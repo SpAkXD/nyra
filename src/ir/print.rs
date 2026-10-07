@@ -11,14 +11,18 @@
 
 use std::fmt::Write;
 
-use super::{Expr, Func, LocalId, Module, Place, Step, Stmt, StmtKind, UnOp};
+use super::{Arg, Expr, Func, LocalId, Module, Place, Step, Stmt, StmtKind, UnOp};
 use crate::diag::json_str;
 
 pub fn print(m: &Module) -> String {
     let mut out = String::new();
     for f in &m.funcs {
-        let params: Vec<String> =
-            (0..f.params).map(|i| format!("{}: {}", name(f, LocalId(i as u32)), f.locals[i].ty.name())).collect();
+        let params: Vec<String> = (0..f.params)
+            .map(|i| {
+                let inout = if f.locals[i].inout { "inout " } else { "" };
+                format!("{inout}{}: {}", name(f, LocalId(i as u32)), f.locals[i].ty.name())
+            })
+            .collect();
         let ret = f.ret.map(|t| format!(" -> {}", t.name())).unwrap_or_default();
         let _ = writeln!(out, "fn {}({}){ret} {{", f.name, params.join(", "));
         stmts(m, f, &f.body, 1, &mut out);
@@ -51,7 +55,14 @@ fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
             }
             StmtKind::Call { dst, func, args } => {
                 let d = dst.map(|d| target(f, d)).unwrap_or_default();
-                let _ = writeln!(out, "{pad}{d}call {}({})", m.func(*func).name, list(m, f, args));
+                let args: Vec<String> = args
+                    .iter()
+                    .map(|a| match a {
+                        Arg::Val(e) => expr(m, f, e),
+                        Arg::InOut(p) => format!("inout {}", place(m, f, p)),
+                    })
+                    .collect();
+                let _ = writeln!(out, "{pad}{d}call {}({})", m.func(*func).name, args.join(", "));
             }
             StmtKind::Op { dst, op, args } => {
                 let d = dst.map(|d| target(f, d)).unwrap_or_default();

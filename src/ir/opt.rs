@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use super::{BinOp, Expr, FuncId, Module, Place, RtOp, Step, Stmt, StmtKind, StrId, UnOp};
+use super::{Arg, BinOp, Expr, FuncId, Module, Place, RtOp, Step, Stmt, StmtKind, StrId, UnOp};
 
 pub fn optimize(m: &mut Module) {
     let mut strs = Interner::new(&mut m.strs);
@@ -52,7 +52,14 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
         let (mut keep, mut stop) = (true, false);
         match &mut s.kind {
             StmtKind::Set(_, e) => fold(e, strs),
-            StmtKind::Call { args, .. } => args.iter_mut().for_each(|a| fold(a, strs)),
+            StmtKind::Call { args, .. } => {
+                for a in args {
+                    match a {
+                        Arg::Val(e) => fold(e, strs),
+                        Arg::InOut(p) => fold_place(p, strs),
+                    }
+                }
+            }
             StmtKind::Op { op, args, .. } => {
                 args.iter_mut().for_each(|a| fold(a, strs));
                 if matches!(op, RtOp::Print | RtOp::Format) {

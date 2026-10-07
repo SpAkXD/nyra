@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use super::{bare, names};
-use crate::ir::{BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
+use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
     "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
@@ -104,7 +104,10 @@ pub fn gen(m: &Module, file: &str) -> String {
         if f.locals.len() > f.params {
             let _ = writeln!(out, "    let {};", n[f.params..].join(", "));
         }
-        let mut g = Gen { m, f, names: &n, out: String::new(), indent: 1, tmp: 0 };
+        // an `inout` parameter is a box: the value is `p.v`
+        let uses: Vec<String> =
+            n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("{x}.v") } else { x.clone() }).collect();
+        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0 };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -198,9 +201,49 @@ impl Gen<'_> {
                 self.line(&line);
             }
             StmtKind::Call { dst, func, args } => {
-                let args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
-                let line = self.assign(*dst, format!("{}({})", name(&self.m.func(*func).name), args.join(", ")));
-                self.line(&line);
+                // an `inout` argument goes in a box `{v: x}`; the callee's value is written back after
+                let inout = args.iter().any(|a| matches!(a, Arg::InOut(_)));
+                if !inout {
+                    let args: Vec<String> = args
+                        .iter()
+                        .map(|a| match a {
+                            Arg::Val(e) => self.arg(e),
+                            Arg::InOut(_) => unreachable!("checked above"),
+                        })
+                        .collect();
+                    let line = self.assign(*dst, format!("{}({})", name(&self.m.func(*func).name), args.join(", ")));
+                    self.line(&line);
+                    return;
+                }
+                self.line("{");
+                self.indent += 1;
+                let mut parts = Vec::with_capacity(args.len());
+                let mut boxes = Vec::new();
+                for a in args {
+                    match a {
+                        Arg::Val(e) => parts.push(self.arg(e)),
+                        Arg::InOut(p) => {
+                            let lv = self.place(p, false);
+                            let b = self.fresh("b");
+                            self.line(&format!("const {b} = {{v: {lv}}};"));
+                            parts.push(b.clone());
+                            boxes.push((b, lv));
+                        }
+                    }
+                }
+                let call = format!("{}({})", name(&self.m.func(*func).name), parts.join(", "));
+                // the result is assigned after the write-back (`x = f(inout x)` keeps the result)
+                let r = self.fresh("r");
+                self.line(&format!("const {r} = {call};"));
+                for (b, lv) in boxes {
+                    self.line(&format!("{lv} = {b}.v;"));
+                }
+                if let Some(d) = dst {
+                    let line = format!("{} = {r};", self.local(*d));
+                    self.line(&line);
+                }
+                self.indent -= 1;
+                self.line("}");
             }
             StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at),
             StmtKind::Store { place, value } => {

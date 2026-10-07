@@ -1,0 +1,85 @@
+// inout: a function changes the caller's variable, and the call says so
+struct User {
+    name: str
+    tags: [str]
+}
+
+fn swap(inout a: int, inout b: int) {
+    let t = a
+    a = b
+    b = t
+}
+
+fn add_tag(inout u: User, tag: str) {
+    u.tags.push(tag)
+}
+
+fn fill(inout row: [int], v: int) {
+    for i in 0..row.len() {
+        row[i] = v
+    }
+}
+
+fn shout(inout s: str) {
+    s = s.upper()
+    s += "!"
+}
+
+fn bump(inout n: int) {
+    n += 1
+}
+
+fn bump_all(inout xs: [int]) {
+    for i in 0..xs.len() {
+        bump(inout xs[i])
+    }
+}
+
+fn take_last(inout xs: [str]) -> str = xs.pop()
+
+fn grow(inout xs: [int], old: [int]) -> int {
+    xs.push(9)
+    ret old.len()
+}
+
+fn next(inout n: int) -> int {
+    n += 10
+    ret n * 2
+}
+
+fn main() {
+    var x = 1
+    var y = 2
+    swap(inout x, inout y)
+    print("{x} {y}")
+    var u = User(name: "ann", tags: [])
+    let before = u
+    add_tag(inout u, "admin")
+    print(u)
+    print(before)
+    var grid = [[0].repeat(3)].repeat(2)
+    fill(inout grid[1], 7)
+    print(grid)
+    var word = "hey"
+    let copy = word
+    shout(inout word)
+    print(word)
+    print(copy)
+    var nums = [1, 2, 3]
+    bump_all(inout nums)
+    print(nums)
+    var stack = ["a", "b", "c"]
+    print(take_last(inout stack))
+    print(stack)
+    var pair = [1, 2]
+    y = 5
+    swap(inout pair[0], inout y)
+    print(pair)
+    print(y)
+    var arr = [1, 2]
+    print(grow(inout arr, arr))
+    print(arr)
+    var k = 1
+    k = next(inout k)
+    print(k)
+}

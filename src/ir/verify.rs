@@ -1,7 +1,7 @@
 //! Checks that an IR module is well formed: ids in range, operand and call types,
 //! and that functions with a result return on every path. A failure is a compiler bug.
 
-use super::{BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
+use super::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
 pub fn verify(m: &Module) -> Result<(), String> {
     if m.main.0 as usize >= m.funcs.len() {
@@ -180,7 +180,15 @@ impl Verifier<'_> {
                     return Err(format!("{} takes {} arguments, got {}", callee.name, callee.params, args.len()));
                 }
                 for (a, p) in args.iter().zip(&callee.locals) {
-                    self.expect(a, p.ty, "argument")?;
+                    match a {
+                        Arg::Val(e) if !p.inout => self.expect(e, p.ty, "argument")?,
+                        Arg::InOut(place) if p.inout => {
+                            if self.place(place)? != p.ty {
+                                return Err(format!("inout argument of {} has the wrong type", callee.name));
+                            }
+                        }
+                        _ => return Err(format!("argument kinds of {} do not match its `inout` parameters", callee.name)),
+                    }
                 }
                 match (dst, callee.ret) {
                     (Some(d), Some(r)) if self.local(*d)? != r => Err(format!("result of {} has the wrong type", callee.name)),

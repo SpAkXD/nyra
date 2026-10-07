@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use super::{bare, names};
-use crate::ir::{BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StructInfo, Ty, UnOp};
+use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StructInfo, Ty, UnOp};
 
 /// The C runtime, emitted before every program (`@FILE@` becomes the source path).
 const PRELUDE: &str = include_str!("../rt/c/core.c");
@@ -163,11 +163,18 @@ fn structs(m: &Module, out: &mut String) {
     out.push('\n');
 }
 
+/// `names` are the plain names; an `inout` parameter is a pointer.
 fn signature(f: &Func, names: &[String]) -> String {
     let params = if f.params == 0 {
         "void".to_string()
     } else {
-        (0..f.params).map(|i| format!("{} {}", ctype(f.locals[i].ty), names[i])).collect::<Vec<_>>().join(", ")
+        (0..f.params)
+            .map(|i| {
+                let star = if f.locals[i].inout { "*" } else { "" };
+                format!("{}{star} {}", ctype(f.locals[i].ty), names[i])
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     };
     format!("static {} ny_{}({params})", f.ret.map_or("void".to_string(), ctype), f.name)
 }
@@ -211,7 +218,10 @@ pub fn gen(m: &Module, file: &str) -> String {
             };
             let _ = writeln!(out, "    {} {}{init};", ctype(l.ty), n[i]);
         }
-        let mut g = Gen { m, f, names: n, out: String::new(), indent: 1, tmp: 0 };
+        // an `inout` parameter is used through its pointer: `(*p)`
+        let uses: Vec<String> =
+            n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
+        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0 };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -304,9 +314,28 @@ impl Gen<'_> {
                 self.line(&line);
             }
             StmtKind::Call { dst, func, args } => {
-                let args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
-                let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, args.join(", ")));
+                // an `inout` argument passes a pointer to the place (every array on the way unique)
+                let inout = args.iter().any(|a| matches!(a, Arg::InOut(_)));
+                if inout {
+                    self.line("{");
+                    self.indent += 1;
+                }
+                let mut parts = Vec::with_capacity(args.len());
+                for a in args {
+                    match a {
+                        Arg::Val(e) => parts.push(self.arg(e)),
+                        Arg::InOut(p) => {
+                            let lv = self.place(p);
+                            parts.push(format!("&{lv}"));
+                        }
+                    }
+                }
+                let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, parts.join(", ")));
                 self.line(&line);
+                if inout {
+                    self.indent -= 1;
+                    self.line("}");
+                }
             }
             StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at),
             StmtKind::Store { place, value } => {

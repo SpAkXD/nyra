@@ -18,8 +18,8 @@
 use std::collections::HashMap;
 
 use super::{
-    visit_locals, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StrId,
-    StructInfo, Structs, Ty, UnOp,
+    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind,
+    StrId, StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
 
@@ -172,12 +172,10 @@ impl<'a> Lower<'a> {
     }
 
     fn func(&mut self, f: &ast::Func) -> Func {
-        // parameters: borrowed, so not owned by any scope
+        // parameters: borrowed (an `inout` one is the caller's place), so not owned by any scope
         for p in &f.params {
-            if p.inout {
-                self.not_yet("`inout` parameters");
-            }
             let id = self.new_local(Some(p.name.clone()), p.ty);
+            self.locals[id.0 as usize].inout = p.inout;
             self.scopes[0].names.insert(p.name.clone(), id);
         }
         let mut body = Vec::new();
@@ -188,7 +186,7 @@ impl<'a> Lower<'a> {
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
         let id = LocalId(self.locals.len() as u32);
-        self.locals.push(Local { name, ty: t });
+        self.locals.push(Local { name, ty: t, inout: false });
         id
     }
 
@@ -523,7 +521,7 @@ impl<'a> Lower<'a> {
                     // a call whose plain result is not used writes nowhere
                     if let Some(&func) = self.ids.get(name) {
                         if !self.managed(e.ty) {
-                            let args = self.args(args, out);
+                            let args = self.call_args(args, out);
                             out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span: e.span });
                             self.end_statement(span, out);
                             return;
@@ -652,20 +650,39 @@ impl<'a> Lower<'a> {
         cur
     }
 
-    /// Call arguments, left to right (struct fields are `name: value`).
-    fn args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
-        let mut refs: Vec<&ast::Expr> = Vec::with_capacity(args.len());
-        for a in args {
+    /// The field values of a struct construction (`name: value`), left to right.
+    fn fields(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
+        let refs: Vec<&ast::Expr> = args
+            .iter()
+            .map(|a| match &a.kind {
+                ast::ExprKind::Labeled(_, v) => v.as_ref(),
+                _ => a,
+            })
+            .collect();
+        self.operands(&refs, out)
+    }
+
+    /// The arguments of a call to a user function, left to right. An `inout` argument is a
+    /// place; next to one, every plain argument is copied first, so it keeps the value it had
+    /// even when the callee changes the same variable through the `inout` one.
+    fn call_args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Arg> {
+        let any_inout = args.iter().any(|a| matches!(a.kind, ast::ExprKind::Inout(_)));
+        let mut v = Vec::with_capacity(args.len());
+        for (i, a) in args.iter().enumerate() {
+            let later = args[i + 1..].iter().any(mutates);
             match &a.kind {
-                ast::ExprKind::Inout(_) => {
-                    self.not_yet("`inout` arguments");
-                    return Vec::new();
+                ast::ExprKind::Inout(p) => {
+                    let place = self.place(p, later, out);
+                    v.push(Arg::InOut(place));
                 }
-                ast::ExprKind::Labeled(_, v) => refs.push(v),
-                _ => refs.push(a),
+                _ => {
+                    let x = self.expr(a, None, out);
+                    let x = if later || any_inout { self.snapshot(x, a.ty, a.span, out) } else { x };
+                    v.push(Arg::Val(x));
+                }
             }
         }
-        self.operands(&refs, out)
+        v
     }
 
     /// The position of field `name` in struct type `t`.
@@ -941,10 +958,10 @@ impl<'a> Lower<'a> {
             _ => {
                 let Some(&func) = self.ids.get(name) else {
                     // `Point(x: 1, y: 2)`: the fields in declaration order (the checker made sure)
-                    let fields = self.args(args, out);
+                    let fields = self.fields(args, out);
                     return self.op(RtOp::StructNew, fields, e.ty, dst, span, out);
                 };
-                let args = self.args(args, out);
+                let args = self.call_args(args, out);
                 if e.ty == Type::Void {
                     out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span });
                     return Expr::Bool(false);

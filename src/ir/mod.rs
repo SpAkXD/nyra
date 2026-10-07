@@ -109,6 +109,15 @@ pub struct Local {
     /// The Nyra name; `None` for a compiler temporary.
     pub name: Option<String>,
     pub ty: Ty,
+    /// An `inout` parameter: the local is the caller's place (C: a pointer, JS: a box).
+    pub inout: bool,
+}
+
+/// A call argument: a value (borrowed by the callee), or a place for an `inout` parameter.
+#[derive(Clone, Debug)]
+pub enum Arg {
+    Val(Expr),
+    InOut(Place),
 }
 
 pub struct Stmt {
@@ -142,7 +151,7 @@ impl Place {
 pub enum StmtKind {
     /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
-    Call { dst: Option<LocalId>, func: FuncId, args: Vec<Expr> },
+    Call { dst: Option<LocalId>, func: FuncId, args: Vec<Arg> },
     Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
     /// `place = value` for a place below a local (a whole local is `Set`). Every array on the
     /// way is made unique first (copy on write) and every index is checked. The value is
@@ -560,7 +569,18 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
                 f(l);
                 expr_locals(e, f);
             }
-            StmtKind::Call { dst, args, .. } | StmtKind::Op { dst, args, .. } => {
+            StmtKind::Call { dst, args, .. } => {
+                if let Some(d) = dst {
+                    f(d);
+                }
+                for a in args {
+                    match a {
+                        Arg::Val(e) => expr_locals(e, f),
+                        Arg::InOut(p) => place_locals(p, f),
+                    }
+                }
+            }
+            StmtKind::Op { dst, args, .. } => {
                 if let Some(d) = dst {
                     f(d);
                 }
