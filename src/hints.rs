@@ -1,0 +1,227 @@
+//! What people (and AI models) usually mean when they write something Nyra does not have.
+//! The lexer, parser and checker use these tables to turn "unknown thing" errors into a fix
+//! that can be applied at once: other languages' words, symbols and type names, mapped to
+//! the Nyra way of saying the same thing.
+
+use crate::diag::suggest;
+
+/// A word from another language that Nyra spells differently or does not have.
+/// Used where a syntax error is caused by that word (`return x`, `a and b`, `elif`).
+pub fn word(w: &str) -> Option<String> {
+    let hint = match w {
+        "return" => "Nyra spells it `ret`: replace `return` with `ret`",
+        "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
+        "break" | "continue" => {
+            "Nyra has no `break` or `continue`: stop a loop with a `bool` flag in the `while` condition, or `ret` from a helper function"
+        }
+        "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
+        "and" => "write `&&` for logical and: `a && b`",
+        "or" => "write `||` for logical or: `a || b`",
+        "not" => "write `!` for logical not: `!done`",
+        "then" => "Nyra has no `then`: the body of an `if` is `{ ... }` on the same line as the `if`",
+        "null" | "nil" | "None" | "NULL" | "undefined" => {
+            "Nyra has no null: every variable always holds a value of its type"
+        }
+        "True" | "False" => "write `true` or `false` in lowercase",
+        "mut" => "write `var` for a variable that changes: `var x = 0`",
+        "const" | "static" | "final" => {
+            "write `let` for a value that never changes and `var` for one that does (a constant for the whole program is a function: `fn limit() -> int = 100`)"
+        }
+        "function" | "func" | "fun" | "def" => "functions start with `fn`: `fn name(a: int) -> int { ... }`",
+        "try" | "catch" | "throw" | "finally" | "except" | "raise" => {
+            "Nyra has no exceptions: a failing operation (such as an integer division by zero) stops the program with a runtime error"
+        }
+        "self" | "this" => "Nyra has no methods or objects, so there is no `self` or `this`: pass the value as a parameter",
+        "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
+        _ => return None,
+    };
+    Some(hint.to_string())
+}
+
+/// A word that starts a top-level item in another language.
+pub fn top_level_word(w: &str) -> Option<String> {
+    let hint = match w {
+        "struct" | "class" | "enum" | "interface" | "trait" | "impl" | "union" | "type" => {
+            return Some(format!(
+                "Nyra has no `{w}` yet: the only top-level item is `fn`, so model data with functions and plain values"
+            ))
+        }
+        "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
+            "Nyra has no imports or modules: one file is one program, and it only contains `fn` definitions"
+        }
+        "pub" | "public" | "private" | "protected" | "extern" | "export" => {
+            "Nyra has no visibility modifiers: start the definition with `fn`"
+        }
+        "const" | "static" | "final" => {
+            "there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`"
+        }
+        _ => return word(w),
+    };
+    Some(hint.to_string())
+}
+
+/// Hint for an undefined variable whose name is a keyword or literal of another language.
+pub fn undefined_variable(w: &str) -> Option<String> {
+    match w {
+        "return" | "break" | "continue" | "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self"
+        | "this" => word(w),
+        _ => None,
+    }
+}
+
+/// Hint for a call to a function that does not exist, but that other languages have.
+pub fn undefined_function(w: &str) -> Option<String> {
+    let hint = match w {
+        "abs" => "Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`",
+        "min" => "Nyra has no `min`: define it, e.g. `fn min(a: int, b: int) -> int = if a < b { a } else { b }`",
+        "max" => "Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`",
+        "pow" | "power" | "powi" => {
+            "Nyra has no `pow`: write it with a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)"
+        }
+        "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" => {
+            "Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)"
+        }
+        "floor" | "ceil" | "round" | "trunc" => {
+            "Nyra has no `floor`/`ceil`/`round`: `int(x)` truncates a float toward zero"
+        }
+        "len" | "length" | "size" => {
+            "Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable"
+        }
+        "str" | "string" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" => {
+            "Nyra has no string conversion function: build text with interpolation, e.g. `\"{x}\"`"
+        }
+        "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
+        "input" | "readline" | "read_line" | "scanf" | "gets" | "getline" => {
+            "Nyra has no input: put the values in the program, e.g. `let n = 12`"
+        }
+        "exit" | "panic" | "assert" | "abort" | "quit" => {
+            "Nyra has no `exit`, `panic` or `assert`: the program ends when `main` ends"
+        }
+        "range" => "a range is written `a..b` in a loop: `for i in 0..10 { ... }`",
+        "bool" => "Nyra has no `bool(x)`: compare instead, e.g. `x != 0`",
+        "random" | "rand" | "randint" | "clock" | "sleep" => {
+            "Nyra programs are closed: there is no random, clock or sleep"
+        }
+        _ => return None,
+    };
+    Some(hint.to_string())
+}
+
+/// True for names that other languages use for a type (`string`, `i32`, `double`, `void`, ...).
+pub fn is_type_word(w: &str) -> bool {
+    matches!(
+        w.to_ascii_lowercase().as_str(),
+        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "i8" | "i16" | "i32"
+            | "i64" | "u8" | "u16" | "u32" | "u64" | "float" | "double" | "real" | "f32" | "f64" | "bool" | "boolean"
+            | "str" | "string" | "char" | "void"
+    )
+}
+
+/// What to do about a type name that does not exist.
+pub fn type_name(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    let right = match lower.as_str() {
+        "string" | "text" | "cstring" | "varchar" | "str" => Some("str"),
+        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16"
+        | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => Some("int"),
+        "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => Some("float"),
+        "bool" | "boolean" => Some("bool"),
+        _ => None,
+    };
+    if let Some(t) = right {
+        return format!("write `{t}` (all type names are lowercase: `int`, `float`, `bool`, `str`)");
+    }
+    match lower.as_str() {
+        "char" | "character" | "rune" => {
+            "Nyra has no character type: use a one-character `str`, e.g. `\"a\"`".to_string()
+        }
+        "void" | "unit" | "none" | "nothing" => {
+            "a function that returns nothing has no return type: leave out the `->` part".to_string()
+        }
+        "vec" | "list" | "array" | "vector" | "map" | "dict" | "set" | "tuple" => {
+            "Nyra has no collection types yet: the types are `int`, `float`, `bool` and `str`".to_string()
+        }
+        "any" | "object" | "auto" | "var" | "let" => {
+            "write the type out: `int`, `float`, `bool` or `str` (only local variables are inferred: leave the annotation off)"
+                .to_string()
+        }
+        _ => match suggest(name, ["int", "float", "bool", "str"]) {
+            Some(s) => format!("{s} The types are `int`, `float`, `bool` and `str`"),
+            None => "the types are `int`, `float`, `bool` and `str`".to_string(),
+        },
+    }
+}
+
+/// The closing quote that matches an opening quote of another language, if `c` is one.
+pub fn quote_close(c: char) -> Option<char> {
+    match c {
+        '\'' => Some('\''),
+        '`' => Some('`'),
+        '\u{2018}' => Some('\u{2019}'),
+        '\u{201C}' => Some('\u{201D}'),
+        _ => None,
+    }
+}
+
+/// How to write the text of a single-quoted, typographic or backtick literal in Nyra.
+pub fn quoted_text(open: char, text: &str) -> String {
+    if text.contains('"') || text.contains('\\') {
+        return "Nyra text uses straight double quotes: \"like this\"".to_string();
+    }
+    let kind = match open {
+        '\'' => "Nyra has no single-quoted text or character type",
+        '`' => "Nyra has no backtick strings",
+        _ => "typographic quotes are not quotes",
+    };
+    if open == '`' && text.contains("${") {
+        return format!("{kind}: write double quotes and `{{x}}` instead of `${{x}}`, e.g. \"total: {{x}}\"");
+    }
+    format!("{kind}: write \"{text}\" with straight double quotes")
+}
+
+/// A name for characters that cannot be seen, so the message can say what they are.
+pub fn invisible_char(c: char) -> Option<&'static str> {
+    match c {
+        '\u{FEFF}' => Some("byte order mark"),
+        '\u{200B}' => Some("zero width space"),
+        '\u{200C}' => Some("zero width non-joiner"),
+        '\u{200D}' => Some("zero width joiner"),
+        '\u{2060}' => Some("word joiner"),
+        '\u{00AD}' => Some("soft hyphen"),
+        c if c.is_control() => Some("control character"),
+        _ => None,
+    }
+}
+
+/// Hint for a character the lexer does not know.
+pub fn bad_char(c: char) -> String {
+    match c {
+        '#' => "comments start with `//`, not `#`".into(),
+        '?' => "Nyra has no `?`: for a conditional value write `if cond { a } else { b }`".into(),
+        '[' | ']' => "arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values".into(),
+        '&' => "write `&&` for logical and (there are no bit operations)".into(),
+        '|' => "write `||` for logical or (there are no bit operations)".into(),
+        '^' | '~' => "Nyra has no bit operations or power operator: multiply (`x * x`) or use a loop".into(),
+        '@' => "`@` has no meaning in Nyra (there are no attributes or decorators)".into(),
+        '$' => "to put a value in a string write `{x}` inside the quotes: \"cost: {x}\"".into(),
+        '\\' => "a backslash only appears inside a string, as in `\\n`".into(),
+        '.' => "`.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`".into(),
+        '\u{00D7}' => "write `*` for multiplication".into(),
+        '\u{00F7}' => "write `/` for division".into(),
+        '\u{2212}' | '\u{2013}' | '\u{2014}' => "write a plain `-` (ASCII hyphen) for minus".into(),
+        '\u{2264}' => "write `<=`".into(),
+        '\u{2265}' => "write `>=`".into(),
+        '\u{2260}' => "write `!=`".into(),
+        '\u{2192}' => "write `->` for a return type".into(),
+        '\u{2026}' => "write `..` for a range: `0..10`".into(),
+        '\u{2227}' => "write `&&` for logical and".into(),
+        '\u{2228}' => "write `||` for logical or".into(),
+        '\u{00AC}' => "write `!` for logical not".into(),
+        '\u{201C}' | '\u{201D}' | '\u{2018}' | '\u{2019}' | '\u{201E}' => {
+            "typographic quotes are not quotes: use straight double quotes (\") around text".into()
+        }
+        '\u{FEFF}' => "the file starts with a byte order mark: save it as UTF-8 without BOM".into(),
+        c if invisible_char(c).is_some() => "remove it: it is an invisible character, often pasted in by accident".into(),
+        _ => "this character is not part of Nyra: remove it".into(),
+    }
+}

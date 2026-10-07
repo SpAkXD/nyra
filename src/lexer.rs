@@ -2,6 +2,7 @@
 
 use crate::ast::{BinOp, Span};
 use crate::diag::Diag;
+use crate::hints;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
@@ -54,20 +55,30 @@ pub enum Tok {
 }
 
 impl Tok {
+    /// How a token is named in an error message: "found `x`", "found keyword `let`", "found end of line".
     pub fn describe(&self) -> String {
         match self {
             Tok::Int(n) => format!("number `{n}`"),
-            Tok::Float(f) => format!("number `{f}`"),
+            Tok::Float(f) => format!("number `{f:?}`"),
             Tok::Str(_) | Tok::Interp(_) => "a string".into(),
             Tok::Ident(s) => format!("`{s}`"),
             Tok::Newline => "end of line".into(),
             Tok::Eof => "end of file".into(),
             Tok::OpAssign(op) => format!("`{}=`", op.symbol()),
+            t if t.is_keyword() => format!("keyword `{}`", t.text()),
             other => format!("`{}`", other.text()),
         }
     }
 
-    fn text(&self) -> &'static str {
+    /// The words that cannot be used as names.
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            Tok::Fn | Tok::Let | Tok::Var | Tok::If | Tok::Else | Tok::While | Tok::For | Tok::In | Tok::Ret
+        )
+    }
+
+    pub fn text(&self) -> &'static str {
         match self {
             Tok::Fn => "fn",
             Tok::Let => "let",
@@ -178,9 +189,19 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 match text.parse::<i64>() {
                     Ok(n) => Tok::Int(n),
                     Err(_) => {
+                        let hint = if text == "9223372036854775808" {
+                            "the smallest `int` has no literal: write `-9223372036854775807 - 1`; the largest is 9223372036854775807"
+                                .to_string()
+                        } else {
+                            format!("keep `int` values within 9223372036854775807, or write a float: `{text}.0`")
+                        };
                         errs.push(
-                            Diag::new("E0003", format!("number `{text}` is too large for `int`"), span)
-                                .hint("int is 64-bit: the max is 9223372036854775807"),
+                            Diag::new(
+                                "E0003",
+                                format!("integer `{text}` is too large for `int` (the largest is 9223372036854775807)"),
+                                span,
+                            )
+                            .hint(hint),
                         );
                         Tok::Int(0)
                     }
@@ -243,10 +264,22 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         'r' => s.push('\r'),
                         '\\' => s.push('\\'),
                         '"' => s.push('"'),
-                        _ => errs.push(
-                            Diag::new("E0004", format!("unknown escape `\\{esc}`"), Span { line, col })
-                                .hint("valid escapes: \\n \\t \\r \\\\ \\\""),
-                        ),
+                        _ => {
+                            let hint = match esc {
+                                '{' | '}' => "braces are doubled, not escaped: write `{{` or `}}` for a literal brace".to_string(),
+                                '\'' => "a single quote needs no escape: write `'`".to_string(),
+                                'u' | 'x' | '0' => format!(
+                                    "Nyra has no `\\{esc}` escape: type the character itself (strings are UTF-8), e.g. \"\u{e9}\""
+                                ),
+                                _ => format!(
+                                    "the escapes are `\\n` `\\t` `\\r` `\\\\` and `\\\"`; to write a literal backslash, double it: `\\\\{esc}`"
+                                ),
+                            };
+                            errs.push(
+                                Diag::new("E0004", format!("unknown escape `\\{esc}` in a string"), Span { line, col })
+                                    .hint(hint),
+                            );
+                        }
                     }
                     i += 2;
                     col += 2;
@@ -259,7 +292,10 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                     continue;
                 }
                 if ch == '}' {
-                    errs.push(Diag::new("E0006", "single `}` in a string", here).hint("write `}}` for a literal `}`"));
+                    errs.push(
+                        Diag::new("E0006", "unmatched `}` in a string: there is no `{` for it to close", here)
+                            .hint("write `}}` to print a literal `}`"),
+                    );
                     i += 1;
                     col += 1;
                     continue;
@@ -287,8 +323,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                             let code: String = cs[start..e].iter().collect();
                             if code.trim().is_empty() {
                                 errs.push(
-                                    Diag::new("E0006", "empty `{}` in a string", here)
-                                        .hint("put an expression inside, e.g. `{x}`, or write `{{}}` for literal braces"),
+                                    Diag::new("E0006", "empty `{}` in a string: there is no expression to insert", here)
+                                        .hint("put an expression between the braces, e.g. `{x}`, or write `{{}}` to print literal braces"),
                                 );
                             } else {
                                 if !s.is_empty() {
@@ -302,15 +338,27 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         None => {
                             // a quote before any `}`: either a quote inside `{ }` (if a `}` follows
                             // later on the line) or a `{` that is never closed
-                            let closes_later = cs[j..].iter().take_while(|c| **c != '\n').any(|c| *c == '}');
-                            let (msg, hint) = if cs.get(j) == Some(&'"') && closes_later {
-                                ("quotes are not allowed inside `{ }` in a string", "store the text in a variable first, then use `{name}`")
-                            } else {
-                                ("unclosed `{` in a string", "close it with `}`, or write `{{` for a literal `{`")
-                            };
-                            errs.push(Diag::new("E0006", msg, here).hint(hint));
-                            col += j - i;
-                            i = j;
+                            let close_later = cs[j..].iter().take_while(|c| **c != '\n').position(|c| *c == '}');
+                            match close_later {
+                                Some(k) if cs.get(j) == Some(&'"') => {
+                                    errs.push(
+                                        Diag::new("E0006", "quotes are not allowed inside `{ }` in a string", here)
+                                            .hint("put the text in a variable first (`let t = \"x\"`), then write `{t}` in the string"),
+                                    );
+                                    // skip the whole `{ ... }`, so its quotes do not start new strings
+                                    let e = j + k;
+                                    col += e + 1 - i;
+                                    i = e + 1;
+                                }
+                                _ => {
+                                    errs.push(
+                                        Diag::new("E0006", "unclosed `{` in a string: no matching `}` before the end of the string", here)
+                                            .hint("add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`"),
+                                    );
+                                    col += j - i;
+                                    i = j;
+                                }
+                            }
                         }
                     }
                     continue;
@@ -321,8 +369,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             }
             if !closed {
                 errs.push(
-                    Diag::new("E0002", "unterminated string", span)
-                        .hint("close the string with `\"` on the same line"),
+                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span)
+                        .hint("add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)"),
                 );
             }
             let tok = if parts.is_empty() {
@@ -388,10 +436,28 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 toks.push(Token { tok, span });
             }
             None if c == ';' => errs.push(
-                Diag::new("E0005", "Nyra has no semicolons", span)
-                    .hint("remove the `;` and put each statement on its own line"),
+                Diag::new("E0005", "unexpected `;`: Nyra has no semicolons", span)
+                    .hint("delete the `;`: a new line already ends a statement, so put each statement on its own line"),
             ),
-            None => errs.push(Diag::new("E0001", format!("unexpected character `{c}`"), span)),
+            None => {
+                // a quote from another language: report the whole literal once, not each quote
+                if let Some(close) = hints::quote_close(c) {
+                    let line_rest = cs[i + 1..].iter().take_while(|x| **x != '\n');
+                    if let Some(k) = line_rest.clone().position(|x| *x == close) {
+                        let text: String = cs[i + 1..i + 1 + k].iter().collect();
+                        let msg = if c == '`' {
+                            "unexpected character '`' (a backtick)".to_string()
+                        } else {
+                            format!("unexpected character `{c}`")
+                        };
+                        errs.push(Diag::new("E0001", msg, span).hint(hints::quoted_text(c, &text)));
+                        i += k + 2;
+                        col += k + 2;
+                        continue;
+                    }
+                }
+                errs.push(bad_char(c, &cs, i, span));
+            }
         }
         i += 1;
         col += 1;
@@ -403,4 +469,41 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     }
     toks.push(Token { tok: Tok::Eof, span: end });
     (toks, errs)
+}
+
+/// E0001 for the character at `cs[i]`, with a hint about what was probably meant.
+fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
+    let before = i.checked_sub(1).map(|j| cs[j]);
+    let after = cs.get(i + 1).copied();
+    let msg = match hints::invisible_char(c) {
+        Some(name) => format!("unexpected invisible character U+{:04X} ({name})", c as u32),
+        None if c == '`' => "unexpected character '`' (a backtick)".to_string(),
+        None => format!("unexpected character `{c}`"),
+    };
+    let hint = if c == '.' && after.is_some_and(|a| a.is_ascii_digit()) {
+        let digits: String = cs[i + 1..].iter().take_while(|d| d.is_ascii_digit()).collect();
+        format!("a float needs digits on both sides of the dot: write `0.{digits}`")
+    } else if c == '.' && before.is_some_and(|b| b.is_ascii_digit()) {
+        let mut start = i;
+        while start > 0 && cs[start - 1].is_ascii_digit() {
+            start -= 1;
+        }
+        let digits: String = cs[start..i].iter().collect();
+        format!("a float needs digits on both sides of the dot: write `{digits}.0`")
+    } else if c == '.' {
+        // `console.log(x)`, `Math.sqrt(x)`, `s.len()`: name the Nyra way when the word before the dot is known
+        let mut start = i;
+        while start > 0 && (cs[start - 1].is_alphanumeric() || cs[start - 1] == '_') {
+            start -= 1;
+        }
+        let word: String = cs[start..i].iter().collect();
+        match word.as_str() {
+            "console" => "print with `print(x)`: it takes one value and ends the line".to_string(),
+            "Math" => "Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)".to_string(),
+            _ => hints::bad_char(c),
+        }
+    } else {
+        hints::bad_char(c)
+    };
+    Diag::new("E0001", msg, span).hint(hint)
 }

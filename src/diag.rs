@@ -20,6 +20,14 @@ impl Diag {
         self.hint = Some(hint.into());
         self
     }
+
+    /// Sets the hint only if there is none yet, so a more specific hint is never replaced.
+    pub fn or_hint(mut self, hint: impl Into<String>) -> Self {
+        if self.hint.is_none() {
+            self.hint = Some(hint.into());
+        }
+        self
+    }
 }
 
 pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
@@ -31,7 +39,9 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
         if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
             let num = d.span.line.to_string();
             let pad = " ".repeat(num.len());
-            let caret = " ".repeat(d.span.col.saturating_sub(1));
+            // keep tabs as tabs, so the caret lines up under the character in any editor
+            let mut before = line.chars();
+            let caret: String = (1..d.span.col).map(|_| if before.next() == Some('\t') { '\t' } else { ' ' }).collect();
             out += &format!("{pad} |\n{num} | {line}\n{pad} | {caret}^\n");
         }
         if let Some(h) = &d.hint {
