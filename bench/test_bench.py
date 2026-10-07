@@ -2918,5 +2918,13 @@ class VerifyCommandLine(unittest.TestCase):
         self.assertNotIn("rust", out.getvalue().replace("not checked here (--skip): nyra, rust", ""))
 
 
+class ContinuousIntegration(unittest.TestCase):
+    def test_ci_runs_the_benchmark_tests_and_the_verifier(self):
+        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        for needle in ("cargo test", "cargo build --release", "python bench/test_bench.py", "python bench/verify.py",
+                       "ubuntu-latest", "actions/setup-node", "actions/setup-python"):
+            self.assertIn(needle, ci)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
