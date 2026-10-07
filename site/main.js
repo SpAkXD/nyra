@@ -134,7 +134,7 @@ function hero() {
   function load(i) {
     pi = i; const d = data[i];
     sfile.textContent = d.file; stask.textContent = d.task;
-    sgut.textContent = Array.from({ length: 9 }, (_, k) => k + 1).join('\n');
+    sgut.textContent = Array.from({ length: 10 }, (_, k) => k + 1).join('\n');
     chars = build(scode, d.code, 'nyra', true);
     caret = el('i', 'caret'); scode.append(caret); caret.style.transform = 'translate(0,0)';
     lh = parseFloat(getComputedStyle(scode).lineHeight) || 20;

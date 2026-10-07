@@ -91,7 +91,8 @@
 6
 7
 8
-9</pre><pre class="code typed nyra" id="scode" aria-hidden="true">fn fib(n: int) -> int {
+9
+10</pre><pre class="code typed nyra" id="scode" aria-hidden="true">fn fib(n: int) -> int {
     if n &lt; 2 { ret n }
     ret fib(n - 1) + fib(n - 2)
 }
@@ -515,7 +516,18 @@ quick
       </div>
     </div>
     <div class="win loop rv" id="loop">
-      <svg viewBox="0 0 640 150" role="img" aria-label="The agent loop: write, check, fix, then run. Check and fix repeat until the program is ok.">
+      <svg class="lm" viewBox="0 0 320 250" role="img" aria-label="The agent loop: write, check, fix, then run. Check and fix repeat until the program is ok.">
+        <path class="ln" d="M90 52V198"/>
+        <path class="ln" d="M140 150C236 150 236 90 140 90"/>
+        <path class="fl" pathLength="100" d="M90 52V198"/>
+        <path class="fl" pathLength="100" d="M140 150C236 150 236 90 140 90"/>
+        <g><rect class="nd" x="40" y="32" width="100" height="40" rx="20"/><text x="90" y="52">Write</text></g>
+        <g><rect class="nd" x="40" y="90" width="100" height="40" rx="20"/><text x="90" y="110">Check</text></g>
+        <g><rect class="nd" x="40" y="150" width="100" height="40" rx="20"/><text x="90" y="170">Fix</text></g>
+        <g><rect class="nd" x="40" y="208" width="100" height="40" rx="20"/><text x="90" y="228">Run</text></g>
+        <text class="sub" x="205" y="124">repeat until</text><text class="sub" x="205" y="140">"ok": true</text>
+      </svg>
+      <svg class="lw" viewBox="0 0 640 150" role="img" aria-label="The agent loop: write, check, fix, then run. Check and fix repeat until the program is ok.">
         <path class="ln" d="M80 50H240M240 50H400M400 50H560" />
         <path class="ln" d="M400 70C400 130 240 130 240 70"/>
         <path class="fl" pathLength="100" d="M80 50H560"/>
@@ -612,7 +624,7 @@ nyra run hello.nyra --js</pre></div></article>
   <div class="wrap">
     <p class="eyebrow rv">Open source</p>
     <h2 class="rv" style="--d:1;max-width:18em;margin-inline:auto">A solo project, built in the open.</h2>
-    <p class="lead rv" style="--d:2;margin-inline:auto">Nyra is MIT licensed. Issues and pull requests are welcome, and <code class="i">cargo test</code> must stay green. If an AI could not write a program you expected it to, open an issue with the program and the <code class="i">nyra check --json</code> output: that is the most useful bug report.</p>
+    <p class="lead rv" style="--d:2;margin-inline:auto">Nyra is MIT licensed. Issues and pull requests are welcome, and <code class="i nw">cargo test</code> must stay green. If an AI could not write a program you expected it to, open an issue with the program and the <code class="i">nyra check --json</code> output: that is the most useful bug report.</p>
     <a class="btn pri rv" style="--d:3" href="https://github.com/SpAkXD/nyra" rel="noopener">github.com/SpAkXD/nyra</a>
   </div>
 </section>
