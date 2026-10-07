@@ -1,0 +1,9 @@
+{
+  "id": "roman_numerals",
+  "title": "Roman numerals",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "For each of the numbers 4, 9, 14, 40, 90, 400, 1994 and 2024, print its Roman numeral in standard subtractive notation (symbols I, V, X, L, C, D, M), one per line, in that order.",
+  "expected_output": "IV\nIX\nXIV\nXL\nXC\nCD\nMCMXCIV\nMMXXIV\n"
+}

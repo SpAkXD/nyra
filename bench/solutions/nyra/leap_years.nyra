@@ -1,0 +1,16 @@
+fn is_leap(year: int) -> bool {
+    ret year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+fn show(year: int) {
+    if is_leap(year) { print("yes") } else { print("no") }
+}
+
+fn main() {
+    show(1900)
+    show(1996)
+    show(2000)
+    show(2023)
+    show(2024)
+    show(2100)
+}

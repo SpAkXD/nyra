@@ -1,0 +1,9 @@
+{
+  "id": "ackermann",
+  "title": "Ackermann function",
+  "category": "recursion",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "The Ackermann function is defined for non-negative integers m and n by: A(0, n) = n + 1; A(m, 0) = A(m - 1, 1) when m > 0; A(m, n) = A(m - 1, A(m, n - 1)) when m > 0 and n > 0. Implement it recursively and print A(0, 0), A(1, 2), A(2, 3), A(3, 3) and A(3, 5), one per line, in that order.",
+  "expected_output": "1\n4\n9\n61\n253\n"
+}

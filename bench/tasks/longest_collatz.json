@@ -1,0 +1,9 @@
+{
+  "id": "longest_collatz",
+  "title": "Longest Collatz chain below 10000",
+  "category": "math",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "The Collatz sequence of a positive integer n repeats this step until it reaches 1: if n is even, replace it with n / 2; otherwise replace it with 3n + 1. The number of steps is the number of replacements needed to reach 1 (for n = 1 it is 0, for n = 6 it is 8).\n\nAmong the starting numbers 1 to 9999, find the one with the most steps (it is unique). Print that starting number on the first line and its number of steps on the second line.",
+  "expected_output": "6171\n261\n"
+}

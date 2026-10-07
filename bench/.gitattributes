@@ -1,0 +1,2 @@
+# The benchmark's tasks, expected outputs and reference solutions must be byte-identical on every platform.
+* text eol=lf

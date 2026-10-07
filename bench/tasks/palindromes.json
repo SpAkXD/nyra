@@ -1,0 +1,9 @@
+{
+  "id": "palindromes",
+  "title": "Palindrome check",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "For each of the words `level`, `hello`, `racecar`, `robot`, `a` and `abba`, print `yes` if it reads the same forwards and backwards and `no` if it does not, one per line, in that order.",
+  "expected_output": "yes\nno\nyes\nno\nyes\nyes\n"
+}

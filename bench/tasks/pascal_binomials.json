@@ -1,0 +1,9 @@
+{
+  "id": "pascal_binomials",
+  "title": "Binomial coefficients by recursion",
+  "category": "recursion",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "Write a recursive function binom(n, k) based on the rule binom(n, k) = binom(n - 1, k - 1) + binom(n - 1, k), with binom(n, 0) = 1 and binom(n, n) = 1. Print binom(5, 2), binom(10, 5) and binom(20, 10), one per line, in that order.",
+  "expected_output": "10\n252\n184756\n"
+}

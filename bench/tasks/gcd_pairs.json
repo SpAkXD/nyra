@@ -1,0 +1,9 @@
+{
+  "id": "gcd_pairs",
+  "title": "Greatest common divisors",
+  "category": "number-theory",
+  "difficulty": "easy",
+  "min_version": "0.1",
+  "prompt": "Write Euclid's algorithm yourself (do not call a library gcd function) and print the greatest common divisor of each of these pairs, one per line, in this order: (48, 18), (1071, 462), (17, 5), (1000000, 250000), (270, 192).",
+  "expected_output": "6\n21\n1\n250000\n6\n"
+}

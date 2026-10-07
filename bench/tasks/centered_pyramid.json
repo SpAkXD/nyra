@@ -1,0 +1,9 @@
+{
+  "id": "centered_pyramid",
+  "title": "Centered pyramid",
+  "category": "patterns",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "Print a centered pyramid of asterisks (`*`) that is 5 lines tall. Line k (counting from 1) has 2k - 1 asterisks, preceded by just enough spaces to center it over the last line, so the last line has no leading spaces. Do not print trailing spaces.",
+  "expected_output": "    *\n   ***\n  *****\n *******\n*********\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "grade_letters",
+  "title": "Letter grades",
+  "category": "strings",
+  "difficulty": "easy",
+  "min_version": "0.1",
+  "prompt": "Print the letter grade for each of the scores 95, 90, 89, 75, 60, 59 and 0, one per line, in that order: `A` for 90 or more, `B` for 80 to 89, `C` for 70 to 79, `D` for 60 to 69, and `F` for anything below 60.",
+  "expected_output": "A\nA\nB\nC\nD\nF\nF\n"
+}

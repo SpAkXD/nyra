@@ -1,0 +1,23 @@
+fn steps(start: int) -> int {
+    var n = start
+    var count = 0
+    while n != 1 {
+        if n % 2 == 0 { n = n / 2 } else { n = 3 * n + 1 }
+        count = count + 1
+    }
+    ret count
+}
+
+fn main() {
+    var best = 1
+    var best_steps = 0
+    for start in 1..10000 {
+        let s = steps(start)
+        if s > best_steps {
+            best = start
+            best_steps = s
+        }
+    }
+    print(best)
+    print(best_steps)
+}

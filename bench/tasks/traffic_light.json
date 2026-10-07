@@ -1,0 +1,9 @@
+{
+  "id": "traffic_light",
+  "title": "Traffic light cycle",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "A traffic light repeats this cycle forever: green for 3 seconds, then yellow for 1 second, then red for 2 seconds (6 seconds per cycle). At second 0 the light has just turned green. For each second from 0 to 14 inclusive, print the color shown during that second (`green`, `yellow` or `red`, lowercase), one per line.",
+  "expected_output": "green\ngreen\ngreen\nyellow\nred\nred\ngreen\ngreen\ngreen\nyellow\nred\nred\ngreen\ngreen\ngreen\n"
+}

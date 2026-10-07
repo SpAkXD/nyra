@@ -1,0 +1,9 @@
+{
+  "id": "leap_years",
+  "title": "Leap years",
+  "category": "math",
+  "difficulty": "easy",
+  "min_version": "0.1",
+  "prompt": "A year is a leap year if it is divisible by 4, except that years divisible by 100 are not leap years unless they are also divisible by 400. For each of the years 1900, 1996, 2000, 2023, 2024 and 2100, print `yes` if it is a leap year and `no` if it is not, one per line, in that order.",
+  "expected_output": "no\nyes\nyes\nno\nyes\nno\n"
+}

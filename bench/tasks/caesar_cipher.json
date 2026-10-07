@@ -1,0 +1,9 @@
+{
+  "id": "caesar_cipher",
+  "title": "Caesar cipher",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Encrypt the text `hello world` with a Caesar cipher that shifts every lowercase letter 3 places forward in the alphabet (x becomes a, y becomes b, z becomes c) and leaves spaces unchanged. Print the encrypted text on one line.",
+  "expected_output": "khoor zruog\n"
+}

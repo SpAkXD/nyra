@@ -1,0 +1,9 @@
+{
+  "id": "number_rows",
+  "title": "Rows of counting numbers",
+  "category": "patterns",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "Print 6 lines. Line k (counting from 1) contains the integers from 1 to k in increasing order, separated by single spaces. For example line 1 is `1` and line 3 is `1 2 3`.",
+  "expected_output": "1\n1 2\n1 2 3\n1 2 3 4\n1 2 3 4 5\n1 2 3 4 5 6\n"
+}

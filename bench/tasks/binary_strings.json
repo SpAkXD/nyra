@@ -1,0 +1,9 @@
+{
+  "id": "binary_strings",
+  "title": "Binary representation",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "For each of the numbers 5, 10, 255 and 1024, print its binary representation (only the digits 0 and 1, no prefix, no leading zeros), one per line, in that order. Build the digits yourself with division and remainder; do not use a built-in base-conversion function.",
+  "expected_output": "101\n1010\n11111111\n10000000000\n"
+}

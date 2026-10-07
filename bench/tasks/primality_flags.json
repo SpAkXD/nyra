@@ -1,0 +1,9 @@
+{
+  "id": "primality_flags",
+  "title": "Primality flags",
+  "category": "number-theory",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "For each of the numbers 1, 2, 3, 4, 17, 25, 97, 100 and 7919, print the word `true` if it is prime and the word `false` if it is not (lowercase). Print one answer per line, in that order.",
+  "expected_output": "false\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n"
+}

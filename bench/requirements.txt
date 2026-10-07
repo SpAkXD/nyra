@@ -1,0 +1,3 @@
+# Needed only for `--provider anthropic`.
+# Mock runs, verify.py, test_bench.py and everything else use the standard library only.
+anthropic>=1.11,<2

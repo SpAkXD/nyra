@@ -1,0 +1,17 @@
+fn grade(score: int) -> str {
+    if score >= 90 { ret "A" }
+    if score >= 80 { ret "B" }
+    if score >= 70 { ret "C" }
+    if score >= 60 { ret "D" }
+    ret "F"
+}
+
+fn main() {
+    print(grade(95))
+    print(grade(90))
+    print(grade(89))
+    print(grade(75))
+    print(grade(60))
+    print(grade(59))
+    print(grade(0))
+}
