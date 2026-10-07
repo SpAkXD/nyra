@@ -142,8 +142,9 @@ Known asymmetries (they are part of the question, but you should know them):
 - Do not compare result files whose `tasks_sha256`, spec hash, compiler version or model differ.
 - Output tokens include thinking when the model thinks, and some models cannot turn it off. Quote **code tokens** for
   "how compact is the language" and **output tokens** for "what did it cost", and say which.
-- Sampling parameters such as temperature are not sent (current Claude models fix them); only `--effort` and
-  `--extra-json` can change the request.
+- Sampling parameters such as temperature are not sent: the newest Claude models reject them and the SDK no longer
+  types them. Only `--effort` and `--extra-json` change the request (for an older model,
+  `--extra-json '{"temperature": 0}'` is passed through unchanged). The request is recorded in the result file.
 - The harness runs model-written code on your machine without a sandbox (isolated interpreter, time and output limits,
   no secrets in the environment, but the code can still touch your files). Run real benchmarks in a container or VM.
 
