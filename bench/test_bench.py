@@ -1153,7 +1153,7 @@ class EvaluateTypeScript(unittest.TestCase):
         lang = run.TypeScriptLang(timeout=5)
         self.assertEqual(lang.evaluate("while (true) {}\n", _task()).kind, "timeout")
         # long lines: a loop of one-character lines needs seconds to reach the cap, which is a timeout instead
-        self.assertEqual(lang.evaluate('while (true) console.log("x".repeat(1000));\n', _task()).kind, "output_limit")
+        self.assertEqual(lang.evaluate('while (true) console.log("x".repeat(100000));\n', _task()).kind, "output_limit")
 
     def test_secrets_are_not_visible_to_the_program(self):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-v1-secret"}):
