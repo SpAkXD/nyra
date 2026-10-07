@@ -64,10 +64,15 @@ static void nyrt_str_retain(nyrt_str *s) {
     if (s->rc < 0) nyrt_bug("a freed string was used again");
     s->rc++;
 }
+// `s[i]` on non-ASCII text: the last (character, byte) position found, so a loop over the
+// indexes walks the string once instead of once per index. Dropped when its string changes or dies.
+static const nyrt_str *nyrt_pos_s = NULL;
+static int64_t nyrt_pos_ci = 0, nyrt_pos_bi = 0;
 static void nyrt_str_release(nyrt_str *s) {
     if (!s || !s->rc) return;
     if (s->rc < 0) nyrt_bug("a string was freed twice");
     if (--s->rc > 0) return;
+    if (s == nyrt_pos_s) nyrt_pos_s = NULL;
     if (nyrt_checking) { s->rc = -1; nyrt_live--; }   // tombstone
     else nyrt_free(s);
 }
@@ -97,12 +102,27 @@ static nyrt_str *nyrt_str_from(const char *p, int64_t n) {
 static int64_t nyrt_str_offset(const nyrt_str *s, int64_t i) {
     NYRT_LIVE(s);
     if (s->nchars == s->len) return i;   // ASCII: O(1)
-    int64_t b = 0;
-    while (i > 0 && b < s->len) {
+    int64_t ci = 0, b = 0;
+    if (s == nyrt_pos_s && i >= nyrt_pos_ci) {
+        ci = nyrt_pos_ci;   // continue from the last position
+        b = nyrt_pos_bi;
+    } else if (s == nyrt_pos_s && nyrt_pos_ci - i < i) {
+        ci = nyrt_pos_ci;   // closer to the last position than to the start: walk back
+        b = nyrt_pos_bi;
+        while (ci > i) {
+            b--;
+            while (b > 0 && ((unsigned char)s->data[b] & 0xC0) == 0x80) b--;
+            ci--;
+        }
+    }
+    while (ci < i && b < s->len) {
         b++;
         while (b < s->len && ((unsigned char)s->data[b] & 0xC0) == 0x80) b++;
-        i--;
+        ci++;
     }
+    nyrt_pos_s = s;
+    nyrt_pos_ci = ci;
+    nyrt_pos_bi = b;
     return b;
 }
 static nyrt_char nyrt_utf8_decode(const char *p, int64_t *adv) {
@@ -130,6 +150,7 @@ typedef struct nyrt_buf { nyrt_str *s; } nyrt_buf;
 static nyrt_buf nyrt_buf_new(void) { nyrt_buf b = { nyrt_str_alloc(16) }; return b; }
 static void nyrt_buf_add(nyrt_buf *b, const char *p, int64_t n) {
     nyrt_str *s = b->s;
+    if (s == nyrt_pos_s) nyrt_pos_s = NULL;   // it changes (and may move)
     if (s->len + n > s->cap) {
         int64_t cap = s->cap * 2;
         if (cap < s->len + n) cap = s->len + n;

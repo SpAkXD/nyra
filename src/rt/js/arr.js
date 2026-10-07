@@ -97,6 +97,8 @@ function ny_sort(a, lt) {
     sort(0, a.length);
 }
 function ny_lt_num(x, y) { return x < y; }
+// NaN sorts after every number (and NaNs keep their order), like the C runtime
+function ny_lt_float(x, y) { return x < y || (y !== y && x === x); }
 function ny_lt_str(x, y) { return ny_str_cmp(x, y) < 0; }
 function ny_join_char(a, sep) {
     let s = "";

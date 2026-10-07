@@ -269,7 +269,11 @@ impl Gen<'_> {
                     RtOp::ArrRemove => format!("ny_remove({target}, {}, {at})", a[0]),
                     RtOp::ArrSort => {
                         let elem = self.place_ty(place).elem().expect("verified: an array");
-                        let lt = if elem == Ty::Str { "ny_lt_str" } else { "ny_lt_num" };
+                        let lt = match elem {
+                            Ty::Str => "ny_lt_str",
+                            Ty::Float => "ny_lt_float",
+                            _ => "ny_lt_num",
+                        };
                         format!("ny_sort({target}, {lt})")
                     }
                     RtOp::ArrReverse => format!("{target}.reverse()"),

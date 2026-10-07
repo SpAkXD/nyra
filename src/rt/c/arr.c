@@ -282,7 +282,9 @@ static void nyrt_fmt_char(nyrt_buf *b, const void *e) { nyrt_buf_repr_char(b, *(
 static void nyrt_fmt_str(nyrt_buf *b, const void *e) { nyrt_buf_repr_str(b, *(nyrt_str *const *)e); }
 static void nyrt_fmt_arr(nyrt_buf *b, const void *e) { nyrt_buf_arr(b, *(nyrt_arr *const *)e); }
 static bool nyrt_lt_int(const void *a, const void *b) { return *(const int64_t *)a < *(const int64_t *)b; }
-static bool nyrt_lt_float(const void *a, const void *b) { return *(const double *)a < *(const double *)b; }
+// NaN sorts after every number (and NaNs keep their order), on every backend
+#define NYRT_LT_FLOAT(x, y) ((x) < (y) || ((y) != (y) && (x) == (x)))
+static bool nyrt_lt_float(const void *a, const void *b) { return NYRT_LT_FLOAT(*(const double *)a, *(const double *)b); }
 static bool nyrt_lt_char(const void *a, const void *b) { return *(const nyrt_char *)a < *(const nyrt_char *)b; }
 static bool nyrt_lt_str(const void *a, const void *b) { return nyrt_str_cmp(*(nyrt_str *const *)a, *(nyrt_str *const *)b) < 0; }
 static const nyrt_type nyrt_T_int = { sizeof(int64_t), NULL, NULL, nyrt_eq_int, nyrt_fmt_int, nyrt_lt_int, NULL };
@@ -357,7 +359,7 @@ static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
 #define NYRT_LT(x, y) ((x) < (y))
 #define NYRT_LT_STR(x, y) (nyrt_str_cmp((x), (y)) < 0)
 NYRT_MSORT(nyrt_msort_int, int64_t, NYRT_LT)
-NYRT_MSORT(nyrt_msort_float, double, NYRT_LT)
+NYRT_MSORT(nyrt_msort_float, double, NYRT_LT_FLOAT)
 NYRT_MSORT(nyrt_msort_char, nyrt_char, NYRT_LT)
 NYRT_MSORT(nyrt_msort_str, nyrt_str *, NYRT_LT_STR)
 static void nyrt_arr_sort(nyrt_arr **p) {

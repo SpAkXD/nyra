@@ -1,0 +1,24 @@
+// indexing text that is not ASCII: switching strings, growing one, making new ones
+fn main() {
+    let a = "αβγδε"
+    let b = "日本語テキスト"
+    var out = ""
+    for k in 0..5 {
+        out += str(a[4 - k]) + str(b[k])
+    }
+    print(out)
+    var s = "ü"
+    for k in 0..3 {
+        s += "é"
+        print(s[s.len() - 1])
+    }
+    print(s[0])
+    print(s.slice(1, 3))
+    for k in 0..3 {
+        let w = "ñ" + str(k)
+        print(w[1])
+    }
+    var floats = [3.0, 0.0 / 0.0, 1.0, -0.0, 1.0 / 0.0, -2.5]
+    floats.sort()
+    print(floats)
+}
