@@ -17,13 +17,20 @@ cargo test                # must pass before every commit
 
 Run a program while you work: `cargo run -- run examples/hello.nyra` (add `--js` for JavaScript).
 
+The tests run every native example with `NYRA_LEAKCHECK=1`: the program then counts its live strings
+and arrays and exits with code 102 on a leak, a double free or a use after free, so a reference-counting
+bug fails `cargo test` even when the output looks right. The variable is for nyra's own tests; set it by
+hand to check one program the same way.
+
 ## Where things live
 
 | Path | What |
 |---|---|
 | `src/lexer.rs`, `src/parser.rs`, `src/ast.rs` | text to tokens to syntax tree |
-| `src/check.rs` | type checker, and most error codes |
+| `src/check.rs`, `src/check_v03.rs` | type checker, and most error codes |
+| `src/ir/` | the intermediate representation: lowering (evaluation order, reference counting), checks, optimizations |
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
+| `src/rt/c/`, `src/rt/js/` | the runtime code each backend embeds (strings, arrays, printing, runtime errors) |
 | `src/diag.rs`, `src/hints.rs` | error rendering, for humans and as JSON, and the hints that name the likely fix |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 | `docs/SPEC.md` | the language spec (the source of truth) |
@@ -36,11 +43,13 @@ Run a program while you work: `cargo run -- run examples/hello.nyra` (add `--js`
 ## Adding a language feature
 
 1. Describe it in `docs/SPEC.md` first. Keep the rules few: Nyra prefers one way to do each thing.
-2. Implement it through the whole pipeline: lexer, AST, parser, checker, then **both** backends. The
-   same program must print the same output on C and on JavaScript.
+2. Implement it through the whole pipeline: lexer, AST, parser, checker, IR lowering, then **both**
+   backends and their runtimes. The same program must print the same output on C and on JavaScript.
 3. Add an example: `examples/<name>.nyra` and `examples/<name>.out`. `cargo test` runs every example
    on every available backend and compares stdout exactly.
-4. Update `docs/AI_GUIDE.md` and `llms.txt` if an AI needs to know about the change.
+4. Update `docs/AI_GUIDE.md` and `llms.txt` if an AI needs to know about the change. `cargo test`
+   compiles the Nyra code blocks of the docs: blocks marked `rust` in `README.md` and the AI guide
+   (GitHub has no Nyra highlighting) and blocks marked `nyra` in the spec.
 
 ## Adding an error code
 
