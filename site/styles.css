@@ -288,6 +288,10 @@ html.menu-open { overflow: hidden; }
 .fact { display: flex; gap: 16px; align-items: flex-start; padding: 22px; border-radius: var(--r-lg); border: 1px solid var(--bd); background: linear-gradient(180deg, rgba(255,255,255,.025), transparent); }
 .fi { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--teal); background: rgba(11,216,182,.08); border: 1px solid rgba(11,216,182,.2); }
 .fi svg { width: 21px; height: 21px; }
+.fact { transition: border-color var(--d-slow), transform var(--d-slow) var(--out); }
+.fact:hover { border-color: rgba(11,216,182,.3); transform: translateY(-2px); }
+.fi { transition: transform var(--d-slow) var(--spring); }
+.fact:hover .fi { transform: rotate(-8deg) scale(1.06); }
 .fact h3 { font-size: 1.05rem; margin-bottom: 6px; }
 .fact p { color: var(--tx2); font-size: 14.5px; }
 @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, 1fr); gap: 18px; } }
