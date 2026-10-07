@@ -22,7 +22,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `bool` | `true`, `false` |
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
-| `[T]` | array of `T`: `[1, 2]`, `[["a"], []]` |
+| `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
 | `Point` | a struct you declare |
 
 ## Functions
@@ -180,6 +180,7 @@ The argument is a `var`, an `inout` parameter, or a field or element of one (`in
 ## Memory
 Memory is freed automatically: reference counting, no garbage collector. Three statements say
 when. They are checked at compile time, and a program prints the same with or without them:
+
 | write | effect |
 |---|---|
 | `free(x)` | frees `x`'s value now; later uses of `x` are error E0239 (a `var` may get a new value) |
