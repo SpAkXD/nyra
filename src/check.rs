@@ -189,17 +189,15 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                 .hint("a function cannot share a struct's name: rename the function (functions start lowercase)"),
             );
         } else {
-            for p in &f.params {
-                c.check_type(p.ty, p.span);
-            }
-            if f.ret != Type::Void {
-                c.check_type(f.ret, f.span);
-            }
+            // a type that is not defined is reported here, once: the calls then see it as unknown
+            let params: Vec<Type> =
+                f.params.iter().map(|p| if c.check_type(p.ty, p.span) { p.ty } else { Type::Unknown }).collect();
+            let ret = if f.ret == Type::Void || c.check_type(f.ret, f.span) { f.ret } else { Type::Unknown };
             let sig = Sig {
-                params: f.params.iter().map(|p| p.ty).collect(),
+                params,
                 names: f.params.iter().map(|p| p.name.clone()).collect(),
                 inout: f.params.iter().map(|p| p.inout).collect(),
-                ret: f.ret,
+                ret,
                 span: f.span,
             };
             c.fns.insert(f.name.clone(), sig);
@@ -672,15 +670,25 @@ impl Checker {
         );
     }
 
+    /// False for a struct that is not defined (reported already), also inside an array type.
+    fn defined(&self, t: Type) -> bool {
+        match t {
+            Type::Array(_) => t.elem().is_none_or(|e| self.defined(e)),
+            Type::Struct(_) => t.struct_name().is_some_and(|n| self.structs.contains_key(&n)),
+            _ => true,
+        }
+    }
+
     fn func(&mut self, f: &mut Func) {
-        self.ret = f.ret;
+        self.ret = if self.defined(f.ret) { f.ret } else { Type::Unknown };
         self.fname = f.name.clone();
         self.decls.clear();
         self.freed.clear();
         collect_decls(&f.body, &mut self.decls);
         self.scopes = vec![HashMap::new()];
         for p in &f.params {
-            self.declare(&p.name, p.ty, if p.inout { Decl::Inout } else { Decl::Param }, p.span);
+            let ty = if self.defined(p.ty) { p.ty } else { Type::Unknown };
+            self.declare(&p.name, ty, if p.inout { Decl::Inout } else { Decl::Param }, p.span);
         }
         self.block(&mut f.body);
         if f.ret != Type::Void && !returns(&f.body) {
@@ -748,10 +756,10 @@ impl Checker {
         let span = s.span;
         match &mut s.kind {
             StmtKind::Let { name, mutable, ty, value } => {
-                if let Some(want) = ty {
-                    self.check_type(*want, span);
-                }
-                let got = self.expr_with(value, *ty);
+                // a type that is not defined is reported once: the variable then has no known type
+                let declared = *ty;
+                let want = declared.filter(|w| self.check_type(*w, span));
+                let got = self.expr_with(value, want);
                 let mut t = got;
                 if got == Type::Void {
                     self.errs.push(
@@ -764,11 +772,13 @@ impl Checker {
                     );
                     t = Type::Unknown;
                 }
-                if let Some(want) = ty {
+                if let Some(want) = want {
                     if got != Type::Void {
-                        self.expect_ty(*want, got, value, Ctx::Let(name, *want));
+                        self.expect_ty(want, got, value, Ctx::Let(name, want));
                     }
-                    t = *want;
+                    t = want;
+                } else if declared.is_some() {
+                    t = Type::Unknown;
                 }
                 self.declare(name, t, if *mutable { Decl::Var } else { Decl::Let }, span);
             }
@@ -1191,10 +1201,23 @@ impl Checker {
                     Type::Str => Type::Char,
                     Type::Array(_) => bt.elem().unwrap_or(Type::Unknown),
                     t => {
-                        let hint = if let Type::Struct(_) = t {
-                            "read a field with `.`: `p.x`".to_string()
-                        } else {
-                            "only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed".to_string()
+                        let shown = show(base);
+                        let hint = match (t, shown) {
+                            (Type::Struct(_), shown) => {
+                                // a struct has fields, not positions: name its first field
+                                let field = t
+                                    .struct_name()
+                                    .and_then(|n| self.structs.get(&n))
+                                    .and_then(|s| s.fields.first().map(|(f, _, _)| f.clone()));
+                                match (shown, field) {
+                                    (Some(b), Some(f)) => format!("a struct has fields, not positions: read one with a dot, e.g. `{b}.{f}`"),
+                                    _ => "a struct has fields, not positions: read one with a dot, e.g. `p.x`".to_string(),
+                                }
+                            }
+                            (Type::Int, Some(b)) => format!(
+                                "only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed; to index the digits of `{b}`, turn it into text first: `str({b})`"
+                            ),
+                            _ => "only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed".to_string(),
                         };
                         self.errs.push(Diag::new("E0233", format!("cannot index a value of type `{}`", t.name()), span).hint(hint));
                         Type::Unknown
@@ -1203,7 +1226,8 @@ impl Checker {
             }
             ExprKind::Field(base, name) => {
                 let bt = self.expr(base);
-                self.field_type(bt, name, span)
+                let shown = show(base);
+                self.field_type(bt, name, shown, span)
             }
             ExprKind::Method(recv, name, args) => self.method(recv, name, args, span),
             ExprKind::Labeled(label, v) => {
@@ -1244,6 +1268,8 @@ impl Checker {
             };
         }
         let mut first: Option<Type> = None;
+        // the first element as the program wrote it, and whether it is an int literal (for the hint)
+        let mut first_shown: Option<(String, bool)> = None;
         let mut bad = false;
         for it in items.iter_mut() {
             let t = self.expr_with(it, first.or(want_elem));
@@ -1260,13 +1286,25 @@ impl Checker {
                 continue;
             }
             match first {
-                None => first = Some(t),
+                None => {
+                    first = Some(t);
+                    first_shown = show(it).map(|s| (s, matches!(it.kind, ExprKind::Int(_))));
+                }
                 Some(f) if f != t => {
                     let hint = match (f, t) {
                         (Type::Float, Type::Int) => match show(it) {
                             Some(s) if matches!(it.kind, ExprKind::Int(_)) => format!("write it as a float: `{s}.0`"),
                             Some(s) => format!("convert it: `float({s})`"),
                             None => "convert it with `float(...)`".to_string(),
+                        },
+                        (Type::Int, Type::Float) => match &first_shown {
+                            Some((s, true)) => format!("make every element a float: write the first as `{s}.0`"),
+                            Some((s, false)) => format!("make every element a float: convert the first with `float({s})`"),
+                            None => "make every element a float: convert the first with `float(...)`".to_string(),
+                        },
+                        (Type::Str, Type::Int | Type::Float | Type::Bool | Type::Char) => match show(it) {
+                            Some(s) => format!("an array holds one type: write this element as text, `str({s})`, or use a struct to group values of different types"),
+                            None => "an array holds one type: write this element as text with `str(...)`, or use a struct to group values of different types".to_string(),
                         },
                         _ => format!(
                             "an array holds one type: convert this element to `{}`, or use a struct to group different types",
@@ -1292,7 +1330,8 @@ impl Checker {
         }
     }
 
-    fn field_type(&mut self, bt: Type, name: &str, span: Span) -> Type {
+    /// `base.name`: `shown` is the base as the program wrote it, for the hint.
+    fn field_type(&mut self, bt: Type, name: &str, shown: Option<String>, span: Span) -> Type {
         if bt.is_unknown() {
             return Type::Unknown;
         }
@@ -1317,13 +1356,22 @@ impl Checker {
             );
             return Type::Unknown;
         }
-        let hint = match bt {
-            Type::Array(_) | Type::Str | Type::Char => format!(
-                "`{}` has methods, not fields: {}",
-                bt.name(),
-                v3::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
-            ),
-            _ => "only structs have fields: `p.x`".to_string(),
+        let r = shown.unwrap_or_else(|| match bt {
+            Type::Array(_) => "xs".into(),
+            Type::Str => "s".into(),
+            _ => "c".into(),
+        });
+        // `xs.length`: what other languages write as a field is a method here
+        let hint = match hints::method(bt, name, &r) {
+            Some(h) => h,
+            None => match bt {
+                Type::Array(_) | Type::Str | Type::Char => format!(
+                    "`{}` has methods, not fields: {}",
+                    bt.name(),
+                    v3::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
+                ),
+                _ => "only structs have fields: `p.x`".to_string(),
+            },
         };
         self.errs.push(Diag::new("E0224", format!("`{}` has no field `{name}`", bt.name()), span).hint(hint));
         Type::Unknown
@@ -1346,8 +1394,9 @@ impl Checker {
         }
         let rt = self.expr(recv);
         if rt.is_unknown() {
+            // the receiver is already reported (`Point.new(x: 1)`): its arguments are not judged again
             for a in args.iter_mut() {
-                self.expr(a);
+                self.arg_type(a, None);
             }
             return Type::Unknown;
         }
@@ -1356,8 +1405,16 @@ impl Checker {
                 self.expr(a);
             }
             let methods = v3::methods_of(rt);
+            let shown = show(recv).unwrap_or_else(|| match rt {
+                Type::Array(_) => "xs".into(),
+                Type::Str => "s".into(),
+                Type::Char => "c".into(),
+                _ => "x".into(),
+            });
             let hint = if rt == Type::Str && v3::CHAR_METHODS.contains(&name) {
                 format!("`{name}()` is a `char` method: use a character, `'A'.{name}()` or `s[0].{name}()`; all codes of a string: `s.codes()`")
+            } else if let Some(h) = hints::method(rt, name, &shown) {
+                h
             } else if let Some(h) = suggest(name, methods.iter().copied()) {
                 h
             } else if let Some(sname) = rt.struct_name() {
@@ -1379,7 +1436,8 @@ impl Checker {
             };
             if let Some(needs) = bad {
                 let hint = if name == "join" {
-                    "convert the elements first, e.g. build `[str]` with `str(x)` in a loop".to_string()
+                    let (r, sep) = (show(recv).unwrap_or_else(|| "xs".into()), args.first().and_then(show).unwrap_or_else(|| "\", \"".into()));
+                    format!("turn the elements into text first: `var parts: [str] = []`, `for x in {r} {{ parts.push(str(x)) }}`, then `parts.join({sep})`")
                 } else {
                     "sort by a key yourself: e.g. loop and insert each element at its place".to_string()
                 };
@@ -1608,17 +1666,19 @@ impl Checker {
         }
 
         let Some(sig) = self.fns.get(name) else {
-            for a in args.iter_mut() {
-                self.arg_type(a, None);
-            }
+            let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
             let d = Diag::new("E0202", format!("undefined function `{name}`"), span);
-            let names = self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied());
+            // a struct's name too: `point(...)` after `struct Point` was renamed
+            let names = self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied()).chain(self.structs.keys().map(String::as_str));
             let hint = if self.lookup(name).is_some() {
                 format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
             } else if let Some(h) = hints::undefined_function(name) {
                 h
             } else if let Some(h) = suggest(name, names) {
                 h
+            } else if let Some(fields) = declared_fields(name, args, &tys) {
+                // `Vec2(x: 1.0, y: 2.0)` and no struct `Vec2`: it was probably meant as a struct
+                format!("no struct `{name}` is defined: declare it before use, `struct {name} {{ {fields} }}`")
             } else {
                 format!("define it: `fn {name}(...) {{ ... }}` (the builtins are `print`, `int`, `float`, `str`, `char`, `free` and `keep`)")
             };
@@ -1655,6 +1715,7 @@ impl Checker {
             );
             return ret;
         }
+        let plain = without_names(name, &names, args);
         // which variables the `inout` arguments change: each at most once per call
         let mut roots: Vec<(String, Span)> = Vec::new();
         for (i, a) in args.iter_mut().enumerate() {
@@ -1698,9 +1759,12 @@ impl Checker {
                 }
                 (ExprKind::Labeled(label, _), false) => {
                     let label = label.clone();
+                    let hint = match &plain {
+                        Some(call) => format!("names are only for building structs: write the values in parameter order, `{call}`"),
+                        None => format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order"),
+                    };
                     self.errs.push(
-                        Diag::new("E0226", format!("named argument `{label}:` in a call to function `{name}`"), a.span)
-                            .hint(format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order")),
+                        Diag::new("E0226", format!("named argument `{label}:` in a call to function `{name}`"), a.span).hint(hint),
                     );
                 }
                 (_, false) => {
@@ -1930,6 +1994,44 @@ impl Checker {
             self.freed.insert(var.clone(), Freed { line: span.line, maybe: false });
         }
     }
+}
+
+/// The fields of the struct that `Vec2(x: 1.0, y: 2.0)` was meant to build, as they are declared:
+/// `x: float, y: float`. `None` unless the name looks like a struct and every argument is named.
+fn declared_fields(name: &str, args: &[Expr], tys: &[Type]) -> Option<String> {
+    if !name.starts_with(|c: char| c.is_uppercase()) {
+        return None;
+    }
+    let fields: Option<Vec<String>> = args
+        .iter()
+        .zip(tys)
+        .map(|(a, t)| match &a.kind {
+            ExprKind::Labeled(label, _) if !t.is_unknown() && *t != Type::Void => Some(format!("{label}: {}", t.name())),
+            _ => None,
+        })
+        .collect();
+    fields.filter(|f| !f.is_empty()).map(|f| f.join(", "))
+}
+
+/// `area(width: 3, height: 4)` written as `area(3, 4)`: the values without their names, in the order of
+/// the parameters when every parameter is named once. `None` if a value is too long to show.
+fn without_names(name: &str, params: &[String], args: &[Expr]) -> Option<String> {
+    let label = |a: &Expr| match &a.kind {
+        ExprKind::Labeled(l, _) => Some(l.clone()),
+        _ => None,
+    };
+    let value = |a: &Expr| match &a.kind {
+        ExprKind::Labeled(_, v) => show(v),
+        _ => show(a),
+    };
+    let named: Option<Vec<&Expr>> =
+        params.iter().map(|p| args.iter().find(|a| label(a).as_deref() == Some(p.as_str()))).collect();
+    let ordered: Vec<&Expr> = match named {
+        Some(v) if v.len() == args.len() => v,
+        _ => args.iter().collect(),
+    };
+    let values: Option<Vec<String>> = ordered.into_iter().map(value).collect();
+    Some(format!("{name}({})", values?.join(", ")))
 }
 
 /// The freed variables after two paths join: freed on both = freed, on one = maybe freed.
