@@ -1,0 +1,43 @@
+name: Bug report
+description: The compiler crashed, rejected a valid program, accepted an invalid one, or the backends disagree.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The fields below let us reproduce the problem in seconds.
+  - type: textarea
+    id: program
+    attributes:
+      label: The .nyra program
+      description: The smallest program that shows the problem.
+      render: rust
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Output of `nyra --version`
+      placeholder: nyra 0.2.0
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of `nyra check file.nyra --json`
+      description: Paste it as it is. If the compiler accepted the program, that is `{"ok":true,"errors":[]}`.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened, and what did you expect?
+      description: For wrong output, say what `nyra run` printed and what it should print, and whether native and `--js` differ.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and C compiler
+      placeholder: Windows 11 with gcc 15.2 (or "none, using --js")

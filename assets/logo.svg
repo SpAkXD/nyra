@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 140" width="424" height="140" role="img" aria-labelledby="nyra-title">
+  <title id="nyra-title">Nyra</title>
+  <defs>
+    <!-- Mid-tone colors on purpose: readable on both light and dark backgrounds. -->
+    <linearGradient id="nyra-mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFF"/>
+      <stop offset="1" stop-color="#22B8E8"/>
+    </linearGradient>
+    <linearGradient id="nyra-word" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="270" y2="0">
+      <stop offset="0" stop-color="#7C5CFF"/>
+      <stop offset="1" stop-color="#4C8DFF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- mark: rounded square with an N -->
+  <g transform="translate(8 12)">
+    <rect width="96" height="96" rx="26" fill="url(#nyra-mark)"/>
+    <path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark: "nyra", drawn with strokes so it needs no font -->
+  <g transform="translate(140 28)" fill="none" stroke="url(#nyra-word)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <!-- n -->
+    <path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/>
+    <!-- y -->
+    <path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/>
+    <!-- r -->
+    <path d="M152 0V64M152 28A28 28 0 0 1 180 0"/>
+    <!-- a -->
+    <circle cx="238" cy="32" r="32"/>
+    <path d="M270 0V64"/>
+  </g>
+</svg>

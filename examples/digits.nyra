@@ -1,0 +1,38 @@
+// Digit tricks with integer division (`/` truncates) and remainder (`%`).
+fn digit_sum(n: int) -> int {
+    var x = n
+    var total = 0
+    while x > 0 {
+        total = total + x % 10
+        x = x / 10
+    }
+    ret total
+}
+
+fn reverse(n: int) -> int {
+    var x = n
+    var r = 0
+    while x > 0 {
+        r = r * 10 + x % 10
+        x = x / 10
+    }
+    ret r
+}
+
+fn is_palindrome(n: int) -> bool {
+    ret n == reverse(n)
+}
+
+fn main() {
+    print(digit_sum(12345))
+    print(reverse(12345))
+    print(is_palindrome(12321))
+    print(is_palindrome(12345))
+
+    // palindromes from 1 to 999
+    var count = 0
+    for n in 1..1000 {
+        if is_palindrome(n) { count = count + 1 }
+    }
+    print(count)
+}
