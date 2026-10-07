@@ -416,3 +416,6 @@ code.i{overflow-wrap:anywhere}
 @media(min-width:720px){.loop .lm{display:none}.loop .lw{display:block}}
 .stage .out-b{overflow-x:auto;overflow-y:hidden}
 .term .o{overflow:hidden;padding-bottom:6px}
+.diag .ptr{stroke-dasharray:1 2;stroke-dashoffset:1.02}
+.cow .ptr.on{stroke-dashoffset:0}
+.cow .ptr.off{stroke-dashoffset:-1.02}

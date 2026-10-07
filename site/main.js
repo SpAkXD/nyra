@@ -129,7 +129,7 @@ function hero() {
   let pi = 0, chars = [], plan = [], tl, caret, t = 0, lh = 20, idx = 0, pl = 0, running = false, shown = 0;
   const setPhase = (txt, cls) => { phaseT.textContent = txt; phase.className = 'sp phase ' + (cls || ''); };
   const mkPlan = (src) => { let tt = 0, i = 0, seed = 11; const r = () => (seed = seed * 16807 % 2147483647) / 2147483647, out = [];
-    while (i < src.length) { let end = Math.min(src.length, i + 2 + Math.floor(r() * 4)); const nl = src.indexOf('\n', i); if (nl >= 0 && nl < end) end = nl + 1; i = end; tt += 34 + r() * 44 + (src[end - 1] === '\n' ? 100 + r() * 120 : 0); out.push([end, tt]); } return out; };
+    while (i < src.length) { let end = Math.min(src.length, i + 2 + Math.floor(r() * 4)); const nl = src.indexOf('\n', i); if (nl >= 0 && nl < end) end = nl + 1; i = end; tt += 22 + r() * 30 + (src[end - 1] === '\n' ? 60 + r() * 90 : 0); out.push([end, tt]); } return out; };
   const reveal = (n) => { for (; shown < n; shown++) { const c = chars[shown]; if (c && c.s) c.s.classList.add('on'); } const c = chars[n - 1]; if (c) caret.style.transform = 'translate(' + c.col + 'ch,' + c.row * lh + 'px)'; };
   function load(i) {
     pi = i; const d = data[i];
