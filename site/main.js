@@ -354,8 +354,8 @@ function heroScroll() {
       const p = L.sy / L.vh;
       if (Math.abs(p - lastP) > 0.0002) {
         lastP = p;
-        if (p < 1.4) inner.style.transform = `translate3d(0, ${(p * L.vh * 0.32).toFixed(1)}px, 0) scale(${(1 - p * 0.05).toFixed(4)})`;
-        inner.style.opacity = clamp(1 - p * 1.3).toFixed(3);
+        if (!RM && p < 1.4) inner.style.transform = `translate3d(0, ${(p * L.vh * 0.32).toFixed(1)}px, 0) scale(${(1 - p * 0.05).toFixed(4)})`;
+        if (!RM) inner.style.opacity = clamp(1 - p * 1.3).toFixed(3);
         Hero.morph = clamp((p - 0.08) / 0.85);
         Hero.opacity = clamp((heroH - L.sy - L.vh * 0.15) / (L.vh * 0.55));
         if (cv) cv.style.opacity = Hero.opacity.toFixed(3);
@@ -715,6 +715,12 @@ function tile() {
   });
 }
 
+/* pause decorative CSS loops while their sheet is off screen */
+function pauseOffscreen() {
+  const po = new IntersectionObserver((es) => es.forEach(e => e.target.classList.toggle('paused', !e.isIntersecting)));
+  $$('.bento').forEach(b => po.observe(b));
+}
+
 /* ---------------- boot ---------------- */
 safe('reveals', reveals);
 safe('header', header);
@@ -731,6 +737,7 @@ safe('tour', tour);
 safe('loop', agentLoop);
 safe('roadmap', roadmap);
 safe('tile', tile);
+safe('pause', pauseOffscreen);
 measure();
 addEventListener('load', measure);
 if ('ResizeObserver' in window) { let first = true; new ResizeObserver(() => { if (first) { first = false; return; } clearTimeout(rsT); rsT = setTimeout(measure, 100); }).observe($('main')); }
