@@ -1,0 +1,107 @@
+//! Text form of the IR, printed with `NYRA_DUMP=ir` (debugging; later the playground's IR tab).
+//!
+//! ```text
+//! fn main() {
+//!     %0: int = call note("a", 1)
+//!     %1: int = call note("b", 2)
+//!     %2: int = call add(%0, %1)
+//!     print(%2)
+//! }
+//! ```
+
+use std::fmt::Write;
+
+use super::{Expr, Func, LocalId, Module, Stmt, StmtKind, UnOp};
+use crate::diag::json_str;
+
+pub fn print(m: &Module) -> String {
+    let mut out = String::new();
+    for f in &m.funcs {
+        let params: Vec<String> =
+            (0..f.params).map(|i| format!("{}: {}", name(f, LocalId(i as u32)), f.locals[i].ty.name())).collect();
+        let ret = f.ret.map(|t| format!(" -> {}", t.name())).unwrap_or_default();
+        let _ = writeln!(out, "fn {}({}){ret} {{", f.name, params.join(", "));
+        stmts(m, f, &f.body, 1, &mut out);
+        out.push_str("}\n");
+    }
+    out
+}
+
+fn name(f: &Func, l: LocalId) -> String {
+    match &f.local(l).name {
+        Some(n) => n.clone(),
+        None => format!("%{}", l.0),
+    }
+}
+
+/// `x = `, or `%3: int = ` for a temporary.
+fn target(f: &Func, l: LocalId) -> String {
+    match &f.local(l).name {
+        Some(n) => format!("{n} = "),
+        None => format!("%{}: {} = ", l.0, f.local(l).ty.name()),
+    }
+}
+
+fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
+    let pad = "    ".repeat(depth);
+    for s in ss {
+        match &s.kind {
+            StmtKind::Set(l, e) => {
+                let _ = writeln!(out, "{pad}{}{}", target(f, *l), expr(m, f, e));
+            }
+            StmtKind::Call { dst, func, args } => {
+                let d = dst.map(|d| target(f, d)).unwrap_or_default();
+                let _ = writeln!(out, "{pad}{d}call {}({})", m.func(*func).name, list(m, f, args));
+            }
+            StmtKind::Op { dst, op, args } => {
+                let d = dst.map(|d| target(f, d)).unwrap_or_default();
+                let _ = writeln!(out, "{pad}{d}{}({})", op.name(), list(m, f, args));
+            }
+            StmtKind::If { cond, then, els } => {
+                let _ = writeln!(out, "{pad}if {} {{", expr(m, f, cond));
+                stmts(m, f, then, depth + 1, out);
+                if !els.is_empty() {
+                    let _ = writeln!(out, "{pad}}} else {{");
+                    stmts(m, f, els, depth + 1, out);
+                }
+                let _ = writeln!(out, "{pad}}}");
+            }
+            StmtKind::Loop { head, cond, body, step } => {
+                let _ = writeln!(out, "{pad}loop {{");
+                stmts(m, f, head, depth + 1, out);
+                let _ = writeln!(out, "{pad}    while {}", expr(m, f, cond));
+                stmts(m, f, body, depth + 1, out);
+                if !step.is_empty() {
+                    let _ = writeln!(out, "{pad}  step:");
+                    stmts(m, f, step, depth + 1, out);
+                }
+                let _ = writeln!(out, "{pad}}}");
+            }
+            StmtKind::Return(None) => {
+                let _ = writeln!(out, "{pad}return");
+            }
+            StmtKind::Return(Some(e)) => {
+                let _ = writeln!(out, "{pad}return {}", expr(m, f, e));
+            }
+        }
+    }
+}
+
+fn list(m: &Module, f: &Func, es: &[Expr]) -> String {
+    es.iter().map(|e| expr(m, f, e)).collect::<Vec<_>>().join(", ")
+}
+
+fn expr(m: &Module, f: &Func, e: &Expr) -> String {
+    match e {
+        Expr::Int(n) => n.to_string(),
+        Expr::Float(x) => format!("{x:?}"),
+        Expr::Bool(b) => b.to_string(),
+        Expr::Str(id) => json_str(m.str(*id)),
+        Expr::Local(l) => name(f, *l),
+        Expr::Unary(UnOp::Not, x) => format!("!{}", expr(m, f, x)),
+        Expr::Unary(_, x) => format!("-{}", expr(m, f, x)),
+        Expr::Binary(op, a, b) => format!("({} {} {})", expr(m, f, a), op.symbol(), expr(m, f, b)),
+        Expr::Select(c, a, b) => format!("select({}, {}, {})", expr(m, f, c), expr(m, f, a), expr(m, f, b)),
+        Expr::IntToFloat(x) => format!("float({})", expr(m, f, x)),
+    }
+}
