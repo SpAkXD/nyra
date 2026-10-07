@@ -345,7 +345,7 @@ impl Verifier<'_> {
                     Ok(())
                 }
             }
-            StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) => {
+            StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => {
                 if self.m.managed(self.local(*l)?) {
                     Ok(())
                 } else {

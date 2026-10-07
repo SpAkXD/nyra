@@ -310,7 +310,7 @@ impl Gen<'_> {
                     self.line(&line);
                 }
             }
-            StmtKind::Drop(_) => {}
+            StmtKind::Drop(_) | StmtKind::Keep(_) => {}
             StmtKind::Free(l) => {
                 let line = format!("{} = undefined;", self.local(*l));
                 self.line(&line);

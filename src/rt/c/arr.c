@@ -9,6 +9,7 @@ typedef struct nyrt_type {
     bool (*eq)(const void *a, const void *b);
     void (*fmt)(nyrt_buf *b, const void *elem);     // as an element: strings and chars quoted
     bool (*lt)(const void *a, const void *b);       // NULL: not sortable
+    void (*keep)(void *elem);                       // `keep`: NULL for plain data
 } nyrt_type;
 typedef struct nyrt_arr { int64_t rc, len, cap; const nyrt_type *ty; char *data; } nyrt_arr;
 // The longest array `repeat` makes; the JavaScript runtime stops at the same length.
@@ -33,6 +34,13 @@ static void nyrt_arr_release(nyrt_arr *a) {
     if (a->ty->release) for (int64_t i = 0; i < a->len; i++) a->ty->release(a->data + i * a->ty->size);
     if (nyrt_checking) { a->rc = -1; nyrt_live--; }   // tombstone
     else nyrt_free(a);
+}
+// `keep(xs)`: the array and everything in it is never freed (reference count 0), not a leak.
+static void nyrt_arr_keep(nyrt_arr *a) {
+    if (!a || a->rc <= 0) return;
+    a->rc = 0;
+    nyrt_live--;
+    if (a->ty->keep) for (int64_t i = 0; i < a->len; i++) a->ty->keep(a->data + i * a->ty->size);
 }
 // Gives every element of a copy one more owner.
 static void nyrt_arr_retain_all(nyrt_arr *a) {
@@ -267,6 +275,8 @@ static void nyrt_retain_str(void *e) { nyrt_str_retain(*(nyrt_str **)e); }
 static void nyrt_release_str(void *e) { nyrt_str_release(*(nyrt_str **)e); }
 static void nyrt_retain_arr(void *e) { nyrt_arr_retain(*(nyrt_arr **)e); }
 static void nyrt_release_arr(void *e) { nyrt_arr_release(*(nyrt_arr **)e); }
+static void nyrt_keep_str(void *e) { nyrt_str_keep(*(nyrt_str **)e); }
+static void nyrt_keep_arr(void *e) { nyrt_arr_keep(*(nyrt_arr **)e); }
 static bool nyrt_eq_int(const void *a, const void *b) { return *(const int64_t *)a == *(const int64_t *)b; }
 static bool nyrt_eq_float(const void *a, const void *b) { return *(const double *)a == *(const double *)b; }
 static bool nyrt_eq_bool(const void *a, const void *b) { return *(const bool *)a == *(const bool *)b; }
@@ -283,12 +293,16 @@ static bool nyrt_lt_int(const void *a, const void *b) { return *(const int64_t *
 static bool nyrt_lt_float(const void *a, const void *b) { return *(const double *)a < *(const double *)b; }
 static bool nyrt_lt_char(const void *a, const void *b) { return *(const nyrt_char *)a < *(const nyrt_char *)b; }
 static bool nyrt_lt_str(const void *a, const void *b) { return nyrt_str_cmp(*(nyrt_str *const *)a, *(nyrt_str *const *)b) < 0; }
-static const nyrt_type nyrt_T_int = { sizeof(int64_t), NULL, NULL, nyrt_eq_int, nyrt_fmt_int, nyrt_lt_int };
-static const nyrt_type nyrt_T_float = { sizeof(double), NULL, NULL, nyrt_eq_float, nyrt_fmt_float, nyrt_lt_float };
-static const nyrt_type nyrt_T_bool = { sizeof(bool), NULL, NULL, nyrt_eq_bool, nyrt_fmt_bool, NULL };
-static const nyrt_type nyrt_T_char = { sizeof(nyrt_char), NULL, NULL, nyrt_eq_char, nyrt_fmt_char, nyrt_lt_char };
-static const nyrt_type nyrt_T_str = { sizeof(nyrt_str *), nyrt_retain_str, nyrt_release_str, nyrt_eq_str, nyrt_fmt_str, nyrt_lt_str };
-static const nyrt_type nyrt_T_arr = { sizeof(nyrt_arr *), nyrt_retain_arr, nyrt_release_arr, nyrt_eq_arr, nyrt_fmt_arr, NULL };
+static const nyrt_type nyrt_T_int = { sizeof(int64_t), NULL, NULL, nyrt_eq_int, nyrt_fmt_int, nyrt_lt_int, NULL };
+static const nyrt_type nyrt_T_float = { sizeof(double), NULL, NULL, nyrt_eq_float, nyrt_fmt_float, nyrt_lt_float, NULL };
+static const nyrt_type nyrt_T_bool = { sizeof(bool), NULL, NULL, nyrt_eq_bool, nyrt_fmt_bool, NULL, NULL };
+static const nyrt_type nyrt_T_char = { sizeof(nyrt_char), NULL, NULL, nyrt_eq_char, nyrt_fmt_char, nyrt_lt_char, NULL };
+static const nyrt_type nyrt_T_str = {
+    sizeof(nyrt_str *), nyrt_retain_str, nyrt_release_str, nyrt_eq_str, nyrt_fmt_str, nyrt_lt_str, nyrt_keep_str
+};
+static const nyrt_type nyrt_T_arr = {
+    sizeof(nyrt_arr *), nyrt_retain_arr, nyrt_release_arr, nyrt_eq_arr, nyrt_fmt_arr, NULL, nyrt_keep_arr
+};
 
 // ---- strings to arrays and back ----------------------------------------------------------------
 static nyrt_arr *nyrt_str_chars(const nyrt_str *s) {

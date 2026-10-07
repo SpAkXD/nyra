@@ -71,6 +71,12 @@ static void nyrt_str_release(nyrt_str *s) {
     if (nyrt_checking) { s->rc = -1; nyrt_live--; }   // tombstone
     else nyrt_free(s);
 }
+// `keep(s)`: never freed from now on (reference count 0, like a literal), not a leak.
+static void nyrt_str_keep(nyrt_str *s) {
+    if (!s || s->rc <= 0) return;
+    s->rc = 0;
+    nyrt_live--;
+}
 // Under the memory check, every operation first makes sure its strings are alive.
 #define NYRT_LIVE(s) do { if (nyrt_checking && (s)->rc < 0) nyrt_bug("a freed string was used again"); } while (0)
 

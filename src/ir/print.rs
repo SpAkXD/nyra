@@ -117,6 +117,9 @@ fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
             StmtKind::Free(l) => {
                 let _ = writeln!(out, "{pad}free {}", name(f, *l));
             }
+            StmtKind::Keep(l) => {
+                let _ = writeln!(out, "{pad}keep {}", name(f, *l));
+            }
             StmtKind::Return(None) => {
                 let _ = writeln!(out, "{pad}return");
             }

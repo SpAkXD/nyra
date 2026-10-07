@@ -176,6 +176,9 @@ pub enum StmtKind {
     Drop(LocalId),
     /// `free(x)`: release now and leave the local empty.
     Free(LocalId),
+    /// `keep(x)`: the value and everything in it is never freed (C: reference count 0, the
+    /// mark of literals; the leak check no longer counts it).
+    Keep(LocalId),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -618,7 +621,7 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
                 visit_locals(body, f);
             }
             StmtKind::Return(Some(e)) => expr_locals(e, f),
-            StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) => f(l),
+            StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => f(l),
             StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => {}
         }
     }

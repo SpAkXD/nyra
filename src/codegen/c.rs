@@ -50,6 +50,14 @@ fn retain(t: Ty, x: &str) -> String {
     }
 }
 
+/// Makes the managed value at the lvalue `x` permanent (`keep(x)`).
+fn keep(t: Ty, x: &str) -> String {
+    match t {
+        Ty::Struct(_) => format!("{}_keep(&{x});", ctype(t)),
+        _ => format!("nyrt_{}_keep({x});", rt_name(t)),
+    }
+}
+
 /// One owner less for the managed value at the lvalue `x`.
 fn release(t: Ty, x: &str) -> String {
     match t {
@@ -103,17 +111,21 @@ fn structs(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
         let n = format!("nyS_{}", s.name);
         if s.managed {
-            let _ = writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);");
+            let _ = writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);\nstatic void {n}_keep(void *p);");
         }
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b);");
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p);");
-        let (r, d) = if s.managed { (format!("{n}_retain"), format!("{n}_release")) } else { ("NULL".into(), "NULL".into()) };
-        let _ = writeln!(out, "static const nyrt_type nyT_{} = {{ sizeof({n}), {r}, {d}, {n}_eq, {n}_fmt, NULL }};", s.name);
+        let (r, d, k) = if s.managed {
+            (format!("{n}_retain"), format!("{n}_release"), format!("{n}_keep"))
+        } else {
+            ("NULL".into(), "NULL".into(), "NULL".into())
+        };
+        let _ = writeln!(out, "static const nyrt_type nyT_{} = {{ sizeof({n}), {r}, {d}, {n}_eq, {n}_fmt, NULL, {k} }};", s.name);
     }
     for (_, s) in &m.structs.0 {
         let n = format!("nyS_{}", s.name);
         if s.managed {
-            for (what, f) in [("retain", retain as fn(Ty, &str) -> String), ("release", release)] {
+            for (what, f) in [("retain", retain as fn(Ty, &str) -> String), ("release", release), ("keep", keep)] {
                 let _ = writeln!(out, "static void {n}_{what}(void *p) {{\n    {n} *v = p;");
                 for (k, (_, t)) in s.fields.iter().enumerate() {
                     if m.managed(*t) {
@@ -410,6 +422,15 @@ impl Gen<'_> {
             }
             StmtKind::Drop(l) => {
                 let line = release(self.f.local(*l).ty, self.local(*l));
+                self.line(&line);
+            }
+            StmtKind::Keep(l) => {
+                let t = self.f.local(*l).ty;
+                let x = self.local(*l).to_string();
+                let line = match t {
+                    Ty::Struct(_) => format!("{}_keep(&{x});", ctype(t)),
+                    _ => format!("nyrt_{}_keep({x});", rt_name(t)),
+                };
                 self.line(&line);
             }
             StmtKind::Free(l) => {

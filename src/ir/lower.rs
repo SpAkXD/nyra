@@ -455,7 +455,9 @@ impl<'a> Lower<'a> {
                 out.push(Stmt { kind, span });
             }
             ast::StmtKind::Arena(body) => {
-                // arenas only change when memory is returned, never what a program does
+                // An arena only changes when memory is returned, never what a program does. The
+                // checker keeps values made inside from escaping except through `ret`; here its
+                // values are freed by reference counting at `}` (a bulk allocator can come later).
                 let mut b = Vec::new();
                 self.block(body, &mut b, false);
                 out.extend(b);
@@ -507,12 +509,7 @@ impl<'a> Lower<'a> {
                         if let Some(ast::ExprKind::Var(x)) = args.first().map(|a| &a.kind) {
                             let id = self.lookup(x);
                             if self.managed(self.ty_of(id)) {
-                                let kind = if name == "free" {
-                                    StmtKind::Free(id)
-                                } else {
-                                    // never released: one owner that is never dropped
-                                    StmtKind::Dup(id)
-                                };
+                                let kind = if name == "free" { StmtKind::Free(id) } else { StmtKind::Keep(id) };
                                 out.push(Stmt { kind, span: e.span });
                             }
                         }

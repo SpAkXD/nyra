@@ -104,7 +104,7 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
                 stmts(body, strs);
             }
             StmtKind::Break | StmtKind::Continue => stop = true,
-            StmtKind::Dup(_) | StmtKind::Drop(_) | StmtKind::Free(_) => {}
+            StmtKind::Dup(_) | StmtKind::Drop(_) | StmtKind::Free(_) | StmtKind::Keep(_) => {}
             StmtKind::Return(v) => {
                 if let Some(e) = v {
                     fold(e, strs);
