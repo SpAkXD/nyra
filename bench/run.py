@@ -763,7 +763,11 @@ def rustc_candidates(explicit: Optional[str] = None, windows: Optional[bool] = N
 
 def _command_label(cmd: list) -> str:
     """`rustc +stable-x86_64-pc-windows-gnu` (no directories: result files get committed)."""
-    return " ".join([Path(cmd[0]).stem] + list(cmd[1:]))
+    # split on both separators: a Windows path must give the same label on every platform
+    name = cmd[0].replace("\\", "/").rsplit("/", 1)[-1]
+    if name.lower().endswith(".exe"):
+        name = name[:-4]
+    return " ".join([name] + list(cmd[1:]))
 
 
 class RustLang(Language):
