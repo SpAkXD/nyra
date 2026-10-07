@@ -1,0 +1,8 @@
+// expect: E0207
+fn f(x: int) -> int {
+    if x > 0 { ret 1 }
+}
+
+fn main() {
+    print(f(1))
+}

@@ -1,0 +1,4 @@
+/target
+*.exe
+examples/*.c
+examples/*.js

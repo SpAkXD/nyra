@@ -1,0 +1,17 @@
+[package]
+name = "nyra"
+version = "0.1.0"
+edition = "2021"
+description = "A compact, strictly-typed programming language designed to be written by AI agents. Compiles to C and JavaScript."
+license = "MIT"
+
+[[bin]]
+name = "nyra"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -1,0 +1,4 @@
+// expect: E0101
+fn main() {
+    let x = 
+}

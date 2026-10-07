@@ -1,0 +1,3 @@
+// expect: E0208
+fn helper() {
+}

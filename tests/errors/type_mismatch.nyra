@@ -1,0 +1,4 @@
+// expect: E0203
+fn main() {
+    let x: int = "hi"
+}

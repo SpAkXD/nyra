@@ -1,0 +1,21 @@
+// Newton's method square root, plus explicit int/float conversions.
+fn sqrt(x: float) -> float {
+    var g = x / 2.0
+    var i = 0
+    while i < 20 {
+        g = (g + x / g) / 2.0
+        i = i + 1
+    }
+    ret g
+}
+
+fn main() {
+    print(sqrt(2.0))
+    print(float(7) / 2.0)
+    print(7 / 2)
+    print(-7 / 2)
+    print(int(3.9))
+    print(1.5 * 2.0)
+    print(0.1 + 0.2)
+    print(10 > 3 && !(2 == 3))
+}
