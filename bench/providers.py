@@ -133,9 +133,13 @@ class MockProvider(Provider):
         flaky=True        a deterministic mix of the four defects below (about 4 of 7 tasks)
         flaky="no_code"   reply without a fenced code block
         flaky="syntax"    program that does not parse / compile
-        flaky="runtime"   program that crashes (Python); a compile error for Nyra, which has no
-                          crashing construct that behaves the same on every platform
+        flaky="runtime"   program that crashes (Python, TypeScript, Rust); a compile error for
+                          Nyra, which has no crashing construct that behaves the same on every platform
         flaky="wrong"     program that prints one extra line first
+
+    The model id can ask for the same thing, so a multi-model mock run (`--models mock,mock-flaky,
+    mock-wrong`) produces different "models" for the comparison tables: `mock` is perfect,
+    `mock-flaky` is the mix and `mock-<defect>` is that defect. `--mock-flaky` applies to every model.
     """
 
     name = "mock"
@@ -149,6 +153,15 @@ class MockProvider(Provider):
         if reference is None:
             raise ValueError("MockProvider needs reference=callable(lang, task_id) -> source or None")
         self.reference = reference
+        if not flaky and self.model != "mock":
+            variant = self.model[len("mock-"):] if self.model.startswith("mock-") else None
+            if variant == "flaky":
+                flaky = True
+            elif variant in DEFECTS:
+                flaky = variant
+            else:
+                raise ValueError(f"unknown mock model {self.model!r}; use mock, mock-flaky or "
+                                 f"mock-<{'|'.join(DEFECTS)}>")
         self.flaky = flaky
 
     def has_reference(self, lang: str, task_id: str) -> bool:
@@ -187,6 +200,20 @@ class MockProvider(Provider):
                 broken = "@\n" + code
             else:  # runtime: Nyra has no portable crash, use another compile error (missing `main`)
                 broken = code.replace("fn main()", "fn mian()", 1)
+        elif lang == "rust":
+            if defect == "wrong":
+                broken = code.replace("fn main() {", 'fn main() {\n    println!("12345");', 1)
+            elif defect == "syntax":
+                broken = "@\n" + code
+            else:
+                broken = code.replace("fn main() {", 'fn main() {\n    panic!("mock failure");', 1)
+        elif lang == "typescript":
+            if defect == "wrong":
+                broken = "console.log(12345);\n" + code
+            elif defect == "syntax":
+                broken = "const = ;\n" + code
+            else:
+                broken = 'throw new Error("mock failure");\n' + code
         else:
             if defect == "wrong":
                 broken = "print(12345)\n" + code

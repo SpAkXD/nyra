@@ -49,6 +49,33 @@ def _nyra_or_none():
 
 NYRA = _nyra_or_none()
 needs_nyra = unittest.skipUnless(NYRA, "the nyra compiler is not built (cargo build --release)")
+NODE = shutil.which("node")
+needs_node = unittest.skipUnless(NODE, "Node.js is not installed")
+
+
+_RUST: dict = {}
+
+
+def rust_toolchain():
+    """A RustLang whose toolchain was found and works, or None (looked up once: it compiles a program)."""
+    if "lang" not in _RUST:
+        try:
+            lang = run.RustLang(timeout=20)
+            lang.preflight()
+            _RUST["lang"] = lang
+        except run.HarnessError:
+            _RUST["lang"] = None
+    return _RUST["lang"]
+
+
+class NeedsRust(unittest.TestCase):
+    """Base class: the tests of a subclass run only where a Rust toolchain works."""
+
+    @classmethod
+    def setUpClass(cls):
+        if rust_toolchain() is None:
+            raise unittest.SkipTest("no working Rust toolchain (rustc)")
+        cls.lang = rust_toolchain()
 
 
 def _task(expected="1\n"):
@@ -364,8 +391,11 @@ class MockPipeline(unittest.TestCase):
     TASKS = "fizzbuzz,gcd_pairs,grade_letters"
 
     def _run(self, *extra):
+        # Nyra and Python keep these tests quick; the four-language runs have their own tests below.
+        langs = [] if "--langs" in extra else ["--langs", "nyra,python"]
         with tempfile.TemporaryDirectory() as out:
-            code, stdout, stderr = _run_main("--provider", "mock", "--tasks", self.TASKS, "--out", out, "-q", *extra)
+            code, stdout, stderr = _run_main("--provider", "mock", "--tasks", self.TASKS, "--out", out, "-q", *langs,
+                                             *extra)
             files = sorted(p.name for p in Path(out).iterdir())
             results = json.loads(next(Path(out).glob("*.json")).read_text(encoding="utf-8"))
             latest = (Path(out) / "latest.md").read_text(encoding="utf-8")
@@ -486,10 +516,14 @@ class MockPipeline(unittest.TestCase):
 
     def test_dry_run_writes_nothing(self):
         with tempfile.TemporaryDirectory() as out:
-            code, stdout, _ = _run_main("--provider", "mock", "--tasks", "fizzbuzz", "--out", out, "--dry-run")
+            code, stdout, _ = _run_main("--provider", "mock", "--tasks", "fizzbuzz", "--langs", "nyra,python",
+                                        "--out", out, "--dry-run")
             self.assertEqual(code, 0)
             self.assertEqual(list(Path(out).iterdir()), [])
             self.assertIn("at most 8 model calls", stdout)
+            _, stdout, _ = _run_main("--provider", "mock", "--tasks", "fizzbuzz", "--out", out, "--dry-run")
+            self.assertIn("1 tasks x 4 languages", stdout)  # the default is all four
+            self.assertIn("at most 16 model calls", stdout)
 
     def test_task_selection_errors(self):
         code, _, stderr = _run_main("--provider", "mock", "--tasks", "no_such_task", "--dry-run")
@@ -811,8 +845,9 @@ class ReportSummary(unittest.TestCase):
         self.assertAlmostEqual(nyra["avg_attempts"], (1 + 2 + 2) / 3)
         self.assertEqual(nyra["avg_output_tokens_first_attempt"], 100)
         self.assertEqual(s["paired"]["n"], 1)
-        ft = s["paired"]["first_try"]
-        self.assertEqual((ft["both"], ft["only_nyra"], ft["only_python"], ft["neither"]), (1, 0, 1, 1))
+        self.assertEqual(s["paired"]["baseline"], "nyra")
+        ft = s["paired"]["pairs"]["python"]["first_try"]
+        self.assertEqual((ft["both"], ft["only_a"], ft["only_b"], ft["neither"]), (1, 0, 1, 1))
 
     def test_render_markdown_smoke(self):
         recs = [self.rec("a", "nyra", True, True), self.rec("a", "python", False, True, kind="wrong_output", attempts=2)]
@@ -844,6 +879,427 @@ class ReportSummary(unittest.TestCase):
                            "samples": 1, "timeout_s": 10, "mock": False, "complete": True, "task_ids": []},
                    "records": [], "summary": report.summarize([], ["python"])}
         self.assertIn("No complete results", report.render_markdown(results, {}))
+
+# ===================================================================== TypeScript and Rust
+
+
+class NodeOutputHelpers(unittest.TestCase):
+    """What the model is shown when a TypeScript program fails: Node's output without Node's own noise."""
+
+    SYNTAX = (
+        "C:\\Users\\x\\Temp\\nyra-bench-abc\\main.ts:1\n"
+        "const x: number = ;\n"
+        "                  ^\n"
+        "\n"
+        "SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected\n"
+        "    at parseTypeScript (node:internal/modules/typescript:72:36)\n"
+        "    at processTypeScriptCode (node:internal/modules/typescript:146:42)\n"
+        "    at Module._compile (node:internal/modules/cjs/loader:1712:15)\n"
+        "    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5) {\n"
+        "  code: 'ERR_INVALID_TYPESCRIPT_SYNTAX'\n"
+        "}\n"
+        "\n"
+        "Node.js v25.2.1\n")
+    CRASH = (
+        "main.ts:3\n"
+        "function boom()       { throw new Error(\"kaboom\"); }\n"
+        "                        ^\n"
+        "\n"
+        "Error: kaboom\n"
+        "    at boom (main.ts:3:31)\n"
+        "    at Object.<anonymous> (main.ts:4:1)\n"
+        "    at Module._compile (node:internal/modules/cjs/loader:1760:14)\n"
+        "    at node:internal/main/run_main_module:33:47\n"
+        "\n"
+        "Node.js v25.2.1\n")
+    RUNTIME_SYNTAX_ERROR = (
+        "undefined:1\n"
+        "x\n"
+        "^\n"
+        "\n"
+        "SyntaxError: Unexpected token 'x', \"x\" is not valid JSON\n"
+        "    at JSON.parse (<anonymous>)\n"
+        "    at Object.<anonymous> (main.ts:2:6)\n"
+        "    at Module._compile (node:internal/modules/cjs/loader:1760:14)\n")
+
+    def test_internal_frames_the_version_line_and_the_code_tail_are_removed(self):
+        cleaned = run.clean_node_stderr(self.SYNTAX)
+        for noise in ("node:internal", "Node.js v25", "ERR_INVALID_TYPESCRIPT_SYNTAX'", "}"):
+            self.assertNotIn(noise, cleaned)
+        self.assertIn("SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected", cleaned)
+        self.assertIn("const x: number = ;", cleaned)
+
+    def test_frames_of_the_program_itself_are_kept(self):
+        cleaned = run.clean_node_stderr(self.CRASH)
+        self.assertIn("at boom (main.ts:3:31)", cleaned)
+        self.assertIn("at Object.<anonymous> (main.ts:4:1)", cleaned)
+        self.assertNotIn("node:internal", cleaned)
+        self.assertNotIn("Node.js v", cleaned)
+
+    def test_crlf_output_is_handled(self):
+        self.assertNotIn("node:internal", run.clean_node_stderr(self.CRASH.replace("\n", "\r\n")))
+
+    def test_syntax_errors_are_told_apart_from_crashes(self):
+        self.assertTrue(run._is_node_syntax_error(run.clean_node_stderr(self.SYNTAX)))
+        self.assertFalse(run._is_node_syntax_error(run.clean_node_stderr(self.CRASH)))
+        # a SyntaxError thrown while the program runs (JSON.parse) has a frame of the program: a crash, not a rejection
+        self.assertFalse(run._is_node_syntax_error(run.clean_node_stderr(self.RUNTIME_SYNTAX_ERROR)))
+        self.assertFalse(run._is_node_syntax_error(""))
+
+    def test_node_module_urls_lose_the_scratch_directory(self):
+        with run.scratch_dir() as wd:
+            posix = wd.resolve().as_posix()
+            url = ("file:///" if re.match(r"[A-Za-z]:", posix) else "file://") + posix + "/main.ts:3:1"
+            self.assertEqual(run.scrub_paths(f"at async {url}", wd), "at async main.ts:3:1")
+
+
+class ToolchainLookup(unittest.TestCase):
+    def test_node_is_found_or_reported(self):
+        with self.assertRaises(run.HarnessError) as cm:
+            run.find_node("definitely-not-node-xyz")
+        self.assertIn("--node", str(cm.exception))
+        with mock.patch.object(shutil, "which", return_value=None):
+            with self.assertRaises(run.HarnessError) as cm:
+                run.find_node()
+        self.assertIn("Node.js not found", str(cm.exception))
+
+    @needs_node
+    def test_node_version_gate(self):
+        lang = run.TypeScriptLang()
+        with mock.patch.object(run.TypeScriptLang, "version_text", return_value="v18.19.0"):
+            with self.assertRaises(run.HarnessError) as cm:
+                lang.preflight()
+        self.assertIn("22.6", str(cm.exception))
+        with mock.patch.object(run.TypeScriptLang, "version_text", return_value="not node"):
+            with self.assertRaises(run.HarnessError):
+                lang.preflight()
+
+    def test_language_names_and_aliases(self):
+        self.assertEqual([run.canonical_lang(n) for n in ("TS", " rs ", "py", "nyra", "rust")],
+                         ["typescript", "rust", "python", "nyra", "rust"])
+        self.assertEqual(run.LANG_ORDER, ("nyra", "python", "typescript", "rust"))
+        code, _, stderr = _run_main("--langs", "python,cobol", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown language 'cobol'", stderr)
+        self.assertIn("typescript", stderr)
+        self.assertIn("rust", stderr)
+        code, _, stderr = _run_main("--langs", "python,py", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("distinct", stderr)
+
+
+class RustToolchainDetection(unittest.TestCase):
+    """Finding a rustc that can link: the Windows default (MSVC) fails without Visual Studio, the GNU one works."""
+
+    def test_an_explicit_command_is_the_only_candidate(self):
+        self.assertEqual(run.rustc_candidates("rustc +stable-x86_64-pc-windows-gnu"),
+                         [["rustc", "+stable-x86_64-pc-windows-gnu"]])
+        self.assertEqual(run.rustc_candidates('"C:\\Program Files\\Rust\\rustc.exe" +stable', windows=True),
+                         [["C:\\Program Files\\Rust\\rustc.exe", "+stable"]])
+
+    def test_windows_tries_the_gnu_toolchains_first(self):
+        toolchains = ["stable-x86_64-pc-windows-msvc", "stable-x86_64-pc-windows-gnu", "nightly-x86_64-pc-windows-gnu"]
+        with mock.patch.object(run, "_find_rust_tool", return_value="/x/rustc"), \
+                mock.patch.object(run, "_rustup_toolchains", return_value=toolchains):
+            self.assertEqual(run.rustc_candidates(windows=True),
+                             [["/x/rustc", "+stable-x86_64-pc-windows-gnu"],
+                              ["/x/rustc", "+nightly-x86_64-pc-windows-gnu"], ["/x/rustc"]])
+
+    def test_other_platforms_use_the_plain_rustc(self):
+        with mock.patch.object(run, "_find_rust_tool", return_value="/x/rustc"), \
+                mock.patch.object(run, "_rustup_toolchains", side_effect=AssertionError("not asked")):
+            self.assertEqual(run.rustc_candidates(windows=False), [["/x/rustc"]])
+
+    def test_no_rustc_means_no_candidates(self):
+        with mock.patch.object(run, "_find_rust_tool", return_value=None):
+            self.assertEqual(run.rustc_candidates(), [])
+            with self.assertRaises(run.HarnessError) as cm:
+                run.RustLang().command()
+        self.assertIn("rustc not found", str(cm.exception))
+        self.assertIn("rustup.rs", str(cm.exception))
+
+    def test_rustc_is_found_in_the_cargo_bin_directory_when_it_is_not_on_path(self):
+        with tempfile.TemporaryDirectory() as home:
+            exe = "rustc.exe" if os.name == "nt" else "rustc"
+            (Path(home) / "bin").mkdir()
+            (Path(home) / "bin" / exe).write_text("")
+            with mock.patch.object(shutil, "which", return_value=None), \
+                    mock.patch.dict(os.environ, {"CARGO_HOME": home}):
+                self.assertEqual(run._find_rust_tool("rustc"), str(Path(home) / "bin" / exe))
+                self.assertIsNone(run._find_rust_tool("no-such-tool"))
+
+    def test_the_first_candidate_that_compiles_is_used_and_remembered(self):
+        lang = run.RustLang()
+        tried = []
+
+        def fake(self_, cmd, code, task):
+            tried.append(cmd)
+            if cmd == ["good"]:
+                return run.EvalResult(True, "pass")
+            return run.EvalResult(False, "toolchain_error", stderr="error: linking with `link.exe` failed")
+
+        with mock.patch.object(run, "rustc_candidates", return_value=[["bad"], ["good"]]), \
+                mock.patch.object(run.RustLang, "_evaluate_with", fake):
+            self.assertEqual(lang.command(), ["good"])
+            self.assertEqual(lang.command(), ["good"])
+        self.assertEqual(tried, [["bad"], ["good"]])  # probed once
+
+    def test_when_nothing_works_every_attempt_is_explained(self):
+        failing = run.EvalResult(False, "toolchain_error", stderr="error: linking with `link.exe` failed")
+        with mock.patch.object(run, "rustc_candidates", return_value=[["rustc", "+gnu"], ["rustc"]]), \
+                mock.patch.object(run.RustLang, "_evaluate_with", return_value=failing):
+            with self.assertRaises(run.HarnessError) as cm:
+                run.RustLang().preflight()
+        text = str(cm.exception)
+        self.assertIn("`rustc +gnu`", text)
+        self.assertIn("`rustc`", text)
+        self.assertIn("linking", text)
+        self.assertIn("GNU toolchain", text)
+        self.assertIn("--rustc", text)
+
+    def test_commands_are_shown_without_directories(self):
+        self.assertEqual(run._command_label(["C:\\Users\\me\\.cargo\\bin\\rustc.exe", "+stable"]), "rustc +stable")
+        self.assertEqual(run._command_label(["/usr/bin/rustc"]), "rustc")
+
+    def test_toolchain_failures_are_told_apart_from_mistakes_in_the_program(self):
+        for text in ("error: linking with `link.exe` failed: exit code: 1", "error: linker `cc` not found",
+                     "error: internal compiler error: unexpected panic",
+                     "error: toolchain 'x' is not installed", "rustup could not choose a version of rustc"):
+            self.assertTrue(run._is_rustc_toolchain_failure(text), text)
+        for text in ("error[E0425]: cannot find value `x` in this scope", "error: expected one of `;`, found `}`",
+                     "error[E0463]: can't find crate for `rand`", "error: aborting due to 1 previous error"):
+            self.assertFalse(run._is_rustc_toolchain_failure(text), text)
+
+
+@needs_node
+class EvaluateTypeScript(unittest.TestCase):
+    def setUp(self):
+        self.lang = run.TypeScriptLang(timeout=10)
+
+    def test_preflight_runs_a_typed_program(self):
+        self.assertEqual(self.lang.preflight(), [])
+        self.assertGreaterEqual(self.lang.version(), run.NODE_MIN_VERSION)
+
+    def test_types_are_erased_and_output_is_normalized(self):
+        code = ("interface P { x: number }\nfunction id<T>(v: T): T { return v; }\n"
+                "const p: P = { x: id<number>(3) } as P;\nconsole.log(p.x);\nconsole.log('x   ');\n")
+        r = self.lang.evaluate(code, _task("3\nx\n\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_enums_namespaces_and_parameter_properties_run(self):
+        code = ("enum Color { Red, Green }\nclass Pt { constructor(public x: number, private y: number) {}\n"
+                "  sum(): number { return this.x + this.y; } }\nnamespace NS { export const v = 5; }\n"
+                "console.log(Color.Green, new Pt(1, 2).sum(), NS.v);\n")
+        r = self.lang.evaluate(code, _task("1 3 5\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_type_errors_are_not_detected(self):
+        # documented limitation: nothing type-checks the program, so a wrong type does not fail it
+        r = self.lang.evaluate('const n: number = "text";\nconsole.log(n);\n', _task("text\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_import_syntax_and_top_level_await_work(self):
+        code = ('import { createHash } from "node:crypto";\nconst v = await Promise.resolve(41 + 1);\n'
+                'console.log(createHash("sha256").update("x").digest("hex").length, v);\nexport {};\n')
+        r = self.lang.evaluate(code, _task("64 42\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_commonjs_require_works(self):
+        r = self.lang.evaluate('const util = require("util");\nconsole.log(util.format("%d items", 3));\n',
+                               _task("3 items\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_wrong_output_feedback_hides_the_expected_output(self):
+        r = self.lang.evaluate("console.log(41);\n", _task("42\n"))
+        self.assertEqual(r.kind, "wrong_output")
+        self.assertIn("41", r.feedback)
+        self.assertNotIn("42", r.feedback)
+        self.assertIn("line 1", r.feedback)
+
+    def test_a_crash_is_a_runtime_error_with_a_clean_message(self):
+        code = 'console.log("before");\nfunction boom(): void { throw new Error("kaboom"); }\nboom();\n'
+        r = self.lang.evaluate(code, _task("before\n"))
+        self.assertEqual((r.kind, r.exit_code), ("runtime_error", 1))
+        for wanted in ("Error: kaboom", "before"):
+            self.assertIn(wanted, r.feedback)
+        self.assertRegex(r.feedback, r"main\.ts:\d+")  # where it happened, relative to the program (no scratch path)
+        for noise in ("node:internal", "Node.js v", "nyra-bench-", "ExperimentalWarning"):
+            self.assertNotIn(noise, r.feedback)
+            self.assertNotIn(noise, r.stderr)
+
+    def test_a_syntax_error_is_a_compile_error(self):
+        r = self.lang.evaluate("const x: number = ;\nconsole.log(x);\n", _task())
+        self.assertEqual(r.kind, "compile_error")
+        self.assertIn("Node.js rejected your program", r.feedback)
+        self.assertIn("SyntaxError", r.feedback)
+        self.assertNotIn("nyra-bench-", r.feedback)
+
+    def test_a_syntax_error_raised_while_running_is_a_runtime_error(self):
+        r = self.lang.evaluate('console.log(1);\nJSON.parse("x");\n', _task("1\n"))
+        self.assertEqual(r.kind, "runtime_error")
+        self.assertIn("1", r.feedback)
+
+    def test_nonzero_exit_fails_even_if_the_output_matches(self):
+        r = self.lang.evaluate("console.log(1);\nprocess.exit(3);\n", _task("1\n"))
+        self.assertEqual((r.passed, r.kind, r.exit_code), (False, "runtime_error", 3))
+
+    def test_timeout_and_output_limit(self):
+        lang = run.TypeScriptLang(timeout=5)
+        self.assertEqual(lang.evaluate("while (true) {}\n", _task()).kind, "timeout")
+        # long lines: a loop of one-character lines needs seconds to reach the cap, which is a timeout instead
+        self.assertEqual(lang.evaluate('while (true) console.log("x".repeat(1000));\n', _task()).kind, "output_limit")
+
+    def test_secrets_are_not_visible_to_the_program(self):
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-v1-secret"}):
+            r = self.lang.evaluate("console.log(process.env.OPENROUTER_API_KEY === undefined);\n", _task("true\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_reference_solutions_match_the_expected_outputs(self):
+        tasks = run.load_tasks()
+
+        def check(t):
+            return t.id, self.lang.evaluate(self.lang.reference_code(t.id), t)
+
+        with cf.ThreadPoolExecutor(max_workers=4) as pool:
+            for tid, r in pool.map(check, tasks):
+                self.assertTrue(r.passed, (tid, r.kind, r.stderr[-300:]))
+
+
+class EvaluateRust(NeedsRust):
+    def test_preflight_found_a_working_command(self):
+        self.assertTrue(self.lang.command_text().startswith("rustc"))
+        self.assertTrue(self.lang.version_text().startswith("rustc "), self.lang.version_text())
+
+    def test_pass_and_output_normalization(self):
+        code = 'fn main() {\n    println!("1");\n    println!("x   ");\n}\n'
+        r = self.lang.evaluate(code, _task("1\nx\n\n"))
+        self.assertTrue(r.passed, r)
+        self.assertIsNotNone(r.compile_ms)
+
+    def test_edition_2021_is_used(self):
+        # arrays iterate by value only from edition 2021 on; plain rustc defaults to 2015 and would reject this
+        code = 'fn main() {\n    let v: Vec<i32> = [1, 2, 3].into_iter().collect();\n    println!("{:?}", v);\n}\n'
+        r = self.lang.evaluate(code, _task("[1, 2, 3]\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_programs_are_built_with_optimizations(self):
+        # without overflow checks (release mode) this wraps around to 0; a debug build would panic
+        code = 'fn main() {\n    let x: u8 = std::hint::black_box(255);\n    println!("{}", x + 1);\n}\n'
+        r = self.lang.evaluate(code, _task("0\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_wrong_output_feedback_hides_the_expected_output(self):
+        r = self.lang.evaluate('fn main() {\n    println!("41");\n}\n', _task("42\n"))
+        self.assertEqual(r.kind, "wrong_output")
+        self.assertIn("41", r.feedback)
+        self.assertNotIn("42", r.feedback)
+
+    def test_a_panic_is_a_runtime_error_with_the_message(self):
+        code = 'fn main() {\n    let v: Vec<i32> = Vec::new();\n    println!("before");\n    println!("{}", v[3]);\n}\n'
+        r = self.lang.evaluate(code, _task("before\n"))
+        self.assertEqual((r.kind, r.exit_code), ("runtime_error", 101))
+        self.assertIn("index out of bounds", r.feedback)
+        self.assertIn("before", r.feedback)
+        self.assertNotIn("nyra-bench-", r.feedback)
+
+    def test_compile_errors_show_the_errors_and_no_warnings(self):
+        code = 'fn main() {\n    let unused = 1;\n    println!("{}", missing);\n}\n'
+        r = self.lang.evaluate(code, _task())
+        self.assertEqual(r.kind, "compile_error")
+        self.assertIn("The Rust compiler (`rustc`) rejected your program", r.feedback)
+        self.assertIn("E0425", r.feedback)
+        self.assertIn("missing", r.feedback)
+        self.assertNotIn("unused variable", r.feedback)
+        self.assertNotIn("nyra-bench-", r.feedback)
+        self.assertNotIn("\x1b[", r.feedback)  # no colour codes
+
+    def test_warnings_alone_do_not_matter(self):
+        r = self.lang.evaluate('fn main() {\n    let unused = 1;\n    println!("42");\n}\n', _task("42\n"))
+        self.assertTrue(r.passed, r)
+
+    def test_external_crates_are_a_compile_error_not_a_toolchain_error(self):
+        r = self.lang.evaluate('use rand::Rng;\nfn main() {\n    println!("42");\n}\n', _task("42\n"))
+        self.assertEqual(r.kind, "compile_error")
+
+    def test_timeout_and_output_limit(self):
+        lang = run.RustLang(timeout=5)
+        lang.cmd = self.lang.command()
+        self.assertEqual(lang.evaluate("fn main() {\n    loop {\n        std::hint::black_box(1);\n    }\n}\n",
+                                       _task()).kind, "timeout")
+        # long lines: println! flushes every line, so one-character lines need seconds to reach the cap
+        flood = 'fn main() {\n    let s = "x".repeat(1000);\n    loop {\n        println!("{}", s);\n    }\n}\n'
+        self.assertEqual(lang.evaluate(flood, _task()).kind, "output_limit")
+
+    def test_nonzero_exit_fails_even_if_the_output_matches(self):
+        r = self.lang.evaluate('fn main() {\n    println!("1");\n    std::process::exit(3);\n}\n', _task("1\n"))
+        self.assertEqual((r.passed, r.kind, r.exit_code), (False, "runtime_error", 3))
+
+    def test_reference_solutions_match_the_expected_outputs(self):
+        tasks = run.load_tasks()
+
+        def check(t):
+            return t.id, self.lang.evaluate(self.lang.reference_code(t.id), t)
+
+        with cf.ThreadPoolExecutor(max_workers=4) as pool:
+            for tid, r in pool.map(check, tasks):
+                self.assertTrue(r.passed, (tid, r.kind, r.stderr[-300:]))
+
+
+class SystemPrompts(unittest.TestCase):
+    """The prompts are part of the experiment: they are pinned, so a change is a deliberate decision."""
+
+    RULE = "Reply with exactly one fenced code block that contains the complete program, and no other text."
+
+    def paragraph(self, language):
+        return (f"Solve the task you are given with a complete {language} program. The program takes no input, and "
+                "only what it prints to standard output is checked, so it must print exactly what the task describes.")
+
+    def test_python_prompt_is_unchanged(self):
+        self.assertEqual(run._PYTHON_SYSTEM, "You write programs in Python 3, using only the standard library.\n\n"
+                         + self.paragraph("Python") + "\n\n" + self.RULE)
+
+    def test_nyra_prompt_is_unchanged(self):
+        text = run._NYRA_SYSTEM.format(spec="SPEC TEXT")
+        self.assertEqual(text, "You write programs in Nyra, a new programming language that you have not seen before. "
+                         "The complete language specification is below. It is the only documentation you have.\n\n"
+                         "<nyra_spec>\nSPEC TEXT\n</nyra_spec>\n\n" + self.paragraph("Nyra") + "\n\n" + self.RULE)
+
+    def test_typescript_and_rust_prompts_are_parallel_to_the_others(self):
+        for text, language in ((run._TYPESCRIPT_SYSTEM, "TypeScript"), (run._RUST_SYSTEM, "Rust")):
+            self.assertIn(self.paragraph(language), text)
+            self.assertTrue(text.endswith(self.RULE))
+            self.assertNotIn("spec", text.lower())
+        self.assertIn("Node.js", run._TYPESCRIPT_SYSTEM)
+        self.assertIn("without checking", run._TYPESCRIPT_SYSTEM)
+        self.assertIn("no npm packages", run._TYPESCRIPT_SYSTEM)
+        self.assertIn("2021", run._RUST_SYSTEM)
+        self.assertIn("rustc", run._RUST_SYSTEM)
+        self.assertIn("no external crates", run._RUST_SYSTEM)
+
+    def test_every_language_object_serves_its_own_prompt(self):
+        self.assertIs(run.PythonLang().system_prompt, run._PYTHON_SYSTEM)
+        if NODE:
+            self.assertEqual(run.TypeScriptLang().system_prompt, run._TYPESCRIPT_SYSTEM)
+        self.assertEqual(run.RustLang().system_prompt, run._RUST_SYSTEM)
+
+    def test_tasks_prompts_are_shared_not_rewritten_per_language(self):
+        # the user message is the task's prompt verbatim, whatever the language
+        seen = []
+
+        class Spy(providers.Provider):
+            name, default_model = "spy", "spy"
+
+            def complete(self, system, messages, meta):
+                seen.append((meta["lang"], messages[0]["content"]))
+                return providers.Reply("no code here", providers.Usage(1, 1))
+
+        task = _task("1\n")
+        task = run.Task(task.id, task.title, "the one prompt", task.expected_output, "0.1", "math", "", Path("."))
+        langs = [run.PythonLang(), run.RustLang()] + ([run.TypeScriptLang()] if NODE else [])
+        for lang in langs:
+            run.run_one(task, lang, 0, run.RunContext(provider=Spy(), repairs=0, count_tokens=False))
+        self.assertEqual({prompt for _, prompt in seen}, {"the one prompt"})
+        self.assertEqual(len(seen), len(langs))
 
 # ============================================================================== OpenRouter
 
@@ -1472,6 +1928,751 @@ class ModelList(unittest.TestCase):
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             self.assertEqual(modelsmod.main(["claude"]), 2)
         self.assertIn("cannot reach", err.getvalue())
+
+
+class _FakeOpenRouter(http.server.BaseHTTPRequestHandler):
+    """Enough of OpenRouter for the runner: GET /api/v1/models and POST /api/v1/chat/completions. It answers with the
+    reference solution of the task in the language of the system prompt. A model whose id contains `weak` answers
+    its first attempt without a code block; `broken` answers with a server error."""
+
+    def _answer(self, status, body):
+        data = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        self.server.requests.append(("GET", self.path, {k.lower(): v for k, v in self.headers.items()}, None))
+        if self.path.endswith("/models"):
+            self._answer(200, {"data": [{"id": m, "name": m, "created": 1, "context_length": 1000,
+                                         "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                                         "top_provider": {"max_completion_tokens": 8000 if "small" in m else None}}
+                                        for m in self.server.models]})
+        else:
+            self._answer(404, {"error": {"code": 404, "message": "no route"}})
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
+        self.server.requests.append(("POST", self.path, {k.lower(): v for k, v in self.headers.items()}, body))
+        if not self.path.endswith("/chat/completions"):
+            return self._answer(404, {"error": {"code": 404, "message": "no route"}})
+        model = body["model"]
+        if model not in self.server.models:
+            return self._answer(404, {"error": {"code": 404, "message": f"No endpoints found for {model}"}})
+        if "broken" in model:
+            return self._answer(500, {"error": {"code": 500, "message": "upstream exploded"}})
+        if body.get("max_tokens") == providers.COUNT_MAX_TOKENS:  # a token-count request: code alone, one message
+            text = body["messages"][-1]["content"]
+            return self._answer(200, ok_body(prompt=10 + len(text) // 3, completion=1, cost=0.000001, model=model))
+        system, user_messages = body["messages"][0]["content"], body["messages"][1:]
+        task_prompt = user_messages[0]["content"]
+        lang = ("nyra" if "<nyra_spec>" in system else "python" if "Python 3" in system
+                else "typescript" if "TypeScript" in system else "rust")
+        task = next(t for t in self.server.tasks if t.prompt == task_prompt)
+        if "weak" in model and len(user_messages) == 1:
+            text = "I would solve this with a loop."
+        else:
+            text = f"```{lang}\n{reference_for_tests(lang, task.id).rstrip()}\n```"
+        self._answer(200, ok_body(text=text, prompt=len(system) // 4 + 50, completion=60 if "weak" not in model else 30,
+                                  reasoning=10, cost=0.0005, model=model + "-20260101", provider="Fake Inc"))
+
+    def log_message(self, *args):
+        pass
+
+
+def _fake_openrouter(models, tasks):
+    server = _StubServer(_FakeOpenRouter)
+    server.models, server.tasks = list(models), tasks
+    return server
+
+
+def reference_for_tests(lang: str, task_id: str) -> str:
+    """What the fake OpenRouter answers with: the reference solution of the task."""
+    ext = {"python": ".py", "typescript": ".ts", "rust": ".rs", "nyra": ".nyra"}[lang]
+    return (run.SOLUTIONS_DIR / lang / f"{task_id}{ext}").read_text(encoding="utf-8")
+
+
+class OpenRouterRunEndToEnd(unittest.TestCase):
+    """run.py against a fake OpenRouter on this machine: real urllib, real files, no outside network."""
+
+    TASKS = "fizzbuzz,gcd_pairs"
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {providers.OPENROUTER_KEY_ENV: API_KEY})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.tasks = run.load_tasks()
+
+    def run_main(self, server, *argv):
+        base = server.url + "/api/v1"
+        return _run_main("--provider", "openrouter", "--base-url", base, "--langs", "python", "--tasks", self.TASKS,
+                         "-q", "--jobs", "2", *argv)
+
+    def test_two_models_one_run_and_a_comparison(self):
+        with _fake_openrouter(["good/model", "weak/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = self.run_main(server, "--models", "good/model,weak/model", "--out", out)
+            files = sorted(p.name for p in Path(out).iterdir())
+            loaded = [json.loads(p.read_text(encoding="utf-8")) for p in Path(out).glob("*.json")]
+            results = {r["run"]["provider"]["model"]: r for r in loaded if "records" in r}
+            index = next(r for r in loaded if "records" not in r)
+            compare = next(Path(out).glob("*compare.md")).read_text(encoding="utf-8")
+            everything = "".join(p.read_text(encoding="utf-8") for p in Path(out).iterdir())
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(len(files), 7)  # two results (json + md each), the comparison (md + json) and latest.md
+        self.assertIn("latest.md", files)
+        good, weak = results["good/model"], results["weak/model"]
+        self.assertEqual(good["summary"]["langs"]["python"]["pass_at_1"], 2)
+        self.assertEqual(weak["summary"]["langs"]["python"]["pass_at_1"], 0)
+        self.assertEqual(weak["summary"]["langs"]["python"]["pass_within_repairs"], 2)
+        self.assertEqual(weak["records"][0]["attempts"][0]["result"]["kind"], "no_code")
+        # what the API reported is kept
+        a = good["records"][0]["attempts"][0]
+        self.assertEqual((a["usage"]["output_tokens"], a["usage"]["reasoning_tokens"]), (60, 10))
+        self.assertEqual(a["served_model"], "good/model-20260101")
+        self.assertEqual(a["served_by"], "Fake Inc")
+        self.assertIsNotNone(a["code_tokens"])  # counted with a token-count request
+        self.assertIsNone(weak["records"][0]["attempts"][1]["code_tokens"])  # repairs are not counted
+        self.assertEqual(good["run"]["served_models"], ["good/model-20260101"])
+        self.assertGreater(good["run"]["spent_usd"], 0.001)
+        self.assertEqual(good["run"]["provider"]["base_url"], server.url + "/api/v1")
+        # the comparison names both models and the index lists their files
+        self.assertIn("good/model", compare)
+        self.assertIn("weak/model", compare)
+        self.assertIn("First-try success", compare)
+        self.assertEqual([m["model"] for m in index["models"]], ["good/model", "weak/model"])
+        # the key travelled in the Authorization header of the chat requests only, never into a file or the output
+        chat = [r for r in server.requests if r[0] == "POST"]
+        self.assertTrue(chat)
+        self.assertTrue(all(r[2]["authorization"] == f"Bearer {API_KEY}" for r in chat))
+        listing = [r for r in server.requests if r[0] == "GET"]
+        self.assertTrue(listing and all("authorization" not in r[2] for r in listing))
+        for text in (everything, stdout, stderr):
+            self.assertNotIn(API_KEY, text)
+        self.assertIn("spent $", stdout)
+
+    def test_unknown_model_ids_are_refused_before_anything_is_spent(self):
+        with _fake_openrouter(["good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = self.run_main(server, "--models", "good/model,good/modle", "--out", out)
+            self.assertEqual(list(Path(out).iterdir()), [])
+        self.assertEqual(code, 2)
+        self.assertIn("good/modle", stderr)
+        self.assertIn("similar: good/model", stderr)
+        self.assertEqual([r for r in server.requests if r[0] == "POST"], [])
+
+    def test_a_max_tokens_above_what_a_model_allows_is_warned_about_up_front(self):
+        with _fake_openrouter(["small/model", "good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, _, stderr = self.run_main(server, "--models", "small/model,good/model", "--out", out, "--dry-run")
+            self.assertEqual(code, 0)
+            self.assertIn("--max-tokens 16000 is above the 8000 completion tokens small/model allows", stderr)
+            self.assertNotIn("good/model allows", stderr)
+            _, _, stderr = self.run_main(server, "--models", "small/model", "--out", out, "--dry-run", "--max-tokens", "8000")
+            self.assertNotIn("allows", stderr)
+
+    def test_the_model_check_can_be_skipped_and_an_unreachable_list_is_only_a_warning(self):
+        with _fake_openrouter(["good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, _, stderr = self.run_main(server, "--models", "unlisted/model", "--no-model-check", "--out", out)
+            self.assertEqual(code, 2)  # the server answers 404 to the first request: that stops the model
+            self.assertIn("No endpoints found for unlisted/model", stderr)
+            self.assertEqual([r for r in server.requests if r[0] == "GET"], [])
+            self.assertEqual(list(Path(out).iterdir()), [])  # nothing finished, so no files
+        # unreachable: the list cannot be fetched, the run goes on and the first request decides
+        with tempfile.TemporaryDirectory() as out:
+            code, _, stderr = _run_main("--provider", "openrouter", "--base-url", "http://127.0.0.1:9/api/v1",
+                                        "--models", "a/b", "--langs", "python", "--tasks", "fizzbuzz", "--out", out,
+                                        "-q", "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("could not check the model ids", stderr)
+
+    def test_dry_run_estimates_the_cost_and_calls_nothing(self):
+        with _fake_openrouter(["good/model", "weak/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, _ = self.run_main(server, "--models", "good/model,weak/model", "--out", out, "--dry-run")
+            self.assertEqual(list(Path(out).iterdir()), [])
+        self.assertEqual(code, 0)
+        self.assertIn("at most 8 model calls per model, 16 in total", stdout)
+        self.assertIn("estimated cost", stdout)
+        self.assertRegex(stdout, r"good/model: about \$\d")
+        self.assertRegex(stdout, r"total: about \$\d")
+        self.assertIn("--budget", stdout)
+        self.assertEqual([r for r in server.requests if r[0] == "POST"], [])
+
+    def test_a_bad_key_stops_the_whole_run_and_a_missing_key_stops_it_before_it_starts(self):
+        with _fake_openrouter(["a/model", "b/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            with mock.patch.object(providers.OpenRouterProvider, "_post", side_effect=providers.ProviderError(
+                    "HTTP 401: No auth credentials found", stop_all=True)):
+                code, _, stderr = self.run_main(server, "--models", "a/model,b/model", "--out", out)
+            self.assertEqual(code, 2)
+            self.assertIn("HTTP 401", stderr)
+            self.assertIn("remaining 1 model(s) were not run", stderr)
+            self.assertEqual(list(Path(out).iterdir()), [])
+            with mock.patch.dict(os.environ):
+                os.environ.pop(providers.OPENROUTER_KEY_ENV)
+                code, _, stderr = self.run_main(server, "--models", "a/model", "--out", out)
+            self.assertEqual(code, 2)
+            self.assertIn("OPENROUTER_API_KEY", stderr)
+            self.assertEqual([r for r in server.requests if r[0] == "POST"], [])
+
+    def test_a_model_that_fails_does_not_stop_the_others(self):
+        with _fake_openrouter(["broken/model", "good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            with mock.patch.object(providers.OpenRouterProvider, "__init__", _fast_init(max_retries=0)):
+                code, _, stderr = self.run_main(server, "--models", "broken/model,good/model", "--out", out)
+            names = sorted(p.name for p in Path(out).glob("*.json") if "compare" not in p.name)
+        self.assertEqual(code, 2, stderr)  # something went wrong, and it is said so ...
+        self.assertIn("no run finished for broken/model", stderr)
+        self.assertEqual(len(names), 1)  # ... but the other model was run and saved
+        self.assertTrue(names[0].endswith("-openrouter-good-model.json"), names)
+
+    def test_the_budget_stops_after_the_model_that_used_it_up(self):
+        with _fake_openrouter(["good/model", "other/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = self.run_main(server, "--models", "good/model,other/model", "--out", out,
+                                                 "--budget", "0.0007", "--jobs", "1", "--no-count-tokens")
+            files = sorted(p.name for p in Path(out).glob("*.json") if "compare" not in p.name)
+            result = json.loads(Path(out, files[0]).read_text(encoding="utf-8"))
+        self.assertEqual(code, 2)
+        self.assertIn("budget of $0.0007 was reached", stderr)
+        self.assertIn("the remaining 1 model(s) were not run", stderr)
+        self.assertEqual(len(files), 1, files)  # the second model was never started
+        self.assertTrue(result["run"]["complete"])  # the first model's runs had all finished
+        self.assertEqual(result["run"]["budget_usd"], 0.0007)
+        self.assertIn("spent $0.0010 of the $0.0007 budget", stdout)
+
+    def test_the_budget_can_end_a_model_in_the_middle(self):
+        with _fake_openrouter(["good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = self.run_main(server, "--models", "good/model", "--out", out, "--budget", "0.0003",
+                                                 "--jobs", "1", "--no-count-tokens")
+            result = json.loads(next(Path(out).glob("*good-model.json")).read_text(encoding="utf-8"))
+        self.assertEqual(code, 2)
+        self.assertFalse(result["run"]["complete"])
+        self.assertEqual([r["status"] for r in result["records"]], ["pass", "aborted"])
+        self.assertIn("INCOMPLETE RUN", stdout)
+        self.assertIn("were not started or finished", stderr)
+
+    def test_budget_needs_openrouter(self):
+        code, _, stderr = _run_main("--provider", "mock", "--budget", "1", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("--budget", stderr)
+        code, _, stderr = _run_main("--provider", "openrouter", "--budget", "-1", "--models", "a/b", "--dry-run")
+        self.assertEqual(code, 2)
+
+
+def _fast_init(**fixed):
+    """OpenRouterProvider.__init__ with some options forced (no waiting between retries in a test)."""
+    original = providers.OpenRouterProvider.__init__
+
+    def init(self, model=None, **options):
+        options.update(fixed)
+        options.setdefault("sleep", lambda s: None)
+        original(self, model, **options)
+
+    return init
+
+# =========================================================== several models, several languages
+
+
+def fake_results(model, recs, langs, categories=None, mock=False, **run_fields):
+    """A results dict as run.py writes it (without the prompts), built from records."""
+    categories = categories or {}
+    run_meta = {
+        "date": "2026-10-07", "started_at": "2026-10-07T10:00:00+00:00", "finished_at": "2026-10-07T10:30:00+00:00",
+        "provider": {"name": "mock" if mock else "openrouter", "model": model}, "langs": langs, "repairs": 3,
+        "samples": 1, "timeout_s": 10, "backend": "native", "mock": mock, "complete": True,
+        "tokens_are_estimates": mock, "nyra": {"path": "target/release/nyra", "version": "nyra 0.2.0"},
+        "spec": {"path": "docs/SPEC.md", "version": "0.2", "sha256": "5" * 64}, "node": {"version": "v25.2.1", "flags": ""},
+        "rust": {"command": "rustc", "version": "rustc 1.99.0", "flags": ""}, "python": "3.14.2",
+        "max_version": "0.2", "tasks_sha256": "t" * 64, "served_models": [] if mock else [model + "-20260101"],
+        "served_by": [], "spent_usd": None, "repo": {"commit": "abc1234", "dirty": False}, "warnings": [],
+        "task_ids": sorted({r["task_id"] for r in recs}), "excluded_tasks": [],
+        "tasks": {t: {"category": categories.get(t, "math"), "prompt": "PROMPT-" + t}
+                  for t in {r["task_id"] for r in recs}},
+        "system_prompts": {lang: "SYSTEM-" + lang for lang in langs},
+    }
+    run_meta.update(run_fields)
+    return {"schema": 2, "run": run_meta, "records": recs, "summary": report.summarize(recs, langs, categories)}
+
+
+def four_language_records(first_try):
+    """first_try: {(task, lang): bool}. A run that fails its first try passes on the second (wrong output)."""
+    rec = ReportSummary.rec
+    out = []
+    for (task, lang), ok in first_try.items():
+        out.append(rec(task, lang, ok, True, kind="wrong_output", attempts=1 if ok else 2,
+                       out={"nyra": 80, "python": 60, "typescript": 90, "rust": 120}[lang],
+                       code_tokens={"nyra": 50, "python": 40, "typescript": 60, "rust": 100}[lang]))
+    return out
+
+
+LANGS4 = ["nyra", "python", "typescript", "rust"]
+
+
+class ReportManyLanguages(unittest.TestCase):
+    TASKS = ("a", "b", "c", "d")
+
+    def records(self):
+        # a: everybody first try. b: only nyra misses. c: only rust hits. d: nobody
+        table = {"a": (1, 1, 1, 1), "b": (0, 1, 1, 1), "c": (0, 0, 0, 1), "d": (0, 0, 0, 0)}
+        return four_language_records({(t, lang): bool(table[t][i]) for t in self.TASKS for i, lang in enumerate(LANGS4)})
+
+    def test_every_language_is_compared_with_the_first_one(self):
+        s = report.summarize(self.records(), LANGS4)
+        self.assertEqual(s["paired"]["baseline"], "nyra")
+        self.assertEqual(sorted(s["paired"]["pairs"]), ["python", "rust", "typescript"])
+        self.assertEqual(s["paired"]["n"], 1)  # task a is the only run all four got right
+        py = s["paired"]["pairs"]["python"]
+        self.assertEqual((py["n"], py["first_try"]["only_a"], py["first_try"]["only_b"], py["first_try"]["neither"]),
+                         (1, 0, 1, 2))
+        self.assertEqual(py["langs"]["nyra"]["avg_code_tokens"], 50)
+        self.assertEqual(py["langs"]["python"]["avg_code_tokens"], 40)
+        rust = s["paired"]["pairs"]["rust"]
+        self.assertEqual((rust["n"], rust["first_try"]["only_b"]), (1, 2))
+        self.assertAlmostEqual(rust["first_try"]["sign_test_p"], report.mcnemar_exact(0, 2))
+        for lang in LANGS4:
+            self.assertEqual(s["paired"]["langs"][lang]["avg_chars"], 200)
+
+    def test_category_breakdown_counts_first_tries_and_repairs(self):
+        cats = {"a": "math", "b": "math", "c": "strings", "d": "strings"}
+        s = report.summarize(self.records(), LANGS4, cats)
+        self.assertEqual(s["by_category"]["math"]["nyra"], {"n": 2, "pass_at_1": 1, "pass_within_repairs": 2})
+        self.assertEqual(s["by_category"]["strings"]["rust"], {"n": 2, "pass_at_1": 1, "pass_within_repairs": 2})
+        self.assertEqual(list(s["by_category"]), ["math", "strings"])
+        self.assertIsNone(report.summarize(self.records(), LANGS4)["by_category"])
+
+    def test_thinking_and_cost_statistics_appear_only_when_the_api_reports_them(self):
+        plain = report.summarize(self.records(), LANGS4)["langs"]["nyra"]
+        self.assertIsNone(plain["avg_reasoning_tokens_first_attempt"])
+        self.assertIsNone(plain["avg_reply_tokens_first_attempt"])
+        self.assertIsNone(plain["total_cost_usd"])
+        recs = self.records()
+        for r in recs:
+            first = r["attempts"][0]
+            first["usage"]["reasoning_tokens"] = 30
+            first["usage"]["cost_usd"] = 0.5
+        s = report.summarize(recs, LANGS4)["langs"]["nyra"]
+        self.assertEqual(s["avg_reasoning_tokens_first_attempt"], 30)
+        self.assertEqual(s["avg_reply_tokens_first_attempt"], 50)  # 80 billed - 30 thinking
+        self.assertAlmostEqual(s["total_cost_usd"], 0.5 * 4)  # first attempts only: the repair attempts have no cost
+        self.assertAlmostEqual(s["avg_cost_per_run_usd"], 0.5)
+
+    def test_a_model_report_has_every_language_and_the_token_headline_in_order(self):
+        recs = self.records()
+        results = fake_results("vendor/model", recs, LANGS4, {"a": "math", "b": "math", "c": "strings", "d": "strings"})
+        md = report.render_markdown(results, {})
+        header = next(ln for ln in md.splitlines() if ln.startswith("| Metric |"))
+        self.assertEqual([c.strip() for c in header.strip("|").split("|")], ["Metric", "Nyra", "Python", "TypeScript", "Rust"])
+        self.assertLess(md.index("**Code tokens, first attempt**"), md.index("**Billed output tokens, first attempt**"))
+        self.assertNotIn("of which thinking", md)  # not reported, not shown
+        self.assertNotIn("Cost per run", md)
+        for section in ("## Nyra against each other language", "## Same runs, right on the first try in all 4 languages",
+                        "## Per category", "## How first attempts failed", "## Per task"):
+            self.assertIn(section, md)
+        self.assertIn("| Python | 1 |", md)
+        self.assertTrue(md.isascii())
+        self.assertIn("Node.js 25.2.1", md)
+        self.assertIn("rustc 1.99.0", md)
+
+    def test_thinking_and_cost_rows_are_shown_when_reported(self):
+        recs = self.records()
+        for r in recs:
+            r["attempts"][0]["usage"].update(reasoning_tokens=30, cost_usd=0.01)
+        md = report.render_markdown(fake_results("vendor/model", recs, LANGS4), {})
+        for row in ("of which thinking, first attempt", "Reply tokens without thinking", "Cost per run (as billed)"):
+            self.assertIn(row, md)
+
+    def test_two_languages_still_render_without_the_all_language_table(self):
+        recs = [r for r in self.records() if r["lang"] in ("nyra", "python")]
+        md = report.render_markdown(fake_results("m", recs, ["nyra", "python"]), {})
+        self.assertIn("## Nyra against each other language", md)
+        self.assertNotIn("Same runs, right on the first try in all", md)
+
+    def test_a_single_language_has_no_comparison(self):
+        recs = [r for r in self.records() if r["lang"] == "python"]
+        md = report.render_markdown(fake_results("m", recs, ["python"]), {})
+        self.assertNotIn("against each other language", md)
+        self.assertIn("**pass@1**", md)
+
+    def test_language_columns_follow_the_standard_order(self):
+        self.assertEqual(report.ordered_langs({"rust", "python", "zig", "nyra"}), ["nyra", "python", "rust", "zig"])
+        self.assertEqual(report.display("typescript"), "TypeScript")
+        self.assertEqual(report.display("zig"), "zig")
+
+
+class ModelComparison(unittest.TestCase):
+    def results(self, model, first_try, **run_fields):
+        return fake_results(model, four_language_records(first_try), LANGS4, **run_fields)
+
+    def two_models(self):
+        everything = {(t, lang): True for t in ("a", "b") for lang in LANGS4}
+        some = dict(everything)
+        some[("a", "nyra")] = False
+        some[("b", "rust")] = False
+        return [self.results("vendor/strong", everything, spent_usd=1.5), self.results("vendor/weak", some)]
+
+    def test_one_row_per_model_and_one_column_per_language(self):
+        md = report.render_comparison(self.two_models())
+        self.assertTrue(md.isascii())
+        for heading in ("## First-try success (pass@1)", "## Success within 3 repairs", "## Tokens of the first attempt",
+                        "## Models"):
+            self.assertIn(heading, md)
+        self.assertIn("| Model | Nyra | Python | TypeScript | Rust |", md)
+        self.assertIn("| vendor/strong | 100% (2/2) | 100% (2/2) | 100% (2/2) | 100% (2/2) |", md)
+        self.assertIn("| vendor/weak | 50% (1/2) | 100% (2/2) | 100% (2/2) | 50% (1/2) |", md)
+        self.assertNotIn("Cost per run", md)
+
+    def test_the_token_cell_is_code_tokens_with_billed_tokens_in_brackets(self):
+        md = report.render_comparison(self.two_models())
+        self.assertIn("| vendor/strong | 50 (80) | 40 (60) | 60 (90) | 100 (120) |", md)
+
+    def test_costs_and_spent_totals_appear_when_reported(self):
+        models = self.two_models()
+        for results in models:
+            for rec in results["records"]:
+                rec["attempts"][0]["usage"]["cost_usd"] = 0.25
+            results["summary"] = report.summarize(results["records"], LANGS4)
+        md = report.render_comparison(models)
+        self.assertIn("## Cost per run (as billed)", md)
+        self.assertIn("$0.2500", md)
+        self.assertIn("$1.50", md)  # the total of the strong model, from the run metadata
+        self.assertIn("| vendor/weak | vendor/weak-20260101 | yes | - |", md)
+
+    def test_mock_incomplete_and_mismatched_runs_are_flagged(self):
+        models = self.two_models()
+        md = report.render_comparison(models)
+        self.assertNotIn("MOCK", md)
+        self.assertNotIn("INCOMPLETE", md)
+        models[1]["run"]["complete"] = False
+        models[1]["run"]["tasks_sha256"] = "other"
+        models[0]["run"]["mock"] = True
+        md = report.render_comparison(models)
+        self.assertIn("MOCK RUN", md)
+        self.assertIn("INCOMPLETE", md)
+        self.assertIn("differ in task set", md)
+        self.assertIn("| vendor/weak | vendor/weak-20260101 | NO |", md)
+
+    def test_models_with_different_languages_get_dashes(self):
+        a = self.results("m/a", {(t, lang): True for t in ("a",) for lang in LANGS4})
+        recs = [r for r in four_language_records({("a", lang): True for lang in LANGS4}) if r["lang"] in ("python", "rust")]
+        b = fake_results("m/b", recs, ["python", "rust"])
+        md = report.render_comparison([a, b])
+        self.assertIn("| m/b | - | 100% (1/1) | - | 100% (1/1) |", md)
+
+    def test_an_empty_comparison_does_not_crash(self):
+        self.assertIn("No results", report.render_comparison([]))
+
+
+class CountingPolicy(unittest.TestCase):
+    """Counting code tokens costs money with some providers: the runner asks about first attempts only."""
+
+    def run_with(self, count_all_attempts):
+        counted = []
+
+        class Counting(providers.Provider):
+            name, default_model = "c", "c"
+
+            def complete(self, system, messages, meta):
+                text = "```python\nprint(%d)\n```" % (1 if meta["attempt"] > 1 else 0)
+                return providers.Reply(text, providers.Usage(1, 1))
+
+            def count_tokens(self, text):
+                counted.append(text)
+                return 3
+
+        Counting.count_all_attempts = count_all_attempts
+        rec = run.run_one(_task("1\n"), run.PythonLang(timeout=5), 0,
+                          run.RunContext(provider=Counting(), repairs=2, count_tokens=True))
+        return rec, counted
+
+    def test_a_provider_that_bills_for_counting_is_asked_about_first_attempts_only(self):
+        self.assertFalse(providers.OpenRouterProvider.count_all_attempts)
+        self.assertTrue(providers.AnthropicProvider.count_all_attempts)
+        rec, counted = self.run_with(False)
+        self.assertEqual(rec["attempts_used"], 2)
+        self.assertEqual([a["code_tokens"] for a in rec["attempts"]], [3, None])
+        self.assertEqual(counted, ["print(0)"])
+
+    def test_a_free_counter_is_asked_about_every_attempt(self):
+        rec, counted = self.run_with(True)
+        self.assertEqual([a["code_tokens"] for a in rec["attempts"]], [3, 3])
+        self.assertEqual(counted, ["print(0)", "print(1)"])
+
+    def test_counting_can_be_switched_off(self):
+        counted = []
+
+        class Counting(providers.Provider):
+            name, default_model = "c", "c"
+
+            def complete(self, system, messages, meta):
+                return providers.Reply("```python\nprint(1)\n```", providers.Usage(1, 1))
+
+            def count_tokens(self, text):
+                counted.append(text)
+                return 3
+
+        rec = run.run_one(_task("1\n"), run.PythonLang(timeout=5), 0,
+                          run.RunContext(provider=Counting(), repairs=0, count_tokens=False))
+        self.assertEqual((counted, rec["attempts"][0]["code_tokens"]), ([], None))
+
+
+@needs_nyra
+class MockModels(unittest.TestCase):
+    """Several mock models in one run: different 'models' for the comparison tables, no API."""
+
+    ARGS = ("--provider", "mock", "--langs", "nyra,python", "--tasks", "fizzbuzz,gcd_pairs,grade_letters", "-q")
+
+    def run_models(self, models, *extra):
+        with tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = _run_main(*self.ARGS, "--models", models, "--out", out, *extra)
+            files = sorted(p.name for p in Path(out).iterdir())
+            loaded = {}
+            for p in Path(out).glob("*.json"):
+                data = json.loads(p.read_text(encoding="utf-8"))
+                loaded["index" if "records" not in data else data["run"]["provider"]["model"]] = data
+            compare = next(Path(out).glob("*compare.md")).read_text(encoding="utf-8") if models.count(",") else None
+        return code, stdout, stderr, files, loaded, compare
+
+    def test_each_model_gets_its_result_files_and_the_run_a_comparison(self):
+        code, stdout, stderr, files, loaded, compare = self.run_models("mock,mock-flaky,mock-wrong")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(len(files), 9)  # three results x (json, md), the comparison (md, json) and latest.md
+        self.assertEqual(sorted(loaded), ["index", "mock", "mock-flaky", "mock-wrong"])
+        self.assertEqual(loaded["mock"]["summary"]["langs"]["python"]["pass_at_1"], 3)
+        self.assertEqual(loaded["mock-wrong"]["summary"]["langs"]["python"]["pass_at_1"], 0)
+        self.assertEqual(loaded["mock-wrong"]["summary"]["langs"]["python"]["pass_within_repairs"], 3)
+        flaky = loaded["mock-flaky"]["summary"]["langs"]
+        persona = providers.MockProvider("mock-flaky", reference=lambda lang, task: None)
+        for lang in ("nyra", "python"):  # the first try fails exactly where the mock breaks it on purpose
+            unbroken = sum(1 for t in ("fizzbuzz", "gcd_pairs", "grade_letters") if persona.defect_for(lang, t) is None)
+            self.assertEqual(flaky[lang]["pass_at_1"], unbroken, lang)
+            self.assertEqual(flaky[lang]["pass_within_repairs"], 3, lang)
+        self.assertEqual([m["model"] for m in loaded["index"]["models"]], ["mock", "mock-flaky", "mock-wrong"])
+        for model in ("mock", "mock-flaky", "mock-wrong"):
+            self.assertIn(f"| {model} |", compare)
+        self.assertIn("MOCK RUN", compare)
+        self.assertIn("=== model 2 of 3: mock-flaky ===", stdout)
+        self.assertIn("mock-wrong: pass@1 Nyra 0/3, Python 0/3", stdout)
+
+    def test_a_single_model_prints_its_full_report_and_writes_no_comparison(self):
+        code, stdout, _, files, loaded, _ = self.run_models("mock")
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(loaded), ["mock"])
+        self.assertIn("## Headline", stdout)
+        self.assertFalse([f for f in files if "compare" in f])
+
+    def test_the_comparison_is_there_for_an_interrupted_or_partial_set_too(self):
+        # models run one after the other: with a model that cannot finish, the others still land in the comparison
+        class Dead(providers.MockProvider):
+            def __init__(self, model=None, **options):
+                super().__init__("mock", **options)
+                self.model = model
+
+            def complete(self, system, messages, meta):
+                raise providers.ProviderError("HTTP 404: no such model", fatal=True)
+
+        real = providers.make_provider
+
+        def make(name, model=None, **options):
+            return Dead(model, **options) if model == "mock-dead" else real(name, model, **options)
+
+        with mock.patch.object(providers, "make_provider", make):
+            code, _, stderr, files, loaded, compare = self.run_models("mock,mock-dead,mock-wrong")
+        self.assertEqual(code, 2)
+        self.assertIn("no run finished for mock-dead", stderr)
+        self.assertEqual(sorted(loaded), ["index", "mock", "mock-wrong"])
+        self.assertNotIn("mock-dead", compare)
+
+    def test_repairs_zero_makes_the_flawed_models_fail_the_self_test(self):
+        code, _, stderr, _, loaded, _ = self.run_models("mock,mock-wrong", "--repairs", "0")
+        self.assertEqual(code, 1)
+        self.assertIn("self-test", stderr)
+        self.assertEqual(loaded["mock"]["summary"]["langs"]["python"]["pass_within_repairs"], 3)
+
+    def test_option_errors(self):
+        cases = (
+            (("--models", "mock", "--model", "mock"), "--model or --models, not both"),
+            (("--models", "mock-bogus"), "unknown mock model 'mock-bogus'"),
+            (("--models", "default"), "OpenRouter list"),
+            (("--models", "mock,mock"), "listed more than once"),
+            (("--models", " , "), "no model ids given"),
+        )
+        for extra, message in cases:
+            code, _, stderr = _run_main("--provider", "mock", "--langs", "python", "--tasks", "fizzbuzz", "--dry-run", *extra)
+            self.assertEqual(code, 2, extra)
+            self.assertIn(message, stderr)
+        code, _, stderr = _run_main("--provider", "openrouter", "--langs", "python", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("no default model", stderr)
+        self.assertIn("--models", stderr)
+
+    def test_effort_levels_depend_on_the_provider(self):
+        code, _, stderr = _run_main("--provider", "anthropic", "--effort", "none", "--langs", "python", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("OpenRouter reasoning levels", stderr)
+        code, _, _ = _run_main("--provider", "anthropic", "--effort", "high", "--langs", "python", "--tasks", "fizzbuzz",
+                               "--dry-run")
+        self.assertEqual(code, 0)
+
+    def test_default_models_expand_to_the_configured_list(self):
+        ids = modelsmod.default_model_ids()
+        listing = [{"id": mid, "name": mid, "pricing": {"prompt": "0.000001", "completion": "0.000002"}} for mid in ids]
+        with mock.patch.object(modelsmod, "fetch_models", return_value=listing):
+            code, stdout, _ = _run_main("--provider", "openrouter", "--models", "default", "--langs", "python",
+                                        "--tasks", "fizzbuzz", "--dry-run")
+        self.assertEqual(code, 0)
+        for mid in ids:
+            self.assertIn(f"{mid}: about $", stdout)
+        self.assertIn(f"{4 * len(ids)} in total", stdout)
+
+
+@needs_nyra
+@needs_node
+class MockPipelineFourLanguages(NeedsRust):
+    TASKS = "fizzbuzz,gcd_pairs,roman_numerals"
+
+    def run_main_out(self, *extra, tasks=None):
+        with tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = _run_main("--provider", "mock", "--tasks", tasks or self.TASKS, "--out", out, "-q", *extra)
+            results = json.loads(next(Path(out).glob("*.json")).read_text(encoding="utf-8"))
+        return code, stdout, stderr, results
+
+    def test_all_four_languages_run_and_pass(self):
+        code, stdout, stderr, results = self.run_main_out()
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(results["run"]["langs"], LANGS4)
+        self.assertEqual(len(results["records"]), 12)
+        self.assertTrue(all(r["status"] == "pass" and r["first_try"] for r in results["records"]))
+        for lang in LANGS4:
+            self.assertEqual(results["summary"]["langs"][lang]["pass_at_1"], 3)
+        self.assertEqual(set(results["run"]["system_prompts"]), set(LANGS4))
+        self.assertIn("| Metric | Nyra | Python | TypeScript | Rust |", stdout)
+        self.assertIn("Nyra against each other language", stdout)
+
+    def test_the_toolchains_are_recorded_without_local_paths(self):
+        _, _, _, results = self.run_main_out("--langs", "typescript,rust", tasks="fizzbuzz")
+        run_meta = results["run"]
+        self.assertRegex(run_meta["node"]["version"], r"^v\d+\.\d+\.\d+")
+        self.assertIn("--experimental-transform-types", run_meta["node"]["flags"])
+        self.assertTrue(run_meta["rust"]["version"].startswith("rustc "))
+        self.assertTrue(run_meta["rust"]["command"].startswith("rustc"))
+        self.assertIn("--edition 2021", run_meta["rust"]["flags"])
+        self.assertIn("-O", run_meta["rust"]["flags"].split())
+        self.assertIsNone(run_meta["nyra"])
+        self.assertNotIn(os.path.expanduser("~"), json.dumps(run_meta))
+        self.assertEqual(results["schema"], 2)
+
+    def test_each_defect_is_repaired_in_typescript_and_rust(self):
+        expected_kind = {"no_code": "no_code", "syntax": "compile_error", "runtime": "runtime_error",
+                         "wrong": "wrong_output"}
+        for defect, kind in expected_kind.items():
+            with self.subTest(defect=defect):
+                code, _, stderr, results = self.run_main_out("--langs", "typescript,rust", "--mock-flaky", defect,
+                                                             tasks="fizzbuzz")
+                self.assertEqual(code, 0, stderr)
+                for rec in results["records"]:
+                    self.assertEqual((rec["status"], rec["attempts_used"]), ("pass", 2), rec["lang"])
+                    first = rec["attempts"][0]
+                    self.assertEqual(first["result"]["kind"], kind, rec["lang"])
+                    self.assertTrue(first["feedback"])
+                    self.assertNotIn("nyra-bench-", first["feedback"])
+
+    def test_a_typescript_only_run_needs_neither_nyra_nor_rust(self):
+        with mock.patch.object(run, "find_nyra", side_effect=AssertionError("nyra is not needed")), \
+                mock.patch.object(run, "_find_rust_tool", side_effect=AssertionError("rust is not needed")):
+            code, _, stderr, results = self.run_main_out("--langs", "typescript", tasks="fizzbuzz,binary_search")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(len(results["records"]), 2)  # no Nyra, so no version limit: the 0.3 task runs too
+
+    def test_a_nyra_run_limits_every_language_to_the_tasks_nyra_can_express(self):
+        code, stdout, _ = _run_main("--provider", "mock", "--langs", "nyra,typescript,rust", "--tasks",
+                                    "fizzbuzz,binary_search", "--max-version", "0.2", "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("fizzbuzz", stdout)
+        self.assertIn("skipped binary_search: needs Nyra 0.3", stdout)
+
+
+class VerifyLanguages(unittest.TestCase):
+    """verify.py must be able to fail for TypeScript and Rust references too."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not NODE or rust_toolchain() is None:
+            raise unittest.SkipTest("needs Node.js and a Rust toolchain")
+
+    def setUp(self):
+        import verify
+        self.verify = verify
+        self.tmp = tempfile.TemporaryDirectory()
+        self.sol = Path(self.tmp.name)
+        for lang in ("python", "nyra", "typescript", "rust"):
+            (self.sol / lang).mkdir()
+        (self.sol / "python" / "t.py").write_text("print(42)\n")
+        patcher = mock.patch.object(run, "SOLUTIONS_DIR", self.sol)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.tmp.cleanup)
+        self.args = SimpleNamespace(timeout=10, write=False, strict=False)
+        self.extra = {"typescript": run.TypeScriptLang(timeout=10), "rust": rust_toolchain()}
+
+    def check(self, extra=None):
+        task = run.Task("t", "T", "prompt", "42\n", "0.1", "math", "easy", Path("t.json"))
+        return self.verify.check_task(task, self.args, {}, None, self.extra if extra is None else extra)
+
+    def good(self):
+        (self.sol / "typescript" / "t.ts").write_text("console.log(42);\n")
+        (self.sol / "rust" / "t.rs").write_text('fn main() {\n    println!("42");\n}\n')
+
+    def test_good_references_pass_and_are_noted(self):
+        self.good()
+        res = self.check()
+        self.assertEqual(res["problems"], [])
+        self.assertIn("typescript, rust", res["notes"])
+
+    def test_a_missing_reference_is_a_problem_whatever_the_version(self):
+        self.good()
+        (self.sol / "rust" / "t.rs").unlink()
+        res = self.check()
+        self.assertEqual(len(res["problems"]), 1)
+        self.assertIn("missing bench/solutions/rust/t.rs", res["problems"][0])
+        (self.sol / "typescript" / "t.ts").unlink()
+        self.assertEqual(len(self.check()["problems"]), 2)
+
+    def test_wrong_output_and_broken_programs_are_reported_per_language(self):
+        self.good()
+        (self.sol / "typescript" / "t.ts").write_text("console.log(41);\n")
+        (self.sol / "rust" / "t.rs").write_text("fn main() {\n    println!(oops);\n}\n")
+        problems = self.check()["problems"]
+        self.assertEqual(len(problems), 2)
+        self.assertIn("TypeScript reference: wrong_output: first difference on line 1", problems[0])
+        self.assertIn("Rust reference: compile_error", problems[1])
+
+    def test_only_the_requested_languages_are_checked(self):
+        self.good()
+        (self.sol / "rust" / "t.rs").unlink()
+        self.assertEqual(self.check({"typescript": self.extra["typescript"]})["problems"], [])
+
+class VerifyCommandLine(unittest.TestCase):
+    def test_skip_leaves_toolchains_out_and_says_so(self):
+        import verify
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = verify.main(["--skip", "nyra,typescript,rust", "--tasks", "fizzbuzz", "--timeout", "20"])
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertIn("not checked here (--skip): nyra, rust, typescript", out.getvalue())
+        self.assertNotIn("typescript;", out.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(verify.main(["--skip", "cobol"]), 2)
+        self.assertIn("unknown language", err.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(verify.main(["--tasks", "no_such_task", "--skip", "nyra,typescript,rust"]), 2)
+
+    @unittest.skipUnless(NODE, "Node.js is not installed")
+    def test_typescript_is_checked_unless_skipped(self):
+        import verify
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = verify.main(["--skip", "nyra,rust", "--tasks", "fizzbuzz,gcd_pairs"])
+        self.assertEqual(code, 0)
+        self.assertIn("2 with a TypeScript reference", out.getvalue())
+        self.assertIn("(typescript)", out.getvalue())
+        self.assertNotIn("rust", out.getvalue().replace("not checked here (--skip): nyra, rust", ""))
 
 
 if __name__ == "__main__":
