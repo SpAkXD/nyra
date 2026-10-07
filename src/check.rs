@@ -862,16 +862,20 @@ impl Checker {
             }
         } else if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge) && l == Str && r == Str {
             "strings can only be compared with `==` and `!=`: there is no ordering for text".to_string()
-        } else if op == BinOp::Mod && l == Float && r == Float {
-            "`%` works on `int` only; for floats compute the remainder as `a - b * float(int(a / b))`".to_string()
+        } else if op == BinOp::Mod && (l == Float || r == Float) {
+            "`%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`".to_string()
         } else if matches!(op, BinOp::And | BinOp::Or) {
             let fix = |e: &Expr, t: Type, s: &Option<String>| -> Option<String> {
                 let s = s.as_ref()?;
-                let simple = matches!(
-                    e.kind,
-                    ExprKind::Var(_) | ExprKind::Call(..) | ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Str(_) | ExprKind::Bool(_)
+                // `a + b != 0` needs no parentheses, `a < b != 0` would
+                let loose = matches!(
+                    &e.kind,
+                    ExprKind::Binary(
+                        BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::And | BinOp::Or,
+                        ..
+                    )
                 );
-                let wrapped = if simple { s.clone() } else { format!("({s})") };
+                let wrapped = if loose { format!("({s})") } else { s.clone() };
                 match t {
                     Bool => Some(s.clone()),
                     Int => Some(format!("{wrapped} != 0")),

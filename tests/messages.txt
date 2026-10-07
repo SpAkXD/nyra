@@ -2491,7 +2491,7 @@ error[E0210]: cannot use `%` on `float` and `float`: `%` needs two `int`s
   |
 2 |     print(5.0 % 2.0)
   |               ^
-  = hint: `%` works on `int` only; for floats compute the remainder as `a - b * float(int(a / b))`
+  = hint: `%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -4217,5 +4217,36 @@ error[E0101]: expected `fn`, found `string`
   | ^
   = hint: functions start with `fn` and the return type comes after `->`: `fn greet(...) -> str { ... }`
   = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== chk_op_mod_mixed
+fn main() {
+    let f = 5.5
+    print(f % 2)
+}
+----
+error[E0210]: cannot use `%` on `float` and `int`: `%` needs two `int`s
+  --> case.nyra:3:13
+  |
+3 |     print(f % 2)
+  |             ^
+  = hint: `%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`
+  = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== chk_op_and_compare
+fn main() {
+    let a = 1
+    let b = 2
+    print((a < b) && (a + b) % 2)
+}
+----
+error[E0210]: cannot use `&&` on `bool` and `int`: `&&` needs two `bool`s
+  --> case.nyra:4:19
+  |
+4 |     print((a < b) && (a + b) % 2)
+  |                   ^
+  = hint: compare each side first: `a < b && (a + b) % 2 != 0`
+  = explain: nyra explain E0210
 
 nyra: 1 error(s)
