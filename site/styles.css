@@ -86,7 +86,7 @@ html:not(.js) .burger{display:none}
 .win-bar .sp{margin-left:auto}
 .lights{display:flex;gap:6px}.lights i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.14)}
 .cw{display:flex;padding:14px 14px 14px 0;min-width:0}
-.gut{margin:0;padding:0 12px 0 14px;color:#566079;text-align:right;font:var(--fs)/var(--lh) var(--mono);user-select:none;flex:none}
+.gut{margin:0;padding:0 12px 0 14px;color:#6d7690;text-align:right;font:var(--fs)/var(--lh) var(--mono);user-select:none;flex:none}
 .code{margin:0;font:var(--fs)/var(--lh) var(--mono);color:#d6dae8;overflow-x:auto;white-space:pre;tab-size:4;flex:1;min-width:0;position:relative;scrollbar-width:thin;scrollbar-color:#2a3042 transparent}
 .code.pad{padding:14px}
 .code .l{height:var(--lh);min-height:var(--lh)}
