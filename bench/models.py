@@ -79,13 +79,22 @@ def default_model_ids(path: Path = DEFAULT_MODELS_FILE) -> list:
     return [e["id"] if isinstance(e, dict) else e for e in data["models"]]
 
 
+def lookup(by_id: dict, model_id: str) -> Optional[dict]:
+    """The listing entry of a model id. `vendor/model:variant` (:online, :nitro, :floor, ...) is the same model with
+    different routing and is not listed on its own, so it falls back to `vendor/model`."""
+    entry = by_id.get(model_id)
+    if entry is None and ":" in model_id:
+        entry = by_id.get(model_id.rsplit(":", 1)[0])
+    return entry
+
+
 def missing_ids(listing: list, ids: list) -> list:
     """The ids that are not in the listing, each with up to three similar ids: [(id, [suggestions])]."""
-    known = {m["id"] for m in listing}
+    by_id = {m["id"]: m for m in listing}
     out = []
     for mid in ids:
-        if mid not in known:
-            near = difflib.get_close_matches(mid, sorted(known), n=3, cutoff=0.6)
+        if lookup(by_id, mid) is None:
+            near = difflib.get_close_matches(mid, sorted(by_id), n=3, cutoff=0.6)
             out.append((mid, near))
     return out
 
@@ -103,9 +112,10 @@ def price_per_token(model: dict) -> Optional[tuple]:
     if not isinstance(pricing, dict):
         return None
     try:
-        return float(pricing["prompt"]), float(pricing["completion"])
+        prompt, completion = float(pricing["prompt"]), float(pricing["completion"])
     except (KeyError, TypeError, ValueError):
         return None
+    return (prompt, completion) if prompt >= 0 and completion >= 0 else None  # "-1": routers like openrouter/auto
 
 
 def thinking_note(model: dict) -> str:
@@ -120,7 +130,9 @@ def thinking_note(model: dict) -> str:
 def describe(model: dict) -> str:
     price = price_per_token(model)
     cost = f"${price[0] * 1e6:.2f} in / ${price[1] * 1e6:.2f} out per M tokens" if price else "price n/a"
-    return f"{model['id']:<42} {cost:<40} {model.get('context_length', 0):>9,} ctx  {thinking_note(model)}"
+    context = model.get("context_length")
+    context = context if isinstance(context, int) and not isinstance(context, bool) else 0
+    return f"{model['id']:<42} {cost:<40} {context:>9,} ctx  {thinking_note(model)}"
 
 
 def main(argv=None) -> int:

@@ -1873,6 +1873,26 @@ class ModelList(unittest.TestCase):
         self.assertIn("anthropic/claude-opus-5.5", bad[0][1])
         self.assertEqual(bad[1][1], [])
 
+    def test_variant_suffixes_fall_back_to_the_model_itself(self):
+        # :online, :nitro, :floor ... are routing variants of a listed model and are not listed themselves
+        self.assertEqual(modelsmod.missing_ids(LISTING, ["openai/gpt-6-sol:online", "openai/gpt-6-sol:nitro"]), [])
+        bad = modelsmod.missing_ids(LISTING, ["openai/gpt-7:online"])
+        self.assertEqual([b[0] for b in bad], ["openai/gpt-7:online"])
+        self.assertEqual(modelsmod.lookup({"a/b": 1}, "a/b:x"), 1)
+        self.assertEqual(modelsmod.lookup({"a/b": 1, "a/b:x": 2}, "a/b:x"), 2)  # an exact id wins
+        self.assertIsNone(modelsmod.lookup({"a/b": 1}, "c/d"))
+
+    def test_a_price_of_minus_one_is_no_price(self):
+        # routers such as openrouter/auto have no fixed price and say -1
+        self.assertIsNone(modelsmod.price_per_token({"pricing": {"prompt": "-1", "completion": "-1"}}))
+        self.assertEqual(modelsmod.price_per_token({"pricing": {"prompt": "0", "completion": "0"}}), (0.0, 0.0))
+
+    def test_describe_survives_missing_fields(self):
+        text = modelsmod.describe({"id": "a/b", "context_length": None, "pricing": {}})
+        self.assertIn("a/b", text)
+        self.assertIn("0 ctx", text)
+        self.assertIn("price n/a", text)
+
     def test_search_matches_every_word_and_lists_newest_first(self):
         self.assertEqual([m["id"] for m in modelsmod.search(LISTING, ["claude"])],
                          ["anthropic/claude-opus-5.5", "anthropic/claude-haiku-4.5"])
@@ -1977,7 +1997,8 @@ class _FakeOpenRouter(http.server.BaseHTTPRequestHandler):
         else:
             text = f"```{lang}\n{reference_for_tests(lang, task.id).rstrip()}\n```"
         self._answer(200, ok_body(text=text, prompt=len(system) // 4 + 50, completion=60 if "weak" not in model else 30,
-                                  reasoning=10, cost=0.0005, model=model + "-20260101", provider="Fake Inc"))
+                                  reasoning=10, cost=None if "nocost" in model else 0.0005, model=model + "-20260101",
+                                  provider="Fake Inc"))
 
     def log_message(self, *args):
         pass
@@ -2061,6 +2082,13 @@ class OpenRouterRunEndToEnd(unittest.TestCase):
         self.assertIn("good/modle", stderr)
         self.assertIn("similar: good/model", stderr)
         self.assertEqual([r for r in server.requests if r[0] == "POST"], [])
+
+    def test_a_variant_of_a_listed_model_passes_the_id_check(self):
+        with _fake_openrouter(["small/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = self.run_main(server, "--models", "small/model:online", "--out", out, "--dry-run")
+        self.assertEqual(code, 0, stderr)
+        self.assertRegex(stdout, r"small/model:online: about \$\d")
+        self.assertIn("small/model:online allows", stderr)  # the limits of the model itself apply to its variants
 
     def test_a_max_tokens_above_what_a_model_allows_is_warned_about_up_front(self):
         with _fake_openrouter(["small/model", "good/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
@@ -2148,6 +2176,13 @@ class OpenRouterRunEndToEnd(unittest.TestCase):
         self.assertEqual([r["status"] for r in result["records"]], ["pass", "aborted"])
         self.assertIn("INCOMPLETE RUN", stdout)
         self.assertIn("were not started or finished", stderr)
+
+    def test_a_budget_cannot_work_without_reported_costs_and_that_is_said(self):
+        with _fake_openrouter(["nocost/model"], self.tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, _, stderr = self.run_main(server, "--models", "nocost/model", "--out", out, "--budget", "0.0001",
+                                            "--no-count-tokens")
+        self.assertEqual(code, 0, stderr)  # nothing could stop it, so it ran to the end
+        self.assertIn("--budget could not work for nocost/model: the API reported no costs", stderr)
 
     def test_budget_needs_openrouter(self):
         code, _, stderr = _run_main("--provider", "mock", "--budget", "1", "--dry-run")
@@ -2938,7 +2973,7 @@ class Readme(unittest.TestCase):
                        "bench/published", "typescript", "rust", "ANTHROPIC_API_KEY"):
             self.assertIn(needle, readme)
 
-    def test_the_readme_models_are_in_the_default_list_or_marked_as_examples(self):
+    def test_the_readme_only_names_models_that_bench_models_json_ships(self):
         # the ids the README tells the reader to type must be ids the harness itself ships and verified
         readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
         shipped = set(modelsmod.default_model_ids())

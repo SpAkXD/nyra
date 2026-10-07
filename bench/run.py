@@ -1242,7 +1242,7 @@ def check_openrouter_models(ids: list, base_url: Optional[str] = None, max_token
                          "(--no-model-check skips this check).")
     by_id = {m["id"]: m for m in listing}
     for mid in ids:
-        limit = (by_id[mid].get("top_provider") or {}).get("max_completion_tokens")
+        limit = ((modelsmod.lookup(by_id, mid) or {}).get("top_provider") or {}).get("max_completion_tokens")
         if max_tokens and isinstance(limit, int) and not isinstance(limit, bool) and max_tokens > limit:
             print(f"warning: --max-tokens {max_tokens} is above the {limit} completion tokens {mid} allows, so its "
                   f"requests will probably be rejected; pass --max-tokens {limit} or less", file=sys.stderr)
@@ -1391,6 +1391,8 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
     if bad and not (budget and budget.hit):
         print(f"warning: {len(bad)} run(s) of {provider.model} ended in an error and are excluded from the metrics",
               file=sys.stderr)
+    if budget and spent is None:
+        print(f"warning: --budget could not work for {provider.model}: the API reported no costs", file=sys.stderr)
     if budget and budget.hit:
         print(f"warning: the budget of ${budget.limit:g} was reached (${budget.spent():.4f} spent)"
               + (f": {len(bad)} run(s) of {provider.model} were not started or finished, and the numbers cover only "
@@ -1487,7 +1489,7 @@ def _main(args) -> int:
             print(f"estimated cost (about {ASSUMED_ATTEMPTS} attempts per run and {args.assume_output_tokens:,} output "
                   "tokens per attempt, thinking included; thinking models can use several times more):")
             for mid in model_ids:
-                price = modelsmod.price_per_token(by_id[mid])
+                price = modelsmod.price_per_token(modelsmod.lookup(by_id, mid) or {})
                 if price is None:
                     print(f"  {mid}: price not listed")
                     continue

@@ -78,7 +78,8 @@ entries. Use concrete ids such as `anthropic/claude-opus-5.5`, not the moving `~
 a result file says what was measured. `--models default` expands to the list in `bench/models.json`, which you can
 edit freely; it only holds ids that were checked against the live list (the `verified` date in the file says when),
 and `python bench/models.py --check` re-checks them. Before anything is spent, `run.py` checks every id against the
-public list and refuses a typo (with suggestions); `--no-model-check` skips that.
+public list and refuses a typo (with suggestions); a variant such as `vendor/model:online` passes when `vendor/model`
+is listed, and `--no-model-check` skips the check.
 
 **What is sent.** A chat completion per attempt: the language's system prompt, the task, and for repairs the
 conversation so far. Nothing else is set unless you ask: no temperature (many current models reject or ignore
@@ -94,7 +95,9 @@ harness asks for with the `X-OpenRouter-Metadata` header).
 **Failures.** Rate limits (429), timeouts and server trouble (5xx, also when OpenRouter reports them inside a 200
 response) are retried with exponential backoff that honours `Retry-After`. A request that can never work (400, 404,
 422) stops that model and the run goes on with the next one; a bad key or no credits (401, 402) stops everything.
-Results that finished are always saved and marked `"complete": false` when the run was cut short.
+Results that finished are always saved and marked `"complete": false` when the run was cut short. A request that
+times out is retried, and a provider may bill it again: for a thinking model that keeps timing out, lower
+`--max-tokens` or `--effort`.
 
 **Tokens and cost.** OpenRouter reports `usage` on every reply (prompt and completion tokens counted with the
 model's own tokenizer, thinking tokens inside the completion tokens, and the dollars charged). OpenRouter has no
@@ -352,7 +355,7 @@ instead of recording hundreds of fake failures. For an HTTP API, `providers.urll
 show the retry and error handling; tests inject a fake transport.
 
 **Language**: subclass `run.Language` (`name`, `ext`, `system_prompt`, `evaluate(code, task)`), add reference
-solutions under `solutions/<name>/`, register it in `run.make_languages` and `LANG_ORDER` (and in `report.DISPLAY`).
+solutions under `solutions/<name>/`, register it in `run.make_languages` and in `report.LANG_ORDER` and `report.DISPLAY`.
 `evaluate` must return an `EvalResult` and should reuse `run_limited` and `judge_run` so the verdict rules stay
 identical. `RustLang` and `TypeScriptLang` are the examples.
 
