@@ -9,7 +9,7 @@ function ny_panic(code, msg, hint, line, col) {
     const json = typeof process !== "undefined" && process.env.NYRA_JSON;
     const text = json
         ? JSON.stringify({ ok: false, errors: [{ code, message: msg, file: ny_file, line, col, hint, runtime: true }] })
-        : `runtime error[${code}]: ${msg}\n  --> ${ny_file}:${line}:${col}\n  = hint: ${hint}`;
+        : `runtime error[${code}]: ${msg}\n  --> ${ny_file}:${line}:${col}\n  = hint: ${hint}\n  = explain: nyra explain ${code}`;
     throw new NyPanic(text);
 }
 function ny_oom(line, col) {

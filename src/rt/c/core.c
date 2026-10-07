@@ -74,7 +74,8 @@ static void nyrt_panic(const char *code, const char *msg, const char *hint, int 
         nyrt_json_str(hint);
         fputs(",\"runtime\":true}]}\n", stderr);
     } else {
-        fprintf(stderr, "runtime error[%s]: %s\n  --> %s:%d:%d\n  = hint: %s\n", code, msg, nyrt_file, line, col, hint);
+        fprintf(stderr, "runtime error[%s]: %s\n  --> %s:%d:%d\n  = hint: %s\n  = explain: nyra explain %s\n", code, msg, nyrt_file,
+                line, col, hint, code);
     }
     exit(101);
 }
