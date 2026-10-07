@@ -27,8 +27,8 @@ const Loop = (() => {
 })();
 
 /* visibility via one IntersectionObserver */
-const io = new IntersectionObserver((es) => es.forEach(e => e.target._vis && e.target._vis(e.isIntersecting)), { rootMargin: '80px 0px' });
-const watch = (node, fn) => { if (!node) return; node._vis = fn; io.observe(node); };
+const io = new IntersectionObserver((es) => es.forEach(e => e.target._vis && e.target._vis.forEach(f => f(e.isIntersecting))), { rootMargin: '80px 0px' });
+const watch = (node, fn) => { if (!node) return; (node._vis = node._vis || []).push(fn); io.unobserve(node); io.observe(node); };
 /* run tick(dt, now) every frame while node is on screen */
 function whileVisible(node, tick, onShow) {
   let on = false;
@@ -223,7 +223,7 @@ function heroGL() {
 
   const VS = `
 attribute vec3 aPos; attribute vec4 aInfo;
-uniform mat3 uRot; uniform float uTime, uMorph, uF, uAspect, uDist, uSize, uPulse, uLine; uniform vec2 uShift;
+uniform mat3 uRot; uniform float uSplit; uniform float uTime, uMorph, uF, uAspect, uDist, uSize, uPulse, uLine; uniform vec2 uShift;
 varying float vA; varying float vG; varying vec3 vC;
 void main(){
   float seed = aInfo.z;
@@ -233,7 +233,7 @@ void main(){
   float side = aInfo.y*2.0 - 1.0;
   float sp = smoothstep(0.06, 0.4, tt);
   float ang = tt*20.0 + aInfo.y*3.1416 + uTime*0.7;
-  vec3 b = vec3(side*0.82*sp + cos(ang)*0.16*(0.35 + sp), 1.3 - tt*3.8, sin(ang)*0.16*(0.35 + sp));
+  vec3 b = vec3(side*uSplit*sp + cos(ang)*0.16*(0.35 + sp), 1.3 - tt*3.8, sin(ang)*0.16*(0.35 + sp));
   float m = smoothstep(0.0, 1.0, clamp(uMorph*1.8 - seed*0.8, 0.0, 1.0));
   vec3 p = mix(a, b, m);
   float w = uDist - p.z;
@@ -242,7 +242,7 @@ void main(){
   float d = clamp((p.z + 1.4)/2.8, 0.0, 1.0);
   gl_PointSize = uSize*(0.5 + 0.85*d)*uDist/w;
   float ends = smoothstep(0.0, 0.07, tt)*(1.0 - smoothstep(0.82, 1.0, tt));
-  vA = (0.16 + 0.84*d*d) * mix(1.0, ends, m) * mix(1.0, 1.0 - m, uLine);
+  vA = mix(0.16 + 0.84*d*d, 0.55 + 0.4*d, m) * mix(1.0, ends, m) * mix(1.0, 1.0 - m, uLine);
   vG = aInfo.w;
   vec3 teal = vec3(0.043, 0.847, 0.714), mint = vec3(0.384, 0.965, 0.71), sky = vec3(0.22, 0.74, 0.97);
   vC = mix(teal, mint, clamp(d*0.9 + 0.25*sin(seed*40.0), 0.0, 1.0));
@@ -257,7 +257,7 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
     const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
     gl.bindAttribLocation(p, 0, 'aPos'); gl.bindAttribLocation(p, 1, 'aInfo'); gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    const u = {}; ['uRot', 'uTime', 'uMorph', 'uF', 'uAspect', 'uDist', 'uSize', 'uPulse', 'uLine', 'uShift', 'uTex'].forEach(n => u[n] = gl.getUniformLocation(p, n));
+    const u = {}; ['uRot', 'uSplit', 'uTime', 'uMorph', 'uF', 'uAspect', 'uDist', 'uSize', 'uPulse', 'uLine', 'uShift', 'uTex'].forEach(n => u[n] = gl.getUniformLocation(p, n));
     return { p, u };
   };
   const PP = prog(FS_P), PL = prog(FS_L);
@@ -272,7 +272,7 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
   gl.enableVertexAttribArray(0); gl.enableVertexAttribArray(1);
 
   /* sizing */
-  let W = 0, H = 0, F = 1, shift = [0, 0], size = 24, aspect = 1;
+  let W = 0, H = 0, F = 1, shift = [0, 0], size = 24, aspect = 1, split = .82, R = 100;
   const DIST = 4;
   function resize() {
     const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
@@ -280,11 +280,12 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     gl.viewport(0, 0, W, H); aspect = w / h;
     const wide = w >= 900;
-    const R = wide ? Math.min(h * .3, w * .2) : Math.min(w * .3, 140);      // crystal radius in css px
+    R = wide ? Math.min(h * .3, w * .2) : Math.min(w * .3, 140);      // crystal radius in css px
     F = R / (h / 2) * DIST;
     const cx = wide ? w * .74 : w * .5, cy = wide ? h * .5 : 64 + (Math.min(w * .68, 330) - 10) / 2 + 6;
     shift = [cx / w * 2 - 1, 1 - cy / h * 2];
     size = (wide ? 30 : 23) * DPR;
+    split = wide ? Math.min(w / 2 - 44, 600) / R : .82;   // on wide screens the two streams flank the demo card
   }
   resize();
   if ('ResizeObserver' in window) new ResizeObserver(() => { resize(); if (RM) draw(); }).observe(cv);
@@ -320,7 +321,9 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
       gl.uniformMatrix3fv(u.uRot, false, rot);
       gl.uniform1f(u.uTime, t); gl.uniform1f(u.uMorph, Hero.morph); gl.uniform1f(u.uF, F); gl.uniform1f(u.uAspect, aspect);
       gl.uniform1f(u.uDist, DIST); gl.uniform1f(u.uSize, size); gl.uniform1f(u.uPulse, Hero.pulse); gl.uniform1f(u.uLine, line);
-      gl.uniform2f(u.uShift, shift[0], shift[1]);
+      const mo = sstep(0, 1, Hero.morph);
+      gl.uniform2f(u.uShift, shift[0] * (1 - mo), shift[1] + mo * 0.25);
+      gl.uniform1f(u.uSplit, split);
       if (!line) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(u.uTex, 0); }
       gl.drawArrays(mode, 0, count);
     }
