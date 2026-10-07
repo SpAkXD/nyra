@@ -1,0 +1,5 @@
+// expect: E0231
+fn main() {
+    let user = ["ann", 31]
+    print(user.len())
+}

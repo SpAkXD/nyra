@@ -1,0 +1,6 @@
+// expect: E0226
+fn area(width: int, height: int) -> int = width * height
+
+fn main() {
+    print(area(width: 3, height: 4))
+}

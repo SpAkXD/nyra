@@ -835,213 +835,247 @@ fn main() {
 - **Related:** E0101, E0223, E0226
 
 ## E0226: named argument in a function call
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A call to a function or builtin uses `name: value` arguments. Names are only used to build structs.
-- **Why Nyra has this rule:** One way to pass arguments: by position. Struct construction is the only place where names appear.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A call to a function, a builtin or a method uses `name: value` arguments. Names belong only to building a struct, `Point(x: 1, y: 2)`. Each named argument is reported: "named argument `width:` in a call to function `area`", and when the values are short the hint shows the call to write, with the values in the order of the parameters: `area(3, 4)`.
+- **Why Nyra has this rule:** Arguments are passed in one way only: by position, in the order of the parameters. There are no keyword arguments, no default values and no reordering, so a call reads the same way everywhere. Struct construction is the one place where names appear.
 - **Common causes:**
   - keyword arguments from Python, Swift or Kotlin
   - calling a function as if it were a struct
+  - `print(value: x)` or `str(value: x)`
 - **Wrong:**
 ```rust
-fn add(a: int, b: int) -> int = a + b
+fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(add(a: 1, b: 2))
+    print(area(width: 3, height: 4))
 }
 ```
 - **Fixed:**
 ```rust
-fn add(a: int, b: int) -> int = a + b
+fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(add(1, 2))
+    print(area(3, 4))
 }
 ```
-- **Related:** E0225, E0204
+- **Related:** E0204, E0225
 
 ## E0227: unknown method
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Methods exist only for arrays, strings and chars, and structs have none.
-- **Why Nyra has this rule:** The built-in operations are methods so that they add no global names, but the list is fixed and small. For a struct, write a function that takes it as a parameter (`area(p)`, not `p.area()`).
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Arrays, strings and characters have a fixed list of methods; numbers, bools and structs have none. The message is "`[int]` has no method `length`". The hint gives the Nyra spelling when the name is one that other languages use (`length` is `len`, `append` is `push`, `toUpperCase` is `upper`, `substring` is `slice`), suggests the closest name for a typo, or lists the methods. For a struct it says to write a function instead: `area(r)`, not `r.area()`.
+- **Why Nyra has this rule:** The built-in operations are methods so that they add no global names, and the list is small and fixed, so there is one name for each operation. Structs have no methods at all: a function that takes the struct as a parameter does the same.
 - **Common causes:**
-  - a method from another language: `size()`, `length()`, `append(...)`
-  - calling a method on a struct
+  - a method name from another language: `length()`, `size()`, `append(x)`, `toUpperCase()`, `substring(a, b)`, `isEmpty()`, `map(...)`
+  - a method on a number: `n.abs()`, `x.sqrt()`, `n.to_string()` (write `str(n)`)
+  - calling a method on a struct: write `area(r)`
   - `"A".code()`: `code()` belongs to `char`, so write `'A'.code()` or `s[0].code()` (all codes of a string: `s.codes()`)
-  - a typo in a method name (the message suggests the closest one)
+  - a typo in a method name
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs.size())
+    let xs = [4, 8, 15]
+    print(xs.length())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2]
+    let xs = [4, 8, 15]
     print(xs.len())
 }
 ```
-- **Related:** E0228, E0236
+- **Related:** E0224, E0228, E0236
 
 ## E0228: method not available for this element type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method exists, but not for the element type of this array: `join` needs `[str]` or `[char]`, and `sort` needs `[int]`, `[float]`, `[str]` or `[char]`.
-- **Why Nyra has this rule:** Joining and ordering are only defined for element types with one exact meaning on every backend.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method exists, but not for the element type of this array. `join` needs `[str]` or `[char]`, and `sort` needs `[int]`, `[float]`, `[str]` or `[char]`. The message is "`join` needs `[str]` or `[char]`, found `[int]`". For `join` the hint shows the loop that turns the elements into text first.
+- **Why Nyra has this rule:** Joining and ordering are only defined for element types where the result is the same on every backend. Characters and strings join as text and numbers, strings and characters have one order. There is no order for `bool` or for structs, and `join` never converts numbers to text behind your back: `str(x)` says what text you want.
 - **Common causes:**
-  - `join` on an array of numbers: convert the elements to text first
+  - `join` on an array of numbers: turn the elements into text first with `str(x)`
   - `sort` on an array of `bool` or of structs
-  - `join` on `[char]` is fine (`"ab".chars().join("-")`), on `[int]` it is not
+  - `sort` on an array of arrays
 - **Wrong:**
 ```rust
 fn main() {
-    print([1, 2].join(","))
+    let nums = [3, 1, 2]
+    print(nums.join(", "))
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    print(["1", "2"].join(","))
+    let nums = [3, 1, 2]
+    var parts: [str] = []
+    for n in nums {
+        parts.push(str(n))
+    }
+    print(parts.join(", "))
 }
 ```
 - **Related:** E0227
 
 ## E0229: cannot assign to this expression
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The left side of an assignment (or the receiver of a mutating method such as `push`, or an `inout` argument) is not something that can be changed: a temporary value like `f().push(1)`, a character of a string (`s[0] = "x"`), or any other expression that is not a variable, a field or an array element.
-- **Why Nyra has this rule:** Only variables and the fields and elements inside them can change. Strings are immutable: build a new string instead.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The left side of an assignment, the receiver of a method that changes its receiver (`push`, `pop`, `insert`, `remove`, `sort`, `reverse`) or an `inout` argument is not something that can change. Only a variable, a field or an element of one can. The messages name the case: "cannot assign to a character of a string: strings are immutable" (`name[0] = 'A'`), "cannot call `.push()` on a temporary value: it changes its receiver" (`items().push(3)`), "cannot assign to this expression" (`a + b = 3`) and "`inout` needs a variable, a field or an element" (`bump(inout 5)`). A variable that is not a `var` is a different error, E0205.
+- **Why Nyra has this rule:** Only variables, and the fields and elements inside them, can change. A string is a value that never changes in place: to change a character, build a new string and assign it. A temporary value has no name, so a change to it would be lost.
 - **Common causes:**
-  - `s[0] = "x"` on a string
-  - calling `push` or `sort` on the result of a function call
-  - assigning to an expression such as `a + b = 3`, or passing one as `inout`
+  - `s[0] = 'A'` on a string: build the new string with `slice` and `+`
+  - `push`, `pop` or `sort` on the result of a function call: store the result in a `var` first
+  - an assignment to an expression such as `a + b = 3` or `f() = 1`
+  - `inout` with a value that is not a variable, such as `inout 5` or `inout f()`
 - **Wrong:**
 ```rust
 fn main() {
-    var s = "abc"
-    s[0] = "x"
+    var name = "ann"
+    name[0] = 'A'
+    print(name)
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var s = "abc"
-    s = "x" + s.slice(1, 3)
+    var name = "ann"
+    name = str(name[0].upper()) + name.slice(1, name.len())
+    print(name)
 }
 ```
-- **Related:** E0205, E0233
+- **Related:** E0205, E0233, E0237
 
 ## E0230: cannot infer the type of `[]`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** An empty array literal `[]` appears where nothing says what its element type is.
-- **Why Nyra has this rule:** Every array has one element type, and an empty literal contains no element to read it from. Write the type where the variable is declared.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** An empty array literal `[]` appears where nothing says what its element type is. The message is "cannot infer the type of the empty array `[]`" and the hint shows `var xs: [int] = []`. The type is known, and `[]` is fine, where it is declared (`var xs: [int] = []`), assigned to a variable, passed as an argument, put in a struct field, returned with `ret`, pushed or inserted into an array of arrays, or compared with or added to an array of known type (`xs == []`, `xs + []`).
+- **Why Nyra has this rule:** Every array has one element type, and an empty literal contains no element to read it from. The compiler never guesses a type, so a program is the same on every backend.
 - **Common causes:**
-  - `var xs = []` without an annotation
-  - passing `[]` to something that does not fix its type
+  - `var xs = []` or `let xs = []` without a type, to be filled later with `push`
+  - `print([])`, or `[] == []`, where there is no known type on either side
+  - `[[], [1]]`: the first `[]` is read before the element that would give its type (write `[[1], []]`, or declare the type of the whole array)
 - **Wrong:**
 ```rust
 fn main() {
-    var xs = []
+    var names = []
+    names.push("ann")
+    print(names.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
+    var names: [str] = []
+    names.push("ann")
+    print(names.len())
 }
 ```
 - **Related:** E0231
 
 ## E0231: array elements must have one type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The elements of an array literal do not all have the same type, for example `[1, "two"]`.
-- **Why Nyra has this rule:** An array `[T]` holds values of exactly one type, so reading an element always gives a known type.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The elements of an array literal do not all have the same type, as in `["ann", 31]`. The message is "array elements must all have one type: the first is `str`, this one is `int`" and it is reported at every element that does not match the first one. The hint depends on the case: `str(31)` to write a number as text, `1.0` to make whole numbers floats, or a struct to group values of different types.
+- **Why Nyra has this rule:** An array `[T]` holds values of exactly one type, so reading an element always gives a known type. Values of different types that belong together, such as a name and an age, are a struct with named fields.
 - **Common causes:**
-  - mixing numbers and text
-  - mixing `int` and `float` elements: write all of them as floats (`1.0`)
+  - a "row" of mixed values, `["ann", 31]`: declare a `struct User { name: str, age: int }`
+  - mixing `int` and `float` elements, `[1, 2.5]`: write them all as floats, `[1.0, 2.5]`
+  - an element that is a call or a variable of another type than the first
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, "two"]
+    let user = ["ann", 31]
+    print(user.len())
 }
 ```
 - **Fixed:**
 ```rust
+struct User {
+    name: str
+    age: int
+}
+
 fn main() {
-    let xs = ["1", "two"]
+    let user = User(name: "ann", age: 31)
+    print(user.age)
 }
 ```
-- **Related:** E0230, E0203
+- **Related:** E0203, E0230
 
 ## E0232: index must be an `int`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** An array or string is indexed with a value that is not an `int`, such as a `float`.
-- **Why Nyra has this rule:** A position is a whole number, and Nyra never converts a float to an int silently: convert it yourself with `int(x)`.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** An array or a string is indexed with a value that is not an `int`: a `float`, a `str` or a `char`. The message is "an index must be an `int`, found `float`" and the hint shows the conversion to write: `[int(mid)]`.
+- **Why Nyra has this rule:** A position is a whole number, and Nyra never converts a float to an int behind your back. `int(x)` truncates toward zero and is written where you want it. An array is not a map: a `str` is not a key, and a `char` is not a position (use `c.code()` for its number).
 - **Common causes:**
-  - an index computed with floating-point arithmetic
-  - a variable that holds a `float`, or a float literal such as `xs[1.0]`
+  - an index computed with floats, such as half the length: `float(xs.len()) / 2.0`
+  - a float literal such as `xs[1.0]`
+  - a `str` used as a key (`xs["a"]`), which arrays do not have
+  - a `char` used as an index into a table of counts (`counts[c]`): write `counts[c.code()]`
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs[1.0])
+    let xs = [10, 20, 30, 40, 50]
+    let mid = float(xs.len()) / 2.0
+    print(xs[mid])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs[1])
+    let xs = [10, 20, 30, 40, 50]
+    let mid = xs.len() / 2
+    print(xs[mid])
 }
 ```
 - **Related:** E0233, E0240
 
 ## E0233: cannot index this type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The `[...]` index operator is applied to a value that is not an array or a string, such as an `int`.
-- **Why Nyra has this rule:** Only arrays and strings have positions. Numbers, bools and structs are not indexable.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The index operator `[...]` is applied to a value that is not an array or a string: an `int`, a `float`, a `bool`, a `char` or a struct. The message is "cannot index a value of type `int`". For a struct the hint names a field to read, `p.n`; for an `int` it shows how to get at the digits, `str(n)`.
+- **Why Nyra has this rule:** Only arrays and strings have positions. A struct has fields, read with a dot, and a number is one value.
 - **Common causes:**
-  - indexing a number to get a digit: use `n / 10` and `n % 10` instead
-  - indexing a struct instead of reading a field (`p.x`)
+  - indexing a number to get one of its digits: turn it into text first with `str(n)`, or use `n % 10` and `n / 10`
+  - indexing a struct instead of reading a field (`p[0]` instead of `p.x`)
+  - a variable that was declared as one value (`let xs = 5`) but is used as an array: look at its declaration
+  - indexing a `char` (`c[0]`)
 - **Wrong:**
 ```rust
 fn main() {
-    let n = 5
+    let n = 4821
     print(n[0])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [5]
-    print(xs[0])
+    let n = 4821
+    let digits = str(n)
+    print(digits[0])
 }
 ```
-- **Related:** E0232, E0229
+- **Related:** E0229, E0232, E0234
 
 ## E0234: cannot loop over this type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `for x in value` is used with a value that is neither a range nor an array nor a string.
-- **Why Nyra has this rule:** A loop needs a clear sequence of values: a range `a..b`, the elements of an array, or the characters of a string.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** `for x in value` is used with a value that is not an array or a string, and it is not a range `a..b`: an `int`, a `float`, a `bool`, a `char` or a struct. The message is "cannot loop over `int`: `for i in ...` needs an array, a string or a range". For an `int` the hint shows the range to write, `for i in 0..n`.
+- **Why Nyra has this rule:** A loop needs a clear sequence of values: the numbers of a range (the end is not included), the elements of an array, or the characters of a string. A single number is none of them.
 - **Common causes:**
-  - `for x in 10` to count to ten: write `for i in 0..10`
-  - looping over a struct or a number
+  - `for i in n` to count to `n`, as in Python's `for i in range(n)`: write `for i in 0..n`
+  - looping over the digits of a number: turn it into text first, `for c in str(n)`
+  - looping over a struct: loop over an array field instead (`for x in p.items`)
 - **Wrong:**
 ```rust
 fn main() {
-    for x in 10 {
-        print(x)
+    let n = 5
+    for i in n {
+        print(i)
     }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    for x in 0..10 {
-        print(x)
+    let n = 5
+    for i in 0..n {
+        print(i)
     }
 }
 ```
-- **Related:** E0233, E0203
+- **Related:** E0203, E0233
 
 ## E0235: type used as a value
 - **Kind:** compile error · **Since:** v0.3
@@ -1078,26 +1112,31 @@ fn main() {
 - **Related:** E0206, E0223
 
 ## E0236: method must be called
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method name is written without call parentheses, as in `xs.len`. Methods are always called.
-- **Why Nyra has this rule:** There are no function values, so a method name alone has nothing to evaluate to; with parentheses it is a call.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method name is written without call parentheses, as in `xs.len`. The message is "method `len` must be called" and the hint is "add the parentheses: `.len()`".
+- **Why Nyra has this rule:** A method is always called. There are no function values, so a method name alone has nothing to stand for, and `xs.len` can never be a number.
 - **Common causes:**
-  - `xs.len` or `s.upper` from a language with properties
+  - `xs.len` or `s.len` written like a property, as `length` is in JavaScript
+  - `xs.pop` or `s.trim` on a line of its own, without `()`
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1]
-    print(xs.len)
+    let xs = [4, 8, 15]
+    if xs.len > 2 {
+        print("long")
+    }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1]
-    print(xs.len())
+    let xs = [4, 8, 15]
+    if xs.len() > 2 {
+        print("long")
+    }
 }
 ```
-- **Related:** E0227, E0224
+- **Related:** E0224, E0227
 
 ## E0237: bad `inout` argument
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
