@@ -2926,5 +2926,25 @@ class ContinuousIntegration(unittest.TestCase):
             self.assertIn(needle, ci)
 
 
+class Readme(unittest.TestCase):
+    def test_the_readme_documents_every_option_and_tool(self):
+        readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
+        options = {s for action in run.build_parser()._actions for s in action.option_strings if s.startswith("--")}
+        options.discard("--help")
+        self.assertGreater(len(options), 20)
+        for option in sorted(options):
+            self.assertIn(option, readme, f"bench/README.md does not mention {option}")
+        for needle in ("OPENROUTER_API_KEY", "bench/models.py", "bench/models.json", "bench/publish.py",
+                       "bench/published", "typescript", "rust", "ANTHROPIC_API_KEY"):
+            self.assertIn(needle, readme)
+
+    def test_the_readme_models_are_in_the_default_list_or_marked_as_examples(self):
+        # the ids the README tells the reader to type must be ids the harness itself ships and verified
+        readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
+        shipped = set(modelsmod.default_model_ids())
+        for mid in set(re.findall(r"\b(?:anthropic|openai|google|x-ai|deepseek)/[A-Za-z0-9._-]+", readme)):
+            self.assertIn(mid, shipped, f"README mentions {mid}, which is not in bench/models.json")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
