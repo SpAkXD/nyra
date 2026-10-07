@@ -36,6 +36,7 @@ sys.path.insert(0, str(BENCH_DIR))
 
 import models as modelsmod  # noqa: E402
 import providers  # noqa: E402
+import publish  # noqa: E402
 import report  # noqa: E402
 import run  # noqa: E402
 
@@ -2357,6 +2358,248 @@ class ModelComparison(unittest.TestCase):
 
     def test_an_empty_comparison_does_not_crash(self):
         self.assertIn("No results", report.render_comparison([]))
+
+
+class Publishing(unittest.TestCase):
+    CATS = {"a": "math", "b": "strings", "c": "strings", "d": "patterns"}
+
+    def results(self, model, table):
+        recs = four_language_records({(t, lang): bool(table[t][i]) for t in table for i, lang in enumerate(LANGS4)})
+        for r in recs:  # things that must never be published
+            for a in r["attempts"]:
+                a.update(reply="REPLY-SECRET", code="CODE-SECRET", feedback="FEEDBACK-SECRET")
+                a["result"]["stdout"] = "STDOUT-SECRET"
+        return fake_results(model, recs, LANGS4, self.CATS)
+
+    def two(self, **second_run_fields):
+        """Two models; `second_run_fields` change the run metadata of the second one."""
+        strong = self.results("vendor/strong", {"a": (1, 1, 1, 1), "b": (1, 1, 1, 1), "c": (0, 1, 1, 1), "d": (0, 0, 1, 1)})
+        weak = self.results("vendor/weak", {"a": (1, 1, 1, 1), "b": (0, 1, 1, 1), "c": (0, 0, 1, 1), "d": (0, 0, 0, 1)})
+        weak["run"].update(second_run_fields)
+        return strong, weak
+
+    def write(self, directory, *results_list):
+        paths = []
+        for i, results in enumerate(results_list):
+            path = Path(directory) / f"result-{i}.json"
+            path.write_text(json.dumps(results), encoding="utf-8")
+            paths.append(path)
+        return paths
+
+    def test_the_summary_has_the_sections_and_the_numbers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two())
+            md, data, written = publish.publish(paths, "2026-10-demo", Path(tmp) / "pub")
+            self.assertEqual(sorted(p.name for p in written), ["2026-10-demo.json", "2026-10-demo.md"])
+            self.assertEqual(written[0].read_text(encoding="utf-8"), md)
+            on_disk = json.loads(written[1].read_text(encoding="utf-8"))
+        self.assertEqual(on_disk, json.loads(json.dumps(data)))
+        for heading in ("# Nyra benchmark results: 2026-10-demo", "## What was measured", "## First-try success (pass@1)",
+                        "## Success within 3 repairs", "## Tokens of the first attempt", "## Nyra code tokens relative",
+                        "## Per model", "### vendor/strong", "### vendor/weak", "#### Per category",
+                        "## Notable failures", "## How to read this"):
+            self.assertIn(heading, md)
+        self.assertIn("vendor/strong", data["models"])
+        self.assertEqual(data["models"]["vendor/strong"]["langs"]["nyra"]["pass_at_1"], 2)
+        self.assertEqual(data["run"]["langs"], LANGS4)
+        self.assertEqual(data["run"]["harness_commits"], ["abc1234"])
+        self.assertTrue(md.isascii())
+
+    def test_no_prompt_reply_program_or_output_is_published(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            md, data, _ = publish.publish(self.write(tmp, *self.two()), "x", Path(tmp) / "pub", write=False)
+        text = md + json.dumps(data)
+        for secret in ("REPLY-SECRET", "CODE-SECRET", "FEEDBACK-SECRET", "STDOUT-SECRET", "PROMPT-a", "SYSTEM-nyra"):
+            self.assertNotIn(secret, text)
+
+    def test_sources_are_named_with_their_checksums(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two())
+            _, data, _ = publish.publish(paths, "x", Path(tmp) / "pub", write=False)
+            expected = [hashlib.sha256(p.read_bytes()).hexdigest() for p in paths]
+        self.assertEqual([s["sha256"] for s in data["sources"]], expected)
+        self.assertEqual([s["file"] for s in data["sources"]], ["result-0.json", "result-1.json"])
+
+    def test_the_nyra_ratio_table_averages_the_runs_both_got_right(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            md, data, _ = publish.publish(self.write(tmp, *self.two()), "x", Path(tmp) / "pub", write=False)
+        # Nyra got only tasks a and b right first try, so n=2 against every language; code tokens are
+        # nyra 50, python 40 (1.25x), typescript 60 (0.83x), rust 100 (0.50x) in every run
+        self.assertIn("| vendor/strong | 1.25x (n=2) | 0.83x (n=2) | 0.50x (n=2) |", md)
+
+    def test_mock_results_are_refused_unless_allowed_and_then_marked(self):
+        strong, weak = self.two()
+        strong["run"]["mock"] = True
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, strong, weak)
+            with self.assertRaises(publish.PublishError) as cm:
+                publish.publish(paths, "x", Path(tmp) / "pub")
+            self.assertIn("mock", str(cm.exception))
+            self.assertFalse((Path(tmp) / "pub").exists())
+            md, data, _ = publish.publish(paths, "x", Path(tmp) / "pub", allow_mock=True, write=False)
+        self.assertIn("MOCK RESULTS", md)
+        self.assertTrue(data["mock"])
+
+    def test_incomplete_runs_are_refused_unless_allowed_and_then_marked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two(complete=False))
+            with self.assertRaises(publish.PublishError) as cm:
+                publish.publish(paths, "x", Path(tmp) / "pub")
+            self.assertIn("stopped early", str(cm.exception))
+            md, data, _ = publish.publish(paths, "x", Path(tmp) / "pub", allow_incomplete=True, write=False)
+        self.assertIn("INCOMPLETE", md)
+        self.assertFalse(data["complete"])
+        self.assertTrue(any("--allow-incomplete" in n for n in data["notes"]))
+
+    def test_results_measured_differently_are_refused_unless_allowed(self):
+        for field, value in (("tasks_sha256", "o" * 64), ("samples", 5), ("repairs", 1), ("langs", ["nyra", "python"]),
+                             ("spec", {"sha256": "x" * 64}), ("nyra", {"version": "nyra 0.3.0"})):
+            with tempfile.TemporaryDirectory() as tmp:
+                paths = self.write(tmp, *self.two(**{field: value}))
+                with self.assertRaises(publish.PublishError, msg=field) as cm:
+                    publish.publish(paths, "x", Path(tmp) / "pub")
+                self.assertIn("not comparable", str(cm.exception))
+                md, _, _ = publish.publish(paths, "x", Path(tmp) / "pub", allow_mismatch=True, write=False)
+                self.assertIn("published with --allow-mismatch", md)
+
+    def test_the_same_model_twice_is_refused(self):
+        strong, _ = self.two()
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, strong, strong)
+            with self.assertRaises(publish.PublishError) as cm:
+                publish.publish(paths, "x", Path(tmp) / "pub")
+        self.assertIn("same model", str(cm.exception))
+
+    def test_names_files_and_overwriting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two())
+            for bad in ("", "../x", "a b", ".hidden", "x/y"):
+                with self.assertRaises(publish.PublishError, msg=bad):
+                    publish.publish(paths, bad, Path(tmp) / "pub")
+            publish.publish(paths, "v1", Path(tmp) / "pub")
+            with self.assertRaises(publish.PublishError) as cm:
+                publish.publish(paths, "v1", Path(tmp) / "pub")
+            self.assertIn("--overwrite", str(cm.exception))
+            publish.publish(paths, "v1", Path(tmp) / "pub", overwrite=True)
+            with self.assertRaises(publish.PublishError):
+                publish.publish([Path(tmp) / "missing.json"], "v2", Path(tmp) / "pub")
+            (Path(tmp) / "junk.json").write_text('{"hello": 1}')
+            with self.assertRaises(publish.PublishError) as cm:
+                publish.publish([Path(tmp) / "junk.json"], "v2", Path(tmp) / "pub")
+            self.assertIn("not a benchmark result", str(cm.exception))
+            (Path(tmp) / "bad.json").write_text("not json")
+            with self.assertRaises(publish.PublishError):
+                publish.publish([Path(tmp) / "bad.json"], "v2", Path(tmp) / "pub")
+
+    def test_a_compare_index_stands_for_its_result_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two())
+            index = Path(tmp) / "run-compare.json"
+            index.write_text(json.dumps({"models": [{"model": "vendor/strong", "file": paths[0].name},
+                                                     {"model": "vendor/weak", "file": paths[1].name}]}))
+            _, data, _ = publish.publish([index], "x", Path(tmp) / "pub", write=False)
+            self.assertEqual(sorted(data["models"]), ["vendor/strong", "vendor/weak"])
+            # the same file named twice (directly and through the index) counts once
+            _, data, _ = publish.publish([index] + paths, "x", Path(tmp) / "pub", write=False)
+            self.assertEqual(len(data["sources"]), 2)
+            index.write_text(json.dumps({"models": [{"model": "m", "file": "../escape.json"}]}))
+            with self.assertRaises(publish.PublishError):
+                publish.publish([index], "x", Path(tmp) / "pub", write=False)
+
+    def test_notable_failures_list_compiler_bugs_first_then_runs_that_never_passed(self):
+        rec = ReportSummary.rec
+        nyra_fail = rec("hard", "nyra", False, False, kind="compile_error", attempts=4,
+                        errors=[{"code": "E0201", "message": "undefined variable `cout`"}])
+        nyra_fail["attempts"][-1]["result"]["errors"] = [{"code": "E0203", "message": "type mismatch | expected `int`"}]
+        rust_fail = rec("hard", "rust", False, False, kind="compile_error", attempts=2)
+        rust_fail["attempts"][-1]["result"]["stderr"] = "warning: x\nerror[E0425]: cannot find value `y`\nmore"
+        ts_fail = rec("hard", "typescript", False, False, kind="runtime_error", attempts=2)
+        ts_fail["attempts"][-1]["result"]["stderr"] = "main.ts:3\n\nTypeError: x is not a function"
+        bug = rec("fine", "rust", False, True, kind="toolchain_error", attempts=2)
+        bug["attempts"][0]["result"]["stderr"] = "error: linking with `cc` failed"
+        wrong = rec("wrong", "python", False, False, kind="wrong_output", attempts=3)
+        ok = rec("easy", "python", True, True)
+        results = fake_results("m", [nyra_fail, rust_fail, ts_fail, bug, wrong, ok], LANGS4)
+        entries = publish.notable_failures(results)
+        self.assertEqual([(e["lang"], e["task"], e["outcome"]) for e in entries],
+                         [("rust", "fine", "compiler or toolchain bug"), ("nyra", "hard", "never passed"),
+                          ("python", "wrong", "never passed"), ("typescript", "hard", "never passed"),
+                          ("rust", "hard", "never passed")])
+        by = {(e["lang"], e["task"]): e for e in entries}
+        self.assertEqual(by["nyra", "hard"]["error_codes"], ["E0201", "E0203"])
+        self.assertEqual(by["nyra", "hard"]["message"], "E0203: type mismatch | expected `int`")
+        self.assertEqual(by["rust", "hard"]["message"], "error[E0425]: cannot find value `y`")
+        self.assertEqual(by["typescript", "hard"]["message"], "TypeError: x is not a function")
+        self.assertEqual(by["python", "wrong"]["message"], "the program ran but printed the wrong output")
+        self.assertEqual(by["rust", "fine"]["message"], "error: linking with `cc` failed")
+        self.assertEqual(by["python", "wrong"]["attempts"], 3)
+        self.assertEqual(len(publish.notable_failures(results, limit=2)), 2)
+
+    def test_the_output_of_a_real_multi_model_run_is_publishable(self):
+        # run.py (here against a fake OpenRouter on this machine) -> the compare index -> publish.py
+        tasks = run.load_tasks()
+        with mock.patch.dict(os.environ, {providers.OPENROUTER_KEY_ENV: API_KEY}), \
+                _fake_openrouter(["good/model", "weak/model"], tasks) as server, tempfile.TemporaryDirectory() as out:
+            code, _, stderr = _run_main("--provider", "openrouter", "--base-url", server.url + "/api/v1", "--langs",
+                                        "python", "--tasks", "fizzbuzz,gcd_pairs", "-q", "--jobs", "2",
+                                        "--models", "good/model,weak/model", "--out", out)
+            self.assertEqual(code, 0, stderr)
+            md, data, written = publish.publish([str(next(Path(out).glob("*compare.json")))], "demo",
+                                                Path(out) / "published", write=True)
+            self.assertEqual({p.name for p in written}, {"demo.md", "demo.json"})
+        self.assertEqual(sorted(data["models"]), ["good/model", "weak/model"])
+        self.assertIn("good/model", md)
+        self.assertIn("weak/model", md)
+
+    def test_pipes_in_messages_cannot_break_a_table(self):
+        self.assertEqual(publish._cell("a | b\nc"), "a \\| b c")
+
+    def test_common_nyra_errors_and_hardest_tasks(self):
+        rec = ReportSummary.rec
+        recs = [rec("t1", "nyra", False, True, kind="compile_error", attempts=2, errors=[{"code": "E0201", "message": "m1"}]),
+                rec("t2", "nyra", False, True, kind="compile_error", attempts=2,
+                    errors=[{"code": "E0201", "message": "m2"}, {"code": "E0203", "message": "m3"}]),
+                rec("t1", "python", True, True), rec("t2", "python", False, True, kind="wrong_output", attempts=2)]
+        a = fake_results("a/a", recs, ["nyra", "python"], {"t1": "math", "t2": "strings"})
+        b = fake_results("b/b", recs, ["nyra", "python"], {"t1": "math", "t2": "strings"})
+        errors = publish.common_nyra_errors([a, b])
+        self.assertEqual([(e["code"], e["count"]) for e in errors], [("E0201", 4), ("E0203", 2)])
+        self.assertEqual(errors[0]["message"], "m1")
+        hard = publish.hardest_tasks([a, b])
+        self.assertEqual([h["task"] for h in hard], ["t1", "t2"])  # both fail for nyra every time; the order is by task
+        self.assertEqual(hard[0]["rates"], {"nyra": [0, 2], "python": [2, 2]})
+        self.assertEqual(hard[1]["category"], "strings")
+        self.assertEqual(publish.hardest_tasks([fake_results("c/c", [rec("e", "python", True, True)], ["python"])]), [])
+
+    def test_the_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self.write(tmp, *self.two())
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = publish.main([str(p) for p in paths] + ["--name", "cli", "--out", str(Path(tmp) / "pub")])
+            self.assertEqual(code, 0, err.getvalue())
+            self.assertIn("wrote", out.getvalue())
+            self.assertTrue((Path(tmp) / "pub" / "cli.md").is_file())
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = publish.main([str(p) for p in paths] + ["--name", "cli", "--out", str(Path(tmp) / "pub")])
+            self.assertEqual(code, 2)
+            self.assertIn("already exists", err.getvalue())
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = publish.main([str(p) for p in paths] + ["--name", "preview", "--stdout",
+                                                                "--out", str(Path(tmp) / "pub")])
+            self.assertEqual(code, 0)
+            self.assertIn("# Nyra benchmark results: preview", out.getvalue())
+            self.assertFalse((Path(tmp) / "pub" / "preview.md").exists())
+
+    def test_raw_results_are_ignored_by_git_and_published_ones_are_not(self):
+        ignore = (BENCH_DIR / "results" / ".gitignore").read_text(encoding="utf-8")
+        lines = [ln.strip() for ln in ignore.splitlines() if ln.strip() and not ln.startswith("#")]
+        self.assertIn("*", lines)  # everything in bench/results stays local ...
+        self.assertIn("!.gitignore", lines)  # ... except this file
+        self.assertTrue((BENCH_DIR / "published").is_dir())
+        self.assertFalse((BENCH_DIR / "published" / ".gitignore").exists())
 
 
 class CountingPolicy(unittest.TestCase):

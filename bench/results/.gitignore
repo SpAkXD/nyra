@@ -1,6 +1,5 @@
-# Mock runs replay the reference solutions: they test the pipeline and are not measurements.
-# Never commit them, so they cannot be mistaken for results.
-*-mock-*
-# latest.md is a convenience copy of the most recent run, whichever run that was.
-# Commit the dated <date>-<provider>-<model>.json / .md files of real runs instead.
-latest.md
+# Raw results hold every prompt, every reply and every program of a run (and mock runs measure nothing):
+# they stay on the machine that ran the benchmark and are never committed.
+# What is committed is the summary that `python bench/publish.py` writes to bench/published/.
+*
+!.gitignore
