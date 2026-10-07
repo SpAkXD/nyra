@@ -1,9 +1,0 @@
-{
-  "id": "lcm_1_to_20",
-  "title": "Smallest multiple of 1 to 20",
-  "category": "number-theory",
-  "difficulty": "medium",
-  "min_version": "0.1",
-  "prompt": "Print the smallest positive integer that is evenly divisible by every integer from 1 to 20. Print only that number, on one line.",
-  "expected_output": "232792560\n"
-}

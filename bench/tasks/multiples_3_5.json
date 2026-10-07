@@ -1,9 +1,0 @@
-{
-  "id": "multiples_3_5",
-  "title": "Sum of multiples of 3 or 5",
-  "category": "math",
-  "difficulty": "easy",
-  "min_version": "0.1",
-  "prompt": "Print the sum of all positive integers below 1000 that are divisible by 3 or by 5 (or by both). Print only that number, on one line.",
-  "expected_output": "233168\n"
-}

@@ -1,0 +1,9 @@
+{
+  "id": "lcm_1_to_16",
+  "title": "Smallest multiple of 1 to 16",
+  "category": "number-theory",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "Print the smallest positive integer that is evenly divisible by every integer from 1 to 16. Print only that number, on one line.",
+  "expected_output": "720720\n"
+}
