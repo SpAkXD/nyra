@@ -1,6 +1,9 @@
 //! JavaScript backend. Output runs on Node.js or in the browser.
 
-use crate::ast::*;
+use std::fmt::Write;
+
+use super::{bare, names};
+use crate::ir::{BinOp, Expr, Func, LocalId, Module, RtOp, Stmt, StmtKind, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
     "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
@@ -55,35 +58,46 @@ fn name(n: &str) -> String {
 }
 
 /// `file` is the source path as given to nyra; runtime errors report it.
-pub fn gen(prog: &Program, file: &str) -> String {
-    let mut g = Gen { out: PRELUDE.replace("@FILE@", &crate::diag::json_str(file)), indent: 0, tmp: 0 };
-    for f in &prog.funcs {
-        let params: Vec<String> = f.params.iter().map(|p| name(&p.name)).collect();
-        g.line(&format!("function {}({}) {{", name(&f.name), params.join(", ")));
-        g.block(&f.body);
-        g.line("}");
-        g.out.push('\n');
+pub fn gen(m: &Module, file: &str) -> String {
+    let mut out = PRELUDE.replace("@FILE@", &crate::diag::json_str(file));
+    for f in &m.funcs {
+        let n = names::locals(f, name, "ny_");
+        let _ = writeln!(out, "function {}({}) {{", name(&f.name), n[..f.params].join(", "));
+        // every local is declared at the top; statements only assign
+        if f.locals.len() > f.params {
+            let _ = writeln!(out, "    let {};", n[f.params..].join(", "));
+        }
+        let mut g = Gen { m, f, names: &n, out: String::new(), indent: 1 };
+        g.stmts(&f.body);
+        out.push_str(&g.out);
+        out.push_str("}\n\n");
     }
-    g.out.push_str(concat!(
-        "try {\n",
-        "    main();\n",
-        "} catch (e) {\n",
-        "    if (!(e instanceof NyPanic)) throw e;\n",
-        "    console.error(e.message);\n",
-        "    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
-        "    if (typeof process !== \"undefined\") process.exitCode = 101;\n",
-        "}\n",
-    ));
-    g.out
+    let _ = write!(
+        out,
+        concat!(
+            "try {{\n",
+            "    {}();\n",
+            "}} catch (e) {{\n",
+            "    if (!(e instanceof NyPanic)) throw e;\n",
+            "    console.error(e.message);\n",
+            "    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
+            "    if (typeof process !== \"undefined\") process.exitCode = 101;\n",
+            "}}\n",
+        ),
+        name(&m.func(m.main).name)
+    );
+    out
 }
 
-struct Gen {
+struct Gen<'a> {
+    m: &'a Module,
+    f: &'a Func,
+    names: &'a [String],
     out: String,
     indent: usize,
-    tmp: usize,
 }
 
-impl Gen {
+impl Gen<'_> {
     fn line(&mut self, s: &str) {
         for _ in 0..self.indent {
             self.out.push_str("    ");
@@ -92,128 +106,183 @@ impl Gen {
         self.out.push('\n');
     }
 
-    fn block(&mut self, b: &[Stmt]) {
+    fn block(&mut self, ss: &[Stmt]) {
         self.indent += 1;
-        for s in b {
-            self.stmt(s);
-        }
+        self.stmts(ss);
         self.indent -= 1;
     }
 
+    fn stmts(&mut self, ss: &[Stmt]) {
+        for s in ss {
+            self.stmt(s);
+        }
+    }
+
+    fn local(&self, l: LocalId) -> &str {
+        &self.names[l.0 as usize]
+    }
+
+    /// `dst = value;` or `value;`
+    fn assign(&self, dst: Option<LocalId>, value: String) -> String {
+        match dst {
+            Some(d) => format!("{} = {value};", self.local(d)),
+            None => format!("{value};"),
+        }
+    }
+
     fn stmt(&mut self, s: &Stmt) {
+        let at = format!("{}, {}", s.span.line, s.span.col);
         match &s.kind {
-            StmtKind::Let { name: n, mutable, value, .. } => {
-                let kw = if *mutable { "let" } else { "const" };
-                self.line(&format!("{kw} {} = {};", name(n), expr(value)));
+            StmtKind::Set(l, e) => {
+                let line = format!("{} = {};", self.local(*l), bare(&self.expr(e)));
+                self.line(&line);
             }
-            StmtKind::Assign { name: n, value } => self.line(&format!("{} = {};", name(n), expr(value))),
+            StmtKind::Call { dst, func, args } => {
+                let args: Vec<String> = args.iter().map(|a| bare(&self.expr(a)).to_string()).collect();
+                let line = self.assign(*dst, format!("{}({})", name(&self.m.func(*func).name), args.join(", ")));
+                self.line(&line);
+            }
+            StmtKind::Op { dst, op, args } => {
+                let code = match op {
+                    RtOp::Print => self.print(args),
+                    RtOp::Format => self.template(args),
+                    RtOp::DivInt => format!("ny_div({}, {}, {at})", self.expr(&args[0]), self.expr(&args[1])),
+                    RtOp::RemInt => format!("ny_mod({}, {}, {at})", self.expr(&args[0]), self.expr(&args[1])),
+                    RtOp::FloatToInt => format!("ny_f2i({}, {at})", self.expr(&args[0])),
+                };
+                let line = self.assign(*dst, code);
+                self.line(&line);
+            }
             StmtKind::If { .. } => self.if_chain(s),
-            StmtKind::While { cond, body } => {
-                self.line(&format!("while ({}) {{", expr(cond)));
-                self.block(body);
-                self.line("}");
+            StmtKind::Loop { head, cond, body, step } => self.lp(head, cond, body, step),
+            StmtKind::Return(None) => self.line("return;"),
+            StmtKind::Return(Some(e)) => {
+                let line = format!("return {};", bare(&self.expr(e)));
+                self.line(&line);
             }
-            StmtKind::For { var, start, end, body } => {
-                self.tmp += 1;
-                let (i, e) = (name(var), format!("ny_end{}", self.tmp));
-                self.line(&format!("for (let {i} = {}, {e} = {}; {i} < {e}; {i}++) {{", expr(start), expr(end)));
-                self.block(body);
-                self.line("}");
-            }
-            StmtKind::Ret(None) => self.line("return;"),
-            StmtKind::Ret(Some(e)) => self.line(&format!("return {};", expr(e))),
-            StmtKind::Expr(e) => self.line(&format!("{};", expr(e))),
         }
     }
 
     fn if_chain(&mut self, s: &Stmt) {
         let mut cur = s;
-        let mut first = true;
+        let mut head = "if";
         loop {
             let StmtKind::If { cond, then, els } = &cur.kind else { unreachable!() };
-            let head = if first { "if" } else { "} else if" };
-            self.line(&format!("{head} ({}) {{", expr(cond)));
-            first = false;
+            let line = format!("{head} ({}) {{", bare(&self.expr(cond)));
+            self.line(&line);
             self.block(then);
-            match els {
-                Some(e) if e.len() == 1 && matches!(e[0].kind, StmtKind::If { .. }) => cur = &e[0],
-                Some(e) => {
+            match els.as_slice() {
+                [] => break,
+                [next] if matches!(next.kind, StmtKind::If { .. }) => {
+                    cur = next;
+                    head = "} else if";
+                }
+                _ => {
                     self.line("} else {");
-                    self.block(e);
-                    self.line("}");
-                    return;
-                }
-                None => {
-                    self.line("}");
-                    return;
+                    self.block(els);
+                    break;
                 }
             }
         }
+        self.line("}");
     }
-}
 
-fn expr(e: &Expr) -> String {
-    match &e.kind {
-        ExprKind::Int(n) => n.to_string(),
-        ExprKind::Float(f) => format!("{f:?}"),
-        ExprKind::Bool(b) => b.to_string(),
-        ExprKind::Str(s) => crate::diag::json_str(s),
-        ExprKind::Interp(parts) => {
-            let mut s = String::from("`");
-            for p in parts {
-                match p {
-                    InterpPart::Lit(t) => {
-                        for c in t.chars() {
-                            match c {
-                                '\\' => s.push_str("\\\\"),
-                                '`' => s.push_str("\\`"),
-                                '$' => s.push_str("\\$"),
-                                '\n' => s.push_str("\\n"),
-                                '\r' => s.push_str("\\r"),
-                                '\t' => s.push_str("\\t"),
-                                c if (c as u32) < 0x20 => s.push_str(&format!("\\u{:04x}", c as u32)),
-                                c => s.push(c),
-                            }
-                        }
-                    }
-                    InterpPart::Expr(e) => {
-                        s.push_str("${");
-                        s.push_str(&expr(e));
-                        s.push('}');
+    fn lp(&mut self, head: &[Stmt], cond: &Expr, body: &[Stmt], step: &[Stmt]) {
+        let full = self.expr(cond);
+        let c = bare(&full);
+        match (head, step) {
+            ([], []) => {
+                self.line(&format!("while ({c}) {{"));
+                self.block(body);
+            }
+            ([], [Stmt { kind: StmtKind::Set(l, e), .. }]) => {
+                let line = format!("for (; {c}; {} = {}) {{", self.local(*l), bare(&self.expr(e)));
+                self.line(&line);
+                self.block(body);
+            }
+            _ => {
+                self.line("for (;;) {");
+                self.indent += 1;
+                self.stmts(head);
+                self.line(&format!("if (!{full}) break;"));
+                self.stmts(body);
+                self.stmts(step);
+                self.indent -= 1;
+            }
+        }
+        self.line("}");
+    }
+
+    /// Numbers print through `String()` so `-0` shows as `0`, like the C backend.
+    fn print(&self, parts: &[Expr]) -> String {
+        if let [p] = parts {
+            let x = self.expr(p);
+            return match p.ty(self.f) {
+                Ty::Int | Ty::Float => format!("console.log(String({x}))"),
+                Ty::Bool | Ty::Str => format!("console.log({x})"),
+            };
+        }
+        format!("console.log({})", self.template(parts))
+    }
+
+    /// A template literal for string parts: text is escaped, values become `${...}`.
+    fn template(&self, parts: &[Expr]) -> String {
+        let mut s = String::from("`");
+        for p in parts {
+            if let Expr::Str(id) = p {
+                for c in self.m.str(*id).chars() {
+                    match c {
+                        '\\' => s.push_str("\\\\"),
+                        '`' => s.push_str("\\`"),
+                        '$' => s.push_str("\\$"),
+                        '\n' => s.push_str("\\n"),
+                        '\r' => s.push_str("\\r"),
+                        '\t' => s.push_str("\\t"),
+                        c if (c as u32) < 0x20 => s.push_str(&format!("\\u{:04x}", c as u32)),
+                        c => s.push(c),
                     }
                 }
+                continue;
             }
-            s.push('`');
-            s
+            s.push_str("${");
+            s.push_str(&self.expr(p));
+            s.push('}');
         }
-        ExprKind::Var(n) => name(n),
-        // `+ 0` turns an int -0 into 0 (C has no -0 for ints)
-        ExprKind::Unary(UnOp::Neg, x) if e.ty == Type::Int => format!("(-{} + 0)", expr(x)),
-        ExprKind::Unary(op, x) => format!("({}{})", if *op == UnOp::Neg { "-" } else { "!" }, expr(x)),
-        ExprKind::If(c, a, b) => format!("({} ? {} : {})", expr(c), expr(a), expr(b)),
-        ExprKind::Binary(op, l, r) => {
-            let (a, b) = (expr(l), expr(r));
-            match op {
-                BinOp::Div if e.ty == Type::Int => format!("ny_div({a}, {b}, {}, {})", e.span.line, e.span.col),
-                BinOp::Mod if e.ty == Type::Int => format!("ny_mod({a}, {b}, {}, {})", e.span.line, e.span.col),
-                BinOp::Mul if e.ty == Type::Int => format!("({a} * {b} + 0)"),
-                BinOp::Eq => format!("({a} === {b})"),
-                BinOp::Ne => format!("({a} !== {b})"),
-                _ => format!("({a} {} {b})", op.symbol()),
+        s.push('`');
+        s
+    }
+
+    fn expr(&self, e: &Expr) -> String {
+        match e {
+            Expr::Int(n) => n.to_string(),
+            Expr::Float(f) => format!("{f:?}"),
+            Expr::Bool(b) => b.to_string(),
+            Expr::Str(id) => crate::diag::json_str(self.m.str(*id)),
+            Expr::Local(l) => self.local(*l).to_string(),
+            Expr::Unary(op, x) => {
+                let x = self.expr(x);
+                // never print `--x` (that would be a decrement)
+                let neg = if x.starts_with('-') { format!("-({x})") } else { format!("-{x}") };
+                match op {
+                    // `+ 0` turns an int -0 into 0 (C has no -0 for ints)
+                    UnOp::INeg => format!("({neg} + 0)"),
+                    UnOp::FNeg => format!("({neg})"),
+                    UnOp::Not => format!("(!{x})"),
+                }
             }
-        }
-        ExprKind::Call(n, args) => {
-            let a: Vec<String> = args.iter().map(expr).collect();
-            match n.as_str() {
-                // String() so that -0 prints as "0", like the C backend
-                "print" => match args[0].ty {
-                    Type::Int | Type::Float => format!("console.log(String({}))", a[0]),
-                    _ => format!("console.log({})", a[0]),
-                },
-                "int" if args[0].ty == Type::Float => format!("ny_f2i({}, {}, {})", a[0], e.span.line, e.span.col),
-                "int" | "float" => a[0].clone(),
-                _ => format!("{}({})", name(n), a.join(", ")),
+            Expr::Binary(op, a, b) => {
+                let (a, b) = (self.expr(a), self.expr(b));
+                match op {
+                    BinOp::IMul => format!("({a} * {b} + 0)"),
+                    BinOp::IDiv => format!("(Math.trunc({a} / {b}) + 0)"),
+                    BinOp::IRem => format!("({a} % {b} + 0)"),
+                    BinOp::IEq | BinOp::FEq | BinOp::BEq | BinOp::SEq => format!("({a} === {b})"),
+                    BinOp::INe | BinOp::FNe | BinOp::BNe | BinOp::SNe => format!("({a} !== {b})"),
+                    _ => format!("({a} {} {b})", op.symbol()),
+                }
             }
+            Expr::Select(c, a, b) => format!("({} ? {} : {})", self.expr(c), self.expr(a), self.expr(b)),
+            Expr::IntToFloat(x) => self.expr(x),
         }
     }
 }

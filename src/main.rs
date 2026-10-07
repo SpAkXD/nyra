@@ -2,6 +2,7 @@ mod ast;
 mod check;
 mod codegen;
 mod diag;
+mod ir;
 mod lexer;
 mod parser;
 
@@ -146,9 +147,16 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    let module = ir::lower::lower(&prog);
+    if let Err(e) = ir::verify::verify(&module) {
+        return fail(format!("internal error: the compiler produced invalid IR ({e}); please report this bug"));
+    }
+    if std::env::var_os("NYRA_DUMP").is_some_and(|v| v == "ir") {
+        eprint!("{}", ir::print::print(&module));
+    }
     let code = match opts.target {
-        Target::Js => codegen::js::gen(&prog, &opts.file),
-        Target::Native | Target::C => codegen::c::gen(&prog, &opts.file),
+        Target::Js => codegen::js::gen(&module, &opts.file),
+        Target::Native | Target::C => codegen::c::gen(&module, &opts.file),
     };
     let nyra_time = start.elapsed();
     let stem = Path::new(&opts.file).file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
