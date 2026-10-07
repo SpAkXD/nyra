@@ -237,10 +237,10 @@ class TaskSet(unittest.TestCase):
             self.assertTrue(t.prompt.strip() and t.title.strip() and t.category, t.id)
 
     def test_prompts_never_mention_a_language(self):
+        names = re.compile(r"\b(python|nyra|typescript|javascript|node(\.?js)?|rust|rustc|cargo)\b")
         for t in self.tasks:
-            low = t.prompt.lower()
-            self.assertNotIn("python", low, t.id)
-            self.assertNotIn("nyra", low, t.id)
+            self.assertIsNone(names.search(t.prompt.lower()), t.id)
+            self.assertIsNone(names.search(t.title.lower()), t.id)
 
     def test_digest_is_stable(self):
         self.assertEqual(run.tasks_digest(), run.tasks_digest())

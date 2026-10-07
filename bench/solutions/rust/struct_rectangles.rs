@@ -3,6 +3,14 @@ struct Rect {
     height: u32,
 }
 
+fn area(rect: &Rect) -> u32 {
+    rect.width * rect.height
+}
+
+fn perimeter(rect: &Rect) -> u32 {
+    2 * (rect.width + rect.height)
+}
+
 fn main() {
     let rects = [
         Rect { width: 3, height: 4 },
@@ -10,8 +18,6 @@ fn main() {
         Rect { width: 7, height: 7 },
     ];
     for rect in &rects {
-        let area = rect.width * rect.height;
-        let perimeter = 2 * (rect.width + rect.height);
-        println!("{} {}", area, perimeter);
+        println!("{} {}", area(rect), perimeter(rect));
     }
 }
