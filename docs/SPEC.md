@@ -1,4 +1,4 @@
-# Nyra v0.1 — language spec
+# Nyra v0.2 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
 context and the agent can write Nyra.
@@ -17,8 +17,10 @@ context and the agent can write Nyra.
 fn add(a: int, b: int) -> int {
     ret a + b
 }
-fn greet() {            // no `->` means it returns nothing
-    print("hi")
+fn square(x: int) -> int = x * x      // one-line function: the expression is returned
+fn greet(name: str) = print("hi {name}")
+fn log() {                            // no `->` means it returns nothing
+    print("done")
 }
 ```
 Every program needs `fn main()` with no parameters and no return type.
@@ -30,16 +32,23 @@ let x = 5               // immutable
 let y: float = 2.5      // optional type annotation
 var n = 0               // mutable
 n = n + 1               // only `var` can be reassigned
+n += 1                  // also -= *= /= %=
 ```
 
 ## Control flow
 ```
 if x > 3 { ... } else if x == 3 { ... } else { ... }
-while n < 10 { n = n + 1 }
+while n < 10 { n += 1 }
 for i in 0..10 { print(i) }   // 0 to 9; `i` is an immutable int
 ret value                      // return
 ```
 Conditions must be `bool` (write `x != 0`, not `x`).
+
+`if` can also be a value. It needs an `else`, and each branch is one expression of the same type:
+```
+let max = if a > b { a } else { b }
+fn sign(x: int) -> str = if x > 0 { "+" } else if x < 0 { "-" } else { "0" }
+```
 
 ## Operators (high to low precedence)
 | ops | types |
@@ -60,8 +69,15 @@ Conditions must be `bool` (write `x != 0`, not `x`).
 | `float(x)` | int → float |
 
 ## Strings
-`"text"` with escapes `\n \t \r \\ \"`. Strings can be compared with `==` / `!=`.
-Concatenation is not supported yet.
+`"text"` with escapes `\n \t \r \\ \"`. Compare with `==` / `!=`.
+
+Put any expression inside `{ }` to insert its value (ints, floats, bools, strings):
+```
+print("{name} is {age} years old, adult: {age >= 18}")
+let label = "v{major}.{minor + 1}"
+```
+Write `{{` and `}}` for literal braces. Quotes are not allowed inside `{ }`:
+store the text in a variable first.
 
 ## Errors
 `nyra check file.nyra --json` prints:
@@ -70,7 +86,7 @@ Concatenation is not supported yet.
 ```
 | code | meaning |
 |---|---|
-| E0001–E0005 | lexer: bad character, unterminated string, number too large, bad escape, semicolon |
+| E0001–E0006 | lexer: bad character, unterminated string, number too large, bad escape, semicolon, bad `{`/`}` in a string |
 | E0101 | unexpected token |
 | E0102 | unknown type |
 | E0201 | undefined variable |
@@ -84,6 +100,8 @@ Concatenation is not supported yet.
 | E0209 | condition is not `bool` |
 | E0210 | operator used on wrong types |
 | E0211 | `main` has parameters or a return type |
+| E0212 | `if` used as a value: missing `else`, or branches that aren't one value of the same type |
 
-## Known differences between backends (v0.1)
+## Known differences between backends
 - `int` overflow wraps in C; in JS, values above 2^53 lose precision.
+- Strings built with `{ }` are not freed before the program exits yet (the v0.3 memory model fixes this).
