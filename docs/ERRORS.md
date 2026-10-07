@@ -23,7 +23,7 @@ design may still change.
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
-| E0220-E0239 | type checker (planned, v0.3) | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
+| E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 (E0241 and E0245 exist; E0240, E0242-E0244, E0246 and E0249 are planned) |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
@@ -1139,13 +1139,13 @@ fn main() {
 - **Related:** E0224, E0227
 
 ## E0237: bad `inout` argument
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `inout` is used inconsistently. A parameter declared `inout` is called without `inout` at the call (or `inout` is written for a plain parameter), or two `inout` arguments of one call are the same variable, as in `swap(inout xs[0], inout xs[1])`.
-- **Why Nyra has this rule:** An `inout` parameter lets a function change the caller's variable. The call says `inout` too, so you can see what can change, and two `inout` arguments are never the same variable, so nothing can observe the variable half-way: no aliasing surprises.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** `inout` is used inconsistently between a function and its call. Three cases: a parameter declared `inout` is called without `inout` ("argument 1 of `bump` is `inout`: the call must say so"); `inout` is written for an argument whose parameter is not `inout`, or for a builtin ("parameter `n` of `bump` is not `inout`"); or two `inout` arguments of one call start at the same variable, as in `swap(inout xs[0], inout xs[1])` ("`inout` arguments must be different variables").
+- **Why Nyra has this rule:** An `inout` parameter lets a function change the caller's variable, and the call says `inout` too, so the line shows what can change. Two `inout` arguments are never the same variable: no function can see a variable changed half-way through another name, so there are no aliasing surprises.
 - **Common causes:**
   - `inout` forgotten at the call: `bump(x)` instead of `bump(inout x)`
-  - `inout` written for a parameter that is not `inout`
-  - two elements of one array passed to one call: swap through a temporary variable instead
+  - `inout` written at a call for a parameter that is not `inout`, such as `print(inout x)`
+  - two elements of one array passed to one call: copy one into a temporary variable, call, then assign it back
 - **Wrong:**
 ```rust
 fn bump(inout n: int) {
@@ -1173,18 +1173,65 @@ fn main() {
 - **Related:** E0205, E0229, E0238
 
 ## E0238: bad target for `free`, `keep` or `arena`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `free(x)` or `keep(x)` is used on something that cannot be freed or kept (an `int`, a parameter, an `inout` parameter, an expression), or a string or array declared outside an `arena { }` block is changed inside the block.
-- **Why Nyra has this rule:** Memory is automatic unless a program asks: `free(x)` returns a local variable's memory now, `arena { }` frees everything created inside it at its `}`, and `keep(x)` never frees. Every use is checked at compile time, so a program that compiles can never use freed memory. Values created in an arena are freed at its `}`, so nothing declared outside may be changed to point into it.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** Two kinds of mistake. `free(x)` or `keep(x)` is used on something that cannot be freed or kept: a value that owns no heap memory ("nothing to free: `n` is an `int`, which owns no heap memory"), a parameter or the variable of a `for` loop ("cannot free parameter `xs`: the caller owns it"), or an expression instead of a variable ("`free` needs a local variable"). Or, inside an `arena { }` block, a string or an array (or a struct that holds one) that was declared outside the block is changed: assigned, extended with `+=`, an element or field stored, a method such as `push` called on it, passed as `inout`, freed or kept ("`best` cannot be changed inside this `arena` block: it was declared outside it"). Numbers, bools and chars declared outside can change freely.
+- **Why Nyra has this rule:** Memory is automatic: strings, arrays and structs that hold them are freed when their last owner is gone. `free(x)` gives a local variable's memory back now, `keep(x)` says a value is never freed, and `arena { }` marks the values that belong to one block. All three are checked when the program is compiled, so a program that compiles never uses freed memory, and the same programs are accepted on every backend. In v0.3 an `arena` block is checked by these rules, but its memory is freed by reference counting when the last reference goes, as in any other block: an arena changes when memory is returned and never what a program prints. The rule about outer strings and arrays is checked now, so that the way an arena frees its memory can change in a later version without changing what any program does.
 - **Common causes:**
-  - `free(n)` on an `int`: there is nothing to free
-  - freeing or keeping a parameter: the caller owns it
-  - `names.push(...)` inside an `arena` while `names` was declared before it: change it after the block, or return the result from a function that uses `arena`
+  - `free(n)` or `keep(n)` on an `int`, `float`, `bool` or `char`: there is nothing to free
+  - freeing or keeping a parameter or a loop variable: the caller owns it
+  - `free(xs[0])` or `free(p.name)`: `free` needs a whole variable, and to drop an element early you assign an empty value (`xs[0] = []`)
+  - `names.push(...)` or `best = w` inside an `arena` while the variable was declared before the block: change it after the block, or let a function whose body is the `arena` return the result with `ret`
 - **Wrong:**
 ```rust
 fn main() {
-    let n = 1
-    free(n)
+    var best = ""
+    arena {
+        let words = "the quick brown fox".split(" ")
+        for w in words {
+            if w.len() > best.len() {
+                best = w
+            }
+        }
+    }
+    print(best)
+}
+```
+- **Fixed:**
+```rust
+fn longest(text: str) -> str {
+    arena {
+        let words = text.split(" ")
+        var best = ""
+        for w in words {
+            if w.len() > best.len() {
+                best = w
+            }
+        }
+        ret best
+    }
+}
+
+fn main() {
+    print(longest("the quick brown fox"))
+}
+```
+- **Related:** E0205, E0237, E0239
+
+## E0239: use after free
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A variable is used after `free(x)`, or on a path where it may have been freed: freed in only one branch of an `if`, or in an earlier round of a loop. Every use is an error, including a second `free(x)`, until a `var` is given a new value. The message says where it was freed: "`xs` was freed at line 3 and cannot be used any more", or "`xs` may have been freed (line 4): it is freed on some paths before this use".
+- **Why Nyra has this rule:** Freed memory must never be used. The compiler follows every local variable through the function and rejects the program, instead of letting it crash or print garbage. The same programs are rejected on every backend, even where freeing leaves nothing visible.
+- **Common causes:**
+  - reading the variable after `free(xs)`
+  - `free` inside an `if`, with a use after the `if`
+  - `free` inside a loop, so the next round uses a variable that was freed in the one before
+  - a second `free(xs)` for the same variable
+- **Wrong:**
+```rust
+fn main() {
+    var xs = [1, 2, 3]
+    free(xs)
+    print(xs.len())
 }
 ```
 - **Fixed:**
@@ -1195,33 +1242,7 @@ fn main() {
     free(xs)
 }
 ```
-- **Related:** E0239, E0237, E0205
-
-## E0239: use after free
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A variable is used after `free(x)`, or on a path where it may have been freed (freed in only one branch of an `if`, or in an earlier round of a loop). Every use, including a second `free`, is an error until a `var` is given a new value. The message says where the variable was freed: "`xs` was freed at line 7".
-- **Why Nyra has this rule:** Freed memory must never be used. The compiler follows every local variable through the function and rejects the program, instead of letting it crash or print garbage.
-- **Common causes:**
-  - reading the variable after `free(xs)`
-  - `free` inside an `if`, with a use after the `if`
-  - `free` inside a loop, so the second round uses a freed variable
-- **Wrong:**
-```rust
-fn main() {
-    var xs = [1]
-    free(xs)
-    print(xs)
-}
-```
-- **Fixed:**
-```rust
-fn main() {
-    var xs = [1]
-    print(xs)
-    free(xs)
-}
-```
-- **Related:** E0238, E0201
+- **Related:** E0201, E0238
 
 ## E0240: index out of bounds
 - **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
