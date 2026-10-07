@@ -35,7 +35,7 @@ p{margin:0}
 .grad{background:linear-gradient(100deg,#a18bff 0%,#6fa0ff 55%,#3cc4ee 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .eyebrow{font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);font-weight:600;margin-bottom:16px}
 .lead{color:var(--muted);font-size:clamp(1.02rem,2.4vw,1.2rem);max-width:60ch;margin-top:18px}
-.sec{padding-block:clamp(64px,11vw,132px);position:relative}
+.sec{padding-block:clamp(56px,9vw,104px);position:relative}
 .sec-h{margin-bottom:clamp(32px,5vw,56px)}
 code.i{font-size:.88em;background:var(--panel2);border:1px solid var(--line);padding:.08em .4em;border-radius:6px;color:var(--text)}
 
@@ -250,9 +250,9 @@ html:not(.js) .burger{display:none}
 .cow.run .hlb{opacity:1}
 .diag{width:100%;height:auto}
 .diag text{font-family:var(--mono)}
-.diag .tag rect{fill:var(--panel2);stroke:var(--accline)}
-.diag .tag text{fill:var(--ink);font-size:14px;text-anchor:middle;dominant-baseline:central}
-.diag .blk>rect{fill:rgba(255,255,255,.02);stroke:var(--line2);stroke-dasharray:3 4}
+.diag .vt rect{fill:var(--panel2);stroke:var(--accline)}
+.diag .vt text{fill:var(--ink);font-size:14px;text-anchor:middle;dominant-baseline:central}
+.diag .blk>rect{fill:rgba(255,255,255,.025);stroke:var(--line2);stroke-dasharray:3 4}
 .diag .cell rect{fill:var(--panel2);stroke:var(--line2)}
 .diag .cell text{fill:#fff;font-size:15px;text-anchor:middle;dominant-baseline:central}
 .diag .rc text{fill:var(--cyink);font-size:11px;text-anchor:middle;dominant-baseline:central}
@@ -398,3 +398,11 @@ html:not(.js) .burger{display:none}
 .wm>:nth-child(2){animation-delay:.12s}.wm>:nth-child(3){animation-delay:.24s}.wm>:nth-child(4){animation-delay:.36s}.wm>:nth-child(5){animation-delay:.48s}
 @keyframes draw{to{stroke-dashoffset:0}}
 .win.rel .code{padding-right:64px}
+.grid>*,.cols>*,.tgrid>*,.duo>*,.cow>*,.ag>*,.bench>*,.two>*,.sbody>*{min-width:0}
+.card{min-width:0}
+
+.stage .out-b{white-space:normal}.stage .out-b>span{white-space:pre}
+.term .o{white-space:normal}.term .o .row{white-space:pre-wrap}
+.diag{max-width:540px;margin-inline:auto}
+.ag{align-items:start}
+.win.rel .code{padding-right:14px}

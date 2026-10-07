@@ -223,7 +223,7 @@ function pipeline() {
     fill.style.transform = 'scaleX(' + (i / (N - 1)) + ')';
     sc.forEach(s => { s.n.classList.toggle('on', s.set.includes(i)); s.n.classList.toggle('t3', i === 3); });
   }
-  lis.forEach((li, k) => $('button', li).addEventListener('click', () => go(k)));
+  lis.forEach((li, k) => { const b = $('button', li); b.prepend(el('i', 'nd')); b.addEventListener('click', () => go(k)); });
   const finalAll = RM;
   go(0);
   if (finalAll) return;

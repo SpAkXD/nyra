@@ -309,21 +309,21 @@ fn main() {
       <div>
         <div class="win" style="padding:14px">
           <svg class="diag" viewBox="0 0 380 236" role="img" aria-label="Memory diagram">
-            <g class="blk1 fade on" id="c-b1" transform="translate(150 14)">
+            <g class="fade" id="c-b1" transform="translate(150 14)"><g class="blk">
               <rect width="190" height="74" rx="12"/>
               <g class="cell"><rect x="14" y="17" width="48" height="40" rx="8"/><text id="c-v0" x="38" y="38">1</text></g>
               <g class="cell"><rect x="70" y="17" width="48" height="40" rx="8"/><text x="94" y="38">2</text></g>
               <g class="rc" transform="translate(116 -10)"><rect width="64" height="20" rx="10"/><text id="c-rc1" x="32" y="10.5">rc 1</text></g>
-            </g>
-            <g class="blk2" id="c-b2" transform="translate(150 136)">
-              <rect width="190" height="74" rx="12" fill="rgba(255,255,255,.02)" stroke="rgba(255,255,255,.15)" stroke-dasharray="3 4"/>
+            </g></g>
+            <g transform="translate(150 136)"><g class="blk2 blk" id="c-b2">
+              <rect width="190" height="74" rx="12"/>
               <g class="cell"><rect x="14" y="17" width="48" height="40" rx="8"/><text x="38" y="38">1</text></g>
               <g class="cell"><rect x="70" y="17" width="48" height="40" rx="8"/><text x="94" y="38">2</text></g>
               <g class="cell fade" id="c-c3"><rect x="126" y="17" width="48" height="40" rx="8"/><text x="150" y="38">3</text></g>
               <g class="rc" transform="translate(116 -10)"><rect width="64" height="20" rx="10"/><text x="32" y="10.5">rc 1</text></g>
-            </g>
-            <g class="tag fade" id="c-ta"><rect x="0" y="28" width="56" height="30" rx="15"/><text x="28" y="43">a</text></g>
-            <g class="tag fade" id="c-tb"><rect x="0" y="150" width="56" height="30" rx="15"/><text x="28" y="165">b</text></g>
+            </g></g>
+            <g class="vt fade" id="c-ta"><rect x="0" y="28" width="56" height="30" rx="15"/><text x="28" y="43">a</text></g>
+            <g class="vt fade" id="c-tb"><rect x="0" y="150" width="56" height="30" rx="15"/><text x="28" y="165">b</text></g>
             <path class="ptr" id="c-pa" pathLength="1" d="M56 43C100 43 110 51 150 51"/><circle class="pd" cx="150" cy="51" r="3.5"/>
             <path class="ptr" id="c-pb1" pathLength="1" d="M56 165C120 165 100 70 150 66"/><circle class="pd" cx="150" cy="66" r="3.5"/>
             <path class="ptr" id="c-pb2" pathLength="1" d="M56 165C100 165 110 173 150 173"/><circle class="pd" cx="150" cy="173" r="3.5"/>
@@ -539,12 +539,12 @@ quick
     </div>
     <div class="cols">
       <article class="card rv"><h3>Prebuilt binary</h3><p>Linux x86_64, Windows x86_64 and macOS Apple Silicon. Download the archive from the latest release, unpack it and put <code class="i">nyra</code> on your PATH.</p><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Latest release</a><p class="small" style="margin-top:12px">On macOS run <code class="i">xattr -d com.apple.quarantine nyra</code> once: the binary is not signed.</p></article>
-      <article class="card rv" style="--d:1"><h3>From source</h3><p>Any platform with Rust.</p><div class="win rel"><pre class="code pad" data-copy>git clone https://github.com/SpAkXD/nyra
+      <article class="card rv" style="--d:1"><h3>From source</h3><p>Any platform with Rust.</p><div class="win rel"><div class="win-bar">shell</div><pre class="code pad" data-copy>git clone https://github.com/SpAkXD/nyra
 cd nyra
 cargo build --release</pre></div><p class="small" style="margin-top:12px">The binary is <code class="i">target/release/nyra</code>. Or: <code class="i">cargo install --git https://github.com/SpAkXD/nyra</code></p></article>
-      <article class="card rv" style="--d:2"><h3>Your first program</h3><div class="win rel"><pre class="code nyra pad" data-copy>fn main() {
+      <article class="card rv" style="--d:2"><h3>Your first program</h3><div class="win rel"><div class="win-bar">hello.nyra</div><pre class="code nyra pad" data-copy>fn main() {
     print("hello from nyra")
-}</pre></div><p class="small" style="margin:12px 0">Save it as <code class="i">hello.nyra</code>, then:</p><div class="win rel"><pre class="code pad" data-copy>nyra run hello.nyra
+}</pre></div><p class="small" style="margin:12px 0">Save it as <code class="i">hello.nyra</code>, then:</p><div class="win rel"><div class="win-bar">shell</div><pre class="code pad" data-copy>nyra run hello.nyra
 nyra run hello.nyra --js</pre></div></article>
     </div>
     <div class="win rv" style="margin-top:14px;padding:8px 22px">
