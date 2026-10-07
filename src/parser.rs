@@ -1,15 +1,19 @@
 //! Recursive-descent parser with precedence climbing for expressions.
 //! On an error it records a diagnostic and skips to the next statement, so one
-//! run reports as many errors as possible.
+//! run reports as many errors as possible. Every error says what was expected,
+//! what was found and (through `hints`) what to write instead.
 
 use crate::ast::*;
 use crate::diag::Diag;
+use crate::hints;
 use crate::lexer::{self, StrPart, Tok, Token};
 
 type PResult<T> = Result<T, Diag>;
 
+const FORMAT_SPEC_HINT: &str = "format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form";
+
 pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
-    let mut p = Parser { toks, pos: 0, errs: Vec::new() };
+    let mut p = Parser { toks, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0 };
     let prog = p.program();
     (prog, p.errs)
 }
@@ -18,6 +22,11 @@ struct Parser {
     toks: Vec<Token>,
     pos: usize,
     errs: Vec<Diag>,
+    /// True while parsing the code inside `{ }` of a string: the end of that code is the closing `}`.
+    in_string: bool,
+    /// Blocks that were cut short by a `fn`. The `}` that is left over for each of them at the
+    /// top level was already accounted for by that error and is not reported again.
+    cut_blocks: usize,
 }
 
 impl Parser {
@@ -52,8 +61,103 @@ impl Parser {
         }
     }
 
+    fn prev(&self) -> Option<&Token> {
+        self.pos.checked_sub(1).map(|i| &self.toks[i])
+    }
+
+    /// The last token before the current one that is not a line break.
+    fn prev_nonl(&self) -> Option<&Token> {
+        self.toks[..self.pos].iter().rev().find(|t| t.tok != Tok::Newline)
+    }
+
+    /// True if the previous token is `tok` and the current one follows it with no space between.
+    fn glued_to(&self, tok: &Tok) -> bool {
+        self.prev().is_some_and(|p| {
+            p.tok == *tok && p.span.line == self.span().line && p.span.col + p.tok.text().len() == self.span().col
+        })
+    }
+
+    /// The current token as it is named in "found ...". Inside the `{ }` of a string, the end
+    /// of the code is the closing `}`.
+    fn found(&self) -> String {
+        match self.peek() {
+            Tok::Newline | Tok::Eof if self.in_string => "`}`".to_string(),
+            t => t.describe(),
+        }
+    }
+
+    /// `expected X, found Y` at the current token. The hint is filled in when what was found is a
+    /// known mistake (`return`, `and`, `=` instead of `==`, `0xFF`, ...); callers may add others.
     fn unexpected(&self, expected: &str) -> Diag {
-        Diag::new("E0101", format!("expected {expected}, found {}", self.peek().describe()), self.span())
+        let d = Diag::new("E0101", format!("expected {expected}, found {}", self.found()), self.span());
+        match self.found_hint() {
+            Some(h) => d.hint(h),
+            None => d,
+        }
+    }
+
+    fn found_hint(&self) -> Option<String> {
+        match self.peek() {
+            Tok::Ident(w) => self.number_suffix_hint(w).or_else(|| hints::word(w)),
+            Tok::Assign => Some("`=` assigns to a variable on a line of its own (`x = 1`); to compare two values write `==`".into()),
+            Tok::Slash if matches!(self.peek_at(1), Tok::Star) => {
+                Some("Nyra has no block comments: start every comment line with `//`".into())
+            }
+            _ => None,
+        }
+    }
+
+    /// `0xFF`, `1_000`, `1e5` and friends lex as a number followed by a word: say what to write.
+    fn number_suffix_hint(&self, word: &str) -> Option<String> {
+        let prev = self.prev()?;
+        let (text, whole) = match prev.tok {
+            Tok::Int(n) => (n.to_string(), Some(n)),
+            Tok::Float(f) => (format!("{f:?}"), None),
+            _ => return None,
+        };
+        let cur = self.span();
+        if prev.span.line != cur.line || prev.span.col + text.len() != cur.col {
+            return None;
+        }
+        let first = word.chars().next()?;
+        let rest = &word[first.len_utf8()..];
+        let digits = |radix: u32| !rest.is_empty() && rest.chars().all(|c| c.is_digit(radix));
+        match (first, whole) {
+            ('x' | 'X', Some(0)) if digits(16) => i64::from_str_radix(rest, 16)
+                .ok()
+                .map(|v| format!("hexadecimal literals do not exist: write the decimal value `{v}`")),
+            ('b' | 'B', Some(0)) if digits(2) => i64::from_str_radix(rest, 2)
+                .ok()
+                .map(|v| format!("binary literals do not exist: write the decimal value `{v}`")),
+            ('o' | 'O', Some(0)) if digits(8) => i64::from_str_radix(rest, 8)
+                .ok()
+                .map(|v| format!("octal literals do not exist: write the decimal value `{v}`")),
+            ('_', _) if rest.chars().all(|c| c.is_ascii_digit() || c == '_') && rest.contains(|c: char| c.is_ascii_digit()) => {
+                Some(format!("digit separators do not exist: write `{text}{}`", rest.replace('_', "")))
+            }
+            ('e' | 'E', _) => {
+                let exp = if rest.is_empty() {
+                    // `1e-5` / `1e+5`: the sign and the digits are separate tokens
+                    match (self.peek_at(1), self.peek_at(2)) {
+                        (Tok::Plus, Tok::Int(k)) => Some(*k),
+                        (Tok::Minus, Tok::Int(k)) => Some(-*k),
+                        _ => None,
+                    }
+                } else if digits(10) {
+                    rest.parse::<i64>().ok()
+                } else {
+                    None
+                }?;
+                let value = text.parse::<f64>().ok()? * 10f64.powi(exp as i32);
+                let shown = format!("{value:?}");
+                if (0..=15).contains(&exp) && !shown.contains('e') {
+                    Some(format!("exponent notation does not exist: write the number in full, `{shown}`"))
+                } else {
+                    Some("exponent notation does not exist: write the number in full, with a dot (`0.00001`, `100000.0`)".into())
+                }
+            }
+            _ => None,
+        }
     }
 
     fn expect(&mut self, t: Tok, expected: &str) -> PResult<Span> {
@@ -64,12 +168,19 @@ impl Parser {
         }
     }
 
-    fn ident(&mut self, what: &str) -> PResult<(String, Span)> {
+    /// A name. A keyword is described as such, since "expected a variable name, found keyword `in`"
+    /// says exactly why `in` does not work.
+    fn ident(&mut self, what: &str, hint: &str) -> PResult<(String, Span)> {
         if let Tok::Ident(name) = self.peek().clone() {
-            Ok((name, self.bump().span))
-        } else {
-            Err(self.unexpected(what))
+            return Ok((name, self.bump().span));
         }
+        let t = self.peek().clone();
+        let hint = if t.is_keyword() || matches!(t, Tok::True | Tok::False) {
+            format!("`{}` is a reserved word and cannot be used as a name: pick another, e.g. `{}_value`", t.text(), t.text())
+        } else {
+            hint.to_string()
+        };
+        Err(self.unexpected(what).hint(hint))
     }
 
     // ---- top level -------------------------------------------------------
@@ -87,16 +198,55 @@ impl Parser {
                         self.sync_top();
                     }
                 },
+                // the `}` of a block that a nested `fn` cut short: that error already covers it
+                Tok::RBrace if self.cut_blocks > 0 => {
+                    self.cut_blocks -= 1;
+                    self.bump();
+                }
                 _ => {
-                    let d = self
-                        .unexpected("`fn`")
-                        .hint("the top level of a file may only contain `fn` definitions");
+                    let d = self.top_level_error();
                     self.errs.push(d);
                     self.sync_top();
                 }
             }
         }
         Program { funcs }
+    }
+
+    /// Something other than `fn` at the top level of the file.
+    fn top_level_error(&self) -> Diag {
+        let d = self.unexpected("`fn`");
+        let name_after = |n: usize| match self.peek_at(n) {
+            Tok::Ident(w) => Some(w.clone()),
+            _ => None,
+        };
+        let hint = match self.peek() {
+            Tok::Let | Tok::Var => {
+                let name = name_after(1).unwrap_or_else(|| "name".into());
+                format!("there are no global variables: a constant is a function, e.g. `fn {name}() -> int = 10`")
+            }
+            Tok::RBrace => "this `}` closes nothing: remove it, or add the `{` it belongs to".to_string(),
+            Tok::Ident(w) => {
+                if let (true, Some(fname), Tok::LParen) = (hints::is_type_word(w), name_after(1), self.peek_at(2)) {
+                    // C-style `int main() {`
+                    if w == "void" {
+                        format!("functions start with `fn`: `fn {fname}(...) {{ ... }}` (no `->` part when nothing is returned)")
+                    } else {
+                        format!("functions start with `fn` and the return type comes after `->`: `fn {fname}(...) -> {w} {{ ... }}`")
+                    }
+                } else if let Some(h) = hints::top_level_word(w) {
+                    h
+                } else if w == "main" && matches!(self.peek_at(1), Tok::LParen) {
+                    "`main` runs by itself when the program starts: define it with `fn main() { ... }` and do not call it".to_string()
+                } else if matches!(self.peek_at(1), Tok::LParen) {
+                    format!("`{w}(...)` is a call, and calls go inside a function: `fn main() {{ {w}(...) }}`")
+                } else {
+                    return d.or_hint("a file may only contain `fn` definitions: put statements inside `fn main() { ... }`");
+                }
+            }
+            _ => return d.or_hint("a file may only contain `fn` definitions: put statements inside `fn main() { ... }`"),
+        };
+        d.hint(hint)
     }
 
     fn sync_top(&mut self) {
@@ -110,57 +260,150 @@ impl Parser {
 
     fn func(&mut self) -> PResult<Func> {
         self.expect(Tok::Fn, "`fn`")?;
-        let (name, span) = self.ident("a function name")?;
-        self.expect(Tok::LParen, "`(`")?;
+        let (name, span) = self.ident("a function name", "name the function after `fn`: `fn main() { ... }`")?;
+        self.expect(Tok::LParen, "`(`")
+            .map_err(|d| d.or_hint(format!("the parameter list follows the name: `fn {name}(a: int) {{ ... }}`")))?;
         let mut params = Vec::new();
         while !self.at(&Tok::RParen) {
-            let (pname, pspan) = self.ident("a parameter name")?;
-            self.expect(Tok::Colon, "`:` and a type")
-                .map_err(|d| d.hint(format!("parameters need a type, e.g. `{pname}: int`")))?;
-            let ty = self.ty()?;
+            let (pname, pspan) = self.ident("a parameter name", "parameters look like `a: int, b: float`")?;
+            if !self.at(&Tok::Colon) {
+                return Err(self.missing_param_type(&pname));
+            }
+            self.bump();
+            let ty = self.ty(&format!("every parameter needs a type: `{pname}: int`"))?;
             params.push(Param { name: pname, ty, span: pspan });
             if !self.at(&Tok::RParen) {
-                self.expect(Tok::Comma, "`,` or `)`")?;
+                let hint = if matches!(self.peek(), Tok::LBrace | Tok::Arrow | Tok::Assign | Tok::Eof | Tok::Newline) {
+                    "close the parameter list with `)`"
+                } else {
+                    "separate parameters with commas: `fn f(a: int, b: int)`"
+                };
+                self.expect(Tok::Comma, "`,` or `)`").map_err(|d| d.or_hint(hint))?;
             }
         }
         self.bump();
         let ret = if self.at(&Tok::Arrow) {
             self.bump();
-            self.ty()?
+            self.ty("write the return type after `->`, e.g. `fn f() -> int`")?
         } else {
             Type::Void
         };
         let body = if self.at(&Tok::Assign) {
             // one-line function: the expression is the body (and the return value)
             self.bump();
-            let e = self.expr()?;
-            self.end_stmt()?;
+            let e = self.expr().map_err(|d| self.one_line_fn_error(d))?;
+            self.end_stmt_after(
+                None,
+                Some("a one-line function is a single expression: use a block `{ ... }` for several statements"),
+            )?;
             let espan = e.span;
             let kind = if ret == Type::Void { StmtKind::Expr(e) } else { StmtKind::Ret(Some(e)) };
             vec![Stmt { kind, span: espan }]
         } else {
-            self.block()?
+            self.block(&format!("fn {name}"))?
         };
         Ok(Func { name, params, ret, body, span })
     }
 
-    fn ty(&mut self) -> PResult<Type> {
+    /// `int a` (C) or `a int` (no colon) in a parameter list.
+    fn missing_param_type(&self, pname: &str) -> Diag {
+        let d = self.unexpected("`:` and a type");
+        match self.peek() {
+            Tok::Ident(second) if hints::is_type_word(pname) => {
+                d.hint(format!("write the name first, then the type: `{second}: {pname}`"))
+            }
+            Tok::Ident(second) if hints::is_type_word(second) => {
+                d.hint(format!("put a colon between the name and the type: `{pname}: {second}`"))
+            }
+            _ => d.or_hint(format!("every parameter needs a type: `{pname}: int`")),
+        }
+    }
+
+    /// The expression of a one-line function went wrong right where it starts.
+    fn one_line_fn_error(&self, d: Diag) -> Diag {
+        if d.code != "E0101" {
+            return d;
+        }
+        match self.peek() {
+            Tok::Newline => d.hint("the expression must start on the same line as `=`: `fn f() -> int = 1`"),
+            Tok::Ret => d.hint("a one-line function returns its expression itself, so there is no `ret`: `fn f(x: int) -> int = x`"),
+            Tok::LBrace => d.hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`"),
+            Tok::Gt if self.glued_to(&Tok::Assign) => {
+                d.hint("`=>` does not exist: a one-line function is written `fn f(x: int) -> int = x * 2`")
+            }
+            _ => d,
+        }
+    }
+
+    fn ty(&mut self, hint: &str) -> PResult<Type> {
         let span = self.span();
-        let (name, _) = self.ident("a type")?;
+        let (name, _) = self.ident("a type", hint)?;
         match name.as_str() {
             "int" => Ok(Type::Int),
             "float" => Ok(Type::Float),
             "bool" => Ok(Type::Bool),
             "str" => Ok(Type::Str),
-            _ => Err(Diag::new("E0102", format!("unknown type `{name}`"), span)
-                .hint("the types are: int, float, bool, str")),
+            _ => Err(Diag::new(
+                "E0102",
+                format!("unknown type `{name}`: expected `int`, `float`, `bool` or `str`"),
+                span,
+            )
+            .hint(hints::type_name(&name))),
         }
     }
 
     // ---- statements ------------------------------------------------------
 
-    fn block(&mut self) -> PResult<Vec<Stmt>> {
-        self.expect(Tok::LBrace, "`{`")?;
+    /// The `{` of a block. `what` says whose body it is (`fn main`, `if`, `else`, `while`, `for`).
+    /// A `{` alone on the next line is reported once and then parsed anyway, so it does not
+    /// cause a second error.
+    fn open_brace(&mut self, what: &str) -> PResult<Span> {
+        if self.at(&Tok::LBrace) {
+            return Ok(self.bump().span);
+        }
+        let is_fn = what.starts_with("fn ");
+        let expected = if what == "else" {
+            "`{` or `if` after `else`".to_string()
+        } else if is_fn {
+            format!("`{{` or `=` to start the body of `{what}`")
+        } else {
+            format!("`{{` to start the body of this `{what}`")
+        };
+        let example = match what {
+            "else" => "} else {".to_string(),
+            "if" => "if x > 0 {".to_string(),
+            "while" => "while n > 0 {".to_string(),
+            "for" => "for i in 0..10 {".to_string(),
+            w => format!("{w}(...) {{"),
+        };
+        let allman = matches!(self.peek(), Tok::Newline) && matches!(self.peek_at(1), Tok::LBrace);
+        let specific = match self.peek() {
+            Tok::Newline if allman => Some(format!("put the `{{` on the same line as the header: `{example}`")),
+            Tok::Newline if is_fn => Some(format!(
+                "a function body is missing: write `{example} ... }}`, or `= expression` for a one-line function"
+            )),
+            Tok::Newline => Some(format!("a body in braces is missing: `{example} ... }}`")),
+            Tok::Colon if is_fn => Some("the return type is written after an arrow: `fn f(a: int) -> int {`".to_string()),
+            Tok::Ident(t) if is_fn && hints::is_type_word(t) => {
+                Some(format!("the return type is written after an arrow: `fn f() -> {t} {{`"))
+            }
+            _ => None,
+        };
+        let d = self.unexpected(&expected);
+        let d = match specific {
+            Some(h) => d.hint(h),
+            None => d.or_hint(format!("braces are required, even around one statement: `{example} ... }}`")),
+        };
+        if allman {
+            self.errs.push(d);
+            self.bump();
+            return Ok(self.bump().span);
+        }
+        Err(d)
+    }
+
+    fn block(&mut self, what: &str) -> PResult<Vec<Stmt>> {
+        let open = self.open_brace(what)?;
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
@@ -169,7 +412,7 @@ impl Parser {
                     self.bump();
                     return Ok(stmts);
                 }
-                Tok::Eof | Tok::Fn => return Err(self.unexpected("`}`")),
+                Tok::Eof | Tok::Fn => return Err(self.unclosed_block(open, what)),
                 _ => match self.stmt() {
                     Ok(s) => stmts.push(s),
                     Err(d) => {
@@ -181,11 +424,28 @@ impl Parser {
         }
     }
 
+    /// The file (or the next `fn`) came before the `}` of a block.
+    fn unclosed_block(&mut self, open: Span, what: &str) -> Diag {
+        let nested = self.at(&Tok::Fn);
+        if nested {
+            self.cut_blocks += 1;
+        }
+        let d = self.unexpected(&format!("`}}` to close the `{{` of `{what}` opened at {}:{}", open.line, open.col));
+        d.hint(if nested {
+            "functions cannot be nested: add the missing `}` before this `fn`, or move the inner function to the top level"
+        } else {
+            "add the missing `}`: every `{` needs a matching `}`"
+        })
+    }
+
     fn sync_stmt(&mut self) {
         let mut depth = 0usize;
         loop {
             match self.peek() {
-                Tok::Eof | Tok::Fn => return,
+                Tok::Eof => return,
+                // a `fn` that starts a line is the next function; one in the middle of a line
+                // (`let f = fn(x) x`) belongs to the broken statement
+                Tok::Fn if self.prev().is_some_and(|p| p.tok == Tok::Newline) => return,
                 Tok::LBrace => depth += 1,
                 Tok::RBrace => {
                     if depth == 0 {
@@ -204,30 +464,90 @@ impl Parser {
     }
 
     fn end_stmt(&mut self) -> PResult<()> {
+        self.end_stmt_after(None, None)
+    }
+
+    /// The end of a statement. `first` is the name the statement started with, if it started with
+    /// one; `generic` replaces the general "one statement per line" hint.
+    fn end_stmt_after(&mut self, first: Option<&str>, generic: Option<&str>) -> PResult<()> {
         match self.peek() {
             Tok::Newline => {
                 self.bump();
                 Ok(())
             }
             Tok::RBrace | Tok::Eof => Ok(()),
-            _ => Err(self.unexpected("end of line").hint("put each statement on its own line")),
+            _ => Err(self.after_statement_error(first, generic)),
         }
+    }
+
+    fn after_statement_error(&self, first: Option<&str>, generic: Option<&str>) -> Diag {
+        let mut d = self.unexpected("end of line");
+        if let Some(w) = first {
+            let word_hint = match (w, self.peek()) {
+                ("const" | "final" | "static" | "val", Tok::Ident(name)) => Some(format!(
+                    "write `let {name} = ...` for a value that never changes, or `var {name} = ...` for one that does"
+                )),
+                _ => hints::word(w),
+            };
+            if let Some(h) = word_hint {
+                // `return x`, `elif x == 1`: the first word is the real mistake
+                d.msg = format!("`{w}` is not a Nyra keyword: expected end of line after it, found {}", self.found());
+                return d.hint(h);
+            }
+        }
+        let t = self.peek();
+        let hint = match (t, first) {
+            (Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Ret, _) => {
+                format!("put `{}` on a new line: Nyra has one statement per line", t.text())
+            }
+            (Tok::Colon, Some(_)) => "to declare a variable write `let x: int = 5` (or `var`)".to_string(),
+            (Tok::Int(_) | Tok::Float(_) | Tok::Str(_) | Tok::Ident(_) | Tok::True | Tok::False, Some(f)) => {
+                let arg = match t {
+                    Tok::Int(n) => n.to_string(),
+                    Tok::Float(x) => format!("{x:?}"),
+                    Tok::Str(s) if s.len() <= 20 && !s.contains(['"', '\\', '{', '}']) => format!("\"{s}\""),
+                    Tok::Ident(x) => x.clone(),
+                    Tok::True => "true".to_string(),
+                    Tok::False => "false".to_string(),
+                    _ => "...".to_string(),
+                };
+                format!("to call `{f}` put the argument in parentheses: `{f}({arg})`; to start a new statement, begin a new line")
+            }
+            _ => match generic {
+                Some(g) => g.to_string(),
+                None => format!("one statement per line: start {} on a new line", t.describe()),
+            },
+        };
+        d.or_hint(hint)
     }
 
     fn stmt(&mut self) -> PResult<Stmt> {
         let span = self.span();
         let kind = match self.peek().clone() {
             Tok::Let | Tok::Var => {
-                let mutable = self.bump().tok == Tok::Var;
-                let (name, _) = self.ident("a variable name")?;
+                let kw = self.bump().tok;
+                let mutable = kw == Tok::Var;
+                let word = kw.text();
+                let (name, _) = self.ident("a variable name", &format!("write the name after `{word}`: `{word} x = 0`"))?;
                 let ty = if self.at(&Tok::Colon) {
                     self.bump();
-                    Some(self.ty()?)
+                    Some(self.ty(&format!("write the type after the colon: `{word} {name}: int = 0`"))?)
                 } else {
                     None
                 };
-                self.expect(Tok::Assign, "`=`")
-                    .map_err(|d| d.hint(format!("variables must be initialized: `let {name} = ...`")))?;
+                if !self.at(&Tok::Assign) {
+                    let shown = match ty {
+                        Some(t) => format!("{word} {name}: {} = ...", t.name()),
+                        None => format!("{word} {name} = ..."),
+                    };
+                    let hint = if name == "mut" {
+                        "Nyra has no `mut`: write `var x = ...` for a variable that changes".to_string()
+                    } else {
+                        format!("a variable needs a starting value: `{shown}`")
+                    };
+                    return Err(self.unexpected("`=`").or_hint(hint));
+                }
+                self.bump();
                 let value = self.expr()?;
                 self.end_stmt()?;
                 StmtKind::Let { name, mutable, ty, value }
@@ -236,18 +556,19 @@ impl Parser {
             Tok::While => {
                 self.bump();
                 let cond = self.expr()?;
-                let body = self.block()?;
+                let body = self.block("while")?;
                 StmtKind::While { cond, body }
             }
             Tok::For => {
                 self.bump();
-                let (var, _) = self.ident("a loop variable")?;
-                self.expect(Tok::In, "`in`")?;
+                let (var, _) = self.ident("a loop variable", "loops look like `for i in 0..10 { ... }`")?;
+                self.expect(Tok::In, "`in`").map_err(|d| d.or_hint("loops look like `for i in 0..10 { ... }`"))?;
                 let start = self.expr()?;
-                self.expect(Tok::DotDot, "`..`")
-                    .map_err(|d| d.hint("loops look like `for i in 0..10 { }`"))?;
+                self.expect(Tok::DotDot, "`..`").map_err(|d| {
+                    d.or_hint("a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`")
+                })?;
                 let end = self.expr()?;
-                let body = self.block()?;
+                let body = self.block("for")?;
                 StmtKind::For { var, start, end, body }
             }
             Tok::Ret => {
@@ -264,21 +585,25 @@ impl Parser {
                 self.bump();
                 self.bump();
                 let value = self.expr()?;
-                self.end_stmt()?;
+                self.end_stmt_after(Some(&name), None)?;
                 StmtKind::Assign { name, value }
             }
             Tok::Ident(name) if matches!(self.peek_at(1), Tok::OpAssign(_)) => {
                 self.bump();
                 let Tok::OpAssign(op) = self.bump().tok else { unreachable!() };
                 let rhs = self.expr()?;
-                self.end_stmt()?;
+                self.end_stmt_after(Some(&name), None)?;
                 let var = Expr::new(ExprKind::Var(name.clone()), span);
                 let value = Expr::new(ExprKind::Binary(op, Box::new(var), Box::new(rhs)), span);
                 StmtKind::Assign { name, value }
             }
-            _ => {
+            first => {
+                let first = match first {
+                    Tok::Ident(w) => Some(w),
+                    _ => None,
+                };
                 let e = self.expr()?;
-                self.end_stmt()?;
+                self.end_stmt_after(first.as_deref(), None)?;
                 StmtKind::Expr(e)
             }
         };
@@ -288,7 +613,7 @@ impl Parser {
     fn if_stmt(&mut self) -> PResult<Stmt> {
         let span = self.expect(Tok::If, "`if`")?;
         let cond = self.expr()?;
-        let then = self.block()?;
+        let then = self.block("if")?;
         // `else` may sit on the line after the closing `}`.
         let save = self.pos;
         self.skip_newlines();
@@ -297,7 +622,7 @@ impl Parser {
             if self.at(&Tok::If) {
                 Some(vec![self.if_stmt()?])
             } else {
-                Some(self.block()?)
+                Some(self.block("else")?)
             }
         } else {
             self.pos = save;
@@ -366,8 +691,12 @@ impl Parser {
         self.skip_newlines();
         if !self.at(&Tok::Else) {
             self.pos = save;
-            return Err(Diag::new("E0212", "an `if` used as a value needs an `else`", span)
-                .hint("add `else { ... }` so there is a value on every path"));
+            return Err(Diag::new(
+                "E0212",
+                "an `if` used as a value needs an `else`: without it there is no value when the condition is false",
+                span,
+            )
+            .hint("add the other branch: `let x = if cond { 1 } else { 0 }`"));
         }
         self.bump();
         let els = if self.at(&Tok::If) { self.if_expr()? } else { self.branch_expr()? };
@@ -376,17 +705,30 @@ impl Parser {
 
     /// `{ expr }`: one branch of an `if` used as a value.
     fn branch_expr(&mut self) -> PResult<Expr> {
-        self.expect(Tok::LBrace, "`{`")?;
+        self.expect(Tok::LBrace, "`{`").map_err(|d| {
+            d.or_hint("each branch of an `if` used as a value is `{ expression }` on the same line as the `if`/`else`")
+        })?;
         self.skip_newlines();
-        let e = self.expr()?;
+        let e = match self.expr() {
+            Ok(e) => e,
+            Err(d) if matches!(self.peek(), Tok::RBrace) => {
+                // an empty branch: skip the rest of this `if`, so one mistake gives one error
+                self.skip_if_value_rest();
+                return Err(d.hint("an `if` used as a value needs a value in every branch: `if c { 1 } else { 2 }`"));
+            }
+            Err(d) => return Err(d),
+        };
         self.skip_newlines();
         if !self.at(&Tok::RBrace) {
             let d = Diag::new(
                 "E0212",
-                "each branch of an `if` used as a value must be a single expression",
+                format!(
+                    "each branch of an `if` used as a value must be exactly one expression, found {} after it",
+                    self.found()
+                ),
                 self.span(),
             )
-            .hint("compute the value before the `if`, or use an `if` statement that assigns a `var`");
+            .hint("compute the value first: `var x = 0`, then an `if` statement that sets it (`if c { x = 1 } else { x = 2 }`)");
             self.skip_if_value_rest();
             return Err(d);
         }
@@ -434,6 +776,7 @@ impl Parser {
     /// Parses the expression inside `{ }` of an interpolated string.
     fn sub_expr(&mut self, code: &str, base: Span) -> PResult<Expr> {
         let shift = |s: Span| Span { line: base.line, col: base.col + s.col - 1 };
+        let spec = code.contains(':');
         let (mut toks, errs) = lexer::lex(code);
         if let Some((first, rest)) = errs.split_first() {
             for d in rest {
@@ -443,25 +786,23 @@ impl Parser {
             }
             let mut d = first.clone();
             d.span = shift(d.span);
-            return Err(d);
+            return Err(if spec { d.hint(FORMAT_SPEC_HINT) } else { d });
         }
         for t in &mut toks {
             t.span = shift(t.span);
         }
-        let mut sub = Parser { toks, pos: 0, errs: Vec::new() };
-        // Inside a string, the end of the sub-source is the closing `}`.
-        let e = sub.expr().map_err(|mut d| {
-            for end in ["found end of line", "found end of file"] {
-                if let Some(head) = d.msg.strip_suffix(end) {
-                    d.msg = format!("{head}found `}}`");
-                }
-            }
-            d
-        });
+        let mut sub = Parser { toks, pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0 };
+        let e = sub.expr();
         self.errs.append(&mut sub.errs);
         let e = e?;
         if !matches!(sub.peek(), Tok::Newline | Tok::Eof) {
-            return Err(sub.unexpected("`}`").hint("only a single expression can go inside `{ }` in a string"));
+            let d = sub.unexpected("`}` after the expression");
+            let hint = if spec && matches!(sub.peek(), Tok::Colon) {
+                FORMAT_SPEC_HINT
+            } else {
+                "only one expression can go inside `{ }` in a string: build the parts separately, e.g. `\"{a} {b}\"`"
+            };
+            return Err(d.hint(hint));
         }
         Ok(e)
     }
@@ -503,12 +844,15 @@ impl Parser {
             Tok::Ident(name) => {
                 self.bump();
                 if self.at(&Tok::LParen) {
-                    self.bump();
+                    let open = self.bump().span;
                     let mut args = Vec::new();
                     while !self.at(&Tok::RParen) {
                         args.push(self.expr()?);
                         if !self.at(&Tok::RParen) {
-                            self.expect(Tok::Comma, "`,` or `)`")?;
+                            if !self.at(&Tok::Comma) {
+                                return Err(self.call_error(&name, open));
+                            }
+                            self.bump();
                         }
                     }
                     self.bump();
@@ -518,14 +862,97 @@ impl Parser {
                 }
             }
             Tok::LParen => {
-                self.bump();
+                let open = self.bump().span;
                 let e = self.expr()?;
-                self.expect(Tok::RParen, "`)`")?;
+                self.expect(Tok::RParen, &format!("`)` to close the `(` opened at {}:{}", open.line, open.col))
+                    .map_err(|d| d.or_hint("add the missing `)`: every `(` needs a matching `)`"))?;
                 return Ok(e);
             }
             Tok::If => return self.if_expr(),
-            _ => return Err(self.unexpected("an expression")),
+            _ => return Err(self.expression_expected()),
         };
         Ok(Expr::new(kind, span))
+    }
+
+    /// Something that is not a `,` or `)` after an argument.
+    fn call_error(&self, name: &str, open: Span) -> Diag {
+        let d = self.unexpected(&format!("`,` or `)` in the arguments of `{name}`"));
+        if matches!(self.peek(), Tok::RBrace | Tok::Eof | Tok::Fn | Tok::Newline) {
+            d.hint(format!("close the call with `)`: the `(` at {}:{} is never closed", open.line, open.col))
+        } else {
+            d.or_hint(format!("separate arguments with commas: `{name}(a, b)`"))
+        }
+    }
+
+    /// True if the two tokens before the current one are `-` `-` with no space between them.
+    fn double_minus_before(&self) -> bool {
+        let n = self.pos;
+        n >= 2
+            && self.toks[n - 1].tok == Tok::Minus
+            && self.toks[n - 2].tok == Tok::Minus
+            && self.toks[n - 2].span.line == self.toks[n - 1].span.line
+            && self.toks[n - 2].span.col + 1 == self.toks[n - 1].span.col
+    }
+
+    /// "expected an expression" with the most likely reason.
+    fn expression_expected(&self) -> Diag {
+        let d = self.unexpected("an expression");
+        let t = self.peek();
+        let starts_line = matches!(self.prev().map(|p| &p.tok), Some(Tok::Newline) | None);
+        let before = self.prev_nonl().map(|p| &p.tok);
+        if matches!(t, Tok::Plus) && self.glued_to(&Tok::Plus) {
+            return d.hint("`++` does not exist: write `i += 1`");
+        }
+        if matches!(t, Tok::Star) && self.glued_to(&Tok::Star) {
+            return d.hint("there is no `**` operator: multiply (`x * x * x`) or write a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)");
+        }
+        if matches!(t, Tok::Assign) && self.glued_to(&Tok::DotDot) {
+            return d.hint("`..=` does not exist: the end of a range is exclusive, so `0..10` counts 0 to 9");
+        }
+        if matches!(t, Tok::Newline | Tok::RBrace | Tok::Eof | Tok::RParen) && self.double_minus_before() {
+            return d.hint("`--` does not exist: write `i -= 1`");
+        }
+        let generic = "an expression is a value such as `5`, `x + 1` or `f(x)`";
+        match t {
+            Tok::Else => d.hint("`else` must follow the `}` of an `if` (`} else {`): look for a missing `}` or a statement between them"),
+            Tok::RParen if matches!(before, Some(Tok::LParen)) => {
+                d.hint("empty parentheses are not a value: put an expression inside, or remove them")
+            }
+            Tok::Fn => d.hint("functions are not values (there are no lambdas or closures): define a named `fn` at the top level"),
+            Tok::While | Tok::For | Tok::Let | Tok::Var | Tok::Ret => {
+                d.hint(format!("`{}` starts a statement, not a value: put it on its own line", t.text()))
+            }
+            Tok::LBrace => d.hint("a `{ }` block is not a value: for a conditional value write `if cond { a } else { b }`"),
+            Tok::Plus | Tok::Star | Tok::Slash | Tok::Percent | Tok::Eq | Tok::Ne | Tok::Lt | Tok::Le | Tok::Gt | Tok::Ge
+            | Tok::And | Tok::Or
+                if starts_line =>
+            {
+                d.hint(format!(
+                    "a line cannot start with `{}`: end the previous line with the operator instead (a line may break after an operator, never before one)",
+                    t.text()
+                ))
+            }
+            Tok::Plus | Tok::Star | Tok::Slash | Tok::Percent | Tok::Eq | Tok::Ne | Tok::Lt | Tok::Le | Tok::Gt | Tok::Ge
+            | Tok::And | Tok::Or | Tok::Comma
+                if before.is_some_and(|p| Self::binop(p).is_some()) =>
+            {
+                d.hint(format!(
+                    "two operators in a row: `{}` needs a value on its right, but `{}` follows it",
+                    before.map(|p| p.text()).unwrap_or(""),
+                    t.text()
+                ))
+            }
+            Tok::Newline | Tok::Eof | Tok::RBrace | Tok::RParen | Tok::Comma => match before {
+                Some(p) if Self::binop(p).is_some() => {
+                    d.hint(format!("`{}` needs a value on its right side: `a {} b`", p.text(), p.text()))
+                }
+                Some(Tok::Assign) => d.hint("write a value after `=`: `let x = 0`"),
+                Some(Tok::LParen) | Some(Tok::Comma) => d.hint("write the missing value, or remove the extra `,`"),
+                Some(Tok::DotDot) => d.hint("write the end of the range after `..`: `0..10`"),
+                Some(Tok::Minus) => d.hint("`-` needs a value after it: `-x`"),
+                _ => d.or_hint(generic),
+            },
+            _ => d.or_hint(generic),
+        }
     }
 }
