@@ -1,0 +1,5 @@
+// expect: E0249 at 3:18
+fn main() {
+    let xs = [0].repeat(1000000000)
+    print(xs.len())
+}

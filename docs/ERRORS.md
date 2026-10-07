@@ -24,7 +24,7 @@ design may still change.
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
-| E0240-E0249 | run time | the program stops with exit code 101 (E0241 and E0245 exist; E0240, E0242-E0244, E0246 and E0249 are planned) |
+| E0240-E0249 | run time | the program stops with exit code 101 |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
@@ -1245,30 +1245,31 @@ fn main() {
 - **Related:** E0201, E0238
 
 ## E0240: index out of bounds
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** At run time, an index or a range is outside the array or string: `index 3 is out of bounds for length 3`. Valid indexes are 0 up to the length minus 1; positions for `insert`, `remove` and `slice` are checked the same way.
-- **Why Nyra has this rule:** Reading past the end would be undefined behaviour in C and `undefined` in JavaScript. Nyra stops the program with the same error and exit code 101 on every backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** At run time an index or a range is outside the array or the string. The message gives both numbers: "index 3 is out of bounds for length 3" (reading `xs[3]` or `s[3]`, storing `xs[3] = v`, `remove(i)`, `insert(i, v)`) or "range 2..5 is out of bounds for length 3" (`slice(a, b)`). The valid indexes are 0 up to the length minus 1, and there are no negative indexes: `xs[-1]` is an error, not the last element. `insert(i, v)` also accepts `i` equal to the length, and `slice(a, b)` needs `0 <= a <= b <= len`. The program prints what it printed so far, then the error with the position of the `[` or of the method name, and exits with code 101.
+- **Why Nyra has this rule:** Reading past the end would be undefined behaviour in C and `undefined` in JavaScript. Nyra stops with the same error and exit code on every backend.
 - **Common causes:**
-  - an off-by-one: the last valid index is `xs.len() - 1`
-  - an index computed from data without checking it against `xs.len()`
+  - `xs[-1]` for the last element, as in Python: write `xs[xs.len() - 1]`
+  - an off-by-one: the last valid index is `xs.len() - 1`, so `xs[xs.len()]` and a loop to `xs.len() + 1` are out
+  - an index that comes from data and was not checked against `xs.len()`
   - indexing an empty array
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2, 3]
+    let scores = [90, 85, 77]
     print("before")
-    print(xs[3])
+    print(scores[-1])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2, 3]
+    let scores = [90, 85, 77]
     print("before")
-    print(xs[xs.len() - 1])
+    print(scores[scores.len() - 1])
 }
 ```
-- **Related:** E0242, E0232
+- **Related:** E0232, E0242
 
 ## E0241: division by zero
 - **Kind:** runtime error · **Since:** v0.2
@@ -1302,74 +1303,110 @@ fn main() {
 - **Related:** E0245
 
 ## E0242: pop on an empty array
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `xs.pop()` was called on an array with no elements, so there is no last element to remove and return.
-- **Why Nyra has this rule:** There is no null to return instead, so the program stops with exit code 101 on every backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `xs.pop()` was called on an array with no elements, so there is no last element to remove and give back. The message is "pop() on an empty array" with the position of `pop`, and the program exits with code 101. (`remove(i)` on an empty array is E0240, because it names a position.)
+- **Why Nyra has this rule:** There is no null to return instead, so the only honest answer is to stop, with the same error and exit code on every backend.
 - **Common causes:**
-  - popping in a loop that runs more often than the array was filled
+  - popping in a loop that runs more often than the array was filled, such as a stack that is popped once too often
   - an array that is empty because of an earlier branch
 - **Wrong:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    xs.pop()
+    var stack: [int] = []
+    stack.push(1)
+    print(stack.pop())
+    print(stack.pop())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    if xs.len() > 0 {
-        xs.pop()
+    var stack: [int] = []
+    stack.push(1)
+    print(stack.pop())
+    if stack.len() > 0 {
+        print(stack.pop())
+    } else {
+        print("empty")
     }
 }
 ```
 - **Related:** E0240
 
 ## E0243: bad argument value
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method received an argument that is valid in type but not in value: `repeat(n)` with a negative `n`, `replace("", x)` with an empty pattern, or `split("")` with an empty separator (for the characters of a string use `s.chars()`).
-- **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them. A clear error beats an answer that differs by backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** A method received an argument that has the right type but a value it cannot work with: `repeat(n)` with a negative `n` ("repeat count must be >= 0, got -1", on strings and on arrays), `replace("", x)` with an empty pattern ("replace() needs a non-empty pattern") or `split("")` with an empty separator ("split() needs a non-empty separator"; the hint says to use `s.chars()` for the characters of a string). The position is the method name, and the program exits with code 101.
+- **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them: JavaScript splits `"abc".split("")` into characters and Python raises an error, and a negative repeat count is an error in JavaScript and an empty string in Python. A clear error beats an answer that depends on the backend.
 - **Common causes:**
-  - a repeat count computed as a negative number
-  - an empty search text passed to `replace`, or an empty separator passed to `split`
+  - `s.split("")` to get the characters: write `s.chars()`
+  - a repeat count that is computed and turns negative, such as `" ".repeat(width - s.len())` when `s` is longer than `width`
+  - an empty text passed to `replace`, hoping to insert between characters
 - **Wrong:**
 ```rust
 fn main() {
-    print("ab".repeat(0 - 1))
+    let word = "hello"
+    print("start")
+    let letters = word.split("")
+    print(letters.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    print("ab".repeat(2))
+    let word = "hello"
+    print("start")
+    let letters = word.chars()
+    print(letters.len())
 }
 ```
-- **Related:** E0240, E0244
+- **Related:** E0240, E0244, E0249
 
 ## E0244: cannot parse text as a number
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `int(s)` or `float(s)` was given text that is not a number: `int("12x")`. `int` accepts only digits with an optional leading `-` and must fit in 64 bits; the text may not contain spaces, a `+` or an `_`.
-- **Why Nyra has this rule:** Turning letters into numbers silently would hide bugs. A failing conversion stops the program with a precise message; check the text first when it may be invalid.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `int(s)` or `float(s)` was given text that is not a number: `cannot parse "five" as int`. `int` accepts digits with an optional leading `-` and the value must fit in 64 bits. `float` accepts the same, with an optional `.` part and an optional exponent (`2`, `-1.5`, `1e3`, `-1.5e-3`), and `"1e999"` is `Infinity`, not an error. The text may not contain spaces, a leading `+`, a `_` or a thousands separator, may not be empty and may not be a word such as `"nan"`. The program exits with code 101.
+- **Why Nyra has this rule:** Turning text that is not a number into one silently would hide bugs: there is no `NaN` result and no fallback to 0. A failing conversion stops the program with a precise message. When the text may be invalid, check it first, as `is_number` does below.
 - **Common causes:**
-  - text with spaces or a unit (`"12 "`, `"3px"`)
-  - an empty string
-  - a number too large for `int`
+  - text with spaces or a unit: `"12 "`, `"3px"`
+  - an empty string, for example from `split` on text with nothing in it
+  - a decimal point in `int("1.5")`: parse with `float(s)`, then truncate with `int(x)`
+  - a number too large for `int`, or a number written with `,` or `_`
 - **Wrong:**
 ```rust
 fn main() {
-    let n = int("12x")
-    print(n)
+    let parts = "3,4,five".split(",")
+    var total = 0
+    for p in parts {
+        total += int(p)
+    }
+    print(total)
 }
 ```
 - **Fixed:**
 ```rust
+fn is_number(s: str) -> bool {
+    if s.len() == 0 {
+        ret false
+    }
+    for c in s {
+        if !c.is_digit() {
+            ret false
+        }
+    }
+    ret true
+}
+
 fn main() {
-    let n = int("12")
-    print(n)
+    let parts = "3,4,five".split(",")
+    var total = 0
+    for p in parts {
+        if is_number(p) {
+            total += int(p)
+        }
+    }
+    print(total)
 }
 ```
-- **Related:** E0245, E0243
+- **Related:** E0243, E0245
 
 ## E0245: `int()` of a value that is not a whole number in range
 - **Kind:** runtime error · **Since:** v0.2
@@ -1399,52 +1436,55 @@ fn main() {
 - **Related:** E0241, E0244
 
 ## E0246: not a valid character code
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `char(n)` was called with a number that is not a character: negative, above 1114111, or in the surrogate range 55296 to 57343. The program stops with exit code 101.
-- **Why Nyra has this rule:** A `char` is always one real Unicode character, so a string can never contain invalid text. Turning a number into a character is explicit, and an impossible number is an error rather than a replacement character.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `char(n)` was called with a number that is not a character: negative, above 1114111, or in the surrogate range 55296 to 57343. The message shows the number: "char(-3): not a valid character code". The position is the `char` call, and the program exits with code 101.
+- **Why Nyra has this rule:** A `char` is always one real Unicode character, so a string can never hold invalid text. Turning a number into a character is explicit, and an impossible number is an error, not a replacement character.
 - **Common causes:**
-  - arithmetic on codes that left the valid range, such as `char('a'.code() - 100)`
-  - using a byte or a random number as a code without checking it
+  - arithmetic on character codes that leaves the valid range, such as a Caesar shift that goes below `'a'` or past `'z'` without wrapping around
+  - a byte or a random number used as a code without checking it
 - **Wrong:**
 ```rust
+fn shift(c: char, by: int) -> char = char(c.code() + by)
+
 fn main() {
-    print(char(-1))
+    print(shift('a', 1))
+    print(shift('a', -100))
 }
 ```
 - **Fixed:**
 ```rust
+fn shift(c: char, by: int) -> char = char((c.code() - 97 + by) % 26 + 97)
+
 fn main() {
-    print(char(65))
+    print(shift('a', 1))
+    print(shift('a', 25))
 }
 ```
 - **Related:** E0244, E0245
 
 ## E0249: out of memory
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The native backend could not allocate memory for a string, array or struct. The program stops with exit code 101. The JavaScript backend has no such error: the engine reports its own failure.
-- **Why Nyra has this rule:** With memory managed by the runtime, running out of it must end the program cleanly with a message rather than a crash.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** The program asked for more memory than a string, an array or the machine can have, and it stops with exit code 101: "out of memory", at the operation that asked, or at position 0:0 when that is not known. `repeat` has a size limit on every backend, so a result of more than 536870888 characters (strings) or 100000000 elements (arrays) is reported at once, without trying to allocate it: `"ab".repeat(1000000000000)`. Natively, the error is also reported when the system gives no more memory. On JavaScript it is also reported when the engine runs out of string or array length, for example for a string built up past 536870888 characters. A JavaScript program that fills the whole heap is stopped by Node itself ("JavaScript heap out of memory", exit code 134), which cannot be reported as E0249.
+- **Why Nyra has this rule:** With memory managed by the runtime, running out of it has to end the program with a message instead of a crash, and a size that is too big on one backend should be too big on all of them, so `repeat` has one limit everywhere.
 - **Common causes:**
+  - a repeat count with too many zeros, or one that is computed from a wrong value
   - building a huge array or string in a loop
-  - an endless loop that keeps growing a value
+  - a loop that keeps growing a value and never stops
 - **Wrong:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    while true {
-        xs.push(1)
-    }
+    let big = "ab".repeat(1000000000000)
+    print(big.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    for i in 0..1000 {
-        xs.push(i)
-    }
+    let small = "ab".repeat(1000)
+    print(small.len())
 }
 ```
-- **Related:** E0240
+- **Related:** E0240, E0243
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
