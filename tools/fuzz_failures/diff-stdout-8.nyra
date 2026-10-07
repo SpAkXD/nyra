@@ -1,0 +1,11 @@
+// JS: copying a struct without strings or arrays aliases it. Expected `Pair(y: 4)` (native); js prints `Pair(y: 7)`.
+struct Pair {
+    y: int
+}
+
+fn main() {
+    let a = Pair(y: 4)
+    var b = a
+    b.y += 3
+    print(a)
+}

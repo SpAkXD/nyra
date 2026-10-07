@@ -1,0 +1,8 @@
+// JS: a variable named `nyS_Pt` is not escaped and hides the class of struct Pt (JS escapes only `ny_` names). Expected `Pt(x: 1)` then `a` (native); js: TypeError: nyS_Pt is not a constructor.
+struct Pt { x: int }
+
+fn main() {
+    print(Pt(x: 1))
+    var nyS_Pt = "a"
+    print(nyS_Pt)
+}

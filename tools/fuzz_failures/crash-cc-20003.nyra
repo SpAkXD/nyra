@@ -1,0 +1,5 @@
+// C: names that are C macros or keywords outside the escape list reach gcc unchanged (also WIN32, _WIN32, DBL_MIN, EXIT_SUCCESS, BUFSIZ, SIZE_MAX, RAND_MAX, __LINE__, __func__, asm, typeof, _Bool). Expected `1` (js prints it); native: gcc "expected identifier or '(' before numeric constant".
+fn main() {
+    var INT32_MAX = 1
+    print(INT32_MAX)
+}

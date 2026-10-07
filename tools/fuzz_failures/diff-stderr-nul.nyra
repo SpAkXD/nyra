@@ -1,0 +1,5 @@
+// C: a runtime error message is printed as a C string, so it ends at a NUL character. Expected first stderr line `runtime error[E0244]: cannot parse "a<NUL>b" as int` (js); native prints `runtime error[E0244]: cannot parse "a`. (Found by a targeted probe of the generator's nul_char feature.)
+fn main() {
+    let s = "a" + str(char(0)) + "b"
+    print(int(s))
+}

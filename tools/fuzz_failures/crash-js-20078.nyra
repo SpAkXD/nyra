@@ -1,0 +1,5 @@
+// JS: Nyra accepts any Unicode alphanumeric in names (Rust is_alphanumeric), but `²` is not a JS identifier character. Expected `0` (native); js: SyntaxError: Invalid or unexpected token.
+fn main() {
+    var x² = 0
+    print(x²)
+}
