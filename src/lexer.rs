@@ -192,8 +192,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                     Ok(n) => Tok::Int(n),
                     Err(_) => {
                         let hint = if text == "9223372036854775808" {
-                            "the smallest `int` has no literal: write `-9223372036854775807 - 1`; the largest is 9223372036854775807"
-                                .to_string()
+                            "the smallest `int` has no literal: write `-9223372036854775807 - 1`".to_string()
                         } else {
                             format!("keep `int` values within 9223372036854775807, or write a float: `{text}.0`")
                         };

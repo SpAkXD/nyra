@@ -88,12 +88,16 @@ pub fn json_str(s: &str) -> String {
     out
 }
 
-/// "did you mean ...?" — closest candidate within edit distance 2.
+/// "did you mean ...?": the closest candidate. A name must be close in proportion to its length
+/// (one edit for up to five characters, two for longer names) and have at least three characters,
+/// otherwise `max` would be "corrected" to `main` and `x` to `y`. A different capital letter always counts.
 pub fn suggest<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let allowed = (name.chars().count() / 3).clamp(1, 2);
+    let long_enough = name.chars().count() >= 3;
     candidates
         .into_iter()
         .map(|c| (levenshtein(name, c), c))
-        .filter(|(d, _)| *d <= 2)
+        .filter(|(d, c)| *d > 0 && (name.eq_ignore_ascii_case(c) || (long_enough && *d <= allowed)))
         // ties go to the alphabetically first name, so hints never change between runs
         .min_by_key(|&(d, c)| (d, c))
         .map(|(_, c)| format!("did you mean `{c}`?"))

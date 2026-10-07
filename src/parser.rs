@@ -292,7 +292,8 @@ impl Parser {
                 } else {
                     "separate parameters with commas: `fn f(a: int, b: int)`"
                 };
-                self.expect(Tok::Comma, "`,` or `)`").map_err(|d| d.or_hint(hint))?;
+                let expected = format!("`,` or `)` in the parameters of `{name}`");
+                self.expect(Tok::Comma, &expected).map_err(|d| d.or_hint(hint))?;
             }
         }
         self.bump();
@@ -505,7 +506,7 @@ impl Parser {
             };
             if let Some(h) = word_hint {
                 // `return x`, `elif x == 1`: the first word is the real mistake
-                d.msg = format!("`{w}` is not a Nyra keyword: expected end of line after it, found {}", self.found());
+                d.msg = format!("`{w}` is not part of Nyra: expected end of line after it, found {}", self.found());
                 return d.hint(h);
             }
         }
@@ -921,6 +922,8 @@ impl Parser {
         let d = self.unexpected(&format!("`,` or `)` in the arguments of `{name}`"));
         if matches!(self.peek(), Tok::RBrace | Tok::Eof | Tok::Fn | Tok::Newline) {
             d.hint(format!("close the call with `)`: the `(` at {}:{} is never closed", open.line, open.col))
+        } else if name == "print" {
+            d.or_hint("`print` takes one value: to show several, put them in one string, `print(\"{a} {b}\")`")
         } else {
             d.or_hint(format!("separate arguments with commas: `{name}(a, b)`"))
         }

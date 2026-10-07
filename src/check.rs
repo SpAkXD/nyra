@@ -411,10 +411,8 @@ impl Checker {
                 }
             }
             (Int | Float, Str) => {
-                return match number_text(e, want) {
-                    Some(n) => format!("write the number without quotes: `{n}`"),
-                    None => "text is not a number and Nyra cannot parse it (yet): use a number here, or make the other side a `str`"
-                        .to_string(),
+                if let Some(n) = number_text(e, want) {
+                    return format!("write the number without quotes: `{n}`");
                 }
             }
             (Bool, Int | Float | Str) if matches!(e.kind, ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Str(_)) => {
@@ -440,12 +438,17 @@ impl Checker {
             }
             _ => {}
         }
-        match ctx {
+        let advice = match ctx {
             Ctx::Let(name, _) => format!("change the value to {}, or change the declared type: `let {name}: {} = ...`", article(want), got.name()),
             Ctx::Assign(name) => format!("`{name}` holds {} values: assign {}, or declare `{name}` with the type you need", want.name(), article(want)),
             Ctx::Arg { f, param, .. } => format!("pass {} for `{param}`, or change the parameter type in `fn {f}`", article(want)),
             Ctx::Ret => format!("return {}, or change the return type of `{}` to `{}`", article(want), self.fname, got.name()),
             Ctx::Range(_) => "the bounds of a range are `int` values: `for i in 0..10`".to_string(),
+        };
+        if got == Str && matches!(want, Int | Float) {
+            format!("text is not a number and Nyra cannot parse text into numbers (yet): {advice}")
+        } else {
+            advice
         }
     }
 
@@ -978,9 +981,9 @@ impl Checker {
             let names = self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied());
             let hint = if self.lookup(name).is_some() {
                 format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
-            } else if let Some(h) = suggest(name, names) {
-                h
             } else if let Some(h) = hints::undefined_function(name) {
+                h
+            } else if let Some(h) = suggest(name, names) {
                 h
             } else {
                 format!("define it: `fn {name}(...) {{ ... }}` (the only builtins are `print`, `int` and `float`)")

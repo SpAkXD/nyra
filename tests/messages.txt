@@ -78,7 +78,7 @@ error[E0003]: integer `9223372036854775808` is too large for `int` (the largest 
   |
 2 |     print(9223372036854775808)
   |           ^
-  = hint: the smallest `int` has no literal: write `-9223372036854775807 - 1`; the largest is 9223372036854775807
+  = hint: the smallest `int` has no literal: write `-9223372036854775807 - 1`
   = explain: nyra explain E0003
 
 nyra: 1 error(s)
@@ -545,7 +545,7 @@ error[E0101]: expected `,` or `)` in the arguments of `print`, found number `2`
   |
 2 |     print(1 2)
   |             ^
-  = hint: separate arguments with commas: `print(a, b)`
+  = hint: `print` takes one value: to show several, put them in one string, `print("{a} {b}")`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -587,7 +587,7 @@ fn main() {
     }
 }
 ----
-error[E0101]: `elif` is not a Nyra keyword: expected end of line after it, found `x`
+error[E0101]: `elif` is not part of Nyra: expected end of line after it, found `x`
   --> case.nyra:5:12
   |
 5 |     } elif x == 2 {
@@ -895,7 +895,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `,` or `)`, found `b`
+error[E0101]: expected `,` or `)` in the parameters of `f`, found `b`
   --> case.nyra:1:13
   |
 1 | fn f(a: int b: int) {
@@ -944,7 +944,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `,` or `)`, found `{`
+error[E0101]: expected `,` or `)` in the parameters of `f`, found `{`
   --> case.nyra:1:13
   |
 1 | fn f(a: int {
@@ -1475,7 +1475,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: `return` is not a Nyra keyword: expected end of line after it, found number `1`
+error[E0101]: `return` is not part of Nyra: expected end of line after it, found number `1`
   --> case.nyra:2:12
   |
 2 |     return 1
@@ -2884,7 +2884,7 @@ error[E0203]: type mismatch in the assignment to `n`: expected `int`, found `str
   |
 3 |     n = "a"
   |         ^
-  = hint: text is not a number and Nyra cannot parse it (yet): use a number here, or make the other side a `str`
+  = hint: text is not a number and Nyra cannot parse text into numbers (yet): `n` holds int values: assign an `int`, or declare `n` with the type you need
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2927,7 +2927,7 @@ error[E0203]: type mismatch in `let x: int`: expected `int`, found `str`
   |
 2 |     let x: int = "hi"
   |                  ^
-  = hint: text is not a number and Nyra cannot parse it (yet): use a number here, or make the other side a `str`
+  = hint: text is not a number and Nyra cannot parse text into numbers (yet): change the value to an `int`, or change the declared type: `let x: str = ...`
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -3188,7 +3188,7 @@ error[E0202]: undefined function `input`
   |
 2 |     let n = input()
   |             ^
-  = hint: did you mean `int`?
+  = hint: Nyra has no input: put the values in the program, e.g. `let n = 12`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3230,7 +3230,7 @@ error[E0202]: undefined function `println`
   |
 2 |     println("x")
   |     ^
-  = hint: did you mean `print`?
+  = hint: print with `print(x)`: it takes one value and ends the line
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3244,7 +3244,7 @@ error[E0202]: undefined function `max`
   |
 2 |     print(max(1, 2))
   |           ^
-  = hint: did you mean `main`?
+  = hint: Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3586,7 +3586,7 @@ error[E0202]: undefined function `printf`
   |
 2 |     printf("%d", 1)
   |     ^
-  = hint: did you mean `print`?
+  = hint: print with `print(x)`: it takes one value and ends the line
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3598,7 +3598,7 @@ fn main() {
     } while (i < 3)
 }
 ----
-error[E0101]: `do` is not a Nyra keyword: expected end of line after it, found `{`
+error[E0101]: `do` is not part of Nyra: expected end of line after it, found `{`
   --> case.nyra:3:8
   |
 3 |     do {
@@ -3727,7 +3727,7 @@ fn main() {
     print(x)
 }
 ----
-error[E0101]: `const` is not a Nyra keyword: expected end of line after it, found `x`
+error[E0101]: `const` is not part of Nyra: expected end of line after it, found `x`
   --> case.nyra:2:11
   |
 2 |     const x = 5
@@ -3998,7 +3998,7 @@ fn main() {
     }
 }
 ----
-error[E0101]: `loop` is not a Nyra keyword: expected end of line after it, found `{`
+error[E0101]: `loop` is not part of Nyra: expected end of line after it, found `{`
   --> case.nyra:2:10
   |
 2 |     loop {
@@ -4015,7 +4015,7 @@ fn main() {
     }
 }
 ----
-error[E0101]: `match` is not a Nyra keyword: expected end of line after it, found `x`
+error[E0101]: `match` is not part of Nyra: expected end of line after it, found `x`
   --> case.nyra:3:11
   |
 3 |     match x {
@@ -4043,7 +4043,7 @@ fn main() {
     println!("hi")
 }
 ----
-error[E0101]: `println` is not a Nyra keyword: expected end of line after it, found `!`
+error[E0101]: `println` is not part of Nyra: expected end of line after it, found `!`
   --> case.nyra:2:12
   |
 2 |     println!("hi")
