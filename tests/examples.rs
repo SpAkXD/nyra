@@ -25,19 +25,21 @@ fn files(dir: &str) -> Vec<PathBuf> {
 
 #[test]
 fn examples_produce_expected_output_on_every_backend() {
-    // (name, extra flags) for every backend that can run on this machine
-    let mut targets: Vec<(&str, &[&str])> = Vec::new();
+    // (name, extra flags, NYRA_OPT) for every backend that can run on this machine; the
+    // unoptimized run checks that the IR passes never change a program's output
+    let mut targets: Vec<(&str, &[&str], &str)> = Vec::new();
     if available("node") {
-        targets.push(("js", &["--js"]));
+        targets.push(("js", &["--js"], "1"));
+        targets.push(("js, no optimizations", &["--js"], "0"));
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
-        targets.push(("native", &[]));
+        targets.push(("native", &[], "1"));
     }
 
     for path in files("examples") {
         let Ok(expected) = std::fs::read_to_string(path.with_extension("out")) else { continue };
-        for (target, flags) in &targets {
-            let out = nyra().arg("run").arg(&path).args(*flags).output().unwrap();
+        for (target, flags, opt) in &targets {
+            let out = nyra().arg("run").arg(&path).args(*flags).env("NYRA_OPT", opt).output().unwrap();
             assert!(
                 out.status.success(),
                 "{} [{target}] failed:\n{}",

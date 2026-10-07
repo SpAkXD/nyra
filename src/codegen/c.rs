@@ -346,6 +346,7 @@ impl Gen<'_> {
 
     fn expr(&self, e: &Expr) -> String {
         match e {
+            Expr::Int(i64::MIN) => "INT64_MIN".to_string(),
             Expr::Int(n) => {
                 if *n > i32::MAX as i64 || *n < i32::MIN as i64 {
                     format!("INT64_C({n})")

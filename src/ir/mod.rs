@@ -7,6 +7,7 @@
 //! them. This is what makes evaluation order and runtime errors identical on every backend.
 
 pub mod lower;
+pub mod opt;
 pub mod print;
 pub mod verify;
 
@@ -302,8 +303,10 @@ mod tests {
             }
             let src = std::fs::read_to_string(&path).unwrap();
             let prog = crate::compile(&src).unwrap_or_else(|d| panic!("{}: {d:?}", path.display()));
-            let m = super::lower::lower(&prog);
+            let mut m = super::lower::lower(&prog);
             super::verify::verify(&m).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            super::opt::optimize(&mut m);
+            super::verify::verify(&m).unwrap_or_else(|e| panic!("{} after optimizing: {e}", path.display()));
             assert!(!super::print::print(&m).is_empty());
             checked += 1;
         }

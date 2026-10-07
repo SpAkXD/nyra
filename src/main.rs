@@ -33,11 +33,12 @@ set NYRA_CC to use a specific one.
 /// Flags nyra passes to the C compiler. Kept deliberately short:
 /// -O2      optimize
 /// -fwrapv  make int overflow wrap (defined behavior, as the spec says)
+/// -ffp-contract=off  never fuse float operations (a*b+c), so results match JavaScript
 /// -s       strip symbols for a smaller executable (macOS's linker ignores it, so it's left out there)
 #[cfg(not(target_os = "macos"))]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-s"];
+const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off", "-s"];
 #[cfg(target_os = "macos")]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv"];
+const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Target {
@@ -147,7 +148,11 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let module = ir::lower::lower(&prog);
+    let mut module = ir::lower::lower(&prog);
+    // NYRA_OPT=0 (for tests and debugging) skips the optimization passes
+    if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
+        ir::opt::optimize(&mut module);
+    }
     if let Err(e) = ir::verify::verify(&module) {
         return fail(format!("internal error: the compiler produced invalid IR ({e}); please report this bug"));
     }
