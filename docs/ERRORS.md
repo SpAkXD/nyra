@@ -20,16 +20,18 @@ design may still change.
 | Range | Stage | What goes wrong |
 |---|---|---|
 | E0001-E0006 | lexer | characters, numbers and strings |
+| E0007 | lexer (planned, v0.3) | character literals |
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
-| E0220-E0236 | type checker (planned, v0.3) | structs, arrays, strings, methods |
-| E0240-E0249 | run time | the program stops with exit code 101 (E0241 and E0245 exist; E0240, E0242-E0244 and E0249 are planned) |
+| E0220-E0239 | type checker (planned, v0.3) | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
+| E0240-E0249 | run time | the program stops with exit code 101 (E0241 and E0245 exist; E0240, E0242-E0244, E0246 and E0249 are planned) |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
+| E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0237-E0239, E0246-E0248,
-E0309, E0317-E0319, E0326-E0329, E0333-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
+Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248, E0309,
+E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -196,6 +198,31 @@ fn main() {
 }
 ```
 - **Related:** E0004, E0101
+
+## E0007: bad character literal
+- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
+- **What it means:** A character literal in single quotes does not hold exactly one character. `'a'`, `'é'`, `'\n'` and `'\''` are fine; `'ab'` (two characters), `''` (none), an unterminated `'a` and a letter followed by a combining accent (two code points that look like one) are not.
+- **Why Nyra has this rule:** A `char` is exactly one Unicode code point, and explicitly a number (`c.code()`). A literal with more or fewer characters would have no type. Text of any length is written in double quotes.
+- **Common causes:**
+  - text in single quotes, such as `'hello'`: use double quotes, `"hello"`
+  - an empty `''`
+  - a missing closing quote
+  - an accented letter typed as a letter plus a combining accent
+- **Wrong:**
+```rust
+fn main() {
+    let c = 'ab'
+    print(c)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let c = 'a'
+    print(c)
+}
+```
+- **Related:** E0001, E0004, E0002
 
 ## E0101: unexpected token
 - **Kind:** compile error · **Since:** v0.1
@@ -783,11 +810,12 @@ fn main() {
 
 ## E0227: unknown method
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Methods exist only for arrays and strings, and structs have none.
+- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Methods exist only for arrays, strings and chars, and structs have none.
 - **Why Nyra has this rule:** The built-in operations are methods so that they add no global names, but the list is fixed and small. For a struct, write a function that takes it as a parameter (`area(p)`, not `p.area()`).
 - **Common causes:**
   - a method from another language: `size()`, `length()`, `append(...)`
   - calling a method on a struct
+  - `"A".code()`: `code()` belongs to `char`, so write `'A'.code()` or `s[0].code()` (all codes of a string: `s.codes()`)
   - a typo in a method name (the message suggests the closest one)
 - **Wrong:**
 ```rust
@@ -807,11 +835,12 @@ fn main() {
 
 ## E0228: method not available for this element type
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method exists, but not for the element type of this array: `join` needs `[str]`, and `sort` needs `[int]`, `[float]` or `[str]`.
+- **What it means:** A method exists, but not for the element type of this array: `join` needs `[str]` or `[char]`, and `sort` needs `[int]`, `[float]`, `[str]` or `[char]`.
 - **Why Nyra has this rule:** Joining and ordering are only defined for element types with one exact meaning on every backend.
 - **Common causes:**
   - `join` on an array of numbers: convert the elements to text first
   - `sort` on an array of `bool` or of structs
+  - `join` on `[char]` is fine (`"ab".chars().join("-")`), on `[int]` it is not
 - **Wrong:**
 ```rust
 fn main() {
@@ -828,12 +857,12 @@ fn main() {
 
 ## E0229: cannot assign to this expression
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The left side of an assignment (or the receiver of a mutating method such as `push`) is not something that can be changed: a temporary value like `f().push(1)`, a character of a string (`s[0] = "x"`), or any other expression that is not a variable, a field or an array element.
+- **What it means:** The left side of an assignment (or the receiver of a mutating method such as `push`, or an `inout` argument) is not something that can be changed: a temporary value like `f().push(1)`, a character of a string (`s[0] = "x"`), or any other expression that is not a variable, a field or an array element.
 - **Why Nyra has this rule:** Only variables and the fields and elements inside them can change. Strings are immutable: build a new string instead.
 - **Common causes:**
   - `s[0] = "x"` on a string
   - calling `push` or `sort` on the result of a function call
-  - assigning to an expression such as `a + b = 3`
+  - assigning to an expression such as `a + b = 3`, or passing one as `inout`
 - **Wrong:**
 ```rust
 fn main() {
@@ -1014,6 +1043,91 @@ fn main() {
 ```
 - **Related:** E0227, E0224
 
+## E0237: bad `inout` argument
+- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
+- **What it means:** `inout` is used inconsistently. A parameter declared `inout` is called without `inout` at the call (or `inout` is written for a plain parameter), or two `inout` arguments of one call are the same variable, as in `swap(inout xs[0], inout xs[1])`.
+- **Why Nyra has this rule:** An `inout` parameter lets a function change the caller's variable. The call says `inout` too, so you can see what can change, and two `inout` arguments are never the same variable, so nothing can observe the variable half-way: no aliasing surprises.
+- **Common causes:**
+  - `inout` forgotten at the call: `bump(x)` instead of `bump(inout x)`
+  - `inout` written for a parameter that is not `inout`
+  - two elements of one array passed to one call: swap through a temporary variable instead
+- **Wrong:**
+```rust
+fn bump(inout n: int) {
+    n += 1
+}
+
+fn main() {
+    var x = 1
+    bump(x)
+    print(x)
+}
+```
+- **Fixed:**
+```rust
+fn bump(inout n: int) {
+    n += 1
+}
+
+fn main() {
+    var x = 1
+    bump(inout x)
+    print(x)
+}
+```
+- **Related:** E0205, E0229, E0238
+
+## E0238: bad target for `free`, `keep` or `arena`
+- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
+- **What it means:** `free(x)` or `keep(x)` is used on something that cannot be freed or kept (an `int`, a parameter, an `inout` parameter, an expression), or a string or array declared outside an `arena { }` block is changed inside the block.
+- **Why Nyra has this rule:** Memory is automatic unless a program asks: `free(x)` returns a local variable's memory now, `arena { }` frees everything created inside it at its `}`, and `keep(x)` never frees. Every use is checked at compile time, so a program that compiles can never use freed memory. Values created in an arena are freed at its `}`, so nothing declared outside may be changed to point into it.
+- **Common causes:**
+  - `free(n)` on an `int`: there is nothing to free
+  - freeing or keeping a parameter: the caller owns it
+  - `names.push(...)` inside an `arena` while `names` was declared before it: change it after the block, or return the result from a function that uses `arena`
+- **Wrong:**
+```rust
+fn main() {
+    let n = 1
+    free(n)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var xs = [1, 2, 3]
+    print(xs.len())
+    free(xs)
+}
+```
+- **Related:** E0239, E0237, E0205
+
+## E0239: use after free
+- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
+- **What it means:** A variable is used after `free(x)`, or on a path where it may have been freed (freed in only one branch of an `if`, or in an earlier round of a loop). Every use, including a second `free`, is an error until a `var` is given a new value. The message says where the variable was freed: "`xs` was freed at line 7".
+- **Why Nyra has this rule:** Freed memory must never be used. The compiler follows every local variable through the function and rejects the program, instead of letting it crash or print garbage.
+- **Common causes:**
+  - reading the variable after `free(xs)`
+  - `free` inside an `if`, with a use after the `if`
+  - `free` inside a loop, so the second round uses a freed variable
+- **Wrong:**
+```rust
+fn main() {
+    var xs = [1]
+    free(xs)
+    print(xs)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var xs = [1]
+    print(xs)
+    free(xs)
+}
+```
+- **Related:** E0238, E0201
+
 ## E0240: index out of bounds
 - **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
 - **What it means:** At run time, an index or a range is outside the array or string: `index 3 is out of bounds for length 3`. Valid indexes are 0 up to the length minus 1; positions for `insert`, `remove` and `slice` are checked the same way.
@@ -1098,11 +1212,11 @@ fn main() {
 
 ## E0243: bad argument value
 - **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method received an argument that is valid in type but not in value: `repeat(n)` with a negative `n`, or `replace("", x)` with an empty pattern.
+- **What it means:** A method received an argument that is valid in type but not in value: `repeat(n)` with a negative `n`, `replace("", x)` with an empty pattern, or `split("")` with an empty separator (for the characters of a string use `s.chars()`).
 - **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them. A clear error beats an answer that differs by backend.
 - **Common causes:**
   - a repeat count computed as a negative number
-  - an empty search text passed to `replace`
+  - an empty search text passed to `replace`, or an empty separator passed to `split`
 - **Wrong:**
 ```rust
 fn main() {
@@ -1168,6 +1282,27 @@ fn main() {
 ```
 - **Related:** E0241, E0244
 
+## E0246: not a valid character code
+- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
+- **What it means:** `char(n)` was called with a number that is not a character: negative, above 1114111, or in the surrogate range 55296 to 57343. The program stops with exit code 101.
+- **Why Nyra has this rule:** A `char` is always one real Unicode character, so a string can never contain invalid text. Turning a number into a character is explicit, and an impossible number is an error rather than a replacement character.
+- **Common causes:**
+  - arithmetic on codes that left the valid range, such as `char('a'.code() - 100)`
+  - using a byte or a random number as a code without checking it
+- **Wrong:**
+```rust
+fn main() {
+    print(char(-1))
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    print(char(65))
+}
+```
+- **Related:** E0244, E0245
+
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
 - **What it means:** The native backend could not allocate memory for a string, array or struct. The program stops with exit code 101. The JavaScript backend has no such error: the engine reports its own failure.
@@ -1203,6 +1338,7 @@ fn main() {
   - a typo in a module name (`mth` for `math`)
   - a file path without `./`, or with the wrong capitalisation
   - a dependency that is not listed in `nyra.toml`
+  - `use str`: the string helpers are in the `text` module (and `str(x)` is a builtin)
 - **Wrong:**
 ```rust
 use mth
@@ -1372,7 +1508,7 @@ fn main() {
 - **Why Nyra has this rule:** A typo after a module name must not turn into a new meaning. The message suggests the closest name.
 - **Common causes:**
   - a typo (`math.sqroot`)
-  - a function that exists under another name in this module
+  - a function that exists under another name in this module, such as `random.randint(1, 6)`: write `random.range(1, 7)` (the upper bound is excluded)
 - **Wrong:**
 ```rust
 use math
@@ -1494,11 +1630,12 @@ fn main() {
 
 ## E0312: type cannot cross the FFI boundary
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** An `extern` function uses a type that cannot be passed to foreign code. Only `int`, `float`, `bool`, `str` and `ptr` can cross; arrays and structs cannot.
+- **What it means:** An `extern` function uses a type that cannot be passed to foreign code. Only `int`, `float`, `bool`, `str` and `ptr` can cross; arrays, structs, `char` and `inout` parameters cannot.
 - **Why Nyra has this rule:** Foreign code does not know Nyra's memory layout. Wrap arrays and structs in a small C or JavaScript function that takes plain values.
 - **Common causes:**
   - an array parameter or result
   - a struct passed by value
+  - a `char`: pass its code, `c.code()`, as an `int`
 - **Wrong:**
 ```rust
 extern c fn sum(xs: [int]) -> int
@@ -1572,15 +1709,15 @@ extern c fn f(x: int) -> int = "abs"
 ```
 - **Related:** E0313, E0316
 
-## E0316: `ny_` bindings are reserved
+## E0316: `nyrt_` bindings are reserved
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** An `extern` binding names a symbol that starts with `ny_`. These names belong to the Nyra runtime.
-- **Why Nyra has this rule:** Generated code and the runtime use the `ny_` prefix, so foreign code must not collide with it.
+- **What it means:** An `extern` binding names a symbol that starts with `nyrt_`. These names belong to the Nyra runtime.
+- **Why Nyra has this rule:** Generated code and the runtime use the `nyrt_` prefix, so foreign code must not collide with it.
 - **Common causes:**
-  - a C function that happens to start with `ny_`
+  - a C function that happens to start with `nyrt_`
 - **Wrong:**
 ```rust
-extern c fn f(x: int) -> int = "ny_print"
+extern c fn f(x: int) -> int = "nyrt_print"
 ```
 - **Fixed:**
 ```rust
@@ -1730,7 +1867,7 @@ fn stop() -> never {
 
 ## E0331: `const` needs a literal value
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A top-level `const` has an initial value that is not a literal. Only an integer, float, `bool` or plain string literal (with an optional leading `-`) is allowed, and the type must be written.
+- **What it means:** A top-level `const` has an initial value that is not a literal. Only an integer, float, `bool`, `char` or plain string literal (with an optional leading `-`) is allowed, and the type must be written.
 - **Why Nyra has this rule:** Constants are fixed when the program is compiled, with no code to run and nothing to initialise in a particular order.
 - **Common causes:**
   - a computed value such as `2 * 50`
@@ -1748,7 +1885,7 @@ const LIMIT: int = 100
 
 ## E0332: `pub` not allowed here
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or inside a function. It goes before `fn`, `const` or `extern`.
+- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or inside a function. It goes before `fn`, `const`, `extern` or `struct`.
 - **Why Nyra has this rule:** Only definitions can be exported. A module cannot re-export an import: write a small wrapper function instead.
 - **Common causes:**
   - `pub use` to re-export a module
@@ -1764,3 +1901,139 @@ use math
 pub fn root(x: float) -> float = math.sqrt(x)
 ```
 - **Related:** E0301, E0302
+
+## E0340: file operation failed
+- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **What it means:** A function of the `fs` module could not do its job, for example `fs.read: cannot read "x.txt" (not found)`. The reason is one of `not found`, `permission denied`, `is a directory`, `not valid UTF-8` or `io error`. The program stops with exit code 101 and the error points at your call.
+- **Why Nyra has this rule:** Nyra has no exceptions and no null, so a call that cannot succeed stops the program with a clear message. Where recovery is plausible there is a probe that never fails, such as `fs.exists`, so a program can check first.
+- **Common causes:**
+  - a wrong path: paths are relative to the folder the program runs in and use `/` on every system
+  - a file or folder without the needed permission
+  - reading a folder as if it were a file
+  - a file that is not UTF-8 text
+- **Wrong:**
+```rust
+use fs
+
+fn main() {
+    print(fs.read("missing.txt"))
+}
+```
+- **Fixed:**
+```rust
+use fs
+
+fn main() {
+    if fs.exists("missing.txt") {
+        print(fs.read("missing.txt"))
+    } else {
+        print("no such file")
+    }
+}
+```
+- **Related:** E0341, E0310
+
+## E0341: input is not valid UTF-8
+- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **What it means:** Text that enters the program (standard input, files, command-line arguments, environment variables) is not valid UTF-8, for example `io.read_line: input is not valid UTF-8`.
+- **Why Nyra has this rule:** A `str` is UTF-8 text on every backend. Both backends check incoming text with the same rule, so a program behaves identically and never holds broken text.
+- **Common causes:**
+  - binary data piped into the program
+  - a text file in an old encoding such as Latin-1 or UTF-16
+- **Wrong:**
+```rust
+use io
+
+fn main() {
+    // run it as:  printf '\377\n' | nyra run main.nyra
+    print(io.read_line())
+}
+```
+- **Fixed:**
+```rust
+use io
+
+fn main() {
+    // run it as:  printf 'ok\n' | nyra run main.nyra
+    print(io.read_line())
+}
+```
+- **Related:** E0340, E0344
+
+## E0342: bad argument value for a standard function
+- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **What it means:** A standard library function received an argument that is valid in type but has no sensible result, such as `random.range(5, 5): need lo < hi and hi - lo <= 2^53` or `text.fixed: digits must be 0 to 100`.
+- **Why Nyra has this rule:** An empty range or a negative number of digits has no answer, and hosts disagree about what to return. A clear error beats a value that differs by backend.
+- **Common causes:**
+  - `random.range(lo, hi)` with `hi <= lo`: the upper bound is excluded, so `range(1, 7)` rolls a die
+  - `text.fixed(x, d)` with a negative or very large `d`
+- **Wrong:**
+```rust
+use random
+
+fn main() {
+    print(random.range(5, 5))
+}
+```
+- **Fixed:**
+```rust
+use random
+
+fn main() {
+    print(random.range(5, 6))
+}
+```
+- **Related:** E0243, E0344
+
+## E0343: foreign function failed
+- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **What it means:** A call to an `extern` function failed. The message starts with `ffi:`: the message of a JavaScript exception that escaped the foreign call, `ffi: cbrt returned NULL for a str`, or `ffi: a string with a NUL byte cannot be passed to C`.
+- **Why Nyra has this rule:** Foreign code is trusted but can still fail, and Nyra has no `catch`. The failure stops the program with exit code 101 and the original message, the same on every backend.
+- **Common causes:**
+  - a JavaScript function that throws for the given input
+  - a C function that returns NULL where a `str` is expected
+  - a string containing a NUL byte passed to a C function
+- **Wrong:**
+```rust
+extern js fn parse(s: str) -> str = "JSON.parse"
+
+fn main() {
+    print(parse("not json"))
+}
+```
+- **Fixed:**
+```rust
+extern js fn parse(s: str) -> str = "JSON.parse"
+
+fn main() {
+    print(parse("\"ok\""))
+}
+```
+- **Related:** E0312, E0340
+
+## E0344: no source of randomness
+- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **What it means:** `random.random()` or `random.range(lo, hi)` could not get random numbers from the operating system, so the program stops with `random: no randomness source available`.
+- **Why Nyra has this rule:** `random` is truly random unless the program seeds it. Nyra never falls back to the clock silently, because those numbers would be predictable. A program that wants a fixed sequence says so with `random.seed(n)`.
+- **Common causes:**
+  - a container or chroot without `/dev/urandom`
+  - an operating system service that is blocked or missing
+- **Wrong:**
+```rust
+use random
+
+fn main() {
+    // in an environment without an operating system random source
+    print(random.random())
+}
+```
+- **Fixed:**
+```rust
+use random
+
+fn main() {
+    random.seed(42)
+    print(random.random())
+}
+```
+- **Related:** E0342, E0341
