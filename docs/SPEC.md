@@ -1,7 +1,8 @@
 # Nyra v0.2 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
-context and the agent can write Nyra.
+context and the agent can write Nyra. For common mistakes and complete examples, see
+[AI_GUIDE.md](AI_GUIDE.md).
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.

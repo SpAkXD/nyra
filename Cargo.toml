@@ -4,6 +4,10 @@ version = "0.2.0"
 edition = "2021"
 description = "A compact, strictly-typed programming language designed to be written by AI agents. Compiles to C and JavaScript."
 license = "MIT"
+repository = "https://github.com/SpAkXD/nyra"
+readme = "README.md"
+keywords = ["language", "compiler", "transpiler", "ai", "llm"]
+categories = ["compilers", "development-tools"]
 
 [[bin]]
 name = "nyra"

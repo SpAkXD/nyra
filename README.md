@@ -201,10 +201,12 @@ every common mistake with its error code and fix.
 | `--js` | use the JavaScript backend instead of native |
 | `--c` | with `build`: write the generated C instead of an executable |
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
-| `--json` | print errors as JSON, for AI agents and tools |
+| `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools |
 | `--time` | show how long each step took |
 
-Exit codes: `0` success, `1` compile errors, `2` usage or tool problem. `NYRA_CC` selects the C compiler.
+Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
+integer division by zero, which prints `runtime error[E0241]` with the file and position, identically on
+both backends). `NYRA_CC` selects the C compiler.
 
 ## How it works
 
@@ -229,7 +231,7 @@ source.nyra ─► lexer ─► parser ─► type checker ────┤
 | v0.1 | core language, C and JavaScript backends, JSON errors | done |
 | v0.2 | short code: one-line functions, `+=`, string interpolation, `if` as a value, build cache | done |
 | v0.3 | structs, arrays, string functions, memory model (no GC) | next |
-| v0.4 | benchmark: first-try correctness and token count against Python | coming |
+| v0.4 | benchmark: first-try correctness and token count against Python | harness ready in [`bench/`](bench), results coming |
 | v0.5 | intermediate representation, WASM backend, browser playground | planned |
 | v0.6 | modules, standard library, C FFI | planned |
 | v1.0 | packages and addons, published VS Code extension, docs site | planned |

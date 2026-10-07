@@ -2,3 +2,7 @@
 *.exe
 examples/*.c
 examples/*.js
+# executables from `nyra build` on Linux/macOS have no extension
+/examples/*
+!/examples/*.*
+__pycache__/

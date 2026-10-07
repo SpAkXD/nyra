@@ -23,7 +23,8 @@ nyra run prog.nyra --js        # or run on Node.js
    ```
 3. Run it and compare the output with what you expect.
 
-Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`).
+Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
+`101` runtime error (see the bottom of section 5). `nyra run prog.nyra --json` reports runtime errors as JSON too.
 
 **If you cannot run commands** (you are answering in a chat): follow the rules below, go through the
 checklist in section 8, and give the user the code, the output you expect, and the command to run it
@@ -121,8 +122,9 @@ Good to know:
   starts on the same line as its `=`.
 - Text built with `{ }` and stored in a variable (`row = "{row}*"`) is not freed yet, so do not build
   millions of strings in a loop. `print("... {x}")` allocates nothing and is always fine.
-- Never divide an `int` by zero (native crashes, `--js` prints `Infinity`). Float division by zero
-  is defined and prints the same everywhere: `1.0 / 0.0` is `Infinity`, `0.0 / 0.0` is `NaN`.
+- An `int` `/` or `%` by zero stops the program with runtime error E0241, and `int(x)` of NaN or
+  infinity stops it with E0245 (exit code 101, same on both backends). Float division by zero is
+  fine and prints the same everywhere: `1.0 / 0.0` is `Infinity`, `0.0 / 0.0` is `NaN`.
 - Newlines inside `( )` are ignored and trailing commas are fine. You may break a line after a
   binary operator, never before it.
 - Style: 4 spaces, `snake_case`, short functions, `//` comments that say why.
@@ -154,7 +156,7 @@ that works (for example, sort three numbers with `min`/`max` instead of sorting 
 | E0003 | number too large | `int` max is 9223372036854775807 |
 | E0004 | unknown escape | only `\n` `\t` `\r` `\\` `\"` exist |
 | E0005 | semicolon | delete it |
-| E0006 | bad brace in a string | `{` starts an interpolation: a lone `{` or `}`, an empty `{}` or quotes inside `{ }` are errors (a lone `{` may be reported as "quotes are not allowed"). Write `{{` and `}}` for literal braces |
+| E0006 | bad brace in a string | `{` starts an interpolation: a lone `{` or `}`, an empty `{}` or quotes inside `{ }` are errors. Write `{{` and `}}` for literal braces |
 | E0101 | syntax error | `return`, `elif`, `i++`, `0..=n`, `{` on a new line, two statements on a line, a missing `=` or type: compare with section 2 |
 | E0102 | unknown type | only `int`, `float`, `bool`, `str` (not `string`, `i32`, `double`, `char`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, declared in another block, or `break` / `continue` |
@@ -169,6 +171,19 @@ that works (for example, sort three numbers with `min`/`max` instead of sorting 
 | E0210 | operator on wrong types | `int + float`, `str + str`, `!int`, `5.0 % 2.0`, `"a" < "b"`, `a < b < c` |
 | E0211 | bad `main` | no parameters and no return type |
 | E0212 | bad `if` value | an `if` used as a value needs an `else`, exactly one expression per branch, and the same type in both |
+
+**Runtime errors** stop a running program with exit code 101, after everything it printed so far:
+
+```
+runtime error[E0241]: division by zero
+  --> prog.nyra:4:13
+  = hint: check the divisor first
+```
+
+| Code | Meaning | Fix |
+|---|---|---|
+| E0241 | integer `/` or `%` by zero | check the divisor first (`if d != 0 { ... }`) |
+| E0245 | `int(x)` of NaN, infinity or a float too big for an `int` | check the value before converting |
 
 ## 6. Recipes
 
