@@ -1,0 +1,3909 @@
+# Golden file for the compiler's diagnostics (tests/messages.rs).
+#
+# Every case is a small bad program followed by the exact text `nyra check case.nyra` prints
+# for it:
+#
+#     ==== name            starts a case
+#     <the program>
+#     ----
+#     <the expected output>
+#
+# Invisible characters are written \u{XXXX}. After changing a message on purpose, rewrite the
+# expected text with:  NYRA_BLESS=1 cargo test --test messages
+# and review the diff: it is the change your users will see.
+
+==== lex_amp
+fn main() {
+    print(true & false)
+}
+----
+error[E0001]: unexpected character `&`
+  --> case.nyra:2:16
+  |
+2 |     print(true & false)
+  |                ^
+  = hint: write `&&` for logical and (there are no bit operations)
+
+nyra: 1 error(s)
+==== lex_at
+fn main() {
+    let x = @1
+}
+----
+error[E0001]: unexpected character `@`
+  --> case.nyra:2:13
+  |
+2 |     let x = @1
+  |             ^
+  = hint: `@` has no meaning in Nyra (there are no attributes or decorators)
+
+nyra: 1 error(s)
+==== lex_backtick
+fn main() {
+    print(`total ${x}`)
+}
+----
+error[E0001]: unexpected character '`' (a backtick)
+  --> case.nyra:2:11
+  |
+2 |     print(`total ${x}`)
+  |           ^
+  = hint: Nyra has no backtick strings: write double quotes and `{x}` instead of `${x}`, e.g. "total: {x}"
+
+nyra: 1 error(s)
+==== lex_bar
+fn main() {
+    print(true | false)
+}
+----
+error[E0001]: unexpected character `|`
+  --> case.nyra:2:16
+  |
+2 |     print(true | false)
+  |                ^
+  = hint: write `||` for logical or (there are no bit operations)
+
+nyra: 1 error(s)
+==== lex_big
+fn main() {
+    print(9223372036854775808)
+}
+----
+error[E0003]: integer `9223372036854775808` is too large for `int` (the largest is 9223372036854775807)
+  --> case.nyra:2:11
+  |
+2 |     print(9223372036854775808)
+  |           ^
+  = hint: the smallest `int` has no literal: write `-9223372036854775807 - 1`; the largest is 9223372036854775807
+
+nyra: 1 error(s)
+==== lex_big2
+fn main() {
+    print(99999999999999999999)
+}
+----
+error[E0003]: integer `99999999999999999999` is too large for `int` (the largest is 9223372036854775807)
+  --> case.nyra:2:11
+  |
+2 |     print(99999999999999999999)
+  |           ^
+  = hint: keep `int` values within 9223372036854775807, or write a float: `99999999999999999999.0`
+
+nyra: 1 error(s)
+==== lex_bom
+\u{FEFF}fn main() {
+    print(1)
+}
+----
+error[E0001]: unexpected invisible character U+FEFF (byte order mark)
+  --> case.nyra:1:1
+  |
+1 | \u{FEFF}fn main() {
+  | ^
+  = hint: the file starts with a byte order mark: save it as UTF-8 without BOM
+
+nyra: 1 error(s)
+==== lex_bracket
+fn main() {
+    let xs = [1, 2, 3]
+}
+----
+error[E0001]: unexpected character `[`
+  --> case.nyra:2:14
+  |
+2 |     let xs = [1, 2, 3]
+  |              ^
+  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
+
+nyra: 1 error(s)
+==== lex_brackets_index
+fn main() {
+    let xs = 5
+    print(xs[0])
+}
+----
+error[E0001]: unexpected character `[`
+  --> case.nyra:3:13
+  |
+3 |     print(xs[0])
+  |             ^
+  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
+
+nyra: 1 error(s)
+==== lex_caret
+fn main() {
+    print(2 ^ 3)
+}
+----
+error[E0001]: unexpected character `^`
+  --> case.nyra:2:13
+  |
+2 |     print(2 ^ 3)
+  |             ^
+  = hint: Nyra has no bit operations or power operator: multiply (`x * x`) or use a loop
+
+nyra: 1 error(s)
+==== lex_console
+fn main() {
+    console.log("x")
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:12
+  |
+2 |     console.log("x")
+  |            ^
+  = hint: print with `print(x)`: it takes one value and ends the line
+
+nyra: 1 error(s)
+==== lex_dollar
+fn main() {
+    let x = $1
+}
+----
+error[E0001]: unexpected character `$`
+  --> case.nyra:2:13
+  |
+2 |     let x = $1
+  |             ^
+  = hint: to put a value in a string write `{x}` inside the quotes: "cost: {x}"
+
+nyra: 1 error(s)
+==== lex_dot_five
+fn main() {
+    let x = .5
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:13
+  |
+2 |     let x = .5
+  |             ^
+  = hint: a float needs digits on both sides of the dot: write `0.5`
+
+nyra: 1 error(s)
+==== lex_empty_braces
+fn main() {
+    print("a {} b")
+}
+----
+error[E0006]: empty `{}` in a string: there is no expression to insert
+  --> case.nyra:2:14
+  |
+2 |     print("a {} b")
+  |              ^
+  = hint: put an expression between the braces, e.g. `{x}`, or write `{{}}` to print literal braces
+
+nyra: 1 error(s)
+==== lex_escape_brace
+fn main() {
+    print("a \{ b")
+}
+----
+error[E0004]: unknown escape `\{` in a string
+  --> case.nyra:2:14
+  |
+2 |     print("a \{ b")
+  |              ^
+  = hint: braces are doubled, not escaped: write `{{` or `}}` for a literal brace
+
+nyra: 1 error(s)
+==== lex_escape_path
+fn main() {
+    print("C:\Users")
+}
+----
+error[E0004]: unknown escape `\U` in a string
+  --> case.nyra:2:14
+  |
+2 |     print("C:\Users")
+  |              ^
+  = hint: the escapes are `\n` `\t` `\r` `\\` and `\"`; to write a literal backslash, double it: `\\U`
+
+nyra: 1 error(s)
+==== lex_escape_u
+fn main() {
+    print("\u00e9")
+}
+----
+error[E0004]: unknown escape `\u` in a string
+  --> case.nyra:2:12
+  |
+2 |     print("\u00e9")
+  |            ^
+  = hint: Nyra has no `\u` escape: type the character itself (strings are UTF-8), e.g. "é"
+
+nyra: 1 error(s)
+==== lex_escape_x
+fn main() {
+    print("\x41")
+}
+----
+error[E0004]: unknown escape `\x` in a string
+  --> case.nyra:2:12
+  |
+2 |     print("\x41")
+  |            ^
+  = hint: Nyra has no `\x` escape: type the character itself (strings are UTF-8), e.g. "é"
+
+nyra: 1 error(s)
+==== lex_five_dot
+fn main() {
+    let x = 5.
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:14
+  |
+2 |     let x = 5.
+  |              ^
+  = hint: a float needs digits on both sides of the dot: write `5.0`
+
+nyra: 1 error(s)
+==== lex_hash
+fn main() {
+    # say hello
+    print("hi")
+}
+----
+error[E0001]: unexpected character `#`
+  --> case.nyra:2:5
+  |
+2 |     # say hello
+  |     ^
+  = hint: comments start with `//`, not `#`
+
+nyra: 1 error(s)
+==== lex_lone_close
+fn main() {
+    print("a } b")
+}
+----
+error[E0006]: unmatched `}` in a string: there is no `{` for it to close
+  --> case.nyra:2:14
+  |
+2 |     print("a } b")
+  |              ^
+  = hint: write `}}` to print a literal `}`
+
+nyra: 1 error(s)
+==== lex_lone_open
+fn main() {
+    print("{")
+}
+----
+error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
+  --> case.nyra:2:12
+  |
+2 |     print("{")
+  |            ^
+  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
+
+nyra: 1 error(s)
+==== lex_math
+fn main() {
+    print(Math.sqrt(4.0))
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:15
+  |
+2 |     print(Math.sqrt(4.0))
+  |               ^
+  = hint: Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)
+
+nyra: 1 error(s)
+==== lex_method
+fn main() {
+    let s = "abc"
+    print(s.len())
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:3:12
+  |
+3 |     print(s.len())
+  |            ^
+  = hint: `.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`
+
+nyra: 1 error(s)
+==== lex_question
+fn main() {
+    let x = 1 > 0 ? 1 : 2
+}
+----
+error[E0001]: unexpected character `?`
+  --> case.nyra:2:19
+  |
+2 |     let x = 1 > 0 ? 1 : 2
+  |                   ^
+  = hint: Nyra has no `?`: for a conditional value write `if cond { a } else { b }`
+
+nyra: 1 error(s)
+==== lex_quote_in_braces
+fn main() {
+    let n = 1
+    print("{n == "x"}")
+}
+----
+error[E0006]: quotes are not allowed inside `{ }` in a string
+  --> case.nyra:3:12
+  |
+3 |     print("{n == "x"}")
+  |            ^
+  = hint: put the text in a variable first (`let t = "x"`), then write `{t}` in the string
+
+nyra: 1 error(s)
+==== lex_semicolon
+fn main() {
+    let x = 1;
+    print(x)
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:14
+  |
+2 |     let x = 1;
+  |              ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 1 error(s)
+==== lex_single_quote
+fn main() {
+    print('a')
+}
+----
+error[E0001]: unexpected character `'`
+  --> case.nyra:2:11
+  |
+2 |     print('a')
+  |           ^
+  = hint: Nyra has no single-quoted text or character type: write "a" with straight double quotes
+
+nyra: 1 error(s)
+==== lex_single_quote_text
+fn main() {
+    print('hello world')
+}
+----
+error[E0001]: unexpected character `'`
+  --> case.nyra:2:11
+  |
+2 |     print('hello world')
+  |           ^
+  = hint: Nyra has no single-quoted text or character type: write "hello world" with straight double quotes
+
+nyra: 1 error(s)
+==== lex_smart_quotes
+fn main() {
+    print(“hi”)
+}
+----
+error[E0001]: unexpected character `“`
+  --> case.nyra:2:11
+  |
+2 |     print(“hi”)
+  |           ^
+  = hint: typographic quotes are not quotes: write "hi" with straight double quotes
+
+nyra: 1 error(s)
+==== lex_tab_indent
+fn main() {
+	#bad
+}
+----
+error[E0001]: unexpected character `#`
+  --> case.nyra:2:2
+  |
+2 | 	#bad
+  | 	^
+  = hint: comments start with `//`, not `#`
+
+nyra: 1 error(s)
+==== lex_times
+fn main() {
+    print(2 × 3)
+}
+----
+error[E0001]: unexpected character `×`
+  --> case.nyra:2:13
+  |
+2 |     print(2 × 3)
+  |             ^
+  = hint: write `*` for multiplication
+
+nyra: 1 error(s)
+==== lex_unclosed
+fn main() {
+    print("a {x")
+}
+----
+error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
+  --> case.nyra:2:14
+  |
+2 |     print("a {x")
+  |              ^
+  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
+
+nyra: 1 error(s)
+==== lex_unterminated
+fn main() {
+    print("abc)
+}
+----
+error[E0002]: unterminated string: the closing `"` is missing before the end of the line
+  --> case.nyra:2:11
+  |
+2 |     print("abc)
+  |           ^
+  = hint: add `"` at the end of the text; a string cannot continue on the next line (write `\n` for a line break)
+
+nyra: 1 error(s)
+==== lex_zwsp
+fn main() {
+    let x\u{200B} = 1
+}
+----
+error[E0001]: unexpected invisible character U+200B (zero width space)
+  --> case.nyra:2:10
+  |
+2 |     let x\u{200B} = 1
+  |          ^
+  = hint: remove it: it is an invisible character, often pasted in by accident
+
+nyra: 1 error(s)
+==== par_and
+fn main() {
+    print(true and false)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `and`
+  --> case.nyra:2:16
+  |
+2 |     print(true and false)
+  |                ^
+  = hint: write `&&` for logical and: `a && b`
+
+nyra: 1 error(s)
+==== par_block_expr
+fn main() {
+    let x = { 1 }
+}
+----
+error[E0101]: expected an expression, found `{`
+  --> case.nyra:2:13
+  |
+2 |     let x = { 1 }
+  |             ^
+  = hint: a `{ }` block is not a value: for a conditional value write `if cond { a } else { b }`
+
+nyra: 1 error(s)
+==== par_call_no_comma
+fn main() {
+    print(1 2)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found number `2`
+  --> case.nyra:2:13
+  |
+2 |     print(1 2)
+  |             ^
+  = hint: separate arguments with commas: `print(a, b)`
+
+nyra: 1 error(s)
+==== par_call_unclosed
+fn main() {
+    print(1
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `}`
+  --> case.nyra:3:1
+  |
+3 | }
+  | ^
+  = hint: close the call with `)`: the `(` at 2:10 is never closed
+
+nyra: 1 error(s)
+==== par_colon_decl
+fn main() {
+    x: int = 5
+}
+----
+error[E0101]: expected end of line, found `:`
+  --> case.nyra:2:6
+  |
+2 |     x: int = 5
+  |      ^
+  = hint: to declare a variable write `let x: int = 5` (or `var`)
+
+nyra: 1 error(s)
+==== par_elif
+fn main() {
+    let x = 1
+    if x == 1 {
+        print(1)
+    } elif x == 2 {
+        print(2)
+    }
+}
+----
+error[E0101]: `elif` is not a Nyra keyword: expected end of line after it, found `x`
+  --> case.nyra:5:12
+  |
+5 |     } elif x == 2 {
+  |            ^
+  = hint: write `else if` (two words) to test another condition
+
+nyra: 1 error(s)
+==== par_else_allman
+fn main() {
+    if true {
+        print(1)
+    } else
+    {
+        print(2)
+    }
+}
+----
+error[E0101]: expected `{` or `if` after `else`, found end of line
+  --> case.nyra:4:11
+  |
+4 |     } else
+  |           ^
+  = hint: put the `{` on the same line as the header: `} else {`
+
+nyra: 1 error(s)
+==== par_else_alone
+fn main() {
+    print(1)
+    else {
+    }
+}
+----
+error[E0101]: expected an expression, found keyword `else`
+  --> case.nyra:3:5
+  |
+3 |     else {
+  |     ^
+  = hint: `else` must follow the `}` of an `if` (`} else {`): look for a missing `}` or a statement between them
+
+nyra: 1 error(s)
+==== par_empty_parens
+fn main() {
+    let x = ()
+}
+----
+error[E0101]: expected an expression, found `)`
+  --> case.nyra:2:14
+  |
+2 |     let x = ()
+  |              ^
+  = hint: empty parentheses are not a value: put an expression inside, or remove them
+
+nyra: 1 error(s)
+==== par_exp
+fn main() {
+    print(1e5)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `e5`
+  --> case.nyra:2:12
+  |
+2 |     print(1e5)
+  |            ^
+  = hint: exponent notation does not exist: write the number in full, `100000.0`
+
+nyra: 1 error(s)
+==== par_exp_neg
+fn main() {
+    print(1e-5)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `e`
+  --> case.nyra:2:12
+  |
+2 |     print(1e-5)
+  |            ^
+  = hint: exponent notation does not exist: write the number in full, with a dot (`0.00001`, `100000.0`)
+
+nyra: 1 error(s)
+==== par_float_exp
+fn main() {
+    print(2.5e3)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `e3`
+  --> case.nyra:2:14
+  |
+2 |     print(2.5e3)
+  |              ^
+  = hint: exponent notation does not exist: write the number in full, `2500.0`
+
+nyra: 1 error(s)
+==== par_fn_allman
+fn main()
+{
+    print(1)
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn main`, found end of line
+  --> case.nyra:1:10
+  |
+1 | fn main()
+  |          ^
+  = hint: put the `{` on the same line as the header: `fn main(...) {`
+
+nyra: 1 error(s)
+==== par_fn_arrow_no_type
+fn f() -> {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected a type, found `{`
+  --> case.nyra:1:11
+  |
+1 | fn f() -> {
+  |           ^
+  = hint: write the return type after `->`, e.g. `fn f() -> int`
+
+nyra: 1 error(s)
+==== par_fn_colon_ret
+fn f(): int {
+    ret 1
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `:`
+  --> case.nyra:1:7
+  |
+1 | fn f(): int {
+  |       ^
+  = hint: the return type is written after an arrow: `fn f(a: int) -> int {`
+
+nyra: 1 error(s)
+==== par_fn_keyword_name
+fn if() {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected a function name, found keyword `if`
+  --> case.nyra:1:4
+  |
+1 | fn if() {
+  |    ^
+  = hint: `if` is a reserved word and cannot be used as a name: pick another, e.g. `if_value`
+
+nyra: 1 error(s)
+==== par_fn_no_body
+fn f()
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found end of line
+  --> case.nyra:1:7
+  |
+1 | fn f()
+  |       ^
+  = hint: a function body is missing: write `fn f(...) { ... }`, or `= expression` for a one-line function
+
+nyra: 1 error(s)
+==== par_fn_noname
+fn (x: int) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected a function name, found `(`
+  --> case.nyra:1:4
+  |
+1 | fn (x: int) {
+  |    ^
+  = hint: name the function after `fn`: `fn main() { ... }`
+
+nyra: 1 error(s)
+==== par_fn_noparen
+fn main {
+}
+----
+error[E0101]: expected `(`, found `{`
+  --> case.nyra:1:9
+  |
+1 | fn main {
+  |         ^
+  = hint: the parameter list follows the name: `fn main(a: int) { ... }`
+
+nyra: 1 error(s)
+==== par_fn_oneline_arrow
+fn f(x: int) => x * 2
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected an expression, found `>`
+  --> case.nyra:1:15
+  |
+1 | fn f(x: int) => x * 2
+  |               ^
+  = hint: `=>` does not exist: a one-line function is written `fn f(x: int) -> int = x * 2`
+
+nyra: 1 error(s)
+==== par_fn_oneline_newline
+fn f() -> int =
+    1
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected an expression, found end of line
+  --> case.nyra:1:16
+  |
+1 | fn f() -> int =
+  |                ^
+  = hint: the expression must start on the same line as `=`: `fn f() -> int = 1`
+
+nyra: 1 error(s)
+==== par_fn_oneline_ret
+fn f(x: int) -> int = ret x
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected an expression, found keyword `ret`
+  --> case.nyra:1:23
+  |
+1 | fn f(x: int) -> int = ret x
+  |                       ^
+  = hint: a one-line function returns its expression itself, so there is no `ret`: `fn f(x: int) -> int = x`
+
+nyra: 1 error(s)
+==== par_fn_oneline_two
+fn f() = print(1) print(2)
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected end of line, found `print`
+  --> case.nyra:1:19
+  |
+1 | fn f() = print(1) print(2)
+  |                   ^
+  = hint: a one-line function is a single expression: use a block `{ ... }` for several statements
+
+nyra: 1 error(s)
+==== par_fn_param_c_style
+fn f(int a) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `:` and a type, found `a`
+  --> case.nyra:1:10
+  |
+1 | fn f(int a) {
+  |          ^
+  = hint: write the name first, then the type: `a: int`
+
+nyra: 1 error(s)
+==== par_fn_param_no_colon
+fn f(a int) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `:` and a type, found `int`
+  --> case.nyra:1:8
+  |
+1 | fn f(a int) {
+  |        ^
+  = hint: put a colon between the name and the type: `a: int`
+
+nyra: 1 error(s)
+==== par_fn_param_no_comma
+fn f(a: int b: int) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `,` or `)`, found `b`
+  --> case.nyra:1:13
+  |
+1 | fn f(a: int b: int) {
+  |             ^
+  = hint: separate parameters with commas: `fn f(a: int, b: int)`
+
+nyra: 1 error(s)
+==== par_fn_param_no_type
+fn f(a) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `:` and a type, found `)`
+  --> case.nyra:1:7
+  |
+1 | fn f(a) {
+  |       ^
+  = hint: every parameter needs a type: `a: int`
+
+nyra: 1 error(s)
+==== par_fn_ret_no_arrow
+fn f() int {
+    ret 1
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `int`
+  --> case.nyra:1:8
+  |
+1 | fn f() int {
+  |        ^
+  = hint: the return type is written after an arrow: `fn f() -> int {`
+
+nyra: 1 error(s)
+==== par_fn_unclosed_paren
+fn f(a: int {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `,` or `)`, found `{`
+  --> case.nyra:1:13
+  |
+1 | fn f(a: int {
+  |             ^
+  = hint: close the parameter list with `)`
+
+nyra: 1 error(s)
+==== par_fn_unknown_type
+fn f(a: string) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0102]: unknown type `string`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:1:9
+  |
+1 | fn f(a: string) {
+  |         ^
+  = hint: write `str` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+
+nyra: 1 error(s)
+==== par_fn_unknown_type2
+fn f(a: flot) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0102]: unknown type `flot`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:1:9
+  |
+1 | fn f(a: flot) {
+  |         ^
+  = hint: did you mean `float`? The types are `int`, `float`, `bool` and `str`
+
+nyra: 1 error(s)
+==== par_fn_unknown_type3
+fn f(a: i32) -> double {
+    ret 1.0
+}
+fn main() {
+    print(1)
+}
+----
+error[E0102]: unknown type `i32`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:1:9
+  |
+1 | fn f(a: i32) -> double {
+  |         ^
+  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+
+nyra: 1 error(s)
+==== par_for_no_in
+fn main() {
+    for i 0..3 {
+    }
+}
+----
+error[E0101]: expected `in`, found number `0`
+  --> case.nyra:2:11
+  |
+2 |     for i 0..3 {
+  |           ^
+  = hint: loops look like `for i in 0..10 { ... }`
+
+nyra: 1 error(s)
+==== par_for_no_range
+fn main() {
+    let xs = 5
+    for x in xs {
+    }
+}
+----
+error[E0101]: expected `..`, found `{`
+  --> case.nyra:3:17
+  |
+3 |     for x in xs {
+  |                 ^
+  = hint: a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`
+
+nyra: 1 error(s)
+==== par_hex
+fn main() {
+    print(0xFF)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `xFF`
+  --> case.nyra:2:12
+  |
+2 |     print(0xFF)
+  |            ^
+  = hint: hexadecimal literals do not exist: write the decimal value `255`
+
+nyra: 1 error(s)
+==== par_i_minus_minus
+fn main() {
+    var i = 0
+    i--
+}
+----
+error[E0101]: expected an expression, found end of line
+  --> case.nyra:3:8
+  |
+3 |     i--
+  |        ^
+  = hint: `--` does not exist: write `i -= 1`
+
+nyra: 1 error(s)
+==== par_i_plus_plus
+fn main() {
+    var i = 0
+    i++
+}
+----
+error[E0101]: expected an expression, found `+`
+  --> case.nyra:3:7
+  |
+3 |     i++
+  |       ^
+  = hint: `++` does not exist: write `i += 1`
+
+nyra: 1 error(s)
+==== par_if_allman
+fn main() {
+    if true
+    {
+        print(1)
+    }
+}
+----
+error[E0101]: expected `{` to start the body of this `if`, found end of line
+  --> case.nyra:2:12
+  |
+2 |     if true
+  |            ^
+  = hint: put the `{` on the same line as the header: `if x > 0 {`
+
+nyra: 1 error(s)
+==== par_if_and
+fn main() {
+    let x = 1
+    if x > 0 and x < 5 {
+        print(x)
+    }
+}
+----
+error[E0101]: expected `{` to start the body of this `if`, found `and`
+  --> case.nyra:3:14
+  |
+3 |     if x > 0 and x < 5 {
+  |              ^
+  = hint: write `&&` for logical and: `a && b`
+
+nyra: 1 error(s)
+==== par_if_assign
+fn main() {
+    let x = 1
+    if x = 1 {
+    }
+}
+----
+error[E0101]: expected `{` to start the body of this `if`, found `=`
+  --> case.nyra:3:10
+  |
+3 |     if x = 1 {
+  |          ^
+  = hint: `=` assigns to a variable on a line of its own (`x = 1`); to compare two values write `==`
+
+nyra: 1 error(s)
+==== par_if_no_braces
+fn main() {
+    if true print(1)
+}
+----
+error[E0101]: expected `{` to start the body of this `if`, found `print`
+  --> case.nyra:2:13
+  |
+2 |     if true print(1)
+  |             ^
+  = hint: braces are required, even around one statement: `if x > 0 { ... }`
+
+nyra: 1 error(s)
+==== par_ifv_empty
+fn main() {
+    let x = if true { } else { 1 }
+}
+----
+error[E0101]: expected an expression, found `}`
+  --> case.nyra:2:23
+  |
+2 |     let x = if true { } else { 1 }
+  |                       ^
+  = hint: an `if` used as a value needs a value in every branch: `if c { 1 } else { 2 }`
+
+nyra: 1 error(s)
+==== par_ifv_no_else
+fn main() {
+    let x = if true { 1 }
+}
+----
+error[E0212]: an `if` used as a value needs an `else`: without it there is no value when the condition is false
+  --> case.nyra:2:13
+  |
+2 |     let x = if true { 1 }
+  |             ^
+  = hint: add the other branch: `let x = if cond { 1 } else { 0 }`
+
+nyra: 1 error(s)
+==== par_ifv_stmts
+fn main() {
+    let x = if true {
+        print(1)
+        2
+    } else {
+        3
+    }
+}
+----
+error[E0212]: each branch of an `if` used as a value must be exactly one expression, found number `2` after it
+  --> case.nyra:4:9
+  |
+4 |         2
+  |         ^
+  = hint: compute the value first: `var x = 0`, then an `if` statement that sets it (`if c { x = 1 } else { x = 2 }`)
+
+nyra: 1 error(s)
+==== par_interp_comma
+fn main() {
+    let x = 1
+    let y = 2
+    print("{x, y}")
+}
+----
+error[E0101]: expected `}` after the expression, found `,`
+  --> case.nyra:4:14
+  |
+4 |     print("{x, y}")
+  |              ^
+  = hint: only one expression can go inside `{ }` in a string: build the parts separately, e.g. `"{a} {b}"`
+
+nyra: 1 error(s)
+==== par_interp_fmt
+fn main() {
+    let x = 1.5
+    print("{x:.2f}")
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:3:15
+  |
+3 |     print("{x:.2f}")
+  |               ^
+  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
+
+nyra: 1 error(s)
+==== par_interp_fmt2
+fn main() {
+    let x = 1
+    print("{x:5}")
+}
+----
+error[E0101]: expected `}` after the expression, found `:`
+  --> case.nyra:3:14
+  |
+3 |     print("{x:5}")
+  |              ^
+  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
+
+nyra: 1 error(s)
+==== par_interp_missing
+fn main() {
+    print("{1 +}")
+}
+----
+error[E0101]: expected an expression, found `}`
+  --> case.nyra:2:16
+  |
+2 |     print("{1 +}")
+  |                ^
+  = hint: `+` needs a value on its right side: `a + b`
+
+nyra: 1 error(s)
+==== par_interp_two
+fn main() {
+    let a = 1
+    let b = 2
+    print("{a b}")
+}
+----
+error[E0101]: expected `}` after the expression, found `b`
+  --> case.nyra:4:15
+  |
+4 |     print("{a b}")
+  |               ^
+  = hint: only one expression can go inside `{ }` in a string: build the parts separately, e.g. `"{a} {b}"`
+
+nyra: 1 error(s)
+==== par_lambda
+fn main() {
+    let f = fn(x) x
+}
+----
+error[E0101]: expected an expression, found keyword `fn`
+  --> case.nyra:2:13
+  |
+2 |     let f = fn(x) x
+  |             ^
+  = hint: functions are not values (there are no lambdas or closures): define a named `fn` at the top level
+
+nyra: 1 error(s)
+==== par_let_bad_type
+fn main() {
+    let x: = 5
+}
+----
+error[E0101]: expected a type, found `=`
+  --> case.nyra:2:12
+  |
+2 |     let x: = 5
+  |            ^
+  = hint: write the type after the colon: `let x: int = 0`
+
+nyra: 1 error(s)
+==== par_let_keyword_name
+fn main() {
+    let in = 1
+}
+----
+error[E0101]: expected a variable name, found keyword `in`
+  --> case.nyra:2:9
+  |
+2 |     let in = 1
+  |         ^
+  = hint: `in` is a reserved word and cannot be used as a name: pick another, e.g. `in_value`
+
+nyra: 1 error(s)
+==== par_let_mut
+fn main() {
+    let mut x = 5
+}
+----
+error[E0101]: expected `=`, found `x`
+  --> case.nyra:2:13
+  |
+2 |     let mut x = 5
+  |             ^
+  = hint: Nyra has no `mut`: write `var x = ...` for a variable that changes
+
+nyra: 1 error(s)
+==== par_let_no_init
+fn main() {
+    let x: int
+}
+----
+error[E0101]: expected `=`, found end of line
+  --> case.nyra:2:15
+  |
+2 |     let x: int
+  |               ^
+  = hint: a variable needs a starting value: `let x: int = ...`
+
+nyra: 1 error(s)
+==== par_let_no_init2
+fn main() {
+    var x
+}
+----
+error[E0101]: expected `=`, found end of line
+  --> case.nyra:2:10
+  |
+2 |     var x
+  |          ^
+  = hint: a variable needs a starting value: `var x = ...`
+
+nyra: 1 error(s)
+==== par_let_no_name
+fn main() {
+    let = 5
+}
+----
+error[E0101]: expected a variable name, found `=`
+  --> case.nyra:2:9
+  |
+2 |     let = 5
+  |         ^
+  = hint: write the name after `let`: `let x = 0`
+
+nyra: 1 error(s)
+==== par_let_no_value
+fn main() {
+    let x =
+}
+----
+error[E0101]: expected an expression, found end of line
+  --> case.nyra:2:12
+  |
+2 |     let x =
+  |            ^
+  = hint: write a value after `=`: `let x = 0`
+
+nyra: 1 error(s)
+==== par_line_start_op
+fn main() {
+    let x = 1
+        + 2
+}
+----
+error[E0101]: expected an expression, found `+`
+  --> case.nyra:3:9
+  |
+3 |         + 2
+  |         ^
+  = hint: a line cannot start with `+`: end the previous line with the operator instead (a line may break after an operator, never before one)
+
+nyra: 1 error(s)
+==== par_nested_fn
+fn f() {
+    fn g() {
+    }
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `}` to close the `{` of `fn f` opened at 1:8, found keyword `fn`
+  --> case.nyra:2:5
+  |
+2 |     fn g() {
+  |     ^
+  = hint: functions cannot be nested: add the missing `}` before this `fn`, or move the inner function to the top level
+
+nyra: 1 error(s)
+==== par_paren_unclosed
+fn main() {
+    let x = (1 + 2
+}
+----
+error[E0101]: expected `)` to close the `(` opened at 2:13, found `}`
+  --> case.nyra:3:1
+  |
+3 | }
+  | ^
+  = hint: add the missing `)`: every `(` needs a matching `)`
+
+nyra: 1 error(s)
+==== par_pow
+fn main() {
+    print(2 ** 3)
+}
+----
+error[E0101]: expected an expression, found `*`
+  --> case.nyra:2:14
+  |
+2 |     print(2 ** 3)
+  |              ^
+  = hint: there is no `**` operator: multiply (`x * x * x`) or write a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)
+
+nyra: 1 error(s)
+==== par_print_no_parens
+fn main() {
+    print "hi"
+}
+----
+error[E0101]: expected end of line, found a string
+  --> case.nyra:2:11
+  |
+2 |     print "hi"
+  |           ^
+  = hint: to call `print` put the argument in parentheses: `print("hi")`; to start a new statement, begin a new line
+
+nyra: 1 error(s)
+==== par_range_incl
+fn main() {
+    for i in 0..=3 {
+        print(i)
+    }
+}
+----
+error[E0101]: expected an expression, found `=`
+  --> case.nyra:2:17
+  |
+2 |     for i in 0..=3 {
+  |                 ^
+  = hint: `..=` does not exist: the end of a range is exclusive, so `0..10` counts 0 to 9
+
+nyra: 1 error(s)
+==== par_return
+fn f() -> int {
+    return 1
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: `return` is not a Nyra keyword: expected end of line after it, found number `1`
+  --> case.nyra:2:12
+  |
+2 |     return 1
+  |            ^
+  = hint: Nyra spells it `ret`: replace `return` with `ret`
+
+nyra: 1 error(s)
+==== par_top_block_comment
+/* hi */
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `/`
+  --> case.nyra:1:1
+  |
+1 | /* hi */
+  | ^
+  = hint: Nyra has no block comments: start every comment line with `//`
+
+nyra: 1 error(s)
+==== par_top_c_style
+int main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `int`
+  --> case.nyra:1:1
+  |
+1 | int main() {
+  | ^
+  = hint: functions start with `fn` and the return type comes after `->`: `fn main(...) -> int { ... }`
+
+nyra: 1 error(s)
+==== par_top_c_void
+void log() {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `void`
+  --> case.nyra:1:1
+  |
+1 | void log() {
+  | ^
+  = hint: functions start with `fn`: `fn log(...) { ... }` (no `->` part when nothing is returned)
+
+nyra: 1 error(s)
+==== par_top_call
+print(1)
+----
+error[E0101]: expected `fn`, found `print`
+  --> case.nyra:1:1
+  |
+1 | print(1)
+  | ^
+  = hint: `print(...)` is a call, and calls go inside a function: `fn main() { print(...) }`
+
+nyra: 1 error(s)
+==== par_top_const
+const MAX = 10
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `const`
+  --> case.nyra:1:1
+  |
+1 | const MAX = 10
+  | ^
+  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+
+nyra: 1 error(s)
+==== par_top_import
+import math
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `import`
+  --> case.nyra:1:1
+  |
+1 | import math
+  | ^
+  = hint: Nyra has no imports or modules: one file is one program, and it only contains `fn` definitions
+
+nyra: 1 error(s)
+==== par_top_let
+let max = 10
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found keyword `let`
+  --> case.nyra:1:1
+  |
+1 | let max = 10
+  | ^
+  = hint: there are no global variables: a constant is a function, e.g. `fn max() -> int = 10`
+
+nyra: 1 error(s)
+==== par_top_main_call
+fn main() {
+    print(1)
+}
+main()
+----
+error[E0101]: expected `fn`, found `main`
+  --> case.nyra:4:1
+  |
+4 | main()
+  | ^
+  = hint: `main` runs by itself when the program starts: define it with `fn main() { ... }` and do not call it
+
+nyra: 1 error(s)
+==== par_top_rbrace
+fn main() {
+    print(1)
+}
+}
+----
+error[E0101]: expected `fn`, found `}`
+  --> case.nyra:4:1
+  |
+4 | }
+  | ^
+  = hint: this `}` closes nothing: remove it, or add the `{` it belongs to
+
+nyra: 1 error(s)
+==== par_top_struct
+struct Point {
+    x: int
+}
+fn main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `struct`
+  --> case.nyra:1:1
+  |
+1 | struct Point {
+  | ^
+  = hint: Nyra has no `struct` yet: the only top-level item is `fn`, so model data with functions and plain values
+
+nyra: 1 error(s)
+==== par_trailing_op
+fn main() {
+    let x = 1 +
+}
+----
+error[E0101]: expected an expression, found `}`
+  --> case.nyra:3:1
+  |
+3 | }
+  | ^
+  = hint: `+` needs a value on its right side: `a + b`
+
+nyra: 1 error(s)
+==== par_two_ops
+fn main() {
+    let x = 1 + * 2
+}
+----
+error[E0101]: expected an expression, found `*`
+  --> case.nyra:2:17
+  |
+2 |     let x = 1 + * 2
+  |                 ^
+  = hint: two operators in a row: `+` needs a value on its right, but `*` follows it
+
+nyra: 1 error(s)
+==== par_two_stmts
+fn main() {
+    let a = 1 let b = 2
+}
+----
+error[E0101]: expected end of line, found keyword `let`
+  --> case.nyra:2:15
+  |
+2 |     let a = 1 let b = 2
+  |               ^
+  = hint: put `let` on a new line: Nyra has one statement per line
+
+nyra: 1 error(s)
+==== par_unclosed_brace
+fn main() {
+    print(1)
+----
+error[E0101]: expected `}` to close the `{` of `fn main` opened at 1:11, found end of file
+  --> case.nyra:3:1
+  = hint: add the missing `}`: every `{` needs a matching `}`
+
+nyra: 1 error(s)
+==== par_unclosed_if
+fn main() {
+    if true {
+        print(1)
+}
+----
+error[E0101]: expected `}` to close the `{` of `fn main` opened at 1:11, found end of file
+  --> case.nyra:5:1
+  = hint: add the missing `}`: every `{` needs a matching `}`
+
+nyra: 1 error(s)
+==== par_underscore
+fn main() {
+    print(1_000_000)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `_000_000`
+  --> case.nyra:2:12
+  |
+2 |     print(1_000_000)
+  |            ^
+  = hint: digit separators do not exist: write `1000000`
+
+nyra: 1 error(s)
+==== par_while_allman
+fn main() {
+    while true
+    {
+    }
+}
+----
+error[E0101]: expected `{` to start the body of this `while`, found end of line
+  --> case.nyra:2:15
+  |
+2 |     while true
+  |               ^
+  = hint: put the `{` on the same line as the header: `while n > 0 {`
+
+nyra: 1 error(s)
+==== par_while_value
+fn main() {
+    let x = while true { }
+}
+----
+error[E0101]: expected an expression, found keyword `while`
+  --> case.nyra:2:13
+  |
+2 |     let x = while true { }
+  |             ^
+  = hint: `while` starts a statement, not a value: put it on its own line
+
+nyra: 1 error(s)
+==== chk_args_int2
+fn main() {
+    print(int(1.5, 2))
+}
+----
+error[E0204]: `int` takes exactly 1 argument but 2 were given
+  --> case.nyra:2:11
+  |
+2 |     print(int(1.5, 2))
+  |           ^
+  = hint: `int` converts one value: `int(x)`
+
+nyra: 1 error(s)
+==== chk_args_print0
+fn main() {
+    print()
+}
+----
+error[E0204]: `print` takes exactly 1 argument but 0 were given
+  --> case.nyra:2:5
+  |
+2 |     print()
+  |     ^
+  = hint: give it a value to print: `print("hello")`
+
+nyra: 1 error(s)
+==== chk_args_print2
+fn main() {
+    print("a", "b")
+}
+----
+error[E0204]: `print` takes exactly 1 argument but 2 were given
+  --> case.nyra:2:5
+  |
+2 |     print("a", "b")
+  |     ^
+  = hint: `print` takes one value: put the parts in one string, `print("a b")`
+
+nyra: 1 error(s)
+==== chk_args_print2v
+fn main() {
+    let a = 1
+    let b = 2
+    print(a, b)
+}
+----
+error[E0204]: `print` takes exactly 1 argument but 2 were given
+  --> case.nyra:4:5
+  |
+4 |     print(a, b)
+  |     ^
+  = hint: `print` takes one value: put the parts in one string, `print("{a} {b}")`
+
+nyra: 1 error(s)
+==== chk_args_print_label
+fn main() {
+    let total = 3
+    print("total:", total)
+}
+----
+error[E0204]: `print` takes exactly 1 argument but 2 were given
+  --> case.nyra:3:5
+  |
+3 |     print("total:", total)
+  |     ^
+  = hint: `print` takes one value: put the parts in one string, `print("total: {total}")`
+
+nyra: 1 error(s)
+==== chk_args_user
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add(1))
+}
+----
+error[E0204]: `add(a: int, b: int)` takes 2 arguments but 1 was given
+  --> case.nyra:3:11
+  |
+3 |     print(add(1))
+  |           ^
+  = hint: also pass `b: int`: the call is `add(a, b)`
+
+nyra: 1 error(s)
+==== chk_args_user_many
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add(1, 2, 3))
+}
+----
+error[E0204]: `add(a: int, b: int)` takes 2 arguments but 3 were given
+  --> case.nyra:3:11
+  |
+3 |     print(add(1, 2, 3))
+  |           ^
+  = hint: remove the extra argument(s): the signature is `fn add(a: int, b: int)`
+
+nyra: 1 error(s)
+==== chk_args_user_zero
+fn f(x: int) -> int = x
+fn main() {
+    print(f())
+}
+----
+error[E0204]: `f(x: int)` takes 1 argument but 0 were given
+  --> case.nyra:3:11
+  |
+3 |     print(f())
+  |           ^
+  = hint: also pass `x: int`: the call is `f(x)`
+
+nyra: 1 error(s)
+==== chk_assign_void
+fn hello() = print("hi")
+fn main() {
+    var x = 1
+    x = hello()
+}
+----
+error[E0203]: type mismatch in the assignment to `x`: expected `int`, but `hello()` returns nothing
+  --> case.nyra:4:9
+  |
+4 |     x = hello()
+  |         ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_cond_ifv
+fn main() {
+    let x = if 1 { 1 } else { 2 }
+}
+----
+error[E0209]: the condition of an `if` value must be `bool`, found `int`
+  --> case.nyra:2:16
+  |
+2 |     let x = if 1 { 1 } else { 2 }
+  |                ^
+  = hint: a condition is `true`, `false` or a comparison such as `x != 0`
+
+nyra: 1 error(s)
+==== chk_cond_int
+fn main() {
+    let n = 1
+    if n {
+    }
+}
+----
+error[E0209]: the condition of `if` must be `bool`, found `int`
+  --> case.nyra:3:8
+  |
+3 |     if n {
+  |        ^
+  = hint: compare it: `n != 0`
+
+nyra: 1 error(s)
+==== chk_cond_lit
+fn main() {
+    if 1 {
+    }
+}
+----
+error[E0209]: the condition of `if` must be `bool`, found `int`
+  --> case.nyra:2:8
+  |
+2 |     if 1 {
+  |        ^
+  = hint: a condition is `true`, `false` or a comparison such as `x != 0`
+
+nyra: 1 error(s)
+==== chk_cond_str
+fn main() {
+    let s = "a"
+    if s {
+    }
+}
+----
+error[E0209]: the condition of `if` must be `bool`, found `str`
+  --> case.nyra:3:8
+  |
+3 |     if s {
+  |        ^
+  = hint: compare it: `s != ""`
+
+nyra: 1 error(s)
+==== chk_cond_void
+fn hello() = print("hi")
+fn main() {
+    if hello() {
+    }
+}
+----
+error[E0209]: the condition of `if` must be `bool`, found `void`
+  --> case.nyra:3:8
+  |
+3 |     if hello() {
+  |        ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_cond_while
+fn main() {
+    var n = 3
+    while n {
+        n -= 1
+    }
+}
+----
+error[E0209]: the condition of `while` must be `bool`, found `int`
+  --> case.nyra:3:11
+  |
+3 |     while n {
+  |           ^
+  = hint: compare it: `n != 0`
+
+nyra: 1 error(s)
+==== chk_dup_fn
+fn f() {
+}
+fn f() {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0206]: function `f` is defined twice (the first one is on line 1)
+  --> case.nyra:3:4
+  |
+3 | fn f() {
+  |    ^
+  = hint: rename one of them, e.g. `f_2`: Nyra has no overloading, so a function name can be used only once
+
+nyra: 1 error(s)
+==== chk_dup_let
+fn main() {
+    let x = 1
+    let x = 2
+}
+----
+error[E0206]: `x` is already declared on line 2 (Nyra has no shadowing)
+  --> case.nyra:3:5
+  |
+3 |     let x = 2
+  |     ^
+  = hint: use a different name for the new variable, e.g. `x2`; to change the old one, declare it with `var` and assign: `x = ...`
+
+nyra: 1 error(s)
+==== chk_dup_loop
+fn main() {
+    for i in 0..3 {
+        for i in 0..3 {
+        }
+    }
+}
+----
+error[E0206]: `i` is already the loop variable of an enclosing `for` (line 2)
+  --> case.nyra:3:9
+  |
+3 |         for i in 0..3 {
+  |         ^
+  = hint: use a different name for the inner variable, e.g. `j`
+
+nyra: 1 error(s)
+==== chk_dup_param
+fn f(a: int, a: int) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0206]: `a` is already a parameter of `f` (Nyra has no shadowing)
+  --> case.nyra:1:14
+  |
+1 | fn f(a: int, a: int) {
+  |              ^
+  = hint: use a different name: parameters cannot be declared again or changed (copy one into a `var` to change it)
+
+nyra: 1 error(s)
+==== chk_dup_param_local
+fn f(a: int) -> int {
+    let a = 1
+    ret a
+}
+fn main() {
+    print(1)
+}
+----
+error[E0206]: `a` is already a parameter of `f` (Nyra has no shadowing)
+  --> case.nyra:2:5
+  |
+2 |     let a = 1
+  |     ^
+  = hint: use a different name: parameters cannot be declared again or changed (copy one into a `var` to change it)
+
+nyra: 1 error(s)
+==== chk_dup_var
+fn main() {
+    var x = 1
+    var x = 2
+}
+----
+error[E0206]: `x` is already declared on line 2 (Nyra has no shadowing)
+  --> case.nyra:3:5
+  |
+3 |     var x = 2
+  |     ^
+  = hint: assign to the existing variable (`x = ...`) instead of declaring it again, or use a different name
+
+nyra: 1 error(s)
+==== chk_float_bool
+fn main() {
+    let done = true
+    print(float(done))
+}
+----
+error[E0203]: `float(x)` needs an `int` or a `float`, found `bool`
+  --> case.nyra:3:17
+  |
+3 |     print(float(done))
+  |                 ^
+  = hint: choose the numbers yourself: `if done { 1.0 } else { 0.0 }`
+
+nyra: 1 error(s)
+==== chk_fn_builtin
+fn print(x: int) {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0206]: `print` is a builtin function and cannot be defined again
+  --> case.nyra:1:4
+  |
+1 | fn print(x: int) {
+  |    ^
+  = hint: give your function another name, e.g. `fn my_print(...)`
+
+nyra: 1 error(s)
+==== chk_ifv_mixed
+fn main() {
+    let x = if true { 1 } else { 2.5 }
+}
+----
+error[E0212]: the branches of this `if` value have different types: `int` and `float`
+  --> case.nyra:2:13
+  |
+2 |     let x = if true { 1 } else { 2.5 }
+  |             ^
+  = hint: make both branches `float`: write the first as `1.0`
+
+nyra: 1 error(s)
+==== chk_ifv_mixed2
+fn main() {
+    let x = if true { 2.5 } else { 1 }
+}
+----
+error[E0212]: the branches of this `if` value have different types: `float` and `int`
+  --> case.nyra:2:13
+  |
+2 |     let x = if true { 2.5 } else { 1 }
+  |             ^
+  = hint: make both branches `float`: write the second as `1.0`
+
+nyra: 1 error(s)
+==== chk_ifv_mixed3
+fn main() {
+    let x = if true { 1 } else { "a" }
+}
+----
+error[E0212]: the branches of this `if` value have different types: `int` and `str`
+  --> case.nyra:2:13
+  |
+2 |     let x = if true { 1 } else { "a" }
+  |             ^
+  = hint: both branches must have the same type: change one so both are `int` (or both `str`)
+
+nyra: 1 error(s)
+==== chk_ifv_void
+fn main() {
+    let x = if true { print(1) } else { print(2) }
+}
+----
+error[E0212]: the first branch of this `if` value produces no value: `print(1)` returns nothing
+  --> case.nyra:2:13
+  |
+2 |     let x = if true { print(1) } else { print(2) }
+  |             ^
+  = hint: each branch must be an expression with a value, e.g. `if c { 1 } else { 2 }`; use an `if` statement for actions
+
+nyra: 1 error(s)
+==== chk_int_str
+fn main() {
+    print(int("3"))
+}
+----
+error[E0203]: `int(x)` needs an `int` or a `float`, found `str`
+  --> case.nyra:2:15
+  |
+2 |     print(int("3"))
+  |               ^
+  = hint: write the number without quotes: `3`
+
+nyra: 1 error(s)
+==== chk_int_void
+fn hello() = print("hi")
+fn main() {
+    print(int(hello()))
+}
+----
+error[E0203]: `int` needs a number, but `hello()` returns nothing
+  --> case.nyra:3:15
+  |
+3 |     print(int(hello()))
+  |               ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_let_assign
+fn main() {
+    let x = 1
+    x = 2
+}
+----
+error[E0205]: cannot assign to `x`: it was declared with `let` on line 2
+  --> case.nyra:3:5
+  |
+3 |     x = 2
+  |     ^
+  = hint: declare it with `var` to make it changeable: `var x = ...` on line 2
+
+nyra: 1 error(s)
+==== chk_let_compound
+fn main() {
+    let count = 1
+    count += 1
+}
+----
+error[E0205]: cannot assign to `count`: it was declared with `let` on line 2
+  --> case.nyra:3:5
+  |
+3 |     count += 1
+  |     ^
+  = hint: declare it with `var` to make it changeable: `var count = ...` on line 2
+
+nyra: 1 error(s)
+==== chk_loop_assign
+fn main() {
+    for i in 0..3 {
+        i = 5
+    }
+}
+----
+error[E0205]: cannot assign to `i`: it is the loop variable of a `for`
+  --> case.nyra:3:9
+  |
+3 |         i = 5
+  |         ^
+  = hint: loop variables cannot be changed: use a `while` loop with a `var` counter instead
+
+nyra: 1 error(s)
+==== chk_main_both
+fn main(a: int, b: str) -> int {
+    ret 0
+}
+----
+error[E0211]: `main` must take no parameters and return nothing, but it takes `a: int`, `b: str` and returns `int`
+  --> case.nyra:1:4
+  |
+1 | fn main(a: int, b: str) -> int {
+  |    ^
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+
+nyra: 1 error(s)
+==== chk_main_params
+fn main(x: int) {
+}
+----
+error[E0211]: `main` must take no parameters and return nothing, but it takes `x: int`
+  --> case.nyra:1:4
+  |
+1 | fn main(x: int) {
+  |    ^
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+
+nyra: 1 error(s)
+==== chk_main_ret
+fn main() -> int {
+    ret 0
+}
+----
+error[E0211]: `main` must take no parameters and return nothing, but it returns `int`
+  --> case.nyra:1:4
+  |
+1 | fn main() -> int {
+  |    ^
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+
+nyra: 1 error(s)
+==== chk_no_main
+fn helper() {
+}
+----
+error[E0208]: missing `fn main()`: a program starts running at `main`
+  --> case.nyra:1:1
+  |
+1 | fn helper() {
+  | ^
+  = hint: add the entry point: `fn main() { print("hello") }`
+
+nyra: 1 error(s)
+==== chk_not_void
+fn hello() = print("hi")
+fn main() {
+    print(!hello())
+}
+----
+error[E0210]: cannot apply `!` to `void`: `!` needs a `bool`
+  --> case.nyra:3:11
+  |
+3 |     print(!hello())
+  |           ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_op_and_int
+fn main() {
+    print(1 && 2)
+}
+----
+error[E0210]: cannot use `&&` on `int` and `int`: `&&` needs two `bool`s
+  --> case.nyra:2:13
+  |
+2 |     print(1 && 2)
+  |             ^
+  = hint: compare each side first: `1 != 0 && 2 != 0`
+
+nyra: 1 error(s)
+==== chk_op_and_vars
+fn main() {
+    let a = 1
+    let b = 2
+    if a && b {
+    }
+}
+----
+error[E0210]: cannot use `&&` on `int` and `int`: `&&` needs two `bool`s
+  --> case.nyra:4:10
+  |
+4 |     if a && b {
+  |          ^
+  = hint: compare each side first: `a != 0 && b != 0`
+
+nyra: 1 error(s)
+==== chk_op_chain
+fn main() {
+    let a = 1
+    let b = 2
+    let c = 3
+    print(a < b < c)
+}
+----
+error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s or two `float`s
+  --> case.nyra:5:17
+  |
+5 |     print(a < b < c)
+  |                 ^
+  = hint: comparisons do not chain: write `a < b && b < c`
+
+nyra: 1 error(s)
+==== chk_op_compound_float_int
+fn main() {
+    var t = 0.0
+    t += 1
+}
+----
+error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s or two `float`s
+  --> case.nyra:3:5
+  |
+3 |     t += 1
+  |     ^
+  = hint: `t` is a `float`: write the value as a float, `t += 1.0`
+
+nyra: 1 error(s)
+==== chk_op_compound_float_var
+fn main() {
+    var t = 0.0
+    let n = 2
+    t += n
+}
+----
+error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s or two `float`s
+  --> case.nyra:4:5
+  |
+4 |     t += n
+  |     ^
+  = hint: `t` is a `float`: convert the value, `t += float(n)`
+
+nyra: 1 error(s)
+==== chk_op_compound_int_float
+fn main() {
+    var x = 1
+    x += 1.5
+}
+----
+error[E0210]: cannot use `+=` on `int` and `float`: `+=` needs two `int`s or two `float`s
+  --> case.nyra:3:5
+  |
+3 |     x += 1.5
+  |     ^
+  = hint: `x` is an `int`: convert the value (`x += int(1.5)` truncates toward zero) or declare `x` as a float
+
+nyra: 1 error(s)
+==== chk_op_eq_bool
+fn main() {
+    let f = true
+    print(f == 1)
+}
+----
+error[E0210]: cannot use `==` on `bool` and `int`: `==` needs two values of the same type
+  --> case.nyra:3:13
+  |
+3 |     print(f == 1)
+  |             ^
+  = hint: compare a `bool` only with another `bool` (`flag == true`, or just `flag`)
+
+nyra: 1 error(s)
+==== chk_op_eq_types
+fn main() {
+    let n = 1
+    print(n == "a")
+}
+----
+error[E0210]: cannot use `==` on `int` and `str`: `==` needs two values of the same type
+  --> case.nyra:3:13
+  |
+3 |     print(n == "a")
+  |             ^
+  = hint: `==` compares two values of one type: convert one side (`float(x)`, `int(x)`) or write the literal with the right type
+
+nyra: 1 error(s)
+==== chk_op_mixed
+fn main() {
+    print(1 + 2.0)
+}
+----
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s or two `float`s
+  --> case.nyra:2:13
+  |
+2 |     print(1 + 2.0)
+  |             ^
+  = hint: use one type on both sides, e.g. `1.0 + 2.0` (Nyra never converts numbers implicitly)
+
+nyra: 1 error(s)
+==== chk_op_mixed_eq
+fn main() {
+    print(1 == 1.0)
+}
+----
+error[E0210]: cannot use `==` on `int` and `float`: `==` needs two values of the same type
+  --> case.nyra:2:13
+  |
+2 |     print(1 == 1.0)
+  |             ^
+  = hint: use one type on both sides, e.g. `1.0 == 1.0` (Nyra never converts numbers implicitly)
+
+nyra: 1 error(s)
+==== chk_op_mixed_var
+fn main() {
+    let n = 3
+    print(n + 0.5)
+}
+----
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s or two `float`s
+  --> case.nyra:3:13
+  |
+3 |     print(n + 0.5)
+  |             ^
+  = hint: use one type on both sides, e.g. `float(n) + 0.5` (Nyra never converts numbers implicitly)
+
+nyra: 1 error(s)
+==== chk_op_mixed_var2
+fn main() {
+    let x = 2.5
+    print(x * 2)
+}
+----
+error[E0210]: cannot use `*` on `float` and `int`: `*` needs two `int`s or two `float`s
+  --> case.nyra:3:13
+  |
+3 |     print(x * 2)
+  |             ^
+  = hint: use one type on both sides, e.g. `x * 2.0` (Nyra never converts numbers implicitly)
+
+nyra: 1 error(s)
+==== chk_op_mod_float
+fn main() {
+    print(5.0 % 2.0)
+}
+----
+error[E0210]: cannot use `%` on `float` and `float`: `%` needs two `int`s
+  --> case.nyra:2:15
+  |
+2 |     print(5.0 % 2.0)
+  |               ^
+  = hint: `%` works on `int` only; for floats compute the remainder as `a - b * float(int(a / b))`
+
+nyra: 1 error(s)
+==== chk_op_neg_bool
+fn main() {
+    print(-true)
+}
+----
+error[E0210]: cannot apply `-` to `bool`: `-` needs an `int` or a `float`
+  --> case.nyra:2:11
+  |
+2 |     print(-true)
+  |           ^
+  = hint: to flip a `bool` use `!`: `!true`
+
+nyra: 1 error(s)
+==== chk_op_neg_str
+fn main() {
+    print(-"a")
+}
+----
+error[E0210]: cannot apply `-` to `str`: `-` needs an `int` or a `float`
+  --> case.nyra:2:11
+  |
+2 |     print(-"a")
+  |           ^
+  = hint: only numbers can be negated
+
+nyra: 1 error(s)
+==== chk_op_not_int
+fn main() {
+    print(!5)
+}
+----
+error[E0210]: cannot apply `!` to `int`: `!` needs a `bool`
+  --> case.nyra:2:11
+  |
+2 |     print(!5)
+  |           ^
+  = hint: compare instead: `5 == 0`
+
+nyra: 1 error(s)
+==== chk_op_not_var
+fn main() {
+    let n = 5
+    print(!n)
+}
+----
+error[E0210]: cannot apply `!` to `int`: `!` needs a `bool`
+  --> case.nyra:3:11
+  |
+3 |     print(!n)
+  |           ^
+  = hint: compare instead: `n == 0`
+
+nyra: 1 error(s)
+==== chk_op_str_add
+fn main() {
+    print("a" + "b")
+}
+----
+error[E0210]: cannot use `+` on `str` and `str`: `+` needs two `int`s or two `float`s
+  --> case.nyra:2:15
+  |
+2 |     print("a" + "b")
+  |               ^
+  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"ab"`
+
+nyra: 1 error(s)
+==== chk_op_str_add_chain
+fn main() {
+    let a = 1
+    print("a=" + a + "!")
+}
+----
+error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s or two `float`s
+  --> case.nyra:3:16
+  |
+3 |     print("a=" + a + "!")
+  |                ^
+  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"a={a}!"`
+
+nyra: 1 error(s)
+==== chk_op_str_add_var
+fn main() {
+    let total = 3
+    print("total: " + total)
+}
+----
+error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s or two `float`s
+  --> case.nyra:3:21
+  |
+3 |     print("total: " + total)
+  |                     ^
+  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"total: {total}"`
+
+nyra: 1 error(s)
+==== chk_op_str_lt
+fn main() {
+    print("a" < "b")
+}
+----
+error[E0210]: cannot use `<` on `str` and `str`: `<` needs two `int`s or two `float`s
+  --> case.nyra:2:15
+  |
+2 |     print("a" < "b")
+  |               ^
+  = hint: strings can only be compared with `==` and `!=`: there is no ordering for text
+
+nyra: 1 error(s)
+==== chk_op_void
+fn hello() = print("hi")
+fn main() {
+    print(hello() + 1)
+}
+----
+error[E0210]: cannot use `+` on `void` and `int`: `+` needs two `int`s or two `float`s
+  --> case.nyra:3:19
+  |
+3 |     print(hello() + 1)
+  |                   ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_param_assign
+fn f(n: int) -> int {
+    n = n / 2
+    ret n
+}
+fn main() {
+    print(1)
+}
+----
+error[E0205]: cannot assign to `n`: parameters cannot be changed
+  --> case.nyra:2:5
+  |
+2 |     n = n / 2
+  |     ^
+  = hint: copy it into a variable first (`var m = n`), then change `m`
+
+nyra: 1 error(s)
+==== chk_ret_implicit
+fn add(a: int, b: int) -> int {
+    a + b
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: function `add` is declared `-> int` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn add(a: int, b: int) -> int {
+  |    ^
+  = hint: the last line computes a value, but Nyra does not return it by itself: write `ret a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
+
+nyra: 1 error(s)
+==== chk_ret_loop
+fn f(x: int) -> str {
+    for i in 0..x {
+        ret "a"
+    }
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: function `f` is declared `-> str` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn f(x: int) -> str {
+  |    ^
+  = hint: a loop may run zero times: add `ret ""` after the loop
+
+nyra: 1 error(s)
+==== chk_ret_missing
+fn f(x: int) -> int {
+    if x > 0 { ret 1 }
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn f(x: int) -> int {
+  |    ^
+  = hint: the last `if` has no `else`: add `ret 0` after it, or an `else { ret 0 }` branch
+
+nyra: 1 error(s)
+==== chk_ret_missing_else
+fn f(x: int) -> int {
+    if x > 0 {
+        ret 1
+    } else {
+        print(x)
+    }
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn f(x: int) -> int {
+  |    ^
+  = hint: every branch of the last `if`/`else` must end with `ret`
+
+nyra: 1 error(s)
+==== chk_ret_missing_empty
+fn f() -> int {
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn f() -> int {
+  |    ^
+  = hint: end the function with `ret`, e.g. `ret 0`
+
+nyra: 1 error(s)
+==== chk_ret_novalue
+fn f() -> int {
+    ret
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: `ret` needs a value: `f` returns `int`
+  --> case.nyra:2:5
+  |
+2 |     ret
+  |     ^
+  = hint: write `ret 0` (or any other `int` value)
+
+nyra: 1 error(s)
+==== chk_ret_value_void
+fn f() {
+    ret 1
+}
+fn main() {
+    print(1)
+}
+----
+error[E0207]: `ret` returns a value, but `f` has no return type (it returns nothing)
+  --> case.nyra:2:9
+  |
+2 |     ret 1
+  |         ^
+  = hint: add the return type to the signature: `fn f(...) -> int`, or write `ret` without a value
+
+nyra: 1 error(s)
+==== chk_type_arg
+fn sq(x: float) -> float = x * x
+fn main() {
+    print(sq(4))
+}
+----
+error[E0203]: type mismatch in argument 1 (`x`) of `sq`: expected `float`, found `int`
+  --> case.nyra:3:14
+  |
+3 |     print(sq(4))
+  |              ^
+  = hint: write the number as a float: `4.0`
+
+nyra: 1 error(s)
+==== chk_type_arg_bool
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add(true, 2))
+}
+----
+error[E0203]: type mismatch in argument 1 (`a`) of `add`: expected `int`, found `bool`
+  --> case.nyra:3:15
+  |
+3 |     print(add(true, 2))
+  |               ^
+  = hint: choose the numbers yourself: `if true { 1 } else { 0 }`
+
+nyra: 1 error(s)
+==== chk_type_arg_float
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add(1.5, 2))
+}
+----
+error[E0203]: type mismatch in argument 1 (`a`) of `add`: expected `int`, found `float`
+  --> case.nyra:3:15
+  |
+3 |     print(add(1.5, 2))
+  |               ^
+  = hint: convert it with `int`: `int(1.5)` (truncates toward zero), or write an int
+
+nyra: 1 error(s)
+==== chk_type_arg_str
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add(1, "2"))
+}
+----
+error[E0203]: type mismatch in argument 2 (`b`) of `add`: expected `int`, found `str`
+  --> case.nyra:3:18
+  |
+3 |     print(add(1, "2"))
+  |                  ^
+  = hint: write the number without quotes: `2`
+
+nyra: 1 error(s)
+==== chk_type_arg_var
+fn sq(x: float) -> float = x * x
+fn main() {
+    let n = 4
+    print(sq(n))
+}
+----
+error[E0203]: type mismatch in argument 1 (`x`) of `sq`: expected `float`, found `int`
+  --> case.nyra:4:14
+  |
+4 |     print(sq(n))
+  |              ^
+  = hint: convert it with `float`: `float(n)`
+
+nyra: 1 error(s)
+==== chk_type_arg_void
+fn hello() = print("hi")
+fn main() {
+    print(hello())
+}
+----
+error[E0203]: `print` needs a value to show, but `hello()` returns nothing
+  --> case.nyra:3:11
+  |
+3 |     print(hello())
+  |           ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_type_assign
+fn main() {
+    var n = 1
+    n = 2.5
+}
+----
+error[E0203]: type mismatch in the assignment to `n`: expected `int`, found `float`
+  --> case.nyra:3:9
+  |
+3 |     n = 2.5
+  |         ^
+  = hint: convert it with `int`: `int(2.5)` (truncates toward zero), or write an int
+
+nyra: 1 error(s)
+==== chk_type_assign_str
+fn main() {
+    var n = 1
+    n = "a"
+}
+----
+error[E0203]: type mismatch in the assignment to `n`: expected `int`, found `str`
+  --> case.nyra:3:9
+  |
+3 |     n = "a"
+  |         ^
+  = hint: text is not a number and Nyra cannot parse it (yet): use a number here, or make the other side a `str`
+
+nyra: 1 error(s)
+==== chk_type_bool
+fn main() {
+    let x: bool = 1
+}
+----
+error[E0203]: type mismatch in `let x: bool`: expected `bool`, found `int`
+  --> case.nyra:2:19
+  |
+2 |     let x: bool = 1
+  |                   ^
+  = hint: write `true` or `false`: a `bool` is never made from a number or text
+
+nyra: 1 error(s)
+==== chk_type_interp_void
+fn hello() = print("hi")
+fn main() {
+    print("x {hello()}")
+}
+----
+error[E0203]: `hello()` returns nothing, so it cannot be put into a string
+  --> case.nyra:3:15
+  |
+3 |     print("x {hello()}")
+  |               ^
+  = hint: only values (`int`, `float`, `bool`, `str`) can go inside `{ }`: call it on its own line before the string
+
+nyra: 1 error(s)
+==== chk_type_let
+fn main() {
+    let x: int = "hi"
+}
+----
+error[E0203]: type mismatch in `let x: int`: expected `int`, found `str`
+  --> case.nyra:2:18
+  |
+2 |     let x: int = "hi"
+  |                  ^
+  = hint: text is not a number and Nyra cannot parse it (yet): use a number here, or make the other side a `str`
+
+nyra: 1 error(s)
+==== chk_type_let_float
+fn main() {
+    let f: float = 2
+}
+----
+error[E0203]: type mismatch in `let f: float`: expected `float`, found `int`
+  --> case.nyra:2:20
+  |
+2 |     let f: float = 2
+  |                    ^
+  = hint: write the number as a float: `2.0`
+
+nyra: 1 error(s)
+==== chk_type_let_print
+fn main() {
+    let x = print(1)
+}
+----
+error[E0203]: `print(1)` returns nothing, so there is no value to store in `x`
+  --> case.nyra:2:13
+  |
+2 |     let x = print(1)
+  |             ^
+  = hint: `print` only has an effect and returns nothing: use it as a statement on its own line
+
+nyra: 1 error(s)
+==== chk_type_let_void
+fn hello() = print("hi")
+fn main() {
+    let x = hello()
+}
+----
+error[E0203]: `hello()` returns nothing, so there is no value to store in `x`
+  --> case.nyra:3:13
+  |
+3 |     let x = hello()
+  |             ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_type_let_void_ann
+fn hello() = print("hi")
+fn main() {
+    let x: int = hello()
+}
+----
+error[E0203]: `hello()` returns nothing, so there is no value to store in `x`
+  --> case.nyra:3:18
+  |
+3 |     let x: int = hello()
+  |                  ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_type_range
+fn main() {
+    for i in 0.0..3.0 {
+    }
+}
+----
+error[E0203]: type mismatch in the start of a range: expected `int`, found `float`
+  --> case.nyra:2:14
+  |
+2 |     for i in 0.0..3.0 {
+  |              ^
+  = hint: convert it with `int`: `int(0.0)` (truncates toward zero), or write an int
+
+error[E0203]: type mismatch in the end of a range: expected `int`, found `float`
+  --> case.nyra:2:19
+  |
+2 |     for i in 0.0..3.0 {
+  |                   ^
+  = hint: convert it with `int`: `int(3.0)` (truncates toward zero), or write an int
+
+nyra: 2 error(s)
+==== chk_type_range_var
+fn main() {
+    let n = 2.5
+    for i in 0..n {
+    }
+}
+----
+error[E0203]: type mismatch in the end of a range: expected `int`, found `float`
+  --> case.nyra:3:17
+  |
+3 |     for i in 0..n {
+  |                 ^
+  = hint: convert it with `int`: `int(n)` (truncates toward zero), or write an int
+
+nyra: 1 error(s)
+==== chk_type_ret
+fn f() -> int {
+    ret 1.5
+}
+fn main() {
+    print(1)
+}
+----
+error[E0203]: type mismatch in the return value of `f`: expected `int`, found `float`
+  --> case.nyra:2:9
+  |
+2 |     ret 1.5
+  |         ^
+  = hint: convert it with `int`: `int(1.5)` (truncates toward zero), or write an int
+
+nyra: 1 error(s)
+==== chk_type_ret_float
+fn f(x: int) -> float = x
+fn main() {
+    print(1)
+}
+----
+error[E0203]: type mismatch in the return value of `f`: expected `float`, found `int`
+  --> case.nyra:1:25
+  |
+1 | fn f(x: int) -> float = x
+  |                         ^
+  = hint: convert it with `float`: `float(x)`
+
+nyra: 1 error(s)
+==== chk_type_ret_str
+fn f(x: int) -> str = x
+fn main() {
+    print(1)
+}
+----
+error[E0203]: type mismatch in the return value of `f`: expected `str`, found `int`
+  --> case.nyra:1:23
+  |
+1 | fn f(x: int) -> str = x
+  |                       ^
+  = hint: build text with interpolation: `"{x}"`
+
+nyra: 1 error(s)
+==== chk_type_ret_void
+fn hello() = print("hi")
+fn f() -> int = hello()
+fn main() {
+    print(1)
+}
+----
+error[E0203]: type mismatch in the return value of `f`: expected `int`, but `hello()` returns nothing
+  --> case.nyra:2:17
+  |
+2 | fn f() -> int = hello()
+  |                 ^
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+
+nyra: 1 error(s)
+==== chk_undef
+fn main() {
+    let count = 1
+    print(cout)
+}
+----
+error[E0201]: undefined variable `cout`
+  --> case.nyra:3:11
+  |
+3 |     print(cout)
+  |           ^
+  = hint: did you mean `count`?
+
+nyra: 1 error(s)
+==== chk_undef_assign
+fn main() {
+    count = 1
+}
+----
+error[E0201]: undefined variable `count`
+  --> case.nyra:2:5
+  |
+2 |     count = 1
+  |     ^
+  = hint: declare it first with `var count = ...`: `count = ...` can only change a variable that exists
+
+nyra: 1 error(s)
+==== chk_undef_break
+fn main() {
+    while true {
+        break
+    }
+}
+----
+error[E0201]: undefined variable `break`
+  --> case.nyra:3:9
+  |
+3 |         break
+  |         ^
+  = hint: Nyra has no `break` or `continue`: stop a loop with a `bool` flag in the `while` condition, or `ret` from a helper function
+
+nyra: 1 error(s)
+==== chk_undef_builtin_name
+fn main() {
+    let f = print
+}
+----
+error[E0201]: undefined variable `print`
+  --> case.nyra:2:13
+  |
+2 |     let f = print
+  |             ^
+  = hint: `print` is a function, not a variable: call it as `print(x)`
+
+nyra: 1 error(s)
+==== chk_undef_far
+fn main() {
+    print(zzz)
+}
+----
+error[E0201]: undefined variable `zzz`
+  --> case.nyra:2:11
+  |
+2 |     print(zzz)
+  |           ^
+  = hint: declare it first: `let zzz = ...`
+
+nyra: 1 error(s)
+==== chk_undef_fn_abs
+fn main() {
+    print(abs(-3))
+}
+----
+error[E0202]: undefined function `abs`
+  --> case.nyra:2:11
+  |
+2 |     print(abs(-3))
+  |           ^
+  = hint: Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`
+
+nyra: 1 error(s)
+==== chk_undef_fn_input
+fn main() {
+    let n = input()
+}
+----
+error[E0202]: undefined function `input`
+  --> case.nyra:2:13
+  |
+2 |     let n = input()
+  |             ^
+  = hint: did you mean `int`?
+
+nyra: 1 error(s)
+==== chk_undef_fn_len
+fn main() {
+    print(len("abc"))
+}
+----
+error[E0202]: undefined function `len`
+  --> case.nyra:2:11
+  |
+2 |     print(len("abc"))
+  |           ^
+  = hint: Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable
+
+nyra: 1 error(s)
+==== chk_undef_fn_other
+fn main() {
+    print(frobnicate(2))
+}
+----
+error[E0202]: undefined function `frobnicate`
+  --> case.nyra:2:11
+  |
+2 |     print(frobnicate(2))
+  |           ^
+  = hint: define it: `fn frobnicate(...) { ... }` (the only builtins are `print`, `int` and `float`)
+
+nyra: 1 error(s)
+==== chk_undef_fn_println
+fn main() {
+    println("x")
+}
+----
+error[E0202]: undefined function `println`
+  --> case.nyra:2:5
+  |
+2 |     println("x")
+  |     ^
+  = hint: did you mean `print`?
+
+nyra: 1 error(s)
+==== chk_undef_fn_recipe_max
+fn main() {
+    print(max(1, 2))
+}
+----
+error[E0202]: undefined function `max`
+  --> case.nyra:2:11
+  |
+2 |     print(max(1, 2))
+  |           ^
+  = hint: did you mean `main`?
+
+nyra: 1 error(s)
+==== chk_undef_fn_sqrt
+fn main() {
+    print(sqrt(2.0))
+}
+----
+error[E0202]: undefined function `sqrt`
+  --> case.nyra:2:11
+  |
+2 |     print(sqrt(2.0))
+  |           ^
+  = hint: Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)
+
+nyra: 1 error(s)
+==== chk_undef_fn_str
+fn main() {
+    print(str(5))
+}
+----
+error[E0202]: undefined function `str`
+  --> case.nyra:2:11
+  |
+2 |     print(str(5))
+  |           ^
+  = hint: Nyra has no string conversion function: build text with interpolation, e.g. `"{x}"`
+
+nyra: 1 error(s)
+==== chk_undef_fn_typo
+fn square(x: int) -> int = x * x
+fn main() {
+    print(squar(3))
+}
+----
+error[E0202]: undefined function `squar`
+  --> case.nyra:3:11
+  |
+3 |     print(squar(3))
+  |           ^
+  = hint: did you mean `square`?
+
+nyra: 1 error(s)
+==== chk_undef_fn_var
+fn main() {
+    let count = 1
+    print(count(2))
+}
+----
+error[E0202]: undefined function `count`
+  --> case.nyra:3:11
+  |
+3 |     print(count(2))
+  |           ^
+  = hint: `count` is a variable, not a function: remove the parentheses (or give the function another name)
+
+nyra: 1 error(s)
+==== chk_undef_fnname
+fn limit() -> int = 100
+fn main() {
+    print(limit)
+}
+----
+error[E0201]: undefined variable `limit`
+  --> case.nyra:3:11
+  |
+3 |     print(limit)
+  |           ^
+  = hint: `limit` is a function, not a variable: call it as `limit()`
+
+nyra: 1 error(s)
+==== chk_undef_fnname_args
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    print(add)
+}
+----
+error[E0201]: undefined variable `add`
+  --> case.nyra:3:11
+  |
+3 |     print(add)
+  |           ^
+  = hint: `add` is a function, not a variable: call it as `add(a, b)`
+
+nyra: 1 error(s)
+==== chk_undef_interp
+fn main() {
+    print("{nope}")
+}
+----
+error[E0201]: undefined variable `nope`
+  --> case.nyra:2:13
+  |
+2 |     print("{nope}")
+  |             ^
+  = hint: declare it first: `let nope = ...`
+
+nyra: 1 error(s)
+==== chk_undef_later
+fn main() {
+    print(y)
+    let y = 1
+}
+----
+error[E0201]: undefined variable `y`
+  --> case.nyra:2:11
+  |
+2 |     print(y)
+  |           ^
+  = hint: `y` is declared later, on line 3: move that declaration above this line
+
+nyra: 1 error(s)
+==== chk_undef_loop_var
+fn main() {
+    for i in 0..3 {
+    }
+    print(i)
+}
+----
+error[E0201]: undefined variable `i`
+  --> case.nyra:4:11
+  |
+4 |     print(i)
+  |           ^
+  = hint: `i` was declared on line 2 inside a block that has already ended: declare it before that block to use it here
+
+nyra: 1 error(s)
+==== chk_undef_null
+fn main() {
+    let x = null
+}
+----
+error[E0201]: undefined variable `null`
+  --> case.nyra:2:13
+  |
+2 |     let x = null
+  |             ^
+  = hint: Nyra has no null: every variable always holds a value of its type
+
+nyra: 1 error(s)
+==== chk_undef_param_elsewhere
+fn f(a: int) -> int = a
+fn g() -> int = a
+fn main() {
+    print(1)
+}
+----
+error[E0201]: undefined variable `a`
+  --> case.nyra:2:17
+  |
+2 | fn g() -> int = a
+  |                 ^
+  = hint: declare it first: `let a = ...`
+
+nyra: 1 error(s)
+==== chk_undef_return
+fn main() {
+    return
+}
+----
+error[E0201]: undefined variable `return`
+  --> case.nyra:2:5
+  |
+2 |     return
+  |     ^
+  = hint: Nyra spells it `ret`: replace `return` with `ret`
+
+nyra: 1 error(s)
+==== chk_undef_scope
+fn main() {
+    if true {
+        let x = 1
+    }
+    print(x)
+}
+----
+error[E0201]: undefined variable `x`
+  --> case.nyra:5:11
+  |
+5 |     print(x)
+  |           ^
+  = hint: `x` was declared on line 3 inside a block that has already ended: declare it before that block to use it here
+
+nyra: 1 error(s)
+==== chk_var_builtin
+fn main() {
+    let int = 1
+}
+----
+error[E0206]: `int` is already the name of a builtin function
+  --> case.nyra:2:5
+  |
+2 |     let int = 1
+  |     ^
+  = hint: a variable cannot share a builtin's name: rename the variable, e.g. `int_value`
+
+nyra: 1 error(s)
+==== chk_var_fn
+fn add(a: int, b: int) -> int = a + b
+fn main() {
+    let add = 1
+}
+----
+error[E0206]: `add` is already the name of a function (line 1)
+  --> case.nyra:3:5
+  |
+3 |     let add = 1
+  |     ^
+  = hint: a variable cannot share a function's name: rename the variable, e.g. `add_value`
+
+nyra: 1 error(s)
+==== f_array_decl
+fn main() {
+    let xs = [1, 2, 3]
+    print(xs[0])
+}
+----
+error[E0001]: unexpected character `[`
+  --> case.nyra:2:14
+  |
+2 |     let xs = [1, 2, 3]
+  |              ^
+  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
+
+error[E0001]: unexpected character `[`
+  --> case.nyra:3:13
+  |
+3 |     print(xs[0])
+  |             ^
+  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
+
+nyra: 2 error(s)
+==== f_assign_in_expr
+fn main() {
+    var x = 0
+    print(x = 5)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `=`
+  --> case.nyra:3:13
+  |
+3 |     print(x = 5)
+  |             ^
+  = hint: `=` assigns to a variable on a line of its own (`x = 1`); to compare two values write `==`
+
+nyra: 1 error(s)
+==== f_c_cast
+fn main() {
+    let x = (float)5
+}
+----
+error[E0101]: expected end of line, found number `5`
+  --> case.nyra:2:20
+  |
+2 |     let x = (float)5
+  |                    ^
+  = hint: Nyra has no casts: convert with a function call, e.g. `float(x)`
+
+nyra: 1 error(s)
+==== f_c_decl
+fn main() {
+    int x = 5
+    print(x)
+}
+----
+error[E0101]: expected end of line, found `x`
+  --> case.nyra:2:9
+  |
+2 |     int x = 5
+  |         ^
+  = hint: declare variables with `let` or `var`, and put the type after the name: `let x: int = ...` (or just `let x = ...`)
+
+nyra: 1 error(s)
+==== f_c_for
+fn main() {
+    for (int i = 0; i < 3; i++) {
+        print(i)
+    }
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:19
+  |
+2 |     for (int i = 0; i < 3; i++) {
+  |                   ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:26
+  |
+2 |     for (int i = 0; i < 3; i++) {
+  |                          ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 2 error(s)
+==== f_c_main
+int main() {
+    return 0;
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:13
+  |
+2 |     return 0;
+  |             ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 1 error(s)
+==== f_c_printf
+fn main() {
+    printf("%d", 1)
+}
+----
+error[E0202]: undefined function `printf`
+  --> case.nyra:2:5
+  |
+2 |     printf("%d", 1)
+  |     ^
+  = hint: did you mean `print`?
+
+nyra: 1 error(s)
+==== f_do_while
+fn main() {
+    var i = 0
+    do {
+        i += 1
+    } while (i < 3)
+}
+----
+error[E0101]: `do` is not a Nyra keyword: expected end of line after it, found `{`
+  --> case.nyra:3:8
+  |
+3 |     do {
+  |        ^
+  = hint: loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)
+
+nyra: 1 error(s)
+==== f_empty_stmt_semicolon
+fn main() {
+    ;
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:5
+  |
+2 |     ;
+  |     ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 1 error(s)
+==== f_extra_brace
+fn main() {
+    print(1)
+}
+}
+----
+error[E0101]: expected `fn`, found `}`
+  --> case.nyra:4:1
+  |
+4 | }
+  | ^
+  = hint: this `}` closes nothing: remove it, or add the `{` it belongs to
+
+nyra: 1 error(s)
+==== f_extra_paren
+fn main() {
+    print(1 + 2))
+}
+----
+error[E0101]: expected end of line, found `)`
+  --> case.nyra:2:17
+  |
+2 |     print(1 + 2))
+  |                 ^
+  = hint: this `)` closes nothing: remove it, or add the `(` it belongs to
+
+nyra: 1 error(s)
+==== f_global_const
+const LIMIT: int = 100
+fn main() {
+}
+----
+error[E0101]: expected `fn`, found `const`
+  --> case.nyra:1:1
+  |
+1 | const LIMIT: int = 100
+  | ^
+  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+
+nyra: 1 error(s)
+==== f_go_fmt
+fn main() {
+    fmt.Println(1)
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:8
+  |
+2 |     fmt.Println(1)
+  |        ^
+  = hint: `.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`
+
+nyra: 1 error(s)
+==== f_go_func
+func main() {
+    print(1)
+}
+----
+error[E0101]: expected `fn`, found `func`
+  --> case.nyra:1:1
+  |
+1 | func main() {
+  | ^
+  = hint: functions start with `fn`: `fn name(a: int) -> int { ... }`
+
+nyra: 1 error(s)
+==== f_go_short
+fn main() {
+    x := 5
+    print(x)
+}
+----
+error[E0101]: expected end of line, found `:`
+  --> case.nyra:2:7
+  |
+2 |     x := 5
+  |       ^
+  = hint: `:=` does not exist: declare a variable with `let x = ...` (or `var x = ...` to change it later)
+
+nyra: 1 error(s)
+==== f_js_arrow
+fn main() {
+    let f = (x) => x * 2
+}
+----
+error[E0101]: expected end of line, found `=`
+  --> case.nyra:2:17
+  |
+2 |     let f = (x) => x * 2
+  |                 ^
+  = hint: `=>` does not exist: Nyra has no lambdas or closures; define a named function, e.g. `fn double(x: int) -> int = x * 2`
+
+nyra: 1 error(s)
+==== f_js_const
+fn main() {
+    const x = 5
+    print(x)
+}
+----
+error[E0101]: `const` is not a Nyra keyword: expected end of line after it, found `x`
+  --> case.nyra:2:11
+  |
+2 |     const x = 5
+  |           ^
+  = hint: write `let x = ...` for a value that never changes, or `var x = ...` for one that does
+
+nyra: 1 error(s)
+==== f_js_function
+function main() {
+    console.log(1)
+}
+----
+error[E0001]: unexpected character `.`
+  --> case.nyra:2:12
+  |
+2 |     console.log(1)
+  |            ^
+  = hint: print with `print(x)`: it takes one value and ends the line
+
+nyra: 1 error(s)
+==== f_js_not_eq
+fn main() {
+    let n = 1
+    if n !== 1 {
+        print(n)
+    }
+}
+----
+error[E0101]: expected an expression, found `=`
+  --> case.nyra:3:12
+  |
+3 |     if n !== 1 {
+  |            ^
+  = hint: `===` and `!==` do not exist: compare with `==` and `!=`
+
+nyra: 1 error(s)
+==== f_js_semicolon_call
+fn main() {
+    print(1);
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:13
+  |
+2 |     print(1);
+  |             ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 1 error(s)
+==== f_js_strict_eq
+fn main() {
+    let n = 1
+    if n === 1 {
+        print(n)
+    }
+}
+----
+error[E0101]: expected an expression, found `=`
+  --> case.nyra:3:12
+  |
+3 |     if n === 1 {
+  |            ^
+  = hint: `===` and `!==` do not exist: compare with `==` and `!=`
+
+nyra: 1 error(s)
+==== f_js_template
+fn main() {
+    let n = 1
+    print(`n = ${n}`)
+}
+----
+error[E0001]: unexpected character '`' (a backtick)
+  --> case.nyra:3:11
+  |
+3 |     print(`n = ${n}`)
+  |           ^
+  = hint: Nyra has no backtick strings: write double quotes and `{x}` instead of `${x}`, e.g. "total: {x}"
+
+nyra: 1 error(s)
+==== f_kt_fun
+fun main() {
+    println(1)
+}
+----
+error[E0101]: expected `fn`, found `fun`
+  --> case.nyra:1:1
+  |
+1 | fun main() {
+  | ^
+  = hint: functions start with `fn`: `fn name(a: int) -> int { ... }`
+
+nyra: 1 error(s)
+==== f_missing_main_call
+fn helper() {
+    print(1)
+}
+helper()
+----
+error[E0101]: expected `fn`, found `helper`
+  --> case.nyra:4:1
+  |
+4 | helper()
+  | ^
+  = hint: `helper(...)` is a call, and calls go inside a function: `fn main() { helper(...) }`
+
+nyra: 1 error(s)
+==== f_py_def
+def main():
+    print(1)
+----
+error[E0101]: expected `fn`, found `def`
+  --> case.nyra:1:1
+  |
+1 | def main():
+  | ^
+  = hint: functions start with `fn`: `fn name(a: int) -> int { ... }`
+
+nyra: 1 error(s)
+==== f_py_for_range
+fn main() {
+    for i in range(10):
+        print(i)
+}
+----
+error[E0101]: expected `..`, found `:`
+  --> case.nyra:2:23
+  |
+2 |     for i in range(10):
+  |                       ^
+  = hint: `range(...)` does not exist: write the range directly, `for i in 0..10 { ... }`
+
+nyra: 1 error(s)
+==== f_py_if_colon
+fn main() {
+    let x = 1
+    if x > 0:
+        print(x)
+}
+----
+error[E0101]: expected `{` to start the body of this `if`, found `:`
+  --> case.nyra:3:13
+  |
+3 |     if x > 0:
+  |             ^
+  = hint: braces are required, even around one statement: `if x > 0 { ... }`
+
+nyra: 1 error(s)
+==== f_py_none
+fn main() {
+    let x = None
+}
+----
+error[E0201]: undefined variable `None`
+  --> case.nyra:2:13
+  |
+2 |     let x = None
+  |             ^
+  = hint: Nyra has no null: every variable always holds a value of its type
+
+nyra: 1 error(s)
+==== f_py_print
+fn main() {
+    print 'hello'
+}
+----
+error[E0001]: unexpected character `'`
+  --> case.nyra:2:11
+  |
+2 |     print 'hello'
+  |           ^
+  = hint: Nyra has no single-quoted text or character type: write "hello" with straight double quotes
+
+nyra: 1 error(s)
+==== f_py_true
+fn main() {
+    let x = True
+}
+----
+error[E0201]: undefined variable `True`
+  --> case.nyra:2:13
+  |
+2 |     let x = True
+  |             ^
+  = hint: write `true` or `false` in lowercase
+
+nyra: 1 error(s)
+==== f_rust_as
+fn main() {
+    let x = 5 as float
+}
+----
+error[E0101]: expected end of line, found `as`
+  --> case.nyra:2:15
+  |
+2 |     let x = 5 as float
+  |               ^
+  = hint: Nyra has no `as` casts: convert with `float(x)` or `int(x)`
+
+nyra: 1 error(s)
+==== f_rust_i32
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+fn main() {
+    print(add(1, 2))
+}
+----
+error[E0102]: unknown type `i32`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:1:11
+  |
+1 | fn add(a: i32, b: i32) -> i32 {
+  |           ^
+  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+
+nyra: 1 error(s)
+==== f_rust_implicit_ret
+fn add(a: int, b: int) -> int {
+    a + b
+}
+fn main() {
+    print(add(1, 2))
+}
+----
+error[E0207]: function `add` is declared `-> int` but not every path ends with `ret`
+  --> case.nyra:1:4
+  |
+1 | fn add(a: int, b: int) -> int {
+  |    ^
+  = hint: the last line computes a value, but Nyra does not return it by itself: write `ret a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
+
+nyra: 1 error(s)
+==== f_rust_let_mut
+fn main() {
+    let mut x = 1
+    x = 2
+}
+----
+error[E0101]: expected `=`, found `x`
+  --> case.nyra:2:13
+  |
+2 |     let mut x = 1
+  |             ^
+  = hint: Nyra has no `mut`: write `var x = ...` for a variable that changes
+
+nyra: 1 error(s)
+==== f_rust_loop
+fn main() {
+    loop {
+        print(1)
+    }
+}
+----
+error[E0101]: `loop` is not a Nyra keyword: expected end of line after it, found `{`
+  --> case.nyra:2:10
+  |
+2 |     loop {
+  |          ^
+  = hint: loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)
+
+nyra: 1 error(s)
+==== f_rust_match
+fn main() {
+    let x = 1
+    match x {
+        1 => print(1)
+    }
+}
+----
+error[E0101]: `match` is not a Nyra keyword: expected end of line after it, found `x`
+  --> case.nyra:3:11
+  |
+3 |     match x {
+  |           ^
+  = hint: Nyra has no `switch` or `match`: chain `if` / `else if`
+
+nyra: 1 error(s)
+==== f_rust_path
+fn main() {
+    let x = std::max(1, 2)
+}
+----
+error[E0101]: expected end of line, found `:`
+  --> case.nyra:2:16
+  |
+2 |     let x = std::max(1, 2)
+  |                ^
+  = hint: `::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name
+
+nyra: 1 error(s)
+==== f_rust_println
+fn main() {
+    println!("hi")
+}
+----
+error[E0101]: `println` is not a Nyra keyword: expected end of line after it, found `!`
+  --> case.nyra:2:12
+  |
+2 |     println!("hi")
+  |            ^
+  = hint: print with `print(x)`: it takes one value and ends the line
+
+nyra: 1 error(s)
+==== f_rust_range_incl
+fn main() {
+    for i in 0..=3 {
+        print(i)
+    }
+}
+----
+error[E0101]: expected an expression, found `=`
+  --> case.nyra:2:17
+  |
+2 |     for i in 0..=3 {
+  |                 ^
+  = hint: `..=` does not exist: the end of a range is exclusive, so `0..10` counts 0 to 9
+
+nyra: 1 error(s)
+==== f_rust_return
+fn f() -> int {
+    return 1;
+}
+fn main() {
+}
+----
+error[E0005]: unexpected `;`: Nyra has no semicolons
+  --> case.nyra:2:13
+  |
+2 |     return 1;
+  |             ^
+  = hint: delete the `;`: a new line already ends a statement, so put each statement on its own line
+
+nyra: 1 error(s)
+==== f_rust_struct
+struct P {
+    x: int
+}
+fn main() {
+}
+----
+error[E0101]: expected `fn`, found `struct`
+  --> case.nyra:1:1
+  |
+1 | struct P {
+  | ^
+  = hint: Nyra has no `struct` yet: the only top-level item is `fn`, so model data with functions and plain values
+
+nyra: 1 error(s)
+==== f_string_index
+fn main() {
+    let s = "abc"
+    print(s[0])
+}
+----
+error[E0001]: unexpected character `[`
+  --> case.nyra:3:12
+  |
+3 |     print(s[0])
+  |            ^
+  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
+
+nyra: 1 error(s)
+==== f_string_len
+fn main() {
+    let s = "abc"
+    print(len(s))
+}
+----
+error[E0202]: undefined function `len`
+  --> case.nyra:3:11
+  |
+3 |     print(len(s))
+  |           ^
+  = hint: Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable
+
+nyra: 1 error(s)
+==== f_ternary_if
+fn main() {
+    let x = if (1 > 0) 1 else 2
+}
+----
+error[E0101]: expected `{`, found number `1`
+  --> case.nyra:2:24
+  |
+2 |     let x = if (1 > 0) 1 else 2
+  |                        ^
+  = hint: each branch of an `if` used as a value is written in braces: `if c { a } else { b }`
+
+nyra: 1 error(s)
+==== f_ts_string
+fn greet(name: string): string {
+    return name
+}
+fn main() {
+}
+----
+error[E0102]: unknown type `string`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:1:16
+  |
+1 | fn greet(name: string): string {
+  |                ^
+  = hint: write `str` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+
+nyra: 1 error(s)
+==== f_ts_types
+fn main() {
+    let x: number = 5
+}
+----
+error[E0102]: unknown type `number`: expected `int`, `float`, `bool` or `str`
+  --> case.nyra:2:12
+  |
+2 |     let x: number = 5
+  |            ^
+  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+
+nyra: 1 error(s)
+==== f_unbalanced_paren
+fn main() {
+    print((1 + 2)
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `print`, found `}`
+  --> case.nyra:3:1
+  |
+3 | }
+  | ^
+  = hint: close the call with `)`: the `(` at 2:10 is never closed
+
+nyra: 1 error(s)
