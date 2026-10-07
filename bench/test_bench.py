@@ -2941,6 +2941,35 @@ class VerifyCommandLine(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
             self.assertEqual(verify.main(["--tasks", "no_such_task", "--skip", "nyra,typescript,rust"]), 2)
 
+    def test_max_version_must_be_a_version(self):
+        import verify
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(verify.main(["--max-version", "next", "--skip", "nyra,typescript,rust"]), 2)
+        self.assertIn("not a version", err.getvalue())
+
+    @needs_nyra
+    def test_max_version_replaces_the_compiler_version(self):
+        # while Cargo.toml still has the old version, the references of the new one can be checked
+        import verify
+        seen = []
+
+        def fake_check(task, args, nyra_langs, version, extra_langs=None):
+            seen.append(version)
+            return {"id": task.id, "problems": [], "notes": [], "new_expected": None}
+
+        out = io.StringIO()
+        with mock.patch.object(verify, "check_task", fake_check), contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = verify.main(["--max-version", "0.7", "--skip", "typescript,rust", "--tasks", "fizzbuzz"])
+        self.assertEqual((code, seen), (0, [(0, 7)]))
+        self.assertIn("as Nyra 0.7 (--max-version), the compiler says nyra ", out.getvalue())
+        seen.clear()
+        with mock.patch.object(verify, "check_task", fake_check), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            verify.main(["--skip", "typescript,rust", "--tasks", "fizzbuzz"])
+        self.assertEqual(seen, [run.NyraLang(NYRA).version()])
+
     @unittest.skipUnless(NODE, "Node.js is not installed")
     def test_typescript_is_checked_unless_skipped(self):
         import verify

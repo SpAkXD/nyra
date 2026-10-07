@@ -321,6 +321,10 @@ Bump the version in `Cargo.toml` (the runner uses it to choose the tasks), write
 tasks that version unlocks, and run `python bench/verify.py --strict` (a missing reference for a supported version is
 then an error). Results from different versions are different experiments.
 
+While a compiler already implements the new language but still reports the old version number (between the work on
+a version and its release), pass the new version to both tools: `python bench/verify.py --max-version 0.3` checks
+the references as if the compiler were Nyra 0.3, and `python bench/run.py --max-version 0.3` runs the 0.3 tasks.
+
 ## Files
 
 ```
