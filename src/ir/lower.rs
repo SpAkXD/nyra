@@ -1,26 +1,37 @@
 //! Typed AST → IR. Effects become statements in left-to-right order; values become pure
-//! expressions. Lowering also places the reference counting for managed values (strings):
+//! expressions. Lowering also places the reference counting for managed values (strings,
+//! arrays):
 //!
 //! - A local variable owns its value. Parameters are borrowed: the caller keeps them alive.
-//! - A call or operation that makes a new string gives an *owned* temporary. It is moved into a
+//! - A call or operation that makes a new value gives an *owned* temporary. It is moved into a
 //!   variable when it is stored, and otherwise released (`Drop`) at the end of its statement.
-//! - Storing a borrowed value (a variable, a parameter) adds an owner (`Dup`).
+//! - Storing a borrowed value (a variable, a parameter, an element) adds an owner (`Dup`).
+//!   Operations that store into an array (`[a, b]`, `push`, element assignment) add the owner
+//!   themselves, so their operands stay borrowed.
 //! - Leaving a block releases the variables it declared; `ret`, `break` and `continue` release
 //!   the blocks they leave. `ret x` of a local moves it out.
+//!
+//! Pure expressions are evaluated where they are used. When a later operand can change a
+//! variable (`xs.pop()`), the operands before it are first copied into temporaries, so every
+//! operand still sees the program state of its own turn (left-to-right evaluation).
 
 use std::collections::HashMap;
 
-use super::{managed, visit_locals, BinOp, Expr, Func, FuncId, Local, LocalId, Module, PureFn, RtOp, Stmt, StmtKind, StrId, Ty, UnOp};
+use super::{
+    visit_locals, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StrId,
+    StructInfo, Structs, Ty, UnOp,
+};
 use crate::ast::{self, Span, Type};
 
 /// Lowers a type-checked program. Fails for features the backends do not support yet.
 pub fn lower(prog: &ast::Program) -> Result<Module, String> {
     let ids: HashMap<String, FuncId> =
         prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
+    let structs = struct_table(prog);
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
     for f in &prog.funcs {
-        let mut l = Lower::new(&ids, &mut strs);
+        let mut l = Lower::new(&ids, &mut strs, &structs);
         let mut func = l.func(f);
         if let Some(what) = l.unsupported {
             return Err(what);
@@ -28,7 +39,43 @@ pub fn lower(prog: &ast::Program) -> Result<Module, String> {
         prune_temps(&mut func);
         funcs.push(func);
     }
-    Ok(Module { funcs, strs: strs.list, main: ids["main"] })
+    Ok(Module { funcs, strs: strs.list, main: ids["main"], structs })
+}
+
+/// The program's structs, each after the structs it contains by value.
+fn struct_table(prog: &ast::Program) -> Structs {
+    let defs: HashMap<u32, &ast::StructDef> = prog
+        .structs
+        .iter()
+        .filter_map(|s| match Type::structure(&s.name) {
+            Type::Struct(id) => Some((id, s)),
+            _ => None,
+        })
+        .collect();
+    let mut table = Structs::default();
+    // depth-first: a struct is added after the structs of its by-value fields (no cycles: E0222)
+    fn add(id: u32, defs: &HashMap<u32, &ast::StructDef>, table: &mut Structs) {
+        if table.0.iter().any(|(i, _)| *i == id) {
+            return;
+        }
+        let Some(def) = defs.get(&id) else { return };
+        for f in &def.fields {
+            if let Type::Struct(inner) = f.ty {
+                if inner != id {
+                    add(inner, defs, table);
+                }
+            }
+        }
+        let fields: Vec<(String, Ty)> = def.fields.iter().map(|f| (f.name.clone(), f.ty)).collect();
+        let managed = fields.iter().any(|(_, t)| table.managed(*t));
+        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed }));
+    }
+    let mut ids: Vec<u32> = defs.keys().copied().collect();
+    ids.sort_unstable();
+    for id in ids {
+        add(id, &defs, &mut table);
+    }
+    table
 }
 
 #[derive(Default)]
@@ -58,6 +105,26 @@ fn const_int(e: &Expr) -> Option<i64> {
     }
 }
 
+/// True if evaluating `e` can change a variable: a method that changes its receiver, or a
+/// call with an `inout` argument.
+fn mutates(e: &ast::Expr) -> bool {
+    use ast::ExprKind as K;
+    match &e.kind {
+        K::Method(r, name, args) => {
+            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "sort" | "reverse")
+                || mutates(r)
+                || args.iter().any(mutates)
+        }
+        K::Call(_, args) => args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a)),
+        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) => mutates(x),
+        K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
+        K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
+        K::Array(xs) => xs.iter().any(mutates),
+        K::Interp(parts) => parts.iter().any(|p| matches!(p, ast::InterpPart::Expr(x) if mutates(x))),
+        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => false,
+    }
+}
+
 /// A block of the function being lowered.
 #[derive(Default)]
 struct Scope {
@@ -71,6 +138,7 @@ struct Scope {
 struct Lower<'a> {
     ids: &'a HashMap<String, FuncId>,
     strs: &'a mut Strs,
+    structs: &'a Structs,
     locals: Vec<Local>,
     scopes: Vec<Scope>,
     /// Owned temporaries of the statement being lowered: released at its end unless moved.
@@ -80,8 +148,16 @@ struct Lower<'a> {
 }
 
 impl<'a> Lower<'a> {
-    fn new(ids: &'a HashMap<String, FuncId>, strs: &'a mut Strs) -> Self {
-        Lower { ids, strs, locals: Vec::new(), scopes: vec![Scope::default()], pending: Vec::new(), unsupported: None }
+    fn new(ids: &'a HashMap<String, FuncId>, strs: &'a mut Strs, structs: &'a Structs) -> Self {
+        Lower {
+            ids,
+            strs,
+            structs,
+            locals: Vec::new(),
+            scopes: vec![Scope::default()],
+            pending: Vec::new(),
+            unsupported: None,
+        }
     }
 
     fn not_yet(&mut self, what: &str) -> Expr {
@@ -91,9 +167,16 @@ impl<'a> Lower<'a> {
         Expr::Int(0)
     }
 
+    fn managed(&self, t: Ty) -> bool {
+        self.structs.managed(t)
+    }
+
     fn func(&mut self, f: &ast::Func) -> Func {
         // parameters: borrowed, so not owned by any scope
         for p in &f.params {
+            if p.inout {
+                self.not_yet("`inout` parameters");
+            }
             let id = self.new_local(Some(p.name.clone()), p.ty);
             self.scopes[0].names.insert(p.name.clone(), id);
         }
@@ -104,6 +187,12 @@ impl<'a> Lower<'a> {
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
+        fn has_struct(t: Ty) -> bool {
+            matches!(t, Type::Struct(_)) || t.elem().is_some_and(has_struct)
+        }
+        if has_struct(t) {
+            self.not_yet("structs");
+        }
         let id = LocalId(self.locals.len() as u32);
         self.locals.push(Local { name, ty: t });
         id
@@ -116,11 +205,19 @@ impl<'a> Lower<'a> {
     /// A variable of the current scope; a managed one is owned by it.
     fn declare(&mut self, name: &str, t: Ty) -> LocalId {
         let id = self.new_local(Some(name.to_string()), t);
+        let managed = self.managed(t);
         let scope = self.scopes.last_mut().expect("a scope is open");
         scope.names.insert(name.to_string(), id);
-        if managed(t) {
+        if managed {
             scope.owned.push(id);
         }
+        id
+    }
+
+    /// A variable that borrows its value (a loop variable): never released.
+    fn declare_borrowed(&mut self, name: &str, t: Ty) -> LocalId {
+        let id = self.new_local(Some(name.to_string()), t);
+        self.scopes.last_mut().expect("a scope is open").names.insert(name.to_string(), id);
         id
     }
 
@@ -131,7 +228,7 @@ impl<'a> Lower<'a> {
     /// A temporary holding a new value: owned until moved, released at the end of the statement.
     fn owned_temp(&mut self, t: Ty) -> LocalId {
         let id = self.temp(t);
-        if managed(t) {
+        if self.managed(t) {
             self.pending.push(id);
         }
         id
@@ -172,13 +269,18 @@ impl<'a> Lower<'a> {
             }
         }
         let t = self.ty_of(dst);
+        let managed = self.managed(t);
         let moved = self.take(&v);
         // a temporary made by the last statement: let that statement write into `dst` directly
         // (also for plain values: `x = f(x)` becomes one call writing `x`)
-        if moved || !managed(t) {
+        if moved || !managed {
             if let Expr::Local(tmp) = v {
                 if self.locals[tmp.0 as usize].name.is_none() {
-                    if let Some(Stmt { kind: StmtKind::Call { dst: d, .. } | StmtKind::Op { dst: d, .. }, .. }) = out.last_mut() {
+                    if let Some(Stmt {
+                        kind: StmtKind::Call { dst: d, .. } | StmtKind::Op { dst: d, .. } | StmtKind::Mutate { dst: d, .. },
+                        ..
+                    }) = out.last_mut()
+                    {
                         if *d == Some(tmp) {
                             *d = Some(dst);
                             return;
@@ -187,11 +289,40 @@ impl<'a> Lower<'a> {
                 }
             }
         }
-        let borrowed_managed = managed(t) && !moved && !matches!(v, Expr::Str(_));
+        let borrowed_managed = managed && !moved && !matches!(v, Expr::Str(_));
         out.push(Stmt { kind: StmtKind::Set(dst, v), span });
         if borrowed_managed {
             out.push(Stmt { kind: StmtKind::Dup(dst), span });
         }
+    }
+
+    /// Copies the current value of `v` into a temporary of this statement, so that a later
+    /// operand that changes a variable cannot change it.
+    fn snapshot(&mut self, v: Expr, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        // constants and compiler temporaries never change
+        match &v {
+            _ if v.is_const() => return v,
+            Expr::Local(l) if self.locals[l.0 as usize].name.is_none() => return v,
+            _ => {}
+        }
+        let tmp = self.temp(t);
+        self.init(tmp, v, span, out);
+        if self.managed(t) {
+            self.pending.push(tmp);
+        }
+        Expr::Local(tmp)
+    }
+
+    /// Lowers operands left to right. An operand followed by one that can change a variable is
+    /// snapshotted first.
+    fn operands(&mut self, es: &[&ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
+        let mut v = Vec::with_capacity(es.len());
+        for (i, e) in es.iter().enumerate() {
+            let x = self.expr(e, None, out);
+            let x = if es[i + 1..].iter().any(|later| mutates(later)) { self.snapshot(x, e.ty, e.span, out) } else { x };
+            v.push(x);
+        }
+        v
     }
 
     /// Lowers a block in a new scope; at its end the scope's variables are released.
@@ -250,45 +381,7 @@ impl<'a> Lower<'a> {
                 self.end_statement(span, out);
             }
             ast::StmtKind::Assign { target, op, value } => {
-                let ast::ExprKind::Var(name) = &target.kind else {
-                    self.not_yet("assignments to fields and elements");
-                    return;
-                };
-                let id = self.lookup(name);
-                let t = self.ty_of(id);
-                match op {
-                    None if managed(t) => {
-                        // evaluate the new value first (it may read the old one), then replace
-                        let v = self.expr(value, None, out);
-                        let moved = self.take(&v);
-                        if !moved && !matches!(v, Expr::Str(_)) {
-                            // a borrowed value: one more owner before the old value goes
-                            let tmp = self.temp(t);
-                            out.push(Stmt { kind: StmtKind::Set(tmp, v), span });
-                            out.push(Stmt { kind: StmtKind::Dup(tmp), span });
-                            out.push(Stmt { kind: StmtKind::Drop(id), span });
-                            out.push(Stmt { kind: StmtKind::Set(id, Expr::Local(tmp)), span });
-                        } else {
-                            out.push(Stmt { kind: StmtKind::Drop(id), span });
-                            out.push(Stmt { kind: StmtKind::Set(id, v), span });
-                        }
-                    }
-                    None => {
-                        let v = self.expr(value, Some(id), out);
-                        self.init(id, v, span, out);
-                    }
-                    Some(op) if t == Type::Str => {
-                        // `s += t`: append in place when `s` is the only owner
-                        let _ = op;
-                        let v = self.expr(value, None, out);
-                        out.push(Stmt { kind: StmtKind::Op { dst: Some(id), op: RtOp::StrAppend, args: vec![Expr::Local(id), v] }, span });
-                    }
-                    Some(op) => {
-                        let rhs = self.expr(value, None, out);
-                        let v = self.binop(*op, Expr::Local(id), rhs, t, t, span, Some(id), out);
-                        self.init(id, v, span, out);
-                    }
-                }
+                self.assign(target, *op, value, span, out);
                 self.end_statement(span, out);
             }
             ast::StmtKind::If { cond, then, els } => {
@@ -332,19 +425,22 @@ impl<'a> Lower<'a> {
                 out.push(Stmt { kind: StmtKind::Loop { head: Vec::new(), cond, body: bd, step }, span });
             }
             ast::StmtKind::ForEach { var, iter, body } => {
-                if iter.ty != Type::Str {
-                    self.not_yet("loops over arrays");
-                    return;
-                }
-                // the loop keeps its own reference to the string, so the body may reassign the variable
+                // The loop keeps its own reference to the string or array (`it`), so the body
+                // may change the variable it came from without changing what the loop visits.
+                let elem = match iter.ty {
+                    Type::Str => Ty::Char,
+                    t => t.elem().expect("the checker allows strings and arrays"),
+                };
                 self.scopes.push(Scope::default());
                 let v = self.expr(iter, None, out);
-                let it = self.temp(Ty::Str);
+                let it = self.temp(iter.ty);
                 self.init(it, v, span, out);
-                self.scopes.last_mut().expect("pushed").owned.push(it);
+                if self.managed(iter.ty) {
+                    self.scopes.last_mut().expect("pushed").owned.push(it);
+                }
                 self.end_statement(span, out);
                 self.scopes.push(Scope { loop_body: true, ..Scope::default() });
-                let c = self.declare(var, Ty::Char);
+                let x = self.declare_borrowed(var, elem);
                 let mut bd = Vec::new();
                 for st in body {
                     self.stmt(st, &mut bd);
@@ -355,7 +451,7 @@ impl<'a> Lower<'a> {
                         bd.push(Stmt { kind: StmtKind::Drop(l), span });
                     }
                 }
-                out.push(Stmt { kind: StmtKind::ForEach { var: c, iter: Expr::Local(it), body: bd }, span });
+                out.push(Stmt { kind: StmtKind::ForEach { var: x, iter: Expr::Local(it), body: bd }, span });
                 let outer = self.scopes.pop().expect("pushed");
                 for l in outer.owned.into_iter().rev() {
                     out.push(Stmt { kind: StmtKind::Drop(l), span });
@@ -382,7 +478,7 @@ impl<'a> Lower<'a> {
                 let t = e.ty;
                 let v = self.expr(e, None, out);
                 let mut keep = None;
-                let v = if managed(t) {
+                let v = if self.managed(t) {
                     if self.take(&v) {
                         v
                     } else if let Expr::Local(x) = v {
@@ -418,7 +514,7 @@ impl<'a> Lower<'a> {
                     if name == "free" || name == "keep" {
                         if let Some(ast::ExprKind::Var(x)) = args.first().map(|a| &a.kind) {
                             let id = self.lookup(x);
-                            if managed(self.ty_of(id)) {
+                            if self.managed(self.ty_of(id)) {
                                 let kind = if name == "free" {
                                     StmtKind::Free(id)
                                 } else {
@@ -430,48 +526,155 @@ impl<'a> Lower<'a> {
                         }
                         return;
                     }
-                    // a call whose result is not used writes nowhere (a returned string is released)
+                    // a call whose plain result is not used writes nowhere
                     if let Some(&func) = self.ids.get(name) {
-                        let args = self.args(args, out);
-                        if managed(e.ty) {
-                            let t = self.owned_temp(e.ty);
-                            out.push(Stmt { kind: StmtKind::Call { dst: Some(t), func, args }, span: e.span });
-                        } else {
+                        if !self.managed(e.ty) {
+                            let args = self.args(args, out);
                             out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span: e.span });
+                            self.end_statement(span, out);
+                            return;
                         }
-                        self.end_statement(span, out);
-                        return;
                     }
                 }
-                // effects only: the (pure) value itself is unused
-                self.expr(e, None, out);
+                // effects only: the (pure) value itself is unused; an unused new value is
+                // released at the end of the statement
+                let v = self.expr(e, None, out);
+                if let Expr::Local(t) = v {
+                    let fresh = self.locals[t.0 as usize].name.is_none() && !self.pending.contains(&t);
+                    if fresh && self.managed(self.ty_of(t)) && produced_owned(out, t) {
+                        self.pending.push(t);
+                    }
+                }
                 self.end_statement(span, out);
             }
         }
     }
 
-    fn args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
-        let mut v = Vec::with_capacity(args.len());
-        for a in args {
-            let a = match &a.kind {
-                ast::ExprKind::Inout(_) | ast::ExprKind::Labeled(..) => {
-                    self.not_yet("`inout` arguments and structs");
-                    continue;
+    /// `target = value` / `target op= value`.
+    fn assign(&mut self, target: &ast::Expr, op: Option<ast::BinOp>, value: &ast::Expr, span: Span, out: &mut Vec<Stmt>) {
+        let t = target.ty;
+        if let ast::ExprKind::Var(name) = &target.kind {
+            let id = self.lookup(name);
+            match op {
+                None if self.managed(t) => {
+                    // evaluate the new value first (it may read the old one), then replace
+                    let v = self.expr(value, None, out);
+                    let moved = self.take(&v);
+                    if !moved && !matches!(v, Expr::Str(_)) {
+                        // a borrowed value: one more owner before the old value goes
+                        let tmp = self.temp(t);
+                        out.push(Stmt { kind: StmtKind::Set(tmp, v), span });
+                        out.push(Stmt { kind: StmtKind::Dup(tmp), span });
+                        out.push(Stmt { kind: StmtKind::Drop(id), span });
+                        out.push(Stmt { kind: StmtKind::Set(id, Expr::Local(tmp)), span });
+                    } else {
+                        out.push(Stmt { kind: StmtKind::Drop(id), span });
+                        out.push(Stmt { kind: StmtKind::Set(id, v), span });
+                    }
                 }
-                _ => a,
-            };
-            v.push(self.expr(a, None, out));
+                None => {
+                    let v = self.expr(value, Some(id), out);
+                    self.init(id, v, span, out);
+                }
+                Some(_) if t == Type::Str || t.elem().is_some() => {
+                    // `s += t`, `xs += ys`: in place when the variable is the only owner
+                    let v = self.expr(value, None, out);
+                    let op = if t == Type::Str { RtOp::StrAppend } else { RtOp::ArrAppend };
+                    out.push(Stmt { kind: StmtKind::Mutate { dst: None, op, place: Place::local(id), args: vec![v] }, span });
+                }
+                Some(op) => {
+                    let rhs = self.expr(value, None, out);
+                    let v = self.binop(op, Expr::Local(id), rhs, t, span, Some(id), out);
+                    self.init(id, v, span, out);
+                }
+            }
+            return;
         }
-        v
+        // an element or field: the indexes first (left to right), then the value
+        let place = self.place(target, mutates(value), out);
+        match op {
+            None => {
+                let v = self.expr(value, None, out);
+                out.push(Stmt { kind: StmtKind::Store { place, value: v }, span });
+            }
+            Some(_) if t == Type::Str || t.elem().is_some() => {
+                let v = self.expr(value, None, out);
+                let op = if t == Type::Str { RtOp::StrAppend } else { RtOp::ArrAppend };
+                out.push(Stmt { kind: StmtKind::Mutate { dst: None, op, place, args: vec![v] }, span });
+            }
+            Some(op) => {
+                // read once, then the value, then compute and store
+                let old = self.read(&place, t, out);
+                let old = if mutates(value) { self.snapshot(old, t, span, out) } else { old };
+                let rhs = self.expr(value, None, out);
+                let v = self.binop(op, old, rhs, t, span, None, out);
+                out.push(Stmt { kind: StmtKind::Store { place, value: v }, span });
+            }
+        }
+    }
+
+    /// The place `e` names (a variable, then elements). Index values are fixed first, so the
+    /// rest of the statement cannot change which element is meant.
+    fn place(&mut self, e: &ast::Expr, fix: bool, out: &mut Vec<Stmt>) -> Place {
+        match &e.kind {
+            ast::ExprKind::Var(name) => Place::local(self.lookup(name)),
+            ast::ExprKind::Index(base, index) => {
+                let mut p = self.place(base, fix || mutates(index), out);
+                let i = self.expr(index, None, out);
+                let i = if fix && !i.is_const() { self.snapshot(i, Ty::Int, index.span, out) } else { i };
+                p.path.push(Step::Index(i, e.span));
+                p
+            }
+            ast::ExprKind::Field(..) => {
+                self.not_yet("structs");
+                Place::local(LocalId(0))
+            }
+            _ => unreachable!("the checker allows only variables, elements and fields as places"),
+        }
+    }
+
+    /// The current value at a place (for `xs[i] += v`): checked reads down the path.
+    fn read(&mut self, place: &Place, t: Ty, out: &mut Vec<Stmt>) -> Expr {
+        let mut cur = Expr::Local(place.root);
+        let mut cur_ty = self.ty_of(place.root);
+        for step in &place.path {
+            match step {
+                Step::Index(i, span) => {
+                    let elem = cur_ty.elem().expect("an index step reads an array");
+                    let d = self.temp(elem);
+                    out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::ArrGet, args: vec![cur, i.clone()] }, span: *span });
+                    cur = Expr::Local(d);
+                    cur_ty = elem;
+                }
+                Step::Field(_) => unreachable!("structs are not lowered yet"),
+            }
+        }
+        debug_assert!(cur_ty == t);
+        cur
+    }
+
+    fn args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
+        for a in args {
+            if matches!(a.kind, ast::ExprKind::Inout(_) | ast::ExprKind::Labeled(..)) {
+                self.not_yet("`inout` arguments and structs");
+                return Vec::new();
+            }
+        }
+        let refs: Vec<&ast::Expr> = args.iter().collect();
+        self.operands(&refs, out)
     }
 
     /// The parts of an interpolated string: text becomes string literals.
     fn parts(&mut self, parts: &[ast::InterpPart], out: &mut Vec<Stmt>) -> Vec<Expr> {
         let mut v = Vec::with_capacity(parts.len());
-        for p in parts {
+        for (i, p) in parts.iter().enumerate() {
             match p {
                 ast::InterpPart::Lit(s) => v.push(Expr::Str(self.strs.intern(s))),
-                ast::InterpPart::Expr(x) => v.push(self.expr(x, None, out)),
+                ast::InterpPart::Expr(x) => {
+                    let e = self.expr(x, None, out);
+                    let later = parts[i + 1..].iter().any(|p| matches!(p, ast::InterpPart::Expr(y) if mutates(y)));
+                    v.push(if later { self.snapshot(e, x.ty, x.span, out) } else { e });
+                }
             }
         }
         v
@@ -485,6 +688,20 @@ impl<'a> Lower<'a> {
             None => self.temp(t),
         };
         out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op, args }, span });
+        Expr::Local(d)
+    }
+
+    /// `xs[i]`: a checked read. A managed element gets one more owner, so the value stays valid
+    /// whatever the rest of the statement does to the array.
+    fn elem(&mut self, xs: Expr, i: Expr, t: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let d = dst.unwrap_or_else(|| self.temp(t));
+        out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::ArrGet, args: vec![xs, i] }, span });
+        if self.managed(t) {
+            out.push(Stmt { kind: StmtKind::Dup(d), span });
+            if dst.is_none() {
+                self.pending.push(d);
+            }
+        }
         Expr::Local(d)
     }
 
@@ -516,9 +733,9 @@ impl<'a> Lower<'a> {
                 if matches!(op, ast::BinOp::And | ast::BinOp::Or) {
                     return self.logic(*op, l, r, span, out);
                 }
-                let a = self.expr(l, None, out);
-                let b = self.expr(r, None, out);
-                self.binop(*op, a, b, l.ty, e.ty, span, dst, out)
+                let v = self.operands(&[l.as_ref(), r.as_ref()], out);
+                let [a, b]: [Expr; 2] = v.try_into().expect("two operands");
+                self.binop(*op, a, b, l.ty, span, dst, out)
             }
             ast::ExprKind::If(c, a, b) => {
                 let c = self.expr(c, None, out);
@@ -545,7 +762,7 @@ impl<'a> Lower<'a> {
                     self.end_statement(span, branch);
                 }
                 self.pending = saved;
-                if dst.is_none() && managed(t) {
+                if dst.is_none() && self.managed(t) {
                     self.pending.push(d);
                 }
                 out.push(Stmt { kind: StmtKind::If { cond: c, then: ta, els: tb }, span });
@@ -553,15 +770,19 @@ impl<'a> Lower<'a> {
             }
             ast::ExprKind::Call(name, args) => self.call(name, args, e, dst, out),
             ast::ExprKind::Index(base, index) => {
-                if base.ty != Type::Str {
-                    return self.not_yet("arrays");
+                let v = self.operands(&[base.as_ref(), index.as_ref()], out);
+                let [xs, i]: [Expr; 2] = v.try_into().expect("two operands");
+                if base.ty == Type::Str {
+                    return self.op(RtOp::StrAt, vec![xs, i], Ty::Char, dst, span, out);
                 }
-                let s = self.expr(base, None, out);
-                let i = self.expr(index, None, out);
-                self.op(RtOp::StrAt, vec![s, i], Ty::Char, dst, span, out)
+                self.elem(xs, i, e.ty, dst, span, out)
             }
             ast::ExprKind::Method(recv, name, args) => self.method(recv, name, args, e, dst, out),
-            ast::ExprKind::Array(_) => self.not_yet("arrays"),
+            ast::ExprKind::Array(items) => {
+                let refs: Vec<&ast::Expr> = items.iter().collect();
+                let elems = self.operands(&refs, out);
+                self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
+            }
             ast::ExprKind::Field(..) => self.not_yet("structs"),
             ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments and structs"),
         }
@@ -592,9 +813,9 @@ impl<'a> Lower<'a> {
         Expr::Local(t)
     }
 
-    /// A binary operator on lowered operands of type `t`; `rt` is the result type.
+    /// A binary operator on lowered operands of type `t`.
     #[allow(clippy::too_many_arguments)]
-    fn binop(&mut self, op: ast::BinOp, a: Expr, b: Expr, t: Type, rt: Type, span: Span, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+    fn binop(&mut self, op: ast::BinOp, a: Expr, b: Expr, t: Type, span: Span, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         use ast::BinOp as A;
         if t == Type::Int && matches!(op, A::Div | A::Mod) {
             return match const_int(&b) {
@@ -611,10 +832,16 @@ impl<'a> Lower<'a> {
                 }
             };
         }
-        if t == Type::Str && op == A::Add {
+        if op == A::Add && t == Type::Str {
             return self.op(RtOp::StrConcat, vec![a, b], Ty::Str, dst, span, out);
         }
-        let _ = rt;
+        if op == A::Add && t.elem().is_some() {
+            return self.op(RtOp::ArrConcat, vec![a, b], t, dst, span, out);
+        }
+        if Structs::aggregate(t) {
+            let iop = if op == A::Eq { BinOp::DeepEq } else { BinOp::DeepNe };
+            return Expr::Binary(iop, Box::new(a), Box::new(b));
+        }
         let iop = match (op, t) {
             (A::Add, Type::Int) => BinOp::IAdd,
             (A::Add, _) => BinOp::FAdd,
@@ -651,9 +878,6 @@ impl<'a> Lower<'a> {
             (A::Ge, _) => BinOp::FGe,
             (A::Mod, _) | (A::And | A::Or, _) => unreachable!("rejected by the checker or handled above"),
         };
-        if !matches!(t, Type::Int | Type::Float | Type::Bool | Type::Char | Type::Str) {
-            return self.not_yet("comparisons of arrays and structs");
-        }
         Expr::Binary(iop, Box::new(a), Box::new(b))
     }
 
@@ -665,9 +889,6 @@ impl<'a> Lower<'a> {
                     ast::ExprKind::Interp(p) => self.parts(p, out),
                     _ => vec![self.expr(&args[0], None, out)],
                 };
-                if parts.iter().any(|p| !self.printable(p)) {
-                    return self.not_yet("printing arrays and structs");
-                }
                 out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Print, args: parts }, span });
                 // `print` returns nothing, so this value is never used
                 Expr::Bool(false)
@@ -676,9 +897,6 @@ impl<'a> Lower<'a> {
                 let x = self.expr(&args[0], None, out);
                 if args[0].ty == Type::Str {
                     return x;
-                }
-                if !self.printable(&x) {
-                    return self.not_yet("`str(x)` of arrays and structs");
                 }
                 self.op(RtOp::Format, vec![x], Ty::Str, dst, span, out)
             }
@@ -725,29 +943,36 @@ impl<'a> Lower<'a> {
         }
     }
 
-    /// True if the value can be printed by the backends (no arrays or structs yet).
-    fn printable(&self, e: &Expr) -> bool {
-        let t = match e {
-            Expr::Local(l) => self.ty_of(*l),
-            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => return true,
-            _ => return true,
-        };
-        matches!(t, Type::Int | Type::Float | Type::Bool | Type::Char | Type::Str)
-    }
-
     fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
-        if !matches!(recv.ty, Type::Str | Type::Char) {
-            return self.not_yet("array methods");
+        if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "sort" | "reverse") {
+            // changes the receiver: a place, fixed before the arguments run
+            let later = args.iter().any(mutates);
+            let place = self.place(recv, later, out);
+            let refs: Vec<&ast::Expr> = args.iter().collect();
+            let vals = self.operands(&refs, out);
+            let op = match name {
+                "push" => RtOp::ArrPush,
+                "pop" => RtOp::ArrPop,
+                "insert" => RtOp::ArrInsert,
+                "remove" => RtOp::ArrRemove,
+                "sort" => RtOp::ArrSort,
+                _ => RtOp::ArrReverse,
+            };
+            if e.ty == Type::Void {
+                out.push(Stmt { kind: StmtKind::Mutate { dst: None, op, place, args: vals }, span });
+                return Expr::Bool(false);
+            }
+            let d = match dst {
+                Some(d) => d,
+                None => self.owned_temp(e.ty),
+            };
+            out.push(Stmt { kind: StmtKind::Mutate { dst: Some(d), op, place, args: vals }, span });
+            return Expr::Local(d);
         }
-        if recv.ty == Type::Str && matches!(name, "chars" | "codes" | "split") {
-            return self.not_yet("arrays");
-        }
-        let r = self.expr(recv, None, out);
-        let mut all = vec![r];
-        for a in args {
-            all.push(self.expr(a, None, out));
-        }
+        let mut refs: Vec<&ast::Expr> = vec![recv];
+        refs.extend(args.iter());
+        let all = self.operands(&refs, out);
         let pure = |f: PureFn| Some(f);
         let p = match (recv.ty, name) {
             (Type::Str, "len") => pure(PureFn::StrLen),
@@ -763,21 +988,42 @@ impl<'a> Lower<'a> {
             (Type::Char, "is_upper") => pure(PureFn::CharIsUpper),
             (Type::Char, "is_lower") => pure(PureFn::CharIsLower),
             (Type::Char, "is_space") => pure(PureFn::CharIsSpace),
+            (_, "len") => pure(PureFn::ArrLen),
+            (_, "contains") if recv.ty.elem().is_some() => pure(PureFn::ArrContains),
+            (_, "index_of") if recv.ty.elem().is_some() => pure(PureFn::ArrIndexOf),
             _ => None,
         };
         if let Some(p) = p {
             return Expr::Pure(p, all);
         }
-        let op = match name {
-            "slice" => RtOp::StrSlice,
-            "replace" => RtOp::StrReplace,
-            "trim" => RtOp::StrTrim,
-            "upper" => RtOp::StrUpper,
-            "lower" => RtOp::StrLower,
-            "repeat" => RtOp::StrRepeat,
-            _ => return self.not_yet("this method"),
+        let op = match (recv.ty, name) {
+            (Type::Str, "slice") => RtOp::StrSlice,
+            (Type::Str, "replace") => RtOp::StrReplace,
+            (Type::Str, "trim") => RtOp::StrTrim,
+            (Type::Str, "upper") => RtOp::StrUpper,
+            (Type::Str, "lower") => RtOp::StrLower,
+            (Type::Str, "repeat") => RtOp::StrRepeat,
+            (Type::Str, "chars") => RtOp::StrChars,
+            (Type::Str, "codes") => RtOp::StrCodes,
+            (Type::Str, "split") => RtOp::StrSplit,
+            (_, "slice") => RtOp::ArrSlice,
+            (_, "repeat") => RtOp::ArrRepeat,
+            (_, "join") => RtOp::ArrJoin,
+            _ => unreachable!("the checker knows every method"),
         };
-        self.op(op, all, Ty::Str, dst, span, out)
+        self.op(op, all, e.ty, dst, span, out)
+    }
+}
+
+/// True if the statement that wrote `t` (the last one that did) made a new value.
+fn produced_owned(out: &[Stmt], t: LocalId) -> bool {
+    match out.iter().rev().find_map(|s| match &s.kind {
+        StmtKind::Op { dst: Some(d), op, .. } | StmtKind::Mutate { dst: Some(d), op, .. } if *d == t => Some(op.owned_result()),
+        StmtKind::Call { dst: Some(d), .. } if *d == t => Some(true),
+        _ => None,
+    }) {
+        Some(owned) => owned,
+        None => false,
     }
 }
 

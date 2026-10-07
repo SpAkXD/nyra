@@ -11,7 +11,7 @@
 
 use std::fmt::Write;
 
-use super::{Expr, Func, LocalId, Module, Stmt, StmtKind, UnOp};
+use super::{Expr, Func, LocalId, Module, Place, Step, Stmt, StmtKind, UnOp};
 use crate::diag::json_str;
 
 pub fn print(m: &Module) -> String {
@@ -56,6 +56,15 @@ fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
             StmtKind::Op { dst, op, args } => {
                 let d = dst.map(|d| target(f, d)).unwrap_or_default();
                 let _ = writeln!(out, "{pad}{d}{}({})", op.name(), list(m, f, args));
+            }
+            StmtKind::Store { place: p, value } => {
+                let _ = writeln!(out, "{pad}{} = {}", place(m, f, p), expr(m, f, value));
+            }
+            StmtKind::Mutate { dst, op, place: p, args } => {
+                let d = dst.map(|d| target(f, d)).unwrap_or_default();
+                let mut all = vec![place(m, f, p)];
+                all.extend(args.iter().map(|a| expr(m, f, a)));
+                let _ = writeln!(out, "{pad}{d}{}(inout {})", op.name(), all.join(", "));
             }
             StmtKind::If { cond, then, els } => {
                 let _ = writeln!(out, "{pad}if {} {{", expr(m, f, cond));
@@ -105,6 +114,33 @@ fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
             }
         }
     }
+}
+
+/// `grid[%3][%4]`, `p.name`.
+fn place(m: &Module, f: &Func, p: &Place) -> String {
+    let mut s = name(f, p.root);
+    let mut t = f.local(p.root).ty;
+    for step in &p.path {
+        match step {
+            Step::Index(i, _) => {
+                let _ = write!(s, "[{}]", expr(m, f, i));
+                t = t.elem().unwrap_or(t);
+            }
+            Step::Field(k) => {
+                let field = m.structs.get(t).and_then(|info| info.fields.get(*k as usize));
+                match field {
+                    Some((n, ft)) => {
+                        let _ = write!(s, ".{n}");
+                        t = *ft;
+                    }
+                    None => {
+                        let _ = write!(s, ".#{k}");
+                    }
+                }
+            }
+        }
+    }
+    s
 }
 
 fn list(m: &Module, f: &Func, es: &[Expr]) -> String {

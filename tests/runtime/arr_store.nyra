@@ -1,0 +1,6 @@
+// expect: E0240 at 5:7
+fn main() {
+    var xs = [1, 2]
+    print(xs)
+    xs[-1] = 5
+}

@@ -1,0 +1,6 @@
+// expect: E0240 at 5:18
+fn main() {
+    var grid = [[1, 2], [3, 4]]
+    grid[1][0] = 7
+    print(grid[1][2])
+}

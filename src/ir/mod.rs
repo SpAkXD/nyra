@@ -6,8 +6,11 @@
 //! so a backend may emit them in any evaluation order (C!) and later passes may fold or drop
 //! them. This is what makes evaluation order and runtime errors identical on every backend.
 //!
-//! Memory is explicit: values of managed types (strings) are reference counted, and lowering
-//! inserts `Dup` (retain) and `Drop` (release) statements. C executes them; JS ignores them.
+//! Memory is explicit: values of managed types (strings, arrays, structs that contain them)
+//! are reference counted, and lowering inserts `Dup` (one more owner) and `Drop` (one owner
+//! less) statements. Writes into arrays first make them unique (copy on write). C executes
+//! the counting; JavaScript marks values that have more than one owner as shared, so that a
+//! write copies them first.
 
 pub mod lower;
 pub mod opt;
@@ -26,9 +29,40 @@ pub struct LocalId(pub u32);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct StrId(pub u32);
 
-/// True for types whose values own heap memory and are reference counted.
-pub fn managed(t: Ty) -> bool {
-    matches!(t, Ty::Str)
+/// A struct definition, for the backends and for `managed`.
+pub struct StructInfo {
+    pub name: String,
+    pub fields: Vec<(String, Ty)>,
+    /// A field owns heap memory (directly or through a nested struct).
+    pub managed: bool,
+}
+
+/// The structs of a program by type id (`Ty::Struct(id)`), in an order where each struct comes
+/// after every struct it contains by value (C needs that order for its typedefs).
+#[derive(Default)]
+pub struct Structs(pub Vec<(u32, StructInfo)>);
+
+impl Structs {
+    pub fn get(&self, t: Ty) -> Option<&StructInfo> {
+        match t {
+            Ty::Struct(id) => self.0.iter().find(|(i, _)| *i == id).map(|(_, s)| s),
+            _ => None,
+        }
+    }
+
+    /// True for types whose values own heap memory: strings, arrays, and structs with such a field.
+    pub fn managed(&self, t: Ty) -> bool {
+        match t {
+            Ty::Str | Ty::Array(_) => true,
+            Ty::Struct(_) => self.get(t).is_some_and(|s| s.managed),
+            _ => false,
+        }
+    }
+
+    /// True for aggregates: arrays and structs (deep equality, copy on write in JavaScript).
+    pub fn aggregate(t: Ty) -> bool {
+        matches!(t, Ty::Array(_) | Ty::Struct(_))
+    }
 }
 
 pub struct Module {
@@ -36,6 +70,7 @@ pub struct Module {
     /// Interned string literals (ids are indexes).
     pub strs: Vec<String>,
     pub main: FuncId,
+    pub structs: Structs,
 }
 
 impl Module {
@@ -45,6 +80,10 @@ impl Module {
 
     pub fn str(&self, id: StrId) -> &str {
         &self.strs[id.0 as usize]
+    }
+
+    pub fn managed(&self, t: Ty) -> bool {
+        self.structs.managed(t)
     }
 }
 
@@ -78,21 +117,51 @@ pub struct Stmt {
     pub span: Span,
 }
 
+/// Where a write goes: a local, then elements and fields. Index expressions are pure and
+/// already evaluated (constants or temporaries).
+#[derive(Clone, Debug)]
+pub struct Place {
+    pub root: LocalId,
+    pub path: Vec<Step>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Step {
+    /// `[i]` of an array; the span is the `[` (an index out of bounds is runtime error E0240).
+    Index(Expr, Span),
+    /// A field of a struct, by position.
+    Field(u32),
+}
+
+impl Place {
+    pub fn local(root: LocalId) -> Place {
+        Place { root, path: Vec::new() }
+    }
+}
+
 pub enum StmtKind {
     /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
     Call { dst: Option<LocalId>, func: FuncId, args: Vec<Expr> },
     Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
+    /// `place = value` for a place below a local (a whole local is `Set`). Every array on the
+    /// way is made unique first (copy on write) and every index is checked. The value is
+    /// borrowed: the place becomes one more owner, and its old value has one owner less.
+    Store { place: Place, value: Expr },
+    /// An operation that changes a place in place: `xs.push(v)`, `xs.pop()`, `xs += ys`,
+    /// `s += t`. The place is made unique first, like for a `Store`. `dst` gets the result.
+    Mutate { dst: Option<LocalId>, op: RtOp, place: Place, args: Vec<Expr> },
     If { cond: Expr, then: Vec<Stmt>, els: Vec<Stmt> },
     /// Each round: run `head`, leave if `cond` is false, run `body`, then `step`.
     /// `continue` goes to `step`.
     Loop { head: Vec<Stmt>, cond: Expr, body: Vec<Stmt>, step: Vec<Stmt> },
-    /// `for var in iter`: `iter` is a string (`var` gets each `char`).
+    /// `for var in iter`: a string gives each `char`, an array each element. `iter` is a local
+    /// the loop owns, so the body may change the variable it came from; `var` borrows from it.
     ForEach { var: LocalId, iter: Expr, body: Vec<Stmt> },
     Break,
     Continue,
     Return(Option<Expr>),
-    /// One more owner for the value in a local (C: retain).
+    /// One more owner for the value in a local (C: retain; JavaScript: mark an aggregate shared).
     Dup(LocalId),
     /// One owner less (C: release; frees at zero).
     Drop(LocalId),
@@ -114,7 +183,7 @@ pub enum RtOp {
     FloatToInt,
     /// `a + b` on strings: a new string.
     StrConcat,
-    /// `s += t`: appends to the local `dst` (also `args[0]`) in place when it is the only owner.
+    /// `s += t` (a `Mutate`): appends in place when the string has only one owner.
     StrAppend,
     /// `s[i]`: the i-th character (E0240).
     StrAt,
@@ -125,7 +194,7 @@ pub enum RtOp {
     StrTrim,
     StrUpper,
     StrLower,
-    /// `s.repeat(n)` (E0243 for n < 0), new string.
+    /// `s.repeat(n)` (E0243 for n < 0, E0249 when too long), new string.
     StrRepeat,
     /// `int(s)` (E0244).
     StrToInt,
@@ -133,6 +202,37 @@ pub enum RtOp {
     StrToFloat,
     /// `char(n)` (E0246).
     CharFrom,
+    /// `s.chars()`: a new `[char]`.
+    StrChars,
+    /// `s.codes()`: a new `[int]`.
+    StrCodes,
+    /// `s.split(sep)` (E0243 for an empty separator): a new `[str]`.
+    StrSplit,
+    /// `[a, b, c]`: a new array; it becomes one more owner of each element.
+    ArrNew,
+    /// `xs[i]` (E0240). The element is borrowed: lowering adds a `Dup` for managed elements.
+    ArrGet,
+    /// `xs.slice(a, b)` (E0240), new array.
+    ArrSlice,
+    /// `xs.repeat(n)` (E0243, E0249), new array.
+    ArrRepeat,
+    /// `a + b` on arrays: a new array.
+    ArrConcat,
+    /// `xs.join(sep)` of `[str]` or `[char]`: a new string.
+    ArrJoin,
+    /// `xs.push(v)` (a `Mutate`); the array becomes one more owner of `v`.
+    ArrPush,
+    /// `xs.pop()` (a `Mutate`, E0242): the last element moves out into `dst` (owned).
+    ArrPop,
+    /// `xs.insert(i, v)` (a `Mutate`, E0240 unless 0 <= i <= len).
+    ArrInsert,
+    /// `xs.remove(i)` (a `Mutate`, E0240): the element moves out into `dst` (owned).
+    ArrRemove,
+    /// `xs.sort()` (a `Mutate`): stable merge sort, the same algorithm on every backend.
+    ArrSort,
+    ArrReverse,
+    /// `xs += ys` (a `Mutate`): appends in place when the array has only one owner.
+    ArrAppend,
 }
 
 impl RtOp {
@@ -155,17 +255,35 @@ impl RtOp {
             RtOp::StrToInt => "str_to_int",
             RtOp::StrToFloat => "str_to_float",
             RtOp::CharFrom => "char_from",
+            RtOp::StrChars => "str_chars",
+            RtOp::StrCodes => "str_codes",
+            RtOp::StrSplit => "str_split",
+            RtOp::ArrNew => "arr_new",
+            RtOp::ArrGet => "arr_get",
+            RtOp::ArrSlice => "arr_slice",
+            RtOp::ArrRepeat => "arr_repeat",
+            RtOp::ArrConcat => "arr_concat",
+            RtOp::ArrJoin => "arr_join",
+            RtOp::ArrPush => "arr_push",
+            RtOp::ArrPop => "arr_pop",
+            RtOp::ArrInsert => "arr_insert",
+            RtOp::ArrRemove => "arr_remove",
+            RtOp::ArrSort => "arr_sort",
+            RtOp::ArrReverse => "arr_reverse",
+            RtOp::ArrAppend => "arr_append",
         }
     }
 
-    /// The operand types and the result type (`None`: writes nowhere).
+    /// The operand types and the result type (`None`: writes nowhere) of the operations with
+    /// fixed types. Array operations are checked by `verify` against the element type.
     pub fn sig(self) -> (&'static [Ty], Option<Ty>) {
         use Ty::{Char, Float, Int, Str};
         match self {
             RtOp::Print | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
             RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
             RtOp::FloatToInt => (&[Float], Some(Int)),
-            RtOp::StrConcat | RtOp::StrAppend => (&[Str, Str], Some(Str)),
+            RtOp::StrConcat => (&[Str, Str], Some(Str)),
+            RtOp::StrAppend => (&[Str], None),
             RtOp::StrAt => (&[Str, Int], Some(Char)),
             RtOp::StrSlice => (&[Str, Int, Int], Some(Str)),
             RtOp::StrReplace => (&[Str, Str, Str], Some(Str)),
@@ -174,10 +292,11 @@ impl RtOp {
             RtOp::StrToInt => (&[Str], Some(Int)),
             RtOp::StrToFloat => (&[Str], Some(Float)),
             RtOp::CharFrom => (&[Int], Some(Char)),
+            _ => (&[], None),
         }
     }
 
-    /// True if the result is a new value the destination owns (it must be dropped).
+    /// True if the result is a value the destination owns (it must be dropped when managed).
     pub fn owned_result(self) -> bool {
         matches!(
             self,
@@ -189,6 +308,31 @@ impl RtOp {
                 | RtOp::StrUpper
                 | RtOp::StrLower
                 | RtOp::StrRepeat
+                | RtOp::StrChars
+                | RtOp::StrCodes
+                | RtOp::StrSplit
+                | RtOp::ArrNew
+                | RtOp::ArrSlice
+                | RtOp::ArrRepeat
+                | RtOp::ArrConcat
+                | RtOp::ArrJoin
+                | RtOp::ArrPop
+                | RtOp::ArrRemove
+        )
+    }
+
+    /// True for the operations that change a place (`Mutate`).
+    pub fn mutates(self) -> bool {
+        matches!(
+            self,
+            RtOp::StrAppend
+                | RtOp::ArrPush
+                | RtOp::ArrPop
+                | RtOp::ArrInsert
+                | RtOp::ArrRemove
+                | RtOp::ArrSort
+                | RtOp::ArrReverse
+                | RtOp::ArrAppend
         )
     }
 }
@@ -211,6 +355,12 @@ pub enum PureFn {
     CharIsUpper,
     CharIsLower,
     CharIsSpace,
+    /// elements in an array
+    ArrLen,
+    /// `xs.contains(v)` (deep equality)
+    ArrContains,
+    /// `xs.index_of(v)`: the first index or -1
+    ArrIndexOf,
 }
 
 impl PureFn {
@@ -229,9 +379,13 @@ impl PureFn {
             PureFn::CharIsUpper => "char_is_upper",
             PureFn::CharIsLower => "char_is_lower",
             PureFn::CharIsSpace => "char_is_space",
+            PureFn::ArrLen => "arr_len",
+            PureFn::ArrContains => "arr_contains",
+            PureFn::ArrIndexOf => "arr_index_of",
         }
     }
 
+    /// The operand types (empty for the array functions, which `verify` checks itself) and the result.
     pub fn sig(self) -> (&'static [Ty], Ty) {
         use Ty::{Bool, Char, Int, Str};
         match self {
@@ -240,6 +394,8 @@ impl PureFn {
             PureFn::StrIndexOf => (&[Str, Str], Int),
             PureFn::CharCode => (&[Char], Int),
             PureFn::CharUpper | PureFn::CharLower => (&[Char], Char),
+            PureFn::ArrLen | PureFn::ArrIndexOf => (&[], Int),
+            PureFn::ArrContains => (&[], Bool),
             _ => (&[Char], Bool),
         }
     }
@@ -314,18 +470,24 @@ pub enum BinOp {
     SLe,
     SGt,
     SGe,
+    /// arrays and structs: equal when every element or field is equal (no identity shortcut,
+    /// so a NaN inside never equals itself, on every backend)
+    DeepEq,
+    DeepNe,
 }
 
 impl BinOp {
-    pub fn operand(self) -> Ty {
+    /// The operand type (`None` for the deep equalities, which take any aggregate).
+    pub fn operand(self) -> Option<Ty> {
         use BinOp::*;
-        match self {
+        Some(match self {
             IAdd | ISub | IMul | IDiv | IRem | IEq | INe | ILt | ILe | IGt | IGe => Ty::Int,
             FAdd | FSub | FMul | FDiv | FEq | FNe | FLt | FLe | FGt | FGe => Ty::Float,
             BEq | BNe | And | Or => Ty::Bool,
             CEq | CNe | CLt | CLe | CGt | CGe => Ty::Char,
             SEq | SNe | SLt | SLe | SGt | SGe => Ty::Str,
-        }
+            DeepEq | DeepNe => return None,
+        })
     }
 
     pub fn result(self) -> Ty {
@@ -346,8 +508,8 @@ impl BinOp {
             IMul | FMul => "*",
             IDiv | FDiv => "/",
             IRem => "%",
-            IEq | FEq | BEq | CEq | SEq => "==",
-            INe | FNe | BNe | CNe | SNe => "!=",
+            IEq | FEq | BEq | CEq | SEq | DeepEq => "==",
+            INe | FNe | BNe | CNe | SNe | DeepNe => "!=",
             ILt | FLt | CLt | SLt => "<",
             ILe | FLe | CLe | SLe => "<=",
             IGt | FGt | CGt | SGt => ">",
@@ -375,6 +537,11 @@ impl Expr {
             Expr::Pure(p, _) => p.sig().1,
         }
     }
+
+    /// True for a literal (it reads no local).
+    pub fn is_const(&self) -> bool {
+        matches!(self, Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_))
+    }
 }
 
 /// Calls `f` on every local that `stmts` (and the statements nested in them) read or write.
@@ -389,6 +556,19 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
                 if let Some(d) = dst {
                     f(d);
                 }
+                for a in args {
+                    expr_locals(a, f);
+                }
+            }
+            StmtKind::Store { place, value } => {
+                place_locals(place, f);
+                expr_locals(value, f);
+            }
+            StmtKind::Mutate { dst, place, args, .. } => {
+                if let Some(d) = dst {
+                    f(d);
+                }
+                place_locals(place, f);
                 for a in args {
                     expr_locals(a, f);
                 }
@@ -412,6 +592,15 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
             StmtKind::Return(Some(e)) => expr_locals(e, f),
             StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) => f(l),
             StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => {}
+        }
+    }
+}
+
+fn place_locals(p: &mut Place, f: &mut dyn FnMut(&mut LocalId)) {
+    f(&mut p.root);
+    for s in &mut p.path {
+        if let Step::Index(e, _) = s {
+            expr_locals(e, f);
         }
     }
 }
