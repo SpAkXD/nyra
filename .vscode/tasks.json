@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "nyra: run current file",
+            "type": "shell",
+            "command": "${workspaceFolder}/target/release/nyra",
+            "args": ["run", "${file}", "--time"],
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "clear": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "nyra: run current file (JavaScript)",
+            "type": "shell",
+            "command": "${workspaceFolder}/target/release/nyra",
+            "args": ["run", "${file}", "--js", "--time"],
+            "problemMatcher": []
+        }
+    ]
+}

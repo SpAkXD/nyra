@@ -48,17 +48,28 @@ You need [Rust](https://rustup.rs), plus a C compiler (gcc/clang) for the C targ
 
 ```
 cargo build --release
-./target/release/nyra run examples/fizzbuzz.nyra            # native, via C
-./target/release/nyra run examples/fizzbuzz.nyra -t js      # JavaScript
-./target/release/nyra emit examples/fib.nyra -t c           # show the generated C
+./target/release/nyra run examples/hello.nyra          # native
+./target/release/nyra run examples/hello.nyra --js     # JavaScript (Node)
+./target/release/nyra build examples/hello.nyra        # -> hello.exe
 ```
 
 | command | what it does |
 |---|---|
-| `nyra run <file>` | compile and run (default target: `c`) |
-| `nyra build <file> [-o out]` | write the generated `.c` / `.js` file |
-| `nyra emit <file>` | print the generated code |
-| `nyra check <file> [--json]` | type-check only |
+| `nyra run <file>` | compile and run |
+| `nyra build <file>` | compile to a native executable |
+| `nyra check <file>` | only check for errors |
+
+| option | meaning |
+|---|---|
+| `--js` | use the JavaScript backend instead of native |
+| `--c` | with `build`: write the generated C instead of an executable |
+| `-o <path>` | output path (`-o -` prints to stdout) |
+| `--json` | errors as JSON |
+| `--time` | show how long each step took |
+
+You never pass flags to the C compiler. Nyra finds gcc/clang/tcc on its own (or uses
+`NYRA_CC`) and always calls it with just `-O2 -fwrapv`: optimize, and make integer overflow
+wrap the way the spec says.
 
 ## How it works
 

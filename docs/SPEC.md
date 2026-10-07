@@ -6,7 +6,7 @@ context and the agent can write Nyra.
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
 - Every function signature is fully typed. Local variable types are inferred.
-- Statements end at a newline (or `;`). Newlines inside `( )` are ignored.
+- One statement per line. There are no semicolons. Newlines inside `( )` are ignored.
 - Comments: `// to end of line`.
 
 ## Types
@@ -70,7 +70,7 @@ Concatenation is not supported yet.
 ```
 | code | meaning |
 |---|---|
-| E0001–E0004 | lexer: bad character, unterminated string, number too large, bad escape |
+| E0001–E0005 | lexer: bad character, unterminated string, number too large, bad escape, semicolon |
 | E0101 | unexpected token |
 | E0102 | unknown type |
 | E0201 | undefined variable |

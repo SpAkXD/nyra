@@ -28,7 +28,6 @@ pub enum Tok {
     RBrace,
     Comma,
     Colon,
-    Semi,
     Arrow,
     DotDot,
     Plus,
@@ -82,7 +81,6 @@ impl Tok {
             Tok::RBrace => "}",
             Tok::Comma => ",",
             Tok::Colon => ":",
-            Tok::Semi => ";",
             Tok::Arrow => "->",
             Tok::DotDot => "..",
             Tok::Plus => "+",
@@ -279,7 +277,6 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             '}' => Some(Tok::RBrace),
             ',' => Some(Tok::Comma),
             ':' => Some(Tok::Colon),
-            ';' => Some(Tok::Semi),
             '+' => Some(Tok::Plus),
             '-' => Some(Tok::Minus),
             '*' => Some(Tok::Star),
@@ -300,6 +297,10 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 }
                 toks.push(Token { tok, span });
             }
+            None if c == ';' => errs.push(
+                Diag::new("E0005", "Nyra has no semicolons", span)
+                    .hint("remove the `;` and put each statement on its own line"),
+            ),
             None => errs.push(Diag::new("E0001", format!("unexpected character `{c}`"), span)),
         }
         i += 1;

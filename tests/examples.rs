@@ -25,18 +25,19 @@ fn files(dir: &str) -> Vec<PathBuf> {
 
 #[test]
 fn examples_produce_expected_output_on_every_backend() {
-    let mut targets = Vec::new();
+    // (name, extra flags) for every backend that can run on this machine
+    let mut targets: Vec<(&str, &[&str])> = Vec::new();
     if available("node") {
-        targets.push("js");
+        targets.push(("js", &["--js"]));
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
-        targets.push("c");
+        targets.push(("native", &[]));
     }
 
     for path in files("examples") {
         let Ok(expected) = std::fs::read_to_string(path.with_extension("out")) else { continue };
-        for target in &targets {
-            let out = nyra().arg("run").arg(&path).args(["--target", target]).output().unwrap();
+        for (target, flags) in &targets {
+            let out = nyra().arg("run").arg(&path).args(*flags).output().unwrap();
             assert!(
                 out.status.success(),
                 "{} [{target}] failed:\n{}",

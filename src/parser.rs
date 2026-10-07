@@ -183,7 +183,7 @@ impl Parser {
                     }
                     depth -= 1;
                 }
-                Tok::Newline | Tok::Semi if depth == 0 => {
+                Tok::Newline if depth == 0 => {
                     self.bump();
                     return;
                 }
@@ -195,12 +195,12 @@ impl Parser {
 
     fn end_stmt(&mut self) -> PResult<()> {
         match self.peek() {
-            Tok::Newline | Tok::Semi => {
+            Tok::Newline => {
                 self.bump();
                 Ok(())
             }
             Tok::RBrace | Tok::Eof => Ok(()),
-            _ => Err(self.unexpected("end of line or `;`")),
+            _ => Err(self.unexpected("end of line").hint("put each statement on its own line")),
         }
     }
 
@@ -242,7 +242,7 @@ impl Parser {
             }
             Tok::Ret => {
                 self.bump();
-                let value = if matches!(self.peek(), Tok::Newline | Tok::Semi | Tok::RBrace | Tok::Eof) {
+                let value = if matches!(self.peek(), Tok::Newline | Tok::RBrace | Tok::Eof) {
                     None
                 } else {
                     Some(self.expr()?)
