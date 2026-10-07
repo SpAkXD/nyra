@@ -32,6 +32,10 @@ set NYRA_CC to use a specific one.
 /// Flags nyra passes to the C compiler. Kept deliberately short:
 /// -O2      optimize
 /// -fwrapv  make int overflow wrap (defined behavior, as the spec says)
+/// -s       strip symbols for a smaller executable (macOS's linker ignores it, so it's left out there)
+#[cfg(not(target_os = "macos"))]
+const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-s"];
+#[cfg(target_os = "macos")]
 const CC_FLAGS: &[&str] = &["-O2", "-fwrapv"];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -171,27 +175,26 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         None => Path::new(&opts.file).with_extension(ext),
     };
 
-    let mut cc_time = Duration::ZERO;
+    let mut cc_part = String::new();
     if opts.target == Target::Native {
-        let c_path = match write_temp(&format!("{stem}.c"), code) {
-            Ok(p) => p,
+        let (exe, cc_time) = match cc_cached(code, stem) {
+            Ok(r) => r,
             Err(code) => return code,
         };
-        match cc(&c_path, &out) {
-            Ok(t) => cc_time = t,
-            Err(code) => return code,
+        if let Err(e) = std::fs::copy(&exe, &out) {
+            return fail(format!("cannot write `{}`: {e}", out.display()));
         }
+        cc_part = format!(" + {}", cc_label(cc_time));
     } else if let Err(e) = std::fs::write(&out, code) {
         return fail(format!("cannot write `{}`: {e}", out.display()));
     }
 
-    let cc_part = if opts.target == Target::Native { format!(" + cc {}", ms(cc_time)) } else { String::new() };
     eprintln!("nyra: built {} (nyra {}{cc_part})", out.display(), ms(nyra_time));
     ExitCode::SUCCESS
 }
 
 fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
-    let mut cc_time = Duration::ZERO;
+    let mut cc_time = None;
     let mut cmd = if opts.target == Target::Js {
         let js_path = match write_temp(&format!("{stem}.js"), code) {
             Ok(p) => p,
@@ -201,15 +204,13 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         c.arg(js_path);
         c
     } else {
-        let c_path = match write_temp(&format!("{stem}.c"), code) {
-            Ok(p) => p,
+        let exe = match cc_cached(code, stem) {
+            Ok((exe, t)) => {
+                cc_time = t;
+                exe
+            }
             Err(code) => return code,
         };
-        let exe = c_path.with_extension(std::env::consts::EXE_EXTENSION);
-        match cc(&c_path, &exe) {
-            Ok(t) => cc_time = t,
-            Err(code) => return code,
-        }
         Command::new(exe)
     };
 
@@ -217,7 +218,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     let status = cmd.status();
     let run_time = t.elapsed();
     if opts.time {
-        let cc_part = if opts.target == Target::Js { String::new() } else { format!(" | cc {}", ms(cc_time)) };
+        let cc_part = if opts.target == Target::Js { String::new() } else { format!(" | {}", cc_label(cc_time)) };
         eprintln!("nyra {}{cc_part} | run {}", ms(nyra_time), ms(run_time));
     }
     match status {
@@ -234,12 +235,63 @@ fn write_temp(name: &str, contents: &str) -> Result<PathBuf, ExitCode> {
     Ok(path)
 }
 
-/// Compiles generated C into an executable. Returns how long the C compiler took.
-fn cc(c_path: &Path, exe: &Path) -> Result<Duration, ExitCode> {
-    let Some(cc) = find_cc() else {
+fn cc_label(cc_time: Option<Duration>) -> String {
+    match cc_time {
+        Some(t) => format!("cc {}", ms(t)),
+        None => "cc cached".to_string(),
+    }
+}
+
+/// 64-bit FNV-1a over several byte strings (with a separator between them).
+fn fnv1a(parts: &[&[u8]]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for p in parts {
+        for &b in p.iter().chain(&[0xff]) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// Compiles generated C into an executable in the temp dir. If the same C code was
+/// already compiled with the same compiler and flags, the old executable is reused.
+/// Returns the executable and the C compiler's time (`None` when cached).
+fn cc_cached(code: &str, stem: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
+    let Some(compiler) = find_cc() else {
         return Err(fail("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js"));
     };
-    let mut cmd = Command::new(&cc);
+    let key = format!("{:016x}", fnv1a(&[code.as_bytes(), compiler.as_bytes(), CC_FLAGS.join(" ").as_bytes()]));
+    let exe_suffix = std::env::consts::EXE_SUFFIX;
+    let c_path = write_temp(&format!("{stem}-{key}.c"), code)?;
+    let exe = c_path.with_file_name(format!("{stem}-{key}{exe_suffix}"));
+    if exe.exists() {
+        return Ok((exe, None));
+    }
+
+    // Build to a temporary name first so an interrupted build never looks cached.
+    let partial = c_path.with_file_name(format!("{stem}-{key}.partial{exe_suffix}"));
+    let t = cc(&compiler, &c_path, &partial)?;
+    std::fs::rename(&partial, &exe).map_err(|e| fail(format!("cannot write `{}`: {e}", exe.display())))?;
+
+    // Drop older builds of this program so the cache doesn't grow forever.
+    if let Some(dir) = exe.parent() {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(rest) = name.strip_prefix(&format!("{stem}-")) else { continue };
+            let (hash, ext) = rest.split_at(rest.len().min(16));
+            let ours = hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit());
+            if ours && hash != key && (ext == ".c" || ext == exe_suffix) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok((exe, Some(t)))
+}
+
+/// Runs the C compiler. Returns how long it took.
+fn cc(cc: &str, c_path: &Path, exe: &Path) -> Result<Duration, ExitCode> {
+    let mut cmd = Command::new(cc);
     // A compiler given by full path needs its own directory on PATH to find its DLLs/tools.
     if let Some(dir) = Path::new(&cc).parent().filter(|d| !d.as_os_str().is_empty()) {
         let path = std::env::var_os("PATH").unwrap_or_default();
