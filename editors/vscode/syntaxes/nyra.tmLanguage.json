@@ -64,14 +64,14 @@
             ]
         },
         "method": {
-            "match": "(\\.)([a-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+            "match": "(?<!\\.)(\\.)([a-z_][A-Za-z0-9_]*)\\s*(?=\\()",
             "captures": {
                 "1": { "name": "punctuation.accessor.nyra" },
                 "2": { "name": "entity.name.function.member.nyra" }
             }
         },
         "field": {
-            "match": "(\\.)([a-z_][A-Za-z0-9_]*)\\b",
+            "match": "(?<!\\.)(\\.)([a-z_][A-Za-z0-9_]*)\\b",
             "captures": {
                 "1": { "name": "punctuation.accessor.nyra" },
                 "2": { "name": "variable.other.member.nyra" }
