@@ -55,17 +55,15 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ## E0001: unexpected character
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, `//` comments and the symbols `( ) { } , : + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`) or in a range (`0..10`), and `&` and `|` only in pairs.
-- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `[`, `'`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
+- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
+- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
 - **Common causes:**
   - a `#` comment: Nyra comments start with `//`
-  - single quotes (`'a'`), backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes
+  - backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes (single quotes hold one character, `'a'`)
   - `?` and `:` as a ternary: write `if cond { a } else { b }` as a value
-  - `[` and `]`: arrays and indexing do not exist yet
   - a single `&` or `|`: write `&&` or `||`
   - `.5` or `5.`: a float needs digits on both sides of the dot (`0.5`, `5.0`)
-  - a `.` after a name (`s.len()`, `console.log(x)`): there are no methods or fields
-  - `$`, `@`, `^`, `~` or a backslash outside a string
+  - `$`, `@`, `^`, `~` or a backslash outside a string or a character
   - characters pasted from documents: `×`, `÷`, `≤`, `≥`, `≠`, invisible characters and a byte order mark at the start of the file
 - **Wrong:**
 ```rust
@@ -131,7 +129,7 @@ fn main() {
 
 ## E0004: unknown escape
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A backslash inside a string is followed by a character that is not an escape. The escapes are `\n` (new line), `\t` (tab), `\r` (carriage return), `\\` (a backslash) and `\"` (a quote).
+- **What it means:** A backslash inside a string is followed by a character that is not an escape. The escapes are `\n` (new line), `\t` (tab), `\r` (carriage return), `\\` (a backslash) and `\"` (a quote). A character literal such as `'\n'` has the same escapes, plus `\'`, and reports the same error ("unknown escape `\q` in a character").
 - **Why Nyra has this rule:** A closed set of escapes means a backslash never silently disappears: `"C:\Users"` would otherwise print `C:Users`. Strings are UTF-8, so any character can be typed directly instead of using `\u` or `\x` codes.
 - **Common causes:**
   - a Windows path: write every backslash twice (`"C:\\Users"`)
@@ -178,8 +176,8 @@ fn main() {
 
 ## E0006: bad `{` or `}` in a string
 - **Kind:** compile error · **Since:** v0.2
-- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a quote inside the braces.
-- **Why Nyra has this rule:** Interpolation is the only way to build text (there is no string `+`), so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Quotes are not allowed inside `{ }`: put the text in a variable first.
+- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a double quote inside the braces.
+- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Double quotes are not allowed inside `{ }`: put the text in a variable first.
 - **Common causes:**
   - printing a literal brace (JSON, code, a set) without doubling it
   - a placeholder `{}` copied from a Rust or Python format string: name the variable, `"{x}"`
@@ -239,7 +237,10 @@ fn main() {
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
-  - code outside a function: only `fn` definitions may be at the top level (no globals, no `struct`, no `import`)
+  - code outside a function: only `fn` and `struct` definitions may be at the top level (no globals, no `import`)
+  - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
+  - `for i, x in xs` or `enumerate(xs)`: a loop has one variable, so write `for i in 0..xs.len()` and read `xs[i]`
+  - `break` or `continue` outside a loop: to leave a function write `ret`
   - `0xFF`, `1_000` and `1e5` number forms: write `255`, `1000`, `100000.0`
   - `=` where `==` was meant, as in `if x = 1 {`
   - a format specifier inside a string, as in `"{x:.2f}"`
@@ -267,13 +268,14 @@ fn main() {
 
 ## E0102: unknown type
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A type annotation names a type that does not exist. The types are `int` (64-bit integer), `float` (64-bit float), `bool` and `str` (text).
-- **Why Nyra has this rule:** Four types, each with one name, and no aliases: a model never has to guess whether the text type is `str`, `string` or `String`.
+- **What it means:** A type annotation names a type that does not exist. The types are `int` (64-bit integer), `float` (64-bit float), `bool`, `str` (text), `char` (one character), arrays written `[T]` (`[int]`, `[[str]]`) and the structs the program declares. The message for a struct name that is not declared is "unknown type `Vec2`: no struct with this name is defined".
+- **Why Nyra has this rule:** Each type has one name, and there are no aliases: a model never has to guess whether the text type is `str`, `string` or `String`.
 - **Common causes:**
-  - another language's name: `string`, `String`, `i32`, `i64`, `double`, `number`, `boolean`, `char`
+  - another language's name: `string`, `String`, `i32`, `i64`, `double`, `number`, `boolean`
   - `void` for "returns nothing": leave out the `->` part of the signature
-  - arrays, structs and other collection types, which do not exist yet
-  - a typo (`flot`) or a capital letter (`Int`): all type names are lowercase
+  - maps, sets, tuples and other collection types, which do not exist yet: use an array `[T]` or a struct
+  - a typo (`flot`) or a capital letter (`Int`): the built-in type names are lowercase
+  - a struct that is not declared, or written differently from its declaration (`Pointt`, `point` for `Point`): the hint suggests the closest declared struct
 - **Wrong:**
 ```rust
 fn greet(name: string) {
@@ -306,7 +308,7 @@ fn main() {
   - the variable was declared inside an inner `{ }` block and is used after the block ended: declare it before the block
   - a function used without call parentheses: write `limit()`, not `limit`
   - assigning to a variable that was never declared (`count = 1`): declare it first with `var count = 0`
-  - words from other languages: `null`, `None`, `break`, `continue`, `return`, `self`, `True`
+  - words from other languages: `null`, `None`, `return`, `self`, `True`
 - **Wrong:**
 ```rust
 fn main() {
@@ -325,13 +327,15 @@ fn main() {
 
 ## E0202: undefined function
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A call `name(...)` refers to a function that is not defined in the file and is not one of the three builtins `print`, `int` and `float`.
-- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `abs` or `len` should do.
+- **What it means:** A call `name(...)` refers to a function that is not defined in the file and is not one of the builtins `print`, `int`, `float`, `str`, `char`, `free` and `keep`, and not a struct either.
+- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `abs` or `sqrt` should do.
 - **Common causes:**
-  - a library function from another language: `len`, `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `str`, `input`
+  - a library function from another language: `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `input`
+  - `len(xs)`: the length is a method, `xs.len()`
   - `println`, `printf` or `echo`: the output function is `print(x)`
   - a typo in a function name (the hint suggests the closest one)
   - calling a variable as if it were a function
+  - a struct that is not declared (`Vec2(x: 1.0, y: 2.0)` without `struct Vec2`: the hint shows the declaration to write), or a struct called by another spelling (`point(...)` for `Point`)
 - **Wrong:**
 ```rust
 fn main() {
@@ -350,12 +354,14 @@ fn main() {
 
 ## E0203: type mismatch
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function call, a `ret` value, the bounds of a `for` range, or the argument of `int()`/`float()`. A call to a function that returns nothing cannot be used as a value either.
+- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function or method call, a field of a struct construction, a `ret` value, the bounds of a `for` range, or the argument of `int()`, `float()` or `char()`. A call to a function that returns nothing cannot be used as a value either.
 - **Why Nyra has this rule:** Nothing converts implicitly. Turning an `int` into a `float` (or back) changes the result, so you write it: `float(n)` and `int(x)` (which truncates toward zero). That makes every numeric conversion visible in the code.
 - **Common causes:**
   - an `int` where a `float` is needed: write `2.0` for a literal, `float(n)` for a variable
   - a `float` where an `int` is needed, such as a range bound: `int(x)`
-  - text where a number is needed (`int("3")`): there is no conversion from text to numbers
+  - text where a number is needed (`let n: int = "3"`): write the number, or parse the text with `int(s)` (a runtime error if it is not a number)
+  - a `char` where an `int` is needed: its code is `c.code()`; an `int` where a `char` is needed: `char(n)`
+  - a number where text is needed: `str(n)` or interpolation, `"{n}"`
   - the wrong type returned from a function, or passed as an argument
   - using the result of a function without a return type (`let x = print(1)`)
   - a number used as a `bool`: write a comparison
@@ -381,7 +387,7 @@ fn main() {
 
 ## E0204: wrong number of arguments
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A call passes a different number of arguments than the function declares. `print`, `int` and `float` take exactly one argument.
+- **What it means:** A call passes a different number of arguments than the function declares. `print`, `int`, `float`, `str`, `char`, `free` and `keep` take exactly one argument, and a method takes the arguments it needs: `xs.push(1, 2)` reports "`.push()` takes 1 argument but 2 were given".
 - **Why Nyra has this rule:** A function has one signature: no default arguments, no variable argument lists, no overloading. The message shows the signature and the hint says which argument is missing or extra.
 - **Common causes:**
   - an argument was forgotten, or one too many was passed
@@ -408,12 +414,13 @@ fn main() {
 
 ## E0205: assignment to a variable that is not `var`
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** Something that cannot change is assigned to (`=`, `+=`, `-=`, `*=`, `/=` or `%=`): a variable declared with `let`, a function parameter, or the variable of a `for` loop.
+- **What it means:** Something that cannot change is assigned to (`=`, `+=`, `-=`, `*=`, `/=` or `%=`): a variable declared with `let`, a function parameter, or the variable of a `for` loop. The same holds for changing what is inside such a variable: a field or an element (`p.x = 1`, `xs[0] = 1`), a method that changes its receiver (`xs.push(1)`) or an `inout` argument.
 - **Why Nyra has this rule:** Values are immutable unless declared with `var`, so reading a function shows exactly where something can change. Parameters and loop variables never change, which keeps loops and calls easy to reason about.
 - **Common causes:**
   - `let` was used where `var` was needed: change the declaration
   - a compound assignment such as `count += 1` on a `let` variable
-  - modifying a parameter (`n = n / 2`): copy it first with `var m = n`
+  - `xs.push(...)`, `xs[0] = ...` or `p.x = ...` where the variable was declared with `let`: declare it with `var`
+  - modifying a parameter (`n = n / 2`, `xs.push(1)`): copy it first with `var m = n`, or declare the parameter `inout`
   - changing the loop variable of a `for`: use a `while` loop with a `var` counter instead
 - **Wrong:**
 ```rust
@@ -435,7 +442,7 @@ fn main() {
 
 ## E0206: name already defined
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A name is declared where Nyra does not allow it: it hides a variable or parameter that is still visible (shadowing), a function is defined twice, a variable has the name of a function, or a function or variable is named `print`, `int` or `float`.
+- **What it means:** A name is declared where Nyra does not allow it: it hides a variable or parameter that is still visible (shadowing), a function is defined twice, a variable has the name of a function, a function or variable is named like a builtin (`print`, `int`, `float`, `str`, `char`, `free`, `keep`), or a struct name is used for a second struct, a function or a variable.
 - **Why Nyra has this rule:** One name means one thing. Without shadowing, a model never has to work out which of two `x` is meant, and a rename can never change the meaning of a program. There is no overloading either: every function name is used once.
 - **Common causes:**
   - `let x = ...` twice in one function (also in an inner `{ }` block while the outer `x` is visible)
@@ -443,7 +450,8 @@ fn main() {
   - a nested `for i in ...` inside another `for i in ...`: name the inner variable `j`
   - two functions with the same name, for example two `max` with different parameter types
   - a variable named like a function that exists (`let add = 1` while `fn add` exists)
-  - a parameter or variable named `print`, `int` or `float`
+  - a parameter or variable named `print`, `int`, `float`, `str`, `char`, `free` or `keep`
+  - a variable or function named like a struct (`let Point = 1` while `struct Point` exists), or two structs with one name
 - **Wrong:**
 ```rust
 fn main() {
@@ -554,14 +562,16 @@ fn main() {
 
 ## E0210: operator used on wrong types
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** An operator received operands it does not accept. `+ - * /` and `< <= > >=` need two `int`s or two `float`s; `%` needs two `int`s; `==` and `!=` need two values of the same type; `&&`, `||` and `!` need `bool`s; unary `-` needs a number.
-- **Why Nyra has this rule:** Operators never convert their operands and cannot be overloaded, so `1 + 2.0` is an error rather than a guess, and `"a" + b` is not text concatenation (text is built with interpolation: `"a{b}"`).
+- **What it means:** An operator received operands it does not accept. `+ - * /` need two `int`s or two `float`s (and `+` also joins two `str`s or two arrays of one type); `< <= > >=` need two `int`s, `float`s, `str`s or `char`s; `%` needs two `int`s; `==` and `!=` need two values of the same type (arrays and structs are compared by content); `&&`, `||` and `!` need `bool`s; unary `-` needs a number.
+- **Why Nyra has this rule:** Operators never convert their operands and cannot be overloaded, so `1 + 2.0` is an error rather than a guess, and `"a" + n` is an error too: `+` joins two strings, so write `"a" + str(n)` or use interpolation, `"a{n}"`.
 - **Common causes:**
   - an `int` and a `float` in one expression (`1 + 2.0`, `n * 0.5`): convert with `float(n)`
   - compound assignment with the wrong type, such as `x += 1.5` when `x` is an `int`
   - `"total: " + n`: use interpolation, `"total: {n}"`
+  - a `char` joined to a string (`s + c`: write `s + str(c)`) or used in arithmetic (`c + 1`: write `char(c.code() + 1)`)
+  - one element added to an array (`xs + 5`): write `xs + [5]` or `xs.push(5)`
   - a chained comparison `a < b < c`: write `a < b && b < c`
-  - `%` on floats, `<` on strings, `!` on an `int`, `-` on a `bool`
+  - `%` on floats, `<` on arrays or structs, `!` on an `int`, `-` on a `bool`
   - `a && b` where `a` or `b` is an `int`: compare each side first
   - comparing different types with `==`, such as a `bool` with `1`
 - **Wrong:**
