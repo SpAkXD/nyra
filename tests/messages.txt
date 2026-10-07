@@ -4188,3 +4188,34 @@ error[E0101]: expected `,` or `)` in the arguments of `print`, found `}`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
+==== par_assign_junk
+fn main() {
+    var x = 1
+    x = 5 6
+}
+----
+error[E0101]: expected end of line, found number `6`
+  --> case.nyra:3:11
+  |
+3 |     x = 5 6
+  |           ^
+  = hint: one statement per line: start number `6` on a new line
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== par_top_c_string
+string greet() {
+    print("hi")
+}
+fn main() {
+}
+----
+error[E0101]: expected `fn`, found `string`
+  --> case.nyra:1:1
+  |
+1 | string greet() {
+  | ^
+  = hint: functions start with `fn` and the return type comes after `->`: `fn greet(...) -> str { ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)

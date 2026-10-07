@@ -246,7 +246,8 @@ impl Parser {
                     if w == "void" {
                         format!("functions start with `fn`: `fn {fname}(...) {{ ... }}` (no `->` part when nothing is returned)")
                     } else {
-                        format!("functions start with `fn` and the return type comes after `->`: `fn {fname}(...) -> {w} {{ ... }}`")
+                        let ty = hints::nyra_type(w).unwrap_or(w);
+                        format!("functions start with `fn` and the return type comes after `->`: `fn {fname}(...) -> {ty} {{ ... }}`")
                     }
                 } else if let Some(h) = hints::top_level_word(w) {
                     h
@@ -628,14 +629,14 @@ impl Parser {
                 self.bump();
                 self.bump();
                 let value = self.expr()?;
-                self.end_stmt_after(Some(&name), None)?;
+                self.end_stmt()?;
                 StmtKind::Assign { name, value }
             }
             Tok::Ident(name) if matches!(self.peek_at(1), Tok::OpAssign(_)) => {
                 self.bump();
                 let Tok::OpAssign(op) = self.bump().tok else { unreachable!() };
                 let rhs = self.expr()?;
-                self.end_stmt_after(Some(&name), None)?;
+                self.end_stmt()?;
                 let var = Expr::new(ExprKind::Var(name.clone()), span);
                 let value = Expr::new(ExprKind::Binary(op, Box::new(var), Box::new(rhs)), span);
                 StmtKind::Assign { name, value }

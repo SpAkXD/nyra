@@ -226,7 +226,7 @@ fn main() {
 
 ## E0101: unexpected token
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The parser found a token that cannot appear at this point. The message names what it expected and what it found (`expected end of line, found `x``); the hint usually names the construct you meant.
+- **What it means:** The parser found a token that cannot appear at this point. The message names what it expected and what it found (for example: expected end of line, found `x`); the hint usually names the construct you meant.
 - **Why Nyra has this rule:** The grammar is small and strict on purpose: `ret` is the only way to return, braces are always required and `{` stays on the line of its `fn`, `if`, `else`, `while` or `for`, and there is one statement per line. So every program has exactly one spelling, and a model that knows another language is corrected at the first deviation.
 - **Common causes:**
   - `return`, `elif`, `elseif`, `and`, `or`, `not`, `function`, `def`: Nyra spells them `ret`, `else if`, `&&`, `||`, `!`, `fn`
