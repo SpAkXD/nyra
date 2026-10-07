@@ -197,7 +197,16 @@ impl Gen<'_> {
         let at = format!("{}, {}", s.span.line, s.span.col);
         match &s.kind {
             StmtKind::Set(l, e) => {
-                let line = format!("{} = {};", self.local(*l), bare(&self.expr(e)));
+                // A struct with only plain fields is not reference counted, so it never gets a `Dup`:
+                // a copy of one marks it shared here, so a write to either copy copies it first.
+                let t = self.f.local(*l).ty;
+                let plain_struct = matches!(t, Ty::Struct(_)) && !self.m.managed(t);
+                let v = if plain_struct {
+                    self.owned(e)
+                } else {
+                    bare(&self.expr(e)).to_string()
+                };
+                let line = format!("{} = {v};", self.local(*l));
                 self.line(&line);
             }
             StmtKind::Call { dst, func, args } => {
@@ -401,7 +410,15 @@ impl Gen<'_> {
                 let fields: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
                 format!("new nyS_{}({})", t.struct_name().expect("a struct"), fields.join(", "))
             }
-            RtOp::ArrGet => format!("ny_get({}, {}, {at})", a[0], a[1]),
+            RtOp::ArrGet => {
+                // an element that is a plain struct now has two owners (no `Dup` follows for it)
+                let elem = self.ty(&args[0]).elem().expect("verified: an array");
+                if matches!(elem, Ty::Struct(_)) && !self.m.managed(elem) {
+                    format!("ny_sh(ny_get({}, {}, {at}))", a[0], a[1])
+                } else {
+                    format!("ny_get({}, {}, {at})", a[0], a[1])
+                }
+            }
             RtOp::ArrSlice => format!("ny_aslice({}, {}, {}, {at})", a[0], a[1], a[2]),
             RtOp::ArrRepeat => format!("ny_arep({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("ny_aconcat({}, {})", a[0], a[1]),
