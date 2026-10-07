@@ -1,0 +1,93 @@
+name: Release
+
+# Pushing a tag like v0.2.0 builds the nyra binaries and publishes them as a GitHub Release.
+#   git tag v0.2.0 && git push origin v0.2.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            # link the C runtime statically so nyra.exe runs without the VC++ redistributable
+            rustflags: -C target-feature=+crt-static
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the version in Cargo.toml
+        shell: bash
+        run: |
+          version=$(awk -F'"' '/^version *=/ { print $2; exit }' Cargo.toml)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - name: Install the Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          name="nyra-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          exe=nyra
+          if [ "${{ matrix.archive }}" = "zip" ]; then exe=nyra.exe; fi
+          mkdir -p "$name" dist
+          cp "target/${{ matrix.target }}/release/$exe" LICENSE README.md "$name/"
+          cp -r docs examples "$name/"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a -tzip "dist/$name.zip" "$name"
+          else
+            tar -czf "dist/$name.tar.gz" "$name"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nyra-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum nyra-* > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
