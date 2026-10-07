@@ -8,3 +8,4 @@
 - [ ] New behavior has an example (`examples/*.nyra` plus `.out`) or an error test (`tests/errors/*.nyra`)
 - [ ] The C and JavaScript backends print the same output
 - [ ] `docs/SPEC.md` is updated (and `docs/AI_GUIDE.md` and `llms.txt` if an AI needs to know)
+- [ ] New or changed error codes have an entry in `docs/ERRORS.md` and a case in `tests/messages.txt`

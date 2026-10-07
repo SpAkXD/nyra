@@ -9,3 +9,28 @@ jobs:
         with:
           node-version: 22
       - run: cargo test
+
+  # The benchmark harness (bench/): its own tests and the check that every reference solution (Nyra on both
+  # backends, Python, TypeScript, Rust) prints exactly the expected output. No network, no API key, no model call.
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Show the toolchains
+        run: |
+          python --version
+          node --version
+          rustc --version
+          gcc --version
+      - name: Build the Nyra compiler
+        run: cargo build --release
+      - name: Harness tests
+        run: python bench/test_bench.py
+      - name: Reference solutions
+        run: python bench/verify.py
