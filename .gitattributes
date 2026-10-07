@@ -1,0 +1,5 @@
+# LF line endings everywhere, so Windows and Unix checkouts are identical.
+* text=auto eol=lf
+
+# GitHub has no Nyra grammar yet: highlight .nyra files as Rust (close enough).
+*.nyra linguist-language=Rust
