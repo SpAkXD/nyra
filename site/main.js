@@ -127,34 +127,72 @@ function reveals() {
 
 /* ---------------- header ---------------- */
 function header() {
-  const top = $('#topbar'), prog = $('#prog'), burger = $('.burger'), menu = $('#menu');
-  burger.addEventListener('click', () => {
-    const open = burger.getAttribute('aria-expanded') !== 'true';
-    burger.setAttribute('aria-expanded', open); menu.classList.toggle('open', open);
+  const nav = $('#topbar'), prog = $('#prog'), btn = $('.nav-menu'), sheet = $('#msheet'), links = $('#menu');
+  const linkEls = $$('a', links), [il, im, ir] = $$('.nav-ind i', links), ind = $('.nav-ind', links);
+  /* sliding indicator built from two caps and a scaled middle, so the rounded ends never stretch */
+  let active = null, shown = null;
+  const moveInd = (a) => {
+    if (!a) { ind.classList.remove('on'); shown = null; return; }
+    const x = a.offsetLeft, w = a.offsetWidth, h = 36;
+    if (!shown) { ind.classList.add('snap'); void ind.offsetWidth; }
+    il.style.transform = `translateX(${x}px)`;
+    im.style.transform = `translateX(${x + h / 2}px) scaleX(${Math.max(0, w - h)})`;
+    ir.style.transform = `translateX(${x + w - h}px)`;
+    if (!shown) requestAnimationFrame(() => ind.classList.remove('snap'));
+    ind.classList.add('on'); shown = a;
+  };
+  linkEls.forEach(a => a.addEventListener('pointerenter', () => moveInd(a)));
+  links.addEventListener('pointerleave', () => moveInd(active));
+  /* mobile sheet */
+  let open = false, closeT = 0;
+  const setOpen = (v, focusBack) => {
+    if (v === open) return; open = v; clearTimeout(closeT);
+    btn.setAttribute('aria-expanded', v); btn.querySelector('.sr').textContent = v ? 'Close menu' : 'Menu';
+    document.documentElement.classList.toggle('menu-open', v);
+    if (v) { sheet.hidden = false; void sheet.offsetWidth; sheet.classList.add('shown'); setTimeout(() => $('a', sheet).focus({ preventScroll: true }), 60); }
+    else { sheet.classList.remove('shown'); closeT = setTimeout(() => { sheet.hidden = true; }, RM ? 0 : 420); if (focusBack) btn.focus(); }
+  };
+  btn.addEventListener('click', () => setOpen(!open, true));
+  sheet.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
+  addEventListener('keydown', (e) => {
+    if (!open) return;
+    if (e.key === 'Escape') setOpen(false, true);
+    if (e.key === 'Tab') {   /* keep focus inside the open menu */
+      const f = [btn, ...$$('a', sheet)], i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    }
   });
-  menu.addEventListener('click', (e) => { if (e.target.closest('a')) { burger.setAttribute('aria-expanded', 'false'); menu.classList.remove('open'); } });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu.classList.contains('open')) { burger.click(); burger.focus(); } });
-  /* header turns cream over paper sheets */
+  addEventListener('resize', () => { if (open && innerWidth >= 1000) setOpen(false); if (active) moveInd(active); });
+  /* the pill turns cream over paper sheets */
   const papers = new Set();
   const po = new IntersectionObserver((es) => {
     es.forEach(e => e.isIntersecting ? papers.add(e.target) : papers.delete(e.target));
-    top.classList.toggle('on-paper', papers.size > 0);
-  }, { rootMargin: `-60px 0px -${Math.max(0, innerHeight - 62)}px 0px` });
+    nav.classList.toggle('on-paper', papers.size > 0);
+  }, { rootMargin: `-36px 0px -${Math.max(0, innerHeight - 38)}px 0px` });
   $$('.sheet').forEach(s => po.observe(s));
-  /* current section in nav */
-  const links = new Map($$('a', menu).map(a => [a.getAttribute('href').slice(1), a]));
+  /* active section: indicator slides to it */
+  const byId = new Map(linkEls.map(a => [a.getAttribute('href').slice(1), a]));
+  const sheetLinks = $$('a', sheet);
   const so = new IntersectionObserver((es) => es.forEach(e => {
-    const a = links.get(e.target.id); if (!a) return;
-    if (e.isIntersecting) { links.forEach(x => x.classList.remove('cur')); a.classList.add('cur'); }
+    if (!e.isIntersecting) return;
+    const a = byId.get(e.target.id) || null;
+    if (!byId.has(e.target.id) && e.target.id !== 'top' && e.target.id !== 'bench' && e.target.id !== 'agents' && e.target.id !== 'open') return;
+    active = a;
+    linkEls.forEach(x => x.classList.toggle('cur', x === a));
+    sheetLinks.forEach(x => x.classList.toggle('cur', x.getAttribute('href') === '#' + e.target.id));
+    if (!links.matches(':hover')) moveInd(a);
   }), { rootMargin: '-45% 0px -50% 0px' });
-  links.forEach((a, id) => { const s = document.getElementById(id); if (s) so.observe(s); });
-  /* progress bar: always "visible" */
-  const s = { vis: true, last: -1, measure() {}, update() {
+  ['top', 'ideas', 'errors', 'pipeline', 'values', 'language', 'agents', 'install', 'bench', 'roadmap', 'open'].forEach(id => { const s = document.getElementById(id); if (s) so.observe(s); });
+  /* progress and condensed state */
+  let lastP = -1, sc = null;
+  scenes.push({ vis: true, update() {
     const p = clamp(L.sy / Math.max(1, L.doc - L.vh));
-    if (Math.abs(p - this.last) > 0.0005) { prog.style.transform = `scaleX(${p})`; this.last = p; }
+    if (Math.abs(p - lastP) > 0.0005) { prog.style.transform = `scaleX(${p.toFixed(4)})`; lastP = p; }
+    const s = L.sy > 24;
+    if (s !== sc) { sc = s; nav.classList.toggle('scrolled', s); }
     return false;
-  } };
-  scenes.push(s);
+  } });
 }
 
 /* ---------------- hero: WebGL token crystal ---------------- */
@@ -282,7 +320,7 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
     const wide = w >= 900; narrow = !wide;
     R = wide ? Math.min(h * .3, w * .2) : Math.min(w * .3, 140);      // crystal radius in css px
     F = R / (h / 2) * DIST;
-    const cx = wide ? w * .74 : w * .5, cy = wide ? h * .5 : 64 + (Math.min(w * .68, 330) - 10) / 2 + 6;
+    const cx = wide ? w * .74 : w * .5, cy = wide ? h * .5 : 76 + (Math.min(w * .68, 330) - 22) / 2 + 6;
     shift = [cx / w * 2 - 1, 1 - cy / h * 2];
     size = (wide ? 30 : 23) * DPR;
     split = wide ? Math.min(w / 2 - 44, 600) / R : .82;   // on wide screens the two streams flank the demo card
