@@ -177,7 +177,7 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     let mut cc_part = String::new();
     if opts.target == Target::Native {
-        let (exe, cc_time) = match cc_cached(code, stem) {
+        let (exe, cc_time) = match cc_cached(code, stem, &opts.file) {
             Ok(r) => r,
             Err(code) => return code,
         };
@@ -204,7 +204,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         c.arg(js_path);
         c
     } else {
-        let exe = match cc_cached(code, stem) {
+        let exe = match cc_cached(code, stem, &opts.file) {
             Ok((exe, t)) => {
                 cc_time = t;
                 exe
@@ -257,28 +257,38 @@ fn fnv1a(parts: &[&[u8]]) -> u64 {
 /// Compiles generated C into an executable in the temp dir. If the same C code was
 /// already compiled with the same compiler and flags, the old executable is reused.
 /// Returns the executable and the C compiler's time (`None` when cached).
-fn cc_cached(code: &str, stem: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
+fn cc_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
     let Some(compiler) = find_cc() else {
         return Err(fail("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js"));
     };
     let key = format!("{:016x}", fnv1a(&[code.as_bytes(), compiler.as_bytes(), CC_FLAGS.join(" ").as_bytes()]));
+    // Builds are grouped per source file, so two projects that both have a
+    // `main.nyra` never evict each other's cached executables.
+    let full = std::fs::canonicalize(source).unwrap_or_else(|_| PathBuf::from(source));
+    let group = format!("{stem}-{:08x}-", fnv1a(&[full.to_string_lossy().as_bytes()]) as u32);
     let exe_suffix = std::env::consts::EXE_SUFFIX;
-    let c_path = write_temp(&format!("{stem}-{key}.c"), code)?;
-    let exe = c_path.with_file_name(format!("{stem}-{key}{exe_suffix}"));
+    let c_path = write_temp(&format!("{group}{key}.c"), code)?;
+    let exe = c_path.with_file_name(format!("{group}{key}{exe_suffix}"));
     if exe.exists() {
         return Ok((exe, None));
     }
 
-    // Build to a temporary name first so an interrupted build never looks cached.
-    let partial = c_path.with_file_name(format!("{stem}-{key}.partial{exe_suffix}"));
+    // Build to a temporary, per-process name first so an interrupted or
+    // concurrent build never looks cached.
+    let partial = c_path.with_file_name(format!("{group}{key}.{}.partial{exe_suffix}", std::process::id()));
     let t = cc(&compiler, &c_path, &partial)?;
-    std::fs::rename(&partial, &exe).map_err(|e| fail(format!("cannot write `{}`: {e}", exe.display())))?;
+    if let Err(e) = std::fs::rename(&partial, &exe) {
+        let _ = std::fs::remove_file(&partial);
+        if !exe.exists() {
+            return Err(fail(format!("cannot write `{}`: {e}", exe.display())));
+        }
+    }
 
     // Drop older builds of this program so the cache doesn't grow forever.
     if let Some(dir) = exe.parent() {
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let Some(rest) = name.strip_prefix(&format!("{stem}-")) else { continue };
+            let Some(rest) = name.strip_prefix(&group) else { continue };
             let (hash, ext) = rest.split_at(rest.len().min(16));
             let ours = hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit());
             if ours && hash != key && (ext == ".c" || ext == exe_suffix) {
