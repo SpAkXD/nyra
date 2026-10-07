@@ -513,7 +513,7 @@ function errorsDemo() {
 function pipeline() {
   const flight = $('#flight'); if (!flight || RM) return;
   const cards = $$('.pc', flight).map(el => ({ el, i: +el.dataset.i, x: +(el.dataset.x || 0), near: false, shown: true }));
-  const rail = $$('#rail li'), fill = $('#railFill');
+  const rail = $$('#rail li'), fill = $('#railFill'), grid = $('#grid'), big = $('#bignum');
   $$('.pc .code.hl', flight).forEach(pre => { pre.innerHTML = hlLines(pre.textContent, pre.dataset.lang || 'nyra'); });
   let top = 0, span = 1, s = 0, target = 0, onIdx = -1, wide = false, ch = 0;
   rail.forEach((li, k) => li.querySelector('button').addEventListener('click', () => {
@@ -537,11 +537,17 @@ function pipeline() {
       const z = -d * D;
       c.el.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, ${z.toFixed(1)}px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
       c.el.style.opacity = op.toFixed(3);
+      const zi = String(Math.round(200 - Math.abs(d) * 20));
+      if (zi !== c.zi) { c.zi = zi; c.el.style.zIndex = zi; }
       const near = Math.abs(d) < 0.55;
       if (near !== c.near) { c.near = near; c.el.classList.toggle('near', near); }
     }
     const on = Math.round(s);
-    if (on !== onIdx) { onIdx = on; rail.forEach((li, k) => li.classList.toggle('on', k === on)); }
+    if (on !== onIdx) {
+      onIdx = on; rail.forEach((li, k) => li.classList.toggle('on', k === on));
+      if (big) { big.textContent = '0' + (on + 1); big.classList.remove('pop'); void big.offsetWidth; big.classList.add('pop'); }
+    }
+    if (grid) grid.style.transform = `translate3d(0, ${((s * 150) % 60).toFixed(2)}px, 0)`;
     if (fill) fill.style.transform = `scaleY(${(s / 6).toFixed(4)})`;
   }
   scene(flight, {

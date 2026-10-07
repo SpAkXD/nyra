@@ -141,8 +141,8 @@ fib(5) = 5</pre></div>
   </div>
 
   <div class="stream" aria-hidden="true">
-    <div class="lane-s"><div class="run" id="tok1"></div></div>
-    <div class="lane-s rev"><div class="run" id="tok2"></div></div>
+    <div class="lane-s"><div class="tokrun" id="tok1"></div></div>
+    <div class="lane-s rev"><div class="tokrun" id="tok2"></div></div>
   </div>
 </section>
 
@@ -213,6 +213,8 @@ fib(5) = 5</pre></div>
   </div>
   <div class="flight" id="flight">
     <div class="pin">
+      <div class="floor" aria-hidden="true"><i id="grid"></i></div>
+      <p class="bignum" id="bignum" aria-hidden="true">01</p>
       <ol class="rail" id="rail" aria-label="Compiler stages">
         <li><button type="button"><span>01</span>Source</button></li>
         <li><button type="button"><span>02</span>Tokens</button></li>

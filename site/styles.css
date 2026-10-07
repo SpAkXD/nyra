@@ -135,9 +135,9 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .js .rv { opacity: 0; transform: translate3d(0, 30px, 0); }
 .js .rv.in { opacity: 1; transform: none; transition: opacity .9s var(--out) calc(var(--d, 0) * 90ms), transform 1.2s var(--out) calc(var(--d, 0) * 90ms); }
 .js .split.rv { opacity: 1; transform: none; }
-.split .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .2em; margin-bottom: -.2em; }
+.split .w { display: inline-block; vertical-align: top; clip-path: inset(-.25em -.4em -.32em -.4em); }
 .split .wi { display: inline-block; }
-.js .split .wi { transform: translate3d(0, 108%, 0) rotate(4deg); transform-origin: left bottom; }
+.js .split .wi { transform: translate3d(0, 140%, 0) rotate(4deg); transform-origin: left bottom; }
 .js .split.in .wi { transform: none; transition: transform 1.1s var(--out) calc(var(--d, 0) * 90ms + var(--wi) * 42ms); }
 
 /* ---------- hero ---------- */
@@ -155,7 +155,7 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .hero h1 { max-width: 11.5em; }
 .hero h1 em { font-style: normal; }
 .hero h1 em .wi, .no-split.hero h1 em { background: linear-gradient(100deg, var(--teal) 10%, var(--mint) 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.sub { margin-top: 22px; font-size: clamp(1.05rem, 2.6vw, 1.2rem); line-height: 1.6; color: var(--tx2); max-width: 34em; }
+.hero .sub { margin-top: 22px; font-size: clamp(1.05rem, 2.6vw, 1.2rem); line-height: 1.6; color: var(--tx2); max-width: 34em; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 @media (max-width: 479px) { .hero .cta .btn { flex: 1 1 100%; } }
 .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 28px; font: 500 12px/1.3 var(--f-mono); color: var(--mu); letter-spacing: .02em; }
@@ -241,12 +241,12 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 /* token stream */
 .stream { margin-top: 64px; display: grid; gap: 10px; -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .lane-s { overflow: hidden; }
-.run { display: flex; gap: 8px; width: max-content; animation: drift 46s linear infinite; }
-.lane-s.rev .run { animation-direction: reverse; animation-duration: 58s; }
-.run span { font: 500 12.5px/1 var(--f-mono); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--bd); color: var(--mu); background: rgba(255,255,255,.02); white-space: nowrap; }
-.run span.k { color: var(--teal); border-color: rgba(11,216,182,.22); }
-.run span.t { color: var(--sky); border-color: rgba(56,189,248,.2); }
-.run span.e { color: var(--red); border-color: rgba(248,113,113,.25); }
+.tokrun { display: flex; gap: 8px; width: max-content; animation: drift 46s linear infinite; }
+.lane-s.rev .tokrun { animation-direction: reverse; animation-duration: 58s; }
+.tokrun span { font: 500 12.5px/1 var(--f-mono); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--bd); color: var(--mu); background: rgba(255,255,255,.02); white-space: nowrap; }
+.tokrun span.k { color: var(--teal); border-color: rgba(11,216,182,.22); }
+.tokrun span.t { color: var(--sky); border-color: rgba(56,189,248,.2); }
+.tokrun span.e { color: var(--red); border-color: rgba(248,113,113,.25); }
 @keyframes drift { to { transform: translate3d(-50%, 0, 0); } }
 
 /* ---------- cards / bento ---------- */
@@ -339,7 +339,7 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .flight { position: relative; height: 640vh; }
 .pin { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
 .space { position: absolute; inset: 0; perspective: 900px; perspective-origin: 50% 46%; }
-.pc { position: absolute; left: 50%; top: 52%; width: min(560px, calc(100vw - 32px)); padding: 20px; border-radius: 20px; background: rgba(12,23,43,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 30px 60px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07); will-change: transform, opacity; backface-visibility: hidden; transform: translate(-50%, -50%); }
+.pc { position: absolute; left: 50%; top: 52%; width: min(560px, calc(100vw - 32px)); padding: 20px; border-radius: 20px; background: var(--ink-2); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 30px 60px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07); will-change: transform, opacity; backface-visibility: hidden; transform: translate(-50%, -50%); }
 .pc::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: linear-gradient(160deg, rgba(11,216,182,.6), transparent 40%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
 .pc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .pc-h b { font: 600 1.35rem/1.2 var(--f-disp); letter-spacing: -.02em; color: #fff; }
@@ -390,6 +390,12 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
   .pc { padding: 26px; }
   .pc .code { font-size: 14px; }
 }
+.floor { position: absolute; left: -50%; right: -50%; bottom: 0; height: 58%; perspective: 480px; perspective-origin: 50% 0; pointer-events: none; overflow: hidden; -webkit-mask: linear-gradient(transparent, #000 55%); mask: linear-gradient(transparent, #000 55%); }
+.floor::before { content: ""; position: absolute; inset: 0; background: radial-gradient(40% 60% at 50% 0, rgba(11,216,182,.14), transparent); }
+.floor > i { position: absolute; left: 0; right: 0; bottom: -60px; height: 400%; transform-origin: 50% 100%; rotate: x 74deg; background-image: linear-gradient(rgba(11,216,182,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(11,216,182,.13) 1px, transparent 1px); background-size: 60px 60px; background-position: 50% 0; will-change: transform; }
+.bignum { position: absolute; right: var(--gut); bottom: 2vh; font: 600 clamp(7rem, 28vw, 17rem)/1 var(--f-disp); letter-spacing: -.06em; color: rgba(255,255,255,.035); pointer-events: none; user-select: none; }
+.bignum.pop { animation: numIn .8s var(--out); }
+@keyframes numIn { from { opacity: 0; transform: translate3d(0, 30px, 0); } }
 .foot-note { color: var(--mu); font-size: 13.5px; padding-block: 28px 100px; }
 
 /* ---------- memory ---------- */
@@ -561,7 +567,7 @@ code.big { display: inline-block; font-size: 1.15rem; font-weight: 600; color: v
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
   .js .rv, .js .split .wi { opacity: 1; transform: none; }
-  .run { animation: none; }
+  .tokrun { animation: none; }
   .flight { height: auto; }
   .pin { position: static; height: auto; overflow: visible; }
   .space { position: static; perspective: none; display: grid; gap: 16px; padding: 0 var(--gut); max-width: 1200px; margin: 0 auto; }
