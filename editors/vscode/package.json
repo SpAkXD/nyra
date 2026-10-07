@@ -2,7 +2,7 @@
     "name": "nyra",
     "displayName": "Nyra",
     "description": "Syntax highlighting for the Nyra programming language",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "publisher": "spakxd",
     "license": "MIT",
     "repository": {
