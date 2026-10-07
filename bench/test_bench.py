@@ -193,6 +193,11 @@ class TaskSet(unittest.TestCase):
         self.assertTrue(45 <= len(self.tasks) <= 60, len(self.tasks))
         self.assertEqual({t.min_version for t in self.tasks}, {"0.1", "0.2", "0.3"})
 
+    def test_every_category_is_documented(self):
+        readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
+        for category in {t.category for t in self.tasks}:
+            self.assertIn(f"| `{category}` |", readme, f"bench/README.md does not describe the category {category}")
+
     def test_every_task_has_a_python_reference_and_v01_tasks_a_nyra_one(self):
         for t in self.tasks:
             self.assertTrue((run.SOLUTIONS_DIR / "python" / f"{t.id}.py").is_file(), t.id)
