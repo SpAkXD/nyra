@@ -8,7 +8,8 @@ const RESERVED: &[&str] = &[
     "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
     "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
     "try", "typeof", "var", "void", "while", "with", "yield", "undefined", "NaN", "Infinity", "console",
-    "Math",
+    "Math", "String", "Number", "Object", "Array", "JSON", "Symbol", "BigInt", "Error", "globalThis",
+    "process", "require", "module", "exports",
 ];
 
 fn name(n: &str) -> String {
@@ -156,7 +157,11 @@ fn expr(e: &Expr) -> String {
         ExprKind::Call(n, args) => {
             let a: Vec<String> = args.iter().map(expr).collect();
             match n.as_str() {
-                "print" => format!("console.log({})", a[0]),
+                // String() so that -0 prints as "0", like the C backend
+                "print" => match args[0].ty {
+                    Type::Int | Type::Float => format!("console.log(String({}))", a[0]),
+                    _ => format!("console.log({})", a[0]),
+                },
                 "int" => format!("Math.trunc({})", a[0]),
                 "float" => format!("({})", a[0]),
                 _ => format!("{}({})", name(n), a.join(", ")),
