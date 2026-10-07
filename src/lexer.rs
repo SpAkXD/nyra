@@ -8,6 +8,8 @@ pub enum Tok {
     Int(i64),
     Float(f64),
     Str(String),
+    /// A string containing `{expr}` parts.
+    Interp(Vec<StrPart>),
     Ident(String),
     // keywords
     Fn,
@@ -56,7 +58,7 @@ impl Tok {
         match self {
             Tok::Int(n) => format!("number `{n}`"),
             Tok::Float(f) => format!("number `{f}`"),
-            Tok::Str(_) => "a string".into(),
+            Tok::Str(_) | Tok::Interp(_) => "a string".into(),
             Tok::Ident(s) => format!("`{s}`"),
             Tok::Newline => "end of line".into(),
             Tok::Eof => "end of file".into(),
@@ -104,6 +106,13 @@ impl Tok {
             _ => "",
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StrPart {
+    Lit(String),
+    /// Source of an expression inside `{ }`, and where it starts.
+    Code(String, Span),
 }
 
 #[derive(Debug, Clone)]
@@ -209,10 +218,12 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         if c == '"' {
             i += 1;
             col += 1;
+            let mut parts: Vec<StrPart> = Vec::new();
             let mut s = String::new();
             let mut closed = false;
             while i < cs.len() && cs[i] != '\n' {
                 let ch = cs[i];
+                let here = Span { line, col };
                 if ch == '"' {
                     i += 1;
                     col += 1;
@@ -241,6 +252,66 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                     col += 2;
                     continue;
                 }
+                if (ch == '{' || ch == '}') && cs.get(i + 1) == Some(&ch) {
+                    s.push(ch);
+                    i += 2;
+                    col += 2;
+                    continue;
+                }
+                if ch == '}' {
+                    errs.push(Diag::new("E0006", "single `}` in a string", here).hint("write `}}` for a literal `}`"));
+                    i += 1;
+                    col += 1;
+                    continue;
+                }
+                if ch == '{' {
+                    // interpolation: find the matching `}` on this line
+                    let start = i + 1;
+                    let mut j = start;
+                    let mut depth = 0usize;
+                    let mut end = None;
+                    while j < cs.len() && cs[j] != '\n' && cs[j] != '"' {
+                        match cs[j] {
+                            '{' => depth += 1,
+                            '}' if depth == 0 => {
+                                end = Some(j);
+                                break;
+                            }
+                            '}' => depth -= 1,
+                            _ => {}
+                        }
+                        j += 1;
+                    }
+                    match end {
+                        Some(e) => {
+                            let code: String = cs[start..e].iter().collect();
+                            if code.trim().is_empty() {
+                                errs.push(
+                                    Diag::new("E0006", "empty `{}` in a string", here)
+                                        .hint("put an expression inside, e.g. `{x}`, or write `{{}}` for literal braces"),
+                                );
+                            } else {
+                                if !s.is_empty() {
+                                    parts.push(StrPart::Lit(std::mem::take(&mut s)));
+                                }
+                                parts.push(StrPart::Code(code, Span { line, col: col + 1 }));
+                            }
+                            col += e + 1 - i;
+                            i = e + 1;
+                        }
+                        None => {
+                            let (msg, hint) = if cs.get(j) == Some(&'"') {
+                                ("quotes are not allowed inside `{ }` in a string", "store the text in a variable first, then use `{name}`")
+                            } else {
+                                ("unclosed `{` in a string", "close it with `}`, or write `{{` for a literal `{`")
+                            };
+                            errs.push(Diag::new("E0006", msg, here).hint(hint));
+                            col += j - i;
+                            i = j;
+                        }
+                    }
+                    continue;
+                }
                 s.push(ch);
                 i += 1;
                 col += 1;
@@ -251,7 +322,15 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         .hint("close the string with `\"` on the same line"),
                 );
             }
-            toks.push(Token { tok: Tok::Str(s), span });
+            let tok = if parts.is_empty() {
+                Tok::Str(s)
+            } else {
+                if !s.is_empty() {
+                    parts.push(StrPart::Lit(s));
+                }
+                Tok::Interp(parts)
+            };
+            toks.push(Token { tok, span });
             continue;
         }
 

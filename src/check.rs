@@ -232,6 +232,19 @@ impl Checker {
             ExprKind::Float(_) => Type::Float,
             ExprKind::Bool(_) => Type::Bool,
             ExprKind::Str(_) => Type::Str,
+            ExprKind::Interp(parts) => {
+                for p in parts.iter_mut() {
+                    if let InterpPart::Expr(x) = p {
+                        if self.expr(x) == Type::Void {
+                            self.errs.push(
+                                Diag::new("E0203", "cannot put a value of type `void` into a string", x.span)
+                                    .hint("this function returns nothing"),
+                            );
+                        }
+                    }
+                }
+                Type::Str
+            }
             ExprKind::Var(name) => match self.lookup(name) {
                 Some(v) => v.ty,
                 None => {

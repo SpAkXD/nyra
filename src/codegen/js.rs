@@ -113,6 +113,34 @@ fn expr(e: &Expr) -> String {
         ExprKind::Float(f) => format!("{f:?}"),
         ExprKind::Bool(b) => b.to_string(),
         ExprKind::Str(s) => crate::diag::json_str(s),
+        ExprKind::Interp(parts) => {
+            let mut s = String::from("`");
+            for p in parts {
+                match p {
+                    InterpPart::Lit(t) => {
+                        for c in t.chars() {
+                            match c {
+                                '\\' => s.push_str("\\\\"),
+                                '`' => s.push_str("\\`"),
+                                '$' => s.push_str("\\$"),
+                                '\n' => s.push_str("\\n"),
+                                '\r' => s.push_str("\\r"),
+                                '\t' => s.push_str("\\t"),
+                                c if (c as u32) < 0x20 => s.push_str(&format!("\\u{:04x}", c as u32)),
+                                c => s.push(c),
+                            }
+                        }
+                    }
+                    InterpPart::Expr(e) => {
+                        s.push_str("${");
+                        s.push_str(&expr(e));
+                        s.push('}');
+                    }
+                }
+            }
+            s.push('`');
+            s
+        }
         ExprKind::Var(n) => name(n),
         ExprKind::Unary(op, x) => format!("({}{})", if *op == UnOp::Neg { "-" } else { "!" }, expr(x)),
         ExprKind::Binary(op, l, r) => {

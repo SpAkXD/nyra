@@ -126,11 +126,19 @@ impl Expr {
 }
 
 #[derive(Debug)]
+pub enum InterpPart {
+    Lit(String),
+    Expr(Expr),
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Int(i64),
     Float(f64),
     Bool(bool),
     Str(String),
+    /// `"text {expr} text"`
+    Interp(Vec<InterpPart>),
     Var(String),
     Unary(UnOp, Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),

@@ -4,7 +4,7 @@
 
 use crate::ast::*;
 use crate::diag::Diag;
-use crate::lexer::{Tok, Token};
+use crate::lexer::{self, StrPart, Tok, Token};
 
 type PResult<T> = Result<T, Diag>;
 
@@ -357,6 +357,41 @@ impl Parser {
         Ok(Expr::new(ExprKind::Unary(op, Box::new(inner)), span))
     }
 
+    /// Parses the expression inside `{ }` of an interpolated string.
+    fn sub_expr(&mut self, code: &str, base: Span) -> PResult<Expr> {
+        let shift = |s: Span| Span { line: base.line, col: base.col + s.col - 1 };
+        let (mut toks, errs) = lexer::lex(code);
+        if let Some((first, rest)) = errs.split_first() {
+            for d in rest {
+                let mut d = d.clone();
+                d.span = shift(d.span);
+                self.errs.push(d);
+            }
+            let mut d = first.clone();
+            d.span = shift(d.span);
+            return Err(d);
+        }
+        for t in &mut toks {
+            t.span = shift(t.span);
+        }
+        let mut sub = Parser { toks, pos: 0, errs: Vec::new() };
+        // Inside a string, the end of the sub-source is the closing `}`.
+        let e = sub.expr().map_err(|mut d| {
+            for end in ["found end of line", "found end of file"] {
+                if let Some(head) = d.msg.strip_suffix(end) {
+                    d.msg = format!("{head}found `}}`");
+                }
+            }
+            d
+        });
+        self.errs.append(&mut sub.errs);
+        let e = e?;
+        if !matches!(sub.peek(), Tok::Newline | Tok::Eof) {
+            return Err(sub.unexpected("`}`").hint("only a single expression can go inside `{ }` in a string"));
+        }
+        Ok(e)
+    }
+
     fn primary(&mut self) -> PResult<Expr> {
         let span = self.span();
         let kind = match self.peek().clone() {
@@ -371,6 +406,17 @@ impl Parser {
             Tok::Str(s) => {
                 self.bump();
                 ExprKind::Str(s)
+            }
+            Tok::Interp(parts) => {
+                self.bump();
+                let mut out = Vec::new();
+                for p in parts {
+                    match p {
+                        StrPart::Lit(s) => out.push(InterpPart::Lit(s)),
+                        StrPart::Code(code, base) => out.push(InterpPart::Expr(self.sub_expr(&code, base)?)),
+                    }
+                }
+                ExprKind::Interp(out)
             }
             Tok::True => {
                 self.bump();

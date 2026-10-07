@@ -1,0 +1,6 @@
+// expect: E0203
+fn hello() = print("hi")
+
+fn main() {
+    print("x {hello()}")
+}
