@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nyra · A programming language for AI agents</title>
+<meta name="description" content="Nyra is a small, strict programming language designed to be written by AI agents. Compiler errors an agent can read and fix by itself. One source file compiles to native code through C, or to JavaScript.">
+<meta name="theme-color" content="#080a10">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Nyra: a programming language for AI agents">
+<meta property="og:description" content="A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, with identical output.">
+<meta property="og:image" content="social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The Nyra logo and the line: A small, strict language designed to be written by AI agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nyra: a programming language for AI agents">
+<meta name="twitter:description" content="A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, with identical output.">
+<meta name="twitter:image" content="social-preview.png">
+<script>document.documentElement.className="js"</script>
+<link rel="stylesheet" href="styles.css">
+<script src="main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top" id="topbar">
+  <div class="wrap bar">
+    <a class="brand" href="#top" aria-label="Nyra, back to top">
+      <svg viewBox="0 0 424 140" width="85" height="28" role="img" aria-label="Nyra" id="logo">
+        <defs>
+          <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22B8E8"/></linearGradient>
+          <linearGradient id="gw" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="270" y2="0"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#4C8DFF"/></linearGradient>
+        </defs>
+        <g transform="translate(8 12)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g class="wm" transform="translate(140 28)" fill="none" stroke="url(#gw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+          <path pathLength="1" d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/>
+          <path pathLength="1" d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/>
+          <path pathLength="1" d="M152 0V64M152 28A28 28 0 0 1 180 0"/>
+          <circle pathLength="1" cx="238" cy="32" r="32"/>
+          <path pathLength="1" d="M270 0V64"/>
+        </g>
+      </svg>
+    </a>
+    <nav class="links" id="menu" aria-label="Sections">
+      <a href="#ideas">Design</a>
+      <a href="#errors">Errors</a>
+      <a href="#pipeline">Compiler</a>
+      <a href="#values">Memory</a>
+      <a href="#language">Language</a>
+      <a href="#bench">Benchmark</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#install">Install</a>
+    </nav>
+    <a class="gh" href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a>
+    <button class="burger" type="button" aria-expanded="false" aria-controls="menu"><span class="sr">Menu</span><i></i><i></i></button>
+  </div>
+  <span class="prog" id="prog" aria-hidden="true"></span>
+</header>
+
+<main id="main">
+
+<section class="hero" id="top">
+  <div class="wrap">
+    <p class="pill rv"><i></i>v0.3 · open source · MIT</p>
+    <h1 class="rv" style="--d:1">A programming language built for <span class="grad">AI agents to write.</span></h1>
+    <p class="sub rv" style="--d:2">Small and strict, with errors that tell an agent exactly what to write. One source file compiles to native code through C, or to JavaScript, and prints the same thing on both.</p>
+    <div class="cta rv" style="--d:3">
+      <a class="btn pri" href="#install">Get started</a>
+      <a class="btn" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
+    </div>
+
+    <div class="stage rv" id="stage" style="--d:4" role="group" aria-label="Demo: an agent writes a Nyra program, the compiler checks it, and native C and JavaScript print identical output">
+      <div class="win-bar">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="agent"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2 7 7 3-7 3-2 7-2-7-7-3 7-3z"/></svg>agent</span>
+        <span id="sfile">fib.nyra</span>
+        <span class="sp phase" id="phase"><i class="led"></i><span id="phase-t">done</span></span>
+      </div>
+      <div class="sbody">
+        <div class="pane">
+          <p class="task"><span class="prompt">›</span> <span id="stask">first six Fibonacci numbers</span></p>
+          <div class="cw"><pre class="gut" id="sgut" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9</pre><pre class="code typed nyra" id="scode" aria-hidden="true">fn fib(n: int) -> int {
+    if n &lt; 2 { ret n }
+    ret fib(n - 1) + fib(n - 2)
+}
+
+fn main() {
+    for i in 0..6 {
+        print("fib({i}) = {fib(i)}")
+    }
+}</pre></div>
+        </div>
+        <div class="outs" id="souts">
+          <div class="out"><p class="out-h"><b>native</b><span>C · gcc</span></p><pre class="out-b on"><span class="cmd">$ nyra run fib.nyra</span>
+<span>fib(0) = 0</span>
+<span>fib(1) = 1</span>
+<span>fib(2) = 1</span>
+<span>fib(3) = 2</span>
+<span>fib(4) = 3</span>
+<span>fib(5) = 5</span></pre></div>
+          <div class="out"><p class="out-h"><b>JavaScript</b><span>Node.js</span></p><pre class="out-b on"><span class="cmd">$ nyra run fib.nyra --js</span>
+<span>fib(0) = 0</span>
+<span>fib(1) = 1</span>
+<span>fib(2) = 1</span>
+<span>fib(3) = 2</span>
+<span>fib(4) = 3</span>
+<span>fib(5) = 5</span></pre></div>
+          <div class="eq" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path pathLength="1" d="M2 6.5l2.7 2.7L10 3.5"/></svg>identical</div>
+        </div>
+      </div>
+      <div class="dots" id="sdots" role="group" aria-label="Choose an example"></div>
+    </div>
+    <script type="application/json" id="hero-data">[
+{"file":"fib.nyra","task":"first six Fibonacci numbers","code":"fn fib(n: int) -> int {\n    if n < 2 { ret n }\n    ret fib(n - 1) + fib(n - 2)\n}\n\nfn main() {\n    for i in 0..6 {\n        print(\"fib({i}) = {fib(i)}\")\n    }\n}","out":["fib(0) = 0","fib(1) = 1","fib(2) = 1","fib(3) = 2","fib(4) = 3","fib(5) = 5"]},
+{"file":"words.nyra","task":"shout each word of a sentence","code":"fn main() {\n    let s = \"agents write nyra\"\n    for w in s.split(\" \") {\n        print(w.upper())\n    }\n}","out":["AGENTS","WRITE","NYRA"]},
+{"file":"rect.nyra","task":"grow a rectangle, print its area","code":"struct Rect { w: int, h: int }\n\nfn main() {\n    var r = Rect(w: 3, h: 4)\n    r.w += 1\n    print(r)\n    print(\"area {r.w * r.h}\")\n}","out":["Rect(w: 4, h: 4)","area 16"]}
+]</script>
+  </div>
+</section>
+
+<section class="strip" aria-label="Facts">
+  <div class="wrap">
+    <div class="fact rv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><div><h3>Zero dependencies</h3><p>The compiler is Rust with no crates. It builds anywhere Rust does and writes plain, readable C and JavaScript.</p></div></div>
+    <div class="fact rv" style="--d:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-7"/><path d="M12 14c0-4-6-4-6-9"/><path d="M12 14c0-4 6-4 6-9"/><circle cx="6" cy="4" r="1.2"/><circle cx="18" cy="4" r="1.2"/></svg><div><h3>One IR, two targets</h3><p>Native code through C, and JavaScript for Node and the browser. Same output, same evaluation order, same runtime errors.</p></div></div>
+    <div class="fact rv" style="--d:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 17v4M17 19h4"/></svg><div><h3>Fits in one prompt</h3><p>The whole language is a short spec an agent reads in one go. The compiler corrects what is left.</p></div></div>
+  </div>
+</section>
+
+<section class="sec" id="ideas">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Design</p>
+      <h2>Every rule removes a way to be wrong.</h2>
+      <p class="lead">Nyra is shaped by how language models write code, not by what humans like to read. Fewer choices, fewer wrong ones.</p>
+    </div>
+    <div class="grid g3">
+      <article class="card rv"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg></div><h3>One obvious way</h3><p>One spelling for each thing. No implicit conversions, no shadowing, no null: <code class="i">1 + 2.0</code> is error E0210. A model that half-knows Rust, Go or TypeScript already knows the syntax.</p></article>
+      <article class="card rv" style="--d:1"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></div><h3>No semicolons</h3><p>A new line ends a statement. Braces are required and stay on the line that opens them. A stray <code class="i">;</code> is error E0005, and the hint says: delete it.</p></article>
+      <article class="card rv" style="--d:2"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v12H9l-4 4z"/><path d="M9 9h6M9 12h4"/></svg></div><h3>Errors are instructions</h3><p>Every error has a stable code, an exact position and a hint that says what to write. <code class="i">--json</code> is for agents, <code class="i">nyra explain E0201</code> is for the why.</p></article>
+      <article class="card rv"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="8" rx="2"/><rect x="13" y="12" width="8" height="8" rx="2"/></svg></div><h3>Values, not references</h3><p>Assigning, passing and returning always make independent values. Copies share storage until one side writes, so nothing changes behind an agent's back.</p></article>
+      <article class="card rv" style="--d:1"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h16M4 12h10M4 16h6"/></svg></div><h3>Memory: automatic, and yours to steer</h3><p>Reference counting frees memory when the last owner is gone: no garbage collector, no borrow checker. <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code> say exactly when.</p></article>
+      <article class="card rv" style="--d:2"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4.5 4.5L19 7"/></svg></div><h3>The same output everywhere</h3><p>Both backends come from one intermediate representation, so evaluation order, number formatting and runtime errors match byte for byte.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="errors">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Errors are instructions</p>
+      <h2>A compiler an agent can talk to.</h2>
+      <p class="lead">Every error carries a stable code, the exact line and column, and a hint that says what to write. The agent reads it as JSON, applies the fix and checks again. No guessing, no scraping text.</p>
+    </div>
+    <div class="duo rv" id="err" role="group" aria-label="Demo: the compiler reports error E0230 with a hint, the hint is applied, and the program then runs and prints [1]">
+      <div class="win ed">
+        <div class="win-bar"><span>main.nyra</span><span class="badge err" id="ebadge">1 error</span></div>
+        <div class="cw"><pre class="gut" aria-hidden="true">1
+2
+3
+4
+5</pre><pre class="code nyra" id="ecode" aria-hidden="true"><svg class="squig" viewBox="0 0 30 6" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M0 4Q3.75 0 7.5 3T15 3 22.5 3 30 3"/></svg></pre></div>
+        <div class="prob" aria-hidden="true">
+          <div class="pe"><b>E0230</b>cannot infer the type of the empty array <code>[]</code> <span class="small">· 2:14</span><em>hint: write its type where it is declared, e.g. <code>var xs: [int] = []</code></em></div>
+          <div class="po">No problems. The hint was applied.</div>
+        </div>
+      </div>
+      <div class="win term">
+        <div class="win-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span>terminal</span></div>
+        <div class="cw"><pre class="o" id="eterm"><span class="row h cmd">$ nyra check main.nyra --json</span>
+<span class="row h">{"ok":false,"errors":[{<span class="jh" data-k="code">"code":"E0230"</span>,"message":"cannot infer the type of the empty array `[]`","file":"main.nyra",<span class="jh" data-k="pos">"line":2,"col":14</span>,<span class="jh" data-k="hint">"hint":"write its type where it is declared, e.g. `var xs: [int] = []`"</span>}]}</span>
+<span class="row h cmd">$ nyra check main.nyra --json</span>
+<span class="row h jok">{"ok":true,"errors":[]}</span>
+<span class="row h cmd">$ nyra run main.nyra</span>
+<span class="row h">[1]</span></pre></div>
+      </div>
+    </div>
+    <div class="grid g3 three">
+      <article class="card rv"><h3>A stable code</h3><p>Codes never change meaning. <code class="i">nyra explain E0230</code> prints what it means, why the rule exists, the usual causes, and a wrong and a fixed program.</p></article>
+      <article class="card rv" style="--d:1"><h3>An exact position</h3><p>File, line and column, the same on both backends. Runtime errors carry them too, with <code class="i">"runtime":true</code> in the JSON.</p></article>
+      <article class="card rv" style="--d:2"><h3>A hint that says what to write</h3><p>Not "syntax error", but the line to type: a closest-name suggestion, the missing type, the keyword you meant.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="pipeline">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Compiler</p>
+      <h2>One source, one IR, two targets.</h2>
+      <p class="lead">A small Rust compiler with zero dependencies. Both backends read the same typed intermediate representation, so a program prints the same thing whether it runs natively or on JavaScript.</p>
+    </div>
+    <div class="pipe rv" id="pipe" role="group" aria-label="Demo: the stages of the compiler for a one-line function, from source through tokens, tree, types and IR to C and JavaScript, ending in identical output">
+      <ol class="steps" id="steps">
+        <li><button type="button">Source</button></li>
+        <li><button type="button">Tokens</button></li>
+        <li><button type="button">Tree</button></li>
+        <li><button type="button">Types</button></li>
+        <li><button type="button">IR</button></li>
+        <li><button type="button">C + JS</button></li>
+        <li><button type="button">Output</button></li>
+        <span class="sl" aria-hidden="true"><i class="fill" id="sfill"></i></span>
+      </ol>
+      <div class="lens" id="lens">
+        <section class="scene on" data-s="0">
+          <p class="cap"><b>Source.</b> Plain text, written by an agent. Newlines end statements, so there are no semicolons.</p>
+          <div class="art"><pre class="pcode st nyra">fn sq(x: int) -&gt; int = x * x
+
+fn main() {
+    print(sq(5))
+}</pre></div>
+        </section>
+        <section class="scene" data-s="1">
+          <p class="cap"><b>Tokens.</b> The lexer cuts the text into keywords, names, types and symbols.</p>
+          <div class="art"><div class="chips">
+            <span class="chip kw st" style="--i:0">fn</span><span class="chip st" style="--i:1">sq</span><span class="chip sy st" style="--i:2">(</span><span class="chip st" style="--i:3">x</span><span class="chip sy st" style="--i:4">:</span><span class="chip ty st" style="--i:5">int</span><span class="chip sy st" style="--i:6">)</span><span class="chip sy st" style="--i:7">-&gt;</span><span class="chip ty st" style="--i:8">int</span><span class="chip sy st" style="--i:9">=</span><span class="chip st" style="--i:10">x</span><span class="chip sy st" style="--i:11">*</span><span class="chip st" style="--i:12">x</span><span class="chip nl st" style="--i:13">newline</span>
+          </div></div>
+        </section>
+        <section class="scene" data-s="2,3">
+          <p class="cap c2"><b>Tree.</b> The parser builds a syntax tree. It recovers after an error, so one mistake does not hide the next.</p>
+          <p class="cap c3"><b>Types.</b> The checker gives every node a type and collects every error in one pass.</p>
+          <div class="art"><svg class="tree" viewBox="0 0 360 202" role="img" aria-label="Syntax tree: function sq with parameter x and the expression x times x, every node typed int">
+            <g fill="none"><path class="e" pathLength="1" style="--i:1" d="M180 36C180 58 78 56 78 78"/><path class="e" pathLength="1" style="--i:1" d="M180 36C180 58 250 56 250 78"/><path class="e" pathLength="1" style="--i:2" d="M250 106C250 126 206 126 206 146"/><path class="e" pathLength="1" style="--i:2" d="M250 106C250 126 294 126 294 146"/></g>
+            <g class="nd" style="--i:0"><rect x="132" y="8" width="96" height="28" rx="8"/><text x="180" y="22">fn sq</text></g>
+            <g class="nd" style="--i:2"><rect x="32" y="78" width="92" height="28" rx="8"/><text x="78" y="92">x: int</text></g>
+            <g class="nd" style="--i:2"><rect x="226" y="78" width="48" height="28" rx="8"/><text x="250" y="92">*</text></g>
+            <g class="nd" style="--i:3"><rect x="182" y="146" width="48" height="28" rx="8"/><text x="206" y="160">x</text></g>
+            <g class="nd" style="--i:3"><rect x="270" y="146" width="48" height="28" rx="8"/><text x="294" y="160">x</text></g>
+            <g class="ty" style="--i:0"><rect x="238" y="14" width="46" height="16" rx="8"/><text x="261" y="22">int</text></g>
+            <g class="ty" style="--i:1"><rect x="61" y="112" width="34" height="16" rx="8"/><text x="78" y="120">int</text></g>
+            <g class="ty" style="--i:2"><rect x="280" y="84" width="34" height="16" rx="8"/><text x="297" y="92">int</text></g>
+            <g class="ty" style="--i:3"><rect x="189" y="180" width="34" height="16" rx="8"/><text x="206" y="188">int</text></g>
+            <g class="ty" style="--i:4"><rect x="277" y="180" width="34" height="16" rx="8"/><text x="294" y="188">int</text></g>
+          </svg></div>
+        </section>
+        <section class="scene" data-s="4">
+          <p class="cap"><b>IR.</b> One typed intermediate representation. Expressions are pure and every effect is its own statement, so the evaluation order is fixed once, for every backend.</p>
+          <div class="art"><pre class="pcode st nyra ir">fn sq(x: int) -&gt; int {
+    return (x * x)
+}
+fn main() {
+    %0: int = call sq(5)
+    print(%0)
+}</pre></div>
+        </section>
+        <section class="scene" data-s="5">
+          <p class="cap"><b>Two backends.</b> The same IR becomes C99 for gcc or clang, and JavaScript for Node or the browser.</p>
+          <div class="art"><div class="two">
+            <div class="st" style="--i:0"><p class="pl">C99 → native executable</p><pre class="pcode lang-c">static int64_t ny_sq(int64_t x) {
+    return x * x;
+}</pre></div>
+            <div class="st" style="--i:1"><p class="pl">JavaScript → Node, browser</p><pre class="pcode lang-js">function sq(x) {
+    return x * x + 0;
+}</pre></div>
+          </div><p class="note st" style="--i:2">The <code>+ 0</code> turns an int -0 into 0: C has no -0 for ints, so JavaScript may not print one either.</p></div>
+        </section>
+        <section class="scene" data-s="6">
+          <p class="cap"><b>Output.</b> Run it either way and the bytes are the same.</p>
+          <div class="art"><div class="two">
+            <div class="win st" style="--i:0"><div class="win-bar">native</div><pre class="o pad" style="padding:12px 14px"><span class="cmd">$ nyra run sq.nyra</span>
+25</pre></div>
+            <div class="win st" style="--i:1"><div class="win-bar">JavaScript</div><pre class="o pad" style="padding:12px 14px"><span class="cmd">$ nyra run sq.nyra --js</span>
+25</pre></div>
+          </div><span class="match st" style="--i:3"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6.5l2.7 2.7L10 3.5"/></svg>identical output</span></div>
+        </section>
+      </div>
+    </div>
+    <p class="foot rv">The IR above is the compiler's real dump for this program. Every example in the repository runs on both backends in CI and must match byte for byte.</p>
+  </div>
+</section>
+
+<section class="sec" id="values">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Memory</p>
+      <h2>Values, not references.</h2>
+      <p class="lead">Copy a value and you get an independent value. Under the hood the copy is free until one side writes: then, and only then, the memory splits.</p>
+    </div>
+    <div class="cow rv" id="cow" role="group" aria-label="Demo: two variables share one array; when b writes, b gets its own copy; a then writes in place; the outputs are [9, 2] and [1, 2, 3]">
+      <div>
+        <div class="win"><div class="win-bar">copy.nyra</div><div class="cw"><pre class="gut" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8</pre><pre class="code nyra" id="ccode" aria-hidden="true">fn main() {
+    var a = [1, 2]
+    var b = a
+    b.push(3)
+    a[0] = 9
+    print(a)
+    print(b)
+}</pre></div></div>
+        <div class="cout" id="cout"><span>[9, 2]</span><span>[1, 2, 3]</span></div>
+      </div>
+      <div>
+        <div class="win" style="padding:14px">
+          <svg class="diag" viewBox="0 0 380 236" role="img" aria-label="Memory diagram">
+            <g class="blk1 fade on" id="c-b1" transform="translate(150 14)">
+              <rect width="190" height="74" rx="12"/>
+              <g class="cell"><rect x="14" y="17" width="48" height="40" rx="8"/><text id="c-v0" x="38" y="38">1</text></g>
+              <g class="cell"><rect x="70" y="17" width="48" height="40" rx="8"/><text x="94" y="38">2</text></g>
+              <g class="rc" transform="translate(116 -10)"><rect width="64" height="20" rx="10"/><text id="c-rc1" x="32" y="10.5">rc 1</text></g>
+            </g>
+            <g class="blk2" id="c-b2" transform="translate(150 136)">
+              <rect width="190" height="74" rx="12" fill="rgba(255,255,255,.02)" stroke="rgba(255,255,255,.15)" stroke-dasharray="3 4"/>
+              <g class="cell"><rect x="14" y="17" width="48" height="40" rx="8"/><text x="38" y="38">1</text></g>
+              <g class="cell"><rect x="70" y="17" width="48" height="40" rx="8"/><text x="94" y="38">2</text></g>
+              <g class="cell fade" id="c-c3"><rect x="126" y="17" width="48" height="40" rx="8"/><text x="150" y="38">3</text></g>
+              <g class="rc" transform="translate(116 -10)"><rect width="64" height="20" rx="10"/><text x="32" y="10.5">rc 1</text></g>
+            </g>
+            <g class="tag fade" id="c-ta"><rect x="0" y="28" width="56" height="30" rx="15"/><text x="28" y="43">a</text></g>
+            <g class="tag fade" id="c-tb"><rect x="0" y="150" width="56" height="30" rx="15"/><text x="28" y="165">b</text></g>
+            <path class="ptr" id="c-pa" pathLength="1" d="M56 43C100 43 110 51 150 51"/><circle class="pd" cx="150" cy="51" r="3.5"/>
+            <path class="ptr" id="c-pb1" pathLength="1" d="M56 165C120 165 100 70 150 66"/><circle class="pd" cx="150" cy="66" r="3.5"/>
+            <path class="ptr" id="c-pb2" pathLength="1" d="M56 165C100 165 110 173 150 173"/><circle class="pd" cx="150" cy="173" r="3.5"/>
+          </svg>
+        </div>
+        <p class="capline" id="ccap" aria-hidden="true">A value is an array of two numbers.</p>
+      </div>
+    </div>
+
+    <div class="mem3">
+      <h3 class="rv">Automatic by default. Manual when you say so.</h3>
+      <p class="rv">Reference counting frees memory the moment the last owner is gone, with no garbage collector and no pauses. When you want to be exact, three words say so, and the compiler checks them.</p>
+      <div class="grid">
+        <article class="card rv"><code class="big">free(x)</code><p>Give the memory back now. Using <code class="i">x</code> afterwards is a compile error (E0239), until you assign it a new value.</p></article>
+        <article class="card rv" style="--d:1"><code class="big">keep(x)</code><p>Mark a value as living for the whole program: it is never freed early.</p></article>
+        <article class="card rv" style="--d:2"><code class="big">arena { }</code><p>A block whose values are freed together at the closing brace. Values leave only through <code class="i">ret</code>, and outer values are read-only inside. Version 0.3 checks these rules; a faster bulk allocator comes later.</p></article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="language">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Language · v0.3</p>
+      <h2>Small enough to hold in your head.</h2>
+      <p class="lead">Version 0.3 adds real data: strings and chars with methods, arrays, structs, <code class="i">inout</code> parameters, <code class="i">break</code> and <code class="i">continue</code>, and explicit memory control. Every program below was compiled and run; the output is what the compiler printed, identical on native and JavaScript.</p>
+    </div>
+    <div class="rv" id="tour">
+      <div class="tablist" role="tablist" aria-label="Language features">
+        <button role="tab" type="button">Basics</button><button role="tab" type="button">Strings and chars</button><button role="tab" type="button">Arrays</button><button role="tab" type="button">Structs</button><button role="tab" type="button">inout</button><button role="tab" type="button">Loops</button><button role="tab" type="button">Memory</button>
+      </div>
+
+      <div class="tp" role="tabpanel"><p class="d">Functions with typed signatures, one-line functions, <code class="i">let</code> and <code class="i">var</code>, compound assignment, string interpolation and <code class="i">if</code> as a value.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">basics.nyra</div><pre class="code nyra pad" data-copy>fn add(a: int, b: int) -&gt; int = a + b
+
+fn gcd(a: int, b: int) -&gt; int {
+    if b == 0 { ret a }
+    ret gcd(b, a % b)
+}
+
+fn main() {
+    let x = 5
+    var total = 0
+    total += add(x, 2)
+    let size = if total &gt; 6 { "big" } else { "small" }
+    print("total {total} is {size}")
+    print("gcd(48, 18) = {gcd(48, 18)}")
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">total 7 is big
+gcd(48, 18) = 6</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d">Text is UTF-8 and counted in characters. <code class="i">str</code> has methods, <code class="i">char</code> is one code point, and conversions are always explicit.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">strings.nyra</div><pre class="code nyra pad" data-copy>fn main() {
+    let s = "  Hello, Nyra  ".trim()
+    print(s.upper())
+    print(s.replace("Nyra", "agents"))
+    print(s.slice(0, 5))
+    print("a-b-c".split("-"))
+    let c = 'A'
+    print(c.code())
+    print(char(c.code() + 1))
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">HELLO, NYRA
+Hello, agents
+Hello
+["a", "b", "c"]
+65
+B</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d">Arrays are typed, grow with <code class="i">push</code>, and loop with <code class="i">for x in xs</code>. They are values: copies never change each other.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">arrays.nyra</div><pre class="code nyra pad" data-copy>fn main() {
+    var xs = [3, 1, 2]
+    xs.push(0)
+    xs.sort()
+    print(xs)
+    print(xs.slice(1, 3))
+    print(xs.contains(2))
+    var total = 0
+    for x in xs {
+        total += x
+    }
+    print(total)
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">[0, 1, 2, 3]
+[1, 2]
+true
+6</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d">Structs have named fields and are built like a call: <code class="i">User(name: "ann", age: 30)</code>. They are values too.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">structs.nyra</div><pre class="code nyra pad" data-copy>struct User {
+    name: str
+    age: int
+}
+
+fn older(u: User) -&gt; User = User(name: u.name, age: u.age + 1)
+
+fn main() {
+    var ann = User(name: "ann", age: 30)
+    let next = older(ann)
+    ann.name = "Ann"
+    print(ann)
+    print(next)
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">User(name: "Ann", age: 30)
+User(name: "ann", age: 31)</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d">A function can change the caller's variable, and the call says so with <code class="i">inout</code>. Two <code class="i">inout</code> arguments are never the same variable.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">inout.nyra</div><pre class="code nyra pad" data-copy>fn swap(inout a: int, inout b: int) {
+    let t = a
+    a = b
+    b = t
+}
+
+fn main() {
+    var x = 1
+    var y = 2
+    swap(inout x, inout y)
+    print("{x} {y}")
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">2 1</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d"><code class="i">for</code>, <code class="i">while</code>, <code class="i">break</code> and <code class="i">continue</code>. The end of a range is exclusive.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">loops.nyra</div><pre class="code nyra pad" data-copy>fn main() {
+    var odd = ""
+    for i in 0..10 {
+        if i % 2 == 0 { continue }
+        odd += str(i)
+    }
+    print(odd)
+    var n = 0
+    while true {
+        if n * n &gt; 50 { break }
+        n += 1
+    }
+    print(n)
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">13579
+8</pre></div></div></div>
+
+      <div class="tp" role="tabpanel" hidden><p class="d">Memory is automatic. <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code> change only when it is returned, never what the program prints.</p>
+        <div class="tgrid"><div class="win rel"><div class="win-bar">memory.nyra</div><pre class="code nyra pad" data-copy>fn longest_word(text: str) -&gt; str {
+    arena {
+        let words = text.split(" ")
+        var best = ""
+        for w in words {
+            if w.len() &gt; best.len() { best = w }
+        }
+        ret best
+    }
+}
+
+fn main() {
+    var big = [0].repeat(100000)
+    print(big.len())
+    free(big)
+    big = [1, 2, 3]
+    let table = [1, 4, 9, 16]
+    keep(table)
+    print(longest_word("the quick brown fox"))
+    print(big)
+    print(table)
+}</pre></div>
+        <div class="win"><div class="win-bar">output<span class="sp same-pill">native = JS</span></div><pre class="out-b" style="padding:14px">100000
+quick
+[1, 2, 3]
+[1, 4, 9, 16]</pre></div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="agents">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">For agents</p>
+      <h2>Point a model at the repo. It does the rest.</h2>
+      <p class="lead">Nyra is brand new, so no model has seen it in training. It does not need to: the docs are short enough to read in one go, and the compiler corrects what is left.</p>
+    </div>
+    <div class="ag">
+      <div class="win rv"><div class="win-bar">prompt</div><p class="quote"><q>Read https://github.com/SpAkXD/nyra, starting with <code class="i">llms.txt</code> and <code class="i">docs/AI_GUIDE.md</code>, then write me a Nyra program that prints the first 20 prime numbers.</q></p></div>
+      <div class="win rv" style="--d:1;padding:6px 20px">
+        <ul class="docs">
+          <li><b>llms.txt</b><span>What Nyra is, the ten most important rules, links.</span></li>
+          <li><b>AI_GUIDE.md</b><span>Workflow, do and don't rules, error codes with fixes, complete programs.</span></li>
+          <li><b>SPEC.md</b><span>The complete language spec.</span></li>
+          <li><b>ERRORS.md</b><span>Every error code: what it means, why, causes, a wrong and a fixed program.</span></li>
+          <li><b>examples/</b><span>Runnable programs, each with its expected output in a <code class="i">.out</code> file.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="win loop rv" id="loop">
+      <svg viewBox="0 0 640 150" role="img" aria-label="The agent loop: write, check, fix, then run. Check and fix repeat until the program is ok.">
+        <path class="ln" d="M80 50H240M240 50H400M400 50H560" />
+        <path class="ln" d="M400 70C400 130 240 130 240 70"/>
+        <path class="fl" pathLength="100" d="M80 50H560"/>
+        <path class="fl" pathLength="100" d="M400 70C400 130 240 130 240 70"/>
+        <g><rect class="nd" x="30" y="30" width="100" height="40" rx="20"/><text x="80" y="50">Write</text></g>
+        <g><rect class="nd" x="190" y="30" width="100" height="40" rx="20"/><text x="240" y="50">Check</text></g>
+        <g><rect class="nd" x="350" y="30" width="100" height="40" rx="20"/><text x="400" y="50">Fix</text></g>
+        <g><rect class="nd" x="510" y="30" width="100" height="40" rx="20"/><text x="560" y="50">Run</text></g>
+        <text class="sub" x="320" y="128">repeat until "ok": true</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="install">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Get started</p>
+      <h2>Install, then run.</h2>
+      <p class="lead">One binary: <code class="i">nyra</code>. Native programs need a C compiler (gcc, clang or tcc, found automatically). The JavaScript backend needs Node.js instead.</p>
+    </div>
+    <div class="cols">
+      <article class="card rv"><h3>Prebuilt binary</h3><p>Linux x86_64, Windows x86_64 and macOS Apple Silicon. Download the archive from the latest release, unpack it and put <code class="i">nyra</code> on your PATH.</p><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Latest release</a><p class="small" style="margin-top:12px">On macOS run <code class="i">xattr -d com.apple.quarantine nyra</code> once: the binary is not signed.</p></article>
+      <article class="card rv" style="--d:1"><h3>From source</h3><p>Any platform with Rust.</p><div class="win rel"><pre class="code pad" data-copy>git clone https://github.com/SpAkXD/nyra
+cd nyra
+cargo build --release</pre></div><p class="small" style="margin-top:12px">The binary is <code class="i">target/release/nyra</code>. Or: <code class="i">cargo install --git https://github.com/SpAkXD/nyra</code></p></article>
+      <article class="card rv" style="--d:2"><h3>Your first program</h3><div class="win rel"><pre class="code nyra pad" data-copy>fn main() {
+    print("hello from nyra")
+}</pre></div><p class="small" style="margin:12px 0">Save it as <code class="i">hello.nyra</code>, then:</p><div class="win rel"><pre class="code pad" data-copy>nyra run hello.nyra
+nyra run hello.nyra --js</pre></div></article>
+    </div>
+    <div class="win rv" style="margin-top:14px;padding:8px 22px">
+      <div class="cmds">
+        <div><code>nyra run hello.nyra</code><span>Compile and run natively.</span></div>
+        <div><code>nyra run hello.nyra --js</code><span>The same program on Node.js.</span></div>
+        <div><code>nyra build app.nyra</code><span>A native executable next to the source. Unchanged programs skip the C compiler.</span></div>
+        <div><code>nyra check app.nyra --json</code><span>Only report errors, as JSON for agents. Exit code 0 means no errors.</span></div>
+        <div><code>nyra explain E0230</code><span>What an error means, why, the usual causes, a wrong and a fixed program.</span></div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
+      <article class="card rv"><h3>Options</h3><table class="tbl"><tr><td>--js</td><td>use the JavaScript backend</td></tr><tr><td>--c</td><td>with build: write the generated C</td></tr><tr><td>-o &lt;path&gt;</td><td>output path for build</td></tr><tr><td>--json</td><td>errors as JSON, compile and runtime</td></tr><tr><td>--time</td><td>show how long each step took</td></tr></table></article>
+      <article class="card rv" style="--d:1"><h3>Exit codes</h3><table class="tbl"><tr><td>0</td><td>success</td></tr><tr><td>1</td><td>compile errors</td></tr><tr><td>2</td><td>usage or tool problem</td></tr><tr><td>101</td><td>runtime error, identical on both backends</td></tr></table></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="bench">
+  <div class="wrap">
+    <div class="sec-h rv">
+      <p class="eyebrow">Benchmark · v0.4</p>
+      <h2>Does an agent get it right on the first try?</h2>
+      <p class="lead">We built a harness to find out. Results come later, and nothing is claimed until they do.</p>
+    </div>
+    <div class="bench" id="benchbox">
+      <div class="win lanes rv" aria-label="Placeholder chart: results are pending">
+        <div class="hd"><span>Language</span><span>results pending</span></div>
+        <div class="lane"><b>Nyra</b><div class="trk"><i></i></div></div>
+        <div class="lane"><b>Python</b><div class="trk"><i></i></div></div>
+        <div class="lane"><b>TypeScript</b><div class="trk"><i></i></div></div>
+        <div class="lane"><b>Rust</b><div class="trk"><i></i></div></div>
+      </div>
+      <ul class="mlist rv" style="--d:1">
+        <li><b>First-try correctness.</b> How often a model's first program prints exactly the expected output.</li>
+        <li><b>Repairs.</b> The same, when failures are followed by the compiler's feedback and a few retries.</li>
+        <li><b>Code length.</b> Tokens and characters of the program the model wrote.</li>
+        <li><b>Fair by construction.</b> Same tasks, same prompt, same repair budget for all four languages, many models through OpenRouter. Nyra's prompt includes its spec and the others rely on pre-training: a known asymmetry, stated up front.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="roadmap">
+  <div class="wrap rm">
+    <div class="sec-h rv">
+      <p class="eyebrow">Roadmap</p>
+      <h2>Small versions, each one tested on every backend.</h2>
+      <p class="lead">Nyra is 0.x, so the syntax may still change before 1.0.</p>
+    </div>
+    <ol class="road" id="road">
+      <span class="rt" aria-hidden="true"><i class="rf" id="rf"></i></span><i class="rh" id="rh" aria-hidden="true"></i>
+      <li class="done"><span class="nd"></span><h3>v0.1 <small>Core</small> <span class="tag">done</span></h3><p>Functions, <code class="i">int</code> <code class="i">float</code> <code class="i">bool</code> <code class="i">str</code>, <code class="i">if</code>, <code class="i">while</code>, <code class="i">for</code>, the C and JavaScript backends, JSON errors.</p></li>
+      <li class="done"><span class="nd"></span><h3>v0.2 <small>Short code</small> <span class="tag">released</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors, and a typed IR under both backends.</p></li>
+      <li class="now"><span class="nd"></span><h3>v0.3 <small>Real data</small> <span class="tag">now</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></li>
+      <li><span class="nd"></span><h3>v0.4 <small>The proof</small> <span class="tag">harness ready</span></h3><p>The benchmark: first-try correctness and code length against Python, TypeScript and Rust. Results coming.</p></li>
+      <li><span class="nd"></span><h3>v0.5 <small>More targets</small> <span class="tag">planned</span></h3><p>A WebAssembly backend and a browser playground that runs the compiler itself.</p></li>
+      <li><span class="nd"></span><h3>v0.6 <small>Big programs</small> <span class="tag">planned</span></h3><p>Modules and imports, a standard library, and a C foreign function interface.</p></li>
+      <li><span class="nd"></span><h3>v1.0 <small>Ecosystem</small> <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec last" id="open">
+  <div class="wrap">
+    <p class="eyebrow rv">Open source</p>
+    <h2 class="rv" style="--d:1;max-width:18em;margin-inline:auto">A solo project, built in the open.</h2>
+    <p class="lead rv" style="--d:2;margin-inline:auto">Nyra is MIT licensed. Issues and pull requests are welcome, and <code class="i">cargo test</code> must stay green. If an AI could not write a program you expected it to, open an issue with the program and the <code class="i">nyra check --json</code> output: that is the most useful bug report.</p>
+    <a class="btn pri rv" style="--d:3" href="https://github.com/SpAkXD/nyra" rel="noopener">github.com/SpAkXD/nyra</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot-bar">
+  <div class="wrap">
+    <svg viewBox="0 0 112 112" width="26" height="26" role="img" aria-label="Nyra"><defs><linearGradient id="gf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22B8E8"/></linearGradient></defs><g transform="translate(8 8)"><rect width="96" height="96" rx="26" fill="url(#gf)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    <nav class="fl2" aria-label="Project links">
+      <a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a>
+      <a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a>
+      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a>
+      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a>
+      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a>
+      <a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a>
+      <a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a>
+    </nav>
+    <p class="small">MIT license · Nyra v0.3</p>
+  </div>
+</footer>
+</body>
+</html>
