@@ -24,7 +24,7 @@ nyra explain E0201 --json      # what an error code means: why, causes, a wrong 
    ```
    If a hint is not enough, `nyra explain <code> --json` returns the whole entry of the error database
    ([ERRORS.md](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/ERRORS.md)): what the code means, why the rule
-   exists, the usual causes, and a wrong and a fixed program. (`nyra explain` needs a build newer than 0.2.0;
+   exists, the usual causes, and a wrong and a fixed program. (`nyra explain` needs nyra 0.3 or newer;
    with an older one, read ERRORS.md instead.)
 3. Run it and compare the output with what you expect.
 

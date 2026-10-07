@@ -397,8 +397,7 @@ identical. `RustLang` and `TypeScriptLang` are the examples.
   never exercised against the live service, and token counting through OpenRouter (the echo request) is untested
   against real models: check the first real run's `code_tokens` before trusting them.
 - A task whose `min_version` is above the compiler's version number does not run, for any language, unless
-  `--max-version` raises the limit (without Nyra in `--langs` every task runs). Until the 0.3.0 release the compiler
-  on the v0.3 branch implements Nyra 0.3 but reports 0.2.0: use `--max-version 0.3` with `run.py` and `verify.py`.
+  `--max-version` raises the limit (without Nyra in `--langs` every task runs).
 - Single-turn tasks, small programs; nothing here measures reading or fixing existing code.
 - Native Nyra runs need a C compiler (gcc/clang) and `--backend js` needs Node; tasks run in parallel, so timing
   numbers are indicative only.
