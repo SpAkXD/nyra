@@ -55,6 +55,13 @@ static char *ny_float_fmt(char *buf, double x) {
     return buf;
 }
 static void ny_print_float(double x) { char buf[32]; puts(ny_float_fmt(buf, x)); }
+// int(x): truncates toward zero; NaN gives 0 and out-of-range values saturate.
+static int64_t ny_to_int(double x) {
+    if (x != x) return 0;
+    if (x >= 9223372036854775807.0) return INT64_MAX;
+    if (x <= -9223372036854775808.0) return INT64_MIN;
+    return (int64_t)x;
+}
 // Builds an interpolated string. Not freed yet (the v0.3 memory model will).
 static const char *ny_fmt(const char *fmt, ...) {
     va_list ap;
@@ -108,14 +115,18 @@ fn signature(f: &Func) -> String {
 }
 
 pub fn gen(prog: &Program) -> String {
-    let mut g = Gen { out: String::from(PRELUDE), indent: 0, tmp: 0 };
+    let mut g = Gen { out: String::from(PRELUDE), indent: 0, tmp: 0, temps: Vec::new() };
     for f in &prog.funcs {
         let _ = writeln!(g.out, "{};", signature(f));
     }
     g.out.push('\n');
     for f in &prog.funcs {
         g.line(&format!("{} {{", signature(f)));
+        let body_start = g.out.len();
         g.block(&f.body);
+        // Declare the temporaries `operands` needed, at the top of the function.
+        let decls: String = g.temps.drain(..).map(|(t, name)| format!("    {} {name};\n", ctype(t))).collect();
+        g.out.insert_str(body_start, &decls);
         g.line("}");
         g.out.push('\n');
     }
@@ -127,6 +138,8 @@ struct Gen {
     out: String,
     indent: usize,
     tmp: usize,
+    /// Temporaries of the function being generated: (type, name).
+    temps: Vec<(Type, String)>,
 }
 
 impl Gen {
@@ -150,29 +163,38 @@ impl Gen {
         match &s.kind {
             StmtKind::Let { name, ty, value, .. } => {
                 let t = ty.unwrap_or(value.ty);
-                self.line(&format!("{} {} = {};", ctype(t), var(name), expr(value)));
+                let v = self.expr(value);
+                self.line(&format!("{} {} = {v};", ctype(t), var(name)));
             }
-            StmtKind::Assign { name, value } => self.line(&format!("{} = {};", var(name), expr(value))),
+            StmtKind::Assign { name, value } => {
+                let v = self.expr(value);
+                self.line(&format!("{} = {v};", var(name)));
+            }
             StmtKind::If { .. } => self.if_chain(s),
             StmtKind::While { cond, body } => {
-                self.line(&format!("while ({}) {{", expr(cond)));
+                let c = self.expr(cond);
+                self.line(&format!("while ({c}) {{"));
                 self.block(body);
                 self.line("}");
             }
             StmtKind::For { var: v, start, end, body } => {
                 self.tmp += 1;
                 let (i, e) = (var(v), format!("ny_end{}", self.tmp));
-                self.line(&format!(
-                    "for (int64_t {i} = {}, {e} = {}; {i} < {e}; {i}++) {{",
-                    expr(start),
-                    expr(end)
-                ));
+                // Initializers of separate declarators run in order, left to right.
+                let (a, b) = (self.expr(start), self.expr(end));
+                self.line(&format!("for (int64_t {i} = {a}, {e} = {b}; {i} < {e}; {i}++) {{"));
                 self.block(body);
                 self.line("}");
             }
             StmtKind::Ret(None) => self.line("return;"),
-            StmtKind::Ret(Some(e)) => self.line(&format!("return {};", expr(e))),
-            StmtKind::Expr(e) => self.line(&format!("{};", expr(e))),
+            StmtKind::Ret(Some(e)) => {
+                let v = self.expr(e);
+                self.line(&format!("return {v};"));
+            }
+            StmtKind::Expr(e) => {
+                let v = self.expr(e);
+                self.line(&format!("{v};"));
+            }
         }
     }
 
@@ -182,7 +204,8 @@ impl Gen {
         loop {
             let StmtKind::If { cond, then, els } = &cur.kind else { unreachable!() };
             let head = if first { "if" } else { "} else if" };
-            self.line(&format!("{head} ({}) {{", expr(cond)));
+            let c = self.expr(cond);
+            self.line(&format!("{head} ({c}) {{"));
             first = false;
             self.block(then);
             match els {
@@ -200,75 +223,170 @@ impl Gen {
             }
         }
     }
-}
 
-fn expr(e: &Expr) -> String {
-    match &e.kind {
-        ExprKind::Int(n) => {
-            if *n > i32::MAX as i64 || *n < i32::MIN as i64 {
-                format!("INT64_C({n})")
+    fn temp(&mut self, t: Type) -> String {
+        self.tmp += 1;
+        let name = format!("ny_t{}", self.tmp);
+        self.temps.push((t, name.clone()));
+        name
+    }
+
+    /// Generates operands that C would evaluate in an unspecified order (call arguments,
+    /// both sides of `+`, parts of a string). Nyra evaluates left to right, like JS: when
+    /// more than one operand calls a function (and so may print), those calls are stored
+    /// in temporaries first, in order, with the comma operator: `(t1 = f(), t2 = g(), t1 + t2)`.
+    /// Returns that prefix (often empty) and the code for each operand.
+    fn operands(&mut self, es: &[&Expr]) -> (String, Vec<String>) {
+        let effectful = es.iter().filter(|e| has_call(e)).count();
+        let mut prefix = String::new();
+        let mut codes = Vec::new();
+        for e in es {
+            let code = self.expr(e);
+            if effectful >= 2 && has_call(e) {
+                let t = self.temp(e.ty);
+                prefix.push_str(&format!("{t} = {code}, "));
+                codes.push(t);
             } else {
-                n.to_string()
+                codes.push(code);
             }
         }
-        ExprKind::Float(f) => format!("{f:?}"),
-        ExprKind::Bool(b) => b.to_string(),
-        ExprKind::Str(s) => string_lit(s),
-        ExprKind::Interp(parts) => {
-            let (fmt, args) = interp(parts);
-            format!("ny_fmt({}{args})", string_lit(&fmt))
-        }
-        ExprKind::Var(n) => var(n),
-        ExprKind::Unary(op, x) => format!("({}{})", if *op == UnOp::Neg { "-" } else { "!" }, expr(x)),
-        ExprKind::If(c, a, b) => format!("({} ? {} : {})", expr(c), expr(a), expr(b)),
-        ExprKind::Binary(op, l, r) => {
-            if l.ty == Type::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
-                format!("(strcmp({}, {}) {} 0)", expr(l), expr(r), op.symbol())
-            } else {
-                format!("({} {} {})", expr(l), op.symbol(), expr(r))
+        (prefix, codes)
+    }
+
+    fn expr(&mut self, e: &Expr) -> String {
+        match &e.kind {
+            ExprKind::Int(n) => {
+                if *n > i32::MAX as i64 || *n < i32::MIN as i64 {
+                    format!("INT64_C({n})")
+                } else {
+                    n.to_string()
+                }
             }
-        }
-        ExprKind::Call(name, args) => {
-            let a: Vec<String> = args.iter().map(expr).collect();
-            match name.as_str() {
+            ExprKind::Float(f) => format!("{f:?}"),
+            ExprKind::Bool(b) => b.to_string(),
+            ExprKind::Str(s) => string_lit(s),
+            ExprKind::Interp(parts) => {
+                let (prefix, fmt, args) = self.interp(parts);
+                seq(prefix, format!("ny_fmt({}{args})", string_lit(&fmt)))
+            }
+            ExprKind::Var(n) => var(n),
+            ExprKind::Unary(op, x) => {
+                let x = self.expr(x);
+                if *op == UnOp::Neg {
+                    format!("(-{x})")
+                } else {
+                    format!("(!{x})")
+                }
+            }
+            ExprKind::If(c, a, b) => {
+                let (c, a, b) = (self.expr(c), self.expr(a), self.expr(b));
+                format!("({c} ? {a} : {b})")
+            }
+            ExprKind::Binary(op, l, r) => {
+                if matches!(op, BinOp::And | BinOp::Or) {
+                    // && and || already evaluate left to right (and short-circuit) in C
+                    let (a, b) = (self.expr(l), self.expr(r));
+                    return format!("({a} {} {b})", op.symbol());
+                }
+                let (prefix, v) = self.operands(&[&**l, &**r]);
+                let code = if l.ty == Type::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
+                    format!("(strcmp({}, {}) {} 0)", v[0], v[1], op.symbol())
+                } else {
+                    format!("({} {} {})", v[0], op.symbol(), v[1])
+                };
+                seq(prefix, code)
+            }
+            ExprKind::Call(name, args) => match name.as_str() {
                 "print" => match &args[0].kind {
                     // print("x = {x}") becomes a single printf, no allocation
                     ExprKind::Interp(parts) => {
-                        let (fmt, args) = interp(parts);
-                        format!("printf({}{args})", string_lit(&(fmt + "\n")))
+                        let (prefix, fmt, a) = self.interp(parts);
+                        seq(prefix, format!("printf({}{a})", string_lit(&(fmt + "\n"))))
                     }
-                    _ => format!("ny_print_{}({})", args[0].ty.name(), a[0]),
+                    _ => {
+                        let x = self.expr(&args[0]);
+                        format!("ny_print_{}({x})", args[0].ty.name())
+                    }
                 },
-                "int" => format!("((int64_t)({}))", a[0]),
-                "float" => format!("((double)({}))", a[0]),
-                _ => format!("ny_{}({})", name, a.join(", ")),
+                "int" => {
+                    let x = self.expr(&args[0]);
+                    if args[0].ty == Type::Float {
+                        format!("ny_to_int({x})")
+                    } else {
+                        x
+                    }
+                }
+                "float" => {
+                    let x = self.expr(&args[0]);
+                    if args[0].ty == Type::Int {
+                        format!("((double)({x}))")
+                    } else {
+                        x
+                    }
+                }
+                _ => {
+                    let refs: Vec<&Expr> = args.iter().collect();
+                    let (prefix, a) = self.operands(&refs);
+                    seq(prefix, format!("ny_{}({})", name, a.join(", ")))
+                }
+            },
+        }
+    }
+
+    /// For an interpolated string: the sequencing prefix (see `operands`), the printf-style
+    /// format string, and the matching argument list (", a, b").
+    fn interp(&mut self, parts: &[InterpPart]) -> (String, String, String) {
+        let exprs: Vec<&Expr> = parts
+            .iter()
+            .filter_map(|p| match p {
+                InterpPart::Expr(e) => Some(e),
+                InterpPart::Lit(_) => None,
+            })
+            .collect();
+        let (prefix, codes) = self.operands(&exprs);
+        let mut codes = codes.into_iter();
+        let mut fmt = String::new();
+        let mut args = String::new();
+        for p in parts {
+            match p {
+                InterpPart::Lit(s) => fmt.push_str(&s.replace('%', "%%")),
+                InterpPart::Expr(e) => {
+                    let x = codes.next().unwrap_or_default();
+                    let (spec, arg) = match e.ty {
+                        Type::Int => ("%lld", format!("(long long)({x})")),
+                        Type::Float => ("%s", format!("ny_float_fmt((char[32]){{0}}, {x})")),
+                        Type::Bool => ("%s", format!("(({x}) ? \"true\" : \"false\")")),
+                        _ => ("%s", x),
+                    };
+                    fmt.push_str(spec);
+                    args.push_str(", ");
+                    args.push_str(&arg);
+                }
             }
         }
+        (prefix, fmt, args)
     }
 }
 
-/// printf-style format string and the matching argument list (", a, b") for an interpolated string.
-fn interp(parts: &[InterpPart]) -> (String, String) {
-    let mut fmt = String::new();
-    let mut args = String::new();
-    for p in parts {
-        match p {
-            InterpPart::Lit(s) => fmt.push_str(&s.replace('%', "%%")),
-            InterpPart::Expr(e) => {
-                let x = expr(e);
-                let (spec, arg) = match e.ty {
-                    Type::Int => ("%lld", format!("(long long)({x})")),
-                    Type::Float => ("%s", format!("ny_float_fmt((char[32]){{0}}, {x})")),
-                    Type::Bool => ("%s", format!("(({x}) ? \"true\" : \"false\")")),
-                    _ => ("%s", x),
-                };
-                fmt.push_str(spec);
-                args.push_str(", ");
-                args.push_str(&arg);
-            }
-        }
+/// Wraps `code` in a comma expression that first runs `prefix` (see `Gen::operands`).
+fn seq(prefix: String, code: String) -> String {
+    if prefix.is_empty() {
+        code
+    } else {
+        format!("({prefix}{code})")
     }
-    (fmt, args)
+}
+
+/// True if evaluating `e` may call a user function (and so may print).
+fn has_call(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Call(name, args) => !matches!(name.as_str(), "int" | "float") || args.iter().any(has_call),
+        ExprKind::Interp(parts) => parts.iter().any(|p| matches!(p, InterpPart::Expr(x) if has_call(x))),
+        ExprKind::Unary(_, x) => has_call(x),
+        ExprKind::Binary(_, l, r) => has_call(l) || has_call(r),
+        ExprKind::If(c, a, b) => has_call(c) || has_call(a) || has_call(b),
+        ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Var(_) => false,
+    }
 }
 
 fn string_lit(s: &str) -> String {

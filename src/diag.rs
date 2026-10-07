@@ -83,7 +83,8 @@ pub fn suggest<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) ->
         .into_iter()
         .map(|c| (levenshtein(name, c), c))
         .filter(|(d, _)| *d <= 2)
-        .min_by_key(|(d, _)| *d)
+        // ties go to the alphabetically first name, so hints never change between runs
+        .min_by_key(|&(d, c)| (d, c))
         .map(|(_, c)| format!("did you mean `{c}`?"))
 }
 

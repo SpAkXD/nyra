@@ -7,6 +7,7 @@ context and the agent can write Nyra.
 - One way to do each thing. No implicit conversions. No shadowing. No null.
 - Every function signature is fully typed. Local variable types are inferred.
 - One statement per line. There are no semicolons. Newlines inside `( )` are ignored.
+- Everything is evaluated left to right: arguments, operands and the parts of a string.
 - Comments: `// to end of line`.
 
 ## Types
@@ -65,7 +66,7 @@ fn sign(x: int) -> str = if x > 0 { "+" } else if x < 0 { "-" } else { "0" }
 | call | meaning |
 |---|---|
 | `print(x)` | print any value and a newline |
-| `int(x)` | float → int (truncates toward zero) |
+| `int(x)` | float → int (truncates toward zero; NaN gives 0, too-large values saturate) |
 | `float(x)` | int → float |
 
 ## Strings
@@ -101,6 +102,10 @@ store the text in a variable first.
 | E0210 | operator used on wrong types |
 | E0211 | `main` has parameters or a return type |
 | E0212 | `if` used as a value: missing `else`, or branches that aren't one value of the same type |
+
+## Numbers
+Numbers print the same way everywhere: like JavaScript's `String(x)`
+(`3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`, `1.0 / 0.0` prints `Infinity`, never `-0`).
 
 ## Known differences between backends
 - `int` overflow wraps in C; in JS, values above 2^53 lose precision.
