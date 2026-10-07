@@ -20,11 +20,31 @@ const PRELUDE: &str = include_str!("../rt/js/core.js");
 const STRINGS: &str = include_str!("../rt/js/str.js");
 const ARRAYS: &str = include_str!("../rt/js/arr.js");
 
+/// A Nyra name as a JavaScript identifier. Nyra allows any letter (`x²`, `größe`); characters
+/// JavaScript does not accept in names are spelled out as `_u{hex}_`.
+fn ident(n: &str) -> String {
+    let ok = |c: char, first: bool| c == '_' || c == '$' || c.is_ascii_alphabetic() || (!first && c.is_ascii_digit());
+    if n.chars().enumerate().all(|(i, c)| ok(c, i == 0)) {
+        return n.to_string();
+    }
+    let mut out = String::from("nyU_");
+    for c in n.chars() {
+        if ok(c, false) {
+            out.push(c);
+        } else {
+            out.push_str(&format!("_u{:x}_", c as u32));
+        }
+    }
+    out
+}
+
+/// `ny...` names belong to nyra (helpers `ny_*`, struct classes `nyS_*`), so user names that start
+/// with `ny` get a `_`, like reserved words.
 fn name(n: &str) -> String {
-    if RESERVED.contains(&n) || n.starts_with("ny_") {
-        format!("{n}_")
+    if RESERVED.contains(&n) || n.starts_with("ny") {
+        format!("{}_", ident(n))
     } else {
-        n.to_string()
+        ident(n)
     }
 }
 
@@ -43,21 +63,23 @@ fn tdesc(t: Ty) -> String {
 
 /// The JavaScript name of a field: names the runtime uses on objects get a `_`.
 fn jfield(name: &str) -> String {
-    if name.starts_with("ny_") || matches!(name, "constructor" | "prototype" | "__proto__") {
-        format!("{name}_")
+    if name.starts_with("ny") || matches!(name, "constructor" | "prototype" | "__proto__") {
+        format!("{}_", ident(name))
     } else {
-        name.to_string()
+        ident(name)
     }
 }
 
 /// One class per struct: copying one level (copy on write), deep equality and printing.
 fn classes(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
-        let n = format!("nyS_{}", s.name);
+        let n = format!("nyS_{}", ident(&s.name));
         let fields: Vec<String> = s.fields.iter().map(|(f, _)| jfield(f)).collect();
         let _ = writeln!(out, "class {n} {{");
-        let sets: String = fields.iter().map(|f| format!(" this.{f} = {f};")).collect();
-        let _ = writeln!(out, "    constructor({}) {{{sets} }}", fields.join(", "));
+        // parameters by position: a field may be called like a reserved word (`class`)
+        let params: Vec<String> = (0..fields.len()).map(|i| format!("p{i}")).collect();
+        let sets: String = fields.iter().enumerate().map(|(i, f)| format!(" this.{f} = p{i};")).collect();
+        let _ = writeln!(out, "    constructor({}) {{{sets} }}", params.join(", "));
         // the copy shares the aggregate fields, so they are marked shared
         let copies: Vec<String> = s
             .fields
@@ -408,7 +430,7 @@ impl Gen<'_> {
             RtOp::StructNew => {
                 let t = self.f.local(dst.expect("verified: a destination")).ty;
                 let fields: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
-                format!("new nyS_{}({})", t.struct_name().expect("a struct"), fields.join(", "))
+                format!("new nyS_{}({})", ident(&t.struct_name().expect("a struct")), fields.join(", "))
             }
             RtOp::ArrGet => {
                 // an element that is a plain struct now has two owners (no `Dup` follows for it)
@@ -543,6 +565,7 @@ impl Gen<'_> {
     fn expr(&self, e: &Expr) -> String {
         match e {
             Expr::Int(n) => n.to_string(),
+            Expr::Float(f) if f.is_infinite() => (if *f > 0.0 { "Infinity" } else { "(-Infinity)" }).to_string(),
             Expr::Float(f) => format!("{f:?}"),
             Expr::Bool(b) => b.to_string(),
             Expr::Char(c) => c.to_string(),

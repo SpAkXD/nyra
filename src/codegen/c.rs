@@ -20,9 +20,16 @@ const RESERVED: &[&str] = &[
     "uint32_t", "uint64_t", "size_t", "DBL_MAX", "INT64_MAX", "INT64_MIN",
 ];
 
+/// More C words a user name must not be: keywords of newer C and compilers, common macros.
+const RESERVED_MORE: &[&str] = &["asm", "typeof", "fortran", "alignas", "alignof", "noreturn", "thread_local", "complex", "imaginary"];
+
 fn var(name: &str) -> String {
-    // `ny...` names belong to nyra (user functions are `ny_<name>`, the runtime is `nyrt_*`)
-    if RESERVED.contains(&name) || name.starts_with("ny") {
+    // `ny...` names belong to nyra (user functions are `ny_<name>`, the runtime is `nyrt_*`).
+    // Names starting with `_` are reserved in C, and an all-caps name may be a macro of the
+    // C library (`INT32_MAX`, `WIN32`, `BUFSIZ`): both get a suffix too.
+    let macro_like = name.chars().any(|c| c.is_ascii_uppercase())
+        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    if RESERVED.contains(&name) || RESERVED_MORE.contains(&name) || name.starts_with("ny") || name.starts_with('_') || macro_like {
         format!("{name}_")
     } else {
         name.to_string()
@@ -301,6 +308,9 @@ impl Gen<'_> {
     fn addr(&self, e: &Expr, t: Ty) -> String {
         match e {
             Expr::Local(l) => format!("&{}", self.local(*l)),
+            // a struct value initializes an element of a one-element array (`(T){v}` would
+            // initialize the struct's first field with it)
+            _ if matches!(t, Ty::Struct(_)) => format!("&({}[1]){{{}}}[0]", ctype(t), self.arg(e)),
             _ => format!("&({}){{{}}}", ctype(t), self.arg(e)),
         }
     }
@@ -721,6 +731,7 @@ impl Gen<'_> {
                     n.to_string()
                 }
             }
+            Expr::Float(f) if f.is_infinite() => (if *f > 0.0 { "(1.0 / 0.0)" } else { "(-1.0 / 0.0)" }).to_string(),
             Expr::Float(f) => format!("{f:?}"),
             Expr::Bool(b) => b.to_string(),
             Expr::Char(c) => c.to_string(),
@@ -735,7 +746,13 @@ impl Gen<'_> {
                 }
             }
             Expr::Binary(op, ea, eb) => {
-                let (a, b) = (self.expr(ea), self.expr(eb));
+                let (mut a, b) = (self.expr(ea), self.expr(eb));
+                // two small int literals would be computed in C's 32-bit `int`: make one 64-bit
+                if let Expr::Int(n) = **ea {
+                    if !a.starts_with("INT64") {
+                        a = format!("INT64_C({n})");
+                    }
+                }
                 match op {
                     BinOp::SEq => format!("nyrt_str_eq({}, {})", bare(&a), bare(&b)),
                     BinOp::SNe => format!("(!nyrt_str_eq({}, {}))", bare(&a), bare(&b)),

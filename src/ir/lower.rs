@@ -305,6 +305,17 @@ impl<'a> Lower<'a> {
         Expr::Local(tmp)
     }
 
+    /// A value about to be stored into a place, held by its own owner first. A value read from
+    /// the place's own variable (`u.vals.push(u)`, `c.xs[0].ys = c.xs`) would otherwise be the
+    /// very array the store changes, and end up containing itself.
+    fn held(&mut self, v: Expr, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        if self.managed(t) {
+            self.snapshot(v, t, span, out)
+        } else {
+            v
+        }
+    }
+
     /// Lowers operands left to right. An operand followed by one that can change a variable is
     /// snapshotted first.
     fn operands(&mut self, es: &[&ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
@@ -584,10 +595,12 @@ impl<'a> Lower<'a> {
         match op {
             None => {
                 let v = self.expr(value, None, out);
+                let v = self.held(v, t, span, out);
                 out.push(Stmt { kind: StmtKind::Store { place, value: v }, span });
             }
             Some(_) if t == Type::Str || t.elem().is_some() => {
                 let v = self.expr(value, None, out);
+                let v = self.held(v, t, span, out);
                 let op = if t == Type::Str { RtOp::StrAppend } else { RtOp::ArrAppend };
                 out.push(Stmt { kind: StmtKind::Mutate { dst: None, op, place, args: vec![v] }, span });
             }
@@ -981,6 +994,7 @@ impl<'a> Lower<'a> {
             let place = self.place(recv, later, out);
             let refs: Vec<&ast::Expr> = args.iter().collect();
             let vals = self.operands(&refs, out);
+            let vals: Vec<Expr> = vals.into_iter().zip(args).map(|(v, a)| self.held(v, a.ty, a.span, out)).collect();
             let op = match name {
                 "push" => RtOp::ArrPush,
                 "pop" => RtOp::ArrPop,

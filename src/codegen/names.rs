@@ -19,7 +19,7 @@ pub fn locals(f: &Func, escape: fn(&str) -> String, prefix: &str) -> Vec<String>
                 if *count == 1 {
                     escape(n)
                 } else {
-                    format!("{prefix}{n}_{count}")
+                    format!("{prefix}{}_{count}", escape(n))
                 }
             }
             None => format!("{prefix}t{i}"),

@@ -330,6 +330,18 @@ static nyrt_char nyrt_char_from(int64_t n, int line, int col) {
     }
     return (nyrt_char)n;
 }
+// The text of a string in an error message: control characters as escapes (`\n`, `\u0000`).
+static void nyrt_buf_shown(nyrt_buf *b, const nyrt_str *s) {
+    for (int64_t i = 0; i < s->len; i++) {
+        unsigned char c = (unsigned char)s->data[i];
+        char t[8];
+        if (c == '\n') nyrt_buf_add(b, "\\n", 2);
+        else if (c == '\t') nyrt_buf_add(b, "\\t", 2);
+        else if (c == '\r') nyrt_buf_add(b, "\\r", 2);
+        else if (c < 0x20) nyrt_buf_add(b, t, snprintf(t, sizeof t, "\\u%04x", c));
+        else nyrt_buf_add(b, (const char *)&s->data[i], 1);
+    }
+}
 // int(s): -?[0-9]+ that fits in an int, nothing else.
 static int64_t nyrt_str_to_int(const nyrt_str *s, int line, int col) {
     int64_t i = 0, n = s->len;
@@ -345,7 +357,7 @@ static int64_t nyrt_str_to_int(const nyrt_str *s, int line, int col) {
     if (!ok) {
         nyrt_buf b = nyrt_buf_new();
         nyrt_buf_cstr(&b, "cannot parse \"");
-        nyrt_buf_str(&b, s);
+        nyrt_buf_shown(&b, s);
         nyrt_buf_cstr(&b, "\" as int");
         nyrt_panic("E0244", nyrt_buf_done(&b)->data, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
     }
@@ -374,7 +386,7 @@ static double nyrt_str_to_float(const nyrt_str *s, int line, int col) {
     if (!ok || p != e) {
         nyrt_buf b = nyrt_buf_new();
         nyrt_buf_cstr(&b, "cannot parse \"");
-        nyrt_buf_str(&b, s);
+        nyrt_buf_shown(&b, s);
         nyrt_buf_cstr(&b, "\" as float");
         nyrt_panic("E0244", nyrt_buf_done(&b)->data, "float(s) accepts digits with an optional `-`, `.` part and exponent, e.g. \"-1.5e3\"", line, col);
     }

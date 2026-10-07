@@ -75,16 +75,21 @@ function ny_char_from(n, line, col) {
     }
     return n;
 }
+// The text of a string in an error message: control characters as escapes (`\n`, `\u0000`).
+function ny_shown(s) {
+    return s.replace(/[\x00-\x1f]/g, (c) =>
+        c === "\n" ? "\\n" : c === "\t" ? "\\t" : c === "\r" ? "\\r" : "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+}
 function ny_str_to_int(s, line, col) {
     if (/^-?[0-9]+$/.test(s)) {
         const v = BigInt(s);
         if (v >= -9223372036854775808n && v <= 9223372036854775807n) return Number(v);
     }
-    ny_panic("E0244", `cannot parse "${s}" as int`, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
+    ny_panic("E0244", `cannot parse "${ny_shown(s)}" as int`, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
 }
 function ny_str_to_float(s, line, col) {
     if (!/^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(s)) {
-        ny_panic("E0244", `cannot parse "${s}" as float`,
+        ny_panic("E0244", `cannot parse "${ny_shown(s)}" as float`,
             "float(s) accepts digits with an optional `-`, `.` part and exponent, e.g. \"-1.5e3\"", line, col);
     }
     return Number(s);
