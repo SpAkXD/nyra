@@ -110,7 +110,7 @@ fn main() {
 - **What it means:** An integer literal does not fit in `int`, a 64-bit signed integer whose largest value is 9223372036854775807. The smallest `int` cannot be written as a literal at all, because the minus sign is a separate operator: write `-9223372036854775807 - 1`.
 - **Why Nyra has this rule:** `int` is exactly 64 bits and wraps on overflow. A literal that silently wrapped or lost digits would be a wrong program with no error.
 - **Common causes:**
-  - a very large constant such as a factorial, `2^64` or an identifier pasted from elsewhere
+  - a very large constant such as a factorial, `2^64` or an ID number pasted from elsewhere
   - a value that should be a float: write it with a dot (`99999999999999999999.0`)
   - `-9223372036854775808`, the smallest `int`, which has no literal form
 - **Wrong:**
@@ -927,7 +927,7 @@ fn main() {
 - **Why Nyra has this rule:** A position is a whole number, and Nyra never converts a float to an int silently: convert it yourself with `int(x)`.
 - **Common causes:**
   - an index computed with floating-point arithmetic
-  - a `float` loop variable or a float literal such as `xs[1.0]`
+  - a variable that holds a `float`, or a float literal such as `xs[1.0]`
 - **Wrong:**
 ```rust
 fn main() {
@@ -1789,7 +1789,7 @@ json = "https://github.com/someone/nyra-json#v1.2.0"
 - **What it means:** A dependency has the name of a standard module, or two dependencies need different versions (different refs) of the same package.
 - **Why Nyra has this rule:** A name means one package in a program: there is one version of each, and `use math` always means the standard `math`.
 - **Common causes:**
-  - naming a dependency `math` or `str`
+  - naming a dependency `math` or `text`
   - two packages that pin different tags of a third
 - **Wrong:**
 ```toml
