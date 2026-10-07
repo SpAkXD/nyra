@@ -161,5 +161,12 @@ fn expr(m: &Module, f: &Func, e: &Expr) -> String {
         Expr::Binary(op, a, b) => format!("({} {} {})", expr(m, f, a), op.symbol(), expr(m, f, b)),
         Expr::Select(c, a, b) => format!("select({}, {}, {})", expr(m, f, c), expr(m, f, a), expr(m, f, b)),
         Expr::IntToFloat(x) => format!("float({})", expr(m, f, x)),
+        Expr::Field(x, k, _) => {
+            let t = x.ty(f);
+            match m.structs.get(t).and_then(|s| s.fields.get(*k as usize)) {
+                Some((n, _)) => format!("{}.{n}", expr(m, f, x)),
+                None => format!("{}.#{k}", expr(m, f, x)),
+            }
+        }
     }
 }

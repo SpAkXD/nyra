@@ -227,6 +227,13 @@ static void nyrt_put_arr(const nyrt_arr *a) {
     fwrite(b.s->data, 1, (size_t)b.s->len, stdout);
     nyrt_str_release(b.s);
 }
+// Prints a value with its format function (a struct).
+static void nyrt_put_fmt(void (*fmt)(nyrt_buf *, const void *), const void *v) {
+    nyrt_buf b = nyrt_buf_new();
+    fmt(&b, v);
+    fwrite(b.s->data, 1, (size_t)b.s->len, stdout);
+    nyrt_str_release(b.s);
+}
 // A string or a char as it is written in Nyra code: quoted, with escapes.
 static void nyrt_buf_escaped(nyrt_buf *b, nyrt_char c, char quote) {
     switch (c) {

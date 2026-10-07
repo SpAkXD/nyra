@@ -101,6 +101,14 @@ impl Verifier<'_> {
                 self.expect(x, Ty::Int, "int-to-float operand")?;
                 Ty::Float
             }
+            Expr::Field(x, k, t) => {
+                let st = self.ty(x)?;
+                let info = self.m.structs.get(st).ok_or_else(|| format!("field of {}", st.name()))?;
+                match info.fields.get(*k as usize) {
+                    Some((_, ft)) if ft == t => *t,
+                    _ => return Err(format!("{} has no field #{k} of type {}", st.name(), t.name())),
+                }
+            }
             Expr::Pure(p, args) => {
                 let (params, ret) = p.sig();
                 match p {
@@ -210,6 +218,13 @@ impl Verifier<'_> {
                         for a in args {
                             self.expect(a, elem, "array element")?;
                         }
+                        Some(t)
+                    }
+                    RtOp::StructNew => {
+                        let t = dst_ty.ok_or("struct_new needs a destination")?;
+                        let info = self.m.structs.get(t).ok_or("struct_new must write a struct")?;
+                        let fields: Vec<Ty> = info.fields.iter().map(|f| f.1).collect();
+                        self.args(args, &fields, "struct field")?;
                         Some(t)
                     }
                     RtOp::ArrGet => {

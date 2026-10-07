@@ -153,6 +153,10 @@ fn fold_place(p: &mut Place, strs: &mut Interner) {
 fn fold(e: &mut Expr, strs: &mut Interner) {
     match e {
         Expr::Unary(_, x) | Expr::IntToFloat(x) => fold(x, strs),
+        Expr::Field(x, _, _) => {
+            fold(x, strs);
+            return;
+        }
         Expr::Binary(_, a, b) => {
             fold(a, strs);
             fold(b, strs);

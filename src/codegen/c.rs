@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use super::{bare, names};
-use crate::ir::{BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
+use crate::ir::{BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StructInfo, Ty, UnOp};
 
 /// The C runtime, emitted before every program (`@FILE@` becomes the source path).
 const PRELUDE: &str = include_str!("../rt/c/core.c");
@@ -29,15 +29,32 @@ fn var(name: &str) -> String {
     }
 }
 
-fn ctype(t: Ty) -> &'static str {
+fn ctype(t: Ty) -> String {
     match t {
-        Ty::Int => "int64_t",
-        Ty::Float => "double",
-        Ty::Bool => "bool",
-        Ty::Char => "nyrt_char",
-        Ty::Str => "nyrt_str*",
-        Ty::Array(_) => "nyrt_arr*",
-        other => unreachable!("the C backend does not handle `{}` yet", other.name()),
+        Ty::Int => "int64_t".into(),
+        Ty::Float => "double".into(),
+        Ty::Bool => "bool".into(),
+        Ty::Char => "nyrt_char".into(),
+        Ty::Str => "nyrt_str*".into(),
+        Ty::Array(_) => "nyrt_arr*".into(),
+        Ty::Struct(_) => format!("nyS_{}", t.struct_name().expect("a struct")),
+        other => unreachable!("the C backend got the type `{}`", other.name()),
+    }
+}
+
+/// `nyrt_str_retain(x);`, `nyS_User_retain(&x);`: one more owner for the managed value at the lvalue `x`.
+fn retain(t: Ty, x: &str) -> String {
+    match t {
+        Ty::Struct(_) => format!("{}_retain(&{x});", ctype(t)),
+        _ => format!("nyrt_{}_retain({x});", rt_name(t)),
+    }
+}
+
+/// One owner less for the managed value at the lvalue `x`.
+fn release(t: Ty, x: &str) -> String {
+    match t {
+        Ty::Struct(_) => format!("{}_release(&{x});", ctype(t)),
+        _ => format!("nyrt_{}_release({x});", rt_name(t)),
     }
 }
 
@@ -56,7 +73,94 @@ fn rt_name(t: Ty) -> &'static str {
 
 /// The element type descriptor of an array of `elem`.
 fn desc(elem: Ty) -> String {
-    format!("&nyrt_T_{}", rt_name(elem))
+    match elem {
+        Ty::Struct(_) => format!("&nyT_{}", elem.struct_name().expect("a struct")),
+        _ => format!("&nyrt_T_{}", rt_name(elem)),
+    }
+}
+
+/// The C name of a field (escaped like a variable).
+fn field(info: &StructInfo, k: usize) -> String {
+    var(&info.fields[k].0)
+}
+
+/// The typedef, the reference counting, equality and printing of every struct, and the type
+/// descriptor that arrays of it use.
+fn structs(m: &Module, out: &mut String) {
+    if m.structs.0.is_empty() {
+        return;
+    }
+    // by-value fields come first: the order of `m.structs`
+    for (_, s) in &m.structs.0 {
+        let n = format!("nyS_{}", s.name);
+        let fields: String = if s.fields.is_empty() {
+            " char nyrt_unused;".to_string()
+        } else {
+            (0..s.fields.len()).map(|k| format!(" {} {};", ctype(s.fields[k].1), field(s, k))).collect()
+        };
+        let _ = writeln!(out, "typedef struct {n} {{{fields} }} {n};");
+    }
+    for (_, s) in &m.structs.0 {
+        let n = format!("nyS_{}", s.name);
+        if s.managed {
+            let _ = writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);");
+        }
+        let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b);");
+        let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p);");
+        let (r, d) = if s.managed { (format!("{n}_retain"), format!("{n}_release")) } else { ("NULL".into(), "NULL".into()) };
+        let _ = writeln!(out, "static const nyrt_type nyT_{} = {{ sizeof({n}), {r}, {d}, {n}_eq, {n}_fmt, NULL }};", s.name);
+    }
+    for (_, s) in &m.structs.0 {
+        let n = format!("nyS_{}", s.name);
+        if s.managed {
+            for (what, f) in [("retain", retain as fn(Ty, &str) -> String), ("release", release)] {
+                let _ = writeln!(out, "static void {n}_{what}(void *p) {{\n    {n} *v = p;");
+                for (k, (_, t)) in s.fields.iter().enumerate() {
+                    if m.managed(*t) {
+                        let _ = writeln!(out, "    {}", f(*t, &format!("v->{}", field(s, k))));
+                    }
+                }
+                out.push_str("}\n");
+            }
+        }
+        let eqs: Vec<String> = s
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(k, (_, t))| {
+                let f = field(s, k);
+                match t {
+                    Ty::Str => format!("nyrt_str_eq(x->{f}, y->{f})"),
+                    Ty::Array(_) => format!("nyrt_arr_eq(x->{f}, y->{f})"),
+                    Ty::Struct(_) => format!("{}_eq(&x->{f}, &y->{f})", ctype(*t)),
+                    _ => format!("x->{f} == y->{f}"),
+                }
+            })
+            .collect();
+        let body = if eqs.is_empty() { "(void)x; (void)y; return true;".to_string() } else { format!("return {};", eqs.join(" && ")) };
+        let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
+        // `Point(x: 1, y: 2)`: the way the value is written in Nyra
+        let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+        let head = format!("{}(", s.name);
+        let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&head), head.len());
+        for (k, (fname, t)) in s.fields.iter().enumerate() {
+            let label = format!("{}{fname}: ", if k > 0 { ", " } else { "" });
+            let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            let f = field(s, k);
+            let line = match t {
+                Ty::Int => format!("nyrt_buf_int(o, v->{f});"),
+                Ty::Float => format!("nyrt_buf_float(o, v->{f});"),
+                Ty::Bool => format!("nyrt_buf_bool(o, v->{f});"),
+                Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
+                Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
+                Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
+                _ => format!("{}_fmt(o, &v->{f});", ctype(*t)),
+            };
+            let _ = writeln!(out, "    {line}");
+        }
+        out.push_str("    nyrt_buf_lit(o, \")\", 1);\n}\n");
+    }
+    out.push('\n');
 }
 
 fn signature(f: &Func, names: &[String]) -> String {
@@ -65,7 +169,7 @@ fn signature(f: &Func, names: &[String]) -> String {
     } else {
         (0..f.params).map(|i| format!("{} {}", ctype(f.locals[i].ty), names[i])).collect::<Vec<_>>().join(", ")
     };
-    format!("static {} ny_{}({params})", f.ret.map_or("void", ctype), f.name)
+    format!("static {} ny_{}({params})", f.ret.map_or("void".to_string(), ctype), f.name)
 }
 
 /// `file` is the source path as given to nyra; runtime errors report it.
@@ -75,6 +179,7 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     out.push_str(ARRAYS);
     out.push('\n');
+    structs(m, &mut out);
     // string literals: read-only objects that are never freed (reference count 0); `const` also
     // lets the C compiler see that releasing one never reaches free()
     for (i, s) in m.strs.iter().enumerate() {
@@ -99,7 +204,11 @@ pub fn gen(m: &Module, file: &str) -> String {
         let _ = writeln!(out, "{} {{", signature(f, n));
         // every local is declared at the top; statements only assign
         for (i, l) in f.locals.iter().enumerate().skip(f.params) {
-            let init = if m.managed(l.ty) { " = NULL" } else { "" };
+            let init = match l.ty {
+                Ty::Struct(_) => " = {0}",
+                t if m.managed(t) => " = NULL",
+                _ => "",
+            };
             let _ = writeln!(out, "    {} {}{init};", ctype(l.ty), n[i]);
         }
         let mut g = Gen { m, f, names: n, out: String::new(), indent: 1, tmp: 0 };
@@ -174,6 +283,14 @@ impl Gen<'_> {
         }
     }
 
+    /// One more owner for a managed value (a struct through its address).
+    fn retain_value(&self, t: Ty, e: &Expr) -> String {
+        match t {
+            Ty::Struct(_) => format!("{}_retain({});", ctype(t), self.addr(e, t)),
+            _ => retain(t, &self.arg(e)),
+        }
+    }
+
     fn fresh(&mut self, prefix: &str) -> String {
         self.tmp += 1;
         format!("nyrt_{prefix}{}", self.tmp)
@@ -216,9 +333,9 @@ impl Gen<'_> {
                 let v = self.arg(value);
                 if self.m.managed(t) {
                     // the new value gets its owner before the old one loses its own (`xs[0] = xs[0]`)
-                    let n = rt_name(t);
-                    self.line(&format!("nyrt_{n}_retain({v});"));
-                    self.line(&format!("nyrt_{n}_release({slot});"));
+                    let line = self.retain_value(t, value);
+                    self.line(&line);
+                    self.line(&release(t, &slot));
                 }
                 self.line(&format!("{slot} = {v};"));
                 self.indent -= 1;
@@ -259,18 +376,19 @@ impl Gen<'_> {
                 self.line(&line);
             }
             StmtKind::Dup(l) => {
-                let line = format!("nyrt_{}_retain({});", rt_name(self.f.local(*l).ty), self.local(*l));
+                let line = retain(self.f.local(*l).ty, self.local(*l));
                 self.line(&line);
             }
             StmtKind::Drop(l) => {
-                let line = format!("nyrt_{}_release({});", rt_name(self.f.local(*l).ty), self.local(*l));
+                let line = release(self.f.local(*l).ty, self.local(*l));
                 self.line(&line);
             }
             StmtKind::Free(l) => {
                 let x = self.local(*l).to_string();
-                let n = rt_name(self.f.local(*l).ty);
-                self.line(&format!("nyrt_{n}_release({x});"));
-                self.line(&format!("{x} = NULL;"));
+                let t = self.f.local(*l).ty;
+                self.line(&release(t, &x));
+                let empty = if matches!(t, Ty::Struct(_)) { format!("({}){{0}}", ctype(t)) } else { "NULL".to_string() };
+                self.line(&format!("{x} = {empty};"));
             }
         }
     }
@@ -304,7 +422,11 @@ impl Gen<'_> {
                     lv = format!("(*{ptr})");
                     t = elem;
                 }
-                Step::Field(_) => unreachable!("structs are not lowered yet"),
+                Step::Field(k) => {
+                    let info = self.m.structs.get(t).expect("verified: a struct");
+                    lv = format!("{lv}.{}", field(info, *k as usize));
+                    t = info.fields[*k as usize].1;
+                }
             }
         }
         (lv, None)
@@ -337,7 +459,7 @@ impl Gen<'_> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
-                Step::Field(_) => unreachable!("structs are not lowered yet"),
+                Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
         t
@@ -420,6 +542,17 @@ impl Gen<'_> {
                 }
                 return;
             }
+            RtOp::StructNew => {
+                let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
+                let t = self.f.local(dst.expect("checked")).ty;
+                let fields = if a.is_empty() { "0".to_string() } else { a.join(", ") };
+                self.line(&format!("{d} = ({}){{{fields}}};", ctype(t)));
+                if self.m.managed(t) {
+                    // the struct becomes one more owner of each field value
+                    self.line(&retain(t, &d));
+                }
+                return;
+            }
             RtOp::ArrGet => {
                 let elem = self.ty(&args[0]).elem().expect("verified: an array");
                 format!("*({}*)nyrt_arr_at({}, {}, {at})", ctype(elem), a[0], a[1])
@@ -459,7 +592,16 @@ impl Gen<'_> {
             let s = self.m.str(*id);
             return format!("{prefix}_lit({target}{}, {});", string_lit(s), s.len());
         }
-        format!("{prefix}_{}({target}{});", rt_name(self.ty(p)), bare(&self.expr(p)))
+        let t = self.ty(p);
+        if let Ty::Struct(_) = t {
+            let a = self.addr(p, t);
+            return if prefix == "nyrt_buf" {
+                format!("{}_fmt(&nyrt_b, {a});", ctype(t))
+            } else {
+                format!("nyrt_put_fmt({}_fmt, {a});", ctype(t))
+            };
+        }
+        format!("{prefix}_{}({target}{});", rt_name(t), bare(&self.expr(p)))
     }
 
     fn if_chain(&mut self, s: &Stmt) {
@@ -542,21 +684,36 @@ impl Gen<'_> {
                     _ => format!("(-{x})"),
                 }
             }
-            Expr::Binary(op, a, b) => {
-                let (a, b) = (self.expr(a), self.expr(b));
+            Expr::Binary(op, ea, eb) => {
+                let (a, b) = (self.expr(ea), self.expr(eb));
                 match op {
                     BinOp::SEq => format!("nyrt_str_eq({}, {})", bare(&a), bare(&b)),
                     BinOp::SNe => format!("(!nyrt_str_eq({}, {}))", bare(&a), bare(&b)),
                     BinOp::SLt | BinOp::SLe | BinOp::SGt | BinOp::SGe => {
                         format!("(nyrt_str_cmp({}, {}) {} 0)", bare(&a), bare(&b), op.symbol())
                     }
-                    BinOp::DeepEq => format!("nyrt_arr_eq({}, {})", bare(&a), bare(&b)),
-                    BinOp::DeepNe => format!("(!nyrt_arr_eq({}, {}))", bare(&a), bare(&b)),
+                    BinOp::DeepEq | BinOp::DeepNe => {
+                        let (x, y): (&Expr, &Expr) = (ea, eb);
+                        let t = x.ty(self.f);
+                        let eq = match t {
+                            Ty::Struct(_) => format!("{}_eq({}, {})", ctype(t), self.addr(x, t), self.addr(y, t)),
+                            _ => format!("nyrt_arr_eq({}, {})", bare(&a), bare(&b)),
+                        };
+                        if *op == BinOp::DeepEq {
+                            eq
+                        } else {
+                            format!("(!{eq})")
+                        }
+                    }
                     _ => format!("({a} {} {b})", op.symbol()),
                 }
             }
             Expr::Select(c, a, b) => format!("({} ? {} : {})", self.expr(c), self.expr(a), self.expr(b)),
             Expr::IntToFloat(x) => format!("((double)({}))", self.expr(x)),
+            Expr::Field(x, k, _) => {
+                let info = self.m.structs.get(x.ty(self.f)).expect("verified: a struct");
+                format!("{}.{}", self.expr(x), field(info, *k as usize))
+            }
             Expr::Pure(p, args) => {
                 let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
                 match p {

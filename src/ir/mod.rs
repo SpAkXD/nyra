@@ -233,6 +233,9 @@ pub enum RtOp {
     ArrReverse,
     /// `xs += ys` (a `Mutate`): appends in place when the array has only one owner.
     ArrAppend,
+    /// `Point(x: 1, y: 2)`: the fields in declaration order; the struct becomes one more owner
+    /// of each managed field value.
+    StructNew,
 }
 
 impl RtOp {
@@ -271,6 +274,7 @@ impl RtOp {
             RtOp::ArrSort => "arr_sort",
             RtOp::ArrReverse => "arr_reverse",
             RtOp::ArrAppend => "arr_append",
+            RtOp::StructNew => "struct_new",
         }
     }
 
@@ -318,6 +322,7 @@ impl RtOp {
                 | RtOp::ArrJoin
                 | RtOp::ArrPop
                 | RtOp::ArrRemove
+                | RtOp::StructNew
         )
     }
 
@@ -416,6 +421,8 @@ pub enum Expr {
     Select(Box<Expr>, Box<Expr>, Box<Expr>),
     IntToFloat(Box<Expr>),
     Pure(PureFn, Vec<Expr>),
+    /// A field of a struct value, by position, with the field's type. Borrowed like a variable.
+    Field(Box<Expr>, u32, Ty),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -535,6 +542,7 @@ impl Expr {
             Expr::Binary(op, _, _) => op.result(),
             Expr::Select(_, a, _) => a.ty(f),
             Expr::Pure(p, _) => p.sig().1,
+            Expr::Field(_, _, t) => *t,
         }
     }
 
@@ -608,7 +616,7 @@ fn place_locals(p: &mut Place, f: &mut dyn FnMut(&mut LocalId)) {
 fn expr_locals(e: &mut Expr, f: &mut dyn FnMut(&mut LocalId)) {
     match e {
         Expr::Local(l) => f(l),
-        Expr::Unary(_, x) | Expr::IntToFloat(x) => expr_locals(x, f),
+        Expr::Unary(_, x) | Expr::IntToFloat(x) | Expr::Field(x, _, _) => expr_locals(x, f),
         Expr::Binary(_, a, b) => {
             expr_locals(a, f);
             expr_locals(b, f);

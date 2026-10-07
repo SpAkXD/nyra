@@ -187,12 +187,6 @@ impl<'a> Lower<'a> {
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
-        fn has_struct(t: Ty) -> bool {
-            matches!(t, Type::Struct(_)) || t.elem().is_some_and(has_struct)
-        }
-        if has_struct(t) {
-            self.not_yet("structs");
-        }
         let id = LocalId(self.locals.len() as u32);
         self.locals.push(Local { name, ty: t });
         id
@@ -625,9 +619,10 @@ impl<'a> Lower<'a> {
                 p.path.push(Step::Index(i, e.span));
                 p
             }
-            ast::ExprKind::Field(..) => {
-                self.not_yet("structs");
-                Place::local(LocalId(0))
+            ast::ExprKind::Field(base, name) => {
+                let mut p = self.place(base, fix, out);
+                p.path.push(Step::Field(self.field_index(base.ty, name)));
+                p
             }
             _ => unreachable!("the checker allows only variables, elements and fields as places"),
         }
@@ -646,22 +641,37 @@ impl<'a> Lower<'a> {
                     cur = Expr::Local(d);
                     cur_ty = elem;
                 }
-                Step::Field(_) => unreachable!("structs are not lowered yet"),
+                Step::Field(k) => {
+                    let ft = self.structs.get(cur_ty).expect("a field step reads a struct").fields[*k as usize].1;
+                    cur = Expr::Field(Box::new(cur), *k, ft);
+                    cur_ty = ft;
+                }
             }
         }
         debug_assert!(cur_ty == t);
         cur
     }
 
+    /// Call arguments, left to right (struct fields are `name: value`).
     fn args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
+        let mut refs: Vec<&ast::Expr> = Vec::with_capacity(args.len());
         for a in args {
-            if matches!(a.kind, ast::ExprKind::Inout(_) | ast::ExprKind::Labeled(..)) {
-                self.not_yet("`inout` arguments and structs");
-                return Vec::new();
+            match &a.kind {
+                ast::ExprKind::Inout(_) => {
+                    self.not_yet("`inout` arguments");
+                    return Vec::new();
+                }
+                ast::ExprKind::Labeled(_, v) => refs.push(v),
+                _ => refs.push(a),
             }
         }
-        let refs: Vec<&ast::Expr> = args.iter().collect();
         self.operands(&refs, out)
+    }
+
+    /// The position of field `name` in struct type `t`.
+    fn field_index(&self, t: Ty, name: &str) -> u32 {
+        let info = self.structs.get(t).expect("the checker knows every struct");
+        info.fields.iter().position(|(n, _)| n == name).expect("the checker knows every field") as u32
     }
 
     /// The parts of an interpolated string: text becomes string literals.
@@ -783,8 +793,12 @@ impl<'a> Lower<'a> {
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
             }
-            ast::ExprKind::Field(..) => self.not_yet("structs"),
-            ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments and structs"),
+            ast::ExprKind::Field(base, name) => {
+                let k = self.field_index(base.ty, name);
+                let b = self.expr(base, None, out);
+                Expr::Field(Box::new(b), k, e.ty)
+            }
+            ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments"),
         }
     }
 
@@ -926,7 +940,9 @@ impl<'a> Lower<'a> {
             "free" | "keep" => Expr::Bool(false),
             _ => {
                 let Some(&func) = self.ids.get(name) else {
-                    return self.not_yet("structs");
+                    // `Point(x: 1, y: 2)`: the fields in declaration order (the checker made sure)
+                    let fields = self.args(args, out);
+                    return self.op(RtOp::StructNew, fields, e.ty, dst, span, out);
                 };
                 let args = self.args(args, out);
                 if e.ty == Type::Void {

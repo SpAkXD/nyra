@@ -41,6 +41,54 @@ fn tdesc(t: Ty) -> String {
     }
 }
 
+/// The JavaScript name of a field: names the runtime uses on objects get a `_`.
+fn jfield(name: &str) -> String {
+    if name.starts_with("ny_") || matches!(name, "constructor" | "prototype" | "__proto__") {
+        format!("{name}_")
+    } else {
+        name.to_string()
+    }
+}
+
+/// One class per struct: copying one level (copy on write), deep equality and printing.
+fn classes(m: &Module, out: &mut String) {
+    for (_, s) in &m.structs.0 {
+        let n = format!("nyS_{}", s.name);
+        let fields: Vec<String> = s.fields.iter().map(|(f, _)| jfield(f)).collect();
+        let _ = writeln!(out, "class {n} {{");
+        let sets: String = fields.iter().map(|f| format!(" this.{f} = {f};")).collect();
+        let _ = writeln!(out, "    constructor({}) {{{sets} }}", fields.join(", "));
+        // the copy shares the aggregate fields, so they are marked shared
+        let copies: Vec<String> = s
+            .fields
+            .iter()
+            .zip(&fields)
+            .map(|((_, t), f)| if Structs::aggregate(*t) { format!("ny_sh(this.{f})") } else { format!("this.{f}") })
+            .collect();
+        let _ = writeln!(out, "    ny_cp() {{ return new {n}({}); }}", copies.join(", "));
+        let eqs: Vec<String> = s
+            .fields
+            .iter()
+            .zip(&fields)
+            .map(|((_, t), f)| if Structs::aggregate(*t) { format!("ny_eq(this.{f}, o.{f})") } else { format!("this.{f} === o.{f}") })
+            .collect();
+        let eq = if eqs.is_empty() { "true".to_string() } else { eqs.join(" && ") };
+        let _ = writeln!(out, "    ny_eq(o) {{ return {eq}; }}");
+        let parts: Vec<String> = s
+            .fields
+            .iter()
+            .zip(&fields)
+            .map(|((name, t), f)| format!("\"{name}: \" + ny_fmt(this.{f}, \"{}\")", tdesc(*t)))
+            .collect();
+        let body = if parts.is_empty() { String::new() } else { format!(" + {}", parts.join(" + \", \" + ")) };
+        let _ = writeln!(out, "    ny_fmt() {{ return \"{}(\"{body} + \")\"; }}", s.name);
+        out.push_str("}\n");
+    }
+    if !m.structs.0.is_empty() {
+        out.push('\n');
+    }
+}
+
 /// `file` is the source path as given to nyra; runtime errors report it.
 pub fn gen(m: &Module, file: &str) -> String {
     let mut out = PRELUDE.replace("@FILE@", &crate::diag::json_str(file));
@@ -48,6 +96,7 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push_str(STRINGS);
     out.push_str(ARRAYS);
     out.push('\n');
+    classes(m, &mut out);
     for f in &m.funcs {
         let n = names::locals(f, name, "ny_");
         let _ = writeln!(out, "function {}({}) {{", name(&f.name), n[..f.params].join(", "));
@@ -246,7 +295,12 @@ impl Gen<'_> {
                     t = t.elem().expect("verified: an array");
                     format!("ny_ck({lv}, {}, {}, {})", self.arg(i), span.line, span.col)
                 }
-                Step::Field(_) => unreachable!("structs are not lowered yet"),
+                Step::Field(fi) => {
+                    let info = self.m.structs.get(t).expect("verified: a struct");
+                    let key = format!("\"{}\"", jfield(&info.fields[*fi as usize].0));
+                    t = info.fields[*fi as usize].1;
+                    key
+                }
             };
             if k + 1 == n && !unique {
                 return format!("{lv}[{key}]");
@@ -264,7 +318,7 @@ impl Gen<'_> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
-                Step::Field(_) => unreachable!("structs are not lowered yet"),
+                Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
         t
@@ -294,6 +348,11 @@ impl Gen<'_> {
             RtOp::ArrNew => {
                 let items: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
                 format!("[{}]", items.join(", "))
+            }
+            RtOp::StructNew => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                let fields: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
+                format!("new nyS_{}({})", t.struct_name().expect("a struct"), fields.join(", "))
             }
             RtOp::ArrGet => format!("ny_get({}, {}, {at})", a[0], a[1]),
             RtOp::ArrSlice => format!("ny_aslice({}, {}, {}, {at})", a[0], a[1], a[2]),
@@ -455,6 +514,10 @@ impl Gen<'_> {
             }
             Expr::Select(c, a, b) => format!("({} ? {} : {})", self.expr(c), self.expr(a), self.expr(b)),
             Expr::IntToFloat(x) => self.expr(x),
+            Expr::Field(x, k, _) => {
+                let info = self.m.structs.get(x.ty(self.f)).expect("verified: a struct");
+                format!("{}.{}", self.expr(x), jfield(&info.fields[*k as usize].0))
+            }
             Expr::Pure(p, args) => {
                 let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
                 match p {
