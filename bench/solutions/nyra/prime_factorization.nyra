@@ -1,0 +1,31 @@
+fn factorization(n: int) -> str {
+    var line = "{n} ="
+    var sep = " "
+    var rest = n
+    var p = 2
+    while p * p <= rest {
+        var exponent = 0
+        while rest % p == 0 {
+            rest /= p
+            exponent += 1
+        }
+        if exponent > 0 {
+            let part = if exponent == 1 { "{p}" } else { "{p}^{exponent}" }
+            line = "{line}{sep}{part}"
+            sep = " * "
+        }
+        p += 1
+    }
+    if rest > 1 {
+        line = "{line}{sep}{rest}"
+    }
+    ret line
+}
+
+fn main() {
+    print(factorization(360))
+    print(factorization(97))
+    print(factorization(1001))
+    print(factorization(65536))
+    print(factorization(999999))
+}

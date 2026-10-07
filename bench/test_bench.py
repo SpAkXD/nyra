@@ -190,7 +190,7 @@ class TaskSet(unittest.TestCase):
         cls.tasks = run.load_tasks()
 
     def test_size_and_mix(self):
-        self.assertTrue(30 <= len(self.tasks) <= 40, len(self.tasks))
+        self.assertTrue(45 <= len(self.tasks) <= 60, len(self.tasks))
         self.assertEqual({t.min_version for t in self.tasks}, {"0.1", "0.2", "0.3"})
 
     def test_every_task_has_a_python_reference_and_v01_tasks_a_nyra_one(self):

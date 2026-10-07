@@ -1,0 +1,9 @@
+{
+  "id": "count_change",
+  "title": "Ways to make change",
+  "category": "math",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "Count the number of different ways to make exactly 175 cents using any number of coins worth 1, 5, 10, 25 and 50 cents. Two ways are the same if they use the same number of coins of each value (the order of the coins does not matter, so 1 + 5 and 5 + 1 count once). Print only the count, on one line.",
+  "expected_output": "1580\n"
+}

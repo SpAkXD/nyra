@@ -1,0 +1,9 @@
+{
+  "id": "hanoi_moves",
+  "title": "Tower of Hanoi moves",
+  "category": "recursion",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "Solve the Tower of Hanoi puzzle with 4 disks using the minimum number of moves, moving all disks from peg A to peg C and using peg B as the spare peg. Print one line per move in the form `A -> C` (the peg the disk is taken from, then ` -> `, then the peg it is put on). The first move is `A -> B`.",
+  "expected_output": "A -> B\nA -> C\nB -> C\nA -> B\nC -> A\nC -> B\nA -> B\nA -> C\nB -> C\nB -> A\nC -> A\nB -> C\nA -> B\nA -> C\nB -> C\n"
+}

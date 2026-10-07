@@ -1,0 +1,9 @@
+{
+  "id": "happy_numbers",
+  "title": "Happy numbers",
+  "category": "number-theory",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "A positive integer is called happy if repeatedly replacing it with the sum of the squares of its decimal digits eventually reaches 1 (for example 49 becomes 97, then 130, then 10, then 1). Numbers that are not happy never reach 1 and keep cycling. Print the first 10 happy numbers in increasing order, one per line, starting with 1.",
+  "expected_output": "1\n7\n10\n13\n19\n23\n28\n31\n32\n44\n"
+}
