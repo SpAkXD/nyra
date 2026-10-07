@@ -272,14 +272,14 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
   gl.enableVertexAttribArray(0); gl.enableVertexAttribArray(1);
 
   /* sizing */
-  let W = 0, H = 0, F = 1, shift = [0, 0], size = 24, aspect = 1, split = .82, R = 100;
+  let W = 0, H = 0, F = 1, shift = [0, 0], size = 24, aspect = 1, split = .82, R = 100, narrow = false;
   const DIST = 4;
   function resize() {
     const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
     W = Math.round(w * DPR); H = Math.round(h * DPR);
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     gl.viewport(0, 0, W, H); aspect = w / h;
-    const wide = w >= 900;
+    const wide = w >= 900; narrow = !wide;
     R = wide ? Math.min(h * .3, w * .2) : Math.min(w * .3, 140);      // crystal radius in css px
     F = R / (h / 2) * DIST;
     const cx = wide ? w * .74 : w * .5, cy = wide ? h * .5 : 64 + (Math.min(w * .68, 330) - 10) / 2 + 6;
@@ -319,10 +319,11 @@ void main(){ float a = vA*0.22; gl_FragColor = vec4(vC*a, a); }`;
       gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
       gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 28, 12);
       gl.uniformMatrix3fv(u.uRot, false, rot);
-      gl.uniform1f(u.uTime, t); gl.uniform1f(u.uMorph, Hero.morph); gl.uniform1f(u.uF, F); gl.uniform1f(u.uAspect, aspect);
+      gl.uniform1f(u.uTime, t); gl.uniform1f(u.uMorph, narrow ? 0 : Hero.morph); gl.uniform1f(u.uF, F); gl.uniform1f(u.uAspect, aspect);
       gl.uniform1f(u.uDist, DIST); gl.uniform1f(u.uSize, size); gl.uniform1f(u.uPulse, Hero.pulse); gl.uniform1f(u.uLine, line);
       const mo = sstep(0, 1, Hero.morph);
-      gl.uniform2f(u.uShift, shift[0] * (1 - mo), shift[1] + mo * 0.25);
+      if (narrow) gl.uniform2f(u.uShift, shift[0], shift[1] + L.sy * 0.8 / (H / DPR) * 2);   // phones: the crystal rides up with the page
+      else gl.uniform2f(u.uShift, shift[0] * (1 - mo), shift[1] + mo * 0.25);
       gl.uniform1f(u.uSplit, split);
       if (!line) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(u.uTex, 0); }
       gl.drawArrays(mode, 0, count);
@@ -357,10 +358,10 @@ function heroScroll() {
       const p = L.sy / L.vh;
       if (Math.abs(p - lastP) > 0.0002) {
         lastP = p;
-        if (!RM && p < 1.4) inner.style.transform = `translate3d(0, ${(p * L.vh * 0.32).toFixed(1)}px, 0) scale(${(1 - p * 0.05).toFixed(4)})`;
+        if (!RM && FINE && p < 1.4) inner.style.transform = `translate3d(0, ${(p * L.vh * 0.32).toFixed(1)}px, 0) scale(${(1 - p * 0.05).toFixed(4)})`;
         if (!RM) inner.style.opacity = clamp(1 - p * 1.3).toFixed(3);
         Hero.morph = clamp((p - 0.08) / 0.85);
-        Hero.opacity = clamp((heroH - L.sy - L.vh * 0.15) / (L.vh * 0.55));
+        Hero.opacity = L.vw < 900 ? clamp(1 - (p - 0.15) * 1.6) : clamp((heroH - L.sy - L.vh * 0.15) / (L.vh * 0.55));
         if (cv) cv.style.opacity = Hero.opacity.toFixed(3);
       }
       if (RM || !stage) return false;

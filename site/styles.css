@@ -255,7 +255,7 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .card h3 { margin-bottom: 10px; }
 .card p { color: var(--tx2); font-size: 15px; }
 .card:hover { border-color: rgba(11,216,182,.38); }
-.tilt { transform-style: preserve-3d; will-change: transform; }
+@media (hover: hover) and (pointer: fine) { .tilt { will-change: transform; } }
 .glare { position: absolute; left: 0; top: 0; width: 360px; height: 360px; margin: -180px 0 0 -180px; border-radius: 50%; background: radial-gradient(closest-side, rgba(11,216,182,.16), transparent); opacity: 0; pointer-events: none; transition: opacity .4s; }
 .paper .glare { background: radial-gradient(closest-side, rgba(11,216,182,.14), transparent); }
 .tilt.hot .glare { opacity: 1; }
@@ -321,7 +321,7 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 
 /* ---------- errors ---------- */
 .duo-3d { perspective: 1600px; margin-bottom: 20px; }
-.duo { display: grid; gap: 14px; transform-style: preserve-3d; will-change: transform; }
+.duo { display: grid; gap: 14px; transform-style: preserve-3d; }
 .duo .win { transition: transform .9s var(--out); }
 @media (min-width: 960px) {
   .duo { grid-template-columns: 1fr 1.08fr; gap: 22px; align-items: stretch; }
