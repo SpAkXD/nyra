@@ -1,0 +1,5 @@
+// expect: E0001
+fn main() {
+    # not a comment
+    print("hi")
+}

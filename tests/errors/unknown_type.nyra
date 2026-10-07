@@ -1,0 +1,6 @@
+// expect: E0102
+fn f(x: string) {
+}
+
+fn main() {
+}

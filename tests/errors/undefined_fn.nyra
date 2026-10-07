@@ -1,0 +1,4 @@
+// expect: E0202
+fn main() {
+    print(abs(-3))
+}

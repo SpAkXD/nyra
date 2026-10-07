@@ -36,12 +36,13 @@ fn codes_in(text: &str) -> BTreeSet<String> {
     found
 }
 
-fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+/// Every file below `dir`: the runtime that the backends embed (C, JavaScript) may emit codes too.
+fn source_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
-            rust_files(&path, out);
-        } else if path.extension().is_some_and(|e| e == "rs") {
+            source_files(&path, out);
+        } else {
             out.push(path);
         }
     }
@@ -79,14 +80,14 @@ fn entry(code: &str) -> Json {
 #[test]
 fn every_emitted_code_has_an_entry_and_every_entry_is_emitted() {
     let mut files = Vec::new();
-    rust_files(Path::new("src"), &mut files);
+    source_files(Path::new("src"), &mut files);
     let mut emitted = BTreeSet::new();
     for f in &files {
         // explain.rs only mentions codes in its own documentation and tests
         if f.file_name().is_some_and(|n| n == "explain.rs") {
             continue;
         }
-        let text = std::fs::read_to_string(f).unwrap();
+        let text = String::from_utf8_lossy(&std::fs::read(f).unwrap()).into_owned();
         emitted.extend(codes_in(&text));
     }
     assert!(emitted.len() >= 22, "found only {} codes in src/: {emitted:?}", emitted.len());
@@ -282,7 +283,39 @@ fn every_error_program_in_the_tests_has_a_hint_and_a_documented_code() {
         }
         seen += 1;
     }
-    assert!(seen >= 16);
+    assert!(seen >= 25);
+}
+
+/// The codes named in the first line (`// expect: E0203 ...`) of the programs in a folder.
+fn expected_codes(dir: &str) -> BTreeSet<String> {
+    let mut found = BTreeSet::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "nyra") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let first = text.lines().next().unwrap_or("");
+        let code = first.strip_prefix("// expect: ").and_then(|r| r.split_whitespace().next());
+        found.insert(code.unwrap_or_else(|| panic!("{} has no `// expect:` line", path.display())).to_string());
+    }
+    found
+}
+
+#[test]
+fn every_code_of_the_compiler_has_a_test_program() {
+    let compile = expected_codes("tests/errors");
+    let runtime = expected_codes("tests/runtime");
+    for item in listed().iter().filter(|e| !e.planned) {
+        let folder = if item.kind == "runtime error" { ("tests/runtime", &runtime) } else { ("tests/errors", &compile) };
+        assert!(
+            folder.1.contains(&item.code),
+            "{} has no program in {}: add one whose first line is `// expect: {}`",
+            item.code,
+            folder.0,
+            item.code
+        );
+    }
 }
 
 #[test]

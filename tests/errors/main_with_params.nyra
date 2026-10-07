@@ -1,0 +1,3 @@
+// expect: E0211
+fn main(x: int) {
+}

@@ -1,0 +1,4 @@
+// expect: E0002
+fn main() {
+    print("hi)
+}

@@ -1,0 +1,7 @@
+// expect: E0209
+fn main() {
+    let n = 3
+    if n {
+        print(n)
+    }
+}
