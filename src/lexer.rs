@@ -300,7 +300,10 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                             i = e + 1;
                         }
                         None => {
-                            let (msg, hint) = if cs.get(j) == Some(&'"') {
+                            // a quote before any `}`: either a quote inside `{ }` (if a `}` follows
+                            // later on the line) or a `{` that is never closed
+                            let closes_later = cs[j..].iter().take_while(|c| **c != '\n').any(|c| *c == '}');
+                            let (msg, hint) = if cs.get(j) == Some(&'"') && closes_later {
                                 ("quotes are not allowed inside `{ }` in a string", "store the text in a variable first, then use `{name}`")
                             } else {
                                 ("unclosed `{` in a string", "close it with `}`, or write `{{` for a literal `{`")

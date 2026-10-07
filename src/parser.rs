@@ -381,15 +381,54 @@ impl Parser {
         let e = self.expr()?;
         self.skip_newlines();
         if !self.at(&Tok::RBrace) {
-            return Err(Diag::new(
+            let d = Diag::new(
                 "E0212",
                 "each branch of an `if` used as a value must be a single expression",
                 self.span(),
             )
-            .hint("compute the value before the `if`, or use an `if` statement that assigns a `var`"));
+            .hint("compute the value before the `if`, or use an `if` statement that assigns a `var`");
+            self.skip_if_value_rest();
+            return Err(d);
         }
         self.bump();
         Ok(e)
+    }
+
+    /// After a bad branch of an `if` used as a value: skip to the end of this branch and
+    /// any `else` branches after it, so one mistake gives one error.
+    fn skip_if_value_rest(&mut self) {
+        let mut depth = 1usize;
+        while depth > 0 && !matches!(self.peek(), Tok::Eof | Tok::Fn) {
+            match self.bump().tok {
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => depth -= 1,
+                _ => {}
+            }
+        }
+        loop {
+            let save = self.pos;
+            self.skip_newlines();
+            if !self.at(&Tok::Else) {
+                self.pos = save;
+                return;
+            }
+            // `else { ... }` or `else if cond { ... }`: skip to the block, then over it
+            while !matches!(self.peek(), Tok::LBrace | Tok::Eof | Tok::Fn) {
+                self.bump();
+            }
+            if !self.at(&Tok::LBrace) {
+                return;
+            }
+            self.bump();
+            let mut depth = 1usize;
+            while depth > 0 && !matches!(self.peek(), Tok::Eof | Tok::Fn) {
+                match self.bump().tok {
+                    Tok::LBrace => depth += 1,
+                    Tok::RBrace => depth -= 1,
+                    _ => {}
+                }
+            }
+        }
     }
 
     /// Parses the expression inside `{ }` of an interpolated string.

@@ -1,0 +1,10 @@
+// expect: E0212
+fn main() {
+    let x = if true {
+        print("a")
+        1
+    } else {
+        2
+    }
+    print(x)
+}
