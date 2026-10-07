@@ -23,6 +23,7 @@ How to check your work: `nyra check prog.nyra --json` prints `{"ok":true,"errors
 
 - [AI guide](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/AI_GUIDE.md): read this first. The workflow, every rule as do and don't, what does not exist yet, all error codes with fixes, recipes and complete programs.
 - [Language spec](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/SPEC.md): the complete language: types, operators, builtins, the error code table and known backend differences.
+- [Error database](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/ERRORS.md): every error code with what it means, the usual causes, and a wrong and a fixed program; `nyra explain E0201 --json` prints an entry.
 - [README](https://raw.githubusercontent.com/SpAkXD/nyra/main/README.md): overview, install, CLI options and roadmap.
 
 ## Examples

@@ -13,14 +13,19 @@ If a feature is not described, it does not exist yet (section 4).
 nyra check prog.nyra --json    # compile only; prints {"ok":true,"errors":[]} when clean
 nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
 nyra run prog.nyra --js        # or run on Node.js
+nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
 ```
 
 1. Write the program to `prog.nyra`.
 2. Run `nyra check prog.nyra --json`. If `"ok"` is `false`, fix **every** entry of `errors`, then check
-   again. Each error has a stable `code`, a `message`, `line`, `col` and usually a `hint`:
+   again. Each error has a stable `code`, a `message`, `line`, `col` and a `hint`:
    ```json
    {"ok":false,"errors":[{"code":"E0201","message":"undefined variable `cout`","file":"a.nyra","line":4,"col":11,"hint":"did you mean `count`?"}]}
    ```
+   If a hint is not enough, `nyra explain <code> --json` returns the whole entry of the error database
+   ([ERRORS.md](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/ERRORS.md)): what the code means, why the rule
+   exists, the usual causes, and a wrong and a fixed program. (`nyra explain` needs a build newer than 0.2.0;
+   with an older one, read ERRORS.md instead.)
 3. Run it and compare the output with what you expect.
 
 Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
@@ -148,6 +153,9 @@ that works (for example, sort three numbers with `min`/`max` instead of sorting 
   an error): a float always prints in its shortest form, so `12.5` is never shown as `12.50`.
 
 ## 5. Error codes
+
+Short table. The full database, with the reason for each rule and a wrong and a fixed program for every code, is
+[ERRORS.md](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/ERRORS.md); `nyra explain E0201` prints an entry.
 
 | Code | Meaning | Usual cause and fix |
 |---|---|---|

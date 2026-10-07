@@ -20,6 +20,7 @@
   <a href="#language-tour">Language tour</a> ·
   <a href="docs/SPEC.md">Spec</a> ·
   <a href="docs/AI_GUIDE.md">AI guide</a> ·
+  <a href="docs/ERRORS.md">Errors</a> ·
   <a href="#roadmap">Roadmap</a>
 </p>
 
@@ -61,7 +62,9 @@ compiler to tell the AI exactly what to fix.
 - **One way to do each thing.** No implicit conversions, no shadowing, no null, no semicolons. Fewer
   choices mean fewer wrong ones.
 - **Errors are an API.** Every error has a stable code, an exact position and a fix hint, and `--json`
-  makes them machine-readable, so an agent can loop *write, check, fix, run* without a human.
+  makes them machine-readable, so an agent can loop *write, check, fix, run* without a human. Each message says
+  what was expected and what was found, and `nyra explain E0201` explains any code with a wrong and a fixed
+  program ([`docs/ERRORS.md`](docs/ERRORS.md)).
 - **Compact programs.** One-line functions, string interpolation and `if` as a value keep code short.
   A benchmark of first-try correctness and token count against Python is coming in v0.4.
 - **Same output everywhere.** Every example runs on both backends in CI and must match byte for byte.
@@ -72,8 +75,8 @@ compiler to tell the AI exactly what to fix.
   (Node.js or the browser).
 - **Strict static types:** `int`, `float`, `bool`, `str`, with local inference and no implicit conversions.
 - **Short code (v0.2):** one-line functions, `+=` and friends, string interpolation, `if` as a value.
-- **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, and a build cache that skips
-  the C compiler when the program has not changed.
+- **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
+  and a build cache that skips the C compiler when the program has not changed.
 - **Fast and small:** the compiler takes about 0.1 to 0.3 ms per file and the C compiler about 0.4 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
 - **Not yet:** arrays, structs, string functions, input (see the [roadmap](#roadmap)). Nyra is 0.x, so the
@@ -127,6 +130,7 @@ read links** (Gemini, ChatGPT, Claude, ...) and ask for a program:
 | [`llms.txt`](llms.txt) | what Nyra is, the ten most important rules, links ([llmstxt.org](https://llmstxt.org) convention) |
 | [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) | workflow, do/don't rules, what does not exist, error codes with fixes, complete programs |
 | [`docs/SPEC.md`](docs/SPEC.md) | the complete language spec |
+| [`docs/ERRORS.md`](docs/ERRORS.md) | the error database: every code, what it means, why, the usual causes, a wrong and a fixed program |
 | [`examples/`](examples) | runnable programs, each with its expected output in a `.out` file |
 
 An agent that can run commands follows one loop: **write, check, fix, run**.
@@ -134,6 +138,7 @@ An agent that can run commands follows one loop: **write, check, fix, run**.
 ```
 nyra check prog.nyra --json   # -> {"ok":false,"errors":[{"code":"E0210","line":3,"col":13,...}]}
 # fix each error using its code, position and hint; repeat until "ok":true
+nyra explain E0210 --json     # if the hint is not enough: what the code means, why, causes, wrong and fixed program
 nyra run prog.nyra
 ```
 
@@ -195,13 +200,14 @@ every common mistake with its error code and fix.
 | `nyra run <file>` | compile and run (`nyra <file>` is the same) |
 | `nyra build <file>` | compile to a native executable |
 | `nyra check <file>` | type-check only; exit code 0 means no errors |
+| `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list all codes |
 
 | Option | Meaning |
 |---|---|
 | `--js` | use the JavaScript backend instead of native |
 | `--c` | with `build`: write the generated C instead of an executable |
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
-| `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools |
+| `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
 | `--time` | show how long each step took |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
@@ -222,7 +228,8 @@ source.nyra ─► lexer ─► parser ─► type checker ────┤
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
 | `src/check.rs` | type checking, collects every error in one pass |
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
-| `src/diag.rs` | errors for humans and JSON for agents |
+| `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |
+| `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 
 ## Roadmap
 

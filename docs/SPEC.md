@@ -82,6 +82,8 @@ Write `{{` and `}}` for literal braces. Quotes are not allowed inside `{ }`:
 store the text in a variable first.
 
 ## Errors
+Every code is explained, with the reason for the rule and a wrong and a fixed program, in
+[ERRORS.md](ERRORS.md); `nyra explain E0201` prints an entry (`--json` for JSON, no code lists them all).
 `nyra check file.nyra --json` prints:
 ```json
 {"ok":false,"errors":[{"code":"E0201","message":"undefined variable `cout`","file":"a.nyra","line":4,"col":11,"hint":"did you mean `count`?"}]}
