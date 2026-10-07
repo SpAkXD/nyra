@@ -143,6 +143,7 @@ fn expr(e: &Expr) -> String {
         }
         ExprKind::Var(n) => name(n),
         ExprKind::Unary(op, x) => format!("({}{})", if *op == UnOp::Neg { "-" } else { "!" }, expr(x)),
+        ExprKind::If(c, a, b) => format!("({} ? {} : {})", expr(c), expr(a), expr(b)),
         ExprKind::Binary(op, l, r) => {
             let (a, b) = (expr(l), expr(r));
             match op {

@@ -272,6 +272,32 @@ impl Checker {
                 self.binary(*op, lt, rt, span)
             }
             ExprKind::Call(name, args) => self.call(name, args, span),
+            ExprKind::If(cond, a, b) => {
+                let c = self.expr(cond);
+                self.cond(c, cond.span);
+                let (ta, tb) = (self.expr(a), self.expr(b));
+                if ta == Type::Void || tb == Type::Void {
+                    self.errs.push(
+                        Diag::new("E0212", "both branches of an `if` used as a value must produce a value", span)
+                            .hint("a function that returns nothing can't be a branch value"),
+                    );
+                    Type::Unknown
+                } else if ta == Type::Unknown || tb == Type::Unknown {
+                    Type::Unknown
+                } else if ta != tb {
+                    self.errs.push(
+                        Diag::new(
+                            "E0212",
+                            format!("the branches of this `if` have different types: `{}` and `{}`", ta.name(), tb.name()),
+                            span,
+                        )
+                        .hint("both branches must have the same type"),
+                    );
+                    Type::Unknown
+                } else {
+                    ta
+                }
+            }
         };
         e.ty = t;
         t

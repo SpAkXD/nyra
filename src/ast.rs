@@ -143,4 +143,6 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
     Call(String, Vec<Expr>),
+    /// `if c { a } else { b }` used as a value
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
 }

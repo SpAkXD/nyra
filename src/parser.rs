@@ -357,6 +357,41 @@ impl Parser {
         Ok(Expr::new(ExprKind::Unary(op, Box::new(inner)), span))
     }
 
+    /// `if c { a } else if d { b } else { c }` used as a value.
+    fn if_expr(&mut self) -> PResult<Expr> {
+        let span = self.expect(Tok::If, "`if`")?;
+        let cond = self.expr()?;
+        let then = self.branch_expr()?;
+        let save = self.pos;
+        self.skip_newlines();
+        if !self.at(&Tok::Else) {
+            self.pos = save;
+            return Err(Diag::new("E0212", "an `if` used as a value needs an `else`", span)
+                .hint("add `else { ... }` so there is a value on every path"));
+        }
+        self.bump();
+        let els = if self.at(&Tok::If) { self.if_expr()? } else { self.branch_expr()? };
+        Ok(Expr::new(ExprKind::If(Box::new(cond), Box::new(then), Box::new(els)), span))
+    }
+
+    /// `{ expr }`: one branch of an `if` used as a value.
+    fn branch_expr(&mut self) -> PResult<Expr> {
+        self.expect(Tok::LBrace, "`{`")?;
+        self.skip_newlines();
+        let e = self.expr()?;
+        self.skip_newlines();
+        if !self.at(&Tok::RBrace) {
+            return Err(Diag::new(
+                "E0212",
+                "each branch of an `if` used as a value must be a single expression",
+                self.span(),
+            )
+            .hint("compute the value before the `if`, or use an `if` statement that assigns a `var`"));
+        }
+        self.bump();
+        Ok(e)
+    }
+
     /// Parses the expression inside `{ }` of an interpolated string.
     fn sub_expr(&mut self, code: &str, base: Span) -> PResult<Expr> {
         let shift = |s: Span| Span { line: base.line, col: base.col + s.col - 1 };
@@ -449,6 +484,7 @@ impl Parser {
                 self.expect(Tok::RParen, "`)`")?;
                 return Ok(e);
             }
+            Tok::If => return self.if_expr(),
             _ => return Err(self.unexpected("an expression")),
         };
         Ok(Expr::new(kind, span))

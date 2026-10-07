@@ -189,6 +189,7 @@ fn expr(e: &Expr) -> String {
         }
         ExprKind::Var(n) => var(n),
         ExprKind::Unary(op, x) => format!("({}{})", if *op == UnOp::Neg { "-" } else { "!" }, expr(x)),
+        ExprKind::If(c, a, b) => format!("({} ? {} : {})", expr(c), expr(a), expr(b)),
         ExprKind::Binary(op, l, r) => {
             if l.ty == Type::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
                 format!("(strcmp({}, {}) {} 0)", expr(l), expr(r), op.symbol())

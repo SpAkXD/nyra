@@ -1,0 +1,18 @@
+// v0.2: if as a value
+fn max(a: int, b: int) -> int = if a > b { a } else { b }
+
+fn sign(x: int) -> str = if x > 0 { "positive" } else if x < 0 { "negative" } else { "zero" }
+
+fn main() {
+    print(max(3, 9))
+    for x in -1..2 {
+        print("{x} is {sign(x)}")
+    }
+    let grade = 87
+    let letter = if grade >= 90 {
+        "A"
+    } else {
+        "B"
+    }
+    print("grade {grade}: {letter}, passed: {if grade > 50 { true } else { false }}")
+}
