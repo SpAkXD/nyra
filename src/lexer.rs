@@ -1,6 +1,6 @@
 //! Turns source text into tokens. Newlines end statements, except inside `( )`.
 
-use crate::ast::Span;
+use crate::ast::{BinOp, Span};
 use crate::diag::Diag;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +36,8 @@ pub enum Tok {
     Slash,
     Percent,
     Assign,
+    /// `+=` `-=` `*=` `/=` `%=`
+    OpAssign(BinOp),
     Eq,
     Ne,
     Lt,
@@ -58,6 +60,7 @@ impl Tok {
             Tok::Ident(s) => format!("`{s}`"),
             Tok::Newline => "end of line".into(),
             Tok::Eof => "end of file".into(),
+            Tok::OpAssign(op) => format!("`{}=`", op.symbol()),
             other => format!("`{}`", other.text()),
         }
     }
@@ -261,6 +264,11 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ('>', '=') => Some(Tok::Ge),
             ('&', '&') => Some(Tok::And),
             ('|', '|') => Some(Tok::Or),
+            ('+', '=') => Some(Tok::OpAssign(BinOp::Add)),
+            ('-', '=') => Some(Tok::OpAssign(BinOp::Sub)),
+            ('*', '=') => Some(Tok::OpAssign(BinOp::Mul)),
+            ('/', '=') => Some(Tok::OpAssign(BinOp::Div)),
+            ('%', '=') => Some(Tok::OpAssign(BinOp::Mod)),
             _ => None,
         };
         if let Some(tok) = two {

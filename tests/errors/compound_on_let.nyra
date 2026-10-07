@@ -1,0 +1,5 @@
+// expect: E0205
+fn main() {
+    let count = 1
+    count += 1
+}

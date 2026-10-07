@@ -130,7 +130,17 @@ impl Parser {
         } else {
             Type::Void
         };
-        let body = self.block()?;
+        let body = if self.at(&Tok::Assign) {
+            // one-line function: the expression is the body (and the return value)
+            self.bump();
+            let e = self.expr()?;
+            self.end_stmt()?;
+            let espan = e.span;
+            let kind = if ret == Type::Void { StmtKind::Expr(e) } else { StmtKind::Ret(Some(e)) };
+            vec![Stmt { kind, span: espan }]
+        } else {
+            self.block()?
+        };
         Ok(Func { name, params, ret, body, span })
     }
 
@@ -255,6 +265,15 @@ impl Parser {
                 self.bump();
                 let value = self.expr()?;
                 self.end_stmt()?;
+                StmtKind::Assign { name, value }
+            }
+            Tok::Ident(name) if matches!(self.peek_at(1), Tok::OpAssign(_)) => {
+                self.bump();
+                let Tok::OpAssign(op) = self.bump().tok else { unreachable!() };
+                let rhs = self.expr()?;
+                self.end_stmt()?;
+                let var = Expr::new(ExprKind::Var(name.clone()), span);
+                let value = Expr::new(ExprKind::Binary(op, Box::new(var), Box::new(rhs)), span);
                 StmtKind::Assign { name, value }
             }
             _ => {
