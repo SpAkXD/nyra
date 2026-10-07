@@ -3,11 +3,12 @@
 
     python bench/run.py --provider mock                          # pipeline self-test, no API key
     python bench/run.py --provider anthropic --model claude-opus-5-5
+    python bench/run.py --provider openrouter --models anthropic/claude-opus-5.5,openai/gpt-6-sol
 
-Every task is given to the model once per language (Nyra and Python by default) with the
-same prompt and the same repair budget. The program the model writes is run and its
-standard output is compared with the expected output. See bench/README.md for the
-methodology, the metrics and the limitations.
+Every task is given to each model once per language (Nyra, Python, TypeScript and Rust by
+default) with the same prompt and the same repair budget. The program the model writes is
+run and its standard output is compared with the expected output. See bench/README.md for
+the methodology, the metrics and the limitations.
 
 Standard library only; provider SDKs are imported lazily by bench/providers.py.
 """
@@ -25,6 +26,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -32,14 +34,15 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 BENCH_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCH_DIR.parent
 if str(BENCH_DIR) not in sys.path:
     sys.path.insert(0, str(BENCH_DIR))
 
-import providers  # noqa: E402  (sibling module)
+import models as modelsmod  # noqa: E402  (sibling modules)
+import providers  # noqa: E402
 import report  # noqa: E402
 
 TASKS_DIR = BENCH_DIR / "tasks"
@@ -47,13 +50,22 @@ SOLUTIONS_DIR = BENCH_DIR / "solutions"
 RESULTS_DIR = BENCH_DIR / "results"
 DEFAULT_SPEC = REPO_DIR / "docs" / "SPEC.md"
 
-SCHEMA_VERSION = 1
-LANG_ORDER = ("nyra", "python")
+SCHEMA_VERSION = 2
+LANG_ORDER = report.LANG_ORDER  # the languages, in table-column order; the first is the baseline of comparisons
+LANG_ALIASES = {"ts": "typescript", "rs": "rust", "py": "python"}
 MAX_OUTPUT_BYTES = 1_000_000  # a program that prints more than this is killed (runaway loop)
 CHECK_TIMEOUT = 60  # seconds for `nyra check`
-BUILD_TIMEOUT = 120  # seconds for `nyra build` (includes the C compiler)
+BUILD_TIMEOUT = 120  # seconds for `nyra build` and for `rustc` (both include the C compiler / linker)
 STORED_STDOUT_CHARS = 4000  # what is kept of a program's output in the result file
 STORED_STDERR_CHARS = 2000
+NODE_MIN_VERSION = (22, 6)  # the first Node.js that can run TypeScript at all (type stripping behind a flag)
+# `node main.ts`: --experimental-transform-types also runs enums, namespaces and constructor parameter properties
+# (plain stripping rejects them), and implies stripping, so every TypeScript the model might write is accepted.
+# The flags exist from Node 22.6 on; the warning flag keeps the "experimental" notice out of error feedback.
+NODE_TS_FLAGS = ("--experimental-transform-types", "--disable-warning=ExperimentalWarning")
+# There is no Cargo project, so everything is on the command line: optimized (-O), edition 2021 (plain rustc would
+# use 2015), and warnings silenced so that the feedback after a failed build contains the errors only.
+RUSTC_FLAGS = ("-O", "--edition", "2021", "-A", "warnings", "--color", "never")
 
 
 class HarnessError(Exception):
@@ -132,10 +144,18 @@ def tasks_digest(tasks_dir: Path = TASKS_DIR) -> str:
 # ----------------------------------------------------------- prompts and feedback text
 #
 # Everything the model is ever told is built here, so it can be audited in one place.
-# The Nyra and Python prompts are deliberately parallel; only the language differs.
+# The system prompts of all languages are deliberately parallel: a first sentence that names the
+# language and how its programs are run, then the same task paragraph and the same reply rule.
+# Only Nyra's carries a spec, because the model cannot know the language.
 
 _REPLY_RULE = ("Reply with exactly one fenced code block that contains the complete program, "
                "and no other text.")
+
+
+def _task_paragraph(language: str) -> str:
+    return (f"Solve the task you are given with a complete {language} program. The program takes no input, and "
+            "only what it prints to standard output is checked, so it must print exactly what the task describes.")
+
 
 _NYRA_SYSTEM = """\
 You write programs in Nyra, a new programming language that you have not seen before. \
@@ -145,18 +165,18 @@ The complete language specification is below. It is the only documentation you h
 {spec}
 </nyra_spec>
 
-Solve the task you are given with a complete Nyra program. The program takes no input, and \
-only what it prints to standard output is checked, so it must print exactly what the task describes.
+""" + _task_paragraph("Nyra") + "\n\n" + _REPLY_RULE
 
-""" + _REPLY_RULE
+_PYTHON_SYSTEM = ("You write programs in Python 3, using only the standard library.\n\n"
+                  + _task_paragraph("Python") + "\n\n" + _REPLY_RULE)
 
-_PYTHON_SYSTEM = """\
-You write programs in Python 3, using only the standard library.
+_TYPESCRIPT_SYSTEM = ("You write programs in TypeScript. The program is run directly with Node.js, which removes "
+                      "the type annotations without checking them, and it may use only what Node.js itself "
+                      "provides (no npm packages).\n\n" + _task_paragraph("TypeScript") + "\n\n" + _REPLY_RULE)
 
-Solve the task you are given with a complete Python program. The program takes no input, and \
-only what it prints to standard output is checked, so it must print exactly what the task describes.
-
-""" + _REPLY_RULE
+_RUST_SYSTEM = ("You write programs in Rust (2021 edition), using only the standard library. The program is a "
+                "single file with a `main` function, compiled with `rustc` (no Cargo, no external crates).\n\n"
+                + _task_paragraph("Rust") + "\n\n" + _REPLY_RULE)
 
 _FIX = ("Fix the program. Reply with exactly one fenced code block that contains the complete "
         "corrected program, and no other text.")
@@ -396,8 +416,9 @@ def scrub_paths(text: str, workdir: Path) -> str:
     (a Python traceback says `File "main.py"`, not `File "C:\\Users\\...\\Temp\\nyra-bench-x\\main.py"`)."""
     variants = {str(workdir), workdir.as_posix(), str(workdir.resolve()), workdir.resolve().as_posix()}
     for variant in sorted(variants, key=len, reverse=True):
-        for sep in ("\\", "/"):
-            text = text.replace(variant + sep, "")
+        for prefix in ("file:///", "file://", ""):  # Node prints module URLs: file:///C:/Users/.../main.ts
+            for sep in ("\\", "/"):
+                text = text.replace(prefix + variant + sep, "")
         text = text.replace(variant, ".")
     return text
 
@@ -435,13 +456,50 @@ def _is_python_syntax_error(stderr: str) -> bool:
     return last.split(":")[0].strip().rsplit(".", 1)[-1] in _PY_SYNTAX_ERRORS
 
 
-def judge_run(proc: Proc, task: Task, timeout: float, *, workdir: Path, python: bool = False,
-              compile_ms: Optional[float] = None) -> EvalResult:
-    """Turn a finished process into a verdict. Shared by both languages, so the rules are identical."""
+def _python_diagnose(stderr: str, stdout: str) -> Optional[str]:
+    """Name of the tool that rejected the program before running it, or None if it crashed while running."""
+    return "Python" if _is_python_syntax_error(stderr) else None
+
+
+# Node prints an uncaught error as: file:line, the source line and a caret, a blank line, `SyntaxError [CODE]: text`
+# (or `TypeError: text` ...), then the stack. A program that was rejected before it started has no frame of its
+# own file in that stack; one that crashed while running does.
+_NODE_ERROR_LINE = re.compile(r"^([A-Za-z]*Error)(?: \[[A-Za-z0-9_]+\])?: ", re.M)
+_NODE_USER_FRAME = re.compile(r"^\s+at .*\bmain\.ts:\d+", re.M)
+_NODE_INTERNAL_FRAME = re.compile(r"^\s+at (?:.* \()?(?:node:|internal/)[^\s)]*\)?\s*\{?\s*$")
+_NODE_TRAILER = re.compile(r"^Node\.js v\d+")
+_NODE_ERROR_CODE_TAIL = re.compile(r"\n\s*code: '[A-Za-z0-9_]+'\n\}")
+
+
+def clean_node_stderr(text: str) -> str:
+    """Drop what is noise to the model: Node's own stack frames, the version line, the `{ code: ... }` tail."""
+    kept = [ln for ln in text.replace("\r\n", "\n").split("\n")
+            if not _NODE_INTERNAL_FRAME.match(ln) and not _NODE_TRAILER.match(ln)]
+    return _NODE_ERROR_CODE_TAIL.sub("", "\n".join(kept)).strip("\n")
+
+
+def _is_node_syntax_error(stderr: str) -> bool:
+    m = _NODE_ERROR_LINE.search(stderr)
+    return bool(m) and m.group(1) == "SyntaxError" and not _NODE_USER_FRAME.search(stderr)
+
+
+def _node_diagnose(stderr: str, stdout: str) -> Optional[str]:
+    return "Node.js" if _is_node_syntax_error(stderr) else None
+
+
+def judge_run(proc: Proc, task: Task, timeout: float, *, workdir: Path, compile_ms: Optional[float] = None,
+              diagnose=None, clean_stderr=None) -> EvalResult:
+    """Turn a finished process into a verdict. Shared by all languages, so the rules are identical.
+
+    `diagnose(stderr, stdout)` names the tool when a non-zero exit means "rejected before it ran" (a syntax
+    error in an interpreted language); `clean_stderr` removes tool noise from stderr before the model sees it.
+    """
     if proc.spawn_error:
         raise HarnessError(f"cannot start the program: {proc.spawn_error}")
     stdout = proc.stdout.decode("utf-8", "replace")
     stderr = scrub_paths(proc.stderr.decode("utf-8", "replace"), workdir)
+    if clean_stderr is not None:
+        stderr = clean_stderr(stderr)
     base = dict(stdout=stdout, stderr=stderr, exit_code=proc.returncode, compile_ms=compile_ms,
                 run_ms=proc.elapsed * 1000)
     if proc.timed_out:
@@ -449,8 +507,9 @@ def judge_run(proc: Proc, task: Task, timeout: float, *, workdir: Path, python: 
     if proc.truncated:
         return EvalResult(False, "output_limit", feedback=fb_output_limit(stdout), **base)
     if proc.returncode != 0:
-        if python and _is_python_syntax_error(stderr):
-            return EvalResult(False, "compile_error", feedback=fb_compile("Python", clip_tail(stderr)), **base)
+        tool = diagnose(stderr, stdout) if diagnose is not None else None
+        if tool:
+            return EvalResult(False, "compile_error", feedback=fb_compile(tool, clip_tail(stderr)), **base)
         return EvalResult(False, "runtime_error", feedback=fb_runtime(proc.returncode, stderr, stdout), **base)
     expected, actual = normalize_output(task.expected_output), normalize_output(stdout)
     if actual == expected:
@@ -508,7 +567,7 @@ class PythonLang(Language):
             # -I: isolated mode (no user site-packages, no PYTHON* variables); -X utf8: same text encoding everywhere
             proc = run_limited([sys.executable, "-I", "-X", "utf8", "main.py"], cwd=wd, env=child_env(wd),
                                timeout=self.timeout)
-            return judge_run(proc, task, self.timeout, workdir=wd, python=True)
+            return judge_run(proc, task, self.timeout, workdir=wd, diagnose=_python_diagnose)
 
 
 class NyraLang(Language):
@@ -517,11 +576,13 @@ class NyraLang(Language):
     ext = ".nyra"
     hello_world = "fn main() {\n    print(42)\n}\n"
 
-    def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0):
+    def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0,
+                 node: str = "node"):
         super().__init__(timeout)
         if backend not in ("native", "js"):
             raise UsageError("--backend must be native or js")
         self.bin = Path(nyra_bin)
+        self.node = node  # runs the JavaScript backend's output
         self.backend = backend
         self.spec_path = Path(spec_path)
         try:
@@ -586,9 +647,218 @@ class NyraLang(Language):
                 detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
                 return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
                                   exit_code=build.returncode, compile_ms=compile_ms)
-            argv = ["node", target] if js else [wd / target]
+            argv = [self.node, target] if js else [wd / target]
             proc = run_limited(argv, cwd=wd, env=env, timeout=self.timeout)
             return judge_run(proc, task, self.timeout, workdir=wd, compile_ms=compile_ms)
+
+
+def find_node(explicit: Optional[str] = None) -> str:
+    """--node if given, else `node` from PATH. Returns something run_limited can start."""
+    if explicit:
+        found = shutil.which(explicit) or (explicit if Path(explicit).is_file() else None)
+        if not found:
+            raise HarnessError(f"--node {explicit}: no such program")
+        return str(found)
+    found = shutil.which("node")
+    if not found:
+        raise HarnessError("Node.js not found (it runs the TypeScript programs; the JavaScript backend of Nyra needs "
+                           f"it too). Install Node.js {NODE_MIN_VERSION[0]}.{NODE_MIN_VERSION[1]} or newer, or "
+                           "pass --node PATH, or leave TypeScript out with --langs.")
+    return found
+
+
+class TypeScriptLang(Language):
+    """TypeScript through Node.js itself: the type annotations are erased (not checked) and the file runs.
+
+    Node 22.6+ can do that behind a flag (22.18+ and 23.6+ by default); the flags used also accept enums,
+    namespaces and constructor parameter properties. Nothing here compiles or type-checks, so a program that
+    `tsc` would reject for a type error runs (and passes) as long as the JavaScript underneath is right.
+    """
+
+    name = "typescript"
+    display = "TypeScript"
+    ext = ".ts"
+    hello_world = "const answer: number = 42;\nconsole.log(answer);\n"
+
+    def __init__(self, node: Optional[str] = None, timeout: float = 10.0):
+        super().__init__(timeout)
+        self.node = find_node(node)
+        self._version_text: Optional[str] = None
+
+    @property
+    def system_prompt(self) -> str:
+        return _TYPESCRIPT_SYSTEM
+
+    def version_text(self) -> str:
+        """Output of `node --version`, e.g. "v25.2.1" ("" if it cannot be read)."""
+        if self._version_text is None:
+            p = run_limited([self.node, "--version"], cwd=REPO_DIR, env=dict(os.environ), timeout=30)
+            self._version_text = (p.stdout + p.stderr).decode("utf-8", "replace").strip()
+        return self._version_text
+
+    def version(self) -> Optional[tuple]:
+        m = re.search(r"(\d+)\.(\d+)", self.version_text())
+        return (int(m.group(1)), int(m.group(2))) if m else None
+
+    def preflight(self) -> list:
+        ver = self.version()
+        if ver is None:
+            raise HarnessError(f"{self.node} does not look like Node.js (`--version` printed {self.version_text()!r})")
+        if ver < NODE_MIN_VERSION:
+            raise HarnessError(f"Node.js {self.version_text()} cannot run TypeScript files; "
+                               f"{NODE_MIN_VERSION[0]}.{NODE_MIN_VERSION[1]} or newer is needed")
+        return super().preflight()
+
+    def evaluate(self, code: str, task: Task) -> EvalResult:
+        with scratch_dir() as wd:
+            write_source(wd / "main.ts", code)
+            proc = run_limited([self.node, *NODE_TS_FLAGS, "main.ts"], cwd=wd, env=child_env(wd),
+                               timeout=self.timeout)
+            return judge_run(proc, task, self.timeout, workdir=wd, diagnose=_node_diagnose,
+                             clean_stderr=clean_node_stderr)
+
+
+def _find_rust_tool(name: str) -> Optional[str]:
+    """`name` from PATH, else from rustup's proxy directory (~/.cargo/bin, or $CARGO_HOME/bin), which is where
+    rustup puts rustc and where a shell started without the user's PATH settings does not look."""
+    found = shutil.which(name)
+    if found:
+        return found
+    home = Path(os.environ.get("CARGO_HOME") or (Path.home() / ".cargo"))
+    path = home / "bin" / (name + (".exe" if os.name == "nt" else ""))
+    return str(path) if path.is_file() else None
+
+
+def _rustup_toolchains() -> list:
+    rustup = _find_rust_tool("rustup")
+    if not rustup:
+        return []
+    p = run_limited([rustup, "toolchain", "list"], cwd=REPO_DIR, env=dict(os.environ), timeout=30)
+    if p.spawn_error or p.returncode != 0:
+        return []
+    return [ln.split()[0] for ln in p.stdout.decode("utf-8", "replace").splitlines() if ln.strip()]
+
+
+def rustc_candidates(explicit: Optional[str] = None, windows: Optional[bool] = None) -> list:
+    """The commands to try for compiling Rust, best first (each is an argv prefix such as ["rustc", "+toolchain"]).
+
+    --rustc wins and is the only candidate. Otherwise: the rustc that is installed, and, on Windows, first
+    every installed GNU toolchain. The default Windows toolchain is MSVC, which cannot link without the
+    Visual Studio build tools (error: linking with `link.exe` failed); the GNU toolchain links with the MinGW
+    that rustup ships, so it works on a machine that has no Visual Studio. The first candidate that
+    compiles and runs a hello-world program is the one used.
+    """
+    windows = (os.name == "nt") if windows is None else windows
+    if explicit:
+        parts = shlex.split(explicit, posix=not windows)
+        return [[p.strip('"') for p in parts]]
+    rustc = _find_rust_tool("rustc")
+    if rustc is None:
+        return []
+    candidates = [[rustc]]
+    if windows:
+        candidates = [[rustc, f"+{name}"] for name in _rustup_toolchains() if "windows-gnu" in name] + candidates
+    return candidates
+
+
+def _command_label(cmd: list) -> str:
+    """`rustc +stable-x86_64-pc-windows-gnu` (no directories: result files get committed)."""
+    return " ".join([Path(cmd[0]).stem] + list(cmd[1:]))
+
+
+class RustLang(Language):
+    """Rust through rustc: `rustc -O --edition 2021 main.rs`, then the executable it produced."""
+
+    name = "rust"
+    display = "Rust"
+    ext = ".rs"
+    hello_world = 'fn main() {\n    println!("42");\n}\n'
+
+    def __init__(self, rustc: Optional[str] = None, timeout: float = 10.0):
+        super().__init__(timeout)
+        self.explicit = rustc
+        self.cmd: Optional[list] = None  # the working command; found lazily (preflight or the first evaluate)
+        self._version_text: Optional[str] = None
+        self._lock = threading.Lock()
+
+    @property
+    def system_prompt(self) -> str:
+        return _RUST_SYSTEM
+
+    def command(self) -> list:
+        with self._lock:
+            if self.cmd is None:
+                self.cmd = self._probe()
+            return self.cmd
+
+    def _probe(self) -> list:
+        candidates = rustc_candidates(self.explicit)
+        if not candidates:
+            raise HarnessError("rustc not found (it compiles the Rust programs). Install Rust from https://rustup.rs "
+                               "(it is looked for on PATH and in ~/.cargo/bin), or pass --rustc COMMAND, or leave "
+                               "Rust out with --langs.")
+        hello = Task("preflight", "", "", "42\n", "0.1", "", "", Path("."))
+        failures = []
+        for cmd in candidates:
+            result = self._evaluate_with(cmd, self.hello_world, hello)
+            if result.passed:
+                return cmd
+            failures.append(f"`{_command_label(cmd)}`: {result.kind}: "
+                            f"{(result.stderr or result.stdout).strip()[:300]}")
+        raise HarnessError("Rust toolchain self-test failed. Tried " + "; ".join(failures) + ". On Windows without "
+                           "the Visual Studio build tools use the GNU toolchain: `rustup toolchain install "
+                           "stable-x86_64-pc-windows-gnu`, or pass --rustc 'rustc +stable-x86_64-pc-windows-gnu'.")
+
+    def version_text(self) -> str:
+        """`rustc --version` of the command in use, e.g. "rustc 1.99.0 (b940084d7 2026-09-28)"."""
+        if self._version_text is None:
+            p = run_limited([*self.command(), "--version"], cwd=REPO_DIR, env=dict(os.environ), timeout=30)
+            self._version_text = (p.stdout + p.stderr).decode("utf-8", "replace").strip()
+        return self._version_text
+
+    def command_text(self) -> str:
+        return _command_label(self.command())
+
+    def preflight(self) -> list:
+        self.command()  # raises HarnessError with the reason if no toolchain works
+        return []
+
+    def evaluate(self, code: str, task: Task) -> EvalResult:
+        return self._evaluate_with(self.command(), code, task)
+
+    def _evaluate_with(self, cmd: list, code: str, task: Task) -> EvalResult:
+        with scratch_dir() as wd:
+            env = child_env(wd)
+            write_source(wd / "main.rs", code)
+            target = "prog.exe" if os.name == "nt" else "prog"
+            build = run_limited([*cmd, *RUSTC_FLAGS, "main.rs", "-o", target], cwd=wd, env=env, timeout=BUILD_TIMEOUT)
+            if build.spawn_error:
+                raise HarnessError(f"cannot run `{_command_label(cmd)}`: {build.spawn_error}")
+            compile_ms = build.elapsed * 1000
+            detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
+            if build.timed_out:
+                return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                                  exit_code=build.returncode, compile_ms=compile_ms)
+            if build.returncode != 0 or not (wd / target).exists():
+                # Exit 1 with `error[E0425]: ...` is the program's fault; a failed link, a missing component or
+                # an internal compiler error is the toolchain's (and says nothing about the program).
+                if _is_rustc_toolchain_failure(detail) or build.returncode not in (0, 1):
+                    return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                                      exit_code=build.returncode, compile_ms=compile_ms)
+                return EvalResult(False, "compile_error", feedback=fb_compile("The Rust compiler (`rustc`)", detail),
+                                  stderr=detail, exit_code=build.returncode, compile_ms=compile_ms)
+            proc = run_limited([wd / target], cwd=wd, env=env, timeout=self.timeout)
+            return judge_run(proc, task, self.timeout, workdir=wd, compile_ms=compile_ms)
+
+
+_RUSTC_TOOLCHAIN_FAILURES = ("error: linking with", "error: linker", "could not exec the linker", "internal compiler error",
+                             "rustup could not choose", "error: toolchain", "error: could not find", "no override and no default",
+                             "cannot find the file specified")
+
+
+def _is_rustc_toolchain_failure(stderr: str) -> bool:
+    low = stderr.lower()
+    return any(marker in low for marker in _RUSTC_TOOLCHAIN_FAILURES)
 
 
 def _loads(text: str):
@@ -618,15 +888,26 @@ def find_nyra(explicit: Optional[str] = None) -> Path:
                        "build --release`) or pass --nyra PATH.")
 
 
-def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float) -> dict:
+def canonical_lang(name: str) -> str:
+    name = name.strip().lower()
+    return LANG_ALIASES.get(name, name)
+
+
+def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float,
+                   node: Optional[str] = None, rustc: Optional[str] = None) -> dict:
     langs = {}
     for name in names:
         if name == "nyra":
-            langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout)
+            langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout,
+                                   node=find_node(node) if backend == "js" else "node")
         elif name == "python":
             langs[name] = PythonLang(timeout=timeout)
+        elif name == "typescript":
+            langs[name] = TypeScriptLang(node, timeout=timeout)
+        elif name == "rust":
+            langs[name] = RustLang(rustc, timeout=timeout)
         else:
-            raise UsageError(f"unknown language {name!r}; available: nyra, python")
+            raise UsageError(f"unknown language {name!r}; available: {', '.join(LANG_ORDER)}")
     return langs
 
 
@@ -640,6 +921,7 @@ class RunContext:
     count_tokens: bool
     abort: threading.Event = dataclasses.field(default_factory=threading.Event)
     fatal: list = dataclasses.field(default_factory=list)
+    over_budget: Optional[Callable[[], bool]] = None  # --budget: called after every reply; True stops the run
 
 
 def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
@@ -667,15 +949,20 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
                 ctx.abort.set()
             status, error = "error", str(exc)
             break
+        if ctx.over_budget is not None and ctx.over_budget():
+            ctx.abort.set()  # the money is spent: finish this reply, start nothing new
         code = extract_code(reply.text)
         attempt = {"n": n, "reply": reply.text, "stop_reason": reply.stop_reason, "usage": reply.usage.to_dict(),
                    "latency_s": round(reply.latency_s, 3), "request_id": reply.request_id,
-                   "served_model": reply.model, "code": code, "chars": None, "lines": None, "code_tokens": None}
+                   "served_model": reply.model, "served_by": reply.upstream, "code": code, "chars": None,
+                   "lines": None, "code_tokens": None}
         if code is None:
             result = EvalResult(False, "no_code", feedback=fb_no_code())
         else:
             attempt["chars"], attempt["lines"] = code_size(code)
-            if ctx.count_tokens:
+            # Only the first attempt's code tokens enter the report; a provider that bills for counting
+            # (openrouter) is not asked about the repairs.
+            if ctx.count_tokens and (n == 1 or ctx.provider.count_all_attempts):
                 attempt["code_tokens"] = ctx.provider.count_tokens(code)
             try:
                 result = lang.evaluate(code, task)
@@ -779,7 +1066,7 @@ def _progress_line(done: int, total: int, rec: dict) -> str:
         verdict = f"FAIL ({last}) after {rec['attempts_used']} attempts"
     else:
         verdict = f"{rec['status'].upper()}: {rec.get('error') or ''}".strip()
-    return f"[{done:>3}/{total}] {rec['lang']:<7} {rec['task_id']:<22} {verdict}"
+    return f"[{done:>3}/{total}] {rec['lang']:<10} {rec['task_id']:<22} {verdict}"
 
 
 def _git_info() -> dict:
@@ -816,15 +1103,38 @@ def result_paths(out_dir: Path, date: str, provider_name: str, model: str) -> tu
     return candidate, candidate.with_suffix(".md")
 
 
+def toolchain_info(langs: dict) -> dict:
+    """Versions of the tools that run the programs, for the result file."""
+    info: dict = {"node": None, "rust": None}
+    ts = langs.get("typescript")
+    nyra = langs.get("nyra")
+    if ts is not None:
+        info["node"] = {"version": ts.version_text(), "flags": " ".join(NODE_TS_FLAGS)}
+    elif nyra is not None and nyra.backend == "js":
+        info["node"] = {"version": run_limited([nyra.node, "--version"], cwd=REPO_DIR, env=dict(os.environ),
+                                               timeout=30).stdout.decode("utf-8", "replace").strip(), "flags": ""}
+    rust = langs.get("rust")
+    if rust is not None:
+        info["rust"] = {"command": rust.command_text(), "version": rust.version_text(), "flags": " ".join(RUSTC_FLAGS)}
+    return info
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="run.py", description=__doc__.split("\n\n")[0],
         epilog="Methodology and metrics: bench/README.md",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--provider", default="mock", choices=sorted(providers.PROVIDERS),
-                   help="mock replays the reference solutions (no API key); anthropic calls Claude (default: mock)")
-    p.add_argument("--model", help="model id (anthropic default: %s)" % providers.AnthropicProvider.default_model)
-    p.add_argument("--langs", default="nyra,python", help="comma-separated languages to run (default: nyra,python)")
+                   help="mock replays the reference solutions (no API key); anthropic calls Claude (ANTHROPIC_API_KEY); "
+                        "openrouter calls any model on OpenRouter (OPENROUTER_API_KEY) (default: mock)")
+    p.add_argument("--model", help="model id (anthropic default: %s; mock default: mock; openrouter has no default)"
+                   % providers.AnthropicProvider.default_model)
+    p.add_argument("--models", help="comma-separated model ids to run one after the other, e.g. "
+                                    "anthropic/claude-opus-5.5,openai/gpt-6-sol; `default` is the list in "
+                                    "bench/models.json; with mock: mock,mock-flaky,mock-wrong")
+    p.add_argument("--langs", default=",".join(LANG_ORDER),
+                   help="comma-separated languages to run: nyra, python, typescript (ts), rust (rs) "
+                        "(default: %s). The first is the baseline of the paired comparisons." % ",".join(LANG_ORDER))
     p.add_argument("--tasks", help="comma-separated task ids or patterns such as 'fizz*' (default: all)")
     p.add_argument("--max-version", help="skip tasks needing a newer Nyra than this, for every language, e.g. 0.1 "
                                          "(default: the version of the nyra compiler when nyra is run)")
@@ -834,18 +1144,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backend", default="native", choices=("native", "js"),
                    help="Nyra backend that runs the programs (default: native, via the C compiler)")
     p.add_argument("--spec", default=str(DEFAULT_SPEC), help="Nyra spec shown to the model (default: docs/SPEC.md)")
+    p.add_argument("--node", help="the node program that runs TypeScript (default: node on PATH; Node.js %d.%d or newer)"
+                   % NODE_MIN_VERSION)
+    p.add_argument("--rustc", help="the Rust compiler command, e.g. 'rustc +stable-x86_64-pc-windows-gnu' "
+                                   "(default: found automatically; on Windows the GNU toolchain is preferred)")
     p.add_argument("--timeout", type=float, default=10.0, help="seconds a program may run (default: 10)")
     p.add_argument("--jobs", type=int, default=4, help="tasks evaluated in parallel (default: 4)")
     p.add_argument("--out", default=str(RESULTS_DIR), help="directory for the result files (default: bench/results)")
-    p.add_argument("--max-tokens", type=int, default=16000, help="anthropic: max_tokens per reply (default: 16000)")
-    p.add_argument("--effort", choices=("low", "medium", "high", "xhigh", "max"),
-                   help="anthropic: output_config.effort (default: the model's own default)")
-    p.add_argument("--extra-json", help='anthropic: JSON object of extra request fields, e.g. \'{"thinking": {"type": "adaptive"}}\'')
+    p.add_argument("--max-tokens", type=int, default=16000,
+                   help="anthropic, openrouter: max_tokens per reply; thinking shares it (default: 16000)")
+    p.add_argument("--effort", choices=("none", "minimal", "low", "medium", "high", "xhigh", "max"),
+                   help="anthropic: output_config.effort; openrouter: reasoning.effort "
+                        "(default: the model's own default)")
+    p.add_argument("--extra-json", help="anthropic, openrouter: JSON object of extra request fields, e.g. "
+                                        "'{\"reasoning\": {\"max_tokens\": 2000}}' or "
+                                        "'{\"provider\": {\"order\": [\"anthropic\"], \"allow_fallbacks\": false}}'")
+    p.add_argument("--base-url", help="openrouter: another OpenAI-compatible endpoint (https only; for tests and proxies)")
+    p.add_argument("--no-model-check", action="store_true",
+                   help="openrouter: do not check the model ids against OpenRouter's public list before starting")
+    p.add_argument("--budget", type=float, metavar="USD",
+                   help="openrouter: stop the whole run once the calls so far have cost this many dollars")
+    p.add_argument("--assume-output-tokens", type=int, default=1500, metavar="N",
+                   help="--dry-run cost estimate: output tokens per attempt, thinking included (default: 1500)")
     p.add_argument("--no-count-tokens", action="store_true",
                    help="do not measure code-only tokens with the provider's token counter")
     p.add_argument("--mock-flaky", nargs="?", const="mix", choices=("mix",) + providers.DEFECTS,
                    help="mock only: break the first attempt of some tasks to exercise the repair loop")
-    p.add_argument("--dry-run", action="store_true", help="print what would run (and the maximum number of API calls) and exit")
+    p.add_argument("--dry-run", action="store_true",
+                   help="print what would run (and the maximum number of API calls, and an estimated cost) and exit")
     p.add_argument("-q", "--quiet", action="store_true", help="no per-task progress lines")
     return p
 
@@ -868,12 +1194,229 @@ def main(argv: Optional[list] = None) -> int:
         return 2
 
 
+def resolve_models(args) -> list:
+    """The model ids to run, in order. openrouter has no default: it never guesses which models to pay for."""
+    if args.model and args.models:
+        raise UsageError("use --model or --models, not both")
+    raw = args.models or args.model
+    if not raw:
+        default = providers.PROVIDERS[args.provider].default_model
+        if not default:
+            raise UsageError(f"--provider {args.provider} has no default model: pass --models a,b,c "
+                             "(`python bench/models.py claude` finds OpenRouter ids, `--models default` uses "
+                             "bench/models.json)")
+        return [default]
+    ids: list = []
+    for item in [x.strip() for x in raw.split(",") if x.strip()]:
+        if item == "default":
+            if args.provider != "openrouter":
+                raise UsageError("--models default is the OpenRouter list of bench/models.json: use it with "
+                                 "--provider openrouter")
+            try:
+                ids += modelsmod.default_model_ids()
+            except modelsmod.ModelsError as exc:
+                raise UsageError(str(exc)) from None
+        else:
+            ids.append(item)
+    if not ids:
+        raise UsageError("no model ids given")
+    dupes = sorted({m for m in ids if ids.count(m) > 1})
+    if dupes:
+        raise UsageError(f"model listed more than once: {', '.join(dupes)}")
+    return ids
+
+
+def check_openrouter_models(ids: list, base_url: Optional[str] = None, max_tokens: Optional[int] = None) -> Optional[list]:
+    """Refuse unknown OpenRouter ids before anything is spent, and warn about a --max-tokens a model would reject.
+    Returns the public listing (None if it could not be fetched)."""
+    try:
+        listing = modelsmod.fetch_models(base_url or providers.OPENROUTER_BASE_URL)
+    except (modelsmod.ModelsError, ValueError) as exc:
+        print(f"warning: could not check the model ids against OpenRouter's public list ({exc}); "
+              "an unknown id will be rejected by the first request instead", file=sys.stderr)
+        return None
+    bad = modelsmod.missing_ids(listing, ids)
+    if bad:
+        detail = "; ".join(f"{mid}" + (f" (similar: {', '.join(near)})" if near else "") for mid, near in bad)
+        raise UsageError(f"not an OpenRouter model id: {detail}. `python bench/models.py WORD` searches the list "
+                         "(--no-model-check skips this check).")
+    by_id = {m["id"]: m for m in listing}
+    for mid in ids:
+        limit = ((modelsmod.lookup(by_id, mid) or {}).get("top_provider") or {}).get("max_completion_tokens")
+        if max_tokens and isinstance(limit, int) and not isinstance(limit, bool) and max_tokens > limit:
+            print(f"warning: --max-tokens {max_tokens} is above the {limit} completion tokens {mid} allows, so its "
+                  f"requests will probably be rejected; pass --max-tokens {limit} or less", file=sys.stderr)
+    return listing
+
+
+ASSUMED_ATTEMPTS = 1.3  # attempts per run in the --dry-run cost estimate (first try mostly, some repairs)
+
+
+def estimate_cost(price: tuple, tasks: list, lang_names: list, langs: dict, samples: int, output_tokens: int) -> float:
+    """Rough dollars for one model: input from the real prompts (about 3.5 characters per token, repair history
+    ignored), output from an assumption (thinking models spend several times what the program itself needs)."""
+    runs = len(tasks) * len(lang_names) * samples
+    chars = sum(len(langs[n].system_prompt) + len(t.prompt) for t in tasks for n in lang_names) * samples
+    input_tokens = (chars / 3.5 + 30 * runs) * ASSUMED_ATTEMPTS
+    return input_tokens * price[0] + runs * ASSUMED_ATTEMPTS * output_tokens * price[1]
+
+
+class BudgetGuard:
+    """--budget: stop the run once the providers have reported this many dollars of cost in total."""
+
+    def __init__(self, limit: float, plist: list):
+        self.limit = limit
+        self.providers = plist
+        self.hit = False
+
+    def spent(self) -> float:
+        return sum(p.spent() or 0.0 for p in self.providers)
+
+    def exceeded(self) -> bool:
+        if self.spent() >= self.limit:
+            self.hit = True
+        return self.hit
+
+
+@dataclasses.dataclass
+class Plan:
+    """Everything that is the same for every model of a run."""
+    args: argparse.Namespace
+    lang_names: list
+    langs: dict
+    tasks: list
+    excluded: list
+    max_version: Optional[tuple]
+    max_source: Optional[str]
+    warnings: list
+    toolchains: dict
+
+
+@dataclasses.dataclass
+class ModelOutcome:
+    model: str
+    results: Optional[dict] = None
+    json_path: Optional[Path] = None
+    md_path: Optional[Path] = None
+    fatal: list = dataclasses.field(default_factory=list)
+    interrupted: bool = False
+    stop_all: bool = False  # the key or the account is the problem (or the budget is spent): no point in other models
+    exit_code: int = 0
+
+
+def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: Optional[BudgetGuard],
+              single: bool) -> ModelOutcome:
+    """Run every (task, language, sample) job for one model, write its result files, return what happened."""
+    args = plan.args
+    nyra = plan.langs.get("nyra")
+    ctx = RunContext(provider=provider, repairs=args.repairs, count_tokens=not args.no_count_tokens,
+                     over_budget=budget.exceeded if budget else None)
+    jobs = [(t, plan.langs[n], s) for t in plan.tasks for n in plan.lang_names for s in range(args.samples)]
+    started = dt.datetime.now(dt.timezone.utc)
+    records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
+    finished = dt.datetime.now(dt.timezone.utc)
+    outcome = ModelOutcome(model=provider.model, fatal=list(ctx.fatal), interrupted=interrupted)
+    # A broken key or account, a broken local toolchain and a spent budget hurt every model alike.
+    outcome.stop_all = (any(getattr(e, "stop_all", False) or isinstance(e, HarnessError) for e in ctx.fatal)
+                        or bool(budget and budget.hit))
+
+    order = {t.id: i for i, t in enumerate(plan.tasks)}
+    records.sort(key=lambda r: (order[r["task_id"]], plan.lang_names.index(r["lang"]), r["sample"]))
+    complete = not interrupted and not ctx.fatal and all(r["status"] != "aborted" for r in records)
+    if not any(r["status"] in ("pass", "fail") for r in records):
+        # Nothing usable (bad key, unknown model, ...): do not leave an empty result file behind.
+        reason = ctx.fatal[0] if ctx.fatal else next((r["error"] for r in records if r.get("error")), "no run finished")
+        print(f"error: no run finished for {provider.model}, so no result files were written: {reason}", file=sys.stderr)
+        outcome.exit_code = 130 if interrupted else 2
+        return outcome
+    warnings = list(plan.warnings)
+    served = sorted({a["served_model"] for r in records for a in r["attempts"] if a.get("served_model")})
+    if len(served) > 1:
+        warnings.append(f"the provider served more than one model id during the run: {', '.join(served)}")
+    served_by = sorted({a["served_by"] for r in records for a in r["attempts"] if a.get("served_by")})
+    spent = provider.spent()
+
+    results = {
+        "schema": SCHEMA_VERSION,
+        "run": {
+            "date": dt.date.today().isoformat(), "started_at": started.isoformat(timespec="seconds"),
+            "finished_at": finished.isoformat(timespec="seconds"), "complete": complete,
+            "provider": provider.describe(), "mock": provider.is_mock,
+            "mock_flaky": args.mock_flaky if provider.is_mock else None,
+            "tokens_are_estimates": provider.tokens_are_estimates,
+            "langs": plan.lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
+            "backend": nyra.backend if nyra else None, "jobs": args.jobs,
+            "max_version": None if plan.max_version is None else f"{plan.max_version[0]}.{plan.max_version[1]}",
+            "max_version_source": plan.max_source,
+            "nyra": None if nyra is None else {"path": display_path(nyra.bin), "version": nyra.version_text()},
+            "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
+                                               "sha256": nyra.spec_sha256},
+            "node": plan.toolchains["node"], "rust": plan.toolchains["rust"],
+            "python": platform.python_version(), "platform": platform.platform(),
+            "served_models": served, "served_by": served_by, "spent_usd": spent, "budget_usd": args.budget,
+            "repo": _git_info(), "tasks_sha256": tasks_digest(), "warnings": warnings,
+            # Everything needed to rebuild what the model saw: system prompt + task prompt, then for each
+            # attempt its reply and the feedback that followed it.
+            "system_prompts": {n: plan.langs[n].system_prompt for n in plan.lang_names},
+            "tasks": {t.id: {"title": t.title, "category": t.category, "difficulty": t.difficulty,
+                             "min_version": t.min_version, "prompt": t.prompt} for t in plan.tasks},
+            "task_ids": [t.id for t in plan.tasks], "excluded_tasks": plan.excluded,
+        },
+        "records": records,
+    }
+    results["summary"] = report.summarize(records, plan.lang_names, {t.id: t.category for t in plan.tasks})
+    markdown = report.render_markdown(results, {t.id: t for t in plan.tasks})
+
+    outcome.results = results
+    outcome.json_path, outcome.md_path = result_paths(out_dir, results["run"]["date"], provider.name, provider.model)
+    outcome.json_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    outcome.md_path.write_text(markdown, encoding="utf-8")
+    (out_dir / "latest.md").write_text(markdown, encoding="utf-8")
+
+    if single:
+        print()
+        print(markdown)
+        print(f"wrote {outcome.json_path}\n      {outcome.md_path}\n      {out_dir / 'latest.md'}")
+    else:
+        stats = results["summary"]["langs"]
+        print(f"\n{provider.model}: pass@1 " + ", ".join(
+            f"{report.display(n)} {stats[n]['pass_at_1']}/{stats[n]['n']}" for n in plan.lang_names)
+            + (f"; spent ${spent:.4f}" if spent is not None else "") + f"\nwrote {outcome.json_path}")
+    for exc in ctx.fatal[:1]:
+        print(f"error: the run of {provider.model} was stopped by a fatal problem: {exc}", file=sys.stderr)
+        outcome.exit_code = 2
+    if interrupted:
+        outcome.exit_code = 130
+    bad = [r for r in records if r["status"] in ("error", "aborted")]
+    if bad and not (budget and budget.hit):
+        print(f"warning: {len(bad)} run(s) of {provider.model} ended in an error and are excluded from the metrics",
+              file=sys.stderr)
+    if budget and spent is None:
+        print(f"warning: --budget could not work for {provider.model}: the API reported no costs", file=sys.stderr)
+    if budget and budget.hit:
+        print(f"warning: the budget of ${budget.limit:g} was reached (${budget.spent():.4f} spent)"
+              + (f": {len(bad)} run(s) of {provider.model} were not started or finished, and the numbers cover only "
+                 "the runs that did" if bad else ""), file=sys.stderr)
+        if bad:
+            outcome.exit_code = outcome.exit_code or 2
+    if provider.is_mock and not outcome.exit_code and any(r["status"] != "pass" for r in records):
+        print("error: the mock run is the pipeline self-test: every task must pass", file=sys.stderr)
+        outcome.exit_code = 1
+    return outcome
+
+
 def _main(args) -> int:
-    lang_names = [n.strip() for n in args.langs.split(",") if n.strip()]
+    lang_names = [canonical_lang(n) for n in args.langs.split(",") if n.strip()]
     if not lang_names or len(set(lang_names)) != len(lang_names):
-        raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python")
+        raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python,typescript,rust")
     if args.repairs < 0 or args.samples < 1 or args.jobs < 1:
         raise UsageError("--repairs must be >= 0, --samples >= 1, --jobs >= 1")
+    if args.budget is not None and (args.provider != "openrouter" or args.budget <= 0):
+        raise UsageError("--budget takes a positive number of dollars and needs --provider openrouter (the only "
+                         "provider that reports what each call cost)")
+    if args.provider == "anthropic" and args.effort in ("none", "minimal"):
+        raise UsageError("--effort none and minimal are OpenRouter reasoning levels; the anthropic provider takes "
+                         "low, medium, high, xhigh or max")
     extra = None
     if args.extra_json:
         try:
@@ -882,18 +1425,28 @@ def _main(args) -> int:
             raise UsageError(f"--extra-json is not valid JSON: {exc}") from None
         if not isinstance(extra, dict):
             raise UsageError("--extra-json must be a JSON object")
+    model_ids = resolve_models(args)
 
-    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec), timeout=args.timeout)
+    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec),
+                           timeout=args.timeout, node=args.node, rustc=args.rustc)
     warnings: list = []
     for lang in langs.values():
         warnings += lang.preflight()
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
 
-    provider = providers.make_provider(
-        args.provider, args.model, reference=lambda lang, tid: langs[lang].reference_code(tid),
-        flaky=(True if args.mock_flaky == "mix" else (args.mock_flaky or False)), max_tokens=args.max_tokens,
-        effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens)
+    options = dict(reference=lambda lang, tid: langs[lang].reference_code(tid),
+                   flaky=(True if args.mock_flaky == "mix" else (args.mock_flaky or False)),
+                   max_tokens=args.max_tokens, effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens)
+    if args.base_url:
+        options["base_url"] = args.base_url
+    try:
+        plist = [providers.make_provider(args.provider, m, **options) for m in model_ids]
+    except ValueError as exc:
+        raise UsageError(str(exc)) from None
+    provider = plist[0]
+    listing = (check_openrouter_models(model_ids, args.base_url, args.max_tokens)
+               if args.provider == "openrouter" and not args.no_model_check else None)
 
     # Which Nyra version do the tasks have to fit? Default: the compiler we are about to test.
     nyra = langs.get("nyra")
@@ -913,11 +1466,12 @@ def _main(args) -> int:
     if not tasks:
         raise UsageError("no tasks selected")
 
-    jobs = [(t, langs[n], s) for t in tasks for n in lang_names for s in range(args.samples)]
-    max_calls = len(jobs) * (args.repairs + 1)
-    banner = (f"Nyra benchmark | provider={provider.name} model={provider.model} | {len(tasks)} tasks x "
+    n_jobs = len(tasks) * len(lang_names) * args.samples
+    calls_per_model = n_jobs * (args.repairs + 1)
+    banner = (f"Nyra benchmark | provider={provider.name} model={', '.join(model_ids)} | {len(tasks)} tasks x "
               f"{len(lang_names)} languages x {args.samples} sample(s) | up to {args.repairs + 1} attempts each "
-              f"(at most {max_calls} model calls)")
+              f"(at most {calls_per_model} model calls" + (f" per model, {calls_per_model * len(model_ids)} in total"
+                                                           if len(model_ids) > 1 else "") + ")")
     if nyra is not None:
         banner += f" | {nyra.version_text()} ({nyra.backend})"
     print(banner)
@@ -929,77 +1483,66 @@ def _main(args) -> int:
             print(f"  {t.min_version}  {t.id:<24} {t.category:<14} {t.title}")
         for e in excluded:
             print(f"  skipped {e['id']}: {e['reason']}")
+        if listing:
+            by_id = {m["id"]: m for m in listing}
+            total = 0.0
+            print(f"estimated cost (about {ASSUMED_ATTEMPTS} attempts per run and {args.assume_output_tokens:,} output "
+                  "tokens per attempt, thinking included; thinking models can use several times more):")
+            for mid in model_ids:
+                price = modelsmod.price_per_token(modelsmod.lookup(by_id, mid) or {})
+                if price is None:
+                    print(f"  {mid}: price not listed")
+                    continue
+                cost = estimate_cost(price, tasks, lang_names, langs, args.samples, args.assume_output_tokens)
+                total += cost
+                print(f"  {mid}: about ${cost:,.2f}")
+            if len(model_ids) > 1:
+                print(f"  total: about ${total:,.2f}")
+            print("  (use --budget USD to stop a run that costs more than you planned)")
         return 0
 
-    provider.ensure_ready()  # a missing key or SDK stops the run here, before anything is spent
+    for p in plist:
+        p.ensure_ready()  # a missing key or SDK stops the run here, before anything is spent
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    started = dt.datetime.now(dt.timezone.utc)
-    ctx = RunContext(provider=provider, repairs=args.repairs, count_tokens=not args.no_count_tokens)
-    records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
-    finished = dt.datetime.now(dt.timezone.utc)
+    plan = Plan(args=args, lang_names=lang_names, langs=langs, tasks=tasks, excluded=excluded, max_version=max_version,
+                max_source=max_source, warnings=warnings, toolchains=toolchain_info(langs))
+    budget = BudgetGuard(args.budget, plist) if args.budget is not None else None
 
-    order = {t.id: i for i, t in enumerate(tasks)}
-    records.sort(key=lambda r: (order[r["task_id"]], lang_names.index(r["lang"]), r["sample"]))
-    complete = not interrupted and not ctx.fatal and all(r["status"] != "aborted" for r in records)
-    if not any(r["status"] in ("pass", "fail") for r in records):
-        # Nothing usable (bad key, unknown model, ...): do not leave an empty result file behind.
-        reason = ctx.fatal[0] if ctx.fatal else next((r["error"] for r in records if r.get("error")), "no run finished")
-        print(f"error: no run finished, so no result files were written: {reason}", file=sys.stderr)
-        return 130 if interrupted else 2
-    served = sorted({a["served_model"] for r in records for a in r["attempts"] if a.get("served_model")})
-    if len(served) > 1:
-        warnings.append(f"the provider served more than one model id during the run: {', '.join(served)}")
+    outcomes: list = []
+    not_run = 0
+    for i, p in enumerate(plist, 1):
+        if len(plist) > 1:
+            print(f"\n=== model {i} of {len(plist)}: {p.model} ===", flush=True)
+        outcome = run_model(plan, p, out_dir, budget, single=len(plist) == 1)
+        outcomes.append(outcome)
+        if outcome.interrupted or outcome.stop_all:
+            not_run = len(plist) - i
+            if not_run:
+                print(f"stopping: the remaining {not_run} model(s) were not run", file=sys.stderr)
+            break
 
-    results = {
-        "schema": SCHEMA_VERSION,
-        "run": {
-            "date": dt.date.today().isoformat(), "started_at": started.isoformat(timespec="seconds"),
-            "finished_at": finished.isoformat(timespec="seconds"), "complete": complete,
-            "provider": provider.describe(), "mock": provider.is_mock,
-            "mock_flaky": args.mock_flaky if provider.is_mock else None,
-            "tokens_are_estimates": provider.tokens_are_estimates,
-            "langs": lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
-            "backend": nyra.backend if nyra else None, "jobs": args.jobs,
-            "max_version": None if max_version is None else f"{max_version[0]}.{max_version[1]}",
-            "max_version_source": max_source,
-            "nyra": None if nyra is None else {"path": display_path(nyra.bin), "version": nyra.version_text()},
-            "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
-                                               "sha256": nyra.spec_sha256},
-            "python": platform.python_version(), "platform": platform.platform(),
-            "served_models": served, "repo": _git_info(), "tasks_sha256": tasks_digest(), "warnings": warnings,
-            # Everything needed to rebuild what the model saw: system prompt + task prompt, then for each
-            # attempt its reply and the feedback that followed it.
-            "system_prompts": {n: langs[n].system_prompt for n in lang_names},
-            "tasks": {t.id: {"title": t.title, "category": t.category, "difficulty": t.difficulty,
-                             "min_version": t.min_version, "prompt": t.prompt} for t in tasks},
-            "task_ids": [t.id for t in tasks], "excluded_tasks": excluded,
-        },
-        "records": records,
-    }
-    results["summary"] = report.summarize(records, lang_names)
-    markdown = report.render_markdown(results, {t.id: t for t in tasks})
-
-    json_path, md_path = result_paths(out_dir, results["run"]["date"], provider.name, provider.model)
-    json_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    md_path.write_text(markdown, encoding="utf-8")
-    (out_dir / "latest.md").write_text(markdown, encoding="utf-8")
-
-    print()
-    print(markdown)
-    print(f"wrote {json_path}\n      {md_path}\n      {out_dir / 'latest.md'}")
-
-    for exc in ctx.fatal[:1]:
-        print(f"error: the run was stopped by a fatal problem: {exc}", file=sys.stderr)
-        return 2
-    if interrupted:
-        return 130
-    bad = [r for r in records if r["status"] in ("error", "aborted")]
-    if bad:
-        print(f"warning: {len(bad)} run(s) ended in an error and are excluded from the metrics", file=sys.stderr)
-    if provider.is_mock and any(r["status"] != "pass" for r in records):
-        print("error: the mock run is the pipeline self-test: every task must pass", file=sys.stderr)
-        return 1
+    finished = [o for o in outcomes if o.results is not None]
+    if len(plist) > 1 and finished:
+        comparison = report.render_comparison([o.results for o in finished])
+        cmp_json, cmp_md = result_paths(out_dir, finished[0].results["run"]["date"], provider.name, "compare")
+        cmp_md.write_text(comparison, encoding="utf-8")
+        (out_dir / "latest.md").write_text(comparison, encoding="utf-8")  # the comparison is what this run is about
+        # An index of the per-model files, so the set can be found again (python bench/publish.py reads them).
+        cmp_json.write_text(json.dumps(
+            {"schema": SCHEMA_VERSION, "date": finished[0].results["run"]["date"], "provider": provider.name,
+             "langs": lang_names, "models": [{"model": o.model, "file": o.json_path.name,
+                                             "complete": o.results["run"]["complete"]} for o in finished]},
+            indent=2) + "\n", encoding="utf-8")
+        print()
+        print(comparison)
+        print(f"wrote {cmp_md}\nper-model results: " + ", ".join(o.json_path.name for o in finished))
+    if budget is not None and finished:
+        print(f"spent ${budget.spent():.4f} of the ${budget.limit:g} budget")
+    codes = [o.exit_code for o in outcomes] + ([2] if not_run else [])
+    for code in (130, 2, 1):  # the most serious problem decides the exit status
+        if code in codes:
+            return code
     return 0
 
 
