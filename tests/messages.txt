@@ -4244,3 +4244,117 @@ error[E0210]: cannot use `&&` on `bool` and `int`: `&&` needs two `bool`s
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
+==== struct_braces
+struct Point {
+    x: int
+    y: int
+}
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    print(p.x)
+}
+----
+error[E0101]: expected end of line, found `{`
+  --> case.nyra:6:19
+  |
+6 |     let p = Point { x: 1, y: 2 }
+  |                   ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_braces_in_call
+struct Point {
+    x: int
+    y: int
+}
+fn show(p: Point) {
+    print(p.x)
+}
+fn main() {
+    show(Point { x: 1, y: 2 })
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `show`, found `{`
+  --> case.nyra:9:16
+  |
+9 |     show(Point { x: 1, y: 2 })
+  |                ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_lowercase_as_type
+struct point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(point(x: 1))
+}
+----
+error[E0221]: struct name `point` must start with an uppercase letter
+  --> case.nyra:1:8
+  |
+1 | struct point {
+  |        ^
+  = hint: write `struct Point`: type names start uppercase, variables and functions lowercase
+  = explain: nyra explain E0221
+
+nyra: 1 error(s)
+==== struct_type_wrong_case
+struct Point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(Point(x: 1))
+}
+----
+error[E0102]: unknown type `point`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
+  --> case.nyra:4:12
+  |
+4 | fn show(p: point) {
+  |            ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== for_two_variables
+fn main() {
+    let xs = [5, 6]
+    for i, x in xs {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, x in xs {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..xs.len() { let x = xs[i] ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== for_enumerate
+fn main() {
+    let names = ["a", "b"]
+    for i, name in enumerate(names) {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, name in enumerate(names) {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..names.len() { let name = names[i] ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
