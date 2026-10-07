@@ -5,6 +5,6 @@ def gcd(a, b):
 
 
 result = 1
-for n in range(2, 21):
+for n in range(2, 17):
     result = result // gcd(result, n) * n
 print(result)

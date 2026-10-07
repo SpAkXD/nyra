@@ -1,0 +1,23 @@
+fn search(xs: [int], target: int) -> int {
+    var low = 0
+    var high = xs.len() - 1
+    while low <= high {
+        let mid = (low + high) / 2
+        if xs[mid] == target {
+            ret mid
+        }
+        if xs[mid] < target {
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    ret -1
+}
+
+fn main() {
+    let values = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    for target in [23, 2, 37, 4] {
+        print(search(values, target))
+    }
+}

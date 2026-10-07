@@ -1,0 +1,9 @@
+{
+  "id": "calendar_month",
+  "title": "Calendar of a month",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "A month has 31 days and its first day is a Wednesday. Print its calendar with weeks starting on Monday. The first line is the header `Mo Tu We Th Fr Sa Su`. Then print one line per week. Every date is written right-aligned in a field of width 2, the fields of a week are separated by single spaces, and the days of the first week that come before the 1st are empty fields (two spaces). Do not print trailing spaces. So the 1 stands under the `We` of the header.",
+  "expected_output": "Mo Tu We Th Fr Sa Su\n       1  2  3  4  5\n 6  7  8  9 10 11 12\n13 14 15 16 17 18 19\n20 21 22 23 24 25 26\n27 28 29 30 31\n"
+}

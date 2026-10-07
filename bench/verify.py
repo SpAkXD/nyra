@@ -5,6 +5,7 @@
     python bench/verify.py --write         # also (re)generate expected_output from the Python references
     python bench/verify.py --tasks fizz*   # only some tasks
     python bench/verify.py --skip rust     # no Rust toolchain here (also: nyra, typescript)
+    python bench/verify.py --max-version 0.3   # the compiler implements Nyra 0.3 but its version still says 0.2
 
 What is checked, per task:
   * the task file is well formed, and a Python reference solution exists;
@@ -17,6 +18,7 @@ What is checked, per task:
     and JavaScript via Node), so the expected output is confirmed by two independent implementations;
   * a task whose min_version the installed compiler already supports has a Nyra reference
     (a warning, or an error with --strict), and a Nyra reference is not older than its min_version.
+    "Supports" means the version `nyra --version` prints, or the one given with --max-version.
 
 Exit status 1 if anything is wrong.
 """
@@ -117,7 +119,8 @@ def check_task(task: run.Task, args, nyra_langs: dict, compiler_version, extra_l
         else:
             if compiler_version is not None and task.version > compiler_version:
                 problems.append(f"has a Nyra reference but min_version {task.min_version} is above the compiler "
-                                f"version {compiler_version[0]}.{compiler_version[1]}")
+                                f"version {compiler_version[0]}.{compiler_version[1]} (a compiler that already "
+                                f"implements Nyra {task.min_version}: --max-version {task.min_version})")
             ok = True
             for backend, lang in nyra_langs.items():
                 result = lang.evaluate(nyra_ref, task_for_nyra)
@@ -158,6 +161,9 @@ def main(argv=None) -> int:
                                    "(default: found automatically)")
     p.add_argument("--backends", default="native,js", help="Nyra backends to check (default: native,js)")
     p.add_argument("--strict", action="store_true", help="a missing Nyra reference for a supported version is an error")
+    p.add_argument("--max-version", help="check the Nyra references as if the compiler were this Nyra version, e.g. 0.3 "
+                                         "(default: the version `nyra --version` prints; use it while the compiler "
+                                         "already implements a language version its version number does not show yet)")
     p.add_argument("--timeout", type=float, default=10.0, help="seconds per program (default: 10)")
     p.add_argument("--jobs", type=int, default=4, help="tasks checked in parallel (default: 4)")
     args = p.parse_args(argv)
@@ -170,6 +176,7 @@ def main(argv=None) -> int:
                                  f"available: {', '.join(run.LANG_ORDER)}")
         if args.no_nyra:
             skip.add("nyra")
+        version_limit = run.parse_version(args.max_version) if args.max_version else None
         tasks = run.load_tasks(require_expected=False)
         if args.tasks:
             patterns = [x.strip() for x in args.tasks.split(",") if x.strip()]
@@ -185,7 +192,7 @@ def main(argv=None) -> int:
                                                    node=run.find_node(args.node) if backend == "js" else "node")
                 nyra_langs[backend].preflight()
             if nyra_langs:
-                compiler_version = next(iter(nyra_langs.values())).version()
+                compiler_version = version_limit or next(iter(nyra_langs.values())).version()
         extra_langs: dict = {}
         if "typescript" not in skip:
             extra_langs["typescript"] = run.TypeScriptLang(args.node, timeout=args.timeout)
@@ -213,8 +220,12 @@ def main(argv=None) -> int:
         extra = res["problems"] + [f"({n})" for n in res["notes"]]
         print(line + ("  " + "; ".join(extra) if extra else ""))
     n_nyra = sum(1 for t in tasks if (run.SOLUTIONS_DIR / "nyra" / f"{t.id}.nyra").is_file())
+    as_version = ""
+    if nyra_langs and version_limit:
+        as_version = (f"; as Nyra {version_limit[0]}.{version_limit[1]} (--max-version), the compiler says "
+                      f"{next(iter(nyra_langs.values())).version_text()}")
     summary = (f"\n{len(tasks)} task(s), {n_nyra} with a Nyra reference"
-               + (f" (checked on: {', '.join(nyra_langs)})" if nyra_langs else ""))
+               + (f" (checked on: {', '.join(nyra_langs)}{as_version})" if nyra_langs else ""))
     for lang in extra_langs.values():
         have = sum(1 for t in tasks if lang.reference_path(t.id).is_file())
         summary += f", {have} with a {lang.display} reference"

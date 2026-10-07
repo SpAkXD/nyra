@@ -1,0 +1,9 @@
+{
+  "id": "twisted_fizzbuzz",
+  "title": "FizzBuzz with ordered rules",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "Print the numbers from 1 to 40, one per line, replacing some of them. Check these rules in order and use the first one that applies: if the number contains the digit 7 in its decimal form, print `Seven`; otherwise, if it is divisible by both 3 and 4, print `Twelve`; otherwise, if it is divisible by 3, print `Three`; otherwise, if it is divisible by 4, print `Four`; otherwise print the number itself.",
+  "expected_output": "1\n2\nThree\nFour\n5\nThree\nSeven\nFour\nThree\n10\n11\nTwelve\n13\n14\nThree\nFour\nSeven\nThree\n19\nFour\nThree\n22\n23\nTwelve\n25\n26\nSeven\nFour\n29\nThree\n31\nFour\nThree\n34\n35\nTwelve\nSeven\n38\nThree\nFour\n"
+}

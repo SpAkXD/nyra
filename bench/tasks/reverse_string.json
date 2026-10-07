@@ -4,6 +4,6 @@
   "category": "strings",
   "difficulty": "easy",
   "min_version": "0.3",
-  "prompt": "Print the text `hello world` with its characters in reverse order (the first character of the output is `d`). Build the result by looping over the characters; do not use a built-in reverse function or a slicing trick.",
+  "prompt": "Print the text `hello world` with its characters in reverse order. Build the result yourself by going through the characters one at a time; do not use a built-in reverse function or any other shortcut that reverses the text for you.",
   "expected_output": "dlrow olleh\n"
 }

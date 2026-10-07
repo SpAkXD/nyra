@@ -1,0 +1,9 @@
+{
+  "id": "multiples_4_7",
+  "title": "Sum of multiples of 4 or 7",
+  "category": "math",
+  "difficulty": "easy",
+  "min_version": "0.1",
+  "prompt": "Print the sum of all positive integers below 1000 that are divisible by 4 or by 7 (or by both). Print only that number, on one line.",
+  "expected_output": "177931\n"
+}

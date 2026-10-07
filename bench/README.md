@@ -231,8 +231,9 @@ Known asymmetries (they are part of the question, but you should know them):
   years of pre-training behind them. That is the situation of any new language; the headline answers "how well does a
   model do with this spec", not "how good is Nyra in the abstract".
 - Python and TypeScript have large standard libraries and Nyra has almost none yet. Where a library call would
-  trivialize a task (`gcd`, `pow(a, b, m)`, `sorted`), the prompt asks for the algorithm to be written out. Some tasks
-  are still shorter in Python for that reason; Nyra's own standard library (v0.6) will change this.
+  trivialize a task (`gcd`, `pow(a, b, m)`, `sorted`), the prompt asks for the algorithm to be written out. Nothing
+  checks that request (only the output is compared), so a program that uses the library call anyway passes and is
+  shorter. Some tasks are still shorter in Python for that reason; Nyra's own standard library (v0.6) will change this.
 - **TypeScript is not type-checked** (Node only removes the annotations), so it is closer to JavaScript here than
   `tsc` would make it. Rust is the strictest: the compiler rejects what the others would run.
 - The error feedback differs because the toolchains differ: Nyra's compiler returns structured diagnostics with fix
@@ -253,8 +254,13 @@ Known asymmetries (they are part of the question, but you should know them):
 - A run has one sample per task by default and a model's output varies from run to run. `--samples 5` (or more)
   averages that noise out of each task's result, so use it before putting a number in a README. The 95% intervals
   deliberately use the number of **tasks** as their sample size, because repeating a task does not add a new task.
-  With 29 tasks the interval is roughly 10 to 20 points either way. Quote the count (`25/29`), not only the
+  With 49 tasks the interval is roughly 7 to 14 points either way. Quote the count (`45/49`), not only the
   percentage. The paired sign test compares the languages task by task for the same reason.
+- Most tasks are classic exercises. In a pilot run on the 29 tasks of Nyra 0.2, three cheap models solved every one
+  on the first try in Python, TypeScript and Rust, so at that ceiling a first-try rate cannot separate the languages
+  and the token numbers carry the comparison. The `rules` category (several stated rules and an exact output format)
+  is where first-try failures start: read its row in the per-category table, and remember that 6 tasks give a wide
+  interval (5/6 is 44% to 97%).
 - Do not compare result files whose `tasks_sha256`, spec hash, compiler version or model differ (`publish.py` refuses
   to).
 - Sampling parameters such as temperature are not sent unless you pass them with `--extra-json` (the newest models
@@ -291,10 +297,21 @@ raw files. `publish.py` refuses mock runs, incomplete runs, and result files tha
 ```
 
 `min_version` is the first Nyra version in which a natural solution can be written (0.1: functions, ints, loops,
-one value per `print`; 0.2: string interpolation and compact syntax; 0.3: arrays, structs, string functions).
-Categories: math, number-theory, recursion, simulation, patterns, strings, arrays, structs. There are 39 tasks:
-19 for 0.1, 10 for 0.2, 10 for 0.3. The 0.3 tasks have no Nyra reference solution yet because that language version
-does not exist; they start running as soon as the compiler's version reaches them.
+one value per `print`; 0.2: string interpolation and compact syntax; 0.3: arrays, structs, strings with methods and
+`+`). There are 49 tasks: 22 for 0.1, 14 for 0.2, 13 for 0.3. Every task has a reference solution in all four
+languages; each Nyra reference uses only the features of its task's `min_version`.
+
+| category | tasks | what they exercise |
+|---|---|---|
+| `math` | 9 | loops and arithmetic: sums, digits, counting, leap years, Collatz chains, change making, triples |
+| `number-theory` | 6 | divisibility: gcd and lcm, primes, modular power, happy numbers |
+| `recursion` | 4 | naturally recursive definitions: Ackermann, Fibonacci, binomials, Tower of Hanoi |
+| `simulation` | 4 | a process stepped through time: a generator, a population, a traffic light, Josephus |
+| `patterns` | 7 | lines of text built from numbers and symbols, where the exact layout matters |
+| `strings` | 8 | building, scanning and transforming text |
+| `arrays` | 4 | searching, sorting and marking in arrays |
+| `structs` | 1 | a record type with functions that take it |
+| `rules` | 6 | several stated rules and an exact output format, with edge cases spelled out in the prompt: `bank_ledger`, `receipt`, `calendar_month`, `word_wrap`, `prime_factorization`, `twisted_fizzbuzz`. The tier where first-try failures start |
 
 ### Adding a task
 
@@ -304,8 +321,9 @@ does not exist; they start running as soon as the compiler's version reaches the
    Read the result: it is what the model must print.
 4. Write `bench/solutions/typescript/<id>.ts` and `bench/solutions/rust/<id>.rs` (every task needs both, whatever its
    `min_version`); `verify.py` checks that they print the same output.
-5. If the installed compiler supports `min_version`, write `bench/solutions/nyra/<id>.nyra`; `verify.py` then checks that
-   it prints the same output on both backends. If a task cannot be solved cleanly in that version, raise its `min_version`.
+5. If the installed compiler supports `min_version`, write `bench/solutions/nyra/<id>.nyra` with the features of that
+   version only; `verify.py` then checks that it prints the same output on both backends. If a task cannot be solved
+   cleanly in that version, raise its `min_version`.
 6. `python bench/test_bench.py`.
 
 Rules for a good task: all data is in the prompt and the prompt says exactly what to print and in what format; no
@@ -315,11 +333,23 @@ floors, C, JS and Rust truncate); recursion depth below about 900 (Python's limi
 lowercase words. **Do not edit a task after seeing results**; add a new one (and the task-set hash will show that the
 set changed).
 
+Wording, so that no language is favoured: never write `/` for division in prose (say "half of n", or "divided by 5,
+discarding the remainder") and say when numbers are printed as whole numbers, because Python's `/` prints `3.0`;
+do not name one language's trick ("slicing"); state every convention (where counting starts, inclusive or exclusive
+bounds, which line comes first) and give a worked example that is not one of the test cases; keep intermediate values
+below 2^31, since Rust infers `i32`. Avoid answers that can be remembered instead of computed (Project Euler
+problems, textbook examples such as 292 ways to change a dollar): a model can print a memorized number in every
+language.
+
 ### When a new Nyra version lands
 
 Bump the version in `Cargo.toml` (the runner uses it to choose the tasks), write the `.nyra` reference solutions for the
 tasks that version unlocks, and run `python bench/verify.py --strict` (a missing reference for a supported version is
 then an error). Results from different versions are different experiments.
+
+While a compiler already implements the new language but still reports the old version number (between the work on
+a version and its release), pass the new version to both tools: `python bench/verify.py --max-version 0.3` checks
+the references as if the compiler were Nyra 0.3, and `python bench/run.py --max-version 0.3` runs the 0.3 tasks.
 
 ## Files
 
@@ -366,7 +396,9 @@ identical. `RustLang` and `TypeScriptLang` are the examples.
   has been benchmarked. In particular the OpenRouter request and response shapes follow its documentation and were
   never exercised against the live service, and token counting through OpenRouter (the echo request) is untested
   against real models: check the first real run's `code_tokens` before trusting them.
-- Only 29 of the 39 tasks can run today (Nyra 0.2); the rest need Nyra 0.3 (they do run without Nyra in `--langs`).
+- A task whose `min_version` is above the compiler's version number does not run, for any language, unless
+  `--max-version` raises the limit (without Nyra in `--langs` every task runs). Until the 0.3.0 release the compiler
+  on the v0.3 branch implements Nyra 0.3 but reports 0.2.0: use `--max-version 0.3` with `run.py` and `verify.py`.
 - Single-turn tasks, small programs; nothing here measures reading or fixing existing code.
 - Native Nyra runs need a C compiler (gcc/clang) and `--backend js` needs Node; tasks run in parallel, so timing
   numbers are indicative only.

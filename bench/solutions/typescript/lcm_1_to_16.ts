@@ -6,7 +6,7 @@ function gcd(a: number, b: number): number {
 }
 
 let result = 1;
-for (let n = 2; n <= 20; n++) {
+for (let n = 2; n <= 16; n++) {
   result = (result / gcd(result, n)) * n;
 }
 console.log(result);

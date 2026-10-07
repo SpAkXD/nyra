@@ -1,0 +1,9 @@
+{
+  "id": "receipt",
+  "title": "Receipt with tax",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Print a receipt for these items (name, price per unit in cents, quantity): apple 125 3, bread 399 1, milk 89 12, cheese 1450 2. Print one line per item, in this order, made of the name left-aligned in a field of 8 characters followed by the item total (price times quantity, in cents) written as dollars and cents with exactly two digits after the point (1205 cents is written 12.05) right-aligned in a field of 8 characters. Then print three more lines in the same layout, labelled `subtotal` (the sum of the item totals), `tax` and `total`. The tax is 8.25 percent of the subtotal rounded half up to a whole number of cents: compute it with integers as (subtotal * 825 + 5000) divided by 10000, discarding the remainder. The total is the subtotal plus the tax. Do not print trailing spaces.",
+  "expected_output": "apple       3.75\nbread       3.99\nmilk       10.68\ncheese     29.00\nsubtotal   47.42\ntax         3.91\ntotal      51.33\n"
+}

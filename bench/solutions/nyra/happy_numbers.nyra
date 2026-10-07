@@ -1,0 +1,33 @@
+fn next(n: int) -> int {
+    var x = n
+    var sum = 0
+    while x > 0 {
+        let d = x % 10
+        sum = sum + d * d
+        x = x / 10
+    }
+    ret sum
+}
+
+// a slow and a fast walker: they meet on a cycle, unless the fast one reaches 1 first
+fn is_happy(n: int) -> bool {
+    var slow = n
+    var fast = next(n)
+    while fast != 1 && slow != fast {
+        slow = next(slow)
+        fast = next(next(fast))
+    }
+    ret fast == 1
+}
+
+fn main() {
+    var found = 0
+    var n = 1
+    while found < 10 {
+        if is_happy(n) {
+            print(n)
+            found = found + 1
+        }
+        n = n + 1
+    }
+}
