@@ -269,8 +269,8 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .num { display: block; font: 600 12px/1 var(--f-mono); color: var(--act); margin-bottom: 26px; letter-spacing: .08em; }
 
 /* bento micro-animations: transform and opacity only */
-.mini { position: absolute; top: 26px; right: 24px; display: flex; align-items: center; gap: 6px; font: 600 11px/1 var(--f-mono); }
-.mini code { font-size: 12px; padding: 7px 10px; border-radius: 8px; background: var(--ink); color: #E2E8F0; position: relative; display: inline-block; }
+.mi { position: absolute; top: 26px; right: 24px; display: flex; align-items: center; gap: 6px; font: 600 11px/1 var(--f-mono); }
+.mi code { font-size: 12px; padding: 7px 10px; border-radius: 8px; background: var(--ink); color: #E2E8F0; position: relative; display: inline-block; }
 .m-err span { padding: 6px 8px; border-radius: 999px; border: 1px solid var(--bd2); color: var(--mu); animation: mErr 4.5s var(--out) infinite; }
 .m-err span:nth-child(2) { animation-delay: .6s; } .m-err span:nth-child(3) { animation-delay: 1.2s; }
 @keyframes mErr { 0%, 8% { opacity: .45; transform: none; } 14%, 60% { opacity: 1; transform: translateY(-3px); box-shadow: 0 0 0 1px var(--teal-deep); } 75%, 100% { opacity: .45; transform: none; } }
@@ -293,7 +293,7 @@ code.i { font-size: .88em; padding: .1em .4em; border-radius: 6px; background: v
 .m-same em { font-style: normal; color: var(--ink); background: var(--mint); border-radius: 999px; padding: 3px 6px; animation: mSame 3s var(--spring) infinite; }
 .m-same span + span em { animation-delay: .25s; }
 @keyframes mSame { 0%, 20% { transform: scale(.6); opacity: .3; } 35%, 100% { transform: none; opacity: 1; } }
-.paused .mini * { animation-play-state: paused !important; }
+.paused .mi * { animation-play-state: paused !important; }
 
 /* ---------- windows (always ink islands, also on paper) ---------- */
 .win { position: relative; background: var(--ink-1); color: #E2E8F0; border: 1px solid rgba(255,255,255,.09); border-radius: var(--r-lg); overflow: hidden; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 24px 48px -24px rgba(0,0,0,.6); }
@@ -601,7 +601,7 @@ code.big { display: inline-block; font-size: 1.15rem; font-weight: 600; color: v
   .space { position: static; perspective: none; display: grid; gap: 16px; padding: 0 var(--gut); max-width: 1200px; margin: 0 auto; }
   .pc { position: relative; left: auto; top: auto; transform: none !important; opacity: 1 !important; width: auto; visibility: visible !important; }
   .rail, .floor, .bignum { display: none; }
-  .mini *, .mini *::after { animation: none !important; }
+  .mi *, .mi *::after { animation: none !important; }
   .duo .ed, .duo .term2 { transform: none; }
   .stage { transform: none !important; }
 }
