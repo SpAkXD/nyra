@@ -139,7 +139,7 @@ function header() {
   const po = new IntersectionObserver((es) => {
     es.forEach(e => e.isIntersecting ? papers.add(e.target) : papers.delete(e.target));
     top.classList.toggle('on-paper', papers.size > 0);
-  }, { rootMargin: `-${32}px 0px -${Math.max(0, innerHeight - 34)}px 0px` });
+  }, { rootMargin: `-60px 0px -${Math.max(0, innerHeight - 62)}px 0px` });
   $$('.sheet').forEach(s => po.observe(s));
   /* current section in nav */
   const links = new Map($$('a', menu).map(a => [a.getAttribute('href').slice(1), a]));
