@@ -144,14 +144,6 @@ static void nyrt_merge_sort(char *a, char *tmp, int64_t lo, int64_t hi, int64_t 
     }
     memcpy(a + lo * sz, tmp + lo * sz, (size_t)((hi - lo) * sz));
 }
-static void nyrt_arr_sort(nyrt_arr **p) {
-    nyrt_arr *a = *p;
-    if (a->len < 2) return;
-    char *tmp = malloc((size_t)(a->len * a->ty->size));
-    if (!tmp) nyrt_oom(0, 0);
-    nyrt_merge_sort(a->data, tmp, 0, a->len, a->ty->size, a->ty->lt);
-    free(tmp);
-}
 // `xs += ys`: appends in place when `*p` is the only owner; `xs += xs` doubles it.
 static void nyrt_arr_append(nyrt_arr **p, const nyrt_arr *b) {
     nyrt_arr *keep = (nyrt_arr *)b;
@@ -348,4 +340,35 @@ static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
         else nyrt_buf_str(&b, ((nyrt_str **)a->data)[i]);
     }
     return nyrt_buf_done(&b);
+}
+
+// ---- sorting (after the element types it dispatches on) ----------------------------------------
+// The same merge sort for the sortable element types, without a call per comparison.
+#define NYRT_MSORT(name, T, LT) \
+    static void name(T *a, T *tmp, int64_t lo, int64_t hi) { \
+        if (hi - lo < 2) return; \
+        int64_t mid = lo + (hi - lo) / 2; \
+        name(a, tmp, lo, mid); \
+        name(a, tmp, mid, hi); \
+        int64_t i = lo, j = mid; \
+        for (int64_t k = lo; k < hi; k++) tmp[k] = (j < hi && (i >= mid || LT(a[j], a[i]))) ? a[j++] : a[i++]; \
+        memcpy(a + lo, tmp + lo, (size_t)(hi - lo) * sizeof(T)); \
+    }
+#define NYRT_LT(x, y) ((x) < (y))
+#define NYRT_LT_STR(x, y) (nyrt_str_cmp((x), (y)) < 0)
+NYRT_MSORT(nyrt_msort_int, int64_t, NYRT_LT)
+NYRT_MSORT(nyrt_msort_float, double, NYRT_LT)
+NYRT_MSORT(nyrt_msort_char, nyrt_char, NYRT_LT)
+NYRT_MSORT(nyrt_msort_str, nyrt_str *, NYRT_LT_STR)
+static void nyrt_arr_sort(nyrt_arr **p) {
+    nyrt_arr *a = *p;
+    if (a->len < 2) return;
+    char *tmp = malloc((size_t)(a->len * a->ty->size));
+    if (!tmp) nyrt_oom(0, 0);
+    if (a->ty == &nyrt_T_int) nyrt_msort_int((int64_t *)a->data, (int64_t *)tmp, 0, a->len);
+    else if (a->ty == &nyrt_T_float) nyrt_msort_float((double *)a->data, (double *)tmp, 0, a->len);
+    else if (a->ty == &nyrt_T_char) nyrt_msort_char((nyrt_char *)a->data, (nyrt_char *)tmp, 0, a->len);
+    else if (a->ty == &nyrt_T_str) nyrt_msort_str((nyrt_str **)a->data, (nyrt_str **)tmp, 0, a->len);
+    else nyrt_merge_sort(a->data, tmp, 0, a->len, a->ty->size, a->ty->lt);
+    free(tmp);
 }
