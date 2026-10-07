@@ -1,28 +1,28 @@
 # Nyra
 
-> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to native code (through C) or to JavaScript with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
+> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to native code (through C) or to JavaScript with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
 
-Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there is no input, no arrays, no structs and no string functions yet). Read the AI guide before you write code.
+Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there is no input, no maps, no tuples and no modules yet). Read the AI guide before you write code.
 
-The ten most important rules for writing correct Nyra (v0.2):
+The ten most important rules for writing correct Nyra (v0.3):
 
-1. A program is a list of `fn` definitions and must contain `fn main() { ... }` (no parameters, no return type). Nothing else may be at the top level, so there are no global variables.
+1. A program is a list of `fn` and `struct` definitions, in any order, and must contain `fn main() { ... }` (no parameters, no return type). Nothing else may be at the top level, so there are no global variables.
 2. No semicolons. One statement per line. Braces are required and `{` stays on the same line as `fn`, `if`, `else`, `while` and `for`. Comments are `// ...`.
-3. Types are `int` (64-bit), `float`, `bool` and `str`. Parameters and return types are always written (`fn add(a: int, b: int) -> int`); local types are inferred.
-4. Types never convert implicitly: `1 + 2.0` is an error. Write `float(x)` or `int(x)`, and write float literals with a dot (`2.0`, never `2`).
-5. `let` is immutable, `var` is mutable, and only `var` can be reassigned (`n = n + 1`, `n += 1`). A name can be declared only once per function, parameters and loop variables included (no shadowing).
+3. Types are `int` (64-bit), `float`, `bool`, `str`, `char` (`'a'`), arrays `[T]` (`[1, 2, 3]`) and structs. Parameters and return types are always written (`fn add(a: int, b: int) -> int`); local types are inferred, but an empty array needs one: `var xs: [int] = []`.
+4. Types never convert implicitly: `1 + 2.0` and `"n=" + 5` are errors. Write `float(x)`, `int(x)` or `str(x)`, and write float literals with a dot (`2.0`, never `2`).
+5. `let` is immutable and `var` is mutable: only a `var` can be reassigned or changed (`n += 1`, `xs.push(4)`, `p.x = 3`). A name can be declared only once while it is visible (no shadowing). Parameters are immutable unless declared `inout`, and then the call says `inout` too: `swap(inout a, inout b)`.
 6. Conditions must be `bool`: `if n != 0 { }`, never `if n { }`. The boolean operators are `&&`, `||` and `!`.
 7. Return with `ret`, not `return`. A function with `-> T` must end every path with `ret`. One-line form: `fn square(x: int) -> int = x * x`.
-8. `for i in 0..10 { }` counts 0 to 9 (the end is exclusive, there is no `..=`); `while cond { }` also exists. There is no `break` or `continue`: leave a loop with `ret`.
-9. `print(x)` takes exactly one value and ends the line. Build text with interpolation: `print("sum: {a + b}")` (`{{` and `}}` are literal braces, and nothing inside `{ }` may contain quotes). There is no string `+`.
-10. The only builtins are `print`, `int` and `float`. Everything else (`abs`, `min`, `max`, `pow`, `sqrt`, `len`, `input`, ...) does not exist: write it as a function. Keep integers below 2^53 so `--js` prints the same as native. An integer `/` or `%` by zero stops the program with runtime error E0241 (exit code 101).
+8. `for i in 0..10 { }` counts 0 to 9 (the end is exclusive, there is no `..=`), `for x in xs { }` visits each element and `for c in s { }` each char; `while cond { }` also exists. `break` and `continue` act on the innermost loop.
+9. Text: `+` joins two strings and `"sum: {a + b}"` inserts any value (`{{` and `}}` are literal braces; nothing inside `{ }` may contain a `"`). `s.len()` counts characters and `s[i]` is a `char`, compared with single quotes: `s[0] == 'a'`. Chars convert explicitly: `str(c)`, `c.code()`, `char(65)`. Strings and arrays have methods (`split`, `replace`, `trim`, `upper`, `index_of`, `push`, `pop`, `sort`, `join`, `slice`, ...); there is no `len(x)`, `map` or `filter`.
+10. A struct is declared `struct Point { x: int, y: int }`, built with every field named in order, `Point(x: 1, y: 2)`, and has no methods: write `fn area(p: Point) -> int`. Assigning or passing an array or a struct copies it. `print(x)` takes one value of any type and prints arrays and structs as Nyra code. A failing operation (index out of bounds, integer division by zero, `int("12x")`) stops the program with a runtime error and exit code 101. Keep integers below 2^53 so `--js` prints the same as native.
 
 How to check your work: `nyra check prog.nyra --json` prints `{"ok":true,"errors":[]}` or a list of errors, each with `code`, `line`, `col`, `message` and `hint`. Fix them all and check again, then `nyra run prog.nyra` (add `--js` to use Node.js instead of a C compiler). If you cannot run commands, state the output the program should print and tell the user to run `nyra run prog.nyra`.
 
 ## Docs
 
 - [AI guide](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/AI_GUIDE.md): read this first. The workflow, every rule as do and don't, what does not exist yet, all error codes with fixes, recipes and complete programs.
-- [Language spec](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/SPEC.md): the complete language: types, operators, builtins, the error code table and known backend differences.
+- [Language spec](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/SPEC.md): the complete language: types, operators, builtins, every method of strings, chars and arrays, structs, `inout`, memory control, printing, runtime errors and known backend differences.
 - [Error database](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/ERRORS.md): every error code with what it means, the usual causes, and a wrong and a fixed program; `nyra explain E0201 --json` prints an entry.
 - [README](https://raw.githubusercontent.com/SpAkXD/nyra/main/README.md): overview, install, CLI options and roadmap.
 
@@ -32,14 +32,17 @@ Every example has a matching `.out` file with the exact expected output, and run
 
 - [hello.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/hello.nyra): the smallest program
 - [fizzbuzz.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/fizzbuzz.nyra): `for`, `else if`, `%`
+- [strings.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/strings.nyra): joining, comparing, searching, slicing and converting strings
+- [chars.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/chars.nyra): `char` values, codes and character tests
+- [arrays.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/arrays.nyra): every array method, nested arrays, printing
+- [structs.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/structs.nyra): declaring, building, changing and comparing structs
+- [inout.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/inout.nyra): functions that change the caller's variables
+- [loops.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/loops.nyra): `break` and `continue`
+- [memory.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/memory.nyra): `free`, `arena` and `keep`
 - [fib.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/fib.nyra): recursion
 - [primes.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/primes.nyra): `while`, early `ret`, string comparison
 - [math.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/math.nyra): floats, explicit conversions, Newton's method
 - [gcd.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/gcd.nyra): Euclid's algorithm, `lcm`
-- [collatz.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/collatz.nyra): tracking the best result in a loop
-- [perfect.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/perfect.nyra): nested conditions, `bool` functions
-- [digits.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/digits.nyra): integer `/` and `%` tricks
-- [short_fns.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/short_fns.nyra): one-line functions and `+=`
 - [interpolation.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/interpolation.nyra): `"{expr}"` strings
 - [if_value.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/if_value.nyra): `if` as a value
 
