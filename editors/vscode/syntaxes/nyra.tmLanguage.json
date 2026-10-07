@@ -1,0 +1,99 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Nyra",
+    "scopeName": "source.nyra",
+    "patterns": [
+        { "include": "#comment" },
+        { "include": "#fn-def" },
+        { "include": "#expression" }
+    ],
+    "repository": {
+        "comment": {
+            "name": "comment.line.double-slash.nyra",
+            "match": "//.*$"
+        },
+        "fn-def": {
+            "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+            "captures": {
+                "1": { "name": "storage.type.function.nyra" },
+                "2": { "name": "entity.name.function.nyra" }
+            }
+        },
+        "expression": {
+            "patterns": [
+                { "include": "#comment" },
+                { "include": "#string" },
+                { "include": "#keyword" },
+                { "include": "#builtin" },
+                { "include": "#type" },
+                { "include": "#call" },
+                { "include": "#number" },
+                { "include": "#semicolon" },
+                { "include": "#operator" },
+                { "include": "#braces" }
+            ]
+        },
+        "keyword": {
+            "patterns": [
+                { "name": "keyword.control.nyra", "match": "\\b(if|else|while|for|in|ret)\\b" },
+                { "name": "storage.type.nyra", "match": "\\b(fn|let|var)\\b" },
+                { "name": "constant.language.boolean.nyra", "match": "\\b(true|false)\\b" }
+            ]
+        },
+        "builtin": {
+            "name": "support.function.builtin.nyra",
+            "match": "\\b(print|int|float)\\b(?=\\s*\\()"
+        },
+        "type": {
+            "name": "entity.name.type.primitive.nyra",
+            "match": "\\b(int|float|bool|str)\\b"
+        },
+        "call": {
+            "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+            "captures": {
+                "1": { "name": "entity.name.function.call.nyra" }
+            }
+        },
+        "number": {
+            "name": "constant.numeric.nyra",
+            "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
+        "semicolon": {
+            "name": "invalid.illegal.semicolon.nyra",
+            "match": ";"
+        },
+        "operator": {
+            "patterns": [
+                { "name": "keyword.operator.arrow.nyra", "match": "->" },
+                { "name": "keyword.operator.range.nyra", "match": "\\.\\." },
+                { "name": "keyword.operator.comparison.nyra", "match": "==|!=|<=|>=|<|>" },
+                { "name": "keyword.operator.logical.nyra", "match": "&&|\\|\\||!" },
+                { "name": "keyword.operator.assignment.nyra", "match": "[-+*/%]?=" },
+                { "name": "keyword.operator.arithmetic.nyra", "match": "[-+*/%]" }
+            ]
+        },
+        "braces": {
+            "begin": "\\{",
+            "end": "\\}",
+            "patterns": [{ "include": "#expression" }]
+        },
+        "string": {
+            "name": "string.quoted.double.nyra",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                { "name": "constant.character.escape.nyra", "match": "\\\\[ntr\\\\\"]" },
+                { "name": "constant.character.escape.brace.nyra", "match": "\\{\\{|\\}\\}" },
+                {
+                    "name": "meta.interpolation.nyra",
+                    "begin": "\\{",
+                    "end": "\\}",
+                    "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.nyra" } },
+                    "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.nyra" } },
+                    "contentName": "source.nyra.embedded",
+                    "patterns": [{ "include": "#expression" }]
+                }
+            ]
+        }
+    }
+}

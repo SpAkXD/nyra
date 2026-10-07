@@ -1,0 +1,35 @@
+{
+    "name": "nyra",
+    "displayName": "Nyra",
+    "description": "Syntax highlighting for the Nyra programming language",
+    "version": "0.2.0",
+    "publisher": "spakxd",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SpAkXD/nyra"
+    },
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "nyra",
+                "aliases": ["Nyra", "nyra"],
+                "extensions": [".nyra"],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "nyra",
+                "scopeName": "source.nyra",
+                "path": "./syntaxes/nyra.tmLanguage.json"
+            }
+        ]
+    }
+}
