@@ -1,0 +1,6 @@
+// expect: E0245 at 4:13
+fn main() {
+    let nan = 0.0 / 0.0
+    let n = int(nan)
+    print(n)
+}

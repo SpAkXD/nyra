@@ -1,0 +1,6 @@
+// expect: E0241 at 2:35
+fn div(a: int, b: int) -> int = a / b
+fn main() {
+    print(div(6, 3))
+    print(div(1, 0))
+}

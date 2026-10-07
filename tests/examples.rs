@@ -51,6 +51,39 @@ fn examples_produce_expected_output_on_every_backend() {
 }
 
 #[test]
+fn runtime_errors_report_code_position_and_exit_101() {
+    let mut backends: Vec<&[&str]> = Vec::new();
+    if available("node") {
+        backends.push(&["--js"]);
+    }
+    if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
+        backends.push(&[]);
+    }
+    for path in files("tests/runtime") {
+        let src = std::fs::read_to_string(&path).unwrap();
+        // first line: `// expect: E0241 at 2:35`
+        let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).unwrap_or_else(|| {
+            panic!("{} has no `// expect:` line", path.display())
+        });
+        let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
+        let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default();
+        for flags in &backends {
+            let out = nyra().arg("run").arg(&path).args(*flags).output().unwrap();
+            let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            let label = format!("{} {:?}", path.display(), flags);
+            assert_eq!(out.status.code(), Some(101), "{label}: exit code; stderr:\n{stderr}");
+            assert!(stderr.contains(&format!("runtime error[{code}]")), "{label}: stderr was:\n{stderr}");
+            assert!(stderr.contains(&format!(":{at}\n")) || stderr.contains(&format!(":{at}\r\n")), "{label}: position {at} missing:\n{stderr}");
+            assert_eq!(stdout.replace("\r\n", "\n"), stdout_expected.replace("\r\n", "\n"), "{label}: stdout (must be flushed before the error)");
+
+            let json = nyra().arg("run").arg(&path).args(*flags).arg("--json").output().unwrap();
+            let stderr = String::from_utf8_lossy(&json.stderr);
+            assert!(stderr.contains(&format!("\"code\":\"{code}\"")) && stderr.contains("\"runtime\":true"), "{label} --json: {stderr}");
+        }
+    }
+}
+
+#[test]
 fn bad_programs_report_expected_error_codes() {
     for path in files("tests/errors") {
         let src = std::fs::read_to_string(&path).unwrap();

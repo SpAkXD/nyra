@@ -55,7 +55,7 @@ fn sign(x: int) -> str = if x > 0 { "+" } else if x < 0 { "-" } else { "0" }
 | ops | types |
 |---|---|
 | `-x` `!x` | `-` on int/float, `!` on bool |
-| `*` `/` `%` | int,int or float,float (`%` int only; int `/` truncates) |
+| `*` `/` `%` | int,int or float,float (`%` int only; int `/` truncates; int `/` or `%` by zero is runtime error E0241) |
 | `+` `-` | int,int or float,float |
 | `<` `<=` `>` `>=` | int,int or float,float → bool |
 | `==` `!=` | same type on both sides → bool (strings compare by value) |
@@ -66,7 +66,7 @@ fn sign(x: int) -> str = if x > 0 { "+" } else if x < 0 { "-" } else { "0" }
 | call | meaning |
 |---|---|
 | `print(x)` | print any value and a newline |
-| `int(x)` | float → int (truncates toward zero; NaN gives 0, too-large values saturate) |
+| `int(x)` | float → int (truncates toward zero; NaN or a value outside the int range is runtime error E0245) |
 | `float(x)` | int → float |
 
 ## Strings
@@ -102,6 +102,21 @@ store the text in a variable first.
 | E0210 | operator used on wrong types |
 | E0211 | `main` has parameters or a return type |
 | E0212 | `if` used as a value: missing `else`, or branches that aren't one value of the same type |
+
+## Runtime errors
+Some mistakes only show up while the program runs. It then stops with exit code 101 and,
+after all earlier output, prints:
+```
+runtime error[E0241]: division by zero
+  --> main.nyra:4:13
+  = hint: check the divisor first
+```
+`nyra run --json` prints the same error as JSON (with `"runtime":true`).
+
+| code | meaning |
+|---|---|
+| E0241 | integer `/` or `%` by zero |
+| E0245 | `int(x)` of NaN, infinity or a float outside the int range |
 
 ## Numbers
 Numbers print the same way everywhere: like JavaScript's `String(x)`

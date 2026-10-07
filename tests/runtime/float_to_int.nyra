@@ -1,0 +1,4 @@
+// expect: E0245 at 3:11
+fn main() {
+    print(int(1.0 / 0.0))
+}

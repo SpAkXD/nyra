@@ -22,7 +22,7 @@ options:
   --js         use the JavaScript backend instead of native
   --c          (build) write the generated C source instead of an executable
   -o <path>    output path for `build` (`-o -` prints to stdout)
-  --json       print errors as JSON, for AI agents and tools
+  --json       print errors as JSON (compile and runtime), for AI agents
   --time       show how long each step took
 
 The C compiler is picked automatically (gcc, clang, cc or tcc);
@@ -147,8 +147,8 @@ fn main() -> ExitCode {
     }
 
     let code = match opts.target {
-        Target::Js => codegen::js::gen(&prog),
-        Target::Native | Target::C => codegen::c::gen(&prog),
+        Target::Js => codegen::js::gen(&prog, &opts.file),
+        Target::Native | Target::C => codegen::c::gen(&prog, &opts.file),
     };
     let nyra_time = start.elapsed();
     let stem = Path::new(&opts.file).file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
@@ -214,6 +214,10 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         Command::new(exe)
     };
 
+    if opts.json {
+        // the program's runtime errors are then printed as JSON too
+        cmd.env("NYRA_JSON", "1");
+    }
     let t = Instant::now();
     let status = cmd.status();
     let run_time = t.elapsed();

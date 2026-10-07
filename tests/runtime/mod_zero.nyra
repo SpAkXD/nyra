@@ -1,0 +1,5 @@
+// expect: E0241 at 4:13
+fn main() {
+    print("start")
+    print(7 % (3 - 3))
+}
