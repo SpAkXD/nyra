@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest a language feature, a CLI option or a better error message.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do that Nyra cannot do, or does badly?
+      description: A concrete program or task is best. If an AI failed to write something, say which program and what went wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed syntax or behavior
+      description: Show the code you would like to write and what it should print.
+      render: rust
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: How do you do it today, and why is that not enough?
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Does it fit Nyra's principles?
+      options:
+        - label: It gives one clear way to do something, not a second way
+        - label: It behaves the same on the C and JavaScript backends
+        - label: A compiler error with a code and a hint can catch its misuse
