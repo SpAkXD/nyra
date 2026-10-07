@@ -282,7 +282,9 @@ FEATURES = {
     "name_reuse": True,        # a block reuses the name of a variable of a closed sibling block
     "evalorder": True,         # statements whose operands change the array they read
     "pod_structs": True,       # structs without a string or an array inside
-    "struct_field_reads": True,  # a struct read out of a field (`p.inner`) as a value
+    "self_store": True,        # `x.a[0].b = x.a`: a part of a variable stored into the variable
+    "big_literals": True,      # int literals near 2^31 and 2^40
+    "struct_rvalues": True,  # a struct out of a field or an if-value, used as a value
 }
 
 
@@ -675,7 +677,8 @@ class Gen:
         r = self.r
         if t == INT:
             n = self.wpick([(10, r.randint(0, 9)), (4, r.randint(-9, -1)), (3, r.randint(10, 1000)),
-                            (1, r.randint(-1000, -10)), (1, self.pick([2147483647, -2147483647, 65536, 1 << 40]))])
+                            (1, r.randint(-1000, -10)),
+                            (1 if self.f["big_literals"] else 0, self.pick([2147483647, -2147483647, 65536, 1 << 40]))])
             return E(str(n), INT, iv=(n, n), atom=n >= 0)
         if t == FLOAT:
             if self.f["extreme_floats"] and self.chance(0.05):
@@ -740,7 +743,7 @@ class Gen:
         cands = []
         for v in self.live():
             for p in self.place_paths(v, lambda x: x == t):
-                if is_struct(t) and p and p[-1][0] == "f" and not self.f["struct_field_reads"]:
+                if is_struct(t) and p and p[-1][0] == "f" and not self.f["struct_rvalues"]:
                     continue
                 cands.append((v, p))
         if not cands:
@@ -861,6 +864,8 @@ class Gen:
         return E(code, t, sh=f.ret_env, iv=(-VB, VB) if t == INT else None)
 
     def p_ifval(self, t, env, d, q, mut, exp):
+        if is_struct(t) and not self.f["struct_rvalues"]:
+            return None
         c = self.expr(BOOL, None, d - 1, q=q, mut=mut)
         before = self.vstate()
         a = self.expr(t, env, d - 1, q=q, mut=mut)
@@ -1270,6 +1275,9 @@ class Gen:
     def guard_grow(self, pl, stmt, add, cap):
         """`stmt` adds add's elements (or characters) to the place: unguarded when it surely
         stays within the cap, otherwise inside `if place.len() <= k`."""
+        rest = stmt[len(pl.code):] if stmt.startswith(pl.code) else stmt
+        if not self.f["self_store"] and re.search(r"\b%s\b" % re.escape(pl.root.name), rest):
+            return None
         new = self.update_place(pl, lambda s: grow_shape(s, add))
         if new is not FAIL:
             self.vars[pl.root.name].sh = new
@@ -1324,6 +1332,8 @@ class Gen:
             lines = self.guard_grow(pl, f"{pl.code} += {e.code}", e.sh, SCAP)
             return None if lines is None else (lines, False)
         e = self.sexpr(t, pl.env, self.r.randint(1, 3))
+        if not self.f["self_store"] and re.search(r"\b%s\b" % re.escape(pl.root.name), e.code):
+            return None
         new = self.update_place(pl, lambda s: e.sh)
         if new is FAIL:
             return None
@@ -1836,6 +1846,8 @@ def signature(kind, detail):
     if kind.startswith("crash-") or kind == "gen-typeerror":
         d = re.sub(r"\d+", "N", detail)
         d = re.sub(r"`[^`]*`", "`X`", d)
+        d = re.sub(r"'[^']*'", "'X'", d)
+        d = re.sub(r"^[^:]*NYRA_OPT=0: ", "", re.sub(r"^native: |^js: ", "", d))
         return d[:120]
     return ""
 

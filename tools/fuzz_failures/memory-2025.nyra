@@ -1,0 +1,11 @@
+// Storing an array into one of its own elements makes a cycle instead of a copy. Expected `Cell(items: [Cell(items: [Cell(items: [], n: 1)], n: 1)], n: 0)`; native crashes in print (stack overflow, exit 253; without the print: leak check exit 102), js: RangeError (maximum call stack) in print.
+struct Cell {
+    items: [Cell]
+    n: int
+}
+
+fn main() {
+    var c = Cell(items: [Cell(items: [], n: 1)], n: 0)
+    c.items[0].items = c.items
+    print(c)
+}

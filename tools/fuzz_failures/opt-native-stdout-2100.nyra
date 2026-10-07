@@ -1,0 +1,4 @@
+// C with NYRA_OPT=0: arithmetic on two int literals is done in 32-bit C `int`. Expected `10737418235` (js, and native with the optimizer, which folds it); native NYRA_OPT=0 prints `2147483643`.
+fn main() {
+    print(2147483647 * 5)
+}
