@@ -99,12 +99,26 @@ impl Parser {
     fn found_hint(&self) -> Option<String> {
         match self.peek() {
             Tok::Ident(w) => self.number_suffix_hint(w).or_else(|| hints::word(w)),
+            Tok::Assign if self.arrow_ahead() => Some(
+                "`=>` does not exist: Nyra has no lambdas or closures; define a named function, e.g. `fn double(x: int) -> int = x * 2`"
+                    .into(),
+            ),
+            Tok::Assign if self.glued_to(&Tok::Eq) || self.glued_to(&Tok::Ne) => {
+                Some("`===` and `!==` do not exist: compare with `==` and `!=`".into())
+            }
             Tok::Assign => Some("`=` assigns to a variable on a line of its own (`x = 1`); to compare two values write `==`".into()),
             Tok::Slash if matches!(self.peek_at(1), Tok::Star) => {
                 Some("Nyra has no block comments: start every comment line with `//`".into())
             }
             _ => None,
         }
+    }
+
+    /// True if the current token is an `=` that is directly followed by `>`: a `=>` arrow.
+    fn arrow_ahead(&self) -> bool {
+        let next = self.toks.get(self.pos + 1);
+        self.at(&Tok::Assign)
+            && next.is_some_and(|n| n.tok == Tok::Gt && n.span.line == self.span().line && n.span.col == self.span().col + 1)
     }
 
     /// `0xFF`, `1_000`, `1e5` and friends lex as a number followed by a word: say what to write.
@@ -496,11 +510,31 @@ impl Parser {
             }
         }
         let t = self.peek();
+        let after_cast = self.pos >= 3
+            && self.toks[self.pos - 1].tok == Tok::RParen
+            && self.toks[self.pos - 3].tok == Tok::LParen
+            && matches!(&self.toks[self.pos - 2].tok, Tok::Ident(w) if hints::nyra_type(w).is_some());
         let hint = match (t, first) {
+            _ if after_cast => {
+                let Tok::Ident(w) = &self.toks[self.pos - 2].tok else { unreachable!() };
+                let ty = hints::nyra_type(w).unwrap_or("float");
+                format!("Nyra has no casts: convert with a function call, e.g. `{ty}(x)`")
+            }
             (Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Ret, _) => {
                 format!("put `{}` on a new line: Nyra has one statement per line", t.text())
             }
+            (Tok::Colon, _) if matches!(self.peek_at(1), Tok::Colon) => {
+                "`::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name".to_string()
+            }
+            (Tok::Colon, Some(f)) if matches!(self.peek_at(1), Tok::Assign) => {
+                format!("`:=` does not exist: declare a variable with `let {f} = ...` (or `var {f} = ...` to change it later)")
+            }
             (Tok::Colon, Some(_)) => "to declare a variable write `let x: int = 5` (or `var`)".to_string(),
+            (Tok::RParen, _) => "this `)` closes nothing: remove it, or add the `(` it belongs to".to_string(),
+            (Tok::Ident(name), Some(f)) if hints::nyra_type(f).is_some() => format!(
+                "declare variables with `let` or `var`, and put the type after the name: `let {name}: {} = ...` (or just `let {name} = ...`)",
+                hints::nyra_type(f).unwrap_or("int")
+            ),
             (Tok::Int(_) | Tok::Float(_) | Tok::Str(_) | Tok::Ident(_) | Tok::True | Tok::False, Some(f)) => {
                 let arg = match t {
                     Tok::Int(n) => n.to_string(),
@@ -564,9 +598,17 @@ impl Parser {
                 let (var, _) = self.ident("a loop variable", "loops look like `for i in 0..10 { ... }`")?;
                 self.expect(Tok::In, "`in`").map_err(|d| d.or_hint("loops look like `for i in 0..10 { ... }`"))?;
                 let start = self.expr()?;
-                self.expect(Tok::DotDot, "`..`").map_err(|d| {
-                    d.or_hint("a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`")
-                })?;
+                if !self.at(&Tok::DotDot) {
+                    let hint = match &start.kind {
+                        ExprKind::Call(f, args) if f == "range" => match range_example(args) {
+                            Some(r) => format!("`range(...)` does not exist: write the range directly, `for i in {r} {{ ... }}`"),
+                            None => "`range(...)` does not exist: write the range directly, `for i in 0..10 { ... }`".to_string(),
+                        },
+                        _ => "a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`".to_string(),
+                    };
+                    return Err(self.unexpected("`..`").or_hint(hint));
+                }
+                self.bump();
                 let end = self.expr()?;
                 let body = self.block("for")?;
                 StmtKind::For { var, start, end, body }
@@ -706,7 +748,7 @@ impl Parser {
     /// `{ expr }`: one branch of an `if` used as a value.
     fn branch_expr(&mut self) -> PResult<Expr> {
         self.expect(Tok::LBrace, "`{`").map_err(|d| {
-            d.or_hint("each branch of an `if` used as a value is `{ expression }` on the same line as the `if`/`else`")
+            d.or_hint("each branch of an `if` used as a value is written in braces: `if c { a } else { b }`")
         })?;
         self.skip_newlines();
         let e = match self.expr() {
@@ -954,5 +996,19 @@ impl Parser {
             },
             _ => d.or_hint(generic),
         }
+    }
+}
+
+/// `0..10` for `range(10)` and `1..n` for `range(1, n)`, when the arguments are simple.
+fn range_example(args: &[Expr]) -> Option<String> {
+    let simple = |e: &Expr| match &e.kind {
+        ExprKind::Int(n) => Some(n.to_string()),
+        ExprKind::Var(v) => Some(v.clone()),
+        _ => None,
+    };
+    match args {
+        [end] => Some(format!("0..{}", simple(end)?)),
+        [start, end] => Some(format!("{}..{}", simple(start)?, simple(end)?)),
+        _ => None,
     }
 }

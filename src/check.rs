@@ -483,6 +483,14 @@ impl Checker {
         if f.ret != Type::Void && !returns(&f.body) {
             let value = sample(f.ret);
             let hint = match f.body.last().map(|s| &s.kind) {
+                Some(StmtKind::Expr(e)) if e.ty == f.ret => match show(e) {
+                    Some(s) => format!(
+                        "the last line computes a value, but Nyra does not return it by itself: write `ret {s}` (or make this a one-line function: `fn {}(...) -> {} = {s}`)",
+                        f.name,
+                        f.ret.name()
+                    ),
+                    None => "the last line computes a value, but Nyra does not return it by itself: start it with `ret`".to_string(),
+                },
                 Some(StmtKind::If { els: None, .. }) => {
                     format!("the last `if` has no `else`: add `ret {value}` after it, or an `else {{ ret {value} }}` branch")
                 }

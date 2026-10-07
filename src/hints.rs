@@ -32,6 +32,10 @@ pub fn word(w: &str) -> Option<String> {
             "Nyra has no exceptions: a failing operation (such as an integer division by zero) stops the program with a runtime error"
         }
         "self" | "this" => "Nyra has no methods or objects, so there is no `self` or `this`: pass the value as a parameter",
+        "loop" | "do" | "repeat" | "until" | "foreach" => {
+            "loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)"
+        }
+        "as" => "Nyra has no `as` casts: convert with `float(x)` or `int(x)`",
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         _ => return None,
     };
@@ -117,18 +121,22 @@ pub fn is_type_word(w: &str) -> bool {
     )
 }
 
+/// The Nyra type that a type word of another language stands for (`string` is `str`, `i32` is `int`).
+pub fn nyra_type(w: &str) -> Option<&'static str> {
+    Some(match w.to_ascii_lowercase().as_str() {
+        "string" | "text" | "cstring" | "varchar" | "str" => "str",
+        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16"
+        | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
+        "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => "float",
+        "bool" | "boolean" => "bool",
+        _ => return None,
+    })
+}
+
 /// What to do about a type name that does not exist.
 pub fn type_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
-    let right = match lower.as_str() {
-        "string" | "text" | "cstring" | "varchar" | "str" => Some("str"),
-        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16"
-        | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => Some("int"),
-        "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => Some("float"),
-        "bool" | "boolean" => Some("bool"),
-        _ => None,
-    };
-    if let Some(t) = right {
+    if let Some(t) = nyra_type(name) {
         return format!("write `{t}` (all type names are lowercase: `int`, `float`, `bool`, `str`)");
     }
     match lower.as_str() {

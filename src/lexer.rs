@@ -138,6 +138,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let mut errs = Vec::new();
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
     let mut paren_depth = 0usize;
+    // `[` is reported once; the `]` that closes it is part of the same mistake
+    let mut open_brackets = 0usize;
 
     let ends_line = |toks: &Vec<Token>| matches!(toks.last().map(|t| &t.tok), None | Some(Tok::Newline));
 
@@ -456,7 +458,12 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         continue;
                     }
                 }
-                errs.push(bad_char(c, &cs, i, span));
+                if c == ']' && open_brackets > 0 {
+                    open_brackets -= 1;
+                } else {
+                    open_brackets += usize::from(c == '[');
+                    errs.push(bad_char(c, &cs, i, span));
+                }
             }
         }
         i += 1;
