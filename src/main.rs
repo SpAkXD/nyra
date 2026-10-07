@@ -2,6 +2,7 @@ mod ast;
 mod check;
 mod codegen;
 mod diag;
+mod explain;
 mod hints;
 mod ir;
 mod lexer;
@@ -18,6 +19,7 @@ usage:
   nyra run   <file.nyra>    compile and run
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors
+  nyra explain [CODE]       explain an error code (without CODE: list all codes)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -114,6 +116,10 @@ fn fail(msg: impl std::fmt::Display) -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    // `nyra explain [CODE] [--json]` needs no source file
+    if std::env::args().nth(1).as_deref() == Some("explain") {
+        return explain::run(std::env::args().skip(2).collect());
+    }
     let opts = match parse_args() {
         Ok(o) => o,
         Err(msg) => {

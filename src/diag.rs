@@ -47,6 +47,7 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
         if let Some(h) = &d.hint {
             out += &format!("  = hint: {h}\n");
         }
+        out += &format!("  = explain: nyra explain {}\n", d.code);
         out.push('\n');
     }
     out
@@ -98,7 +99,7 @@ pub fn suggest<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) ->
         .map(|(_, c)| format!("did you mean `{c}`?"))
 }
 
-fn levenshtein(a: &str, b: &str) -> usize {
+pub fn levenshtein(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.chars().enumerate() {
