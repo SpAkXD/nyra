@@ -1,0 +1,23 @@
+fn cell(day: int, days: int) -> str {
+    if day < 1 || day > days {
+        ret "  "
+    }
+    ret if day < 10 { " {day}" } else { "{day}" }
+}
+
+fn main() {
+    let days = 31
+    let first = 2 // Monday is 0, so Wednesday is 2
+    print("Mo Tu We Th Fr Sa Su")
+    var monday = 1 - first
+    while monday <= days {
+        var line = cell(monday, days)
+        for col in 1..7 {
+            if monday + col <= days {
+                line = "{line} {cell(monday + col, days)}"
+            }
+        }
+        print(line)
+        monday += 7
+    }
+}

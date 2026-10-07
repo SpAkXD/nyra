@@ -1,0 +1,27 @@
+// structs with only plain fields are values too, on every backend
+struct Point {
+    x: int
+    y: int
+}
+
+fn same(p: Point) -> Point = p
+
+fn main() {
+    let a = Point(x: 1, y: 2)
+    var b = a
+    b.x = 10
+    print(a)
+    print(b)
+    var ps = [a, b]
+    var p = ps[0]
+    p.y = 99
+    print(ps)
+    print(p)
+    var c = same(a)
+    c.y += 1
+    print(a)
+    print(c)
+    ps[1].x = 0
+    print(b)
+    print(ps)
+}

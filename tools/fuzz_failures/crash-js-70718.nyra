@@ -1,0 +1,9 @@
+// fuzz: crash-js (seed 70718): js: SyntaxError: Invalid or unexpected token
+// js: exit 1, stdout '', stderr 'C:\\Users\\vondr\\AppData\\Local\\Temp\\nyra_fuzz\\wh1y5scua\\min\\desc-js.js:290\r'
+fn main() {
+            if [""].join("") == "" {
+                let x² = 0
+            } else if 0 == 0 / 0 {
+                var x² = char(0)
+            }
+}

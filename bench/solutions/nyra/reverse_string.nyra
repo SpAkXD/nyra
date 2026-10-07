@@ -1,0 +1,7 @@
+fn main() {
+    var out = ""
+    for c in "hello world" {
+        out = str(c) + out
+    }
+    print(out)
+}

@@ -5,6 +5,7 @@
     "patterns": [
         { "include": "#comment" },
         { "include": "#fn-def" },
+        { "include": "#struct-def" },
         { "include": "#expression" }
     ],
     "repository": {
@@ -19,13 +20,23 @@
                 "2": { "name": "entity.name.function.nyra" }
             }
         },
+        "struct-def": {
+            "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+            "captures": {
+                "1": { "name": "storage.type.struct.nyra" },
+                "2": { "name": "entity.name.type.struct.nyra" }
+            }
+        },
         "expression": {
             "patterns": [
                 { "include": "#comment" },
                 { "include": "#string" },
+                { "include": "#char" },
                 { "include": "#keyword" },
                 { "include": "#builtin" },
                 { "include": "#type" },
+                { "include": "#method" },
+                { "include": "#field" },
                 { "include": "#call" },
                 { "include": "#number" },
                 { "include": "#semicolon" },
@@ -35,18 +46,40 @@
         },
         "keyword": {
             "patterns": [
-                { "name": "keyword.control.nyra", "match": "\\b(if|else|while|for|in|ret)\\b" },
-                { "name": "storage.type.nyra", "match": "\\b(fn|let|var)\\b" },
+                { "name": "keyword.control.nyra", "match": "\\b(if|else|while|for|in|ret|break|continue)\\b" },
+                { "name": "keyword.other.memory.nyra", "match": "\\b(arena)\\b" },
+                { "name": "storage.type.nyra", "match": "\\b(fn|let|var|struct)\\b" },
+                { "name": "storage.modifier.inout.nyra", "match": "\\b(inout)\\b" },
                 { "name": "constant.language.boolean.nyra", "match": "\\b(true|false)\\b" }
             ]
         },
         "builtin": {
             "name": "support.function.builtin.nyra",
-            "match": "\\b(print|int|float)\\b(?=\\s*\\()"
+            "match": "\\b(print|int|float|str|char|free|keep)\\b(?=\\s*\\()"
         },
         "type": {
-            "name": "entity.name.type.primitive.nyra",
-            "match": "\\b(int|float|bool|str)\\b"
+            "patterns": [
+                { "name": "entity.name.type.primitive.nyra", "match": "\\b(int|float|bool|str|char)\\b" },
+                { "name": "entity.name.type.nyra", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" }
+            ]
+        },
+        "method": {
+            "match": "(?<!\\.)(\\.)([a-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+            "captures": {
+                "1": { "name": "punctuation.accessor.nyra" },
+                "2": { "name": "entity.name.function.member.nyra" }
+            }
+        },
+        "field": {
+            "match": "(?<!\\.)(\\.)([a-z_][A-Za-z0-9_]*)\\b",
+            "captures": {
+                "1": { "name": "punctuation.accessor.nyra" },
+                "2": { "name": "variable.other.member.nyra" }
+            }
+        },
+        "char": {
+            "name": "string.quoted.single.char.nyra",
+            "match": "'(?:\\\\[ntr\\\\\"']|[^'\\\\])'"
         },
         "call": {
             "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
@@ -64,6 +97,7 @@
         },
         "operator": {
             "patterns": [
+                { "name": "punctuation.section.brackets.nyra", "match": "\\[|\\]" },
                 { "name": "keyword.operator.arrow.nyra", "match": "->" },
                 { "name": "keyword.operator.range.nyra", "match": "\\.\\." },
                 { "name": "keyword.operator.comparison.nyra", "match": "==|!=|<=|>=|<|>" },

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use super::{BinOp, Expr, FuncId, Module, RtOp, Stmt, StmtKind, StrId, UnOp};
+use super::{Arg, BinOp, Expr, FuncId, Module, Place, RtOp, Step, Stmt, StmtKind, StrId, UnOp};
 
 pub fn optimize(m: &mut Module) {
     let mut strs = Interner::new(&mut m.strs);
@@ -52,12 +52,27 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
         let (mut keep, mut stop) = (true, false);
         match &mut s.kind {
             StmtKind::Set(_, e) => fold(e, strs),
-            StmtKind::Call { args, .. } => args.iter_mut().for_each(|a| fold(a, strs)),
+            StmtKind::Call { args, .. } => {
+                for a in args {
+                    match a {
+                        Arg::Val(e) => fold(e, strs),
+                        Arg::InOut(p) => fold_place(p, strs),
+                    }
+                }
+            }
             StmtKind::Op { op, args, .. } => {
                 args.iter_mut().for_each(|a| fold(a, strs));
                 if matches!(op, RtOp::Print | RtOp::Format) {
                     text_parts(args, strs);
                 }
+            }
+            StmtKind::Store { place, value } => {
+                fold_place(place, strs);
+                fold(value, strs);
+            }
+            StmtKind::Mutate { place, args, .. } => {
+                fold_place(place, strs);
+                args.iter_mut().for_each(|a| fold(a, strs));
             }
             StmtKind::If { cond, then, els } => {
                 fold(cond, strs);
@@ -66,7 +81,7 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
                 if let Expr::Bool(c) = cond {
                     // a constant condition: keep the branch that runs, inline
                     let taken = if *c { std::mem::take(then) } else { std::mem::take(els) };
-                    stop = taken.last().is_some_and(|l| matches!(l.kind, StmtKind::Return(_)));
+                    stop = taken.last().is_some_and(|l| matches!(l.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue));
                     out.extend(taken);
                     keep = false;
                 } else if then.is_empty() && els.is_empty() {
@@ -84,6 +99,12 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
                     keep = false;
                 }
             }
+            StmtKind::ForEach { iter, body, .. } => {
+                fold(iter, strs);
+                stmts(body, strs);
+            }
+            StmtKind::Break | StmtKind::Continue => stop = true,
+            StmtKind::Dup(_) | StmtKind::Drop(_) | StmtKind::Free(_) | StmtKind::Keep(_) => {}
             StmtKind::Return(v) => {
                 if let Some(e) = v {
                     fold(e, strs);
@@ -108,6 +129,7 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
         let text = match &p {
             Expr::Int(n) => Some(n.to_string()),
             Expr::Bool(b) => Some(b.to_string()),
+            Expr::Char(c) => char::from_u32(*c).map(|c| c.to_string()),
             Expr::Str(id) => Some(strs.get(*id).to_string()),
             _ => None,
         };
@@ -127,9 +149,21 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
     *parts = out;
 }
 
+fn fold_place(p: &mut Place, strs: &mut Interner) {
+    for s in &mut p.path {
+        if let Step::Index(i, _) = s {
+            fold(i, strs);
+        }
+    }
+}
+
 fn fold(e: &mut Expr, strs: &mut Interner) {
     match e {
         Expr::Unary(_, x) | Expr::IntToFloat(x) => fold(x, strs),
+        Expr::Field(x, _, _) => {
+            fold(x, strs);
+            return;
+        }
         Expr::Binary(_, a, b) => {
             fold(a, strs);
             fold(b, strs);
@@ -138,6 +172,12 @@ fn fold(e: &mut Expr, strs: &mut Interner) {
             fold(c, strs);
             fold(a, strs);
             fold(b, strs);
+        }
+        Expr::Pure(_, args) => {
+            for a in args {
+                fold(a, strs);
+            }
+            return;
         }
         _ => return,
     }
@@ -184,6 +224,8 @@ fn constant(e: &Expr, strs: &mut Interner) -> Option<Expr> {
             (BinOp::Or, Bool(false), x) | (BinOp::Or, x, Bool(false)) => x.clone(),
             (BinOp::SEq, Expr::Str(x), Expr::Str(y)) => Bool(strs.get(*x) == strs.get(*y)),
             (BinOp::SNe, Expr::Str(x), Expr::Str(y)) => Bool(strs.get(*x) != strs.get(*y)),
+            (BinOp::CEq, Expr::Char(x), Expr::Char(y)) => Bool(x == y),
+            (BinOp::CNe, Expr::Char(x), Expr::Char(y)) => Bool(x != y),
             _ => return None,
         },
         _ => return None,
@@ -231,6 +273,7 @@ fn calls(ss: &[Stmt], f: &mut dyn FnMut(FuncId)) {
                 calls(body, f);
                 calls(step, f);
             }
+            StmtKind::ForEach { body, .. } => calls(body, f),
             _ => {}
         }
     }
@@ -249,6 +292,7 @@ fn calls_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut FuncId)) {
                 calls_mut(body, f);
                 calls_mut(step, f);
             }
+            StmtKind::ForEach { body, .. } => calls_mut(body, f),
             _ => {}
         }
     }

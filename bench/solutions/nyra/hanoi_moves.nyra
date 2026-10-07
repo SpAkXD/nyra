@@ -1,0 +1,11 @@
+fn hanoi(disks: int, source: str, target: str, spare: str) {
+    if disks > 0 {
+        hanoi(disks - 1, source, spare, target)
+        print("{source} -> {target}")
+        hanoi(disks - 1, spare, target, source)
+    }
+}
+
+fn main() {
+    hanoi(4, "A", "C", "B")
+}

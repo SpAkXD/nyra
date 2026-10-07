@@ -11,6 +11,8 @@ pub enum Tok {
     Str(String),
     /// A string containing `{expr}` parts.
     Interp(Vec<StrPart>),
+    /// `'a'`: one code point
+    Char(u32),
     Ident(String),
     // keywords
     Fn,
@@ -24,13 +26,21 @@ pub enum Tok {
     Ret,
     True,
     False,
+    Struct,
+    Inout,
+    Break,
+    Continue,
+    Arena,
     // punctuation
     LParen,
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Comma,
     Colon,
+    Dot,
     Arrow,
     DotDot,
     Plus,
@@ -61,6 +71,7 @@ impl Tok {
             Tok::Int(n) => format!("number `{n}`"),
             Tok::Float(f) => format!("number `{f:?}`"),
             Tok::Str(_) | Tok::Interp(_) => "a string".into(),
+            Tok::Char(c) => format!("character `{}`", char_literal(*c)),
             Tok::Ident(s) => format!("`{s}`"),
             Tok::Newline => "end of line".into(),
             Tok::Eof => "end of file".into(),
@@ -74,7 +85,20 @@ impl Tok {
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
-            Tok::Fn | Tok::Let | Tok::Var | Tok::If | Tok::Else | Tok::While | Tok::For | Tok::In | Tok::Ret
+            Tok::Fn
+                | Tok::Let
+                | Tok::Var
+                | Tok::If
+                | Tok::Else
+                | Tok::While
+                | Tok::For
+                | Tok::In
+                | Tok::Ret
+                | Tok::Struct
+                | Tok::Inout
+                | Tok::Break
+                | Tok::Continue
+                | Tok::Arena
         )
     }
 
@@ -91,12 +115,20 @@ impl Tok {
             Tok::Ret => "ret",
             Tok::True => "true",
             Tok::False => "false",
+            Tok::Struct => "struct",
+            Tok::Inout => "inout",
+            Tok::Break => "break",
+            Tok::Continue => "continue",
+            Tok::Arena => "arena",
             Tok::LParen => "(",
             Tok::RParen => ")",
             Tok::LBrace => "{",
             Tok::RBrace => "}",
+            Tok::LBracket => "[",
+            Tok::RBracket => "]",
             Tok::Comma => ",",
             Tok::Colon => ":",
+            Tok::Dot => ".",
             Tok::Arrow => "->",
             Tok::DotDot => "..",
             Tok::Plus => "+",
@@ -138,8 +170,6 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let mut errs = Vec::new();
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
     let mut paren_depth = 0usize;
-    // `[` is reported once; the `]` that closes it is part of the same mistake
-    let mut open_brackets = 0usize;
 
     let ends_line = |toks: &Vec<Token>| matches!(toks.last().map(|t| &t.tok), None | Some(Tok::Newline));
 
@@ -231,9 +261,22 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "ret" => Tok::Ret,
                 "true" => Tok::True,
                 "false" => Tok::False,
+                "struct" => Tok::Struct,
+                "inout" => Tok::Inout,
+                "break" => Tok::Break,
+                "continue" => Tok::Continue,
+                "arena" => Tok::Arena,
                 _ => Tok::Ident(text),
             };
             toks.push(Token { tok, span });
+            continue;
+        }
+
+        if c == '\'' {
+            let (tok, len) = char_lit(&cs, i, span, &mut errs);
+            toks.push(Token { tok, span });
+            i += len;
+            col += len;
             continue;
         }
 
@@ -409,11 +452,26 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             continue;
         }
 
+        // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
+        if c == '.' {
+            let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
+            let before_digit = next.is_ascii_digit()
+                && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
+            if !after_digit && !before_digit {
+                toks.push(Token { tok: Tok::Dot, span });
+                i += 1;
+                col += 1;
+                continue;
+            }
+        }
+
         let one = match c {
             '(' => Some(Tok::LParen),
             ')' => Some(Tok::RParen),
             '{' => Some(Tok::LBrace),
             '}' => Some(Tok::RBrace),
+            '[' => Some(Tok::LBracket),
+            ']' => Some(Tok::RBracket),
             ',' => Some(Tok::Comma),
             ':' => Some(Tok::Colon),
             '+' => Some(Tok::Plus),
@@ -457,12 +515,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         continue;
                     }
                 }
-                if c == ']' && open_brackets > 0 {
-                    open_brackets -= 1;
-                } else {
-                    open_brackets += usize::from(c == '[');
-                    errs.push(bad_char(c, &cs, i, span));
-                }
+                errs.push(bad_char(c, &cs, i, span));
             }
         }
         i += 1;
@@ -496,20 +549,91 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         }
         let digits: String = cs[start..i].iter().collect();
         format!("a float needs digits on both sides of the dot: write `{digits}.0`")
-    } else if c == '.' {
-        // `console.log(x)`, `Math.sqrt(x)`, `s.len()`: name the Nyra way when the word before the dot is known
-        let mut start = i;
-        while start > 0 && (cs[start - 1].is_alphanumeric() || cs[start - 1] == '_') {
-            start -= 1;
-        }
-        let word: String = cs[start..i].iter().collect();
-        match word.as_str() {
-            "console" => "print with `print(x)`: it takes one value and ends the line".to_string(),
-            "Math" => "Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)".to_string(),
-            _ => hints::bad_char(c),
-        }
     } else {
         hints::bad_char(c)
     };
     Diag::new("E0001", msg, span).hint(hint)
+}
+
+/// A char literal as it is written in source: `'a'`, `'\n'`, `'\''`.
+pub fn char_literal(c: u32) -> String {
+    match char::from_u32(c) {
+        Some('\n') => r"'\n'".into(),
+        Some('\t') => r"'\t'".into(),
+        Some('\r') => r"'\r'".into(),
+        Some('\\') => r"'\\'".into(),
+        Some('\'') => r"'\''".into(),
+        Some(ch) => format!("'{ch}'"),
+        None => format!("char({c})"),
+    }
+}
+
+/// The char literal starting at `cs[i]`: its token and how many characters it spans. Exactly one
+/// character (or one escape) must be between the quotes, else E0007.
+fn char_lit(cs: &[char], i: usize, span: Span, errs: &mut Vec<Diag>) -> (Tok, usize) {
+    let mut j = i + 1;
+    let mut chars: Vec<char> = Vec::new();
+    let mut closed = false;
+    while j < cs.len() && cs[j] != '\n' {
+        match cs[j] {
+            '\'' => {
+                closed = true;
+                j += 1;
+                break;
+            }
+            '\\' => {
+                let esc = cs.get(j + 1).copied().unwrap_or('\n');
+                let ch = match esc {
+                    'n' => '\n',
+                    't' => '\t',
+                    'r' => '\r',
+                    '\\' => '\\',
+                    '"' => '"',
+                    '\'' => '\'',
+                    '\n' => break,
+                    _ => {
+                        let at = Span { line: span.line, col: span.col + (j - i) };
+                        errs.push(
+                            Diag::new("E0004", format!(r"unknown escape `\{esc}` in a character"), at)
+                                .hint(r#"the escapes are `\n` `\t` `\r` `\\` `\"` and `\'`"#),
+                        );
+                        esc
+                    }
+                };
+                chars.push(ch);
+                j += 2;
+            }
+            ch => {
+                chars.push(ch);
+                j += 1;
+            }
+        }
+    }
+    let len = j - i;
+    let text: String = chars.iter().collect();
+    if !closed {
+        errs.push(
+            Diag::new("E0007", "unterminated character: the closing `'` is missing", span)
+                .hint(r#"a character is one letter in single quotes, `'a'`; text uses double quotes: "like this""#),
+        );
+    } else if chars.len() != 1 {
+        let (msg, hint) = if chars.is_empty() {
+            (
+                "empty character `''`: a character literal holds exactly one character".to_string(),
+                r#"write a character between the quotes, e.g. `' '` for a space; empty text is `""`"#.to_string(),
+            )
+        } else {
+            (
+                format!("a character literal holds exactly one character, but `'{text}'` has {}", chars.len()),
+                if text.contains('"') || text.contains('\\') {
+                    r#"text uses double quotes: "like this""#.to_string()
+                } else {
+                    format!("text uses double quotes: \"{text}\"")
+                },
+            )
+        };
+        errs.push(Diag::new("E0007", msg, span).hint(hint));
+    }
+    let value = chars.first().map_or(0, |c| *c as u32);
+    (Tok::Char(value), len)
 }

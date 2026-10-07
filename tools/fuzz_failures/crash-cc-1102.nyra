@@ -1,0 +1,15 @@
+// C: a struct-typed field used as a value in print/str/"{}"/== becomes `&(nyS_User){c.text}` and gcc rejects it ("incompatible types when initializing type 'double' using type 'nyS_User'"). Expected `User(tags: 1, h: [])` (js prints it); native does not compile.
+struct User {
+    tags: float
+    h: [str]
+}
+
+struct Rec {
+    text: User
+    n: str
+}
+
+fn main() {
+    let c = Rec(text: User(tags: 1.0, h: []), n: "")
+    print(c.text)
+}

@@ -1,0 +1,23 @@
+fn main() {
+    let text = "the quick brown fox jumps over the lazy dog and keeps running far away from here"
+    let width = 18
+    var lines: [str] = []
+    var current = ""
+    for word in text.split(" ") {
+        if current == "" {
+            current = word
+        } else if current.len() + 1 + word.len() <= width {
+            current += " " + word
+        } else {
+            lines.push(current)
+            current = word
+        }
+    }
+    if current != "" {
+        lines.push(current)
+    }
+    for line in lines {
+        print(line)
+    }
+    print("lines: {lines.len()}")
+}

@@ -1,0 +1,14 @@
+fn shift(c: char, k: int) -> char {
+    if !c.is_lower() {
+        ret c
+    }
+    ret char('a'.code() + (c.code() - 'a'.code() + k) % 26)
+}
+
+fn main() {
+    var out = ""
+    for c in "hello world" {
+        out += str(shift(c, 3))
+    }
+    print(out)
+}

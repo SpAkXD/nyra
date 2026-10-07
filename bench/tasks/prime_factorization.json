@@ -1,0 +1,9 @@
+{
+  "id": "prime_factorization",
+  "title": "Prime factorizations",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "For each of the numbers 360, 97, 1001, 65536 and 999999, print its prime factorization on one line in the form `n = p1^e1 * p2^e2 * ...`: the prime factors in increasing order, joined by ` * `, where the exponent is written as `^e` only when it is greater than 1. For example, 12 is written `12 = 2^2 * 3` and 7 is written `7 = 7`. Print one line per number, in the order given.",
+  "expected_output": "360 = 2^3 * 3^2 * 5\n97 = 97\n1001 = 7 * 11 * 13\n65536 = 2^16\n999999 = 3^3 * 7 * 11 * 13 * 37\n"
+}

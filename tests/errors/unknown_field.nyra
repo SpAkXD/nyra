@@ -1,0 +1,10 @@
+// expect: E0224
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u = User(name: "ann", age: 31)
+    print(u.username)
+}

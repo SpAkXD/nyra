@@ -4,6 +4,6 @@
   "category": "number-theory",
   "difficulty": "medium",
   "min_version": "0.1",
-  "prompt": "Print the remainder of 3^200 (3 to the power 200) divided by 1000007. Compute it with a loop that multiplies step by step and keeps the running value below 1000007; do not use a built-in modular-exponentiation function and do not rely on arbitrarily large integers. Print only the remainder, on one line.",
+  "prompt": "Print the remainder of 3^200 (3 to the power 200) divided by 1000007. Compute it with a loop that multiplies the running value by 3 step by step and reduces it modulo 1000007 after every multiplication, so that no intermediate value exceeds 3 * 1000007; do not use a built-in power or modular-exponentiation function. Print only the remainder, on one line.",
   "expected_output": "959082\n"
 }

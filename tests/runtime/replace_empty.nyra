@@ -1,0 +1,5 @@
+// expect: E0243 at 4:13
+fn main() {
+    let s = "abc"
+    print(s.replace("", "x"))
+}

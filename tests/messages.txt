@@ -110,18 +110,18 @@ error[E0001]: unexpected invisible character U+FEFF (byte order mark)
   = explain: nyra explain E0001
 
 nyra: 1 error(s)
-==== lex_bracket
+==== arr_mixed
 fn main() {
-    let xs = [1, 2, 3]
+    let xs = [1, "a"]
 }
 ----
-error[E0001]: unexpected character `[`
-  --> case.nyra:2:14
+error[E0231]: array elements must all have one type: the first is `int`, this one is `str`
+  --> case.nyra:2:18
   |
-2 |     let xs = [1, 2, 3]
-  |              ^
-  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
-  = explain: nyra explain E0001
+2 |     let xs = [1, "a"]
+  |                  ^
+  = hint: an array holds one type: convert this element to `int`, or use a struct to group different types
+  = explain: nyra explain E0231
 
 nyra: 1 error(s)
 ==== lex_brackets_index
@@ -130,13 +130,13 @@ fn main() {
     print(xs[0])
 }
 ----
-error[E0001]: unexpected character `[`
+error[E0233]: cannot index a value of type `int`
   --> case.nyra:3:13
   |
 3 |     print(xs[0])
   |             ^
-  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
-  = explain: nyra explain E0001
+  = hint: only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed; to index the digits of `xs`, turn it into text first: `str(xs)`
+  = explain: nyra explain E0233
 
 nyra: 1 error(s)
 ==== lex_caret
@@ -158,13 +158,13 @@ fn main() {
     console.log("x")
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:2:12
+error[E0201]: undefined variable `console`
+  --> case.nyra:2:5
   |
 2 |     console.log("x")
-  |            ^
+  |     ^
   = hint: print with `print(x)`: it takes one value and ends the line
-  = explain: nyra explain E0001
+  = explain: nyra explain E0201
 
 nyra: 1 error(s)
 ==== lex_dollar
@@ -327,28 +327,28 @@ fn main() {
     print(Math.sqrt(4.0))
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:2:15
+error[E0201]: undefined variable `Math`
+  --> case.nyra:2:11
   |
 2 |     print(Math.sqrt(4.0))
-  |               ^
+  |           ^
   = hint: Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)
-  = explain: nyra explain E0001
+  = explain: nyra explain E0201
 
 nyra: 1 error(s)
-==== lex_method
+==== str_method_length
 fn main() {
     let s = "abc"
-    print(s.len())
+    print(s.length())
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:3:12
+error[E0227]: `str` has no method `length`
+  --> case.nyra:3:13
   |
-3 |     print(s.len())
-  |            ^
-  = hint: `.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`
-  = explain: nyra explain E0001
+3 |     print(s.length())
+  |             ^
+  = hint: the length is `s.len()`
+  = explain: nyra explain E0227
 
 nyra: 1 error(s)
 ==== lex_question
@@ -395,18 +395,18 @@ error[E0005]: unexpected `;`: Nyra has no semicolons
   = explain: nyra explain E0005
 
 nyra: 1 error(s)
-==== lex_single_quote
+==== lex_char_two
 fn main() {
-    print('a')
+    print('ab')
 }
 ----
-error[E0001]: unexpected character `'`
+error[E0007]: a character literal holds exactly one character, but `'ab'` has 2
   --> case.nyra:2:11
   |
-2 |     print('a')
+2 |     print('ab')
   |           ^
-  = hint: Nyra has no single-quoted text or character type: write "a" with straight double quotes
-  = explain: nyra explain E0001
+  = hint: text uses double quotes: "ab"
+  = explain: nyra explain E0007
 
 nyra: 1 error(s)
 ==== lex_single_quote_text
@@ -414,13 +414,13 @@ fn main() {
     print('hello world')
 }
 ----
-error[E0001]: unexpected character `'`
+error[E0007]: a character literal holds exactly one character, but `'hello world'` has 11
   --> case.nyra:2:11
   |
 2 |     print('hello world')
   |           ^
-  = hint: Nyra has no single-quoted text or character type: write "hello world" with straight double quotes
-  = explain: nyra explain E0001
+  = hint: text uses double quotes: "hello world"
+  = explain: nyra explain E0007
 
 nyra: 1 error(s)
 ==== lex_smart_quotes
@@ -960,12 +960,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0102]: unknown type `string`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `string`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:1:9
   |
 1 | fn f(a: string) {
   |         ^
-  = hint: write `str` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+  = hint: write `str` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -976,12 +976,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0102]: unknown type `flot`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `flot`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:1:9
   |
 1 | fn f(a: flot) {
   |         ^
-  = hint: did you mean `float`? The types are `int`, `float`, `bool` and `str`
+  = hint: did you mean `float`? The types are `int`, `float`, `bool`, `str`, `char`, arrays `[T]` and structs
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -993,12 +993,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0102]: unknown type `i32`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `i32`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:1:9
   |
 1 | fn f(a: i32) -> double {
   |         ^
-  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+  = hint: write `int` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -1013,7 +1013,7 @@ error[E0101]: expected `in`, found number `0`
   |
 2 |     for i 0..3 {
   |           ^
-  = hint: loops look like `for i in 0..10 { ... }`
+  = hint: loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1024,13 +1024,13 @@ fn main() {
     }
 }
 ----
-error[E0101]: expected `..`, found `{`
-  --> case.nyra:3:17
+error[E0234]: cannot loop over `int`: `for x in ...` needs an array, a string or a range
+  --> case.nyra:3:14
   |
 3 |     for x in xs {
-  |                 ^
-  = hint: a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`
-  = explain: nyra explain E0101
+  |              ^
+  = hint: to count, loop over a range: `for x in 0..xs`
+  = explain: nyra explain E0234
 
 nyra: 1 error(s)
 ==== par_hex
@@ -1490,7 +1490,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `/`
+error[E0101]: expected `fn` or `struct`, found `/`
   --> case.nyra:1:1
   |
 1 | /* hi */
@@ -1504,7 +1504,7 @@ int main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `int`
+error[E0101]: expected `fn` or `struct`, found `int`
   --> case.nyra:1:1
   |
 1 | int main() {
@@ -1520,7 +1520,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `void`
+error[E0101]: expected `fn` or `struct`, found `void`
   --> case.nyra:1:1
   |
 1 | void log() {
@@ -1532,7 +1532,7 @@ nyra: 1 error(s)
 ==== par_top_call
 print(1)
 ----
-error[E0101]: expected `fn`, found `print`
+error[E0101]: expected `fn` or `struct`, found `print`
   --> case.nyra:1:1
   |
 1 | print(1)
@@ -1547,7 +1547,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `const`
+error[E0101]: expected `fn` or `struct`, found `const`
   --> case.nyra:1:1
   |
 1 | const MAX = 10
@@ -1562,12 +1562,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `import`
+error[E0101]: expected `fn` or `struct`, found `import`
   --> case.nyra:1:1
   |
 1 | import math
   | ^
-  = hint: Nyra has no imports or modules: one file is one program, and it only contains `fn` definitions
+  = hint: Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1577,7 +1577,7 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found keyword `let`
+error[E0101]: expected `fn` or `struct`, found keyword `let`
   --> case.nyra:1:1
   |
 1 | let max = 10
@@ -1592,7 +1592,7 @@ fn main() {
 }
 main()
 ----
-error[E0101]: expected `fn`, found `main`
+error[E0101]: expected `fn` or `struct`, found `main`
   --> case.nyra:4:1
   |
 4 | main()
@@ -1607,7 +1607,7 @@ fn main() {
 }
 }
 ----
-error[E0101]: expected `fn`, found `}`
+error[E0101]: expected `fn` or `struct`, found `}`
   --> case.nyra:4:1
   |
 4 | }
@@ -1616,21 +1616,21 @@ error[E0101]: expected `fn`, found `}`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== par_top_struct
-struct Point {
+==== struct_lowercase
+struct point {
     x: int
 }
 fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `struct`
-  --> case.nyra:1:1
+error[E0221]: struct name `point` must start with an uppercase letter
+  --> case.nyra:1:8
   |
-1 | struct Point {
-  | ^
-  = hint: Nyra has no `struct` yet: the only top-level item is `fn`, so model data with functions and plain values
-  = explain: nyra explain E0101
+1 | struct point {
+  |        ^
+  = hint: write `struct Point`: type names start uppercase, variables and functions lowercase
+  = explain: nyra explain E0221
 
 nyra: 1 error(s)
 ==== par_trailing_op
@@ -2074,7 +2074,7 @@ fn main() {
     print(float(done))
 }
 ----
-error[E0203]: `float(x)` needs an `int` or a `float`, found `bool`
+error[E0203]: `float(x)` needs an `int`, a `float` or a `str`, found `bool`
   --> case.nyra:3:17
   |
 3 |     print(float(done))
@@ -2155,17 +2155,17 @@ error[E0212]: the first branch of this `if` value produces no value: `print(1)` 
   = explain: nyra explain E0212
 
 nyra: 1 error(s)
-==== chk_int_str
+==== chk_int_bool
 fn main() {
-    print(int("3"))
+    print(int(true))
 }
 ----
-error[E0203]: `int(x)` needs an `int` or a `float`, found `str`
+error[E0203]: `int(x)` needs an `int`, a `float` or a `str`, found `bool`
   --> case.nyra:2:15
   |
-2 |     print(int("3"))
+2 |     print(int(true))
   |               ^
-  = hint: write the number without quotes: `3`
+  = hint: choose the numbers yourself: `if true { 1 } else { 0 }`
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2338,7 +2338,7 @@ fn main() {
     print(a < b < c)
 }
 ----
-error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s or two `float`s
+error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s, two `float`s, two `str`s or two `char`s
   --> case.nyra:5:17
   |
 5 |     print(a < b < c)
@@ -2353,7 +2353,7 @@ fn main() {
     t += 1
 }
 ----
-error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s or two `float`s
+error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:5
   |
 3 |     t += 1
@@ -2369,7 +2369,7 @@ fn main() {
     t += n
 }
 ----
-error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s or two `float`s
+error[E0210]: cannot use `+=` on `float` and `int`: `+=` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:4:5
   |
 4 |     t += n
@@ -2384,7 +2384,7 @@ fn main() {
     x += 1.5
 }
 ----
-error[E0210]: cannot use `+=` on `int` and `float`: `+=` needs two `int`s or two `float`s
+error[E0210]: cannot use `+=` on `int` and `float`: `+=` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:5
   |
 3 |     x += 1.5
@@ -2428,7 +2428,7 @@ fn main() {
     print(1 + 2.0)
 }
 ----
-error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:2:13
   |
 2 |     print(1 + 2.0)
@@ -2457,7 +2457,7 @@ fn main() {
     print(n + 0.5)
 }
 ----
-error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:13
   |
 3 |     print(n + 0.5)
@@ -2552,17 +2552,18 @@ error[E0210]: cannot apply `!` to `int`: `!` needs a `bool`
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
-==== chk_op_str_add
+==== chk_op_str_add_int
 fn main() {
-    print("a" + "b")
+    let n = 5
+    print("n=" + n)
 }
 ----
-error[E0210]: cannot use `+` on `str` and `str`: `+` needs two `int`s or two `float`s
-  --> case.nyra:2:15
+error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
+  --> case.nyra:3:16
   |
-2 |     print("a" + "b")
-  |               ^
-  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"ab"`
+3 |     print("n=" + n)
+  |                ^
+  = hint: `+` joins two strings: convert the other side with `str(n)`, or use interpolation
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -2572,12 +2573,12 @@ fn main() {
     print("a=" + a + "!")
 }
 ----
-error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:16
   |
 3 |     print("a=" + a + "!")
   |                ^
-  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"a={a}!"`
+  = hint: `+` joins two strings: convert the other side with `str(a)`, or use interpolation
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -2587,26 +2588,26 @@ fn main() {
     print("total: " + total)
 }
 ----
-error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `str` and `int`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:21
   |
 3 |     print("total: " + total)
   |                     ^
-  = hint: Nyra cannot add strings: join text with interpolation, e.g. `"total: {total}"`
+  = hint: `+` joins two strings: convert the other side with `str(total)`, or use interpolation
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
-==== chk_op_str_lt
+==== chk_op_char_add
 fn main() {
-    print("a" < "b")
+    print('a' + 1)
 }
 ----
-error[E0210]: cannot use `<` on `str` and `str`: `<` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `char` and `int`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:2:15
   |
-2 |     print("a" < "b")
+2 |     print('a' + 1)
   |               ^
-  = hint: strings can only be compared with `==` and `!=`: there is no ordering for text
+  = hint: characters have no arithmetic: compute with the code and convert back, `char('a'.code() + 1)`
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -2616,7 +2617,7 @@ fn main() {
     print(hello() + 1)
 }
 ----
-error[E0210]: cannot use `+` on `void` and `int`: `+` needs two `int`s or two `float`s
+error[E0210]: cannot use `+` on `void` and `int`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
   --> case.nyra:3:19
   |
 3 |     print(hello() + 1)
@@ -2639,7 +2640,7 @@ error[E0205]: cannot assign to `n`: parameters cannot be changed
   |
 2 |     n = n / 2
   |     ^
-  = hint: copy it into a variable first (`var m = n`), then change `m`
+  = hint: copy it into a variable first (`var m = n`), then change `m`; or declare the parameter `inout n: int` to change the caller's variable
   = explain: nyra explain E0205
 
 nyra: 1 error(s)
@@ -2884,7 +2885,7 @@ error[E0203]: type mismatch in the assignment to `n`: expected `int`, found `str
   |
 3 |     n = "a"
   |         ^
-  = hint: text is not a number and Nyra cannot parse text into numbers (yet): `n` holds int values: assign an `int`, or declare `n` with the type you need
+  = hint: this text is not a number: write an `int` here, or give the variable the type you need
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2913,7 +2914,7 @@ error[E0203]: `hello()` returns nothing, so it cannot be put into a string
   |
 3 |     print("x {hello()}")
   |               ^
-  = hint: only values (`int`, `float`, `bool`, `str`) can go inside `{ }`: call it on its own line before the string
+  = hint: only values can go inside `{ }`: call it on its own line before the string
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2927,7 +2928,7 @@ error[E0203]: type mismatch in `let x: int`: expected `int`, found `str`
   |
 2 |     let x: int = "hi"
   |                  ^
-  = hint: text is not a number and Nyra cannot parse text into numbers (yet): change the value to an `int`, or change the declared type: `let x: str = ...`
+  = hint: this text is not a number: write an `int` here, or give the variable the type you need
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -3071,7 +3072,7 @@ error[E0203]: type mismatch in the return value of `f`: expected `str`, found `i
   |
 1 | fn f(x: int) -> str = x
   |                       ^
-  = hint: build text with interpolation: `"{x}"`
+  = hint: build text with interpolation: `"{x}"`, or convert with `str(x)`
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -3120,20 +3121,19 @@ error[E0201]: undefined variable `count`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
-==== chk_undef_break
+==== par_break_outside
 fn main() {
-    while true {
-        break
-    }
+    let x = 1
+    break
 }
 ----
-error[E0201]: undefined variable `break`
-  --> case.nyra:3:9
+error[E0101]: `break` must be inside a loop
+  --> case.nyra:3:5
   |
-3 |         break
-  |         ^
-  = hint: Nyra has no `break` or `continue`: stop a loop with a `bool` flag in the `while` condition, or `ret` from a helper function
-  = explain: nyra explain E0201
+3 |     break
+  |     ^
+  = hint: `break` and `continue` work in `while` and `for` loops; to leave a function early write `ret`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== chk_undef_builtin_name
@@ -3202,7 +3202,7 @@ error[E0202]: undefined function `len`
   |
 2 |     print(len("abc"))
   |           ^
-  = hint: Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable
+  = hint: the length is a method: `xs.len()` or `s.len()`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3216,7 +3216,7 @@ error[E0202]: undefined function `frobnicate`
   |
 2 |     print(frobnicate(2))
   |           ^
-  = hint: define it: `fn frobnicate(...) { ... }` (the only builtins are `print`, `int` and `float`)
+  = hint: define it: `fn frobnicate(...) { ... }` (the builtins are `print`, `int`, `float`, `str`, `char`, `free` and `keep`)
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3262,17 +3262,17 @@ error[E0202]: undefined function `sqrt`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
-==== chk_undef_fn_str
+==== chk_undef_fn_string
 fn main() {
-    print(str(5))
+    print(string(5))
 }
 ----
-error[E0202]: undefined function `str`
+error[E0202]: undefined function `string`
   --> case.nyra:2:11
   |
-2 |     print(str(5))
+2 |     print(string(5))
   |           ^
-  = hint: Nyra has no string conversion function: build text with interpolation, e.g. `"{x}"`
+  = hint: convert with `str(x)`, or build text with interpolation, e.g. `"{x}"`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3471,29 +3471,21 @@ error[E0206]: `add` is already the name of a function (line 1)
   = explain: nyra explain E0206
 
 nyra: 1 error(s)
-==== f_array_decl
+==== f_array_empty
 fn main() {
-    let xs = [1, 2, 3]
-    print(xs[0])
+    let xs = []
+    print(xs.len())
 }
 ----
-error[E0001]: unexpected character `[`
+error[E0230]: cannot infer the type of the empty array `[]`
   --> case.nyra:2:14
   |
-2 |     let xs = [1, 2, 3]
+2 |     let xs = []
   |              ^
-  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
-  = explain: nyra explain E0001
+  = hint: write its type where it is declared, e.g. `var xs: [int] = []`
+  = explain: nyra explain E0230
 
-error[E0001]: unexpected character `[`
-  --> case.nyra:3:13
-  |
-3 |     print(xs[0])
-  |             ^
-  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
-  = explain: nyra explain E0001
-
-nyra: 2 error(s)
+nyra: 1 error(s)
 ==== f_assign_in_expr
 fn main() {
     var x = 0
@@ -3603,7 +3595,7 @@ error[E0101]: `do` is not part of Nyra: expected end of line after it, found `{`
   |
 3 |     do {
   |        ^
-  = hint: loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)
+  = hint: loops are `while cond { ... }`, `for i in 0..n { ... }` and `for x in xs { ... }` (for an endless loop write `while true { ... }` and leave it with `break`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3627,7 +3619,7 @@ fn main() {
 }
 }
 ----
-error[E0101]: expected `fn`, found `}`
+error[E0101]: expected `fn` or `struct`, found `}`
   --> case.nyra:4:1
   |
 4 | }
@@ -3655,7 +3647,7 @@ const LIMIT: int = 100
 fn main() {
 }
 ----
-error[E0101]: expected `fn`, found `const`
+error[E0101]: expected `fn` or `struct`, found `const`
   --> case.nyra:1:1
   |
 1 | const LIMIT: int = 100
@@ -3669,13 +3661,13 @@ fn main() {
     fmt.Println(1)
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:2:8
+error[E0201]: undefined variable `fmt`
+  --> case.nyra:2:5
   |
 2 |     fmt.Println(1)
-  |        ^
-  = hint: `.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`
-  = explain: nyra explain E0001
+  |     ^
+  = hint: print with `print(x)`: it takes one value and ends the line
+  = explain: nyra explain E0201
 
 nyra: 1 error(s)
 ==== f_go_func
@@ -3683,7 +3675,7 @@ func main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn`, found `func`
+error[E0101]: expected `fn` or `struct`, found `func`
   --> case.nyra:1:1
   |
 1 | func main() {
@@ -3741,13 +3733,13 @@ function main() {
     console.log(1)
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:2:12
+error[E0101]: expected `fn` or `struct`, found `function`
+  --> case.nyra:1:1
   |
-2 |     console.log(1)
-  |            ^
-  = hint: print with `print(x)`: it takes one value and ends the line
-  = explain: nyra explain E0001
+1 | function main() {
+  | ^
+  = hint: functions start with `fn`: `fn name(a: int) -> int { ... }`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== f_js_not_eq
@@ -3818,7 +3810,7 @@ fun main() {
     println(1)
 }
 ----
-error[E0101]: expected `fn`, found `fun`
+error[E0101]: expected `fn` or `struct`, found `fun`
   --> case.nyra:1:1
   |
 1 | fun main() {
@@ -3833,7 +3825,7 @@ fn helper() {
 }
 helper()
 ----
-error[E0101]: expected `fn`, found `helper`
+error[E0101]: expected `fn` or `struct`, found `helper`
   --> case.nyra:4:1
   |
 4 | helper()
@@ -3846,7 +3838,7 @@ nyra: 1 error(s)
 def main():
     print(1)
 ----
-error[E0101]: expected `fn`, found `def`
+error[E0101]: expected `fn` or `struct`, found `def`
   --> case.nyra:1:1
   |
 1 | def main():
@@ -3905,13 +3897,13 @@ fn main() {
     print 'hello'
 }
 ----
-error[E0001]: unexpected character `'`
+error[E0007]: a character literal holds exactly one character, but `'hello'` has 5
   --> case.nyra:2:11
   |
 2 |     print 'hello'
   |           ^
-  = hint: Nyra has no single-quoted text or character type: write "hello" with straight double quotes
-  = explain: nyra explain E0001
+  = hint: text uses double quotes: "hello"
+  = explain: nyra explain E0007
 
 nyra: 1 error(s)
 ==== f_py_true
@@ -3938,7 +3930,7 @@ error[E0101]: expected end of line, found `as`
   |
 2 |     let x = 5 as float
   |               ^
-  = hint: Nyra has no `as` casts: convert with `float(x)` or `int(x)`
+  = hint: Nyra has no `as` casts: convert with `int(x)`, `float(x)`, `str(x)` or `char(n)`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3950,12 +3942,12 @@ fn main() {
     print(add(1, 2))
 }
 ----
-error[E0102]: unknown type `i32`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `i32`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:1:11
   |
 1 | fn add(a: i32, b: i32) -> i32 {
   |           ^
-  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+  = hint: write `int` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -4003,7 +3995,7 @@ error[E0101]: `loop` is not part of Nyra: expected end of line after it, found `
   |
 2 |     loop {
   |          ^
-  = hint: loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)
+  = hint: loops are `while cond { ... }`, `for i in 0..n { ... }` and `for x in xs { ... }` (for an endless loop write `while true { ... }` and leave it with `break`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -4084,35 +4076,37 @@ error[E0005]: unexpected `;`: Nyra has no semicolons
   = explain: nyra explain E0005
 
 nyra: 1 error(s)
-==== f_rust_struct
+==== f_rust_impl
 struct P {
     x: int
 }
+impl P {
+}
 fn main() {
 }
 ----
-error[E0101]: expected `fn`, found `struct`
-  --> case.nyra:1:1
+error[E0101]: expected `fn` or `struct`, found `impl`
+  --> case.nyra:4:1
   |
-1 | struct P {
+4 | impl P {
   | ^
-  = hint: Nyra has no `struct` yet: the only top-level item is `fn`, so model data with functions and plain values
+  = hint: Nyra has no `impl`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== f_string_index
+==== f_string_index_assign
 fn main() {
     let s = "abc"
-    print(s[0])
+    s[0] = 'x'
 }
 ----
-error[E0001]: unexpected character `[`
-  --> case.nyra:3:12
+error[E0229]: cannot assign to a character of a string: strings are immutable
+  --> case.nyra:3:5
   |
-3 |     print(s[0])
-  |            ^
-  = hint: arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values
-  = explain: nyra explain E0001
+3 |     s[0] = 'x'
+  |     ^
+  = hint: build a new string instead, e.g. `s = s.slice(0, i) + "x" + s.slice(i + 1, s.len())`
+  = explain: nyra explain E0229
 
 nyra: 1 error(s)
 ==== f_string_len
@@ -4126,7 +4120,7 @@ error[E0202]: undefined function `len`
   |
 3 |     print(len(s))
   |           ^
-  = hint: Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable
+  = hint: the length is a method: `xs.len()` or `s.len()`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -4151,12 +4145,12 @@ fn greet(name: string): string {
 fn main() {
 }
 ----
-error[E0102]: unknown type `string`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `string`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:1:16
   |
 1 | fn greet(name: string): string {
   |                ^
-  = hint: write `str` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+  = hint: write `str` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -4165,12 +4159,12 @@ fn main() {
     let x: number = 5
 }
 ----
-error[E0102]: unknown type `number`: expected `int`, `float`, `bool` or `str`
+error[E0102]: unknown type `number`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
   --> case.nyra:2:12
   |
 2 |     let x: number = 5
   |            ^
-  = hint: write `int` (all type names are lowercase: `int`, `float`, `bool`, `str`)
+  = hint: write `int` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)
   = explain: nyra explain E0102
 
 nyra: 1 error(s)
@@ -4210,7 +4204,7 @@ string greet() {
 fn main() {
 }
 ----
-error[E0101]: expected `fn`, found `string`
+error[E0101]: expected `fn` or `struct`, found `string`
   --> case.nyra:1:1
   |
 1 | string greet() {
@@ -4248,5 +4242,431 @@ error[E0210]: cannot use `&&` on `bool` and `int`: `&&` needs two `bool`s
   |                   ^
   = hint: compare each side first: `a < b && (a + b) % 2 != 0`
   = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== struct_braces
+struct Point {
+    x: int
+    y: int
+}
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    print(p.x)
+}
+----
+error[E0101]: expected end of line, found `{`
+  --> case.nyra:6:19
+  |
+6 |     let p = Point { x: 1, y: 2 }
+  |                   ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_braces_in_call
+struct Point {
+    x: int
+    y: int
+}
+fn show(p: Point) {
+    print(p.x)
+}
+fn main() {
+    show(Point { x: 1, y: 2 })
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `show`, found `{`
+  --> case.nyra:9:16
+  |
+9 |     show(Point { x: 1, y: 2 })
+  |                ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_new_labeled
+struct Point {
+    x: int
+    y: int
+}
+fn main() {
+    let p = Point.new(x: 1, y: 2)
+    print(p.x)
+}
+----
+error[E0235]: `Point` is a type, not a value
+  --> case.nyra:6:13
+  |
+6 |     let p = Point.new(x: 1, y: 2)
+  |             ^
+  = hint: build a value with all its fields: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== call_named_args
+fn area(width: int, height: int) -> int = width * height
+fn main() {
+    print(area(height: 4, width: 3))
+}
+----
+error[E0226]: named argument `height:` in a call to function `area`
+  --> case.nyra:3:16
+  |
+3 |     print(area(height: 4, width: 3))
+  |                ^
+  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
+  = explain: nyra explain E0226
+
+error[E0226]: named argument `width:` in a call to function `area`
+  --> case.nyra:3:27
+  |
+3 |     print(area(height: 4, width: 3))
+  |                           ^
+  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
+  = explain: nyra explain E0226
+
+nyra: 2 error(s)
+==== method_other_language_array
+fn main() {
+    var xs = [1, 2, 3]
+    xs.append(4)
+    print(xs.length)
+}
+----
+error[E0227]: `[int]` has no method `append`
+  --> case.nyra:3:8
+  |
+3 |     xs.append(4)
+  |        ^
+  = hint: add an element at the end with `xs.push(x)` (`xs` must be a `var`)
+  = explain: nyra explain E0227
+
+error[E0224]: `[int]` has no field `length`
+  --> case.nyra:4:14
+  |
+4 |     print(xs.length)
+  |              ^
+  = hint: the length is `xs.len()`
+  = explain: nyra explain E0224
+
+nyra: 2 error(s)
+==== method_other_language_str
+fn main() {
+    let s = "hello"
+    print(s.toUpperCase())
+    print(s.substring(1, 3))
+}
+----
+error[E0227]: `str` has no method `toUpperCase`
+  --> case.nyra:3:13
+  |
+3 |     print(s.toUpperCase())
+  |             ^
+  = hint: write `s.upper()` (it changes ASCII letters only)
+  = explain: nyra explain E0227
+
+error[E0227]: `str` has no method `substring`
+  --> case.nyra:4:13
+  |
+4 |     print(s.substring(1, 3))
+  |             ^
+  = hint: `s.slice(a, b)` gives the characters from position `a` up to, but not including, `b`
+  = explain: nyra explain E0227
+
+nyra: 2 error(s)
+==== method_other_language_char
+fn main() {
+    let c = '7'
+    print(c.isdigit())
+}
+----
+error[E0227]: `char` has no method `isdigit`
+  --> case.nyra:3:13
+  |
+3 |     print(c.isdigit())
+  |             ^
+  = hint: write `c.is_digit()`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== method_other_language_number
+fn main() {
+    let n = 5
+    print(n.to_string())
+    print(n.abs())
+}
+----
+error[E0227]: `int` has no method `to_string`
+  --> case.nyra:3:13
+  |
+3 |     print(n.to_string())
+  |             ^
+  = hint: `str(n)` gives the text that `print(n)` shows
+  = explain: nyra explain E0227
+
+error[E0227]: `int` has no method `abs`
+  --> case.nyra:4:13
+  |
+4 |     print(n.abs())
+  |             ^
+  = hint: Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`
+  = explain: nyra explain E0227
+
+nyra: 2 error(s)
+==== method_clone
+fn main() {
+    let xs = [1, 2]
+    let ys = xs.clone()
+    print(ys)
+}
+----
+error[E0227]: `[int]` has no method `clone`
+  --> case.nyra:3:17
+  |
+3 |     let ys = xs.clone()
+  |                 ^
+  = hint: values are copied when they are assigned: `var other = xs` is already independent of `xs`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== arr_int_float
+fn main() {
+    let xs = [1, 2.5]
+}
+----
+error[E0231]: array elements must all have one type: the first is `int`, this one is `float`
+  --> case.nyra:2:18
+  |
+2 |     let xs = [1, 2.5]
+  |                  ^
+  = hint: make every element a float: write the first as `1.0`
+  = explain: nyra explain E0231
+
+nyra: 1 error(s)
+==== arr_str_int
+fn main() {
+    let user = ["ann", 31]
+}
+----
+error[E0231]: array elements must all have one type: the first is `str`, this one is `int`
+  --> case.nyra:2:24
+  |
+2 |     let user = ["ann", 31]
+  |                        ^
+  = hint: an array holds one type: write this element as text, `str(31)`, or use a struct to group values of different types
+  = explain: nyra explain E0231
+
+nyra: 1 error(s)
+==== index_struct
+struct P {
+    n: int
+}
+fn main() {
+    let p = P(n: 1)
+    print(p[0])
+}
+----
+error[E0233]: cannot index a value of type `P`
+  --> case.nyra:6:12
+  |
+6 |     print(p[0])
+  |            ^
+  = hint: a struct has fields, not positions: read one with a dot, e.g. `p.n`
+  = explain: nyra explain E0233
+
+nyra: 1 error(s)
+==== struct_lowercase_as_type
+struct point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(point(x: 1))
+}
+----
+error[E0221]: struct name `point` must start with an uppercase letter
+  --> case.nyra:1:8
+  |
+1 | struct point {
+  |        ^
+  = hint: write `struct Point`: type names start uppercase, variables and functions lowercase
+  = explain: nyra explain E0221
+
+nyra: 1 error(s)
+==== struct_type_wrong_case
+struct Point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(Point(x: 1))
+}
+----
+error[E0102]: unknown type `point`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
+  --> case.nyra:4:12
+  |
+4 | fn show(p: point) {
+  |            ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_call_undefined
+fn main() {
+    let v = Vec2(x: 1.0, y: 2.0)
+    print(v.x)
+}
+----
+error[E0202]: undefined function `Vec2`
+  --> case.nyra:2:13
+  |
+2 |     let v = Vec2(x: 1.0, y: 2.0)
+  |             ^
+  = hint: no struct `Vec2` is defined: declare it before use, `struct Vec2 { x: float, y: float }`
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== struct_call_renamed
+struct Point {
+    x: int
+}
+fn main() {
+    let p = point(x: 1)
+    print(p.x)
+}
+----
+error[E0202]: undefined function `point`
+  --> case.nyra:5:13
+  |
+5 |     let p = point(x: 1)
+  |             ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== struct_type_typo_param
+struct Point {
+    x: int
+}
+fn show(p: Pointt) {
+    print(p.x)
+}
+fn main() {
+    show(Point(x: 1))
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:4:9
+  |
+4 | fn show(p: Pointt) {
+  |         ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_type_typo_ret
+struct Point {
+    x: int
+}
+fn make() -> Pointt {
+    ret Point(x: 1)
+}
+fn main() {
+    print(make().x)
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:4:4
+  |
+4 | fn make() -> Pointt {
+  |    ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_type_typo_let
+struct Point {
+    x: int
+}
+fn main() {
+    let p: Pointt = Point(x: 1)
+    print(p.x)
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:5:5
+  |
+5 |     let p: Pointt = Point(x: 1)
+  |     ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== array_join_numbers
+fn main() {
+    let nums = [3, 1, 2]
+    print(nums.join(", "))
+}
+----
+error[E0228]: `join` needs `[str]` or `[char]`, found `[int]`
+  --> case.nyra:3:16
+  |
+3 |     print(nums.join(", "))
+  |                ^
+  = hint: turn the elements into text first: `var parts: [str] = []`, `for x in nums { parts.push(str(x)) }`, then `parts.join(", ")`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== array_sort_bool
+fn main() {
+    var flags = [true, false]
+    flags.sort()
+}
+----
+error[E0228]: `sort` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+  --> case.nyra:3:11
+  |
+3 |     flags.sort()
+  |           ^
+  = hint: sort by a key yourself: e.g. loop and insert each element at its place
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== for_two_variables
+fn main() {
+    let xs = [5, 6]
+    for i, x in xs {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, x in xs {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..xs.len() { let x = xs[i] ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== for_enumerate
+fn main() {
+    let names = ["a", "b"]
+    for i, name in enumerate(names) {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, name in enumerate(names) {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..names.len() { let name = names[i] ... }`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)

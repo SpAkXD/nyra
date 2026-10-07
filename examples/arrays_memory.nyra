@@ -1,0 +1,77 @@
+// arrays are values: copies never change each other, and memory is freed exactly once
+fn add_row(grid: [[int]], row: [int]) -> [[int]] {
+    var g = grid
+    g.push(row)
+    ret g
+}
+
+fn words(text: str) -> [str] = text.split(" ")
+
+fn longest(ws: [str]) -> str {
+    var best = ""
+    for w in ws {
+        if w.len() > best.len() {
+            best = w
+        }
+    }
+    ret best
+}
+
+fn main() {
+    var a = [1, 2]
+    var b = a
+    b.push(3)
+    a[0] = 9
+    print(a)
+    print(b)
+    var g: [[int]] = []
+    let row = [1, 1]
+    g = add_row(g, row)
+    g = add_row(g, row)
+    g[0][0] = 5
+    print(g)
+    print(row)
+    let ws = words("the quick brown foxes jumped")
+    print(longest(ws))
+    print(ws.len())
+    var nested = [["a"], ["b", "c"]]
+    var copy = nested
+    copy[1].push("d")
+    nested[0][0] = "z"
+    print(nested)
+    print(copy)
+    // the loop keeps going over the array as it was
+    var xs = [1, 2, 3]
+    for x in xs {
+        xs.push(x * 10)
+    }
+    print(xs)
+    // `xs += xs` doubles
+    xs += xs
+    print(xs.len())
+    var stack: [str] = []
+    for i in 0..5 {
+        stack.push("item {i}")
+    }
+    while stack.len() > 2 {
+        let top = stack.pop()
+        print(top)
+    }
+    print(stack)
+    let picked = stack[1]
+    stack[1] = "replaced"
+    print(picked)
+    print(stack)
+    var table: [[str]] = [[]]
+    table[0] += ["x", "y"]
+    table[0][1] += "!"
+    print(table)
+    var counts = [0, 0, 0]
+    for i in 0..10 {
+        counts[i % 3] += 1
+    }
+    print(counts)
+    let removed = stack.remove(0)
+    print(removed)
+    free(nested)
+}

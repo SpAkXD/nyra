@@ -1,0 +1,6 @@
+// expect: E0242 at 5:14
+fn main() {
+    var xs = [1]
+    print(xs.pop())
+    print(xs.pop())
+}

@@ -4,7 +4,7 @@
 //! what was found and (through `hints`) what to write instead.
 
 use crate::ast::*;
-use crate::diag::Diag;
+use crate::diag::{suggest, Diag};
 use crate::hints;
 use crate::lexer::{self, StrPart, Tok, Token};
 
@@ -13,13 +13,23 @@ type PResult<T> = Result<T, Diag>;
 const FORMAT_SPEC_HINT: &str = "format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form";
 
 pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
-    let mut p = Parser { toks, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0 };
+    // every `struct Name` of the file, so a type can name a struct that is declared further down
+    let structs: Vec<String> = toks
+        .windows(2)
+        .filter_map(|w| match (&w[0].tok, &w[1].tok) {
+            (Tok::Struct, Tok::Ident(name)) => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    let mut p = Parser { toks, structs, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0, loop_depth: 0 };
     let prog = p.program();
     (prog, p.errs)
 }
 
 struct Parser {
     toks: Vec<Token>,
+    /// The names of the structs the file declares.
+    structs: Vec<String>,
     pos: usize,
     errs: Vec<Diag>,
     /// True while parsing the code inside `{ }` of a string: the end of that code is the closing `}`.
@@ -27,6 +37,8 @@ struct Parser {
     /// Blocks that were cut short by a `fn`. The `}` that is left over for each of them at the
     /// top level was already accounted for by that error and is not reported again.
     cut_blocks: usize,
+    /// How many loops enclose the current statement (`break`/`continue` need one).
+    loop_depth: usize,
 }
 
 impl Parser {
@@ -110,8 +122,38 @@ impl Parser {
             Tok::Slash if matches!(self.peek_at(1), Tok::Star) => {
                 Some("Nyra has no block comments: start every comment line with `//`".into())
             }
+            Tok::LBrace => self.struct_literal_hint(),
             _ => None,
         }
+    }
+
+    /// `Point { x: 1, y: 2 }`: a struct is built like a call. The hint shows the call with the field
+    /// names that were written between the braces.
+    fn struct_literal_hint(&self) -> Option<String> {
+        let Tok::Ident(name) = &self.prev()?.tok else { return None };
+        if !name.starts_with(|c: char| c.is_uppercase()) {
+            return None;
+        }
+        let mut fields: Vec<String> = Vec::new();
+        let mut depth = 0usize;
+        for i in self.pos..self.toks.len() {
+            match &self.toks[i].tok {
+                Tok::LBrace | Tok::LParen | Tok::LBracket => depth += 1,
+                Tok::RBrace | Tok::RParen | Tok::RBracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                Tok::Ident(f) if depth == 1 && self.toks.get(i + 1).is_some_and(|t| t.tok == Tok::Colon) => {
+                    fields.push(format!("{f}: ..."));
+                }
+                Tok::Eof => break,
+                _ => {}
+            }
+        }
+        let call = if fields.is_empty() { format!("{name}(field: value, ...)") } else { format!("{name}({})", fields.join(", ")) };
+        Some(format!("a struct is built like a call, with every field named: `{call}`"))
     }
 
     /// True if the current token is an `=` that is directly followed by `>`: a `=>` arrow.
@@ -201,12 +243,20 @@ impl Parser {
 
     fn program(&mut self) -> Program {
         let mut funcs = Vec::new();
+        let mut structs = Vec::new();
         loop {
             self.skip_newlines();
             match self.peek() {
                 Tok::Eof => break,
                 Tok::Fn => match self.func() {
                     Ok(f) => funcs.push(f),
+                    Err(d) => {
+                        self.errs.push(d);
+                        self.sync_top();
+                    }
+                },
+                Tok::Struct => match self.struct_def() {
+                    Ok(sd) => structs.push(sd),
                     Err(d) => {
                         self.errs.push(d);
                         self.sync_top();
@@ -224,12 +274,12 @@ impl Parser {
                 }
             }
         }
-        Program { funcs }
+        Program { funcs, structs }
     }
 
     /// Something other than `fn` at the top level of the file.
     fn top_level_error(&self) -> Diag {
-        let d = self.unexpected("`fn`");
+        let d = self.unexpected("`fn` or `struct`");
         let name_after = |n: usize| match self.peek_at(n) {
             Tok::Ident(w) => Some(w.clone()),
             _ => None,
@@ -265,12 +315,55 @@ impl Parser {
     }
 
     fn sync_top(&mut self) {
-        if !self.at(&Tok::Fn) {
+        if !matches!(self.peek(), Tok::Fn | Tok::Struct) {
             self.bump();
         }
-        while !matches!(self.peek(), Tok::Fn | Tok::Eof) {
+        while !matches!(self.peek(), Tok::Fn | Tok::Struct | Tok::Eof) {
             self.bump();
         }
+    }
+
+    /// `struct Name { field: type, ... }` (fields separated by commas or new lines)
+    fn struct_def(&mut self) -> PResult<StructDef> {
+        self.expect(Tok::Struct, "`struct`")?;
+        let (name, span) = self.ident("a struct name", "name the struct after `struct`: `struct Point { x: int, y: int }`")?;
+        self.expect(Tok::LBrace, &format!("`{{` after `struct {name}`"))
+            .map_err(|d| d.or_hint(format!("a struct lists its fields in braces: `struct {name} {{ x: int, y: int }}`")))?;
+        let mut fields = Vec::new();
+        loop {
+            self.skip_newlines();
+            match self.peek() {
+                Tok::RBrace => {
+                    self.bump();
+                    break;
+                }
+                Tok::Eof | Tok::Fn | Tok::Struct => {
+                    return Err(self
+                        .unexpected(&format!("`}}` to close `struct {name}`"))
+                        .hint("add the missing `}` after the last field"))
+                }
+                _ => {}
+            }
+            let (fname, fspan) = self.ident("a field name", "fields look like `x: int`, separated by commas or new lines")?;
+            if !self.at(&Tok::Colon) {
+                return Err(self.unexpected("`:` and a type").or_hint(format!("every field needs a type: `{fname}: int`")));
+            }
+            self.bump();
+            let ty = self.ty(&format!("write the field's type after the colon: `{fname}: int`"))?;
+            fields.push(Field { name: fname, ty, span: fspan });
+            match self.peek() {
+                Tok::Comma | Tok::Newline => {
+                    self.bump();
+                }
+                Tok::RBrace => {}
+                _ => {
+                    return Err(self
+                        .unexpected("`,`, a new line or `}` after a field")
+                        .or_hint(format!("separate the fields with commas or new lines: `struct {name} {{ x: int, y: int }}`")))
+                }
+            }
+        }
+        Ok(StructDef { name, fields, span })
     }
 
     fn func(&mut self) -> PResult<Func> {
@@ -280,13 +373,17 @@ impl Parser {
             .map_err(|d| d.or_hint(format!("the parameter list follows the name: `fn {name}(a: int) {{ ... }}`")))?;
         let mut params = Vec::new();
         while !self.at(&Tok::RParen) {
+            let inout = self.at(&Tok::Inout);
+            if inout {
+                self.bump();
+            }
             let (pname, pspan) = self.ident("a parameter name", "parameters look like `a: int, b: float`")?;
             if !self.at(&Tok::Colon) {
                 return Err(self.missing_param_type(&pname));
             }
             self.bump();
             let ty = self.ty(&format!("every parameter needs a type: `{pname}: int`"))?;
-            params.push(Param { name: pname, ty, span: pspan });
+            params.push(Param { name: pname, ty, inout, span: pspan });
             if !self.at(&Tok::RParen) {
                 let hint = if matches!(self.peek(), Tok::LBrace | Tok::Arrow | Tok::Assign | Tok::Eof | Tok::Newline) {
                     "close the parameter list with `)`"
@@ -353,18 +450,40 @@ impl Parser {
 
     fn ty(&mut self, hint: &str) -> PResult<Type> {
         let span = self.span();
+        if self.at(&Tok::LBracket) {
+            self.bump();
+            let elem = self.ty("an array type names the type of its elements: `[int]`")?;
+            if self.at(&Tok::Colon) {
+                return Err(Diag::new("E0102", "map types like `[str: int]` are not in Nyra yet", span).hint(
+                    "maps come in the next version: for now use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`",
+                ));
+            }
+            self.expect(Tok::RBracket, "`]` to close the array type").map_err(|d| d.or_hint("an array type is written `[int]`"))?;
+            return Ok(Type::array(elem));
+        }
         let (name, _) = self.ident("a type", hint)?;
         match name.as_str() {
             "int" => Ok(Type::Int),
             "float" => Ok(Type::Float),
             "bool" => Ok(Type::Bool),
             "str" => Ok(Type::Str),
-            _ => Err(Diag::new(
-                "E0102",
-                format!("unknown type `{name}`: expected `int`, `float`, `bool` or `str`"),
-                span,
-            )
-            .hint(hints::type_name(&name))),
+            "char" => Ok(Type::Char),
+            // a struct (the checker reports names that are not defined, and struct names that start lowercase)
+            n if (n.starts_with(|c: char| c.is_uppercase()) && hints::nyra_type(n).is_none())
+                || self.structs.iter().any(|s| s == n) =>
+            {
+                Ok(Type::structure(n))
+            }
+            _ => {
+                // `point` where `struct Point` is declared: the closest struct, else what other languages call the type
+                let hint = suggest(&name, self.structs.iter().map(String::as_str)).unwrap_or_else(|| hints::type_name(&name));
+                Err(Diag::new(
+                    "E0102",
+                    format!("unknown type `{name}`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct"),
+                    span,
+                )
+                .hint(hint))
+            }
         }
     }
 
@@ -390,6 +509,7 @@ impl Parser {
             "if" => "if x > 0 {".to_string(),
             "while" => "while n > 0 {".to_string(),
             "for" => "for i in 0..10 {".to_string(),
+            "arena" => "arena {".to_string(),
             w => format!("{w}(...) {{"),
         };
         let allman = matches!(self.peek(), Tok::Newline) && matches!(self.peek_at(1), Tok::LBrace);
@@ -428,7 +548,7 @@ impl Parser {
                     self.bump();
                     return Ok(stmts);
                 }
-                Tok::Eof | Tok::Fn => return Err(self.unclosed_block(open, what)),
+                Tok::Eof | Tok::Fn | Tok::Struct => return Err(self.unclosed_block(open, what)),
                 _ => match self.stmt() {
                     Ok(s) => stmts.push(s),
                     Err(d) => {
@@ -461,7 +581,7 @@ impl Parser {
                 Tok::Eof => return,
                 // a `fn` that starts a line is the next function; one in the middle of a line
                 // (`let f = fn(x) x`) belongs to the broken statement
-                Tok::Fn if self.prev().is_some_and(|p| p.tok == Tok::Newline) => return,
+                Tok::Fn | Tok::Struct if self.prev().is_some_and(|p| p.tok == Tok::Newline) => return,
                 Tok::LBrace => depth += 1,
                 Tok::RBrace => {
                     if depth == 0 {
@@ -592,28 +712,52 @@ impl Parser {
             Tok::While => {
                 self.bump();
                 let cond = self.expr()?;
-                let body = self.block("while")?;
+                let body = self.loop_body("while")?;
                 StmtKind::While { cond, body }
             }
             Tok::For => {
                 self.bump();
-                let (var, _) = self.ident("a loop variable", "loops look like `for i in 0..10 { ... }`")?;
-                self.expect(Tok::In, "`in`").map_err(|d| d.or_hint("loops look like `for i in 0..10 { ... }`"))?;
+                let (var, _) = self.ident("a loop variable", "loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`")?;
+                self.expect(Tok::In, "`in`").map_err(|d| {
+                    let hint = self.two_variables_hint(&var);
+                    d.or_hint(hint.unwrap_or_else(|| "loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`".into()))
+                })?;
                 let start = self.expr()?;
-                if !self.at(&Tok::DotDot) {
-                    let hint = match &start.kind {
-                        ExprKind::Call(f, args) if f == "range" => match range_example(args) {
+                if let ExprKind::Call(f, args) = &start.kind {
+                    if f == "range" {
+                        let hint = match range_example(args) {
                             Some(r) => format!("`range(...)` does not exist: write the range directly, `for i in {r} {{ ... }}`"),
                             None => "`range(...)` does not exist: write the range directly, `for i in 0..10 { ... }`".to_string(),
-                        },
-                        _ => "a loop counts through a range `a..b` (there are no arrays to loop over): `for i in 0..10 { ... }`".to_string(),
-                    };
-                    return Err(self.unexpected("`..`").or_hint(hint));
+                        };
+                        return Err(self.unexpected("`..`").hint(hint));
+                    }
                 }
+                if self.at(&Tok::DotDot) {
+                    self.bump();
+                    let end = self.expr()?;
+                    let body = self.loop_body("for")?;
+                    StmtKind::For { var, start, end, body }
+                } else {
+                    let body = self.loop_body("for")?;
+                    StmtKind::ForEach { var, iter: start, body }
+                }
+            }
+            Tok::Break | Tok::Continue => {
+                let t = self.bump().tok;
+                if self.loop_depth == 0 {
+                    return Err(Diag::new("E0101", format!("`{}` must be inside a loop", t.text()), span)
+                        .hint("`break` and `continue` work in `while` and `for` loops; to leave a function early write `ret`"));
+                }
+                self.end_stmt()?;
+                if t == Tok::Break {
+                    StmtKind::Break
+                } else {
+                    StmtKind::Continue
+                }
+            }
+            Tok::Arena => {
                 self.bump();
-                let end = self.expr()?;
-                let body = self.block("for")?;
-                StmtKind::For { var, start, end, body }
+                StmtKind::Arena(self.block("arena")?)
             }
             Tok::Ret => {
                 self.bump();
@@ -625,33 +769,56 @@ impl Parser {
                 self.end_stmt()?;
                 StmtKind::Ret(value)
             }
-            Tok::Ident(name) if *self.peek_at(1) == Tok::Assign => {
-                self.bump();
-                self.bump();
-                let value = self.expr()?;
-                self.end_stmt()?;
-                StmtKind::Assign { name, value }
-            }
-            Tok::Ident(name) if matches!(self.peek_at(1), Tok::OpAssign(_)) => {
-                self.bump();
-                let Tok::OpAssign(op) = self.bump().tok else { unreachable!() };
-                let rhs = self.expr()?;
-                self.end_stmt()?;
-                let var = Expr::new(ExprKind::Var(name.clone()), span);
-                let value = Expr::new(ExprKind::Binary(op, Box::new(var), Box::new(rhs)), span);
-                StmtKind::Assign { name, value }
-            }
             first => {
                 let first = match first {
                     Tok::Ident(w) => Some(w),
                     _ => None,
                 };
                 let e = self.expr()?;
-                self.end_stmt_after(first.as_deref(), None)?;
-                StmtKind::Expr(e)
+                // `place = value` / `place op= value` (the checker makes sure it is a place)
+                if self.at(&Tok::Assign) || matches!(self.peek(), Tok::OpAssign(_)) {
+                    let op = match self.bump().tok {
+                        Tok::OpAssign(op) => Some(op),
+                        _ => None,
+                    };
+                    let value = self.expr()?;
+                    self.end_stmt()?;
+                    StmtKind::Assign { target: e, op, value }
+                } else {
+                    self.end_stmt_after(first.as_deref(), None)?;
+                    StmtKind::Expr(e)
+                }
             }
         };
         Ok(Stmt { kind, span })
+    }
+
+    /// `for i, x in xs` (or `enumerate(xs)`): a loop has one variable. Shows how to get the position and the element.
+    fn two_variables_hint(&self, first: &str) -> Option<String> {
+        if !self.at(&Tok::Comma) {
+            return None;
+        }
+        let Tok::Ident(second) = &self.toks.get(self.pos + 1)?.tok else { return None };
+        if self.toks.get(self.pos + 2)?.tok != Tok::In {
+            return None;
+        }
+        let at = |n: usize| self.toks.get(self.pos + n).map(|t| &t.tok);
+        let seq = match (at(3), at(4), at(5)) {
+            (Some(Tok::Ident(f)), Some(Tok::LParen), Some(Tok::Ident(inner))) if f == "enumerate" => inner.clone(),
+            (Some(Tok::Ident(s)), next, _) if next != Some(&Tok::LParen) && next != Some(&Tok::Dot) => s.clone(),
+            _ => "xs".to_string(),
+        };
+        Some(format!(
+            "a loop has one variable: to get the position and the element write `for {first} in 0..{seq}.len() {{ let {second} = {seq}[{first}] ... }}`"
+        ))
+    }
+
+    /// The body of a loop: `break` and `continue` are allowed inside.
+    fn loop_body(&mut self, what: &str) -> PResult<Vec<Stmt>> {
+        self.loop_depth += 1;
+        let body = self.block(what);
+        self.loop_depth -= 1;
+        body
     }
 
     fn if_stmt(&mut self) -> PResult<Stmt> {
@@ -835,7 +1002,7 @@ impl Parser {
         for t in &mut toks {
             t.span = shift(t.span);
         }
-        let mut sub = Parser { toks, pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0 };
+        let mut sub = Parser { toks, structs: Vec::new(), pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0, loop_depth: 0 };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);
         let e = e?;
@@ -866,6 +1033,38 @@ impl Parser {
                 self.bump();
                 ExprKind::Str(s)
             }
+            Tok::Char(c) => {
+                self.bump();
+                ExprKind::Char(c)
+            }
+            Tok::LBracket => {
+                let open = self.bump().span;
+                let mut items = Vec::new();
+                loop {
+                    self.skip_newlines();
+                    if self.at(&Tok::RBracket) {
+                        self.bump();
+                        break;
+                    }
+                    items.push(self.expr()?);
+                    self.skip_newlines();
+                    match self.peek() {
+                        Tok::Comma => {
+                            self.bump();
+                        }
+                        Tok::RBracket => {
+                            self.bump();
+                            break;
+                        }
+                        _ => {
+                            return Err(self
+                                .unexpected(&format!("`,` or `]` in the array opened at {}:{}", open.line, open.col))
+                                .or_hint("separate the elements with commas: `[1, 2, 3]`"))
+                        }
+                    }
+                }
+                ExprKind::Array(items)
+            }
             Tok::Interp(parts) => {
                 self.bump();
                 let mut out = Vec::new();
@@ -889,18 +1088,7 @@ impl Parser {
                 self.bump();
                 if self.at(&Tok::LParen) {
                     let open = self.bump().span;
-                    let mut args = Vec::new();
-                    while !self.at(&Tok::RParen) {
-                        args.push(self.expr()?);
-                        if !self.at(&Tok::RParen) {
-                            if !self.at(&Tok::Comma) {
-                                return Err(self.call_error(&name, open));
-                            }
-                            self.bump();
-                        }
-                    }
-                    self.bump();
-                    ExprKind::Call(name, args)
+                    ExprKind::Call(name.clone(), self.args(&name, open)?)
                 } else {
                     ExprKind::Var(name)
                 }
@@ -910,12 +1098,77 @@ impl Parser {
                 let e = self.expr()?;
                 self.expect(Tok::RParen, &format!("`)` to close the `(` opened at {}:{}", open.line, open.col))
                     .map_err(|d| d.or_hint("add the missing `)`: every `(` needs a matching `)`"))?;
-                return Ok(e);
+                return self.postfix(e);
             }
             Tok::If => return self.if_expr(),
             _ => return Err(self.expression_expected()),
         };
-        Ok(Expr::new(kind, span))
+        self.postfix(Expr::new(kind, span))
+    }
+
+    /// The arguments of a call after its `(`: `a`, `inout place` or `label: value`.
+    fn args(&mut self, name: &str, open: Span) -> PResult<Vec<Expr>> {
+        let mut args = Vec::new();
+        while !self.at(&Tok::RParen) {
+            let span = self.span();
+            let arg = if self.at(&Tok::Inout) {
+                self.bump();
+                let place = self.expr()?;
+                Expr::new(ExprKind::Inout(Box::new(place)), span)
+            } else if matches!(self.peek(), Tok::Ident(_))
+                && matches!(self.peek_at(1), Tok::Colon)
+                && !matches!(self.peek_at(2), Tok::Colon)
+            {
+                let Tok::Ident(label) = self.bump().tok else { unreachable!() };
+                self.bump();
+                let value = self.expr()?;
+                Expr::new(ExprKind::Labeled(label, Box::new(value)), span)
+            } else {
+                self.expr()?
+            };
+            args.push(arg);
+            if !self.at(&Tok::RParen) {
+                if !self.at(&Tok::Comma) {
+                    return Err(self.call_error(name, open));
+                }
+                self.bump();
+            }
+        }
+        self.bump();
+        Ok(args)
+    }
+
+    /// Field reads `.name`, method calls `.name(args)` and indexing `[i]` after a value.
+    fn postfix(&mut self, mut e: Expr) -> PResult<Expr> {
+        loop {
+            match self.peek() {
+                Tok::Dot => {
+                    self.bump();
+                    let span = self.span();
+                    let (name, _) = self.ident(
+                        "a field or method name after `.`",
+                        "write a field (`p.x`) or a method call (`xs.len()`) after the dot",
+                    )?;
+                    if self.at(&Tok::LParen) {
+                        let open = self.bump().span;
+                        let args = self.args(&name, open)?;
+                        e = Expr::new(ExprKind::Method(Box::new(e), name, args), span);
+                    } else {
+                        e = Expr::new(ExprKind::Field(Box::new(e), name), span);
+                    }
+                }
+                Tok::LBracket => {
+                    let span = self.bump().span;
+                    self.skip_newlines();
+                    let index = self.expr()?;
+                    self.skip_newlines();
+                    self.expect(Tok::RBracket, "`]` to close the index")
+                        .map_err(|d| d.or_hint("an index is written `xs[i]`"))?;
+                    e = Expr::new(ExprKind::Index(Box::new(e), Box::new(index)), span);
+                }
+                _ => return Ok(e),
+            }
+        }
     }
 
     /// Something that is not a `,` or `)` after an argument.

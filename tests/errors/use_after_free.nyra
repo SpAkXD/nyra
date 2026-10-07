@@ -1,0 +1,6 @@
+// expect: E0239
+fn main() {
+    var xs = [1, 2, 3]
+    free(xs)
+    print(xs.len())
+}

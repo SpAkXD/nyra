@@ -1,0 +1,6 @@
+// JS: a struct field named like a JS reserved word (class, function, this, default, ...) becomes a constructor parameter name. Expected `Pair(class: true)` (native); js: SyntaxError: Unexpected token 'class'.
+struct Pair { class: bool }
+
+fn main() {
+    print(Pair(class: true))
+}

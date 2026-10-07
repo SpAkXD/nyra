@@ -190,8 +190,13 @@ class TaskSet(unittest.TestCase):
         cls.tasks = run.load_tasks()
 
     def test_size_and_mix(self):
-        self.assertTrue(30 <= len(self.tasks) <= 40, len(self.tasks))
+        self.assertTrue(45 <= len(self.tasks) <= 60, len(self.tasks))
         self.assertEqual({t.min_version for t in self.tasks}, {"0.1", "0.2", "0.3"})
+
+    def test_every_category_is_documented(self):
+        readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
+        for category in {t.category for t in self.tasks}:
+            self.assertIn(f"| `{category}` |", readme, f"bench/README.md does not describe the category {category}")
 
     def test_every_task_has_a_python_reference_and_v01_tasks_a_nyra_one(self):
         for t in self.tasks:
@@ -237,10 +242,10 @@ class TaskSet(unittest.TestCase):
             self.assertTrue(t.prompt.strip() and t.title.strip() and t.category, t.id)
 
     def test_prompts_never_mention_a_language(self):
+        names = re.compile(r"\b(python|nyra|typescript|javascript|node(\.?js)?|rust|rustc|cargo)\b")
         for t in self.tasks:
-            low = t.prompt.lower()
-            self.assertNotIn("python", low, t.id)
-            self.assertNotIn("nyra", low, t.id)
+            self.assertIsNone(names.search(t.prompt.lower()), t.id)
+            self.assertIsNone(names.search(t.title.lower()), t.id)
 
     def test_digest_is_stable(self):
         self.assertEqual(run.tasks_digest(), run.tasks_digest())
@@ -2940,6 +2945,35 @@ class VerifyCommandLine(unittest.TestCase):
         self.assertIn("unknown language", err.getvalue())
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
             self.assertEqual(verify.main(["--tasks", "no_such_task", "--skip", "nyra,typescript,rust"]), 2)
+
+    def test_max_version_must_be_a_version(self):
+        import verify
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(verify.main(["--max-version", "next", "--skip", "nyra,typescript,rust"]), 2)
+        self.assertIn("not a version", err.getvalue())
+
+    @needs_nyra
+    def test_max_version_replaces_the_compiler_version(self):
+        # while Cargo.toml still has the old version, the references of the new one can be checked
+        import verify
+        seen = []
+
+        def fake_check(task, args, nyra_langs, version, extra_langs=None):
+            seen.append(version)
+            return {"id": task.id, "problems": [], "notes": [], "new_expected": None}
+
+        out = io.StringIO()
+        with mock.patch.object(verify, "check_task", fake_check), contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = verify.main(["--max-version", "0.7", "--skip", "typescript,rust", "--tasks", "fizzbuzz"])
+        self.assertEqual((code, seen), (0, [(0, 7)]))
+        self.assertIn("as Nyra 0.7 (--max-version), the compiler says nyra ", out.getvalue())
+        seen.clear()
+        with mock.patch.object(verify, "check_task", fake_check), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            verify.main(["--skip", "typescript,rust", "--tasks", "fizzbuzz"])
+        self.assertEqual(seen, [run.NyraLang(NYRA).version()])
 
     @unittest.skipUnless(NODE, "Node.js is not installed")
     def test_typescript_is_checked_unless_skipped(self):

@@ -1,0 +1,10 @@
+Item(name: "shirt", tag: Tag(label: "red"), sizes: [1, 2])
+Item(name: "shirt!", tag: Tag(label: "blue"), sizes: [9, 2])
+10
+Tree(value: 1, kids: [Tree(value: 2, kids: [Tree(value: 4, kids: [])]), Tree(value: 3, kids: [])])
+7
+10
+green
+red
+shirt!
+1

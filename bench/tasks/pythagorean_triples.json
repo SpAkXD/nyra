@@ -1,0 +1,9 @@
+{
+  "id": "pythagorean_triples",
+  "title": "Pythagorean triples",
+  "category": "math",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "Print every triple of positive integers a < b < c with a*a + b*b = c*c and c <= 50, one triple per line in the form `a b c`, sorted by c from smallest to largest and, for equal c, by a from smallest to largest.",
+  "expected_output": "3 4 5\n6 8 10\n5 12 13\n9 12 15\n8 15 17\n12 16 20\n7 24 25\n15 20 25\n10 24 26\n20 21 29\n18 24 30\n16 30 34\n21 28 35\n12 35 37\n15 36 39\n24 32 40\n9 40 41\n27 36 45\n14 48 50\n30 40 50\n"
+}

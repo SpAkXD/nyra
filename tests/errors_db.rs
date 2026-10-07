@@ -188,8 +188,8 @@ fn explain_prints_an_entry() {
         assert_eq!(stdout(&again), text, "`nyra explain {alias}`");
     }
     // a planned code says so
-    let planned = stdout(&nyra().args(["explain", "E0220"]).output().unwrap());
-    assert!(planned.contains("planned for v0.3, not in the compiler yet"), "{planned}");
+    let planned = stdout(&nyra().args(["explain", "E0300"]).output().unwrap());
+    assert!(planned.contains("planned for v0.6, not in the compiler yet"), "{planned}");
     // a run-time code
     let runtime = stdout(&nyra().args(["explain", "E0241"]).output().unwrap());
     assert!(runtime.contains("division by zero") && runtime.contains("runtime error"), "{runtime}");

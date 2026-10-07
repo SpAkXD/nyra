@@ -1,0 +1,62 @@
+// strings are reference counted: every path here must free each string exactly once
+fn label(n: int) -> str {
+    if n == 0 {
+        ret "zero"
+    }
+    let s = "n" + str(n)
+    ret s
+}
+
+fn longest(a: str, b: str) -> str = if a.len() >= b.len() { a } else { b }
+
+fn find_first_long(limit: int) -> str {
+    for i in 0..limit {
+        let s = "x".repeat(i)
+        if s.len() > 3 {
+            ret s
+        }
+    }
+    ret ""
+}
+
+fn count_until_stop(text: str) -> int {
+    var n = 0
+    for c in text {
+        let piece = str(c) + str(c)
+        if piece == ".." {
+            break
+        }
+        if piece == "  " {
+            continue
+        }
+        n += 1
+    }
+    ret n
+}
+
+fn main() {
+    print(label(0))
+    print(label(7))
+    print(longest("ab", "abc"))
+    print(longest("same", "four"))
+    print(find_first_long(10))
+    print(count_until_stop("ab c.d"))
+    var acc = "start"
+    for i in 0..3 {
+        acc = acc + "-" + label(i)
+    }
+    print(acc)
+    var copy = acc
+    acc += "!"
+    print(copy)
+    print(acc)
+    let part = if copy.len() > 5 { copy.slice(0, 5) } else { "short" }
+    print(part)
+    let tmp = "temporary " + str(1)
+    free(tmp)
+    var big = ""
+    for i in 0..1000 {
+        big += "ab"
+    }
+    print(big.len())
+}

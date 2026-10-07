@@ -1,0 +1,11 @@
+// expect: E0220
+struct Player {
+    name: str
+    score: int
+    score: int
+}
+
+fn main() {
+    let p = Player(name: "ann", score: 3)
+    print("{p.name} {p.score}")
+}

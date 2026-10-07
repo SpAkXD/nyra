@@ -1,0 +1,63 @@
+// structs: named fields, values like everything else
+struct Point {
+    x: int
+    y: int
+}
+
+struct Line { a: Point, b: Point }
+
+struct User {
+    name: str
+    age: int
+    tags: [str]
+}
+
+struct Unit {}
+
+fn moved(p: Point, dx: int) -> Point = Point(x: p.x + dx, y: p.y)
+
+fn length2(l: Line) -> int {
+    let dx = l.b.x - l.a.x
+    let dy = l.b.y - l.a.y
+    ret dx * dx + dy * dy
+}
+
+fn older(u: User) -> User = User(name: u.name, age: u.age + 1, tags: u.tags + ["older"])
+
+fn main() {
+    var p = Point(x: 1, y: 2)
+    p.x = 10
+    p.y += 5
+    print(p)
+    let line = Line(a: p, b: Point(x: 13, y: 11))
+    print(line.a.x)
+    print(length2(line))
+    print(p == moved(p, 0))
+    print(p != moved(p, 1))
+    print(line)
+    var u = User(name: "ann", age: 30, tags: [])
+    u.tags.push("admin")
+    let v = older(u)
+    print(u)
+    print(v)
+    var team = [u, v]
+    team[0].name = "bo"
+    team[1].tags.push("lead")
+    print(team[0].name)
+    print(team)
+    print(u.name)
+    print(Unit())
+    print("p is {p}")
+    var points: [Point] = []
+    for i in 0..3 {
+        points.push(Point(x: i, y: i * i))
+    }
+    print(points)
+    print(points.contains(Point(x: 2, y: 4)))
+    print(points.index_of(Point(x: 1, y: 1)))
+    var total = 0
+    for q in points {
+        total += q.x + q.y
+    }
+    print(total)
+}

@@ -4,6 +4,6 @@
   "category": "simulation",
   "difficulty": "medium",
   "min_version": "0.3",
-  "prompt": "Some people stand in a circle, numbered 1 to n. Starting with person 1, you count around the circle and every k-th person still in the circle is removed, until one person is left. Print the number of the last person left for each of these cases, one per line, in this order: n = 7 with k = 3, n = 41 with k = 3, n = 10 with k = 2.",
+  "prompt": "Some people stand in a circle, numbered 1 to n. Counting starts at person 1, who counts as 1; the person who counts as k leaves the circle, and counting continues with the next person still in the circle, who counts as 1 again. This repeats until only one person is left. For example, with n = 5 and k = 2 the people leave in the order 2, 4, 1, 5 and person 3 is left. Print the number of the last person left for each of these cases, one per line, in this order: n = 7 with k = 3, n = 41 with k = 3, n = 10 with k = 2.",
   "expected_output": "4\n31\n5\n"
 }

@@ -4,6 +4,6 @@
   "category": "strings",
   "difficulty": "medium",
   "min_version": "0.2",
-  "prompt": "Print the Collatz sequence that starts at 6 on a single line, with the numbers separated by ` -> ` (space, hyphen, greater-than sign, space), ending with 1. The rule is: if n is even replace it with n / 2, otherwise replace it with 3n + 1. The line begins `6 -> 3 -> 10`.",
+  "prompt": "Print the Collatz sequence that starts at 6 on a single line, with the numbers separated by ` -> ` (space, hyphen, greater-than sign, space), ending with 1. All the numbers are whole numbers and are printed without a decimal point. The rule is: if n is even replace it with half of n, otherwise replace it with 3n + 1. The line begins `6 -> 3 -> 10`.",
   "expected_output": "6 -> 3 -> 10 -> 5 -> 16 -> 8 -> 4 -> 2 -> 1\n"
 }

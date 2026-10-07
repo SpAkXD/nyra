@@ -1,0 +1,8 @@
+// Pushing a variable into an array inside itself stores a reference, not a copy (a cycle, probably the same cause as memory-2025). Expected `User(vals: [User(vals: [])])`; native crashes in print (stack overflow; without the print: leak check exit 102), js: RangeError (maximum call stack).
+struct User { vals: [User] }
+
+fn main() {
+    var u = User(vals: [])
+    u.vals.push(u)
+    print(u)
+}

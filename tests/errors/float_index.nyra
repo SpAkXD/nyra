@@ -1,0 +1,6 @@
+// expect: E0232
+fn main() {
+    let xs = [10, 20, 30, 40, 50]
+    let mid = float(xs.len()) / 2.0
+    print(xs[mid])
+}

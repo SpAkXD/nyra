@@ -1,0 +1,9 @@
+{
+  "id": "bank_ledger",
+  "title": "Bank ledger",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "A bank keeps accounts named by a single capital letter; every account has an integer balance. Process the commands listed at the end in order and print exactly one line per command, following these rules.\n- `open X n` creates account X with balance n. If X already exists, print `X exists` and change nothing; otherwise print `opened X`.\n- `deposit X n` adds n to X. If X does not exist print `X unknown`; otherwise print `X balance B`, where B is the new balance.\n- `withdraw X n` subtracts n from X. If X does not exist print `X unknown`; if the balance would become negative print `X insufficient` and change nothing; otherwise print `X balance B` with the new balance.\n- `transfer X Y n` takes n from X and gives n to Y, and X also pays a fee of 1. If X or Y does not exist print `unknown account`; if the balance of X is less than n + 1 print `X insufficient` and change nothing; otherwise apply the transfer and print `X balance B1 Y balance B2` with the new balances. If X and Y are the same account, nothing is moved but the fee of 1 is still paid, and both printed balances are the balance after the fee.\n- `close X` removes X. If X does not exist print `X unknown`; if its balance is not 0 print `X not empty`; otherwise print `closed X`.\nCommands, in order: open A 100; open B 50; open A 10; deposit C 5; withdraw B 70; transfer A B 60; transfer B A 112; transfer B A 109; transfer A A 5; withdraw A 25; close B; transfer A B 1; deposit A 7; withdraw A 15; close A; open B 0; close B.",
+  "expected_output": "opened A\nopened B\nA exists\nC unknown\nB insufficient\nA balance 39 B balance 110\nB insufficient\nB balance 0 A balance 148\nA balance 147 A balance 147\nA balance 122\nclosed B\nunknown account\nA balance 129\nA balance 114\nA not empty\nopened B\nclosed B\n"
+}

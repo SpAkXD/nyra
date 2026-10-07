@@ -1,0 +1,5 @@
+// expect: E0227
+fn main() {
+    let xs = [4, 8, 15]
+    print(xs.length())
+}

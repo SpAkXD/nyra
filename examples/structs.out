@@ -1,0 +1,17 @@
+Point(x: 10, y: 7)
+10
+25
+true
+true
+Line(a: Point(x: 10, y: 7), b: Point(x: 13, y: 11))
+User(name: "ann", age: 30, tags: ["admin"])
+User(name: "ann", age: 31, tags: ["admin", "older"])
+bo
+[User(name: "bo", age: 30, tags: ["admin"]), User(name: "ann", age: 31, tags: ["admin", "older", "lead"])]
+ann
+Unit()
+p is Point(x: 10, y: 7)
+[Point(x: 0, y: 0), Point(x: 1, y: 1), Point(x: 2, y: 4)]
+true
+1
+8

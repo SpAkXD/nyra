@@ -1,0 +1,10 @@
+fn main() {
+    let vowels = ['a', 'e', 'i', 'o', 'u']
+    var count = 0
+    for c in "the quick brown fox jumps over the lazy dog" {
+        if vowels.contains(c) {
+            count += 1
+        }
+    }
+    print(count)
+}

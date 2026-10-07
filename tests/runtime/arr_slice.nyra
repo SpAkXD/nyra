@@ -1,0 +1,4 @@
+// expect: E0240 at 3:21
+fn main() {
+    print([1, 2, 3].slice(2, 5))
+}

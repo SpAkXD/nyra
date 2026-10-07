@@ -1,0 +1,9 @@
+{
+  "id": "word_wrap",
+  "title": "Greedy word wrap",
+  "category": "rules",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Wrap the sentence `the quick brown fox jumps over the lazy dog and keeps running far away from here` into lines of at most 18 characters using this greedy rule: take the words in order and put each word on the current line, after a single space, if the line then still has at most 18 characters; otherwise start a new line with that word (a line of exactly 18 characters is allowed). Print each line on its own line without trailing spaces, and then print the number of lines in the form `lines: N`.",
+  "expected_output": "the quick brown\nfox jumps over the\nlazy dog and keeps\nrunning far away\nfrom here\nlines: 5\n"
+}
