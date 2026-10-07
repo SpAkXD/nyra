@@ -1,0 +1,10 @@
+fn main() {
+    for row in 0..6 {
+        var line = ""
+        for col in 0..6 {
+            let cell = if (row + col) % 2 == 0 { "#" } else { "." }
+            line = "{line}{cell}"
+        }
+        print(line)
+    }
+}

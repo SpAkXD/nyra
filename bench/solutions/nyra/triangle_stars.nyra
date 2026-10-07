@@ -1,0 +1,7 @@
+fn main() {
+    var row = ""
+    for k in 0..6 {
+        row = "{row}*"
+        print(row)
+    }
+}

@@ -1,0 +1,16 @@
+fn binary(n: int) -> str {
+    var s = ""
+    var x = n
+    while x > 0 {
+        s = "{x % 2}{s}"
+        x /= 2
+    }
+    ret s
+}
+
+fn main() {
+    print(binary(5))
+    print(binary(10))
+    print(binary(255))
+    print(binary(1024))
+}

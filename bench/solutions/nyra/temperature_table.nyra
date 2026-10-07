@@ -1,0 +1,6 @@
+fn main() {
+    for i in 0..6 {
+        let c = i * 20
+        print("{c}C = {c * 9 / 5 + 32}F")
+    }
+}

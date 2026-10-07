@@ -1,0 +1,5 @@
+fn main() {
+    for k in 1..11 {
+        print("7 x {k} = {7 * k}")
+    }
+}
