@@ -120,9 +120,9 @@ function splitWords(root) {
 /* ---------------- reveals ---------------- */
 function reveals() {
   $$('.split').forEach(splitWords);
-  if (RM) { $$('.rv').forEach(e => e.classList.add('in')); return; }
+  if (RM) { $$('.rv, .fb-word').forEach(e => e.classList.add('in')); return; }
   const ro = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); ro.unobserve(e.target); } }), { rootMargin: '0px 0px -7% 0px', threshold: 0.08 });
-  $$('.rv').forEach(e => ro.observe(e));
+  $$('.rv, .fb-word').forEach(e => ro.observe(e));
 }
 
 /* ---------------- header ---------------- */
@@ -691,7 +691,9 @@ function codeBlocks() {
   $$('pre.code.hl').forEach(pre => { if (!pre.closest('#flight')) pre.innerHTML = hlLines(pre.textContent, pre.dataset.lang || 'nyra'); });
   $$('pre[data-copy]').forEach(pre => {
     const host = pre.closest('.win'); if (!host) return;
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'copy'; b.textContent = 'copy';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'copy';
+    b.innerHTML = '<svg class="cp" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M10.5 5V3.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1"/></svg><svg class="ck" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5"/></svg><span>copy</span>';
+    const lab = b.lastChild;
     b.setAttribute('aria-label', 'Copy code');
     b.addEventListener('click', async () => {
       const txt = pre.textContent;
@@ -699,8 +701,8 @@ function codeBlocks() {
         const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.append(ta); ta.select();
         try { document.execCommand('copy'); } catch (_) { /* ignore */ } ta.remove();
       }
-      b.textContent = 'copied'; b.classList.add('done');
-      setTimeout(() => { b.textContent = 'copy'; b.classList.remove('done'); }, 1400);
+      lab.textContent = 'copied'; b.classList.add('done');
+      setTimeout(() => { lab.textContent = 'copy'; b.classList.remove('done'); }, 1500);
     });
     host.append(b);
   });

@@ -554,7 +554,7 @@ quick
     </div>
     <div class="ag">
       <div class="win prompt rv"><div class="win-bar"><span class="live" aria-hidden="true"></span><span>prompt</span></div><p class="quote">Read https://github.com/SpAkXD/nyra, starting with <code class="i">llms.txt</code> and <code class="i">docs/AI_GUIDE.md</code>, then write me a Nyra program that prints the first 20 prime numbers.</p></div>
-      <ul class="docs win rv" style="--d:1">
+      <ul class="docs win rv" style="--d:1" aria-label="Docs in the repository">
         <li><b>llms.txt</b><span>What Nyra is, the ten most important rules, links.</span></li>
         <li><b>AI_GUIDE.md</b><span>Workflow, do and don't rules, error codes with fixes, complete programs.</span></li>
         <li><b>SPEC.md</b><span>The complete language spec.</span></li>
@@ -587,26 +587,29 @@ quick
       <h2 class="split rv">Install, then run.</h2>
       <p class="lead rv">One binary: <code class="i">nyra</code>. Native programs need a C compiler (gcc, clang or tcc, found automatically). The JavaScript backend needs Node.js instead.</p>
     </div>
-    <div class="trio">
-      <article class="card tilt rv"><span class="num" aria-hidden="true">A</span><h3>Prebuilt binary</h3><p>Linux x86_64, Windows x86_64 and macOS Apple Silicon. Download the archive from the latest release, unpack it and put <code class="i">nyra</code> on your PATH.</p><a class="more" href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Latest release <span aria-hidden="true">→</span></a><p class="small">On macOS run <code class="i">xattr -d com.apple.quarantine nyra</code> once: the binary is not signed.</p></article>
-      <article class="card tilt rv" style="--d:1"><span class="num" aria-hidden="true">B</span><h3>From source</h3><p>Any platform with Rust.</p><div class="win mini"><div class="win-bar"><span>shell</span></div><pre class="code" data-copy>git clone https://github.com/SpAkXD/nyra
+    <ol class="steps">
+      <li class="card tilt step rv"><p class="kicker"><span class="step-n">A</span>Install, option one</p><h3>Prebuilt binary</h3><p>Linux x86_64, Windows x86_64 and macOS Apple Silicon. Download the archive from the latest release, unpack it and put <code class="i">nyra</code> on your PATH.</p><a class="link-arrow" href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Latest release <svg class="arw" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5"/></svg></a><p class="small">On macOS run <code class="i">xattr -d com.apple.quarantine nyra</code> once: the binary is not signed.</p></li>
+      <li class="card tilt step rv" style="--d:1"><p class="kicker"><span class="step-n">B</span>Install, option two</p><h3>From source</h3><p>Any platform with Rust.</p><div class="win mini"><div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>shell</span></div><pre class="code" data-copy>git clone https://github.com/SpAkXD/nyra
 cd nyra
-cargo build --release</pre></div><p class="small">The binary is <code class="i">target/release/nyra</code>. Or: <code class="i">cargo install --git https://github.com/SpAkXD/nyra</code></p></article>
-      <article class="card tilt rv" style="--d:2"><span class="num" aria-hidden="true">C</span><h3>Your first program</h3><div class="win mini"><div class="win-bar"><span>hello.nyra</span></div><pre class="code hl" data-copy>fn main() {
+cargo build --release</pre></div><p class="small">The binary is <code class="i">target/release/nyra</code>. Or: <code class="i">cargo install --git https://github.com/SpAkXD/nyra</code></p></li>
+      <li class="card tilt step rv" style="--d:2"><p class="kicker"><span class="step-n">C</span>First run</p><h3>Your first program</h3><div class="win mini"><div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>hello.nyra</span></div><pre class="code hl" data-copy>fn main() {
     print("hello from nyra")
-}</pre></div><p class="small">Save it as <code class="i">hello.nyra</code>, then:</p><div class="win mini"><div class="win-bar"><span>shell</span></div><pre class="code" data-copy>nyra run hello.nyra
-nyra run hello.nyra --js</pre></div></article>
-    </div>
-    <div class="cmds win rv">
-      <div><code>nyra run hello.nyra</code><span>Compile and run natively.</span></div>
-      <div><code>nyra run hello.nyra --js</code><span>The same program on Node.js.</span></div>
-      <div><code>nyra build app.nyra</code><span>A native executable next to the source. Unchanged programs skip the C compiler.</span></div>
-      <div><code>nyra check app.nyra --json</code><span>Only report errors, as JSON for agents. Exit code 0 means no errors.</span></div>
-      <div><code>nyra explain E0230</code><span>What an error means, why, the usual causes, a wrong and a fixed program.</span></div>
+}</pre></div><p class="small">Save it as <code class="i">hello.nyra</code>, then:</p><div class="win mini"><div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>shell</span></div><pre class="code" data-copy>nyra run hello.nyra
+nyra run hello.nyra --js</pre></div></li>
+    </ol>
+    <div class="cli rv">
+      <div class="cli-h"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>commands</span></div>
+      <ul class="cli-list">
+        <li><code><span class="pr" aria-hidden="true">$</span>nyra run hello.nyra</code><span>Compile and run natively.</span></li>
+        <li><code><span class="pr" aria-hidden="true">$</span>nyra run hello.nyra --js</code><span>The same program on Node.js.</span></li>
+        <li><code><span class="pr" aria-hidden="true">$</span>nyra build app.nyra</code><span>A native executable next to the source. Unchanged programs skip the C compiler.</span></li>
+        <li><code><span class="pr" aria-hidden="true">$</span>nyra check app.nyra --json</code><span>Only report errors, as JSON for agents. Exit code 0 means no errors.</span></li>
+        <li><code><span class="pr" aria-hidden="true">$</span>nyra explain E0230</code><span>What an error means, why, the usual causes, a wrong and a fixed program.</span></li>
+      </ul>
     </div>
     <div class="duo2">
-      <article class="card rv"><h3>Options</h3><table class="tbl"><tr><td>--js</td><td>use the JavaScript backend</td></tr><tr><td>--c</td><td>with build: write the generated C</td></tr><tr><td>-o &lt;path&gt;</td><td>output path for build</td></tr><tr><td>--json</td><td>errors as JSON, compile and runtime</td></tr><tr><td>--time</td><td>show how long each step took</td></tr></table></article>
-      <article class="card rv" style="--d:1"><h3>Exit codes</h3><table class="tbl"><tr><td>0</td><td>success</td></tr><tr><td>1</td><td>compile errors</td></tr><tr><td>2</td><td>usage or tool problem</td></tr><tr><td>101</td><td>runtime error, identical on both backends</td></tr></table></article>
+      <article class="card rv"><p class="kicker">flags</p><h3>Options</h3><dl class="kv"><div><dt>--js</dt><dd>use the JavaScript backend</dd></div><div><dt>--c</dt><dd>with build: write the generated C</dd></div><div><dt>-o &lt;path&gt;</dt><dd>output path for build</dd></div><div><dt>--json</dt><dd>errors as JSON, compile and runtime</dd></div><div><dt>--time</dt><dd>show how long each step took</dd></div></dl></article>
+      <article class="card rv" style="--d:1"><p class="kicker">status</p><h3>Exit codes</h3><dl class="kv"><div><dt>0</dt><dd>success</dd></div><div><dt>1</dt><dd>compile errors</dd></div><div><dt>2</dt><dd>usage or tool problem</dd></div><div><dt>101</dt><dd>runtime error, identical on both backends</dd></div></dl></article>
     </div>
   </div>
 </section>
@@ -621,18 +624,19 @@ nyra run hello.nyra --js</pre></div></article>
       <p class="lead rv">We built a harness to find out. Results come later, and nothing is claimed until they do.</p>
     </div>
     <div class="bench">
-      <div class="win lanes rv" aria-label="Placeholder chart: results are pending">
-        <div class="hd"><span>Language</span><span class="pill pill-mono"><span class="live" aria-hidden="true"></span>results pending</span></div>
-        <div class="lane"><b>Nyra</b><div class="trk"><i></i></div></div>
-        <div class="lane"><b>Python</b><div class="trk"><i></i></div></div>
-        <div class="lane"><b>TypeScript</b><div class="trk"><i></i></div></div>
-        <div class="lane"><b>Rust</b><div class="trk"><i></i></div></div>
+      <div class="win lanes rv" role="img" aria-label="Placeholder chart: results are pending">
+        <div class="hd"><span>first-try correctness</span><span class="pill pill-mono pend"><span class="live" aria-hidden="true"></span>results pending</span></div>
+        <div class="lane"><b>Nyra</b><div class="trk"><i></i></div><span class="q">?</span></div>
+        <div class="lane"><b>Python</b><div class="trk"><i></i></div><span class="q">?</span></div>
+        <div class="lane"><b>TypeScript</b><div class="trk"><i></i></div><span class="q">?</span></div>
+        <div class="lane"><b>Rust</b><div class="trk"><i></i></div><span class="q">?</span></div>
+        <p class="lanes-f">No numbers until the runs are done.</p>
       </div>
-      <ul class="mlist rv" style="--d:1">
-        <li><b>First-try correctness.</b> How often a model's first program prints exactly the expected output.</li>
-        <li><b>Repairs.</b> The same, when failures are followed by the compiler's feedback and a few retries.</li>
-        <li><b>Code length.</b> Tokens and characters of the program the model wrote.</li>
-        <li><b>Fair by construction.</b> Same tasks, same prompt, same repair budget for all four languages, many models through OpenRouter. Nyra's prompt includes its spec and the others rely on pre-training: a known asymmetry, stated up front.</li>
+      <ul class="metrics">
+        <li class="card rv"><span class="num" aria-hidden="true">01</span><b>First-try correctness.</b> How often a model's first program prints exactly the expected output.</li>
+        <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">02</span><b>Repairs.</b> The same, when failures are followed by the compiler's feedback and a few retries.</li>
+        <li class="card rv"><span class="num" aria-hidden="true">03</span><b>Code length.</b> Tokens and characters of the program the model wrote.</li>
+        <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">04</span><b>Fair by construction.</b> Same tasks, same prompt, same repair budget for all four languages, many models through OpenRouter. Nyra's prompt includes its spec and the others rely on pre-training: a known asymmetry, stated up front.</li>
       </ul>
     </div>
   </div>
@@ -647,13 +651,13 @@ nyra run hello.nyra --js</pre></div></article>
     </div>
     <ol class="road" id="road">
       <span class="rt" aria-hidden="true"><i id="rf"></i></span>
-      <li class="done rv"><span class="nd"></span><h3>v0.1 <small>Core</small> <span class="tag">done</span></h3><p>Functions, <code class="i">int</code> <code class="i">float</code> <code class="i">bool</code> <code class="i">str</code>, <code class="i">if</code>, <code class="i">while</code>, <code class="i">for</code>, the C and JavaScript backends, JSON errors.</p></li>
-      <li class="done rv"><span class="nd"></span><h3>v0.2 <small>Short code</small> <span class="tag">released</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors, and a typed IR under both backends.</p></li>
-      <li class="now rv"><span class="nd"></span><h3>v0.3 <small>Real data</small> <span class="tag">now</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></li>
-      <li class="rv"><span class="nd"></span><h3>v0.4 <small>The proof</small> <span class="tag">harness ready</span></h3><p>The benchmark: first-try correctness and code length against Python, TypeScript and Rust. Results coming.</p></li>
-      <li class="rv"><span class="nd"></span><h3>v0.5 <small>More targets</small> <span class="tag">planned</span></h3><p>A WebAssembly backend and a browser playground that runs the compiler itself.</p></li>
-      <li class="rv"><span class="nd"></span><h3>v0.6 <small>Big programs</small> <span class="tag">planned</span></h3><p>Modules and imports, a standard library, and a C foreign function interface.</p></li>
-      <li class="rv"><span class="nd"></span><h3>v1.0 <small>Ecosystem</small> <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.1</p><div><h3>Core <span class="tag">done</span></h3><p>Functions, <code class="i">int</code> <code class="i">float</code> <code class="i">bool</code> <code class="i">str</code>, <code class="i">if</code>, <code class="i">while</code>, <code class="i">for</code>, the C and JavaScript backends, JSON errors.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.2</p><div><h3>Short code <span class="tag">released</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors, and a typed IR under both backends.</p></div></div></li>
+      <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.3</p><div><h3>Real data <span class="tag">now</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></div></div></li>
+      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.4</p><div><h3>The proof <span class="tag">harness ready</span></h3><p>The benchmark: first-try correctness and code length against Python, TypeScript and Rust. Results coming.</p></div></div></li>
+      <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>More targets <span class="tag">planned</span></h3><p>A WebAssembly backend and a browser playground that runs the compiler itself.</p></div></div></li>
+      <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Big programs <span class="tag">planned</span></h3><p>Modules and imports, a standard library, and a C foreign function interface.</p></div></div></li>
+      <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v1.0</p><div><h3>Ecosystem <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></div></div></li>
     </ol>
   </div>
 </section>
@@ -674,17 +678,19 @@ nyra run hello.nyra --js</pre></div></article>
 
 <footer class="foot-bar ink">
   <div class="wrap">
-    <svg viewBox="0 0 112 112" width="26" height="26" role="img" aria-label="Nyra"><g transform="translate(8 8)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
-    <nav class="fl2" aria-label="Project links">
-      <a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a>
-      <a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a>
-      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a>
-      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a>
-      <a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a>
-      <a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a>
-      <a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a>
-    </nav>
-    <p class="small">MIT license · Nyra v0.3</p>
+    <div class="fb-top">
+      <div class="fb-brand">
+        <svg viewBox="0 0 112 112" width="40" height="40" role="img" aria-label="Nyra"><g transform="translate(8 8)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+        <p>A small, strict programming language designed to be written by AI agents.</p>
+      </div>
+      <nav class="fb-cols" aria-label="Project links">
+        <div><p class="fb-h">Project</p><a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a><a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></div>
+        <div><p class="fb-h">Docs</p><a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a><a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a></div>
+      </nav>
+      <a class="totop" href="#top"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
+    </div>
+    <div class="fb-word" id="fbword" aria-hidden="true"><svg viewBox="-8 -8 288 122"><defs><linearGradient id="gfw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g fill="none" stroke="url(#gfw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/><path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/><path d="M152 0V64M152 28A28 28 0 0 1 180 0"/><circle cx="238" cy="32" r="32"/><path d="M270 0V64"/></g></svg></div>
+    <div class="fb-bot"><p>MIT license · Nyra v0.3</p><p>Built in the open.</p></div>
   </div>
 </footer>
 </body>
