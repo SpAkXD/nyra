@@ -1,0 +1,10 @@
+// expect: E0235
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let origin = Point.new(1, 2)
+    print(origin.x)
+}

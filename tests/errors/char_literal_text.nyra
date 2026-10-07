@@ -1,0 +1,7 @@
+// expect: E0007
+fn main() {
+    let greeting = 'hello'
+    if greeting[0] == 'h' {
+        print(greeting)
+    }
+}

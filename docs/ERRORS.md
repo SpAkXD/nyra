@@ -20,7 +20,7 @@ design may still change.
 | Range | Stage | What goes wrong |
 |---|---|---|
 | E0001-E0006 | lexer | characters, numbers and strings |
-| E0007 | lexer (planned, v0.3) | character literals |
+| E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
 | E0220-E0239 | type checker (planned, v0.3) | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
@@ -41,7 +41,7 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ```text
 ## E0201: undefined variable
-- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error; or "planned for v0.3, not in the compiler yet")
+- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error; or "planned for v0.6, not in the compiler yet")
 - **What it means:** one or two precise sentences.
 - **Why Nyra has this rule:** the design reason.
 - **Common causes:**
@@ -200,29 +200,34 @@ fn main() {
 - **Related:** E0004, E0101
 
 ## E0007: bad character literal
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A character literal in single quotes does not hold exactly one character. `'a'`, `'é'`, `'\n'` and `'\''` are fine; `'ab'` (two characters), `''` (none), an unterminated `'a` and a letter followed by a combining accent (two code points that look like one) are not.
-- **Why Nyra has this rule:** A `char` is exactly one Unicode code point, and explicitly a number (`c.code()`). A literal with more or fewer characters would have no type. Text of any length is written in double quotes.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A character literal, text between single quotes, does not hold exactly one character. `'a'`, `'é'`, `'\n'` and `'\''` are fine. These are not: `'hello'` (message: "a character literal holds exactly one character, but `'hello'` has 5"), `''` ("empty character") and `'a` with no closing quote ("unterminated character"). The error is reported at the opening quote, and the hint shows the text in double quotes. A character is one Unicode code point, so a letter written as a letter plus a combining accent counts as two.
+- **Why Nyra has this rule:** A `char` is exactly one code point, and its number is `c.code()`. A literal with no character or with several would have no type. Text of any length is written in double quotes, so the quotes tell a `char` (`'a'`) from a `str` (`"a"`) at a glance.
 - **Common causes:**
-  - text in single quotes, such as `'hello'`: use double quotes, `"hello"`
-  - an empty `''`
-  - a missing closing quote
-  - an accented letter typed as a letter plus a combining accent
+  - text in single quotes, as in Python or JavaScript: `'hello'` is written `"hello"`
+  - an empty `''` for an empty string: write `""`
+  - a missing closing quote: `'a`
+  - an apostrophe inside single quotes, as in `'it's'`: use double quotes, `"it's"`
+  - an accented letter typed as a letter plus a combining accent (two code points that look like one)
 - **Wrong:**
 ```rust
 fn main() {
-    let c = 'ab'
-    print(c)
+    let greeting = 'hello'
+    if greeting[0] == 'h' {
+        print(greeting)
+    }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let c = 'a'
-    print(c)
+    let greeting = "hello"
+    if greeting[0] == 'h' {
+        print(greeting)
+    }
 }
 ```
-- **Related:** E0001, E0004, E0002
+- **Related:** E0001, E0002, E0004, E0203
 
 ## E0101: unexpected token
 - **Kind:** compile error · **Since:** v0.1
@@ -624,87 +629,57 @@ fn main() {
 - **Related:** E0101, E0203, E0209
 
 ## E0220: duplicate field in a struct
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A `struct` declares two fields with the same name.
-- **Why Nyra has this rule:** A field name must identify exactly one value, so `p.x` and `Point(x: 1, ...)` are unambiguous.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A `struct` declares two fields with the same name. The message names the field, the struct and the line of the first one: "field `score` is defined twice in struct `Player` (first on line 3)". The error is reported at the second declaration, which is then ignored, so the rest of the program is checked against the first one.
+- **Why Nyra has this rule:** A field name must identify exactly one value, so `p.score` and `Player(name: "ann", score: 3)` mean one thing.
 - **Common causes:**
-  - a field copied and not renamed
-  - two fields that were meant to differ (`x` and `y`)
+  - a field line copied and not renamed
+  - two fields that were meant to differ (`x` and `y`, `width` and `height`)
+  - the same field added twice by two edits
 - **Wrong:**
 ```rust
-struct Point {
-    x: int
-    x: int
+struct Player {
+    name: str
+    score: int
+    score: int
+}
+
+fn main() {
+    let p = Player(name: "ann", score: 3)
+    print("{p.name} {p.score}")
 }
 ```
 - **Fixed:**
 ```rust
-struct Point {
-    x: int
-    y: int
+struct Player {
+    name: str
+    score: int
+}
+
+fn main() {
+    let p = Player(name: "ann", score: 3)
+    print("{p.name} {p.score}")
 }
 ```
-- **Related:** E0206, E0221
+- **Related:** E0206, E0221, E0224
 
 ## E0221: struct name must start with an uppercase letter
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A struct name starts with a lowercase letter. Struct names are written `Point`, not `point`.
-- **Why Nyra has this rule:** `Point(x: 1, y: 2)` (a construction) and `point(1, 2)` (a call) are told apart at a glance, so a reader never has to look up whether a name is a type or a function.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A struct name does not start with an uppercase letter. The message is "struct name `point` must start with an uppercase letter" and the hint gives the name to write, `struct Point`. The lowercase name still works everywhere in the file until it is renamed, so this is the only error you get for it. After the rename, any place that still uses the old spelling is reported there: an unknown type (E0102) or an undefined function (E0202) for a construction, each with "did you mean `Point`?".
+- **Why Nyra has this rule:** `Point(x: 1, y: 2)` builds a struct and `point(1, 2)` calls a function, and the two are told apart at a glance. A type name starts uppercase, a variable or function name starts lowercase.
 - **Common causes:**
-  - a snake_case or lowercase name chosen out of habit
+  - a lowercase or snake_case name chosen out of habit from C (`struct point`) or Python
+  - a name that starts with `_`
 - **Wrong:**
 ```rust
 struct point {
-    x: int
-}
-```
-- **Fixed:**
-```rust
-struct Point {
-    x: int
-}
-```
-- **Related:** E0206, E0220
-
-## E0222: struct contains itself
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A struct has a field whose type is the struct itself, directly or through other structs, so a value would need to contain itself.
-- **Why Nyra has this rule:** Values are stored inline, so a struct that contains itself would have infinite size. A recursive shape goes through an array, which can be empty.
-- **Common causes:**
-  - a linked list written as `next: Node`
-  - a tree written with a direct child (`left: Tree`)
-- **Wrong:**
-```rust
-struct Node {
-    value: int
-    next: Node
-}
-```
-- **Fixed:**
-```rust
-struct Node {
-    value: int
-    next: [Node]
-}
-```
-- **Related:** E0220, E0231
-
-## E0223: missing field in a struct construction
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A construction `Point(...)` does not give a value for every field of the struct.
-- **Why Nyra has this rule:** There are no default values or null: every field of a struct always holds a value, so you cannot read an uninitialised field.
-- **Common causes:**
-  - a field was added to the struct and a construction was not updated
-  - a field was forgotten
-- **Wrong:**
-```rust
-struct Point {
     x: int
     y: int
 }
 
 fn main() {
-    let p = Point(x: 1)
+    let p = point(x: 1, y: 2)
+    print(p.x + p.y)
 }
 ```
 - **Fixed:**
@@ -716,33 +691,59 @@ struct Point {
 
 fn main() {
     let p = Point(x: 1, y: 2)
+    print(p.x + p.y)
 }
 ```
-- **Related:** E0224, E0225
+- **Related:** E0102, E0202, E0206, E0220
 
-## E0224: unknown field
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A field name is used that the struct does not have, either in a construction `Point(z: 1)` or in a read `p.z`.
-- **Why Nyra has this rule:** A typo in a field name must be an error, not a new value. The message lists the fields and suggests the closest name.
+## E0222: struct contains itself
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A struct has a field whose type is the struct itself, or a struct that contains it in turn, so a value would have to contain itself. The message is "struct `Node` contains itself, so its size would be infinite" and it is reported at the struct's name (for two structs that contain each other, at both). A field of type `[Node]` is fine: an array is not stored inside the struct, and it can be empty.
+- **Why Nyra has this rule:** A struct value holds its fields directly, so a struct that contained itself would never end. Anything recursive, such as a list or a tree, keeps its children in an array, which can be empty, and that ends the recursion.
 - **Common causes:**
-  - a typo in a field name
-  - a field that exists in another struct
-  - a field that was renamed in the struct but not at the use
+  - a linked list written as `next: Node`
+  - a tree written with direct children (`left: Tree`, `right: Tree`)
+  - two structs that contain each other (`struct A { b: B }` and `struct B { a: A }`)
 - **Wrong:**
 ```rust
-struct Point {
-    x: int
+struct Node {
+    value: int
+    next: Node
 }
 
 fn main() {
-    let p = Point(x: 1)
-    print(p.z)
+    print("linked list")
 }
 ```
 - **Fixed:**
 ```rust
+struct Node {
+    value: int
+    next: [Node]
+}
+
+fn main() {
+    let last = Node(value: 2, next: [])
+    let first = Node(value: 1, next: [last])
+    print(first.next.len())
+}
+```
+- **Related:** E0220, E0221
+
+## E0223: missing field in a struct construction
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A construction `Point(...)` does not give a value for every field of the struct. The message lists what is missing: "missing field in `Point(...)`: `y`" (or "missing fields ... `x`, `y`") and the hint shows the whole call: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** There are no default values and no null. Every field of a struct always holds a value, so a field can never be read before it was set.
+- **Common causes:**
+  - a field was added to the struct and a construction was not updated
+  - a field was forgotten
+  - `Point()` with no arguments, hoping for default values
+  - a field name with a typo in the construction: the unknown name is reported (E0224) and so is the field that got no value
+- **Wrong:**
+```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
@@ -750,15 +751,63 @@ fn main() {
     print(p.x)
 }
 ```
-- **Related:** E0223, E0227
+- **Fixed:**
+```rust
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let p = Point(x: 1, y: 2)
+    print(p.x)
+}
+```
+- **Related:** E0224, E0225
+
+## E0224: unknown field
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A field name is used that the type does not have. In a construction (`User(name: "ann", years: 31)`) or a read or write (`u.username`) the message is "`User` has no field `username`", and the hint suggests the closest field or lists all of them. The same code is used for `xs.length` on an array, a string or a character: they have methods and no fields, and the hint names the method that does the job ("the length is `xs.len()`").
+- **Why Nyra has this rule:** A typo in a field name must be an error, not a new value or an empty one.
+- **Common causes:**
+  - a typo in a field name
+  - a field that exists in another struct
+  - a field that was renamed in the struct but not where it is used
+  - `xs.length` or `s.length`: the length is a method, `xs.len()`
+- **Wrong:**
+```rust
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u = User(name: "ann", age: 31)
+    print(u.username)
+}
+```
+- **Fixed:**
+```rust
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u = User(name: "ann", age: 31)
+    print(u.name)
+}
+```
+- **Related:** E0223, E0227, E0236
 
 ## E0225: struct fields must be named, in declaration order
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A construction passes values without field names (`Point(1, 2)`) or in a different order than the struct declares them.
-- **Why Nyra has this rule:** Naming every field makes a construction readable and unambiguous, and the same order everywhere means the printed form `Point(x: 1, y: 2)` is also valid source code.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A construction passes values without field names (`Point(1, 2)`) or in a different order than the struct declares them (`Point(y: 2, x: 1)`). It is reported once per construction, at the first value that is wrong: "the fields of `Point(...)` must be named, in declaration order", and the hint shows the call to write: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** Naming every field makes a construction readable and unambiguous. Writing the fields in the same order everywhere means that a printed struct, `Point(x: 1, y: 2)`, is also valid source code.
 - **Common causes:**
-  - positional arguments, as in Rust tuple structs or C
-  - fields written in another order than the declaration
+  - positional values, as for a tuple struct in Rust or a constructor in C, Java or Python
+  - the fields written in another order than the declaration
+  - braces instead of parentheses, `Point { x: 1, y: 2 }` (that is E0101)
 - **Wrong:**
 ```rust
 struct Point {
@@ -768,6 +817,7 @@ struct Point {
 
 fn main() {
     let p = Point(1, 2)
+    print(p.x)
 }
 ```
 - **Fixed:**
@@ -779,9 +829,10 @@ struct Point {
 
 fn main() {
     let p = Point(x: 1, y: 2)
+    print(p.x)
 }
 ```
-- **Related:** E0223, E0226
+- **Related:** E0101, E0223, E0226
 
 ## E0226: named argument in a function call
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
@@ -993,33 +1044,38 @@ fn main() {
 - **Related:** E0233, E0203
 
 ## E0235: type used as a value
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The name of a struct is used where a value is needed, as in `let t = Point`. A struct name is a type, not a value.
-- **Why Nyra has this rule:** Types and values live in different worlds: a struct name only appears in declarations and in a construction `Point(x: 1, y: 2)`.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The name of a struct is used where a value is needed, as in `let origin = Point` or `Point.new(1, 2)`. The message is "`Point` is a type, not a value" and the hint shows the construction with every field: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** Types and values are different things. A struct name appears in declarations (`p: Point`) and in the construction `Point(x: 1, y: 2)`. There are no constructors such as `new`, no default instance and no static methods.
 - **Common causes:**
-  - forgetting the construction parentheses
+  - forgetting the construction parentheses and fields
+  - `Point.new(...)`, `Point.default()` or `Point.zero()` from another language
   - passing the type where an instance was meant
 - **Wrong:**
 ```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
-    let t = Point
+    let origin = Point.new(1, 2)
+    print(origin.x)
 }
 ```
 - **Fixed:**
 ```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
-    let t = Point(x: 1)
+    let origin = Point(x: 1, y: 2)
+    print(origin.x)
 }
 ```
-- **Related:** E0223, E0206
+- **Related:** E0206, E0223
 
 ## E0236: method must be called
 - **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet

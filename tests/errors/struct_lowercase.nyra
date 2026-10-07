@@ -1,0 +1,13 @@
+// expect: E0221
+struct point {
+    x: int
+    y: int
+}
+
+fn show(p: point) {
+    print(p.x + p.y)
+}
+
+fn main() {
+    show(point(x: 1, y: 2))
+}

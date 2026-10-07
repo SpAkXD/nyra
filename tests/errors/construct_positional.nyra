@@ -1,0 +1,10 @@
+// expect: E0225
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let p = Point(1, 2)
+    print(p.x)
+}
