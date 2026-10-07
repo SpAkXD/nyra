@@ -161,11 +161,34 @@ class TaskSet(unittest.TestCase):
             if t.min_version == "0.1":
                 self.assertTrue(nyra.is_file(), f"{t.id} needs a Nyra reference")
 
+    def test_every_task_has_a_typescript_and_a_rust_reference(self):
+        # unlike Nyra, these languages do not depend on a version: all tasks, always
+        for t in self.tasks:
+            self.assertTrue((run.SOLUTIONS_DIR / "typescript" / f"{t.id}.ts").is_file(), f"{t.id}: no TypeScript reference")
+            self.assertTrue((run.SOLUTIONS_DIR / "rust" / f"{t.id}.rs").is_file(), f"{t.id}: no Rust reference")
+
     def test_no_orphan_solutions(self):
         ids = {t.id for t in self.tasks}
-        for lang, ext in (("python", ".py"), ("nyra", ".nyra")):
+        for lang, ext in (("python", ".py"), ("nyra", ".nyra"), ("typescript", ".ts"), ("rust", ".rs")):
             for path in (run.SOLUTIONS_DIR / lang).glob(f"*{ext}"):
                 self.assertIn(path.stem, ids, f"{path} has no task")
+
+    def test_reference_solutions_have_the_shape_the_mock_provider_needs(self):
+        # the mock's deliberately broken replies edit these programs textually
+        for t in self.tasks:
+            nyra = run.SOLUTIONS_DIR / "nyra" / f"{t.id}.nyra"
+            if nyra.is_file():
+                self.assertIn("fn main() {", nyra.read_text(encoding="utf-8"), nyra.name)
+            rust = (run.SOLUTIONS_DIR / "rust" / f"{t.id}.rs").read_text(encoding="utf-8")
+            self.assertIn("fn main() {", rust, f"{t.id}.rs")
+            for lang, ext in (("typescript", ".ts"), ("rust", ".rs")):
+                text = (run.SOLUTIONS_DIR / lang / f"{t.id}{ext}").read_text(encoding="utf-8")
+                self.assertTrue(text.endswith("\n") and "\r" not in text, f"{t.id}{ext}")
+
+    def test_solution_files_are_ascii(self):
+        for lang, ext in (("python", ".py"), ("nyra", ".nyra"), ("typescript", ".ts"), ("rust", ".rs")):
+            for path in (run.SOLUTIONS_DIR / lang).glob(f"*{ext}"):
+                self.assertTrue(path.read_text(encoding="utf-8").isascii(), path.name)
 
     def test_expected_outputs_are_clean(self):
         for t in self.tasks:
