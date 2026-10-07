@@ -1,0 +1,9 @@
+{
+  "id": "lcg_sequence",
+  "title": "Linear congruential generator",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "A simple pseudo-random generator is defined by next = (x * 75 + 74) mod 65537, where x is the previous value and the starting value is 1. Print the first 10 values it generates (the first printed value is the result of applying the formula once to the starting value 1), one per line.",
+  "expected_output": "149\n11249\n57305\n38044\n35283\n24819\n26463\n18689\n25472\n9901\n"
+}

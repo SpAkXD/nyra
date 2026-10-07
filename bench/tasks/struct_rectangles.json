@@ -1,0 +1,9 @@
+{
+  "id": "struct_rectangles",
+  "title": "Rectangles as records",
+  "category": "structs",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Define a record type (struct) Rect with integer fields width and height. Create the three rectangles 3 x 4, 10 x 2 and 7 x 7 (width x height) and, for each, print its area and its perimeter on one line as `area perimeter` separated by a space.",
+  "expected_output": "12 14\n20 24\n49 28\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "two_sum",
+  "title": "Pairs that add up to a target",
+  "category": "arrays",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "The array is [4, 7, 1, 9, 6, 5, 2, 8] and the target is 11. Print every pair of positions (i, j) with i < j (zero-based) whose values add up to the target, one pair per line in the form `i j`, ordered by i and then by j.",
+  "expected_output": "0 1\n3 6\n4 5\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "binary_search",
+  "title": "Binary search",
+  "category": "arrays",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "The sorted array is [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]. Implement binary search yourself (do not scan linearly and do not call a built-in search function) and print the zero-based index of each of the values 23, 2, 37 and 4, one per line, in that order. Print -1 for a value that is not in the array.",
+  "expected_output": "8\n0\n11\n-1\n"
+}

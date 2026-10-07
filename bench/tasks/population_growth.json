@@ -1,0 +1,9 @@
+{
+  "id": "population_growth",
+  "title": "Population with growth and departures",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "A population starts at 1000. Every year it first grows by 10 percent, where the growth is computed with integer arithmetic and rounded down (growth = population * 10 / 100, discarding any remainder), and then 50 individuals leave. Print the population at the end of each of the first 10 years, one per line.",
+  "expected_output": "1050\n1105\n1165\n1231\n1304\n1384\n1472\n1569\n1675\n1792\n"
+}

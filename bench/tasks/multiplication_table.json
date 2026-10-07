@@ -1,0 +1,9 @@
+{
+  "id": "multiplication_table",
+  "title": "Multiplication table of 7",
+  "category": "patterns",
+  "difficulty": "easy",
+  "min_version": "0.2",
+  "prompt": "Print the multiplication table of 7 for the factors 1 to 10, one line per factor, in exactly this form (the first line is shown): `7 x 1 = 7`",
+  "expected_output": "7 x 1 = 7\n7 x 2 = 14\n7 x 3 = 21\n7 x 4 = 28\n7 x 5 = 35\n7 x 6 = 42\n7 x 7 = 49\n7 x 8 = 56\n7 x 9 = 63\n7 x 10 = 70\n"
+}

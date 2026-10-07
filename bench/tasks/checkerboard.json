@@ -1,0 +1,9 @@
+{
+  "id": "checkerboard",
+  "title": "Checkerboard",
+  "category": "patterns",
+  "difficulty": "medium",
+  "min_version": "0.2",
+  "prompt": "Print a 6 by 6 checkerboard made of the characters `#` and `.`: 6 lines of 6 characters each, no spaces. The first character of the first line is `#`, and the characters alternate between `#` and `.` both along every line and down every column.",
+  "expected_output": "#.#.#.\n.#.#.#\n#.#.#.\n.#.#.#\n#.#.#.\n.#.#.#\n"
+}

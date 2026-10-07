@@ -1,0 +1,9 @@
+{
+  "id": "reverse_digits",
+  "title": "Reverse the digits of a number",
+  "category": "math",
+  "difficulty": "medium",
+  "min_version": "0.1",
+  "prompt": "For each of the numbers 12345, 1200, 907 and 86420, print the integer you get by writing its decimal digits in reverse order. Leading zeros of the result disappear (1200 reversed is 0021, which is the integer 21). Print one result per line, in that order.",
+  "expected_output": "54321\n21\n709\n2468\n"
+}

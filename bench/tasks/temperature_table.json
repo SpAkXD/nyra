@@ -1,0 +1,9 @@
+{
+  "id": "temperature_table",
+  "title": "Celsius to Fahrenheit table",
+  "category": "patterns",
+  "difficulty": "easy",
+  "min_version": "0.2",
+  "prompt": "Print a Celsius to Fahrenheit table for 0, 20, 40, 60, 80 and 100 degrees Celsius, one line each, in the form `0C = 32F`. Use integer arithmetic with F = C * 9 / 5 + 32 (every result here is a whole number).",
+  "expected_output": "0C = 32F\n20C = 68F\n40C = 104F\n60C = 140F\n80C = 176F\n100C = 212F\n"
+}

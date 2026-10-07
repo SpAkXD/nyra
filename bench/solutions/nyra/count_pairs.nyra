@@ -1,0 +1,9 @@
+fn main() {
+    var count = 0
+    for a in 1..51 {
+        for b in a + 1..51 {
+            if (a + b) % 5 == 0 { count = count + 1 }
+        }
+    }
+    print(count)
+}

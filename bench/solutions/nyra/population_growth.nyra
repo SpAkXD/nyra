@@ -1,0 +1,8 @@
+fn main() {
+    var population = 1000
+    for year in 0..10 {
+        population = population + population * 10 / 100
+        population = population - 50
+        print(population)
+    }
+}

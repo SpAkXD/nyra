@@ -1,0 +1,9 @@
+{
+  "id": "reverse_string",
+  "title": "Reverse a string",
+  "category": "strings",
+  "difficulty": "easy",
+  "min_version": "0.3",
+  "prompt": "Print the text `hello world` with its characters in reverse order (the first character of the output is `d`). Build the result by looping over the characters; do not use a built-in reverse function or a slicing trick.",
+  "expected_output": "dlrow olleh\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "vowel_count",
+  "title": "Count the vowels",
+  "category": "strings",
+  "difficulty": "easy",
+  "min_version": "0.3",
+  "prompt": "Count the vowels (a, e, i, o, u) in the text `the quick brown fox jumps over the lazy dog` and print the count, on one line.",
+  "expected_output": "11\n"
+}

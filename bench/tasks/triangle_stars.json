@@ -1,0 +1,9 @@
+{
+  "id": "triangle_stars",
+  "title": "Right triangle of asterisks",
+  "category": "patterns",
+  "difficulty": "easy",
+  "min_version": "0.2",
+  "prompt": "Print a right triangle of asterisks that is 6 lines tall: line k (counting from 1) consists of exactly k asterisk characters (`*`) with no spaces.",
+  "expected_output": "*\n**\n***\n****\n*****\n******\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "digit_sums",
+  "title": "Digit sums",
+  "category": "math",
+  "difficulty": "easy",
+  "min_version": "0.1",
+  "prompt": "For each of the numbers 12345, 9999, 100000 and 987654321, print the sum of its decimal digits. Print one result per line, in that order.",
+  "expected_output": "15\n36\n1\n45\n"
+}

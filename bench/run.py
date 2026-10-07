@@ -1,0 +1,1007 @@
+#!/usr/bin/env python3
+"""Nyra benchmark runner: how often does a model write correct code on the first try?
+
+    python bench/run.py --provider mock                          # pipeline self-test, no API key
+    python bench/run.py --provider anthropic --model claude-opus-5-5
+
+Every task is given to the model once per language (Nyra and Python by default) with the
+same prompt and the same repair budget. The program the model writes is run and its
+standard output is compared with the expected output. See bench/README.md for the
+methodology, the metrics and the limitations.
+
+Standard library only; provider SDKs are imported lazily by bench/providers.py.
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import contextlib
+import dataclasses
+import datetime as dt
+import fnmatch
+import hashlib
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+from typing import Optional
+
+BENCH_DIR = Path(__file__).resolve().parent
+REPO_DIR = BENCH_DIR.parent
+if str(BENCH_DIR) not in sys.path:
+    sys.path.insert(0, str(BENCH_DIR))
+
+import providers  # noqa: E402  (sibling module)
+import report  # noqa: E402
+
+TASKS_DIR = BENCH_DIR / "tasks"
+SOLUTIONS_DIR = BENCH_DIR / "solutions"
+RESULTS_DIR = BENCH_DIR / "results"
+DEFAULT_SPEC = REPO_DIR / "docs" / "SPEC.md"
+
+SCHEMA_VERSION = 1
+LANG_ORDER = ("nyra", "python")
+MAX_OUTPUT_BYTES = 1_000_000  # a program that prints more than this is killed (runaway loop)
+CHECK_TIMEOUT = 60  # seconds for `nyra check`
+BUILD_TIMEOUT = 120  # seconds for `nyra build` (includes the C compiler)
+STORED_STDOUT_CHARS = 4000  # what is kept of a program's output in the result file
+STORED_STDERR_CHARS = 2000
+
+
+class HarnessError(Exception):
+    """The environment is broken (missing compiler, cannot spawn a process). Not the model's fault."""
+
+
+class UsageError(Exception):
+    """Bad command line."""
+
+
+# ----------------------------------------------------------------------------- tasks
+
+
+def parse_version(text: str) -> tuple:
+    m = re.match(r"\s*v?(\d+)\.(\d+)", str(text))
+    if not m:
+        raise ValueError(f"not a version like 0.1: {text!r}")
+    return int(m.group(1)), int(m.group(2))
+
+
+@dataclasses.dataclass(frozen=True)
+class Task:
+    id: str
+    title: str
+    prompt: str
+    expected_output: str
+    min_version: str
+    category: str
+    difficulty: str
+    path: Path
+
+    @property
+    def version(self) -> tuple:
+        return parse_version(self.min_version)
+
+
+_TASK_FIELDS = ("id", "title", "prompt", "expected_output", "min_version", "category")
+
+
+def load_tasks(tasks_dir: Path = TASKS_DIR, require_expected: bool = True) -> list:
+    """Load bench/tasks/*.json, ordered by (min_version, id). Raises ValueError on a malformed task."""
+    tasks, seen = [], set()
+    for path in sorted(Path(tasks_dir).glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise ValueError(f"{path.name}: invalid JSON: {exc}") from None
+        missing = [f for f in _TASK_FIELDS if f not in data]
+        if missing:
+            raise ValueError(f"{path.name}: missing field(s): {', '.join(missing)}")
+        if data["id"] != path.stem:
+            raise ValueError(f"{path.name}: id {data['id']!r} must equal the file name")
+        if data["id"] in seen:
+            raise ValueError(f"duplicate task id {data['id']!r}")
+        seen.add(data["id"])
+        parse_version(data["min_version"])
+        if not str(data["prompt"]).strip():
+            raise ValueError(f"{path.name}: empty prompt")
+        if require_expected and not str(data["expected_output"]).strip():
+            raise ValueError(f"{path.name}: empty expected_output (run: python bench/verify.py --write)")
+        tasks.append(Task(id=data["id"], title=data["title"], prompt=data["prompt"],
+                          expected_output=data["expected_output"], min_version=str(data["min_version"]),
+                          category=data["category"], difficulty=data.get("difficulty", ""), path=path))
+    tasks.sort(key=lambda t: (t.version, t.id))
+    return tasks
+
+
+def tasks_digest(tasks_dir: Path = TASKS_DIR) -> str:
+    h = hashlib.sha256()
+    for path in sorted(Path(tasks_dir).glob("*.json")):
+        h.update(path.name.encode())
+        h.update(path.read_bytes().replace(b"\r\n", b"\n"))
+    return h.hexdigest()
+
+
+# ----------------------------------------------------------- prompts and feedback text
+#
+# Everything the model is ever told is built here, so it can be audited in one place.
+# The Nyra and Python prompts are deliberately parallel; only the language differs.
+
+_REPLY_RULE = ("Reply with exactly one fenced code block that contains the complete program, "
+               "and no other text.")
+
+_NYRA_SYSTEM = """\
+You write programs in Nyra, a new programming language that you have not seen before. \
+The complete language specification is below. It is the only documentation you have.
+
+<nyra_spec>
+{spec}
+</nyra_spec>
+
+Solve the task you are given with a complete Nyra program. The program takes no input, and \
+only what it prints to standard output is checked, so it must print exactly what the task describes.
+
+""" + _REPLY_RULE
+
+_PYTHON_SYSTEM = """\
+You write programs in Python 3, using only the standard library.
+
+Solve the task you are given with a complete Python program. The program takes no input, and \
+only what it prints to standard output is checked, so it must print exactly what the task describes.
+
+""" + _REPLY_RULE
+
+_FIX = ("Fix the program. Reply with exactly one fenced code block that contains the complete "
+        "corrected program, and no other text.")
+
+
+def clip_head(text: str, max_lines: int = 40, max_chars: int = 3000) -> str:
+    lines = text.rstrip("\n").split("\n")
+    kept = lines[:max_lines]
+    out = "\n".join(line if len(line) <= 200 else line[:200] + "..." for line in kept)
+    if len(out) > max_chars:
+        out = out[:max_chars] + "..."
+    elif len(lines) > max_lines:
+        out += f"\n... ({len(lines) - max_lines} more lines)"
+    return out
+
+
+def clip_tail(text: str, max_lines: int = 30, max_chars: int = 3000) -> str:
+    lines = text.rstrip("\n").split("\n")
+    out = "\n".join(lines[-max_lines:])
+    if len(lines) > max_lines:
+        out = f"... ({len(lines) - max_lines} earlier lines)\n" + out
+    if len(out) > max_chars:
+        out = "..." + out[-max_chars:]
+    return out
+
+
+def fb_no_code() -> str:
+    return ("Your reply did not contain a fenced code block, so there was no program to run. " + _REPLY_RULE)
+
+
+def fb_compile(tool: str, output: str) -> str:
+    return f"{tool} rejected your program. Its output:\n\n<compiler_output>\n{clip_head(output, 60, 6000)}\n</compiler_output>\n\n{_FIX}"
+
+
+def fb_toolchain(stderr: str) -> str:
+    return ("The compiler accepted your program, but building it failed afterwards. That is a compiler bug, "
+            "not necessarily a mistake in your program. Details:\n\n"
+            f"<build_output>\n{clip_tail(stderr, 15, 1500)}\n</build_output>\n\n"
+            "If you can, rewrite the program so that it avoids the construct that triggers the failure. " + _REPLY_RULE)
+
+
+def fb_runtime(exit_code, stderr: str, stdout: str) -> str:
+    parts = [f"Your program crashed (exit code {exit_code})."]
+    if stderr.strip():
+        parts.append(f"<stderr>\n{clip_tail(stderr)}\n</stderr>")
+    if stdout.strip():
+        parts.append(f"It had printed this before stopping:\n<program_output>\n{clip_head(stdout, 20, 1500)}\n</program_output>")
+    parts.append(_FIX)
+    return "\n\n".join(parts)
+
+
+def fb_timeout(timeout: float, stdout: str) -> str:
+    parts = [f"Your program did not finish within {timeout:g} seconds and was stopped "
+             "(probably an endless loop, or far too slow)."]
+    if stdout.strip():
+        parts.append(f"It had printed this so far:\n<program_output>\n{clip_head(stdout, 20, 1500)}\n</program_output>")
+    parts.append(_FIX)
+    return "\n\n".join(parts)
+
+
+def fb_output_limit(stdout: str) -> str:
+    return (f"Your program printed more than {MAX_OUTPUT_BYTES} bytes and was stopped (probably an endless loop). "
+            f"The start of its output:\n<program_output>\n{clip_head(stdout, 20, 1500)}\n</program_output>\n\n{_FIX}")
+
+
+def fb_wrong(actual: str, expected: str) -> str:
+    """Wrong-output feedback. It never shows the expected output (that would let a model copy the
+    answer), only where the first difference is and how many lines were expected."""
+    exp_lines = expected.split("\n") if expected else []
+    act_lines = actual.split("\n") if actual else []
+    head = ("Your program ran without errors, but its output does not match what the task asks for. "
+            f"The first difference is on line {first_diff_line(expected, actual)}. "
+            f"The expected output has {len(exp_lines)} line(s); your program printed {len(act_lines)}.")
+    shown = (f"Your program printed:\n<program_output>\n{clip_head(actual)}\n</program_output>"
+             if actual else "Your program printed nothing.")
+    return f"{head}\n\n{shown}\n\nRe-read the task. {_FIX}"
+
+
+# --------------------------------------------------------------- code and output handling
+
+_FENCE_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*\n(?P<body>.*?)^[ \t]*(?P=fence)[ \t]*$", re.S | re.M)
+
+
+def extract_code(reply: str) -> Optional[str]:
+    """The body of the first fenced code block of a reply, or None (no block, unterminated, empty)."""
+    m = _FENCE_RE.search(reply.replace("\r\n", "\n"))
+    if not m:
+        return None
+    code = m.group("body").rstrip("\n")
+    return code if code.strip() else None
+
+
+def normalize_output(text: str) -> str:
+    """CRLF -> LF, trailing whitespace stripped from every line, trailing blank lines dropped.
+    Leading whitespace and leading blank lines are significant (patterns depend on them)."""
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    while lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines)
+
+
+def first_diff_line(expected: str, actual: str) -> int:
+    """1-based number of the first line where two normalized outputs differ."""
+    e, a = expected.split("\n"), actual.split("\n")
+    for i, (x, y) in enumerate(zip(e, a), 1):
+        if x != y:
+            return i
+    return min(len(e), len(a)) + 1
+
+
+def code_size(code: str) -> tuple:
+    """(characters, non-blank lines) of a program, ignoring leading/trailing whitespace."""
+    stripped = code.strip()
+    return len(stripped), sum(1 for line in stripped.splitlines() if line.strip())
+
+
+# --------------------------------------------------------------------- process running
+
+
+@dataclasses.dataclass
+class Proc:
+    returncode: Optional[int]
+    stdout: bytes
+    stderr: bytes
+    timed_out: bool = False
+    truncated: bool = False
+    elapsed: float = 0.0
+    spawn_error: Optional[str] = None
+
+
+def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_BYTES) -> Proc:
+    """Run a command with a wall-clock timeout and a cap on captured output.
+
+    Output is read on the fly and the process is killed once it exceeds `max_output`, so a
+    program stuck in `while true { print(1) }` cannot exhaust memory. The command must be the
+    program itself (not a launcher that spawns it): killing only reaches the direct child.
+    """
+    start = time.monotonic()
+    proc = None
+    for attempt in range(4):
+        try:
+            proc = subprocess.Popen([str(a) for a in argv], cwd=str(cwd), env=env, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            break
+        except (FileNotFoundError, NotADirectoryError) as exc:  # not transient
+            return Proc(None, b"", b"", spawn_error=f"{type(exc).__name__}: {exc}")
+        except OSError as exc:
+            # Windows can refuse to start a file that was written a moment ago (antivirus scan): retry briefly.
+            if attempt == 3:
+                return Proc(None, b"", b"", spawn_error=f"{type(exc).__name__}: {exc}")
+            time.sleep(0.25 * 2 ** attempt)
+    assert proc is not None
+
+    bufs = {"out": bytearray(), "err": bytearray()}
+    truncated = threading.Event()
+
+    def pump(stream, key):
+        buf = bufs[key]
+        try:
+            while True:
+                chunk = stream.read1(65536)
+                if not chunk:
+                    return
+                room = max_output - len(buf)
+                if room > 0:
+                    buf += chunk[:room]
+                if len(chunk) > room:
+                    truncated.set()
+                    with contextlib.suppress(OSError):
+                        proc.kill()
+        except (OSError, ValueError):
+            return
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, "out"), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, "err"), daemon=True)]
+    for t in threads:
+        t.start()
+    timed_out = False
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        with contextlib.suppress(OSError):
+            proc.kill()
+        proc.wait()
+    for t, stream in zip(threads, (proc.stdout, proc.stderr)):
+        t.join(timeout=5)
+        if not t.is_alive():  # never close a pipe another thread is still blocked on
+            with contextlib.suppress(OSError, ValueError):
+                stream.close()
+    return Proc(proc.returncode, bytes(bufs["out"]), bytes(bufs["err"]), timed_out=timed_out,
+                truncated=truncated.is_set(), elapsed=time.monotonic() - start)
+
+
+_SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL")
+
+
+def child_env(workdir: Path) -> dict:
+    """Environment for programs and compilers: secrets removed, temp files confined to `workdir`.
+
+    The Nyra compiler writes its intermediate C file to <temp dir>/nyra/<name>.c, so a private
+    temp dir per evaluation keeps parallel jobs from overwriting each other's files.
+    """
+    env = {k: v for k, v in os.environ.items() if not any(h in k.upper() for h in _SECRET_HINTS)}
+    for var in ("TMP", "TEMP", "TMPDIR"):
+        env[var] = str(workdir)
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+def _rmtree(path: Path) -> None:
+    for _ in range(5):  # Windows may briefly lock a freshly built exe (antivirus scan)
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError:
+            time.sleep(0.2)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+@contextlib.contextmanager
+def scratch_dir():
+    path = Path(tempfile.mkdtemp(prefix="nyra-bench-"))
+    try:
+        yield path
+    finally:
+        _rmtree(path)
+
+
+def write_source(path: Path, code: str) -> None:
+    text = code.replace("\r\n", "\n").replace("\r", "\n")
+    path.write_bytes((text.rstrip("\n") + "\n").encode("utf-8"))
+
+
+def scrub_paths(text: str, workdir: Path) -> str:
+    """Remove the private scratch directory from tool output before the model sees it
+    (a Python traceback says `File "main.py"`, not `File "C:\\Users\\...\\Temp\\nyra-bench-x\\main.py"`)."""
+    variants = {str(workdir), workdir.as_posix(), str(workdir.resolve()), workdir.resolve().as_posix()}
+    for variant in sorted(variants, key=len, reverse=True):
+        for sep in ("\\", "/"):
+            text = text.replace(variant + sep, "")
+        text = text.replace(variant, ".")
+    return text
+
+
+# ------------------------------------------------------------------------- evaluation
+
+
+@dataclasses.dataclass
+class EvalResult:
+    passed: bool
+    kind: str  # pass | no_code | compile_error | toolchain_error | runtime_error | timeout | output_limit | wrong_output
+    feedback: str = ""  # what the model is told if it gets a repair attempt
+    errors: list = dataclasses.field(default_factory=list)  # Nyra compiler diagnostics (parsed JSON)
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: Optional[int] = None
+    compile_ms: Optional[float] = None
+    run_ms: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "passed": self.passed, "kind": self.kind, "errors": self.errors,
+            "stdout": self.stdout[:STORED_STDOUT_CHARS], "stderr": self.stderr[-STORED_STDERR_CHARS:],
+            "exit_code": self.exit_code,
+            "compile_ms": None if self.compile_ms is None else round(self.compile_ms, 1),
+            "run_ms": None if self.run_ms is None else round(self.run_ms, 1),
+        }
+
+
+_PY_SYNTAX_ERRORS = ("SyntaxError", "IndentationError", "TabError")
+
+
+def _is_python_syntax_error(stderr: str) -> bool:
+    last = next((ln for ln in reversed(stderr.strip().splitlines()) if ln.strip()), "")
+    return last.split(":")[0].strip().rsplit(".", 1)[-1] in _PY_SYNTAX_ERRORS
+
+
+def judge_run(proc: Proc, task: Task, timeout: float, *, workdir: Path, python: bool = False,
+              compile_ms: Optional[float] = None) -> EvalResult:
+    """Turn a finished process into a verdict. Shared by both languages, so the rules are identical."""
+    if proc.spawn_error:
+        raise HarnessError(f"cannot start the program: {proc.spawn_error}")
+    stdout = proc.stdout.decode("utf-8", "replace")
+    stderr = scrub_paths(proc.stderr.decode("utf-8", "replace"), workdir)
+    base = dict(stdout=stdout, stderr=stderr, exit_code=proc.returncode, compile_ms=compile_ms,
+                run_ms=proc.elapsed * 1000)
+    if proc.timed_out:
+        return EvalResult(False, "timeout", feedback=fb_timeout(timeout, stdout), **base)
+    if proc.truncated:
+        return EvalResult(False, "output_limit", feedback=fb_output_limit(stdout), **base)
+    if proc.returncode != 0:
+        if python and _is_python_syntax_error(stderr):
+            return EvalResult(False, "compile_error", feedback=fb_compile("Python", clip_tail(stderr)), **base)
+        return EvalResult(False, "runtime_error", feedback=fb_runtime(proc.returncode, stderr, stdout), **base)
+    expected, actual = normalize_output(task.expected_output), normalize_output(stdout)
+    if actual == expected:
+        return EvalResult(True, "pass", **base)
+    return EvalResult(False, "wrong_output", feedback=fb_wrong(actual, expected), **base)
+
+
+class Language:
+    name = ""
+    display = ""
+    ext = ""
+
+    def __init__(self, timeout: float = 10.0):
+        self.timeout = timeout
+
+    @property
+    def system_prompt(self) -> str:
+        raise NotImplementedError
+
+    def reference_path(self, task_id: str) -> Path:
+        return SOLUTIONS_DIR / self.name / f"{task_id}{self.ext}"
+
+    def reference_code(self, task_id: str) -> Optional[str]:
+        path = self.reference_path(task_id)
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+
+    def evaluate(self, code: str, task: Task) -> EvalResult:
+        raise NotImplementedError
+
+    def preflight(self) -> list:
+        """Check that the toolchain works before any (paid) request is made. Returns warnings."""
+        hello = Task("preflight", "", "", "42\n", "0.1", "", "", Path("."))
+        result = self.evaluate(self.hello_world, hello)
+        if not result.passed:
+            raise HarnessError(f"{self.display} toolchain self-test failed ({result.kind}): "
+                               f"{(result.stderr or result.stdout).strip()[:500]}")
+        return []
+
+    hello_world = ""
+
+
+class PythonLang(Language):
+    name = "python"
+    display = "Python"
+    ext = ".py"
+    hello_world = "print(42)\n"
+
+    @property
+    def system_prompt(self) -> str:
+        return _PYTHON_SYSTEM
+
+    def evaluate(self, code: str, task: Task) -> EvalResult:
+        with scratch_dir() as wd:
+            write_source(wd / "main.py", code)
+            # -I: isolated mode (no user site-packages, no PYTHON* variables); -X utf8: same text encoding everywhere
+            proc = run_limited([sys.executable, "-I", "-X", "utf8", "main.py"], cwd=wd, env=child_env(wd),
+                               timeout=self.timeout)
+            return judge_run(proc, task, self.timeout, workdir=wd, python=True)
+
+
+class NyraLang(Language):
+    name = "nyra"
+    display = "Nyra"
+    ext = ".nyra"
+    hello_world = "fn main() {\n    print(42)\n}\n"
+
+    def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0):
+        super().__init__(timeout)
+        if backend not in ("native", "js"):
+            raise UsageError("--backend must be native or js")
+        self.bin = Path(nyra_bin)
+        self.backend = backend
+        self.spec_path = Path(spec_path)
+        try:
+            self.spec = self.spec_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HarnessError(f"cannot read the Nyra spec {self.spec_path}: {exc}") from None
+        self.spec_sha256 = hashlib.sha256(self.spec.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+        m = re.search(r"^#\s*Nyra\s+v?(\d+\.\d+)", self.spec, re.M)
+        self.spec_version = m.group(1) if m else None
+        self._version_text: Optional[str] = None
+
+    @property
+    def system_prompt(self) -> str:
+        return _NYRA_SYSTEM.format(spec=self.spec.strip())
+
+    def version_text(self) -> str:
+        """Output of `nyra --version`, e.g. "nyra 0.1.0" ("" if it cannot be read)."""
+        if self._version_text is None:
+            p = run_limited([self.bin, "--version"], cwd=REPO_DIR, env=dict(os.environ), timeout=30)
+            self._version_text = (p.stdout + p.stderr).decode("utf-8", "replace").strip()
+        return self._version_text
+
+    def version(self) -> Optional[tuple]:
+        m = re.search(r"(\d+)\.(\d+)(?:\.\d+)?", self.version_text())
+        return (int(m.group(1)), int(m.group(2))) if m else None
+
+    def preflight(self) -> list:
+        if self.version() is None:
+            raise HarnessError(f"{self.bin} does not look like the Nyra compiler (`--version` printed "
+                               f"{self.version_text()!r})")
+        warnings = super().preflight()
+        ver = self.version()
+        if self.spec_version and ver and parse_version(self.spec_version) != ver:
+            warnings.append(f"{self.spec_path.name} describes Nyra v{self.spec_version} but the compiler is "
+                            f"{self.version_text()}: the model is shown a spec that does not match the compiler")
+        return warnings
+
+    def evaluate(self, code: str, task: Task) -> EvalResult:
+        js = self.backend == "js"
+        with scratch_dir() as wd:
+            env = child_env(wd)
+            write_source(wd / "main.nyra", code)
+            started = time.monotonic()
+            # The file name is relative so diagnostics read `"file":"main.nyra"` (no temp paths in the prompt).
+            chk = run_limited([self.bin, "check", "main.nyra", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
+            if chk.spawn_error:
+                raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {chk.spawn_error}")
+            out = chk.stdout.decode("utf-8", "replace").strip()
+            parsed = _loads(out)
+            if not isinstance(parsed, dict) or chk.returncode not in (0, 1):
+                detail = scrub_paths(chk.stderr.decode("utf-8", "replace") or out, wd).strip()
+                return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                                  exit_code=chk.returncode)
+            if not parsed.get("ok", False):
+                return EvalResult(False, "compile_error", feedback=fb_compile("The Nyra compiler (`nyra check --json`)", out),
+                                  errors=parsed.get("errors", []), stdout=out, exit_code=chk.returncode)
+            target = "main.js" if js else ("prog.exe" if os.name == "nt" else "prog")
+            build = run_limited([self.bin, "build", "main.nyra", "-o", target] + (["--js"] if js else []),
+                                cwd=wd, env=env, timeout=BUILD_TIMEOUT)
+            compile_ms = (time.monotonic() - started) * 1000
+            if build.returncode != 0 or not (wd / target).exists():
+                detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
+                return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                                  exit_code=build.returncode, compile_ms=compile_ms)
+            argv = ["node", target] if js else [wd / target]
+            proc = run_limited(argv, cwd=wd, env=env, timeout=self.timeout)
+            return judge_run(proc, task, self.timeout, workdir=wd, compile_ms=compile_ms)
+
+
+def _loads(text: str):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
+
+
+def find_nyra(explicit: Optional[str] = None) -> Path:
+    """--nyra if given, else target/release/nyra(.exe), else target/debug/nyra(.exe)."""
+    exe = "nyra.exe" if os.name == "nt" else "nyra"
+    if explicit:
+        path = Path(explicit)
+        if not path.is_file():
+            found = shutil.which(explicit)
+            if not found:
+                raise HarnessError(f"--nyra {explicit}: no such file")
+            path = Path(found)
+        return path
+    for profile in ("release", "debug"):
+        path = REPO_DIR / "target" / profile / exe
+        if path.is_file():
+            return path
+    raise HarnessError("Nyra compiler not found (looked for target/release and target/debug). Build it with "
+                       "`cargo build --release` (on Windows without MSVC: `cargo +stable-x86_64-pc-windows-gnu "
+                       "build --release`) or pass --nyra PATH.")
+
+
+def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float) -> dict:
+    langs = {}
+    for name in names:
+        if name == "nyra":
+            langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout)
+        elif name == "python":
+            langs[name] = PythonLang(timeout=timeout)
+        else:
+            raise UsageError(f"unknown language {name!r}; available: nyra, python")
+    return langs
+
+
+# ------------------------------------------------------------------------ one attempt loop
+
+
+@dataclasses.dataclass
+class RunContext:
+    provider: providers.Provider
+    repairs: int
+    count_tokens: bool
+    abort: threading.Event = dataclasses.field(default_factory=threading.Event)
+    fatal: list = dataclasses.field(default_factory=list)
+
+
+def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
+    """Give one task to the model in one language; allow up to `repairs` repair rounds.
+
+    Returns the full record: every reply, the extracted program, the verdict and the feedback.
+    status: pass (correct within the budget) | fail | error (provider/harness problem, excluded from
+    the metrics) | aborted.
+    """
+    system = lang.system_prompt
+    messages = [{"role": "user", "content": task.prompt}]
+    attempts: list = []
+    status = "fail"
+    error: Optional[str] = None
+    for n in range(1, ctx.repairs + 2):
+        if ctx.abort.is_set():
+            status = "aborted"
+            break
+        meta = {"task_id": task.id, "lang": lang.name, "attempt": n, "sample": sample}
+        try:
+            reply = ctx.provider.complete(system, messages, meta)
+        except providers.ProviderError as exc:
+            if exc.fatal:
+                ctx.fatal.append(exc)
+                ctx.abort.set()
+            status, error = "error", str(exc)
+            break
+        code = extract_code(reply.text)
+        attempt = {"n": n, "reply": reply.text, "stop_reason": reply.stop_reason, "usage": reply.usage.to_dict(),
+                   "latency_s": round(reply.latency_s, 3), "request_id": reply.request_id,
+                   "served_model": reply.model, "code": code, "chars": None, "lines": None, "code_tokens": None}
+        if code is None:
+            result = EvalResult(False, "no_code", feedback=fb_no_code())
+        else:
+            attempt["chars"], attempt["lines"] = code_size(code)
+            if ctx.count_tokens:
+                attempt["code_tokens"] = ctx.provider.count_tokens(code)
+            try:
+                result = lang.evaluate(code, task)
+            except HarnessError as exc:
+                ctx.fatal.append(exc)
+                ctx.abort.set()
+                attempts.append(attempt)
+                status, error = "error", str(exc)
+                break
+        attempt["result"] = result.to_dict()
+        attempts.append(attempt)
+        if result.passed:
+            status = "pass"
+            break
+        if n <= ctx.repairs:
+            attempt["feedback"] = result.feedback
+            messages.append({"role": "assistant", "content": reply.text.strip() or "(empty reply)"})
+            messages.append({"role": "user", "content": result.feedback})
+    return {
+        "task_id": task.id, "lang": lang.name, "sample": sample, "status": status,
+        "first_try": bool(attempts and attempts[0].get("result", {}).get("passed")),
+        "attempts_used": len(attempts), "attempts": attempts, "error": error,
+    }
+
+
+# ----------------------------------------------------------------------- orchestration
+
+
+def select_tasks(tasks: list, patterns: Optional[str], max_version: Optional[tuple], lang_names: list,
+                 provider: providers.Provider) -> tuple:
+    """Apply --tasks, --max-version and (for the mock) reference availability.
+
+    Every language runs the same tasks: a task is dropped for all of them or for none.
+    Returns (selected, excluded) where excluded is a list of {"id", "reason"}.
+    """
+    chosen = tasks
+    if patterns:
+        wanted = [p.strip() for p in patterns.split(",") if p.strip()]
+        hit = set()
+        for pattern in wanted:
+            matches = {t.id for t in tasks if fnmatch.fnmatchcase(t.id, pattern)}
+            if not matches:
+                raise UsageError(f"--tasks: no task matches {pattern!r} (--dry-run lists the tasks)")
+            hit |= matches
+        chosen = [t for t in tasks if t.id in hit]
+    selected, excluded = [], []
+    for t in chosen:
+        if max_version is not None and t.version > max_version:
+            excluded.append({"id": t.id, "reason": f"needs Nyra {t.min_version} (limit is {max_version[0]}.{max_version[1]})"})
+            continue
+        if provider.is_mock:
+            missing = [n for n in lang_names if not provider.has_reference(n, t.id)]
+            if missing:
+                excluded.append({"id": t.id, "reason": f"no reference solution for {', '.join(missing)}"})
+                continue
+        selected.append(t)
+    return selected, excluded
+
+
+def execute(jobs: list, ctx: RunContext, n_workers: int, quiet: bool) -> tuple:
+    """Run all (task, lang, sample) jobs on a thread pool. Returns (records, interrupted)."""
+    records: list = []
+    lock = threading.Lock()
+    total = len(jobs)
+    interrupted = False
+
+    def work(job):
+        task, lang, sample = job
+        if ctx.abort.is_set():
+            return {"task_id": task.id, "lang": lang.name, "sample": sample, "status": "aborted", "first_try": False,
+                    "attempts_used": 0, "attempts": [], "error": None}
+        return run_one(task, lang, sample, ctx)
+
+    pool = cf.ThreadPoolExecutor(max_workers=max(1, n_workers))
+    futures = [pool.submit(work, job) for job in jobs]
+    try:
+        for fut in cf.as_completed(futures):
+            try:
+                rec = fut.result()
+            except Exception as exc:  # a bug in the harness itself: do not lose the other results
+                ctx.abort.set()
+                raise HarnessError(f"internal error: {type(exc).__name__}: {exc}") from exc
+            with lock:
+                records.append(rec)
+                if not quiet:
+                    print(_progress_line(len(records), total, rec), flush=True)
+    except KeyboardInterrupt:
+        interrupted = True
+        ctx.abort.set()
+        print("\ninterrupted: saving what has finished so far", file=sys.stderr)
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    return records, interrupted
+
+
+def _progress_line(done: int, total: int, rec: dict) -> str:
+    if rec["status"] == "pass":
+        verdict = "pass" + ("" if rec["attempts_used"] == 1 else f" after {rec['attempts_used']} attempts")
+    elif rec["status"] == "fail":
+        last = rec["attempts"][-1]["result"]["kind"] if rec["attempts"] else "?"
+        verdict = f"FAIL ({last}) after {rec['attempts_used']} attempts"
+    else:
+        verdict = f"{rec['status'].upper()}: {rec.get('error') or ''}".strip()
+    return f"[{done:>3}/{total}] {rec['lang']:<7} {rec['task_id']:<22} {verdict}"
+
+
+def _git_info() -> dict:
+    def git(*args):
+        try:
+            p = subprocess.run(["git", "-C", str(REPO_DIR), *args], capture_output=True, text=True, timeout=15)
+            return p.stdout.strip() if p.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    commit = git("rev-parse", "--short", "HEAD")
+    status = git("status", "--porcelain", "--", ".", ":(exclude)bench/results")
+    return {"commit": commit, "dirty": bool(status) if status is not None else None}
+
+
+def _safe(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-") or "unnamed"
+
+
+def display_path(path: Path) -> str:
+    """Repo-relative path if the file is inside the repo, else just its name (result files get committed,
+    so they must not carry local directory names)."""
+    try:
+        return Path(path).resolve().relative_to(REPO_DIR).as_posix()
+    except ValueError:
+        return Path(path).name
+
+
+def result_paths(out_dir: Path, date: str, provider_name: str, model: str) -> tuple:
+    stem = f"{date}-{_safe(provider_name)}-{_safe(model)}"
+    candidate, n = out_dir / f"{stem}.json", 1
+    while candidate.exists():  # never overwrite an earlier run
+        n += 1
+        candidate = out_dir / f"{stem}-{n}.json"
+    return candidate, candidate.with_suffix(".md")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="run.py", description=__doc__.split("\n\n")[0],
+        epilog="Methodology and metrics: bench/README.md",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--provider", default="mock", choices=sorted(providers.PROVIDERS),
+                   help="mock replays the reference solutions (no API key); anthropic calls Claude (default: mock)")
+    p.add_argument("--model", help="model id (anthropic default: %s)" % providers.AnthropicProvider.default_model)
+    p.add_argument("--langs", default="nyra,python", help="comma-separated languages to run (default: nyra,python)")
+    p.add_argument("--tasks", help="comma-separated task ids or patterns such as 'fizz*' (default: all)")
+    p.add_argument("--max-version", help="skip tasks needing a newer Nyra than this, for every language, e.g. 0.1 "
+                                         "(default: the version of the nyra compiler when nyra is run)")
+    p.add_argument("--repairs", type=int, default=3, help="repair attempts after a failed first try (default: 3)")
+    p.add_argument("--samples", type=int, default=1, help="independent runs per task and language (default: 1)")
+    p.add_argument("--nyra", help="path to the nyra binary (default: target/release, else target/debug)")
+    p.add_argument("--backend", default="native", choices=("native", "js"),
+                   help="Nyra backend that runs the programs (default: native, via the C compiler)")
+    p.add_argument("--spec", default=str(DEFAULT_SPEC), help="Nyra spec shown to the model (default: docs/SPEC.md)")
+    p.add_argument("--timeout", type=float, default=10.0, help="seconds a program may run (default: 10)")
+    p.add_argument("--jobs", type=int, default=4, help="tasks evaluated in parallel (default: 4)")
+    p.add_argument("--out", default=str(RESULTS_DIR), help="directory for the result files (default: bench/results)")
+    p.add_argument("--max-tokens", type=int, default=16000, help="anthropic: max_tokens per reply (default: 16000)")
+    p.add_argument("--effort", choices=("low", "medium", "high", "xhigh", "max"),
+                   help="anthropic: output_config.effort (default: the model's own default)")
+    p.add_argument("--extra-json", help='anthropic: JSON object of extra request fields, e.g. \'{"thinking": {"type": "adaptive"}}\'')
+    p.add_argument("--no-count-tokens", action="store_true",
+                   help="do not measure code-only tokens with the provider's token counter")
+    p.add_argument("--mock-flaky", nargs="?", const="mix", choices=("mix",) + providers.DEFECTS,
+                   help="mock only: break the first attempt of some tasks to exercise the repair loop")
+    p.add_argument("--dry-run", action="store_true", help="print what would run (and the maximum number of API calls) and exit")
+    p.add_argument("-q", "--quiet", action="store_true", help="no per-task progress lines")
+    return p
+
+
+def main(argv: Optional[list] = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    args = build_parser().parse_args(argv)
+    try:
+        return _main(args)
+    except UsageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except HarnessError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except providers.ProviderError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(args) -> int:
+    lang_names = [n.strip() for n in args.langs.split(",") if n.strip()]
+    if not lang_names or len(set(lang_names)) != len(lang_names):
+        raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python")
+    if args.repairs < 0 or args.samples < 1 or args.jobs < 1:
+        raise UsageError("--repairs must be >= 0, --samples >= 1, --jobs >= 1")
+    extra = None
+    if args.extra_json:
+        try:
+            extra = json.loads(args.extra_json)
+        except ValueError as exc:
+            raise UsageError(f"--extra-json is not valid JSON: {exc}") from None
+        if not isinstance(extra, dict):
+            raise UsageError("--extra-json must be a JSON object")
+
+    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec), timeout=args.timeout)
+    warnings: list = []
+    for lang in langs.values():
+        warnings += lang.preflight()
+    for w in warnings:
+        print(f"warning: {w}", file=sys.stderr)
+
+    provider = providers.make_provider(
+        args.provider, args.model, reference=lambda lang, tid: langs[lang].reference_code(tid),
+        flaky=(True if args.mock_flaky == "mix" else (args.mock_flaky or False)), max_tokens=args.max_tokens,
+        effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens)
+
+    # Which Nyra version do the tasks have to fit? Default: the compiler we are about to test.
+    nyra = langs.get("nyra")
+    if args.max_version:
+        max_version, max_source = parse_version(args.max_version), "flag"
+        if nyra is not None and nyra.version() is not None and max_version > nyra.version():
+            warnings.append(f"--max-version {args.max_version} is above the compiler's version {nyra.version_text()}: "
+                            "tasks the compiler cannot express will count as Nyra failures")
+            print(f"warning: {warnings[-1]}", file=sys.stderr)
+    elif nyra is not None and nyra.version() is not None:
+        max_version, max_source = nyra.version(), "compiler"
+    else:
+        max_version, max_source = None, None
+
+    all_tasks = load_tasks()
+    tasks, excluded = select_tasks(all_tasks, args.tasks, max_version, lang_names, provider)
+    if not tasks:
+        raise UsageError("no tasks selected")
+
+    jobs = [(t, langs[n], s) for t in tasks for n in lang_names for s in range(args.samples)]
+    max_calls = len(jobs) * (args.repairs + 1)
+    banner = (f"Nyra benchmark | provider={provider.name} model={provider.model} | {len(tasks)} tasks x "
+              f"{len(lang_names)} languages x {args.samples} sample(s) | up to {args.repairs + 1} attempts each "
+              f"(at most {max_calls} model calls)")
+    if nyra is not None:
+        banner += f" | {nyra.version_text()} ({nyra.backend})"
+    print(banner)
+    if max_version is not None:
+        print(f"tasks limited to Nyra <= {max_version[0]}.{max_version[1]} (from {max_source}); "
+              f"{len(excluded)} task(s) not run")
+    if args.dry_run:
+        for t in tasks:
+            print(f"  {t.min_version}  {t.id:<24} {t.category:<14} {t.title}")
+        for e in excluded:
+            print(f"  skipped {e['id']}: {e['reason']}")
+        return 0
+
+    provider.ensure_ready()  # a missing key or SDK stops the run here, before anything is spent
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    started = dt.datetime.now(dt.timezone.utc)
+    ctx = RunContext(provider=provider, repairs=args.repairs, count_tokens=not args.no_count_tokens)
+    records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
+    finished = dt.datetime.now(dt.timezone.utc)
+
+    order = {t.id: i for i, t in enumerate(tasks)}
+    records.sort(key=lambda r: (order[r["task_id"]], lang_names.index(r["lang"]), r["sample"]))
+    complete = not interrupted and not ctx.fatal and all(r["status"] != "aborted" for r in records)
+    if not any(r["status"] in ("pass", "fail") for r in records):
+        # Nothing usable (bad key, unknown model, ...): do not leave an empty result file behind.
+        reason = ctx.fatal[0] if ctx.fatal else next((r["error"] for r in records if r.get("error")), "no run finished")
+        print(f"error: no run finished, so no result files were written: {reason}", file=sys.stderr)
+        return 130 if interrupted else 2
+    served = sorted({a["served_model"] for r in records for a in r["attempts"] if a.get("served_model")})
+    if len(served) > 1:
+        warnings.append(f"the provider served more than one model id during the run: {', '.join(served)}")
+
+    results = {
+        "schema": SCHEMA_VERSION,
+        "run": {
+            "date": dt.date.today().isoformat(), "started_at": started.isoformat(timespec="seconds"),
+            "finished_at": finished.isoformat(timespec="seconds"), "complete": complete,
+            "provider": provider.describe(), "mock": provider.is_mock,
+            "mock_flaky": args.mock_flaky if provider.is_mock else None,
+            "tokens_are_estimates": provider.tokens_are_estimates,
+            "langs": lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
+            "backend": nyra.backend if nyra else None, "jobs": args.jobs,
+            "max_version": None if max_version is None else f"{max_version[0]}.{max_version[1]}",
+            "max_version_source": max_source,
+            "nyra": None if nyra is None else {"path": display_path(nyra.bin), "version": nyra.version_text()},
+            "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
+                                               "sha256": nyra.spec_sha256},
+            "python": platform.python_version(), "platform": platform.platform(),
+            "served_models": served, "repo": _git_info(), "tasks_sha256": tasks_digest(), "warnings": warnings,
+            # Everything needed to rebuild what the model saw: system prompt + task prompt, then for each
+            # attempt its reply and the feedback that followed it.
+            "system_prompts": {n: langs[n].system_prompt for n in lang_names},
+            "tasks": {t.id: {"title": t.title, "category": t.category, "difficulty": t.difficulty,
+                             "min_version": t.min_version, "prompt": t.prompt} for t in tasks},
+            "task_ids": [t.id for t in tasks], "excluded_tasks": excluded,
+        },
+        "records": records,
+    }
+    results["summary"] = report.summarize(records, lang_names)
+    markdown = report.render_markdown(results, {t.id: t for t in tasks})
+
+    json_path, md_path = result_paths(out_dir, results["run"]["date"], provider.name, provider.model)
+    json_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    md_path.write_text(markdown, encoding="utf-8")
+    (out_dir / "latest.md").write_text(markdown, encoding="utf-8")
+
+    print()
+    print(markdown)
+    print(f"wrote {json_path}\n      {md_path}\n      {out_dir / 'latest.md'}")
+
+    for exc in ctx.fatal[:1]:
+        print(f"error: the run was stopped by a fatal problem: {exc}", file=sys.stderr)
+        return 2
+    if interrupted:
+        return 130
+    bad = [r for r in records if r["status"] in ("error", "aborted")]
+    if bad:
+        print(f"warning: {len(bad)} run(s) ended in an error and are excluded from the metrics", file=sys.stderr)
+    if provider.is_mock and any(r["status"] != "pass" for r in records):
+        print("error: the mock run is the pipeline self-test: every task must pass", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

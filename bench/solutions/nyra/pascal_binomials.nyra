@@ -1,0 +1,10 @@
+fn binom(n: int, k: int) -> int {
+    if k == 0 || k == n { ret 1 }
+    ret binom(n - 1, k - 1) + binom(n - 1, k)
+}
+
+fn main() {
+    print(binom(5, 2))
+    print(binom(10, 5))
+    print(binom(20, 10))
+}

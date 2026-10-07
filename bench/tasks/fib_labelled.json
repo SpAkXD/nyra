@@ -1,0 +1,9 @@
+{
+  "id": "fib_labelled",
+  "title": "Labelled Fibonacci numbers",
+  "category": "patterns",
+  "difficulty": "easy",
+  "min_version": "0.2",
+  "prompt": "Print the first 10 Fibonacci numbers, one per line, in the form `fib(n) = value` for n = 0 to 9, where fib(0) = 0, fib(1) = 1 and every later value is the sum of the two before it. The first two lines are `fib(0) = 0` and `fib(1) = 1`.",
+  "expected_output": "fib(0) = 0\nfib(1) = 1\nfib(2) = 1\nfib(3) = 2\nfib(4) = 3\nfib(5) = 5\nfib(6) = 8\nfib(7) = 13\nfib(8) = 21\nfib(9) = 34\n"
+}
