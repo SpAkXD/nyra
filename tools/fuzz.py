@@ -251,10 +251,11 @@ class Param:
 
 
 class Fn:
-    __slots__ = ("name", "params", "ret", "ret_env", "index")
+    __slots__ = ("name", "params", "ret", "ret_env", "index", "rec")
 
     def __init__(self, name, params, ret, ret_env, index):
         self.name, self.params, self.ret, self.ret_env, self.index = name, params, ret, ret_env, index
+        self.rec = False   # recursive: the first parameter is a depth that every self-call lowers
 
 
 FAIL = object()   # an update that would break a variable's envelope
@@ -279,6 +280,7 @@ FEATURES = {
     "arena": True,
     "inout": True,
     "recursive_structs": True,
+    "recursion": True,         # functions that call themselves with a lower depth
     "name_reuse": True,        # a block reuses the name of a variable of a closed sibling block
     "evalorder": True,         # statements whose operands change the array they read
     "pod_structs": True,       # structs without a string or an array inside
@@ -307,6 +309,7 @@ class Gen:
         self.budget = 0
         self.nomut_roots = ()   # variables the expression being generated must not change
         self.nmut = 0           # how many changes expressions have made (pop, inout)
+        self.no_self = False    # a recursive function's base case may not call it again
 
     # ---- helpers -----------------------------------------------------------------------------
 
@@ -1115,14 +1118,19 @@ class Gen:
     # calls -----------------------------------------------------------------------------------
 
     def callable(self):
-        return [f for f in self.fns if f.index < self.cur.index]
+        fns = [f for f in self.fns if f.index < self.cur.index]
+        if self.cur.rec and self.loop_depth == 0 and not self.no_self:
+            fns.append(self.cur)
+        return fns
 
     def call(self, f, d, q):
         """The code of a call of f: arguments left to right; an `inout` place may get any value
         within the parameter's envelope."""
         args, roots, pending = [], [], []
-        for p in f.params:
-            if p.inout:
+        for k, p in enumerate(f.params):
+            if k == 0 and f.rec:
+                args.append(f"{p.name} - 1" if f is self.cur else str(self.r.randint(0, 3)))
+            elif p.inout:
                 ok = []
                 for v in self.changeable_roots(lambda v: v.name not in roots):
                     for path in self.place_paths(v, lambda x: x == p.ty):
@@ -1659,7 +1667,11 @@ class Gen:
             ret_env = self.top(ret)
             if (ret == STR or is_arr(ret)) and self.chance(0.4):
                 ret_env = with_lo(ret_env, 1)
+        rec = self.f["recursion"] and ret is not None and self.chance(0.3)
+        if rec:
+            params.insert(0, Param(self.fresh("depth"), INT, False, None))
         f = Fn(name, params, ret, ret_env, idx)
+        f.rec = rec
         self.cur = f
         self.vars, self.scopes, self.dead = {}, [[]], []
         self.loop_depth = self.arena_depth = 0
@@ -1667,7 +1679,14 @@ class Gen:
             self.declare(p.name, p.ty, "inout" if p.inout else "param", p.env, env=p.env)
         sig = ", ".join(("inout " if p.inout else "") + f"{p.name}: {self.tname(p.ty)}" for p in params)
         head = f"fn {name}({sig})" + (f" -> {self.tname(ret)}" if ret else "")
-        if ret is not None and self.chance(0.2):
+        base = []
+        if rec:
+            # the base case: callers pass a depth of 0..3 and every self-call lowers it
+            self.no_self = True
+            e = self.ret_expr()
+            self.no_self = False
+            base = [f"if {params[0].name} <= 0 {{", f"    ret {e.code}", "}"]
+        elif ret is not None and self.chance(0.2):
             e = self.ret_expr()
             self.fns.append(f)
             return [f"{head} = {e.code}"]
@@ -1688,7 +1707,7 @@ class Gen:
 
         body, _ = self.block(2, 6, final=final)
         self.fns.append(f)
-        return [head + " {"] + self.indent(body) + ["}"]
+        return [head + " {"] + self.indent(base + body) + ["}"]
 
     def final_prints(self):
         return [f"print({v.name})" for v in self.vars.values() if not v.freed and self.chance(0.8)], False
