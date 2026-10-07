@@ -391,6 +391,16 @@ class MockPipeline(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("ANTHROPIC_API_KEY", stderr)
 
+    def test_dry_run_needs_no_key(self):
+        with tempfile.TemporaryDirectory() as out, mock.patch.dict(os.environ):
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            code, stdout, _ = _run_main("--provider", "anthropic", "--tasks", "fizzbuzz", "--langs", "python",
+                                        "--out", out, "--dry-run")
+            self.assertEqual(list(Path(out).iterdir()), [])
+        self.assertEqual(code, 0)
+        self.assertIn("provider=anthropic model=claude-opus-5-5", stdout)
+        self.assertIn("at most 4 model calls", stdout)
+
     def test_each_failure_kind_is_repaired(self):
         expected_kind = {"no_code": "no_code", "syntax": "compile_error", "runtime": None, "wrong": "wrong_output"}
         for defect, kind in expected_kind.items():
@@ -624,8 +634,9 @@ class AnthropicProviderWithFakeClient(unittest.TestCase):
     def test_missing_key_is_fatal_and_names_the_variable(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ANTHROPIC_API_KEY", None)
+            provider = providers.AnthropicProvider()  # constructing needs neither key nor SDK
             with self.assertRaises(providers.ProviderError) as cm:
-                providers.AnthropicProvider()
+                provider.ensure_ready()
         self.assertTrue(cm.exception.fatal)
         self.assertIn("ANTHROPIC_API_KEY", str(cm.exception))
 

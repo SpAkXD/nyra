@@ -70,6 +70,10 @@ class Provider:
     def __init__(self, model: Optional[str] = None, **_options):
         self.model = model or self.default_model
 
+    def ensure_ready(self) -> None:
+        """Fail fast (raise ProviderError) if the provider cannot work, before any task is run.
+        Not called for --dry-run, so a dry run needs no key and no SDK."""
+
     def complete(self, system: str, messages: list, meta: dict) -> Reply:
         raise NotImplementedError
 
@@ -194,9 +198,11 @@ class AnthropicProvider(Provider):
         self._count_enabled = count_tokens
         self._count_baseline: Optional[int] = None
         self._count_lock = threading.Lock()
-        if client is None:
-            client = self._make_client()
-        self.client = client
+        self.client = client  # created by ensure_ready() when not injected
+
+    def ensure_ready(self) -> None:
+        if self.client is None:
+            self.client = self._make_client()
 
     @staticmethod
     def _make_client():
@@ -236,6 +242,7 @@ class AnthropicProvider(Provider):
         return req
 
     def complete(self, system: str, messages: list, meta: dict) -> Reply:
+        self.ensure_ready()
         start = time.monotonic()
         try:
             resp = self.client.messages.create(**self._request(system, messages))
@@ -253,6 +260,7 @@ class AnthropicProvider(Provider):
                      request_id=getattr(resp, "_request_id", None), model=getattr(resp, "model", None))
 
     def _count_raw(self, text: str) -> int:
+        self.ensure_ready()
         r = self.client.messages.count_tokens(model=self.model, messages=[{"role": "user", "content": text}])
         return int(r.input_tokens)
 

@@ -931,6 +931,7 @@ def _main(args) -> int:
             print(f"  skipped {e['id']}: {e['reason']}")
         return 0
 
+    provider.ensure_ready()  # a missing key or SDK stops the run here, before anything is spent
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     started = dt.datetime.now(dt.timezone.utc)

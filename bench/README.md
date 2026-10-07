@@ -204,9 +204,9 @@ bench/
 
 **Provider** (an OpenAI-compatible endpoint, Gemini, ...): subclass `providers.Provider`, implement
 `complete(system, messages, meta) -> Reply` (and `count_tokens(text)` if the API can count tokens), import the SDK inside
-`__init__`, and add the class to `PROVIDERS`. `messages` is a list of `{"role", "content"}` dicts; `meta` is only for
-the mock provider and logging. Raise `ProviderError(..., fatal=True)` for errors that repeat on every call (key, model,
-parameters) so the run stops instead of recording hundreds of fake failures.
+`ensure_ready()` (called once before any work, never for `--dry-run`), and add the class to `PROVIDERS`. `messages` is a
+list of `{"role", "content"}` dicts; `meta` is only for the mock provider and logging. Raise `ProviderError(..., fatal=True)`
+for errors that repeat on every call (key, model, parameters) so the run stops instead of recording hundreds of fake failures.
 
 **Language** (TypeScript, Rust, ...): subclass `run.Language` (`name`, `ext`, `system_prompt`, `evaluate(code, task)`), add
 reference solutions under `solutions/<name>/`, and register it in `run.make_languages`. `evaluate` must return an
