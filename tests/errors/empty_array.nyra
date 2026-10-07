@@ -1,0 +1,6 @@
+// expect: E0230
+fn main() {
+    var names = []
+    names.push("ann")
+    print(names.len())
+}

@@ -1,0 +1,7 @@
+// expect: E0236
+fn main() {
+    let xs = [4, 8, 15]
+    if xs.len > 2 {
+        print("long")
+    }
+}

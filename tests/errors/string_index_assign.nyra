@@ -1,0 +1,6 @@
+// expect: E0229
+fn main() {
+    var name = "ann"
+    name[0] = 'A'
+    print(name)
+}

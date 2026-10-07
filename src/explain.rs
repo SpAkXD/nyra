@@ -35,7 +35,7 @@ pub struct Entry {
     pub title: String,
     /// `compile error` or `runtime error`
     pub kind: String,
-    /// `v0.1`, or `planned for v0.3, not in the compiler yet`
+    /// `v0.1`, or `planned for v0.6, not in the compiler yet`
     pub since: String,
     pub planned: bool,
     pub what: String,
@@ -160,7 +160,7 @@ fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) 
         version_ok(since)
     };
     if !since_ok {
-        return Err(format!("{code} (line {kind_no}): Since is `v0.2` or `planned for v0.3, not in the compiler yet`, found `{since}`"));
+        return Err(format!("{code} (line {kind_no}): Since is `v0.2` or `planned for v0.6, not in the compiler yet`, found `{since}`"));
     }
 
     let text = |i: usize| -> Result<String, String> {
@@ -491,7 +491,8 @@ mod tests {
         assert!(!e.planned && e.kind == "compile error" && e.since == "v0.1");
         assert!(e.wrong.contains("cout") && e.fixed.contains("count"));
         assert_eq!(e.related, ["E0202", "E0206", "E0205"]);
-        assert!(all.iter().find(|e| e.code == "E0220").unwrap().planned);
+        assert!(!all.iter().find(|e| e.code == "E0220").unwrap().planned);
+        assert!(all.iter().find(|e| e.code == "E0300").unwrap().planned);
         assert_eq!(all.iter().find(|e| e.code == "E0241").unwrap().kind, "runtime error");
     }
 

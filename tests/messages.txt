@@ -135,7 +135,7 @@ error[E0233]: cannot index a value of type `int`
   |
 3 |     print(xs[0])
   |             ^
-  = hint: only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed
+  = hint: only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed; to index the digits of `xs`, turn it into text first: `str(xs)`
   = explain: nyra explain E0233
 
 nyra: 1 error(s)
@@ -347,7 +347,7 @@ error[E0227]: `str` has no method `length`
   |
 3 |     print(s.length())
   |             ^
-  = hint: the methods of `str` are `len` `chars` `codes` `slice` `contains` `starts_with` `ends_with` `index_of` `split` `replace` `trim` `upper` `lower` `repeat`
+  = hint: the length is `s.len()`
   = explain: nyra explain E0227
 
 nyra: 1 error(s)
@@ -4242,5 +4242,431 @@ error[E0210]: cannot use `&&` on `bool` and `int`: `&&` needs two `bool`s
   |                   ^
   = hint: compare each side first: `a < b && (a + b) % 2 != 0`
   = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== struct_braces
+struct Point {
+    x: int
+    y: int
+}
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    print(p.x)
+}
+----
+error[E0101]: expected end of line, found `{`
+  --> case.nyra:6:19
+  |
+6 |     let p = Point { x: 1, y: 2 }
+  |                   ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_braces_in_call
+struct Point {
+    x: int
+    y: int
+}
+fn show(p: Point) {
+    print(p.x)
+}
+fn main() {
+    show(Point { x: 1, y: 2 })
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `show`, found `{`
+  --> case.nyra:9:16
+  |
+9 |     show(Point { x: 1, y: 2 })
+  |                ^
+  = hint: a struct is built like a call, with every field named: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== struct_new_labeled
+struct Point {
+    x: int
+    y: int
+}
+fn main() {
+    let p = Point.new(x: 1, y: 2)
+    print(p.x)
+}
+----
+error[E0235]: `Point` is a type, not a value
+  --> case.nyra:6:13
+  |
+6 |     let p = Point.new(x: 1, y: 2)
+  |             ^
+  = hint: build a value with all its fields: `Point(x: ..., y: ...)`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== call_named_args
+fn area(width: int, height: int) -> int = width * height
+fn main() {
+    print(area(height: 4, width: 3))
+}
+----
+error[E0226]: named argument `height:` in a call to function `area`
+  --> case.nyra:3:16
+  |
+3 |     print(area(height: 4, width: 3))
+  |                ^
+  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
+  = explain: nyra explain E0226
+
+error[E0226]: named argument `width:` in a call to function `area`
+  --> case.nyra:3:27
+  |
+3 |     print(area(height: 4, width: 3))
+  |                           ^
+  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
+  = explain: nyra explain E0226
+
+nyra: 2 error(s)
+==== method_other_language_array
+fn main() {
+    var xs = [1, 2, 3]
+    xs.append(4)
+    print(xs.length)
+}
+----
+error[E0227]: `[int]` has no method `append`
+  --> case.nyra:3:8
+  |
+3 |     xs.append(4)
+  |        ^
+  = hint: add an element at the end with `xs.push(x)` (`xs` must be a `var`)
+  = explain: nyra explain E0227
+
+error[E0224]: `[int]` has no field `length`
+  --> case.nyra:4:14
+  |
+4 |     print(xs.length)
+  |              ^
+  = hint: the length is `xs.len()`
+  = explain: nyra explain E0224
+
+nyra: 2 error(s)
+==== method_other_language_str
+fn main() {
+    let s = "hello"
+    print(s.toUpperCase())
+    print(s.substring(1, 3))
+}
+----
+error[E0227]: `str` has no method `toUpperCase`
+  --> case.nyra:3:13
+  |
+3 |     print(s.toUpperCase())
+  |             ^
+  = hint: write `s.upper()` (it changes ASCII letters only)
+  = explain: nyra explain E0227
+
+error[E0227]: `str` has no method `substring`
+  --> case.nyra:4:13
+  |
+4 |     print(s.substring(1, 3))
+  |             ^
+  = hint: `s.slice(a, b)` gives the characters from position `a` up to, but not including, `b`
+  = explain: nyra explain E0227
+
+nyra: 2 error(s)
+==== method_other_language_char
+fn main() {
+    let c = '7'
+    print(c.isdigit())
+}
+----
+error[E0227]: `char` has no method `isdigit`
+  --> case.nyra:3:13
+  |
+3 |     print(c.isdigit())
+  |             ^
+  = hint: write `c.is_digit()`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== method_other_language_number
+fn main() {
+    let n = 5
+    print(n.to_string())
+    print(n.abs())
+}
+----
+error[E0227]: `int` has no method `to_string`
+  --> case.nyra:3:13
+  |
+3 |     print(n.to_string())
+  |             ^
+  = hint: `str(n)` gives the text that `print(n)` shows
+  = explain: nyra explain E0227
+
+error[E0227]: `int` has no method `abs`
+  --> case.nyra:4:13
+  |
+4 |     print(n.abs())
+  |             ^
+  = hint: Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`
+  = explain: nyra explain E0227
+
+nyra: 2 error(s)
+==== method_clone
+fn main() {
+    let xs = [1, 2]
+    let ys = xs.clone()
+    print(ys)
+}
+----
+error[E0227]: `[int]` has no method `clone`
+  --> case.nyra:3:17
+  |
+3 |     let ys = xs.clone()
+  |                 ^
+  = hint: values are copied when they are assigned: `var other = xs` is already independent of `xs`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== arr_int_float
+fn main() {
+    let xs = [1, 2.5]
+}
+----
+error[E0231]: array elements must all have one type: the first is `int`, this one is `float`
+  --> case.nyra:2:18
+  |
+2 |     let xs = [1, 2.5]
+  |                  ^
+  = hint: make every element a float: write the first as `1.0`
+  = explain: nyra explain E0231
+
+nyra: 1 error(s)
+==== arr_str_int
+fn main() {
+    let user = ["ann", 31]
+}
+----
+error[E0231]: array elements must all have one type: the first is `str`, this one is `int`
+  --> case.nyra:2:24
+  |
+2 |     let user = ["ann", 31]
+  |                        ^
+  = hint: an array holds one type: write this element as text, `str(31)`, or use a struct to group values of different types
+  = explain: nyra explain E0231
+
+nyra: 1 error(s)
+==== index_struct
+struct P {
+    n: int
+}
+fn main() {
+    let p = P(n: 1)
+    print(p[0])
+}
+----
+error[E0233]: cannot index a value of type `P`
+  --> case.nyra:6:12
+  |
+6 |     print(p[0])
+  |            ^
+  = hint: a struct has fields, not positions: read one with a dot, e.g. `p.n`
+  = explain: nyra explain E0233
+
+nyra: 1 error(s)
+==== struct_lowercase_as_type
+struct point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(point(x: 1))
+}
+----
+error[E0221]: struct name `point` must start with an uppercase letter
+  --> case.nyra:1:8
+  |
+1 | struct point {
+  |        ^
+  = hint: write `struct Point`: type names start uppercase, variables and functions lowercase
+  = explain: nyra explain E0221
+
+nyra: 1 error(s)
+==== struct_type_wrong_case
+struct Point {
+    x: int
+}
+fn show(p: point) {
+    print(p.x)
+}
+fn main() {
+    show(Point(x: 1))
+}
+----
+error[E0102]: unknown type `point`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct
+  --> case.nyra:4:12
+  |
+4 | fn show(p: point) {
+  |            ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_call_undefined
+fn main() {
+    let v = Vec2(x: 1.0, y: 2.0)
+    print(v.x)
+}
+----
+error[E0202]: undefined function `Vec2`
+  --> case.nyra:2:13
+  |
+2 |     let v = Vec2(x: 1.0, y: 2.0)
+  |             ^
+  = hint: no struct `Vec2` is defined: declare it before use, `struct Vec2 { x: float, y: float }`
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== struct_call_renamed
+struct Point {
+    x: int
+}
+fn main() {
+    let p = point(x: 1)
+    print(p.x)
+}
+----
+error[E0202]: undefined function `point`
+  --> case.nyra:5:13
+  |
+5 |     let p = point(x: 1)
+  |             ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== struct_type_typo_param
+struct Point {
+    x: int
+}
+fn show(p: Pointt) {
+    print(p.x)
+}
+fn main() {
+    show(Point(x: 1))
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:4:9
+  |
+4 | fn show(p: Pointt) {
+  |         ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_type_typo_ret
+struct Point {
+    x: int
+}
+fn make() -> Pointt {
+    ret Point(x: 1)
+}
+fn main() {
+    print(make().x)
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:4:4
+  |
+4 | fn make() -> Pointt {
+  |    ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== struct_type_typo_let
+struct Point {
+    x: int
+}
+fn main() {
+    let p: Pointt = Point(x: 1)
+    print(p.x)
+}
+----
+error[E0102]: unknown type `Pointt`: no struct with this name is defined
+  --> case.nyra:5:5
+  |
+5 |     let p: Pointt = Point(x: 1)
+  |     ^
+  = hint: did you mean `Point`?
+  = explain: nyra explain E0102
+
+nyra: 1 error(s)
+==== array_join_numbers
+fn main() {
+    let nums = [3, 1, 2]
+    print(nums.join(", "))
+}
+----
+error[E0228]: `join` needs `[str]` or `[char]`, found `[int]`
+  --> case.nyra:3:16
+  |
+3 |     print(nums.join(", "))
+  |                ^
+  = hint: turn the elements into text first: `var parts: [str] = []`, `for x in nums { parts.push(str(x)) }`, then `parts.join(", ")`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== array_sort_bool
+fn main() {
+    var flags = [true, false]
+    flags.sort()
+}
+----
+error[E0228]: `sort` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+  --> case.nyra:3:11
+  |
+3 |     flags.sort()
+  |           ^
+  = hint: sort by a key yourself: e.g. loop and insert each element at its place
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== for_two_variables
+fn main() {
+    let xs = [5, 6]
+    for i, x in xs {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, x in xs {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..xs.len() { let x = xs[i] ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== for_enumerate
+fn main() {
+    let names = ["a", "b"]
+    for i, name in enumerate(names) {
+        print(i)
+    }
+}
+----
+error[E0101]: expected `in`, found `,`
+  --> case.nyra:3:10
+  |
+3 |     for i, name in enumerate(names) {
+  |          ^
+  = hint: a loop has one variable: to get the position and the element write `for i in 0..names.len() { let name = names[i] ... }`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)

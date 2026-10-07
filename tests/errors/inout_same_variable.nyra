@@ -1,0 +1,12 @@
+// expect: E0237
+fn swap(inout a: int, inout b: int) {
+    let t = a
+    a = b
+    b = t
+}
+
+fn main() {
+    var xs = [1, 2]
+    swap(inout xs[0], inout xs[1])
+    print(xs)
+}

@@ -1,0 +1,5 @@
+// expect: E0233
+fn main() {
+    let n = 4821
+    print(n[0])
+}

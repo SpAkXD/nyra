@@ -1,0 +1,4 @@
+// expect: E0246 at 3:11
+fn main() {
+    print(char(1114112))
+}

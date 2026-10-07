@@ -3,6 +3,7 @@
 //! that can be applied at once: other languages' words, symbols and type names, mapped to
 //! the Nyra way of saying the same thing.
 
+use crate::ast::Type;
 use crate::diag::suggest;
 
 /// A word from another language that Nyra spells differently or does not have.
@@ -159,6 +160,117 @@ fn method_spelling(w: &str) -> &str {
         "append" => "push",
         other => other,
     }
+}
+
+/// Hint for a method that the type of `recv` does not have, but that other languages do:
+/// `xs.length()` is `xs.len()`, `s.toUpperCase()` is `s.upper()`. `recv` is the receiver as the
+/// program wrote it. Capital letters and underscores do not count (`startsWith` is `starts_with`).
+pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
+    let w: String = name.chars().filter(|c| *c != '_').map(|c| c.to_ascii_lowercase()).collect();
+    let r = recv;
+    let own = match t {
+        Type::Array(_) => array_method(&w, name, r),
+        Type::Str => str_method(&w, r),
+        Type::Char => char_method(&w, r),
+        _ => None,
+    };
+    own.or_else(|| match w.as_str() {
+        "clone" | "copy" | "duplicate" => {
+            Some(format!("values are copied when they are assigned: `var other = {r}` is already independent of `{r}`"))
+        }
+        "tostring" | "tostr" | "asstring" => Some(format!("`str({r})` gives the text that `print({r})` shows")),
+        "equals" | "isequal" => Some(format!("compare with `==`: `{r} == other`")),
+        "abs" | "min" | "max" | "pow" | "powi" | "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" | "floor" | "ceil"
+        | "round" | "trunc"
+            if matches!(t, Type::Int | Type::Float) =>
+        {
+            undefined_function(name)
+        }
+        _ => None,
+    })
+}
+
+fn array_method(w: &str, name: &str, r: &str) -> Option<String> {
+    Some(match w {
+        "length" | "size" => format!("the length is `{r}.len()`"),
+        "isempty" | "empty" => format!("compare the length: `{r}.len() == 0`"),
+        "append" | "add" | "pushback" | "addlast" => format!("add an element at the end with `{r}.push(x)` (`{r}` must be a `var`)"),
+        "popback" | "poplast" | "removelast" => format!("`{r}.pop()` removes the last element and gives it back"),
+        "shift" | "popfront" | "removefirst" => format!("`{r}.remove(0)` removes the first element and gives it back"),
+        "unshift" | "pushfront" | "addfirst" => format!("`{r}.insert(0, x)` adds an element at the front"),
+        "includes" | "has" | "contain" => format!("write `{r}.contains(x)`"),
+        "indexof" | "find" | "position" => format!("`{r}.index_of(x)` gives the position of the first match, or -1"),
+        "removeat" | "delete" | "erase" => format!("`{r}.remove(i)` removes the element at position `i` and gives it back"),
+        "first" | "front" => format!("the first element is `{r}[0]` (check `{r}.len() > 0` first)"),
+        "last" | "back" => format!("the last element is `{r}[{r}.len() - 1]` (check `{r}.len() > 0` first)"),
+        "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`)"),
+        "reversed" => format!("`{r}.reverse()` reverses in place (`{r}` must be a `var`)"),
+        "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
+        "sublist" | "subarray" | "take" => format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`"),
+        "concat" | "extend" | "addall" => format!("join arrays with `+`: `{r} + other`, or append in place with `{r} += other`"),
+        "map" | "filter" | "reduce" | "fold" | "foreach" | "any" | "all" | "sum" | "min" | "max" | "flatten" | "zip" => {
+            format!("arrays have no `.{name}()`: write a loop, `for x in {r} {{ ... }}` (Nyra has no closures)")
+        }
+        _ => return None,
+    })
+}
+
+fn str_method(w: &str, r: &str) -> Option<String> {
+    Some(match w {
+        "length" | "size" => format!("the length is `{r}.len()`"),
+        "isempty" | "empty" => format!("compare with an empty string: `{r} == \"\"`"),
+        "push" | "append" | "add" => format!("a string is joined with `+`: `{r} += t` (`{r}` must be a `var`; for a character write `{r} += str(c)`)"),
+        "touppercase" | "uppercase" | "toupper" | "upcase" => format!("write `{r}.upper()` (it changes ASCII letters only)"),
+        "tolowercase" | "lowercase" | "tolower" | "downcase" => format!("write `{r}.lower()` (it changes ASCII letters only)"),
+        "strip" | "trimstart" | "trimend" | "trimleft" | "trimright" | "lstrip" | "rstrip" => {
+            format!("`{r}.trim()` removes spaces, tabs and line breaks at both ends")
+        }
+        "startswith" => format!("write `{r}.starts_with(t)`"),
+        "endswith" => format!("write `{r}.ends_with(t)`"),
+        "indexof" | "find" | "search" => format!("`{r}.index_of(t)` gives the character position of the first match, or -1"),
+        "includes" | "has" | "contain" => format!("write `{r}.contains(t)`"),
+        "substring" | "substr" | "sub" => {
+            format!("`{r}.slice(a, b)` gives the characters from position `a` up to, but not including, `b`")
+        }
+        "charat" | "at" | "get" => format!("`{r}[i]` is the character at position `i`, a `char`"),
+        "charcodeat" | "codepointat" | "ord" => {
+            format!("the code of the character at position `i` is `{r}[i].code()`; all the codes: `{r}.codes()`")
+        }
+        "replaceall" => format!("`{r}.replace(old, new)` already replaces every match"),
+        "splitlines" | "lines" => format!("split at the line breaks: `{r}.split(\"\\n\")`"),
+        "padstart" | "padend" | "ljust" | "rjust" | "center" | "zfill" => {
+            format!("pad with `repeat`, e.g. `\" \".repeat(width - {r}.len()) + {r}` (the count must not be negative)")
+        }
+        "reverse" | "reversed" => format!("reverse the characters: `var cs = {r}.chars()`, `cs.reverse()`, then `cs.join(\"\")`"),
+        "isdigit" | "isnumeric" | "isdecimal" | "isalpha" | "isalnum" | "isupper" | "islower" | "isspace" => {
+            format!("these are `char` methods (`c.is_digit()`, `c.is_letter()`, ...): test each character, `for c in {r} {{ ... }}`")
+        }
+        "toint" | "parseint" | "parse" | "atoi" | "tonumber" | "parsefloat" | "tofloat" => {
+            format!("parse text with `int({r})` or `float({r})` (a runtime error if it is not a number)")
+        }
+        "tochararray" | "tochars" | "tolist" => format!("`{r}.chars()` gives the characters as an array"),
+        "bytes" | "encode" | "getbytes" => format!("strings are text, not bytes: `{r}.codes()` gives the character codes"),
+        "concat" => format!("join strings with `+`: `{r} + other`"),
+        "join" => "`join` belongs to an array of strings: `parts.join(\", \")`".to_string(),
+        _ => return None,
+    })
+}
+
+fn char_method(w: &str, r: &str) -> Option<String> {
+    Some(match w {
+        "isdigit" | "isnumeric" | "isdecimal" | "isasciidigit" => format!("write `{r}.is_digit()`"),
+        "isalpha" | "isalphabetic" | "isletter" | "isasciialphabetic" => format!("write `{r}.is_letter()` (ASCII letters only)"),
+        "isalnum" | "isalphanumeric" => format!("write `{r}.is_letter() || {r}.is_digit()`"),
+        "isupper" | "isuppercase" => format!("write `{r}.is_upper()`"),
+        "islower" | "islowercase" => format!("write `{r}.is_lower()`"),
+        "isspace" | "iswhitespace" | "isblank" => format!("write `{r}.is_space()`"),
+        "toupper" | "touppercase" | "uppercase" | "upcase" => format!("write `{r}.upper()`"),
+        "tolower" | "tolowercase" | "lowercase" | "downcase" => format!("write `{r}.lower()`"),
+        "ord" | "tocode" | "codepoint" | "charcode" | "ascii" | "asint" | "toint" | "tointeger" | "value" => {
+            format!("the code of a character is `{r}.code()`")
+        }
+        _ => return None,
+    })
 }
 
 /// True for names that other languages use for a type (`string`, `i32`, `double`, `void`, ...).

@@ -1,0 +1,13 @@
+// expect: E0238
+fn main() {
+    var best = ""
+    arena {
+        let words = "the quick brown fox".split(" ")
+        for w in words {
+            if w.len() > best.len() {
+                best = w
+            }
+        }
+    }
+    print(best)
+}

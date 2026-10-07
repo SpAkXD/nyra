@@ -20,11 +20,11 @@ design may still change.
 | Range | Stage | What goes wrong |
 |---|---|---|
 | E0001-E0006 | lexer | characters, numbers and strings |
-| E0007 | lexer (planned, v0.3) | character literals |
+| E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
-| E0220-E0239 | type checker (planned, v0.3) | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
-| E0240-E0249 | run time | the program stops with exit code 101 (E0241 and E0245 exist; E0240, E0242-E0244, E0246 and E0249 are planned) |
+| E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
+| E0240-E0249 | run time | the program stops with exit code 101 |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
@@ -41,7 +41,7 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ```text
 ## E0201: undefined variable
-- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error; or "planned for v0.3, not in the compiler yet")
+- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error; or "planned for v0.6, not in the compiler yet")
 - **What it means:** one or two precise sentences.
 - **Why Nyra has this rule:** the design reason.
 - **Common causes:**
@@ -55,17 +55,15 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ## E0001: unexpected character
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, `//` comments and the symbols `( ) { } , : + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`) or in a range (`0..10`), and `&` and `|` only in pairs.
-- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `[`, `'`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
+- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
+- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
 - **Common causes:**
   - a `#` comment: Nyra comments start with `//`
-  - single quotes (`'a'`), backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes
+  - backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes (single quotes hold one character, `'a'`)
   - `?` and `:` as a ternary: write `if cond { a } else { b }` as a value
-  - `[` and `]`: arrays and indexing do not exist yet
   - a single `&` or `|`: write `&&` or `||`
   - `.5` or `5.`: a float needs digits on both sides of the dot (`0.5`, `5.0`)
-  - a `.` after a name (`s.len()`, `console.log(x)`): there are no methods or fields
-  - `$`, `@`, `^`, `~` or a backslash outside a string
+  - `$`, `@`, `^`, `~` or a backslash outside a string or a character
   - characters pasted from documents: `×`, `÷`, `≤`, `≥`, `≠`, invisible characters and a byte order mark at the start of the file
 - **Wrong:**
 ```rust
@@ -131,7 +129,7 @@ fn main() {
 
 ## E0004: unknown escape
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A backslash inside a string is followed by a character that is not an escape. The escapes are `\n` (new line), `\t` (tab), `\r` (carriage return), `\\` (a backslash) and `\"` (a quote).
+- **What it means:** A backslash inside a string is followed by a character that is not an escape. The escapes are `\n` (new line), `\t` (tab), `\r` (carriage return), `\\` (a backslash) and `\"` (a quote). A character literal such as `'\n'` has the same escapes, plus `\'`, and reports the same error ("unknown escape `\q` in a character").
 - **Why Nyra has this rule:** A closed set of escapes means a backslash never silently disappears: `"C:\Users"` would otherwise print `C:Users`. Strings are UTF-8, so any character can be typed directly instead of using `\u` or `\x` codes.
 - **Common causes:**
   - a Windows path: write every backslash twice (`"C:\\Users"`)
@@ -178,8 +176,8 @@ fn main() {
 
 ## E0006: bad `{` or `}` in a string
 - **Kind:** compile error · **Since:** v0.2
-- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a quote inside the braces.
-- **Why Nyra has this rule:** Interpolation is the only way to build text (there is no string `+`), so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Quotes are not allowed inside `{ }`: put the text in a variable first.
+- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a double quote inside the braces.
+- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Double quotes are not allowed inside `{ }`: put the text in a variable first.
 - **Common causes:**
   - printing a literal brace (JSON, code, a set) without doubling it
   - a placeholder `{}` copied from a Rust or Python format string: name the variable, `"{x}"`
@@ -200,29 +198,34 @@ fn main() {
 - **Related:** E0004, E0101
 
 ## E0007: bad character literal
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A character literal in single quotes does not hold exactly one character. `'a'`, `'é'`, `'\n'` and `'\''` are fine; `'ab'` (two characters), `''` (none), an unterminated `'a` and a letter followed by a combining accent (two code points that look like one) are not.
-- **Why Nyra has this rule:** A `char` is exactly one Unicode code point, and explicitly a number (`c.code()`). A literal with more or fewer characters would have no type. Text of any length is written in double quotes.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A character literal, text between single quotes, does not hold exactly one character. `'a'`, `'é'`, `'\n'` and `'\''` are fine. These are not: `'hello'` (message: "a character literal holds exactly one character, but `'hello'` has 5"), `''` ("empty character") and `'a` with no closing quote ("unterminated character"). The error is reported at the opening quote, and the hint shows the text in double quotes. A character is one Unicode code point, so a letter written as a letter plus a combining accent counts as two.
+- **Why Nyra has this rule:** A `char` is exactly one code point, and its number is `c.code()`. A literal with no character or with several would have no type. Text of any length is written in double quotes, so the quotes tell a `char` (`'a'`) from a `str` (`"a"`) at a glance.
 - **Common causes:**
-  - text in single quotes, such as `'hello'`: use double quotes, `"hello"`
-  - an empty `''`
-  - a missing closing quote
-  - an accented letter typed as a letter plus a combining accent
+  - text in single quotes, as in Python or JavaScript: `'hello'` is written `"hello"`
+  - an empty `''` for an empty string: write `""`
+  - a missing closing quote: `'a`
+  - an apostrophe inside single quotes, as in `'it's'`: use double quotes, `"it's"`
+  - an accented letter typed as a letter plus a combining accent (two code points that look like one)
 - **Wrong:**
 ```rust
 fn main() {
-    let c = 'ab'
-    print(c)
+    let greeting = 'hello'
+    if greeting[0] == 'h' {
+        print(greeting)
+    }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let c = 'a'
-    print(c)
+    let greeting = "hello"
+    if greeting[0] == 'h' {
+        print(greeting)
+    }
 }
 ```
-- **Related:** E0001, E0004, E0002
+- **Related:** E0001, E0002, E0004, E0203
 
 ## E0101: unexpected token
 - **Kind:** compile error · **Since:** v0.1
@@ -234,7 +237,10 @@ fn main() {
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
-  - code outside a function: only `fn` definitions may be at the top level (no globals, no `struct`, no `import`)
+  - code outside a function: only `fn` and `struct` definitions may be at the top level (no globals, no `import`)
+  - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
+  - `for i, x in xs` or `enumerate(xs)`: a loop has one variable, so write `for i in 0..xs.len()` and read `xs[i]`
+  - `break` or `continue` outside a loop: to leave a function write `ret`
   - `0xFF`, `1_000` and `1e5` number forms: write `255`, `1000`, `100000.0`
   - `=` where `==` was meant, as in `if x = 1 {`
   - a format specifier inside a string, as in `"{x:.2f}"`
@@ -262,13 +268,14 @@ fn main() {
 
 ## E0102: unknown type
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A type annotation names a type that does not exist. The types are `int` (64-bit integer), `float` (64-bit float), `bool` and `str` (text).
-- **Why Nyra has this rule:** Four types, each with one name, and no aliases: a model never has to guess whether the text type is `str`, `string` or `String`.
+- **What it means:** A type annotation names a type that does not exist. The types are `int` (64-bit integer), `float` (64-bit float), `bool`, `str` (text), `char` (one character), arrays written `[T]` (`[int]`, `[[str]]`) and the structs the program declares. The message for a struct name that is not declared is "unknown type `Vec2`: no struct with this name is defined".
+- **Why Nyra has this rule:** Each type has one name, and there are no aliases: a model never has to guess whether the text type is `str`, `string` or `String`.
 - **Common causes:**
-  - another language's name: `string`, `String`, `i32`, `i64`, `double`, `number`, `boolean`, `char`
+  - another language's name: `string`, `String`, `i32`, `i64`, `double`, `number`, `boolean`
   - `void` for "returns nothing": leave out the `->` part of the signature
-  - arrays, structs and other collection types, which do not exist yet
-  - a typo (`flot`) or a capital letter (`Int`): all type names are lowercase
+  - maps, sets, tuples and other collection types, which do not exist yet: use an array `[T]` or a struct
+  - a typo (`flot`) or a capital letter (`Int`): the built-in type names are lowercase
+  - a struct that is not declared, or written differently from its declaration (`Pointt`, `point` for `Point`): the hint suggests the closest declared struct
 - **Wrong:**
 ```rust
 fn greet(name: string) {
@@ -301,7 +308,7 @@ fn main() {
   - the variable was declared inside an inner `{ }` block and is used after the block ended: declare it before the block
   - a function used without call parentheses: write `limit()`, not `limit`
   - assigning to a variable that was never declared (`count = 1`): declare it first with `var count = 0`
-  - words from other languages: `null`, `None`, `break`, `continue`, `return`, `self`, `True`
+  - words from other languages: `null`, `None`, `return`, `self`, `True`
 - **Wrong:**
 ```rust
 fn main() {
@@ -320,13 +327,15 @@ fn main() {
 
 ## E0202: undefined function
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A call `name(...)` refers to a function that is not defined in the file and is not one of the three builtins `print`, `int` and `float`.
-- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `abs` or `len` should do.
+- **What it means:** A call `name(...)` refers to a function that is not defined in the file and is not one of the builtins `print`, `int`, `float`, `str`, `char`, `free` and `keep`, and not a struct either.
+- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `abs` or `sqrt` should do.
 - **Common causes:**
-  - a library function from another language: `len`, `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `str`, `input`
+  - a library function from another language: `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `input`
+  - `len(xs)`: the length is a method, `xs.len()`
   - `println`, `printf` or `echo`: the output function is `print(x)`
   - a typo in a function name (the hint suggests the closest one)
   - calling a variable as if it were a function
+  - a struct that is not declared (`Vec2(x: 1.0, y: 2.0)` without `struct Vec2`: the hint shows the declaration to write), or a struct called by another spelling (`point(...)` for `Point`)
 - **Wrong:**
 ```rust
 fn main() {
@@ -345,12 +354,14 @@ fn main() {
 
 ## E0203: type mismatch
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function call, a `ret` value, the bounds of a `for` range, or the argument of `int()`/`float()`. A call to a function that returns nothing cannot be used as a value either.
+- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function or method call, a field of a struct construction, a `ret` value, the bounds of a `for` range, or the argument of `int()`, `float()` or `char()`. A call to a function that returns nothing cannot be used as a value either.
 - **Why Nyra has this rule:** Nothing converts implicitly. Turning an `int` into a `float` (or back) changes the result, so you write it: `float(n)` and `int(x)` (which truncates toward zero). That makes every numeric conversion visible in the code.
 - **Common causes:**
   - an `int` where a `float` is needed: write `2.0` for a literal, `float(n)` for a variable
   - a `float` where an `int` is needed, such as a range bound: `int(x)`
-  - text where a number is needed (`int("3")`): there is no conversion from text to numbers
+  - text where a number is needed (`let n: int = "3"`): write the number, or parse the text with `int(s)` (a runtime error if it is not a number)
+  - a `char` where an `int` is needed: its code is `c.code()`; an `int` where a `char` is needed: `char(n)`
+  - a number where text is needed: `str(n)` or interpolation, `"{n}"`
   - the wrong type returned from a function, or passed as an argument
   - using the result of a function without a return type (`let x = print(1)`)
   - a number used as a `bool`: write a comparison
@@ -376,7 +387,7 @@ fn main() {
 
 ## E0204: wrong number of arguments
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A call passes a different number of arguments than the function declares. `print`, `int` and `float` take exactly one argument.
+- **What it means:** A call passes a different number of arguments than the function declares. `print`, `int`, `float`, `str`, `char`, `free` and `keep` take exactly one argument, and a method takes the arguments it needs: `xs.push(1, 2)` reports "`.push()` takes 1 argument but 2 were given".
 - **Why Nyra has this rule:** A function has one signature: no default arguments, no variable argument lists, no overloading. The message shows the signature and the hint says which argument is missing or extra.
 - **Common causes:**
   - an argument was forgotten, or one too many was passed
@@ -403,12 +414,13 @@ fn main() {
 
 ## E0205: assignment to a variable that is not `var`
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** Something that cannot change is assigned to (`=`, `+=`, `-=`, `*=`, `/=` or `%=`): a variable declared with `let`, a function parameter, or the variable of a `for` loop.
+- **What it means:** Something that cannot change is assigned to (`=`, `+=`, `-=`, `*=`, `/=` or `%=`): a variable declared with `let`, a function parameter, or the variable of a `for` loop. The same holds for changing what is inside such a variable: a field or an element (`p.x = 1`, `xs[0] = 1`), a method that changes its receiver (`xs.push(1)`) or an `inout` argument.
 - **Why Nyra has this rule:** Values are immutable unless declared with `var`, so reading a function shows exactly where something can change. Parameters and loop variables never change, which keeps loops and calls easy to reason about.
 - **Common causes:**
   - `let` was used where `var` was needed: change the declaration
   - a compound assignment such as `count += 1` on a `let` variable
-  - modifying a parameter (`n = n / 2`): copy it first with `var m = n`
+  - `xs.push(...)`, `xs[0] = ...` or `p.x = ...` where the variable was declared with `let`: declare it with `var`
+  - modifying a parameter (`n = n / 2`, `xs.push(1)`): copy it first with `var m = n`, or declare the parameter `inout`
   - changing the loop variable of a `for`: use a `while` loop with a `var` counter instead
 - **Wrong:**
 ```rust
@@ -430,7 +442,7 @@ fn main() {
 
 ## E0206: name already defined
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A name is declared where Nyra does not allow it: it hides a variable or parameter that is still visible (shadowing), a function is defined twice, a variable has the name of a function, or a function or variable is named `print`, `int` or `float`.
+- **What it means:** A name is declared where Nyra does not allow it: it hides a variable or parameter that is still visible (shadowing), a function is defined twice, a variable has the name of a function, a function or variable is named like a builtin (`print`, `int`, `float`, `str`, `char`, `free`, `keep`), or a struct name is used for a second struct, a function or a variable.
 - **Why Nyra has this rule:** One name means one thing. Without shadowing, a model never has to work out which of two `x` is meant, and a rename can never change the meaning of a program. There is no overloading either: every function name is used once.
 - **Common causes:**
   - `let x = ...` twice in one function (also in an inner `{ }` block while the outer `x` is visible)
@@ -438,7 +450,8 @@ fn main() {
   - a nested `for i in ...` inside another `for i in ...`: name the inner variable `j`
   - two functions with the same name, for example two `max` with different parameter types
   - a variable named like a function that exists (`let add = 1` while `fn add` exists)
-  - a parameter or variable named `print`, `int` or `float`
+  - a parameter or variable named `print`, `int`, `float`, `str`, `char`, `free` or `keep`
+  - a variable or function named like a struct (`let Point = 1` while `struct Point` exists), or two structs with one name
 - **Wrong:**
 ```rust
 fn main() {
@@ -549,14 +562,16 @@ fn main() {
 
 ## E0210: operator used on wrong types
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** An operator received operands it does not accept. `+ - * /` and `< <= > >=` need two `int`s or two `float`s; `%` needs two `int`s; `==` and `!=` need two values of the same type; `&&`, `||` and `!` need `bool`s; unary `-` needs a number.
-- **Why Nyra has this rule:** Operators never convert their operands and cannot be overloaded, so `1 + 2.0` is an error rather than a guess, and `"a" + b` is not text concatenation (text is built with interpolation: `"a{b}"`).
+- **What it means:** An operator received operands it does not accept. `+ - * /` need two `int`s or two `float`s (and `+` also joins two `str`s or two arrays of one type); `< <= > >=` need two `int`s, `float`s, `str`s or `char`s; `%` needs two `int`s; `==` and `!=` need two values of the same type (arrays and structs are compared by content); `&&`, `||` and `!` need `bool`s; unary `-` needs a number.
+- **Why Nyra has this rule:** Operators never convert their operands and cannot be overloaded, so `1 + 2.0` is an error rather than a guess, and `"a" + n` is an error too: `+` joins two strings, so write `"a" + str(n)` or use interpolation, `"a{n}"`.
 - **Common causes:**
   - an `int` and a `float` in one expression (`1 + 2.0`, `n * 0.5`): convert with `float(n)`
   - compound assignment with the wrong type, such as `x += 1.5` when `x` is an `int`
   - `"total: " + n`: use interpolation, `"total: {n}"`
+  - a `char` joined to a string (`s + c`: write `s + str(c)`) or used in arithmetic (`c + 1`: write `char(c.code() + 1)`)
+  - one element added to an array (`xs + 5`): write `xs + [5]` or `xs.push(5)`
   - a chained comparison `a < b < c`: write `a < b && b < c`
-  - `%` on floats, `<` on strings, `!` on an `int`, `-` on a `bool`
+  - `%` on floats, `<` on arrays or structs, `!` on an `int`, `-` on a `bool`
   - `a && b` where `a` or `b` is an `int`: compare each side first
   - comparing different types with `==`, such as a `bool` with `1`
 - **Wrong:**
@@ -624,87 +639,57 @@ fn main() {
 - **Related:** E0101, E0203, E0209
 
 ## E0220: duplicate field in a struct
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A `struct` declares two fields with the same name.
-- **Why Nyra has this rule:** A field name must identify exactly one value, so `p.x` and `Point(x: 1, ...)` are unambiguous.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A `struct` declares two fields with the same name. The message names the field, the struct and the line of the first one: "field `score` is defined twice in struct `Player` (first on line 3)". The error is reported at the second declaration, which is then ignored, so the rest of the program is checked against the first one.
+- **Why Nyra has this rule:** A field name must identify exactly one value, so `p.score` and `Player(name: "ann", score: 3)` mean one thing.
 - **Common causes:**
-  - a field copied and not renamed
-  - two fields that were meant to differ (`x` and `y`)
+  - a field line copied and not renamed
+  - two fields that were meant to differ (`x` and `y`, `width` and `height`)
+  - the same field added twice by two edits
 - **Wrong:**
 ```rust
-struct Point {
-    x: int
-    x: int
+struct Player {
+    name: str
+    score: int
+    score: int
+}
+
+fn main() {
+    let p = Player(name: "ann", score: 3)
+    print("{p.name} {p.score}")
 }
 ```
 - **Fixed:**
 ```rust
-struct Point {
-    x: int
-    y: int
+struct Player {
+    name: str
+    score: int
+}
+
+fn main() {
+    let p = Player(name: "ann", score: 3)
+    print("{p.name} {p.score}")
 }
 ```
-- **Related:** E0206, E0221
+- **Related:** E0206, E0221, E0224
 
 ## E0221: struct name must start with an uppercase letter
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A struct name starts with a lowercase letter. Struct names are written `Point`, not `point`.
-- **Why Nyra has this rule:** `Point(x: 1, y: 2)` (a construction) and `point(1, 2)` (a call) are told apart at a glance, so a reader never has to look up whether a name is a type or a function.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A struct name does not start with an uppercase letter. The message is "struct name `point` must start with an uppercase letter" and the hint gives the name to write, `struct Point`. The lowercase name still works everywhere in the file until it is renamed, so this is the only error you get for it. After the rename, any place that still uses the old spelling is reported there: an unknown type (E0102) or an undefined function (E0202) for a construction, each with "did you mean `Point`?".
+- **Why Nyra has this rule:** `Point(x: 1, y: 2)` builds a struct and `point(1, 2)` calls a function, and the two are told apart at a glance. A type name starts uppercase, a variable or function name starts lowercase.
 - **Common causes:**
-  - a snake_case or lowercase name chosen out of habit
+  - a lowercase or snake_case name chosen out of habit from C (`struct point`) or Python
+  - a name that starts with `_`
 - **Wrong:**
 ```rust
 struct point {
-    x: int
-}
-```
-- **Fixed:**
-```rust
-struct Point {
-    x: int
-}
-```
-- **Related:** E0206, E0220
-
-## E0222: struct contains itself
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A struct has a field whose type is the struct itself, directly or through other structs, so a value would need to contain itself.
-- **Why Nyra has this rule:** Values are stored inline, so a struct that contains itself would have infinite size. A recursive shape goes through an array, which can be empty.
-- **Common causes:**
-  - a linked list written as `next: Node`
-  - a tree written with a direct child (`left: Tree`)
-- **Wrong:**
-```rust
-struct Node {
-    value: int
-    next: Node
-}
-```
-- **Fixed:**
-```rust
-struct Node {
-    value: int
-    next: [Node]
-}
-```
-- **Related:** E0220, E0231
-
-## E0223: missing field in a struct construction
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A construction `Point(...)` does not give a value for every field of the struct.
-- **Why Nyra has this rule:** There are no default values or null: every field of a struct always holds a value, so you cannot read an uninitialised field.
-- **Common causes:**
-  - a field was added to the struct and a construction was not updated
-  - a field was forgotten
-- **Wrong:**
-```rust
-struct Point {
     x: int
     y: int
 }
 
 fn main() {
-    let p = Point(x: 1)
+    let p = point(x: 1, y: 2)
+    print(p.x + p.y)
 }
 ```
 - **Fixed:**
@@ -716,33 +701,59 @@ struct Point {
 
 fn main() {
     let p = Point(x: 1, y: 2)
+    print(p.x + p.y)
 }
 ```
-- **Related:** E0224, E0225
+- **Related:** E0102, E0202, E0206, E0220
 
-## E0224: unknown field
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A field name is used that the struct does not have, either in a construction `Point(z: 1)` or in a read `p.z`.
-- **Why Nyra has this rule:** A typo in a field name must be an error, not a new value. The message lists the fields and suggests the closest name.
+## E0222: struct contains itself
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A struct has a field whose type is the struct itself, or a struct that contains it in turn, so a value would have to contain itself. The message is "struct `Node` contains itself, so its size would be infinite" and it is reported at the struct's name (for two structs that contain each other, at both). A field of type `[Node]` is fine: an array is not stored inside the struct, and it can be empty.
+- **Why Nyra has this rule:** A struct value holds its fields directly, so a struct that contained itself would never end. Anything recursive, such as a list or a tree, keeps its children in an array, which can be empty, and that ends the recursion.
 - **Common causes:**
-  - a typo in a field name
-  - a field that exists in another struct
-  - a field that was renamed in the struct but not at the use
+  - a linked list written as `next: Node`
+  - a tree written with direct children (`left: Tree`, `right: Tree`)
+  - two structs that contain each other (`struct A { b: B }` and `struct B { a: A }`)
 - **Wrong:**
 ```rust
-struct Point {
-    x: int
+struct Node {
+    value: int
+    next: Node
 }
 
 fn main() {
-    let p = Point(x: 1)
-    print(p.z)
+    print("linked list")
 }
 ```
 - **Fixed:**
 ```rust
+struct Node {
+    value: int
+    next: [Node]
+}
+
+fn main() {
+    let last = Node(value: 2, next: [])
+    let first = Node(value: 1, next: [last])
+    print(first.next.len())
+}
+```
+- **Related:** E0220, E0221
+
+## E0223: missing field in a struct construction
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A construction `Point(...)` does not give a value for every field of the struct. The message lists what is missing: "missing field in `Point(...)`: `y`" (or "missing fields ... `x`, `y`") and the hint shows the whole call: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** There are no default values and no null. Every field of a struct always holds a value, so a field can never be read before it was set.
+- **Common causes:**
+  - a field was added to the struct and a construction was not updated
+  - a field was forgotten
+  - `Point()` with no arguments, hoping for default values
+  - a field name with a typo in the construction: the unknown name is reported (E0224) and so is the field that got no value
+- **Wrong:**
+```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
@@ -750,15 +761,63 @@ fn main() {
     print(p.x)
 }
 ```
-- **Related:** E0223, E0227
+- **Fixed:**
+```rust
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let p = Point(x: 1, y: 2)
+    print(p.x)
+}
+```
+- **Related:** E0224, E0225
+
+## E0224: unknown field
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A field name is used that the type does not have. In a construction (`User(name: "ann", years: 31)`) or a read or write (`u.username`) the message is "`User` has no field `username`", and the hint suggests the closest field or lists all of them. The same code is used for `xs.length` on an array, a string or a character: they have methods and no fields, and the hint names the method that does the job ("the length is `xs.len()`").
+- **Why Nyra has this rule:** A typo in a field name must be an error, not a new value or an empty one.
+- **Common causes:**
+  - a typo in a field name
+  - a field that exists in another struct
+  - a field that was renamed in the struct but not where it is used
+  - `xs.length` or `s.length`: the length is a method, `xs.len()`
+- **Wrong:**
+```rust
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u = User(name: "ann", age: 31)
+    print(u.username)
+}
+```
+- **Fixed:**
+```rust
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u = User(name: "ann", age: 31)
+    print(u.name)
+}
+```
+- **Related:** E0223, E0227, E0236
 
 ## E0225: struct fields must be named, in declaration order
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A construction passes values without field names (`Point(1, 2)`) or in a different order than the struct declares them.
-- **Why Nyra has this rule:** Naming every field makes a construction readable and unambiguous, and the same order everywhere means the printed form `Point(x: 1, y: 2)` is also valid source code.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A construction passes values without field names (`Point(1, 2)`) or in a different order than the struct declares them (`Point(y: 2, x: 1)`). It is reported once per construction, at the first value that is wrong: "the fields of `Point(...)` must be named, in declaration order", and the hint shows the call to write: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** Naming every field makes a construction readable and unambiguous. Writing the fields in the same order everywhere means that a printed struct, `Point(x: 1, y: 2)`, is also valid source code.
 - **Common causes:**
-  - positional arguments, as in Rust tuple structs or C
-  - fields written in another order than the declaration
+  - positional values, as for a tuple struct in Rust or a constructor in C, Java or Python
+  - the fields written in another order than the declaration
+  - braces instead of parentheses, `Point { x: 1, y: 2 }` (that is E0101)
 - **Wrong:**
 ```rust
 struct Point {
@@ -768,6 +827,7 @@ struct Point {
 
 fn main() {
     let p = Point(1, 2)
+    print(p.x)
 }
 ```
 - **Fixed:**
@@ -779,278 +839,323 @@ struct Point {
 
 fn main() {
     let p = Point(x: 1, y: 2)
+    print(p.x)
 }
 ```
-- **Related:** E0223, E0226
+- **Related:** E0101, E0223, E0226
 
 ## E0226: named argument in a function call
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A call to a function or builtin uses `name: value` arguments. Names are only used to build structs.
-- **Why Nyra has this rule:** One way to pass arguments: by position. Struct construction is the only place where names appear.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A call to a function, a builtin or a method uses `name: value` arguments. Names belong only to building a struct, `Point(x: 1, y: 2)`. Each named argument is reported: "named argument `width:` in a call to function `area`", and when the values are short the hint shows the call to write, with the values in the order of the parameters: `area(3, 4)`.
+- **Why Nyra has this rule:** Arguments are passed in one way only: by position, in the order of the parameters. There are no keyword arguments, no default values and no reordering, so a call reads the same way everywhere. Struct construction is the one place where names appear.
 - **Common causes:**
   - keyword arguments from Python, Swift or Kotlin
   - calling a function as if it were a struct
+  - `print(value: x)` or `str(value: x)`
 - **Wrong:**
 ```rust
-fn add(a: int, b: int) -> int = a + b
+fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(add(a: 1, b: 2))
+    print(area(width: 3, height: 4))
 }
 ```
 - **Fixed:**
 ```rust
-fn add(a: int, b: int) -> int = a + b
+fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(add(1, 2))
+    print(area(3, 4))
 }
 ```
-- **Related:** E0225, E0204
+- **Related:** E0204, E0225
 
 ## E0227: unknown method
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Methods exist only for arrays, strings and chars, and structs have none.
-- **Why Nyra has this rule:** The built-in operations are methods so that they add no global names, but the list is fixed and small. For a struct, write a function that takes it as a parameter (`area(p)`, not `p.area()`).
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method call `value.name(...)` names a method that the type of `value` does not have. Arrays, strings and characters have a fixed list of methods; numbers, bools and structs have none. The message is "`[int]` has no method `length`". The hint gives the Nyra spelling when the name is one that other languages use (`length` is `len`, `append` is `push`, `toUpperCase` is `upper`, `substring` is `slice`), suggests the closest name for a typo, or lists the methods. For a struct it says to write a function instead: `area(r)`, not `r.area()`.
+- **Why Nyra has this rule:** The built-in operations are methods so that they add no global names, and the list is small and fixed, so there is one name for each operation. Structs have no methods at all: a function that takes the struct as a parameter does the same.
 - **Common causes:**
-  - a method from another language: `size()`, `length()`, `append(...)`
-  - calling a method on a struct
+  - a method name from another language: `length()`, `size()`, `append(x)`, `toUpperCase()`, `substring(a, b)`, `isEmpty()`, `map(...)`
+  - a method on a number: `n.abs()`, `x.sqrt()`, `n.to_string()` (write `str(n)`)
+  - calling a method on a struct: write `area(r)`
   - `"A".code()`: `code()` belongs to `char`, so write `'A'.code()` or `s[0].code()` (all codes of a string: `s.codes()`)
-  - a typo in a method name (the message suggests the closest one)
+  - a typo in a method name
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs.size())
+    let xs = [4, 8, 15]
+    print(xs.length())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2]
+    let xs = [4, 8, 15]
     print(xs.len())
 }
 ```
-- **Related:** E0228, E0236
+- **Related:** E0224, E0228, E0236
 
 ## E0228: method not available for this element type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method exists, but not for the element type of this array: `join` needs `[str]` or `[char]`, and `sort` needs `[int]`, `[float]`, `[str]` or `[char]`.
-- **Why Nyra has this rule:** Joining and ordering are only defined for element types with one exact meaning on every backend.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method exists, but not for the element type of this array. `join` needs `[str]` or `[char]`, and `sort` needs `[int]`, `[float]`, `[str]` or `[char]`. The message is "`join` needs `[str]` or `[char]`, found `[int]`". For `join` the hint shows the loop that turns the elements into text first.
+- **Why Nyra has this rule:** Joining and ordering are only defined for element types where the result is the same on every backend. Characters and strings join as text and numbers, strings and characters have one order. There is no order for `bool` or for structs, and `join` never converts numbers to text behind your back: `str(x)` says what text you want.
 - **Common causes:**
-  - `join` on an array of numbers: convert the elements to text first
+  - `join` on an array of numbers: turn the elements into text first with `str(x)`
   - `sort` on an array of `bool` or of structs
-  - `join` on `[char]` is fine (`"ab".chars().join("-")`), on `[int]` it is not
+  - `sort` on an array of arrays
 - **Wrong:**
 ```rust
 fn main() {
-    print([1, 2].join(","))
+    let nums = [3, 1, 2]
+    print(nums.join(", "))
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    print(["1", "2"].join(","))
+    let nums = [3, 1, 2]
+    var parts: [str] = []
+    for n in nums {
+        parts.push(str(n))
+    }
+    print(parts.join(", "))
 }
 ```
 - **Related:** E0227
 
 ## E0229: cannot assign to this expression
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The left side of an assignment (or the receiver of a mutating method such as `push`, or an `inout` argument) is not something that can be changed: a temporary value like `f().push(1)`, a character of a string (`s[0] = "x"`), or any other expression that is not a variable, a field or an array element.
-- **Why Nyra has this rule:** Only variables and the fields and elements inside them can change. Strings are immutable: build a new string instead.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The left side of an assignment, the receiver of a method that changes its receiver (`push`, `pop`, `insert`, `remove`, `sort`, `reverse`) or an `inout` argument is not something that can change. Only a variable, a field or an element of one can. The messages name the case: "cannot assign to a character of a string: strings are immutable" (`name[0] = 'A'`), "cannot call `.push()` on a temporary value: it changes its receiver" (`items().push(3)`), "cannot assign to this expression" (`a + b = 3`) and "`inout` needs a variable, a field or an element" (`bump(inout 5)`). A variable that is not a `var` is a different error, E0205.
+- **Why Nyra has this rule:** Only variables, and the fields and elements inside them, can change. A string is a value that never changes in place: to change a character, build a new string and assign it. A temporary value has no name, so a change to it would be lost.
 - **Common causes:**
-  - `s[0] = "x"` on a string
-  - calling `push` or `sort` on the result of a function call
-  - assigning to an expression such as `a + b = 3`, or passing one as `inout`
+  - `s[0] = 'A'` on a string: build the new string with `slice` and `+`
+  - `push`, `pop` or `sort` on the result of a function call: store the result in a `var` first
+  - an assignment to an expression such as `a + b = 3` or `f() = 1`
+  - `inout` with a value that is not a variable, such as `inout 5` or `inout f()`
 - **Wrong:**
 ```rust
 fn main() {
-    var s = "abc"
-    s[0] = "x"
+    var name = "ann"
+    name[0] = 'A'
+    print(name)
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var s = "abc"
-    s = "x" + s.slice(1, 3)
+    var name = "ann"
+    name = str(name[0].upper()) + name.slice(1, name.len())
+    print(name)
 }
 ```
-- **Related:** E0205, E0233
+- **Related:** E0205, E0233, E0237
 
 ## E0230: cannot infer the type of `[]`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** An empty array literal `[]` appears where nothing says what its element type is.
-- **Why Nyra has this rule:** Every array has one element type, and an empty literal contains no element to read it from. Write the type where the variable is declared.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** An empty array literal `[]` appears where nothing says what its element type is. The message is "cannot infer the type of the empty array `[]`" and the hint shows `var xs: [int] = []`. The type is known, and `[]` is fine, where it is declared (`var xs: [int] = []`), assigned to a variable, passed as an argument, put in a struct field, returned with `ret`, pushed or inserted into an array of arrays, or compared with or added to an array of known type (`xs == []`, `xs + []`).
+- **Why Nyra has this rule:** Every array has one element type, and an empty literal contains no element to read it from. The compiler never guesses a type, so a program is the same on every backend.
 - **Common causes:**
-  - `var xs = []` without an annotation
-  - passing `[]` to something that does not fix its type
+  - `var xs = []` or `let xs = []` without a type, to be filled later with `push`
+  - `print([])`, or `[] == []`, where there is no known type on either side
+  - `[[], [1]]`: the first `[]` is read before the element that would give its type (write `[[1], []]`, or declare the type of the whole array)
 - **Wrong:**
 ```rust
 fn main() {
-    var xs = []
+    var names = []
+    names.push("ann")
+    print(names.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
+    var names: [str] = []
+    names.push("ann")
+    print(names.len())
 }
 ```
 - **Related:** E0231
 
 ## E0231: array elements must have one type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The elements of an array literal do not all have the same type, for example `[1, "two"]`.
-- **Why Nyra has this rule:** An array `[T]` holds values of exactly one type, so reading an element always gives a known type.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The elements of an array literal do not all have the same type, as in `["ann", 31]`. The message is "array elements must all have one type: the first is `str`, this one is `int`" and it is reported at every element that does not match the first one. The hint depends on the case: `str(31)` to write a number as text, `1.0` to make whole numbers floats, or a struct to group values of different types.
+- **Why Nyra has this rule:** An array `[T]` holds values of exactly one type, so reading an element always gives a known type. Values of different types that belong together, such as a name and an age, are a struct with named fields.
 - **Common causes:**
-  - mixing numbers and text
-  - mixing `int` and `float` elements: write all of them as floats (`1.0`)
+  - a "row" of mixed values, `["ann", 31]`: declare a `struct User { name: str, age: int }`
+  - mixing `int` and `float` elements, `[1, 2.5]`: write them all as floats, `[1.0, 2.5]`
+  - an element that is a call or a variable of another type than the first
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, "two"]
+    let user = ["ann", 31]
+    print(user.len())
 }
 ```
 - **Fixed:**
 ```rust
+struct User {
+    name: str
+    age: int
+}
+
 fn main() {
-    let xs = ["1", "two"]
+    let user = User(name: "ann", age: 31)
+    print(user.age)
 }
 ```
-- **Related:** E0230, E0203
+- **Related:** E0203, E0230
 
 ## E0232: index must be an `int`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** An array or string is indexed with a value that is not an `int`, such as a `float`.
-- **Why Nyra has this rule:** A position is a whole number, and Nyra never converts a float to an int silently: convert it yourself with `int(x)`.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** An array or a string is indexed with a value that is not an `int`: a `float`, a `str` or a `char`. The message is "an index must be an `int`, found `float`" and the hint shows the conversion to write: `[int(mid)]`.
+- **Why Nyra has this rule:** A position is a whole number, and Nyra never converts a float to an int behind your back. `int(x)` truncates toward zero and is written where you want it. An array is not a map: a `str` is not a key, and a `char` is not a position (use `c.code()` for its number).
 - **Common causes:**
-  - an index computed with floating-point arithmetic
-  - a variable that holds a `float`, or a float literal such as `xs[1.0]`
+  - an index computed with floats, such as half the length: `float(xs.len()) / 2.0`
+  - a float literal such as `xs[1.0]`
+  - a `str` used as a key (`xs["a"]`), which arrays do not have
+  - a `char` used as an index into a table of counts (`counts[c]`): write `counts[c.code()]`
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs[1.0])
+    let xs = [10, 20, 30, 40, 50]
+    let mid = float(xs.len()) / 2.0
+    print(xs[mid])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2]
-    print(xs[1])
+    let xs = [10, 20, 30, 40, 50]
+    let mid = xs.len() / 2
+    print(xs[mid])
 }
 ```
 - **Related:** E0233, E0240
 
 ## E0233: cannot index this type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The `[...]` index operator is applied to a value that is not an array or a string, such as an `int`.
-- **Why Nyra has this rule:** Only arrays and strings have positions. Numbers, bools and structs are not indexable.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The index operator `[...]` is applied to a value that is not an array or a string: an `int`, a `float`, a `bool`, a `char` or a struct. The message is "cannot index a value of type `int`". For a struct the hint names a field to read, `p.n`; for an `int` it shows how to get at the digits, `str(n)`.
+- **Why Nyra has this rule:** Only arrays and strings have positions. A struct has fields, read with a dot, and a number is one value.
 - **Common causes:**
-  - indexing a number to get a digit: use `n / 10` and `n % 10` instead
-  - indexing a struct instead of reading a field (`p.x`)
+  - indexing a number to get one of its digits: turn it into text first with `str(n)`, or use `n % 10` and `n / 10`
+  - indexing a struct instead of reading a field (`p[0]` instead of `p.x`)
+  - a variable that was declared as one value (`let xs = 5`) but is used as an array: look at its declaration
+  - indexing a `char` (`c[0]`)
 - **Wrong:**
 ```rust
 fn main() {
-    let n = 5
+    let n = 4821
     print(n[0])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [5]
-    print(xs[0])
+    let n = 4821
+    let digits = str(n)
+    print(digits[0])
 }
 ```
-- **Related:** E0232, E0229
+- **Related:** E0229, E0232, E0234
 
 ## E0234: cannot loop over this type
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `for x in value` is used with a value that is neither a range nor an array nor a string.
-- **Why Nyra has this rule:** A loop needs a clear sequence of values: a range `a..b`, the elements of an array, or the characters of a string.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** `for x in value` is used with a value that is not an array or a string, and it is not a range `a..b`: an `int`, a `float`, a `bool`, a `char` or a struct. The message is "cannot loop over `int`: `for i in ...` needs an array, a string or a range". For an `int` the hint shows the range to write, `for i in 0..n`.
+- **Why Nyra has this rule:** A loop needs a clear sequence of values: the numbers of a range (the end is not included), the elements of an array, or the characters of a string. A single number is none of them.
 - **Common causes:**
-  - `for x in 10` to count to ten: write `for i in 0..10`
-  - looping over a struct or a number
+  - `for i in n` to count to `n`, as in Python's `for i in range(n)`: write `for i in 0..n`
+  - looping over the digits of a number: turn it into text first, `for c in str(n)`
+  - looping over a struct: loop over an array field instead (`for x in p.items`)
 - **Wrong:**
 ```rust
 fn main() {
-    for x in 10 {
-        print(x)
+    let n = 5
+    for i in n {
+        print(i)
     }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    for x in 0..10 {
-        print(x)
+    let n = 5
+    for i in 0..n {
+        print(i)
     }
 }
 ```
-- **Related:** E0233, E0203
+- **Related:** E0203, E0233
 
 ## E0235: type used as a value
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The name of a struct is used where a value is needed, as in `let t = Point`. A struct name is a type, not a value.
-- **Why Nyra has this rule:** Types and values live in different worlds: a struct name only appears in declarations and in a construction `Point(x: 1, y: 2)`.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** The name of a struct is used where a value is needed, as in `let origin = Point` or `Point.new(1, 2)`. The message is "`Point` is a type, not a value" and the hint shows the construction with every field: `Point(x: ..., y: ...)`.
+- **Why Nyra has this rule:** Types and values are different things. A struct name appears in declarations (`p: Point`) and in the construction `Point(x: 1, y: 2)`. There are no constructors such as `new`, no default instance and no static methods.
 - **Common causes:**
-  - forgetting the construction parentheses
+  - forgetting the construction parentheses and fields
+  - `Point.new(...)`, `Point.default()` or `Point.zero()` from another language
   - passing the type where an instance was meant
 - **Wrong:**
 ```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
-    let t = Point
+    let origin = Point.new(1, 2)
+    print(origin.x)
 }
 ```
 - **Fixed:**
 ```rust
 struct Point {
     x: int
+    y: int
 }
 
 fn main() {
-    let t = Point(x: 1)
+    let origin = Point(x: 1, y: 2)
+    print(origin.x)
 }
 ```
-- **Related:** E0223, E0206
+- **Related:** E0206, E0223
 
 ## E0236: method must be called
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method name is written without call parentheses, as in `xs.len`. Methods are always called.
-- **Why Nyra has this rule:** There are no function values, so a method name alone has nothing to evaluate to; with parentheses it is a call.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A method name is written without call parentheses, as in `xs.len`. The message is "method `len` must be called" and the hint is "add the parentheses: `.len()`".
+- **Why Nyra has this rule:** A method is always called. There are no function values, so a method name alone has nothing to stand for, and `xs.len` can never be a number.
 - **Common causes:**
-  - `xs.len` or `s.upper` from a language with properties
+  - `xs.len` or `s.len` written like a property, as `length` is in JavaScript
+  - `xs.pop` or `s.trim` on a line of its own, without `()`
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1]
-    print(xs.len)
+    let xs = [4, 8, 15]
+    if xs.len > 2 {
+        print("long")
+    }
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1]
-    print(xs.len())
+    let xs = [4, 8, 15]
+    if xs.len() > 2 {
+        print("long")
+    }
 }
 ```
-- **Related:** E0227, E0224
+- **Related:** E0224, E0227
 
 ## E0237: bad `inout` argument
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `inout` is used inconsistently. A parameter declared `inout` is called without `inout` at the call (or `inout` is written for a plain parameter), or two `inout` arguments of one call are the same variable, as in `swap(inout xs[0], inout xs[1])`.
-- **Why Nyra has this rule:** An `inout` parameter lets a function change the caller's variable. The call says `inout` too, so you can see what can change, and two `inout` arguments are never the same variable, so nothing can observe the variable half-way: no aliasing surprises.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** `inout` is used inconsistently between a function and its call. Three cases: a parameter declared `inout` is called without `inout` ("argument 1 of `bump` is `inout`: the call must say so"); `inout` is written for an argument whose parameter is not `inout`, or for a builtin ("parameter `n` of `bump` is not `inout`"); or two `inout` arguments of one call start at the same variable, as in `swap(inout xs[0], inout xs[1])` ("`inout` arguments must be different variables").
+- **Why Nyra has this rule:** An `inout` parameter lets a function change the caller's variable, and the call says `inout` too, so the line shows what can change. Two `inout` arguments are never the same variable: no function can see a variable changed half-way through another name, so there are no aliasing surprises.
 - **Common causes:**
   - `inout` forgotten at the call: `bump(x)` instead of `bump(inout x)`
-  - `inout` written for a parameter that is not `inout`
-  - two elements of one array passed to one call: swap through a temporary variable instead
+  - `inout` written at a call for a parameter that is not `inout`, such as `print(inout x)`
+  - two elements of one array passed to one call: copy one into a temporary variable, call, then assign it back
 - **Wrong:**
 ```rust
 fn bump(inout n: int) {
@@ -1078,18 +1183,65 @@ fn main() {
 - **Related:** E0205, E0229, E0238
 
 ## E0238: bad target for `free`, `keep` or `arena`
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `free(x)` or `keep(x)` is used on something that cannot be freed or kept (an `int`, a parameter, an `inout` parameter, an expression), or a string or array declared outside an `arena { }` block is changed inside the block.
-- **Why Nyra has this rule:** Memory is automatic unless a program asks: `free(x)` returns a local variable's memory now, `arena { }` frees everything created inside it at its `}`, and `keep(x)` never frees. Every use is checked at compile time, so a program that compiles can never use freed memory. Values created in an arena are freed at its `}`, so nothing declared outside may be changed to point into it.
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** Two kinds of mistake. `free(x)` or `keep(x)` is used on something that cannot be freed or kept: a value that owns no heap memory ("nothing to free: `n` is an `int`, which owns no heap memory"), a parameter or the variable of a `for` loop ("cannot free parameter `xs`: the caller owns it"), or an expression instead of a variable ("`free` needs a local variable"). Or, inside an `arena { }` block, a string or an array (or a struct that holds one) that was declared outside the block is changed: assigned, extended with `+=`, an element or field stored, a method such as `push` called on it, passed as `inout`, freed or kept ("`best` cannot be changed inside this `arena` block: it was declared outside it"). Numbers, bools and chars declared outside can change freely.
+- **Why Nyra has this rule:** Memory is automatic: strings, arrays and structs that hold them are freed when their last owner is gone. `free(x)` gives a local variable's memory back now, `keep(x)` says a value is never freed, and `arena { }` marks the values that belong to one block. All three are checked when the program is compiled, so a program that compiles never uses freed memory, and the same programs are accepted on every backend. In v0.3 an `arena` block is checked by these rules, but its memory is freed by reference counting when the last reference goes, as in any other block: an arena changes when memory is returned and never what a program prints. The rule about outer strings and arrays is checked now, so that the way an arena frees its memory can change in a later version without changing what any program does.
 - **Common causes:**
-  - `free(n)` on an `int`: there is nothing to free
-  - freeing or keeping a parameter: the caller owns it
-  - `names.push(...)` inside an `arena` while `names` was declared before it: change it after the block, or return the result from a function that uses `arena`
+  - `free(n)` or `keep(n)` on an `int`, `float`, `bool` or `char`: there is nothing to free
+  - freeing or keeping a parameter or a loop variable: the caller owns it
+  - `free(xs[0])` or `free(p.name)`: `free` needs a whole variable, and to drop an element early you assign an empty value (`xs[0] = []`)
+  - `names.push(...)` or `best = w` inside an `arena` while the variable was declared before the block: change it after the block, or let a function whose body is the `arena` return the result with `ret`
 - **Wrong:**
 ```rust
 fn main() {
-    let n = 1
-    free(n)
+    var best = ""
+    arena {
+        let words = "the quick brown fox".split(" ")
+        for w in words {
+            if w.len() > best.len() {
+                best = w
+            }
+        }
+    }
+    print(best)
+}
+```
+- **Fixed:**
+```rust
+fn longest(text: str) -> str {
+    arena {
+        let words = text.split(" ")
+        var best = ""
+        for w in words {
+            if w.len() > best.len() {
+                best = w
+            }
+        }
+        ret best
+    }
+}
+
+fn main() {
+    print(longest("the quick brown fox"))
+}
+```
+- **Related:** E0205, E0237, E0239
+
+## E0239: use after free
+- **Kind:** compile error · **Since:** v0.3
+- **What it means:** A variable is used after `free(x)`, or on a path where it may have been freed: freed in only one branch of an `if`, or in an earlier round of a loop. Every use is an error, including a second `free(x)`, until a `var` is given a new value. The message says where it was freed: "`xs` was freed at line 3 and cannot be used any more", or "`xs` may have been freed (line 4): it is freed on some paths before this use".
+- **Why Nyra has this rule:** Freed memory must never be used. The compiler follows every local variable through the function and rejects the program, instead of letting it crash or print garbage. The same programs are rejected on every backend, even where freeing leaves nothing visible.
+- **Common causes:**
+  - reading the variable after `free(xs)`
+  - `free` inside an `if`, with a use after the `if`
+  - `free` inside a loop, so the next round uses a variable that was freed in the one before
+  - a second `free(xs)` for the same variable
+- **Wrong:**
+```rust
+fn main() {
+    var xs = [1, 2, 3]
+    free(xs)
+    print(xs.len())
 }
 ```
 - **Fixed:**
@@ -1100,59 +1252,34 @@ fn main() {
     free(xs)
 }
 ```
-- **Related:** E0239, E0237, E0205
-
-## E0239: use after free
-- **Kind:** compile error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A variable is used after `free(x)`, or on a path where it may have been freed (freed in only one branch of an `if`, or in an earlier round of a loop). Every use, including a second `free`, is an error until a `var` is given a new value. The message says where the variable was freed: "`xs` was freed at line 7".
-- **Why Nyra has this rule:** Freed memory must never be used. The compiler follows every local variable through the function and rejects the program, instead of letting it crash or print garbage.
-- **Common causes:**
-  - reading the variable after `free(xs)`
-  - `free` inside an `if`, with a use after the `if`
-  - `free` inside a loop, so the second round uses a freed variable
-- **Wrong:**
-```rust
-fn main() {
-    var xs = [1]
-    free(xs)
-    print(xs)
-}
-```
-- **Fixed:**
-```rust
-fn main() {
-    var xs = [1]
-    print(xs)
-    free(xs)
-}
-```
-- **Related:** E0238, E0201
+- **Related:** E0201, E0238
 
 ## E0240: index out of bounds
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** At run time, an index or a range is outside the array or string: `index 3 is out of bounds for length 3`. Valid indexes are 0 up to the length minus 1; positions for `insert`, `remove` and `slice` are checked the same way.
-- **Why Nyra has this rule:** Reading past the end would be undefined behaviour in C and `undefined` in JavaScript. Nyra stops the program with the same error and exit code 101 on every backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** At run time an index or a range is outside the array or the string. The message gives both numbers: "index 3 is out of bounds for length 3" (reading `xs[3]` or `s[3]`, storing `xs[3] = v`, `remove(i)`, `insert(i, v)`) or "range 2..5 is out of bounds for length 3" (`slice(a, b)`). The valid indexes are 0 up to the length minus 1, and there are no negative indexes: `xs[-1]` is an error, not the last element. `insert(i, v)` also accepts `i` equal to the length, and `slice(a, b)` needs `0 <= a <= b <= len`. The program prints what it printed so far, then the error with the position of the `[` or of the method name, and exits with code 101.
+- **Why Nyra has this rule:** Reading past the end would be undefined behaviour in C and `undefined` in JavaScript. Nyra stops with the same error and exit code on every backend.
 - **Common causes:**
-  - an off-by-one: the last valid index is `xs.len() - 1`
-  - an index computed from data without checking it against `xs.len()`
+  - `xs[-1]` for the last element, as in Python: write `xs[xs.len() - 1]`
+  - an off-by-one: the last valid index is `xs.len() - 1`, so `xs[xs.len()]` and a loop to `xs.len() + 1` are out
+  - an index that comes from data and was not checked against `xs.len()`
   - indexing an empty array
 - **Wrong:**
 ```rust
 fn main() {
-    let xs = [1, 2, 3]
+    let scores = [90, 85, 77]
     print("before")
-    print(xs[3])
+    print(scores[-1])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    let xs = [1, 2, 3]
+    let scores = [90, 85, 77]
     print("before")
-    print(xs[xs.len() - 1])
+    print(scores[scores.len() - 1])
 }
 ```
-- **Related:** E0242, E0232
+- **Related:** E0232, E0242
 
 ## E0241: division by zero
 - **Kind:** runtime error · **Since:** v0.2
@@ -1186,74 +1313,110 @@ fn main() {
 - **Related:** E0245
 
 ## E0242: pop on an empty array
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `xs.pop()` was called on an array with no elements, so there is no last element to remove and return.
-- **Why Nyra has this rule:** There is no null to return instead, so the program stops with exit code 101 on every backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `xs.pop()` was called on an array with no elements, so there is no last element to remove and give back. The message is "pop() on an empty array" with the position of `pop`, and the program exits with code 101. (`remove(i)` on an empty array is E0240, because it names a position.)
+- **Why Nyra has this rule:** There is no null to return instead, so the only honest answer is to stop, with the same error and exit code on every backend.
 - **Common causes:**
-  - popping in a loop that runs more often than the array was filled
+  - popping in a loop that runs more often than the array was filled, such as a stack that is popped once too often
   - an array that is empty because of an earlier branch
 - **Wrong:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    xs.pop()
+    var stack: [int] = []
+    stack.push(1)
+    print(stack.pop())
+    print(stack.pop())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    if xs.len() > 0 {
-        xs.pop()
+    var stack: [int] = []
+    stack.push(1)
+    print(stack.pop())
+    if stack.len() > 0 {
+        print(stack.pop())
+    } else {
+        print("empty")
     }
 }
 ```
 - **Related:** E0240
 
 ## E0243: bad argument value
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** A method received an argument that is valid in type but not in value: `repeat(n)` with a negative `n`, `replace("", x)` with an empty pattern, or `split("")` with an empty separator (for the characters of a string use `s.chars()`).
-- **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them. A clear error beats an answer that differs by backend.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** A method received an argument that has the right type but a value it cannot work with: `repeat(n)` with a negative `n` ("repeat count must be >= 0, got -1", on strings and on arrays), `replace("", x)` with an empty pattern ("replace() needs a non-empty pattern") or `split("")` with an empty separator ("split() needs a non-empty separator"; the hint says to use `s.chars()` for the characters of a string). The position is the method name, and the program exits with code 101.
+- **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them: JavaScript splits `"abc".split("")` into characters and Python raises an error, and a negative repeat count is an error in JavaScript and an empty string in Python. A clear error beats an answer that depends on the backend.
 - **Common causes:**
-  - a repeat count computed as a negative number
-  - an empty search text passed to `replace`, or an empty separator passed to `split`
+  - `s.split("")` to get the characters: write `s.chars()`
+  - a repeat count that is computed and turns negative, such as `" ".repeat(width - s.len())` when `s` is longer than `width`
+  - an empty text passed to `replace`, hoping to insert between characters
 - **Wrong:**
 ```rust
 fn main() {
-    print("ab".repeat(0 - 1))
+    let word = "hello"
+    print("start")
+    let letters = word.split("")
+    print(letters.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    print("ab".repeat(2))
+    let word = "hello"
+    print("start")
+    let letters = word.chars()
+    print(letters.len())
 }
 ```
-- **Related:** E0240, E0244
+- **Related:** E0240, E0244, E0249
 
 ## E0244: cannot parse text as a number
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `int(s)` or `float(s)` was given text that is not a number: `int("12x")`. `int` accepts only digits with an optional leading `-` and must fit in 64 bits; the text may not contain spaces, a `+` or an `_`.
-- **Why Nyra has this rule:** Turning letters into numbers silently would hide bugs. A failing conversion stops the program with a precise message; check the text first when it may be invalid.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `int(s)` or `float(s)` was given text that is not a number: `cannot parse "five" as int`. `int` accepts digits with an optional leading `-` and the value must fit in 64 bits. `float` accepts the same, with an optional `.` part and an optional exponent (`2`, `-1.5`, `1e3`, `-1.5e-3`), and `"1e999"` is `Infinity`, not an error. The text may not contain spaces, a leading `+`, a `_` or a thousands separator, may not be empty and may not be a word such as `"nan"`. The program exits with code 101.
+- **Why Nyra has this rule:** Turning text that is not a number into one silently would hide bugs: there is no `NaN` result and no fallback to 0. A failing conversion stops the program with a precise message. When the text may be invalid, check it first, as `is_number` does below.
 - **Common causes:**
-  - text with spaces or a unit (`"12 "`, `"3px"`)
-  - an empty string
-  - a number too large for `int`
+  - text with spaces or a unit: `"12 "`, `"3px"`
+  - an empty string, for example from `split` on text with nothing in it
+  - a decimal point in `int("1.5")`: parse with `float(s)`, then truncate with `int(x)`
+  - a number too large for `int`, or a number written with `,` or `_`
 - **Wrong:**
 ```rust
 fn main() {
-    let n = int("12x")
-    print(n)
+    let parts = "3,4,five".split(",")
+    var total = 0
+    for p in parts {
+        total += int(p)
+    }
+    print(total)
 }
 ```
 - **Fixed:**
 ```rust
+fn is_number(s: str) -> bool {
+    if s.len() == 0 {
+        ret false
+    }
+    for c in s {
+        if !c.is_digit() {
+            ret false
+        }
+    }
+    ret true
+}
+
 fn main() {
-    let n = int("12")
-    print(n)
+    let parts = "3,4,five".split(",")
+    var total = 0
+    for p in parts {
+        if is_number(p) {
+            total += int(p)
+        }
+    }
+    print(total)
 }
 ```
-- **Related:** E0245, E0243
+- **Related:** E0243, E0245
 
 ## E0245: `int()` of a value that is not a whole number in range
 - **Kind:** runtime error · **Since:** v0.2
@@ -1283,52 +1446,55 @@ fn main() {
 - **Related:** E0241, E0244
 
 ## E0246: not a valid character code
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** `char(n)` was called with a number that is not a character: negative, above 1114111, or in the surrogate range 55296 to 57343. The program stops with exit code 101.
-- **Why Nyra has this rule:** A `char` is always one real Unicode character, so a string can never contain invalid text. Turning a number into a character is explicit, and an impossible number is an error rather than a replacement character.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** `char(n)` was called with a number that is not a character: negative, above 1114111, or in the surrogate range 55296 to 57343. The message shows the number: "char(-3): not a valid character code". The position is the `char` call, and the program exits with code 101.
+- **Why Nyra has this rule:** A `char` is always one real Unicode character, so a string can never hold invalid text. Turning a number into a character is explicit, and an impossible number is an error, not a replacement character.
 - **Common causes:**
-  - arithmetic on codes that left the valid range, such as `char('a'.code() - 100)`
-  - using a byte or a random number as a code without checking it
+  - arithmetic on character codes that leaves the valid range, such as a Caesar shift that goes below `'a'` or past `'z'` without wrapping around
+  - a byte or a random number used as a code without checking it
 - **Wrong:**
 ```rust
+fn shift(c: char, by: int) -> char = char(c.code() + by)
+
 fn main() {
-    print(char(-1))
+    print(shift('a', 1))
+    print(shift('a', -100))
 }
 ```
 - **Fixed:**
 ```rust
+fn shift(c: char, by: int) -> char = char((c.code() - 97 + by) % 26 + 97)
+
 fn main() {
-    print(char(65))
+    print(shift('a', 1))
+    print(shift('a', 25))
 }
 ```
 - **Related:** E0244, E0245
 
 ## E0249: out of memory
-- **Kind:** runtime error · **Since:** planned for v0.3, not in the compiler yet
-- **What it means:** The native backend could not allocate memory for a string, array or struct. The program stops with exit code 101. The JavaScript backend has no such error: the engine reports its own failure.
-- **Why Nyra has this rule:** With memory managed by the runtime, running out of it must end the program cleanly with a message rather than a crash.
+- **Kind:** runtime error · **Since:** v0.3
+- **What it means:** The program asked for more memory than a string, an array or the machine can have, and it stops with exit code 101: "out of memory", at the operation that asked, or at position 0:0 when that is not known. `repeat` has a size limit on every backend, so a result of more than 536870888 characters (strings) or 100000000 elements (arrays) is reported at once, without trying to allocate it: `"ab".repeat(1000000000000)`. Natively, the error is also reported when the system gives no more memory. On JavaScript it is also reported when the engine runs out of string or array length, for example for a string built up past 536870888 characters. A JavaScript program that fills the whole heap is stopped by Node itself ("JavaScript heap out of memory", exit code 134), which cannot be reported as E0249.
+- **Why Nyra has this rule:** With memory managed by the runtime, running out of it has to end the program with a message instead of a crash, and a size that is too big on one backend should be too big on all of them, so `repeat` has one limit everywhere.
 - **Common causes:**
+  - a repeat count with too many zeros, or one that is computed from a wrong value
   - building a huge array or string in a loop
-  - an endless loop that keeps growing a value
+  - a loop that keeps growing a value and never stops
 - **Wrong:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    while true {
-        xs.push(1)
-    }
+    let big = "ab".repeat(1000000000000)
+    print(big.len())
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
-    var xs: [int] = []
-    for i in 0..1000 {
-        xs.push(i)
-    }
+    let small = "ab".repeat(1000)
+    print(small.len())
 }
 ```
-- **Related:** E0240
+- **Related:** E0240, E0243
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
