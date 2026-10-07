@@ -90,7 +90,7 @@ compiler to tell the AI exactly what to fix.
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
   runtime errors with the exact position, and a build cache that skips the C compiler when the program
   has not changed.
-- **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1 s
+- **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
 - **Not yet:** maps, modules, a standard library, input (see the [roadmap](#roadmap)). Nyra is 0.x, so the
   syntax may still change before 1.0.
