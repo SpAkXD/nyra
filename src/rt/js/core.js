@@ -12,6 +12,18 @@ function ny_panic(code, msg, hint, line, col) {
         : `runtime error[${code}]: ${msg}\n  --> ${ny_file}:${line}:${col}\n  = hint: ${hint}`;
     throw new NyPanic(text);
 }
+function ny_oom(line, col) {
+    ny_panic("E0249", "out of memory", "the program needs more memory than the system gave it", line, col);
+}
+// What the entry point reports: a Nyra runtime error, or the engine running out of memory
+// (E0249, without a position). Anything else is a bug in nyra and is thrown on.
+function ny_rescue(e) {
+    if (e instanceof NyPanic) return e;
+    if (e instanceof RangeError && /invalid (string|array|typed array) length|allocation failed/i.test(e.message)) {
+        try { ny_oom(0, 0); } catch (p) { return p; }
+    }
+    throw e;
+}
 // int / and %: division by zero is a runtime error; `+ 0` avoids -0.
 function ny_div(a, b, line, col) {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);

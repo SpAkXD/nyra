@@ -1,22 +1,34 @@
-//! Typed AST → IR. Effects become statements in left-to-right order; values become pure expressions.
+//! Typed AST → IR. Effects become statements in left-to-right order; values become pure
+//! expressions. Lowering also places the reference counting for managed values (strings):
+//!
+//! - A local variable owns its value. Parameters are borrowed: the caller keeps them alive.
+//! - A call or operation that makes a new string gives an *owned* temporary. It is moved into a
+//!   variable when it is stored, and otherwise released (`Drop`) at the end of its statement.
+//! - Storing a borrowed value (a variable, a parameter) adds an owner (`Dup`).
+//! - Leaving a block releases the variables it declared; `ret`, `break` and `continue` release
+//!   the blocks they leave. `ret x` of a local moves it out.
 
 use std::collections::HashMap;
 
-use super::{visit_locals, BinOp, Expr, Func, FuncId, Local, LocalId, Module, RtOp, Stmt, StmtKind, StrId, Ty, UnOp};
+use super::{managed, visit_locals, BinOp, Expr, Func, FuncId, Local, LocalId, Module, PureFn, RtOp, Stmt, StmtKind, StrId, Ty, UnOp};
 use crate::ast::{self, Span, Type};
 
-/// Lowers a type-checked program.
-pub fn lower(prog: &ast::Program) -> Module {
+/// Lowers a type-checked program. Fails for features the backends do not support yet.
+pub fn lower(prog: &ast::Program) -> Result<Module, String> {
     let ids: HashMap<String, FuncId> =
         prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
     for f in &prog.funcs {
-        let mut func = Lower::new(&ids, &mut strs).func(f);
+        let mut l = Lower::new(&ids, &mut strs);
+        let mut func = l.func(f);
+        if let Some(what) = l.unsupported {
+            return Err(what);
+        }
         prune_temps(&mut func);
         funcs.push(func);
     }
-    Module { funcs, strs: strs.list, main: ids["main"] }
+    Ok(Module { funcs, strs: strs.list, main: ids["main"] })
 }
 
 #[derive(Default)]
@@ -37,16 +49,6 @@ impl Strs {
     }
 }
 
-fn ty(t: Type) -> Ty {
-    match t {
-        Type::Int => Ty::Int,
-        Type::Float => Ty::Float,
-        Type::Bool => Ty::Bool,
-        Type::Str => Ty::Str,
-        Type::Void | Type::Unknown => panic!("the checker left a `{}` value to lower", t.name()),
-    }
-}
-
 /// An int constant, also through negation (`-1`).
 fn const_int(e: &Expr) -> Option<i64> {
     match e {
@@ -56,26 +58,49 @@ fn const_int(e: &Expr) -> Option<i64> {
     }
 }
 
+/// A block of the function being lowered.
+#[derive(Default)]
+struct Scope {
+    names: HashMap<String, LocalId>,
+    /// Managed values this scope owns, in the order they were created: released at its end.
+    owned: Vec<LocalId>,
+    /// The body of a loop: `break` and `continue` release the scopes up to here.
+    loop_body: bool,
+}
+
 struct Lower<'a> {
     ids: &'a HashMap<String, FuncId>,
     strs: &'a mut Strs,
     locals: Vec<Local>,
-    scopes: Vec<HashMap<String, LocalId>>,
+    scopes: Vec<Scope>,
+    /// Owned temporaries of the statement being lowered: released at its end unless moved.
+    pending: Vec<LocalId>,
+    /// The first feature the backends cannot generate yet.
+    unsupported: Option<String>,
 }
 
 impl<'a> Lower<'a> {
     fn new(ids: &'a HashMap<String, FuncId>, strs: &'a mut Strs) -> Self {
-        Lower { ids, strs, locals: Vec::new(), scopes: vec![HashMap::new()] }
+        Lower { ids, strs, locals: Vec::new(), scopes: vec![Scope::default()], pending: Vec::new(), unsupported: None }
     }
 
-    fn func(mut self, f: &ast::Func) -> Func {
+    fn not_yet(&mut self, what: &str) -> Expr {
+        if self.unsupported.is_none() {
+            self.unsupported = Some(format!("{what} can be type-checked, but the backends cannot generate them yet"));
+        }
+        Expr::Int(0)
+    }
+
+    fn func(&mut self, f: &ast::Func) -> Func {
+        // parameters: borrowed, so not owned by any scope
         for p in &f.params {
-            self.declare(&p.name, ty(p.ty));
+            let id = self.new_local(Some(p.name.clone()), p.ty);
+            self.scopes[0].names.insert(p.name.clone(), id);
         }
         let mut body = Vec::new();
-        self.block(&f.body, &mut body);
-        let ret = if f.ret == Type::Void { None } else { Some(ty(f.ret)) };
-        Func { name: f.name.clone(), params: f.params.len(), ret, locals: self.locals, body, span: f.span }
+        self.block(&f.body, &mut body, false);
+        let ret = if f.ret == Type::Void { None } else { Some(f.ret) };
+        Func { name: f.name.clone(), params: f.params.len(), ret, locals: std::mem::take(&mut self.locals), body, span: f.span }
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
@@ -84,9 +109,18 @@ impl<'a> Lower<'a> {
         id
     }
 
+    fn ty_of(&self, l: LocalId) -> Ty {
+        self.locals[l.0 as usize].ty
+    }
+
+    /// A variable of the current scope; a managed one is owned by it.
     fn declare(&mut self, name: &str, t: Ty) -> LocalId {
         let id = self.new_local(Some(name.to_string()), t);
-        self.scopes.last_mut().expect("a scope is open").insert(name.to_string(), id);
+        let scope = self.scopes.last_mut().expect("a scope is open");
+        scope.names.insert(name.to_string(), id);
+        if managed(t) {
+            scope.owned.push(id);
+        }
         id
     }
 
@@ -94,41 +128,114 @@ impl<'a> Lower<'a> {
         self.new_local(None, t)
     }
 
+    /// A temporary holding a new value: owned until moved, released at the end of the statement.
+    fn owned_temp(&mut self, t: Ty) -> LocalId {
+        let id = self.temp(t);
+        if managed(t) {
+            self.pending.push(id);
+        }
+        id
+    }
+
     fn lookup(&self, name: &str) -> LocalId {
         self.scopes
             .iter()
             .rev()
-            .find_map(|s| s.get(name).copied())
+            .find_map(|s| s.names.get(name).copied())
             .unwrap_or_else(|| panic!("`{name}` reached lowering without being declared"))
     }
 
-    fn block(&mut self, stmts: &[ast::Stmt], out: &mut Vec<Stmt>) {
-        self.scopes.push(HashMap::new());
-        for s in stmts {
-            self.stmt(s, out);
+    /// If `v` is an owned temporary of this statement, takes it over (no release at the end).
+    fn take(&mut self, v: &Expr) -> bool {
+        if let Expr::Local(t) = v {
+            if let Some(i) = self.pending.iter().position(|p| p == t) {
+                self.pending.remove(i);
+                return true;
+            }
         }
-        self.scopes.pop();
+        false
     }
 
-    /// Writes `v` into `dst`. If `v` is the temporary the last statement just produced,
-    /// that statement writes straight into `dst` instead (no extra copy).
-    fn assign(&mut self, dst: LocalId, v: Expr, span: Span, out: &mut Vec<Stmt>) {
+    /// Releases the owned temporaries of the statement that just ended.
+    fn end_statement(&mut self, span: Span, out: &mut Vec<Stmt>) {
+        for t in std::mem::take(&mut self.pending).into_iter().rev() {
+            out.push(Stmt { kind: StmtKind::Drop(t), span });
+        }
+    }
+
+    /// `dst = v` for a fresh local (nothing to release first). The local takes ownership:
+    /// an owned temporary moves, a borrowed value gets one more owner.
+    fn init(&mut self, dst: LocalId, v: Expr, span: Span, out: &mut Vec<Stmt>) {
         if let Expr::Local(t) = v {
             if t == dst {
                 return;
             }
-            if self.locals[t.0 as usize].name.is_none() {
-                if let Some(Stmt { kind: StmtKind::Call { dst: d, .. } | StmtKind::Op { dst: d, .. }, .. }) =
-                    out.last_mut()
-                {
-                    if *d == Some(t) {
-                        *d = Some(dst);
-                        return;
+        }
+        let t = self.ty_of(dst);
+        let moved = self.take(&v);
+        // a temporary made by the last statement: let that statement write into `dst` directly
+        // (also for plain values: `x = f(x)` becomes one call writing `x`)
+        if moved || !managed(t) {
+            if let Expr::Local(tmp) = v {
+                if self.locals[tmp.0 as usize].name.is_none() {
+                    if let Some(Stmt { kind: StmtKind::Call { dst: d, .. } | StmtKind::Op { dst: d, .. }, .. }) = out.last_mut() {
+                        if *d == Some(tmp) {
+                            *d = Some(dst);
+                            return;
+                        }
                     }
                 }
             }
         }
+        let borrowed_managed = managed(t) && !moved && !matches!(v, Expr::Str(_));
         out.push(Stmt { kind: StmtKind::Set(dst, v), span });
+        if borrowed_managed {
+            out.push(Stmt { kind: StmtKind::Dup(dst), span });
+        }
+    }
+
+    /// Lowers a block in a new scope; at its end the scope's variables are released.
+    fn block(&mut self, stmts: &[ast::Stmt], out: &mut Vec<Stmt>, loop_body: bool) {
+        self.scopes.push(Scope { loop_body, ..Scope::default() });
+        for s in stmts {
+            self.stmt(s, out);
+        }
+        let scope = self.scopes.pop().expect("pushed above");
+        let ends = out.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue));
+        if !ends {
+            let span = out.last().map_or(Span { line: 0, col: 0 }, |s| s.span);
+            for l in scope.owned.into_iter().rev() {
+                out.push(Stmt { kind: StmtKind::Drop(l), span });
+            }
+        }
+    }
+
+    /// Releases what the open scopes own, innermost first, down to (and including) the
+    /// innermost loop body when `to_loop`, else all of them. `keep` is moved out instead.
+    fn release_scopes(&mut self, to_loop: bool, keep: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) {
+        for scope in self.scopes.iter().rev() {
+            for l in scope.owned.iter().rev() {
+                if Some(*l) != keep {
+                    out.push(Stmt { kind: StmtKind::Drop(*l), span });
+                }
+            }
+            if to_loop && scope.loop_body {
+                break;
+            }
+        }
+    }
+
+    /// A condition: if computing it left owned temporaries, it is stored in a `bool` first so
+    /// they can be released before the branch.
+    fn cond(&mut self, e: &ast::Expr, out: &mut Vec<Stmt>) -> Expr {
+        let c = self.expr(e, None, out);
+        if self.pending.is_empty() {
+            return c;
+        }
+        let b = self.temp(Ty::Bool);
+        out.push(Stmt { kind: StmtKind::Set(b, c), span: e.span });
+        self.end_statement(e.span, out);
+        Expr::Local(b)
     }
 
     fn stmt(&mut self, s: &ast::Stmt, out: &mut Vec<Stmt>) {
@@ -136,37 +243,76 @@ impl<'a> Lower<'a> {
         match &s.kind {
             ast::StmtKind::Let { name, ty: t, value, .. } => {
                 // No shadowing, so the value cannot refer to the new name.
-                let id = self.declare(name, ty(t.unwrap_or(value.ty)));
+                let t = t.unwrap_or(value.ty);
+                let id = self.declare(name, t);
                 let v = self.expr(value, Some(id), out);
-                self.assign(id, v, span, out);
+                self.init(id, v, span, out);
+                self.end_statement(span, out);
             }
-            ast::StmtKind::Assign { name, value } => {
+            ast::StmtKind::Assign { target, op, value } => {
+                let ast::ExprKind::Var(name) = &target.kind else {
+                    self.not_yet("assignments to fields and elements");
+                    return;
+                };
                 let id = self.lookup(name);
-                let v = self.expr(value, Some(id), out);
-                self.assign(id, v, span, out);
+                let t = self.ty_of(id);
+                match op {
+                    None if managed(t) => {
+                        // evaluate the new value first (it may read the old one), then replace
+                        let v = self.expr(value, None, out);
+                        let moved = self.take(&v);
+                        if !moved && !matches!(v, Expr::Str(_)) {
+                            // a borrowed value: one more owner before the old value goes
+                            let tmp = self.temp(t);
+                            out.push(Stmt { kind: StmtKind::Set(tmp, v), span });
+                            out.push(Stmt { kind: StmtKind::Dup(tmp), span });
+                            out.push(Stmt { kind: StmtKind::Drop(id), span });
+                            out.push(Stmt { kind: StmtKind::Set(id, Expr::Local(tmp)), span });
+                        } else {
+                            out.push(Stmt { kind: StmtKind::Drop(id), span });
+                            out.push(Stmt { kind: StmtKind::Set(id, v), span });
+                        }
+                    }
+                    None => {
+                        let v = self.expr(value, Some(id), out);
+                        self.init(id, v, span, out);
+                    }
+                    Some(op) if t == Type::Str => {
+                        // `s += t`: append in place when `s` is the only owner
+                        let _ = op;
+                        let v = self.expr(value, None, out);
+                        out.push(Stmt { kind: StmtKind::Op { dst: Some(id), op: RtOp::StrAppend, args: vec![Expr::Local(id), v] }, span });
+                    }
+                    Some(op) => {
+                        let rhs = self.expr(value, None, out);
+                        let v = self.binop(*op, Expr::Local(id), rhs, t, t, span, Some(id), out);
+                        self.init(id, v, span, out);
+                    }
+                }
+                self.end_statement(span, out);
             }
             ast::StmtKind::If { cond, then, els } => {
-                let cond = self.expr(cond, None, out);
+                let cond = self.cond(cond, out);
                 let mut t = Vec::new();
-                self.block(then, &mut t);
+                self.block(then, &mut t, false);
                 let mut e = Vec::new();
                 if let Some(els) = els {
-                    self.block(els, &mut e);
+                    self.block(els, &mut e, false);
                 }
                 out.push(Stmt { kind: StmtKind::If { cond, then: t, els: e }, span });
             }
             ast::StmtKind::While { cond, body } => {
                 let mut head = Vec::new();
-                let cond = self.expr(cond, None, &mut head);
+                let cond = self.cond(cond, &mut head);
                 let mut b = Vec::new();
-                self.block(body, &mut b);
+                self.block(body, &mut b, true);
                 out.push(Stmt { kind: StmtKind::Loop { head, cond, body: b, step: Vec::new() }, span });
             }
             ast::StmtKind::For { var, start, end, body } => {
                 // `for i in a..b`: both bounds are evaluated once, before the loop.
                 let a = self.expr(start, None, out);
                 let b = self.expr(end, None, out);
-                self.scopes.push(HashMap::new());
+                self.scopes.push(Scope::default());
                 let i = self.declare(var, Ty::Int);
                 out.push(Stmt { kind: StmtKind::Set(i, a), span });
                 let last = if matches!(b, Expr::Int(_)) {
@@ -176,29 +322,130 @@ impl<'a> Lower<'a> {
                     out.push(Stmt { kind: StmtKind::Set(t, b), span });
                     Expr::Local(t)
                 };
+                self.end_statement(span, out);
                 let cond = Expr::Binary(BinOp::ILt, Box::new(Expr::Local(i)), Box::new(last));
                 let mut bd = Vec::new();
-                self.block(body, &mut bd);
+                self.block(body, &mut bd, true);
                 let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(Expr::Int(1)));
                 let step = vec![Stmt { kind: StmtKind::Set(i, next), span }];
                 self.scopes.pop();
                 out.push(Stmt { kind: StmtKind::Loop { head: Vec::new(), cond, body: bd, step }, span });
             }
+            ast::StmtKind::ForEach { var, iter, body } => {
+                if iter.ty != Type::Str {
+                    self.not_yet("loops over arrays");
+                    return;
+                }
+                // the loop keeps its own reference to the string, so the body may reassign the variable
+                self.scopes.push(Scope::default());
+                let v = self.expr(iter, None, out);
+                let it = self.temp(Ty::Str);
+                self.init(it, v, span, out);
+                self.scopes.last_mut().expect("pushed").owned.push(it);
+                self.end_statement(span, out);
+                self.scopes.push(Scope { loop_body: true, ..Scope::default() });
+                let c = self.declare(var, Ty::Char);
+                let mut bd = Vec::new();
+                for st in body {
+                    self.stmt(st, &mut bd);
+                }
+                let inner = self.scopes.pop().expect("pushed");
+                if !bd.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue)) {
+                    for l in inner.owned.into_iter().rev() {
+                        bd.push(Stmt { kind: StmtKind::Drop(l), span });
+                    }
+                }
+                out.push(Stmt { kind: StmtKind::ForEach { var: c, iter: Expr::Local(it), body: bd }, span });
+                let outer = self.scopes.pop().expect("pushed");
+                for l in outer.owned.into_iter().rev() {
+                    out.push(Stmt { kind: StmtKind::Drop(l), span });
+                }
+            }
+            ast::StmtKind::Break | ast::StmtKind::Continue => {
+                self.release_scopes(true, None, span, out);
+                let kind = if matches!(s.kind, ast::StmtKind::Break) { StmtKind::Break } else { StmtKind::Continue };
+                out.push(Stmt { kind, span });
+            }
+            ast::StmtKind::Arena(body) => {
+                // arenas only change when memory is returned, never what a program does
+                let mut b = Vec::new();
+                self.block(body, &mut b, false);
+                out.extend(b);
+            }
             ast::StmtKind::Ret(v) => {
-                let v = v.as_ref().map(|e| self.expr(e, None, out));
-                out.push(Stmt { kind: StmtKind::Return(v), span });
+                let Some(e) = v else {
+                    self.end_statement(span, out);
+                    self.release_scopes(false, None, span, out);
+                    out.push(Stmt { kind: StmtKind::Return(None), span });
+                    return;
+                };
+                let t = e.ty;
+                let v = self.expr(e, None, out);
+                let mut keep = None;
+                let v = if managed(t) {
+                    if self.take(&v) {
+                        v
+                    } else if let Expr::Local(x) = v {
+                        if self.scopes.iter().any(|s| s.owned.contains(&x)) {
+                            // `ret x` of a local: the value moves out
+                            keep = Some(x);
+                            v
+                        } else {
+                            let r = self.temp(t);
+                            self.init(r, Expr::Local(x), span, out);
+                            Expr::Local(r)
+                        }
+                    } else {
+                        let r = self.temp(t);
+                        self.init(r, v, span, out);
+                        Expr::Local(r)
+                    }
+                } else if self.pending.is_empty() && self.scopes.iter().all(|s| s.owned.is_empty()) {
+                    v
+                } else {
+                    // the value may read something that is about to be released
+                    let r = self.temp(t);
+                    out.push(Stmt { kind: StmtKind::Set(r, v), span });
+                    Expr::Local(r)
+                };
+                self.end_statement(span, out);
+                self.release_scopes(false, keep, span, out);
+                out.push(Stmt { kind: StmtKind::Return(Some(v)), span });
             }
             ast::StmtKind::Expr(e) => {
-                // A call whose result is not used writes nowhere.
                 if let ast::ExprKind::Call(name, args) = &e.kind {
+                    // `free(x)` / `keep(x)`
+                    if name == "free" || name == "keep" {
+                        if let Some(ast::ExprKind::Var(x)) = args.first().map(|a| &a.kind) {
+                            let id = self.lookup(x);
+                            if managed(self.ty_of(id)) {
+                                let kind = if name == "free" {
+                                    StmtKind::Free(id)
+                                } else {
+                                    // never released: one owner that is never dropped
+                                    StmtKind::Dup(id)
+                                };
+                                out.push(Stmt { kind, span: e.span });
+                            }
+                        }
+                        return;
+                    }
+                    // a call whose result is not used writes nowhere (a returned string is released)
                     if let Some(&func) = self.ids.get(name) {
                         let args = self.args(args, out);
-                        out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span: e.span });
+                        if managed(e.ty) {
+                            let t = self.owned_temp(e.ty);
+                            out.push(Stmt { kind: StmtKind::Call { dst: Some(t), func, args }, span: e.span });
+                        } else {
+                            out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span: e.span });
+                        }
+                        self.end_statement(span, out);
                         return;
                     }
                 }
                 // effects only: the (pure) value itself is unused
                 self.expr(e, None, out);
+                self.end_statement(span, out);
             }
         }
     }
@@ -206,6 +453,13 @@ impl<'a> Lower<'a> {
     fn args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Expr> {
         let mut v = Vec::with_capacity(args.len());
         for a in args {
+            let a = match &a.kind {
+                ast::ExprKind::Inout(_) | ast::ExprKind::Labeled(..) => {
+                    self.not_yet("`inout` arguments and structs");
+                    continue;
+                }
+                _ => a,
+            };
             v.push(self.expr(a, None, out));
         }
         v
@@ -223,21 +477,32 @@ impl<'a> Lower<'a> {
         v
     }
 
+    /// An operation whose result goes into `dst` or a new temporary (owned if it makes a value).
+    fn op(&mut self, op: RtOp, args: Vec<Expr>, t: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let d = match dst {
+            Some(d) => d,
+            None if op.owned_result() => self.owned_temp(t),
+            None => self.temp(t),
+        };
+        out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op, args }, span });
+        Expr::Local(d)
+    }
+
     /// Lowers `e`: its effects are appended to `out` and a pure expression for its value is
-    /// returned. With `dst`, a top-level call or runtime operation writes straight into `dst`.
+    /// returned. With `dst` (a fresh variable, or a plain value's target), a top-level call or
+    /// operation writes straight into `dst`.
     fn expr(&mut self, e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
         match &e.kind {
             ast::ExprKind::Int(n) => Expr::Int(*n),
             ast::ExprKind::Float(f) => Expr::Float(*f),
             ast::ExprKind::Bool(b) => Expr::Bool(*b),
+            ast::ExprKind::Char(c) => Expr::Char(*c),
             ast::ExprKind::Str(s) => Expr::Str(self.strs.intern(s)),
             ast::ExprKind::Var(name) => Expr::Local(self.lookup(name)),
             ast::ExprKind::Interp(parts) => {
                 let args = self.parts(parts, out);
-                let d = dst.unwrap_or_else(|| self.temp(Ty::Str));
-                out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::Format, args }, span });
-                Expr::Local(d)
+                self.op(RtOp::Format, args, Ty::Str, dst, span, out)
             }
             ast::ExprKind::Unary(op, x) => {
                 let v = Box::new(self.expr(x, None, out));
@@ -247,61 +512,90 @@ impl<'a> Lower<'a> {
                     (ast::UnOp::Neg, _) => Expr::Unary(UnOp::INeg, v),
                 }
             }
-            ast::ExprKind::Binary(op, l, r) => self.binary(*op, l, r, e, dst, out),
+            ast::ExprKind::Binary(op, l, r) => {
+                if matches!(op, ast::BinOp::And | ast::BinOp::Or) {
+                    return self.logic(*op, l, r, span, out);
+                }
+                let a = self.expr(l, None, out);
+                let b = self.expr(r, None, out);
+                self.binop(*op, a, b, l.ty, e.ty, span, dst, out)
+            }
             ast::ExprKind::If(c, a, b) => {
                 let c = self.expr(c, None, out);
+                let saved = std::mem::take(&mut self.pending);
                 let (mut ta, mut tb) = (Vec::new(), Vec::new());
                 let av = self.expr(a, None, &mut ta);
+                let pa = std::mem::take(&mut self.pending);
                 let bv = self.expr(b, None, &mut tb);
-                if ta.is_empty() && tb.is_empty() {
+                let pb = std::mem::take(&mut self.pending);
+                if ta.is_empty() && tb.is_empty() && pa.is_empty() && pb.is_empty() {
+                    self.pending = saved;
                     return Expr::Select(Box::new(c), Box::new(av), Box::new(bv));
                 }
                 // A branch has effects: only the taken branch may run them.
-                let d = dst.unwrap_or_else(|| self.temp(ty(e.ty)));
-                self.assign(d, av, span, &mut ta);
-                self.assign(d, bv, span, &mut tb);
+                let t = e.ty;
+                let d = match dst {
+                    Some(d) => d,
+                    None => self.temp(t),
+                };
+                // each branch moves (or copies) its value into `d` and releases its own temporaries
+                for (branch, value, pend) in [(&mut ta, av, pa), (&mut tb, bv, pb)] {
+                    self.pending = pend;
+                    self.init(d, value, span, branch);
+                    self.end_statement(span, branch);
+                }
+                self.pending = saved;
+                if dst.is_none() && managed(t) {
+                    self.pending.push(d);
+                }
                 out.push(Stmt { kind: StmtKind::If { cond: c, then: ta, els: tb }, span });
                 Expr::Local(d)
             }
             ast::ExprKind::Call(name, args) => self.call(name, args, e, dst, out),
+            ast::ExprKind::Index(base, index) => {
+                if base.ty != Type::Str {
+                    return self.not_yet("arrays");
+                }
+                let s = self.expr(base, None, out);
+                let i = self.expr(index, None, out);
+                self.op(RtOp::StrAt, vec![s, i], Ty::Char, dst, span, out)
+            }
+            ast::ExprKind::Method(recv, name, args) => self.method(recv, name, args, e, dst, out),
+            ast::ExprKind::Array(_) => self.not_yet("arrays"),
+            ast::ExprKind::Field(..) => self.not_yet("structs"),
+            ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments and structs"),
         }
     }
 
-    fn binary(
-        &mut self,
-        op: ast::BinOp,
-        l: &ast::Expr,
-        r: &ast::Expr,
-        e: &ast::Expr,
-        dst: Option<LocalId>,
-        out: &mut Vec<Stmt>,
-    ) -> Expr {
-        use ast::BinOp as A;
-        let span = e.span;
-        if matches!(op, A::And | A::Or) {
-            let a = self.expr(l, None, out);
-            let mut rhs = Vec::new();
-            let b = self.expr(r, None, &mut rhs);
-            let iop = if op == A::And { BinOp::And } else { BinOp::Or };
-            if rhs.is_empty() {
-                return Expr::Binary(iop, Box::new(a), Box::new(b));
-            }
-            // The right side has effects: run them only when its value is needed.
-            let t = self.temp(Ty::Bool);
-            out.push(Stmt { kind: StmtKind::Set(t, a), span });
-            let cond = if op == A::And {
-                Expr::Local(t)
-            } else {
-                Expr::Unary(UnOp::Not, Box::new(Expr::Local(t)))
-            };
-            self.assign(t, b, span, &mut rhs);
-            out.push(Stmt { kind: StmtKind::If { cond, then: rhs, els: Vec::new() }, span });
-            return Expr::Local(t);
-        }
-
+    /// `a && b`, `a || b`: if `b` has effects, they only run when its value is needed.
+    fn logic(&mut self, op: ast::BinOp, l: &ast::Expr, r: &ast::Expr, span: Span, out: &mut Vec<Stmt>) -> Expr {
         let a = self.expr(l, None, out);
-        let b = self.expr(r, None, out);
-        let t = l.ty;
+        let saved = std::mem::take(&mut self.pending);
+        let mut rhs = Vec::new();
+        let b = self.expr(r, None, &mut rhs);
+        let iop = if op == ast::BinOp::And { BinOp::And } else { BinOp::Or };
+        if rhs.is_empty() && self.pending.is_empty() {
+            self.pending = saved;
+            return Expr::Binary(iop, Box::new(a), Box::new(b));
+        }
+        let t = self.temp(Ty::Bool);
+        out.push(Stmt { kind: StmtKind::Set(t, a), span });
+        let cond = if op == ast::BinOp::And {
+            Expr::Local(t)
+        } else {
+            Expr::Unary(UnOp::Not, Box::new(Expr::Local(t)))
+        };
+        rhs.push(Stmt { kind: StmtKind::Set(t, b), span });
+        self.end_statement(span, &mut rhs);
+        self.pending = saved;
+        out.push(Stmt { kind: StmtKind::If { cond, then: rhs, els: Vec::new() }, span });
+        Expr::Local(t)
+    }
+
+    /// A binary operator on lowered operands of type `t`; `rt` is the result type.
+    #[allow(clippy::too_many_arguments)]
+    fn binop(&mut self, op: ast::BinOp, a: Expr, b: Expr, t: Type, rt: Type, span: Span, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+        use ast::BinOp as A;
         if t == Type::Int && matches!(op, A::Div | A::Mod) {
             return match const_int(&b) {
                 // x / -1 wraps (x86 would trap on MIN / -1), x % -1 is 0
@@ -312,13 +606,15 @@ impl<'a> Lower<'a> {
                     Expr::Binary(iop, Box::new(a), Box::new(b))
                 }
                 _ => {
-                    let d = dst.unwrap_or_else(|| self.temp(Ty::Int));
                     let rop = if op == A::Div { RtOp::DivInt } else { RtOp::RemInt };
-                    out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: rop, args: vec![a, b] }, span });
-                    Expr::Local(d)
+                    self.op(rop, vec![a, b], Ty::Int, dst, span, out)
                 }
             };
         }
+        if t == Type::Str && op == A::Add {
+            return self.op(RtOp::StrConcat, vec![a, b], Ty::Str, dst, span, out);
+        }
+        let _ = rt;
         let iop = match (op, t) {
             (A::Add, Type::Int) => BinOp::IAdd,
             (A::Add, _) => BinOp::FAdd,
@@ -330,32 +626,38 @@ impl<'a> Lower<'a> {
             (A::Eq, Type::Int) => BinOp::IEq,
             (A::Eq, Type::Float) => BinOp::FEq,
             (A::Eq, Type::Bool) => BinOp::BEq,
+            (A::Eq, Type::Char) => BinOp::CEq,
             (A::Eq, _) => BinOp::SEq,
             (A::Ne, Type::Int) => BinOp::INe,
             (A::Ne, Type::Float) => BinOp::FNe,
             (A::Ne, Type::Bool) => BinOp::BNe,
+            (A::Ne, Type::Char) => BinOp::CNe,
             (A::Ne, _) => BinOp::SNe,
             (A::Lt, Type::Int) => BinOp::ILt,
+            (A::Lt, Type::Char) => BinOp::CLt,
+            (A::Lt, Type::Str) => BinOp::SLt,
             (A::Lt, _) => BinOp::FLt,
             (A::Le, Type::Int) => BinOp::ILe,
+            (A::Le, Type::Char) => BinOp::CLe,
+            (A::Le, Type::Str) => BinOp::SLe,
             (A::Le, _) => BinOp::FLe,
             (A::Gt, Type::Int) => BinOp::IGt,
+            (A::Gt, Type::Char) => BinOp::CGt,
+            (A::Gt, Type::Str) => BinOp::SGt,
             (A::Gt, _) => BinOp::FGt,
             (A::Ge, Type::Int) => BinOp::IGe,
+            (A::Ge, Type::Char) => BinOp::CGe,
+            (A::Ge, Type::Str) => BinOp::SGe,
             (A::Ge, _) => BinOp::FGe,
             (A::Mod, _) | (A::And | A::Or, _) => unreachable!("rejected by the checker or handled above"),
         };
+        if !matches!(t, Type::Int | Type::Float | Type::Bool | Type::Char | Type::Str) {
+            return self.not_yet("comparisons of arrays and structs");
+        }
         Expr::Binary(iop, Box::new(a), Box::new(b))
     }
 
-    fn call(
-        &mut self,
-        name: &str,
-        args: &[ast::Expr],
-        e: &ast::Expr,
-        dst: Option<LocalId>,
-        out: &mut Vec<Stmt>,
-    ) -> Expr {
+    fn call(&mut self, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
         match name {
             "print" => {
@@ -363,44 +665,124 @@ impl<'a> Lower<'a> {
                     ast::ExprKind::Interp(p) => self.parts(p, out),
                     _ => vec![self.expr(&args[0], None, out)],
                 };
+                if parts.iter().any(|p| !self.printable(p)) {
+                    return self.not_yet("printing arrays and structs");
+                }
                 out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Print, args: parts }, span });
                 // `print` returns nothing, so this value is never used
                 Expr::Bool(false)
             }
-            "int" => {
+            "str" => {
                 let x = self.expr(&args[0], None, out);
-                if args[0].ty != Type::Float {
+                if args[0].ty == Type::Str {
                     return x;
                 }
-                let d = dst.unwrap_or_else(|| self.temp(Ty::Int));
-                out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::FloatToInt, args: vec![x] }, span });
-                Expr::Local(d)
+                if !self.printable(&x) {
+                    return self.not_yet("`str(x)` of arrays and structs");
+                }
+                self.op(RtOp::Format, vec![x], Ty::Str, dst, span, out)
+            }
+            "char" => {
+                let x = self.expr(&args[0], None, out);
+                if args[0].ty == Type::Char {
+                    return x;
+                }
+                self.op(RtOp::CharFrom, vec![x], Ty::Char, dst, span, out)
+            }
+            "int" => {
+                let x = self.expr(&args[0], None, out);
+                match args[0].ty {
+                    Type::Float => self.op(RtOp::FloatToInt, vec![x], Ty::Int, dst, span, out),
+                    Type::Str => self.op(RtOp::StrToInt, vec![x], Ty::Int, dst, span, out),
+                    _ => x,
+                }
             }
             "float" => {
                 let x = self.expr(&args[0], None, out);
-                if args[0].ty == Type::Int {
-                    Expr::IntToFloat(Box::new(x))
-                } else {
-                    x
+                match args[0].ty {
+                    Type::Int => Expr::IntToFloat(Box::new(x)),
+                    Type::Str => self.op(RtOp::StrToFloat, vec![x], Ty::Float, dst, span, out),
+                    _ => x,
                 }
             }
+            "free" | "keep" => Expr::Bool(false),
             _ => {
-                let func = self.ids[name];
+                let Some(&func) = self.ids.get(name) else {
+                    return self.not_yet("structs");
+                };
                 let args = self.args(args, out);
                 if e.ty == Type::Void {
                     out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span });
                     return Expr::Bool(false);
                 }
-                let d = dst.unwrap_or_else(|| self.temp(ty(e.ty)));
+                let d = match dst {
+                    Some(d) => d,
+                    None => self.owned_temp(e.ty),
+                };
                 out.push(Stmt { kind: StmtKind::Call { dst: Some(d), func, args }, span });
                 Expr::Local(d)
             }
         }
     }
+
+    /// True if the value can be printed by the backends (no arrays or structs yet).
+    fn printable(&self, e: &Expr) -> bool {
+        let t = match e {
+            Expr::Local(l) => self.ty_of(*l),
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => return true,
+            _ => return true,
+        };
+        matches!(t, Type::Int | Type::Float | Type::Bool | Type::Char | Type::Str)
+    }
+
+    fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+        let span = e.span;
+        if !matches!(recv.ty, Type::Str | Type::Char) {
+            return self.not_yet("array methods");
+        }
+        if recv.ty == Type::Str && matches!(name, "chars" | "codes" | "split") {
+            return self.not_yet("arrays");
+        }
+        let r = self.expr(recv, None, out);
+        let mut all = vec![r];
+        for a in args {
+            all.push(self.expr(a, None, out));
+        }
+        let pure = |f: PureFn| Some(f);
+        let p = match (recv.ty, name) {
+            (Type::Str, "len") => pure(PureFn::StrLen),
+            (Type::Str, "contains") => pure(PureFn::StrContains),
+            (Type::Str, "starts_with") => pure(PureFn::StrStartsWith),
+            (Type::Str, "ends_with") => pure(PureFn::StrEndsWith),
+            (Type::Str, "index_of") => pure(PureFn::StrIndexOf),
+            (Type::Char, "code") => pure(PureFn::CharCode),
+            (Type::Char, "upper") => pure(PureFn::CharUpper),
+            (Type::Char, "lower") => pure(PureFn::CharLower),
+            (Type::Char, "is_digit") => pure(PureFn::CharIsDigit),
+            (Type::Char, "is_letter") => pure(PureFn::CharIsLetter),
+            (Type::Char, "is_upper") => pure(PureFn::CharIsUpper),
+            (Type::Char, "is_lower") => pure(PureFn::CharIsLower),
+            (Type::Char, "is_space") => pure(PureFn::CharIsSpace),
+            _ => None,
+        };
+        if let Some(p) = p {
+            return Expr::Pure(p, all);
+        }
+        let op = match name {
+            "slice" => RtOp::StrSlice,
+            "replace" => RtOp::StrReplace,
+            "trim" => RtOp::StrTrim,
+            "upper" => RtOp::StrUpper,
+            "lower" => RtOp::StrLower,
+            "repeat" => RtOp::StrRepeat,
+            _ => return self.not_yet("this method"),
+        };
+        self.op(op, all, Ty::Str, dst, span, out)
+    }
 }
 
-/// Removes temporaries that ended up unused (`assign` redirects some results straight into
-/// variables) and renumbers the rest, so the generated code declares only what it uses.
+/// Removes temporaries that ended up unused (results written straight into variables) and
+/// renumbers the rest, so the generated code declares only what it uses.
 fn prune_temps(f: &mut Func) {
     let mut used = vec![false; f.locals.len()];
     for (i, l) in f.locals.iter().enumerate() {

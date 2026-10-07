@@ -1,5 +1,6 @@
 mod ast;
 mod check;
+mod check_v03;
 mod codegen;
 mod diag;
 mod explain;
@@ -155,7 +156,10 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let mut module = ir::lower::lower(&prog);
+    let mut module = match ir::lower::lower(&prog) {
+        Ok(m) => m,
+        Err(what) => return fail(format!("not supported yet: {what} (coming later in v0.3)")),
+    };
     // NYRA_OPT=0 (for tests and debugging) skips the optimization passes
     if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
         ir::opt::optimize(&mut module);

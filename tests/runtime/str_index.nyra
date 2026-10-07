@@ -1,0 +1,5 @@
+// expect: E0240 at 4:12
+fn main() {
+    let s = "abc"
+    print(s[3])
+}

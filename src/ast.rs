@@ -1,31 +1,106 @@
 //! Syntax tree produced by the parser and annotated by the type checker.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use std::cell::RefCell;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub line: usize,
     pub col: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A Nyra type. `Copy`: array element types and struct names are interned (see `Type::array`,
+/// `Type::structure`), so `[[int]]` or `Point` is a small id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
     Float,
     Bool,
     Str,
+    Char,
     Void,
     /// Produced after an error so one mistake doesn't cascade into many.
     Unknown,
+    /// `[T]`; the id indexes the interned element types.
+    Array(u32),
+    /// A struct; the id indexes the interned struct names.
+    Struct(u32),
+}
+
+thread_local! {
+    static ELEMS: RefCell<Vec<Type>> = const { RefCell::new(Vec::new()) };
+    static STRUCTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 impl Type {
-    pub fn name(self) -> &'static str {
+    /// `[elem]`. An array of an unknown type is unknown.
+    pub fn array(elem: Type) -> Type {
+        if elem == Type::Unknown {
+            return Type::Unknown;
+        }
+        ELEMS.with(|e| {
+            let mut e = e.borrow_mut();
+            let id = match e.iter().position(|t| *t == elem) {
+                Some(i) => i,
+                None => {
+                    e.push(elem);
+                    e.len() - 1
+                }
+            };
+            Type::Array(id as u32)
+        })
+    }
+
+    /// The struct type named `name` (whether or not it is defined: the checker says so).
+    pub fn structure(name: &str) -> Type {
+        STRUCTS.with(|s| {
+            let mut s = s.borrow_mut();
+            let id = match s.iter().position(|n| n == name) {
+                Some(i) => i,
+                None => {
+                    s.push(name.to_string());
+                    s.len() - 1
+                }
+            };
+            Type::Struct(id as u32)
+        })
+    }
+
+    /// The element type of an array.
+    pub fn elem(self) -> Option<Type> {
         match self {
-            Type::Int => "int",
-            Type::Float => "float",
-            Type::Bool => "bool",
-            Type::Str => "str",
-            Type::Void => "void",
-            Type::Unknown => "?",
+            Type::Array(id) => Some(ELEMS.with(|e| e.borrow()[id as usize])),
+            _ => None,
+        }
+    }
+
+    /// The name of a struct type.
+    pub fn struct_name(self) -> Option<String> {
+        match self {
+            Type::Struct(id) => Some(STRUCTS.with(|s| s.borrow()[id as usize].clone())),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> String {
+        match self {
+            Type::Int => "int".into(),
+            Type::Float => "float".into(),
+            Type::Bool => "bool".into(),
+            Type::Str => "str".into(),
+            Type::Char => "char".into(),
+            Type::Void => "void".into(),
+            Type::Unknown => "?".into(),
+            Type::Array(_) => format!("[{}]", self.elem().map(Type::name).unwrap_or_default()),
+            Type::Struct(_) => self.struct_name().unwrap_or_default(),
+        }
+    }
+
+    /// True if values of this type contain something unknown (after an error).
+    pub fn is_unknown(self) -> bool {
+        match self {
+            Type::Unknown => true,
+            Type::Array(_) => self.elem().is_some_and(Type::is_unknown),
+            _ => false,
         }
     }
 }
@@ -33,6 +108,21 @@ impl Type {
 #[derive(Debug)]
 pub struct Program {
     pub funcs: Vec<Func>,
+    pub structs: Vec<StructDef>,
+}
+
+#[derive(Debug)]
+pub struct StructDef {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct Field {
+    pub name: String,
+    pub ty: Type,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -48,6 +138,8 @@ pub struct Func {
 pub struct Param {
     pub name: String,
     pub ty: Type,
+    /// `inout name: T`: the function changes the caller's variable.
+    pub inout: bool,
     pub span: Span,
 }
 
@@ -60,10 +152,18 @@ pub struct Stmt {
 #[derive(Debug)]
 pub enum StmtKind {
     Let { name: String, mutable: bool, ty: Option<Type>, value: Expr },
-    Assign { name: String, value: Expr },
+    /// `target = value`, or `target op= value` (the target is evaluated once).
+    Assign { target: Expr, op: Option<BinOp>, value: Expr },
     If { cond: Expr, then: Vec<Stmt>, els: Option<Vec<Stmt>> },
     While { cond: Expr, body: Vec<Stmt> },
+    /// `for var in start..end`
     For { var: String, start: Expr, end: Expr, body: Vec<Stmt> },
+    /// `for var in iter` over an array or a string
+    ForEach { var: String, iter: Expr, body: Vec<Stmt> },
+    Break,
+    Continue,
+    /// `arena { ... }`: everything allocated inside is freed together at `}`.
+    Arena(Vec<Stmt>),
     Ret(Option<Expr>),
     Expr(Expr),
 }
@@ -137,12 +237,27 @@ pub enum ExprKind {
     Float(f64),
     Bool(bool),
     Str(String),
+    /// `'a'`: one Unicode code point
+    Char(u32),
     /// `"text {expr} text"`
     Interp(Vec<InterpPart>),
     Var(String),
     Unary(UnOp, Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// `f(a, b)`, also struct construction `Point(x: 1, y: 2)` and builtins
     Call(String, Vec<Expr>),
     /// `if c { a } else { b }` used as a value
     If(Box<Expr>, Box<Expr>, Box<Expr>),
+    /// `[a, b, c]`
+    Array(Vec<Expr>),
+    /// `base[index]`
+    Index(Box<Expr>, Box<Expr>),
+    /// `base.name`
+    Field(Box<Expr>, String),
+    /// `receiver.name(args)`
+    Method(Box<Expr>, String, Vec<Expr>),
+    /// `name: value`: only as an argument (struct construction)
+    Labeled(String, Box<Expr>),
+    /// `inout place`: only as an argument
+    Inout(Box<Expr>),
 }

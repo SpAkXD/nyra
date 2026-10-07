@@ -2,9 +2,12 @@
 //!
 //! A structured, typed tree. Every effect (calling a function, printing, building a
 //! string, an operation that can fail at runtime) is its own statement, and statements
-//! run in order. Expressions are pure: they cannot call, print, allocate or fail, so a
-//! backend may emit them in any evaluation order (C!) and later passes may fold or drop
+//! run in order. Expressions are pure: they cannot call user code, print, allocate or fail,
+//! so a backend may emit them in any evaluation order (C!) and later passes may fold or drop
 //! them. This is what makes evaluation order and runtime errors identical on every backend.
+//!
+//! Memory is explicit: values of managed types (strings) are reference counted, and lowering
+//! inserts `Dup` (retain) and `Drop` (release) statements. C executes them; JS ignores them.
 
 pub mod lower;
 pub mod opt;
@@ -12,6 +15,7 @@ pub mod print;
 pub mod verify;
 
 use crate::ast::Span;
+pub use crate::ast::Type as Ty;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FuncId(pub u32);
@@ -22,23 +26,9 @@ pub struct LocalId(pub u32);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct StrId(pub u32);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Ty {
-    Int,
-    Float,
-    Bool,
-    Str,
-}
-
-impl Ty {
-    pub fn name(self) -> &'static str {
-        match self {
-            Ty::Int => "int",
-            Ty::Float => "float",
-            Ty::Bool => "bool",
-            Ty::Str => "str",
-        }
-    }
+/// True for types whose values own heap memory and are reference counted.
+pub fn managed(t: Ty) -> bool {
+    matches!(t, Ty::Str)
 }
 
 pub struct Module {
@@ -89,21 +79,32 @@ pub struct Stmt {
 }
 
 pub enum StmtKind {
-    /// Declare-or-assign a local.
+    /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
     Call { dst: Option<LocalId>, func: FuncId, args: Vec<Expr> },
     Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
     If { cond: Expr, then: Vec<Stmt>, els: Vec<Stmt> },
     /// Each round: run `head`, leave if `cond` is false, run `body`, then `step`.
+    /// `continue` goes to `step`.
     Loop { head: Vec<Stmt>, cond: Expr, body: Vec<Stmt>, step: Vec<Stmt> },
+    /// `for var in iter`: `iter` is a string (`var` gets each `char`).
+    ForEach { var: LocalId, iter: Expr, body: Vec<Stmt> },
+    Break,
+    Continue,
     Return(Option<Expr>),
+    /// One more owner for the value in a local (C: retain).
+    Dup(LocalId),
+    /// One owner less (C: release; frees at zero).
+    Drop(LocalId),
+    /// `free(x)`: release now and leave the local empty.
+    Free(LocalId),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RtOp {
-    /// Prints the parts (int/float/bool/str) and a newline, without building a string.
+    /// Prints the parts and a newline, without building a string.
     Print,
-    /// Builds a string from the parts (interpolation). `dst: str`.
+    /// Builds a new string from the parts (interpolation, `str(x)`). `dst: str`, owned.
     Format,
     /// int `/` whose divisor may be 0 (runtime error E0241). `dst: int`.
     DivInt,
@@ -111,6 +112,27 @@ pub enum RtOp {
     RemInt,
     /// `int(x)` of a float: NaN or out of range is runtime error E0245. `dst: int`.
     FloatToInt,
+    /// `a + b` on strings: a new string.
+    StrConcat,
+    /// `s += t`: appends to the local `dst` (also `args[0]`) in place when it is the only owner.
+    StrAppend,
+    /// `s[i]`: the i-th character (E0240).
+    StrAt,
+    /// `s.slice(a, b)` (E0240), new string.
+    StrSlice,
+    /// `s.replace(old, new)` (E0243 for an empty `old`), new string.
+    StrReplace,
+    StrTrim,
+    StrUpper,
+    StrLower,
+    /// `s.repeat(n)` (E0243 for n < 0), new string.
+    StrRepeat,
+    /// `int(s)` (E0244).
+    StrToInt,
+    /// `float(s)` (E0244).
+    StrToFloat,
+    /// `char(n)` (E0246).
+    CharFrom,
 }
 
 impl RtOp {
@@ -121,6 +143,104 @@ impl RtOp {
             RtOp::DivInt => "div_int",
             RtOp::RemInt => "rem_int",
             RtOp::FloatToInt => "float_to_int",
+            RtOp::StrConcat => "str_concat",
+            RtOp::StrAppend => "str_append",
+            RtOp::StrAt => "str_at",
+            RtOp::StrSlice => "str_slice",
+            RtOp::StrReplace => "str_replace",
+            RtOp::StrTrim => "str_trim",
+            RtOp::StrUpper => "str_upper",
+            RtOp::StrLower => "str_lower",
+            RtOp::StrRepeat => "str_repeat",
+            RtOp::StrToInt => "str_to_int",
+            RtOp::StrToFloat => "str_to_float",
+            RtOp::CharFrom => "char_from",
+        }
+    }
+
+    /// The operand types and the result type (`None`: writes nowhere).
+    pub fn sig(self) -> (&'static [Ty], Option<Ty>) {
+        use Ty::{Char, Float, Int, Str};
+        match self {
+            RtOp::Print | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
+            RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
+            RtOp::FloatToInt => (&[Float], Some(Int)),
+            RtOp::StrConcat | RtOp::StrAppend => (&[Str, Str], Some(Str)),
+            RtOp::StrAt => (&[Str, Int], Some(Char)),
+            RtOp::StrSlice => (&[Str, Int, Int], Some(Str)),
+            RtOp::StrReplace => (&[Str, Str, Str], Some(Str)),
+            RtOp::StrTrim | RtOp::StrUpper | RtOp::StrLower => (&[Str], Some(Str)),
+            RtOp::StrRepeat => (&[Str, Int], Some(Str)),
+            RtOp::StrToInt => (&[Str], Some(Int)),
+            RtOp::StrToFloat => (&[Str], Some(Float)),
+            RtOp::CharFrom => (&[Int], Some(Char)),
+        }
+    }
+
+    /// True if the result is a new value the destination owns (it must be dropped).
+    pub fn owned_result(self) -> bool {
+        matches!(
+            self,
+            RtOp::Format
+                | RtOp::StrConcat
+                | RtOp::StrSlice
+                | RtOp::StrReplace
+                | RtOp::StrTrim
+                | RtOp::StrUpper
+                | RtOp::StrLower
+                | RtOp::StrRepeat
+        )
+    }
+}
+
+/// Pure functions of the runtime: no allocation, no failure, no effect.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PureFn {
+    /// characters in a string
+    StrLen,
+    StrContains,
+    StrStartsWith,
+    StrEndsWith,
+    /// character position or -1
+    StrIndexOf,
+    CharCode,
+    CharUpper,
+    CharLower,
+    CharIsDigit,
+    CharIsLetter,
+    CharIsUpper,
+    CharIsLower,
+    CharIsSpace,
+}
+
+impl PureFn {
+    pub fn name(self) -> &'static str {
+        match self {
+            PureFn::StrLen => "str_len",
+            PureFn::StrContains => "str_contains",
+            PureFn::StrStartsWith => "str_starts_with",
+            PureFn::StrEndsWith => "str_ends_with",
+            PureFn::StrIndexOf => "str_index_of",
+            PureFn::CharCode => "char_code",
+            PureFn::CharUpper => "char_upper",
+            PureFn::CharLower => "char_lower",
+            PureFn::CharIsDigit => "char_is_digit",
+            PureFn::CharIsLetter => "char_is_letter",
+            PureFn::CharIsUpper => "char_is_upper",
+            PureFn::CharIsLower => "char_is_lower",
+            PureFn::CharIsSpace => "char_is_space",
+        }
+    }
+
+    pub fn sig(self) -> (&'static [Ty], Ty) {
+        use Ty::{Bool, Char, Int, Str};
+        match self {
+            PureFn::StrLen => (&[Str], Int),
+            PureFn::StrContains | PureFn::StrStartsWith | PureFn::StrEndsWith => (&[Str, Str], Bool),
+            PureFn::StrIndexOf => (&[Str, Str], Int),
+            PureFn::CharCode => (&[Char], Int),
+            PureFn::CharUpper | PureFn::CharLower => (&[Char], Char),
+            _ => (&[Char], Bool),
         }
     }
 }
@@ -131,6 +251,7 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Bool(bool),
+    Char(u32),
     Str(StrId),
     Local(LocalId),
     Unary(UnOp, Box<Expr>),
@@ -138,6 +259,7 @@ pub enum Expr {
     /// `if c { a } else { b }` with pure branches.
     Select(Box<Expr>, Box<Expr>, Box<Expr>),
     IntToFloat(Box<Expr>),
+    Pure(PureFn, Vec<Expr>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -178,9 +300,20 @@ pub enum BinOp {
     /// Both sides are pure, so no short-circuit is needed.
     And,
     Or,
-    /// String value equality.
+    /// characters compare by code
+    CEq,
+    CNe,
+    CLt,
+    CLe,
+    CGt,
+    CGe,
+    /// strings: equality by value, order by code points
     SEq,
     SNe,
+    SLt,
+    SLe,
+    SGt,
+    SGe,
 }
 
 impl BinOp {
@@ -190,7 +323,8 @@ impl BinOp {
             IAdd | ISub | IMul | IDiv | IRem | IEq | INe | ILt | ILe | IGt | IGe => Ty::Int,
             FAdd | FSub | FMul | FDiv | FEq | FNe | FLt | FLe | FGt | FGe => Ty::Float,
             BEq | BNe | And | Or => Ty::Bool,
-            SEq | SNe => Ty::Str,
+            CEq | CNe | CLt | CLe | CGt | CGe => Ty::Char,
+            SEq | SNe | SLt | SLe | SGt | SGe => Ty::Str,
         }
     }
 
@@ -212,12 +346,12 @@ impl BinOp {
             IMul | FMul => "*",
             IDiv | FDiv => "/",
             IRem => "%",
-            IEq | FEq | BEq | SEq => "==",
-            INe | FNe | BNe | SNe => "!=",
-            ILt | FLt => "<",
-            ILe | FLe => "<=",
-            IGt | FGt => ">",
-            IGe | FGe => ">=",
+            IEq | FEq | BEq | CEq | SEq => "==",
+            INe | FNe | BNe | CNe | SNe => "!=",
+            ILt | FLt | CLt | SLt => "<",
+            ILe | FLe | CLe | SLe => "<=",
+            IGt | FGt | CGt | SGt => ">",
+            IGe | FGe | CGe | SGe => ">=",
             And => "&&",
             Or => "||",
         }
@@ -230,6 +364,7 @@ impl Expr {
             Expr::Int(_) => Ty::Int,
             Expr::Float(_) | Expr::IntToFloat(_) => Ty::Float,
             Expr::Bool(_) => Ty::Bool,
+            Expr::Char(_) => Ty::Char,
             Expr::Str(_) => Ty::Str,
             Expr::Local(l) => f.local(*l).ty,
             Expr::Unary(UnOp::INeg, _) => Ty::Int,
@@ -237,6 +372,7 @@ impl Expr {
             Expr::Unary(UnOp::Not, _) => Ty::Bool,
             Expr::Binary(op, _, _) => op.result(),
             Expr::Select(_, a, _) => a.ty(f),
+            Expr::Pure(p, _) => p.sig().1,
         }
     }
 }
@@ -268,8 +404,14 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
                 visit_locals(body, f);
                 visit_locals(step, f);
             }
+            StmtKind::ForEach { var, iter, body } => {
+                f(var);
+                expr_locals(iter, f);
+                visit_locals(body, f);
+            }
             StmtKind::Return(Some(e)) => expr_locals(e, f),
-            StmtKind::Return(None) => {}
+            StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) => f(l),
+            StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => {}
         }
     }
 }
@@ -287,7 +429,12 @@ fn expr_locals(e: &mut Expr, f: &mut dyn FnMut(&mut LocalId)) {
             expr_locals(a, f);
             expr_locals(b, f);
         }
-        Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Str(_) => {}
+        Expr::Pure(_, args) => {
+            for a in args {
+                expr_locals(a, f);
+            }
+        }
+        Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => {}
     }
 }
 
@@ -303,7 +450,7 @@ mod tests {
             }
             let src = std::fs::read_to_string(&path).unwrap();
             let prog = crate::compile(&src).unwrap_or_else(|d| panic!("{}: {d:?}", path.display()));
-            let mut m = super::lower::lower(&prog);
+            let Ok(mut m) = super::lower::lower(&prog) else { continue };
             super::verify::verify(&m).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
             super::opt::optimize(&mut m);
             super::verify::verify(&m).unwrap_or_else(|e| panic!("{} after optimizing: {e}", path.display()));

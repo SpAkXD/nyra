@@ -77,6 +77,26 @@ fn stmts(m: &Module, f: &Func, ss: &[Stmt], depth: usize, out: &mut String) {
                 }
                 let _ = writeln!(out, "{pad}}}");
             }
+            StmtKind::ForEach { var, iter, body } => {
+                let _ = writeln!(out, "{pad}for {} in {} {{", name(f, *var), expr(m, f, iter));
+                stmts(m, f, body, depth + 1, out);
+                let _ = writeln!(out, "{pad}}}");
+            }
+            StmtKind::Break => {
+                let _ = writeln!(out, "{pad}break");
+            }
+            StmtKind::Continue => {
+                let _ = writeln!(out, "{pad}continue");
+            }
+            StmtKind::Dup(l) => {
+                let _ = writeln!(out, "{pad}dup {}", name(f, *l));
+            }
+            StmtKind::Drop(l) => {
+                let _ = writeln!(out, "{pad}drop {}", name(f, *l));
+            }
+            StmtKind::Free(l) => {
+                let _ = writeln!(out, "{pad}free {}", name(f, *l));
+            }
             StmtKind::Return(None) => {
                 let _ = writeln!(out, "{pad}return");
             }
@@ -96,6 +116,8 @@ fn expr(m: &Module, f: &Func, e: &Expr) -> String {
         Expr::Int(n) => n.to_string(),
         Expr::Float(x) => format!("{x:?}"),
         Expr::Bool(b) => b.to_string(),
+        Expr::Char(c) => crate::lexer::char_literal(*c),
+        Expr::Pure(p, args) => format!("{}({})", p.name(), list(m, f, args)),
         Expr::Str(id) => json_str(m.str(*id)),
         Expr::Local(l) => name(f, *l),
         Expr::Unary(UnOp::Not, x) => format!("!{}", expr(m, f, x)),

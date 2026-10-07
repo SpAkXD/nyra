@@ -1,0 +1,5 @@
+// expect: E0243 at 4:16
+fn main() {
+    print("ok")
+    print("ab".repeat(-1))
+}

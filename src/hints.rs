@@ -11,9 +11,6 @@ pub fn word(w: &str) -> Option<String> {
     let hint = match w {
         "return" => "Nyra spells it `ret`: replace `return` with `ret`",
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
-        "break" | "continue" => {
-            "Nyra has no `break` or `continue`: stop a loop with a `bool` flag in the `while` condition, or `ret` from a helper function"
-        }
         "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
         "and" => "write `&&` for logical and: `a && b`",
         "or" => "write `||` for logical or: `a || b`",
@@ -29,13 +26,16 @@ pub fn word(w: &str) -> Option<String> {
         }
         "function" | "func" | "fun" | "def" => "functions start with `fn`: `fn name(a: int) -> int { ... }`",
         "try" | "catch" | "throw" | "finally" | "except" | "raise" => {
-            "Nyra has no exceptions: a failing operation (such as an integer division by zero) stops the program with a runtime error"
+            "Nyra has no exceptions: a failing operation (such as a division by zero or an index out of bounds) stops the program with a runtime error"
         }
-        "self" | "this" => "Nyra has no methods or objects, so there is no `self` or `this`: pass the value as a parameter",
+        "self" | "this" => {
+            "Nyra has no `self` or `this`: write a function that takes the value as a parameter, e.g. `fn area(r: Rect) -> int`"
+        }
         "loop" | "do" | "repeat" | "until" | "foreach" => {
-            "loops are `while cond { ... }` and `for i in 0..n { ... }` (for an endless loop write `while true { ... }` and leave with `ret`)"
+            "loops are `while cond { ... }`, `for i in 0..n { ... }` and `for x in xs { ... }` (for an endless loop write `while true { ... }` and leave it with `break`)"
         }
-        "as" => "Nyra has no `as` casts: convert with `float(x)` or `int(x)`",
+        "as" => "Nyra has no `as` casts: convert with `int(x)`, `float(x)`, `str(x)` or `char(n)`",
+        "new" => "Nyra has no `new`: build a struct by calling its name with the fields, e.g. `Point(x: 1, y: 2)`",
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         _ => return None,
     };
@@ -45,16 +45,24 @@ pub fn word(w: &str) -> Option<String> {
 /// A word that starts a top-level item in another language.
 pub fn top_level_word(w: &str) -> Option<String> {
     let hint = match w {
-        "struct" | "class" | "enum" | "interface" | "trait" | "impl" | "union" | "type" => {
+        "class" | "object" | "record" | "data" => {
+            "Nyra has no classes: declare the data with `struct Name { field: int }` and write functions that take it, e.g. `fn area(r: Rect) -> int`"
+        }
+        "impl" | "trait" | "interface" | "protocol" | "extension" => {
             return Some(format!(
-                "Nyra has no `{w}` yet: the only top-level item is `fn`, so model data with functions and plain values"
+                "Nyra has no `{w}`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`"
+            ))
+        }
+        "enum" | "union" | "type" | "typedef" => {
+            return Some(format!(
+                "Nyra has no `{w}` yet: the top-level items are `fn` and `struct`; for a fixed set of cases use `int` or `str` values"
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
-            "Nyra has no imports or modules: one file is one program, and it only contains `fn` definitions"
+            "Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions"
         }
         "pub" | "public" | "private" | "protected" | "extern" | "export" => {
-            "Nyra has no visibility modifiers: start the definition with `fn`"
+            "Nyra has no visibility modifiers: start the definition with `fn` or `struct`"
         }
         "const" | "static" | "final" => {
             "there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`"
@@ -67,10 +75,31 @@ pub fn top_level_word(w: &str) -> Option<String> {
 /// Hint for an undefined variable whose name is a keyword or literal of another language.
 pub fn undefined_variable(w: &str) -> Option<String> {
     match w {
-        "return" | "break" | "continue" | "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self"
-        | "this" => word(w),
+        "return" | "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self" | "this" => word(w),
         _ => None,
     }
+}
+
+/// Hint for an undefined name used before a `.`: a library object of another language
+/// (`console.log(x)`, `Math.sqrt(x)`, `fmt.Println(x)`).
+pub fn receiver(w: &str) -> Option<String> {
+    let hint = match w {
+        "console" | "fmt" | "System" | "sys" | "io" | "Console" | "std" | "process" => {
+            "print with `print(x)`: it takes one value and ends the line"
+        }
+        "Math" | "math" => "Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)",
+        "Integer" | "Number" | "Float" | "Double" | "String" | "Str" | "Char" | "Character" => {
+            "convert with the builtins `int(x)`, `float(x)`, `str(x)` and `char(n)`; methods belong to values, e.g. `s.len()`"
+        }
+        "Array" | "List" | "Vec" | "list" | "array" => {
+            "arrays are written `[1, 2, 3]` and their methods are called on a value, e.g. `xs.push(4)`"
+        }
+        "random" | "Random" | "rand" | "time" | "Date" | "os" | "fs" | "File" => {
+            "Nyra programs are closed for now: there is no random, clock, file or system access"
+        }
+        _ => return None,
+    };
+    Some(hint.to_string())
 }
 
 /// Hint for a call to a function that does not exist, but that other languages have.
@@ -88,11 +117,21 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "floor" | "ceil" | "round" | "trunc" => {
             "Nyra has no `floor`/`ceil`/`round`: `int(x)` truncates a float toward zero"
         }
-        "len" | "length" | "size" => {
-            "Nyra has no `len`: there are no arrays or string functions yet, so keep the length in a variable"
+        "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
+        "string" | "String" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" | "sprintf" => {
+            "convert with `str(x)`, or build text with interpolation, e.g. `\"{x}\"`"
         }
-        "str" | "string" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" => {
-            "Nyra has no string conversion function: build text with interpolation, e.g. `\"{x}\"`"
+        "parseInt" | "atoi" | "parse_int" | "Number" | "Integer" => "parse text with `int(s)` (a runtime error if it is not a number)",
+        "parseFloat" | "atof" | "parse_float" | "Float" | "Double" => {
+            "parse text with `float(s)` (a runtime error if it is not a number)"
+        }
+        "chr" | "fromCharCode" | "char_from" => "turn a code into a character with `char(n)`",
+        "ord" | "charCodeAt" | "codePointAt" => "a character's code is `c.code()`; all codes of a string: `s.codes()`",
+        "sorted" | "sort" => "sort an array in place with `xs.sort()`",
+        "reversed" | "reverse" => "reverse an array in place with `xs.reverse()`; for a string: `s.chars()`, reverse, then `join(\"\")`",
+        "split" | "join" | "trim" | "strip" | "upper" | "lower" | "replace" | "contains" | "startswith" | "endswith"
+        | "push" | "append" | "pop" | "insert" | "remove" => {
+            return Some(format!("`{w}` is a method: call it on the value, e.g. `x.{}(...)`", method_spelling(w)))
         }
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         "input" | "readline" | "read_line" | "scanf" | "gets" | "getline" => {
@@ -104,11 +143,22 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "range" => "a range is written `a..b` in a loop: `for i in 0..10 { ... }`",
         "bool" => "Nyra has no `bool(x)`: compare instead, e.g. `x != 0`",
         "random" | "rand" | "randint" | "clock" | "sleep" => {
-            "Nyra programs are closed: there is no random, clock or sleep"
+            "Nyra programs are closed for now: there is no random, clock or sleep"
         }
         _ => return None,
     };
     Some(hint.to_string())
+}
+
+/// The Nyra method for a function name of another language (`startswith` is `starts_with`).
+fn method_spelling(w: &str) -> &str {
+    match w {
+        "strip" => "trim",
+        "startswith" => "starts_with",
+        "endswith" => "ends_with",
+        "append" => "push",
+        other => other,
+    }
 }
 
 /// True for names that other languages use for a type (`string`, `i32`, `double`, `void`, ...).
@@ -129,6 +179,7 @@ pub fn nyra_type(w: &str) -> Option<&'static str> {
         | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
         "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => "float",
         "bool" | "boolean" => "bool",
+        "char" | "character" | "rune" => "char",
         _ => return None,
     })
 }
@@ -137,25 +188,26 @@ pub fn nyra_type(w: &str) -> Option<&'static str> {
 pub fn type_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     if let Some(t) = nyra_type(name) {
-        return format!("write `{t}` (all type names are lowercase: `int`, `float`, `bool`, `str`)");
+        return format!("write `{t}` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)");
     }
     match lower.as_str() {
-        "char" | "character" | "rune" => {
-            "Nyra has no character type: use a one-character `str`, e.g. `\"a\"`".to_string()
-        }
         "void" | "unit" | "none" | "nothing" => {
             "a function that returns nothing has no return type: leave out the `->` part".to_string()
         }
-        "vec" | "list" | "array" | "vector" | "map" | "dict" | "set" | "tuple" => {
-            "Nyra has no collection types yet: the types are `int`, `float`, `bool` and `str`".to_string()
+        "vec" | "list" | "array" | "vector" | "slice" | "arraylist" => {
+            "an array type is written `[T]`, e.g. `[int]` or `[str]`".to_string()
         }
-        "any" | "object" | "auto" | "var" | "let" => {
-            "write the type out: `int`, `float`, `bool` or `str` (only local variables are inferred: leave the annotation off)"
-                .to_string()
+        "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
+            "Nyra has no maps yet: use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`".to_string()
         }
-        _ => match suggest(name, ["int", "float", "bool", "str"]) {
-            Some(s) => format!("{s} The types are `int`, `float`, `bool` and `str`"),
-            None => "the types are `int`, `float`, `bool` and `str`".to_string(),
+        "set" | "hashset" => "Nyra has no sets yet: use an array and `xs.contains(x)`".to_string(),
+        "tuple" | "pair" => "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string(),
+        "any" | "auto" | "var" | "let" | "dynamic" => {
+            "write the type out (only local variables are inferred: leave the annotation off)".to_string()
+        }
+        _ => match suggest(name, ["int", "float", "bool", "str", "char"]) {
+            Some(s) => format!("{s} The types are `int`, `float`, `bool`, `str`, `char`, arrays `[T]` and structs"),
+            None => "the types are `int`, `float`, `bool`, `str`, `char`, arrays `[T]` and structs".to_string(),
         },
     }
 }
@@ -163,7 +215,6 @@ pub fn type_name(name: &str) -> String {
 /// The closing quote that matches an opening quote of another language, if `c` is one.
 pub fn quote_close(c: char) -> Option<char> {
     match c {
-        '\'' => Some('\''),
         '`' => Some('`'),
         '\u{2018}' => Some('\u{2019}'),
         '\u{201C}' => Some('\u{201D}'),
@@ -171,13 +222,12 @@ pub fn quote_close(c: char) -> Option<char> {
     }
 }
 
-/// How to write the text of a single-quoted, typographic or backtick literal in Nyra.
+/// How to write the text of a typographic or backtick literal in Nyra.
 pub fn quoted_text(open: char, text: &str) -> String {
     if text.contains('"') || text.contains('\\') {
         return "Nyra text uses straight double quotes: \"like this\"".to_string();
     }
     let kind = match open {
-        '\'' => "Nyra has no single-quoted text or character type",
         '`' => "Nyra has no backtick strings",
         _ => "typographic quotes are not quotes",
     };
@@ -206,14 +256,12 @@ pub fn bad_char(c: char) -> String {
     match c {
         '#' => "comments start with `//`, not `#`".into(),
         '?' => "Nyra has no `?`: for a conditional value write `if cond { a } else { b }`".into(),
-        '[' | ']' => "arrays and indexing do not exist yet: only `int`, `float`, `bool` and `str` values".into(),
         '&' => "write `&&` for logical and (there are no bit operations)".into(),
         '|' => "write `||` for logical or (there are no bit operations)".into(),
         '^' | '~' => "Nyra has no bit operations or power operator: multiply (`x * x`) or use a loop".into(),
         '@' => "`@` has no meaning in Nyra (there are no attributes or decorators)".into(),
         '$' => "to put a value in a string write `{x}` inside the quotes: \"cost: {x}\"".into(),
-        '\\' => "a backslash only appears inside a string, as in `\\n`".into(),
-        '.' => "`.` only appears in a float (`2.5`) or a range (`0..10`): Nyra has no methods or fields, call a function instead, e.g. `f(x)`".into(),
+        '\\' => "a backslash only appears inside a string or a character, as in `\\n`".into(),
         '\u{00D7}' => "write `*` for multiplication".into(),
         '\u{00F7}' => "write `/` for division".into(),
         '\u{2212}' | '\u{2013}' | '\u{2014}' => "write a plain `-` (ASCII hyphen) for minus".into(),

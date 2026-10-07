@@ -1,0 +1,5 @@
+// expect: E0240 at 4:19
+fn main() {
+    print("before")
+    print("hello".slice(2, 9))
+}

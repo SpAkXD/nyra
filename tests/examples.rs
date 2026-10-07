@@ -34,12 +34,21 @@ fn examples_produce_expected_output_on_every_backend() {
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         targets.push(("native", &[], "1"));
+        targets.push(("native, no optimizations", &[], "0"));
     }
 
     for path in files("examples") {
         let Ok(expected) = std::fs::read_to_string(path.with_extension("out")) else { continue };
         for (target, flags, opt) in &targets {
-            let out = nyra().arg("run").arg(&path).args(*flags).env("NYRA_OPT", opt).output().unwrap();
+            // NYRA_LEAKCHECK: native programs exit with 102 on a leak, a double free or a use after free
+            let out = nyra()
+                .arg("run")
+                .arg(&path)
+                .args(*flags)
+                .env("NYRA_OPT", opt)
+                .env("NYRA_LEAKCHECK", "1")
+                .output()
+                .unwrap();
             assert!(
                 out.status.success(),
                 "{} [{target}] failed:\n{}",

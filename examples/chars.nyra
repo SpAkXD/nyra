@@ -1,0 +1,46 @@
+// chars: one code point each, with explicit codes
+fn caesar(c: char, k: int) -> char {
+    if !c.is_lower() {
+        ret c
+    }
+    ret char('a'.code() + (c.code() - 'a'.code() + k) % 26)
+}
+
+fn main() {
+    let c = 'A'
+    print(c)
+    print(c.code())
+    print(char(66))
+    print(c.lower())
+    print('z'.upper())
+    print('7'.is_digit())
+    print('x'.is_letter())
+    print('é'.is_letter())
+    print(' '.is_space())
+    print('Q'.is_upper())
+    print('Q'.is_lower())
+    print('a' < 'b')
+    print('a' == 'a')
+    print(str(c) + "!")
+    print("<{c}>")
+    let tab = '\t'
+    print(tab.code())
+    print('\''.code())
+    var out = ""
+    for ch in "hello, world" {
+        out += str(caesar(ch, 3))
+    }
+    print(out)
+    var digits = 0
+    for ch in "a1b22c333" {
+        if ch.is_digit() {
+            digits += 1
+        }
+    }
+    print(digits)
+    print("naïve"[2])
+    print("naïve"[2].code())
+    let smile = '😀'
+    print(smile.code())
+    print(smile)
+}

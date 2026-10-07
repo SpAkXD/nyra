@@ -66,7 +66,7 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
                 if let Expr::Bool(c) = cond {
                     // a constant condition: keep the branch that runs, inline
                     let taken = if *c { std::mem::take(then) } else { std::mem::take(els) };
-                    stop = taken.last().is_some_and(|l| matches!(l.kind, StmtKind::Return(_)));
+                    stop = taken.last().is_some_and(|l| matches!(l.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue));
                     out.extend(taken);
                     keep = false;
                 } else if then.is_empty() && els.is_empty() {
@@ -84,6 +84,12 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
                     keep = false;
                 }
             }
+            StmtKind::ForEach { iter, body, .. } => {
+                fold(iter, strs);
+                stmts(body, strs);
+            }
+            StmtKind::Break | StmtKind::Continue => stop = true,
+            StmtKind::Dup(_) | StmtKind::Drop(_) | StmtKind::Free(_) => {}
             StmtKind::Return(v) => {
                 if let Some(e) = v {
                     fold(e, strs);
@@ -108,6 +114,7 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
         let text = match &p {
             Expr::Int(n) => Some(n.to_string()),
             Expr::Bool(b) => Some(b.to_string()),
+            Expr::Char(c) => char::from_u32(*c).map(|c| c.to_string()),
             Expr::Str(id) => Some(strs.get(*id).to_string()),
             _ => None,
         };
@@ -138,6 +145,12 @@ fn fold(e: &mut Expr, strs: &mut Interner) {
             fold(c, strs);
             fold(a, strs);
             fold(b, strs);
+        }
+        Expr::Pure(_, args) => {
+            for a in args {
+                fold(a, strs);
+            }
+            return;
         }
         _ => return,
     }
@@ -184,6 +197,8 @@ fn constant(e: &Expr, strs: &mut Interner) -> Option<Expr> {
             (BinOp::Or, Bool(false), x) | (BinOp::Or, x, Bool(false)) => x.clone(),
             (BinOp::SEq, Expr::Str(x), Expr::Str(y)) => Bool(strs.get(*x) == strs.get(*y)),
             (BinOp::SNe, Expr::Str(x), Expr::Str(y)) => Bool(strs.get(*x) != strs.get(*y)),
+            (BinOp::CEq, Expr::Char(x), Expr::Char(y)) => Bool(x == y),
+            (BinOp::CNe, Expr::Char(x), Expr::Char(y)) => Bool(x != y),
             _ => return None,
         },
         _ => return None,
@@ -231,6 +246,7 @@ fn calls(ss: &[Stmt], f: &mut dyn FnMut(FuncId)) {
                 calls(body, f);
                 calls(step, f);
             }
+            StmtKind::ForEach { body, .. } => calls(body, f),
             _ => {}
         }
     }
@@ -249,6 +265,7 @@ fn calls_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut FuncId)) {
                 calls_mut(body, f);
                 calls_mut(step, f);
             }
+            StmtKind::ForEach { body, .. } => calls_mut(body, f),
             _ => {}
         }
     }

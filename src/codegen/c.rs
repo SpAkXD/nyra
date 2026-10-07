@@ -3,18 +3,19 @@
 use std::fmt::Write;
 
 use super::{bare, names};
-use crate::ir::{BinOp, Expr, Func, LocalId, Module, RtOp, Stmt, StmtKind, Ty, UnOp};
+use crate::ir::{BinOp, Expr, Func, LocalId, Module, PureFn, RtOp, Stmt, StmtKind, Ty, UnOp};
 
 /// The C runtime, emitted before every program (`@FILE@` becomes the source path).
 const PRELUDE: &str = include_str!("../rt/c/core.c");
+const STRINGS: &str = include_str!("../rt/c/str.c");
 
 const RESERVED: &[&str] = &[
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
     "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return",
     "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void",
     "volatile", "while", "bool", "true", "false", "NULL", "EOF", "errno", "stdin", "stdout", "stderr",
-    "main", "printf", "puts", "snprintf", "sprintf", "strcmp", "strcpy", "strtod", "memcpy", "atoi", "malloc",
-    "exit", "int64_t", "DBL_MAX",
+    "main", "printf", "puts", "putchar", "fwrite", "snprintf", "sprintf", "strcmp", "strcpy", "strtod", "memcpy",
+    "memcmp", "strlen", "atoi", "malloc", "realloc", "free", "exit", "int64_t", "uint32_t", "DBL_MAX", "INT64_MAX",
 ];
 
 fn var(name: &str) -> String {
@@ -31,7 +32,21 @@ fn ctype(t: Ty) -> &'static str {
         Ty::Int => "int64_t",
         Ty::Float => "double",
         Ty::Bool => "bool",
-        Ty::Str => "const char*",
+        Ty::Char => "nyrt_char",
+        Ty::Str => "nyrt_str*",
+        other => unreachable!("the C backend does not handle `{}` yet", other.name()),
+    }
+}
+
+/// The runtime's name for a type in `nyrt_put_<ty>` / `nyrt_buf_<ty>`.
+fn rt_name(t: Ty) -> &'static str {
+    match t {
+        Ty::Int => "int",
+        Ty::Float => "float",
+        Ty::Bool => "bool",
+        Ty::Char => "char",
+        Ty::Str => "str",
+        other => unreachable!("cannot print `{}` yet", other.name()),
     }
 }
 
@@ -47,6 +62,23 @@ fn signature(f: &Func, names: &[String]) -> String {
 /// `file` is the source path as given to nyra; runtime errors report it.
 pub fn gen(m: &Module, file: &str) -> String {
     let mut out = PRELUDE.replace("@FILE@", &string_lit(file));
+    out.push_str(STRINGS);
+    out.push('\n');
+    // string literals: read-only objects that are never freed (reference count 0); `const` also
+    // lets the C compiler see that releasing one never reaches free()
+    for (i, s) in m.strs.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "static const nyrt_str nyL_{i} = {{0, {}, {}, {}, (char*){}}};",
+            s.len(),
+            s.len(),
+            s.chars().count(),
+            string_lit(s)
+        );
+    }
+    if !m.strs.is_empty() {
+        out.push('\n');
+    }
     let names: Vec<Vec<String>> = m.funcs.iter().map(|f| names::locals(f, var, "nyrt_")).collect();
     for (f, n) in m.funcs.iter().zip(&names) {
         let _ = writeln!(out, "{};", signature(f, n));
@@ -56,14 +88,19 @@ pub fn gen(m: &Module, file: &str) -> String {
         let _ = writeln!(out, "{} {{", signature(f, n));
         // every local is declared at the top; statements only assign
         for (i, l) in f.locals.iter().enumerate().skip(f.params) {
-            let _ = writeln!(out, "    {} {};", ctype(l.ty), n[i]);
+            let init = if l.ty == Ty::Str { " = NULL" } else { "" };
+            let _ = writeln!(out, "    {} {}{init};", ctype(l.ty), n[i]);
         }
-        let mut g = Gen { m, f, names: n, out: String::new(), indent: 1 };
+        let mut g = Gen { m, f, names: n, out: String::new(), indent: 1, tmp: 0 };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
     }
-    let _ = write!(out, "int main(void) {{\n    ny_{}();\n    return 0;\n}}\n", m.func(m.main).name);
+    let _ = write!(
+        out,
+        "int main(void) {{\n    nyrt_init();\n    ny_{}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
+        m.func(m.main).name
+    );
     out
 }
 
@@ -73,6 +110,8 @@ struct Gen<'a> {
     names: &'a [String],
     out: String,
     indent: usize,
+    /// Counter for the helper names of `for` loops over strings.
+    tmp: usize,
 }
 
 impl Gen<'_> {
@@ -108,6 +147,10 @@ impl Gen<'_> {
         }
     }
 
+    fn arg(&self, e: &Expr) -> String {
+        bare(&self.expr(e)).to_string()
+    }
+
     fn stmt(&mut self, s: &Stmt) {
         let at = format!("{}, {}", s.span.line, s.span.col);
         match &s.kind {
@@ -116,32 +159,108 @@ impl Gen<'_> {
                 self.line(&line);
             }
             StmtKind::Call { dst, func, args } => {
-                let args: Vec<String> = args.iter().map(|a| bare(&self.expr(a)).to_string()).collect();
+                let args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
                 let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, args.join(", ")));
                 self.line(&line);
             }
-            StmtKind::Op { dst, op, args } => {
-                let code = match op {
-                    RtOp::Print => self.print(args),
-                    RtOp::Format => {
-                        let (fmt, a) = self.format(args);
-                        format!("nyrt_fmt({}{a})", string_lit(&fmt))
-                    }
-                    RtOp::DivInt => format!("nyrt_div({}, {}, {at})", self.expr(&args[0]), self.expr(&args[1])),
-                    RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", self.expr(&args[0]), self.expr(&args[1])),
-                    RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", self.expr(&args[0])),
-                };
-                let line = self.assign(*dst, code);
-                self.line(&line);
-            }
+            StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at),
             StmtKind::If { .. } => self.if_chain(s),
             StmtKind::Loop { head, cond, body, step } => self.lp(head, cond, body, step),
+            StmtKind::ForEach { var, iter, body } => {
+                self.tmp += 1;
+                let (p, adv) = (format!("nyrt_p{}", self.tmp), format!("nyrt_adv{}", self.tmp));
+                let s = self.expr(iter);
+                let v = self.local(*var).to_string();
+                self.line(&format!("for (int64_t {p} = 0; {p} < {s}->len; ) {{"));
+                self.indent += 1;
+                self.line(&format!("int64_t {adv};"));
+                self.line(&format!("{v} = nyrt_utf8_decode({s}->data + {p}, &{adv});"));
+                self.line(&format!("{p} += {adv};"));
+                self.stmts(body);
+                self.indent -= 1;
+                self.line("}");
+            }
+            StmtKind::Break => self.line("break;"),
+            StmtKind::Continue => self.line("continue;"),
             StmtKind::Return(None) => self.line("return;"),
             StmtKind::Return(Some(e)) => {
                 let line = format!("return {};", bare(&self.expr(e)));
                 self.line(&line);
             }
+            StmtKind::Dup(l) => {
+                let line = format!("nyrt_str_retain({});", self.local(*l));
+                self.line(&line);
+            }
+            StmtKind::Drop(l) => {
+                let line = format!("nyrt_str_release({});", self.local(*l));
+                self.line(&line);
+            }
+            StmtKind::Free(l) => {
+                let x = self.local(*l).to_string();
+                self.line(&format!("nyrt_str_release({x});"));
+                self.line(&format!("{x} = NULL;"));
+            }
         }
+    }
+
+    fn op(&mut self, dst: Option<LocalId>, op: RtOp, args: &[Expr], at: &str) {
+        let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
+        let call = match op {
+            RtOp::Print => {
+                // each part straight to stdout: no temporary string
+                for p in args {
+                    let line = self.put("nyrt_put", p);
+                    self.line(&line);
+                }
+                self.line("putchar('\\n');");
+                return;
+            }
+            RtOp::Format => {
+                let d = dst.map(|d| self.local(d).to_string()).unwrap_or_default();
+                self.line("{");
+                self.indent += 1;
+                self.line("nyrt_buf b = nyrt_buf_new();");
+                for p in args {
+                    let line = self.put("nyrt_buf", p);
+                    self.line(&line);
+                }
+                self.line(&format!("{d} = nyrt_buf_done(&b);"));
+                self.indent -= 1;
+                self.line("}");
+                return;
+            }
+            RtOp::StrAppend => {
+                let d = dst.map(|d| self.local(d).to_string()).unwrap_or_default();
+                self.line(&format!("nyrt_str_append(&{d}, {});", a[1]));
+                return;
+            }
+            RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
+            RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
+            RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", a[0]),
+            RtOp::StrConcat => format!("nyrt_str_concat({}, {})", a[0], a[1]),
+            RtOp::StrAt => format!("nyrt_str_at({}, {}, {at})", a[0], a[1]),
+            RtOp::StrSlice => format!("nyrt_str_slice({}, {}, {}, {at})", a[0], a[1], a[2]),
+            RtOp::StrReplace => format!("nyrt_str_replace({}, {}, {}, {at})", a[0], a[1], a[2]),
+            RtOp::StrTrim => format!("nyrt_str_trim({})", a[0]),
+            RtOp::StrUpper => format!("nyrt_str_upper({})", a[0]),
+            RtOp::StrLower => format!("nyrt_str_lower({})", a[0]),
+            RtOp::StrRepeat => format!("nyrt_str_repeat({}, {}, {at})", a[0], a[1]),
+            RtOp::StrToInt => format!("nyrt_str_to_int({}, {at})", a[0]),
+            RtOp::StrToFloat => format!("nyrt_str_to_float({}, {at})", a[0]),
+            RtOp::CharFrom => format!("nyrt_char_from({}, {at})", a[0]),
+        };
+        let line = self.assign(dst, call);
+        self.line(&line);
+    }
+
+    /// `nyrt_put_int(x);` / `nyrt_buf_int(&b, x);` for one part of a print or format.
+    fn put(&self, prefix: &str, p: &Expr) -> String {
+        let target = if prefix == "nyrt_buf" { "&b, " } else { "" };
+        if let Expr::Str(id) = p {
+            let s = self.m.str(*id);
+            return format!("{prefix}_lit({target}{}, {});", string_lit(s), s.len());
+        }
+        format!("{prefix}_{}({target}{});", rt_name(p.ty(self.f)), bare(&self.expr(p)))
     }
 
     fn if_chain(&mut self, s: &Stmt) {
@@ -170,60 +289,35 @@ impl Gen<'_> {
 
     fn lp(&mut self, head: &[Stmt], cond: &Expr, body: &[Stmt], step: &[Stmt]) {
         let full = self.expr(cond);
-        let c = bare(&full);
-        match (head, step) {
-            ([], []) => {
+        let c = bare(&full).to_string();
+        // the step goes in the `for` header, so `continue` runs it
+        let steps: Vec<String> = step
+            .iter()
+            .map(|s| match &s.kind {
+                StmtKind::Set(l, e) => format!("{} = {}", self.local(*l), bare(&self.expr(e))),
+                _ => unreachable!("a loop step only assigns"),
+            })
+            .collect();
+        let step = steps.join(", ");
+        match (head.is_empty(), step.is_empty()) {
+            (true, true) => {
                 self.line(&format!("while ({c}) {{"));
                 self.block(body);
             }
-            ([], [Stmt { kind: StmtKind::Set(l, e), .. }]) => {
-                let line = format!("for (; {c}; {} = {}) {{", self.local(*l), bare(&self.expr(e)));
-                self.line(&line);
+            (true, false) => {
+                self.line(&format!("for (; {c}; {step}) {{"));
                 self.block(body);
             }
-            _ => {
-                self.line("for (;;) {");
+            (false, _) => {
+                self.line(&format!("for (;; {step}) {{"));
                 self.indent += 1;
                 self.stmts(head);
                 self.line(&format!("if (!{full}) break;"));
                 self.stmts(body);
-                self.stmts(step);
                 self.indent -= 1;
             }
         }
         self.line("}");
-    }
-
-    /// One part uses the matching print helper; several parts become one `printf`.
-    fn print(&self, parts: &[Expr]) -> String {
-        if let [p] = parts {
-            return format!("nyrt_print_{}({})", p.ty(self.f).name(), self.expr(p));
-        }
-        let (fmt, a) = self.format(parts);
-        format!("printf({}{a})", string_lit(&(fmt + "\n")))
-    }
-
-    /// A printf-style format string and its argument list (", a, b") for string parts.
-    fn format(&self, parts: &[Expr]) -> (String, String) {
-        let mut fmt = String::new();
-        let mut args = String::new();
-        for p in parts {
-            if let Expr::Str(id) = p {
-                fmt.push_str(&self.m.str(*id).replace('%', "%%"));
-                continue;
-            }
-            let x = self.expr(p);
-            let (spec, arg) = match p.ty(self.f) {
-                Ty::Int => ("%lld", format!("(long long)({x})")),
-                Ty::Float => ("%s", format!("nyrt_float_fmt((char[32]){{0}}, {x})")),
-                Ty::Bool => ("%s", format!("(({x}) ? \"true\" : \"false\")")),
-                Ty::Str => ("%s", x),
-            };
-            fmt.push_str(spec);
-            args.push_str(", ");
-            args.push_str(&arg);
-        }
-        (fmt, args)
     }
 
     fn expr(&self, e: &Expr) -> String {
@@ -238,7 +332,8 @@ impl Gen<'_> {
             }
             Expr::Float(f) => format!("{f:?}"),
             Expr::Bool(b) => b.to_string(),
-            Expr::Str(id) => string_lit(self.m.str(*id)),
+            Expr::Char(c) => c.to_string(),
+            Expr::Str(id) => format!("((nyrt_str*)&nyL_{})", id.0),
             Expr::Local(l) => self.local(*l).to_string(),
             Expr::Unary(op, x) => {
                 let x = self.expr(x);
@@ -251,13 +346,34 @@ impl Gen<'_> {
             Expr::Binary(op, a, b) => {
                 let (a, b) = (self.expr(a), self.expr(b));
                 match op {
-                    BinOp::SEq => format!("(strcmp({a}, {b}) == 0)"),
-                    BinOp::SNe => format!("(strcmp({a}, {b}) != 0)"),
+                    BinOp::SEq => format!("nyrt_str_eq({}, {})", bare(&a), bare(&b)),
+                    BinOp::SNe => format!("(!nyrt_str_eq({}, {}))", bare(&a), bare(&b)),
+                    BinOp::SLt | BinOp::SLe | BinOp::SGt | BinOp::SGe => {
+                        format!("(nyrt_str_cmp({}, {}) {} 0)", bare(&a), bare(&b), op.symbol())
+                    }
                     _ => format!("({a} {} {b})", op.symbol()),
                 }
             }
             Expr::Select(c, a, b) => format!("({} ? {} : {})", self.expr(c), self.expr(a), self.expr(b)),
             Expr::IntToFloat(x) => format!("((double)({}))", self.expr(x)),
+            Expr::Pure(p, args) => {
+                let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
+                match p {
+                    PureFn::StrLen => format!("{}->nchars", self.expr(&args[0])),
+                    PureFn::StrContains => format!("nyrt_str_contains({}, {})", a[0], a[1]),
+                    PureFn::StrStartsWith => format!("nyrt_str_starts_with({}, {})", a[0], a[1]),
+                    PureFn::StrEndsWith => format!("nyrt_str_ends_with({}, {})", a[0], a[1]),
+                    PureFn::StrIndexOf => format!("nyrt_str_index_of({}, {})", a[0], a[1]),
+                    PureFn::CharCode => format!("((int64_t)({}))", a[0]),
+                    PureFn::CharUpper => format!("nyrt_char_upper({})", a[0]),
+                    PureFn::CharLower => format!("nyrt_char_lower({})", a[0]),
+                    PureFn::CharIsDigit => format!("nyrt_char_is_digit({})", a[0]),
+                    PureFn::CharIsLetter => format!("nyrt_char_is_letter({})", a[0]),
+                    PureFn::CharIsUpper => format!("nyrt_char_is_upper({})", a[0]),
+                    PureFn::CharIsLower => format!("nyrt_char_is_lower({})", a[0]),
+                    PureFn::CharIsSpace => format!("nyrt_is_space({})", a[0]),
+                }
+            }
         }
     }
 }

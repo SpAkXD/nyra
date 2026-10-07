@@ -1,0 +1,6 @@
+// expect: E0244 at 4:13
+fn main() {
+    let text = "1.5.2"
+    let x = float(text)
+    print(x)
+}
