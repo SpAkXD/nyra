@@ -30,26 +30,30 @@
 </p>
 
 ```rust
-fn fib(n: int) -> int {
-    if n < 2 { ret n }
-    ret fib(n - 1) + fib(n - 2)
+struct Player {
+    name: str
+    score: int
 }
 
 fn main() {
-    for i in 0..6 {
-        print("fib({i}) = {fib(i)}")
+    var players: [Player] = []
+    for entry in "ada:31 grace:47 alan:28".split(" ") {
+        let parts = entry.split(":")
+        players.push(Player(name: parts[0], score: int(parts[1])))
     }
+    var best = players[0]
+    for p in players {
+        if p.score > best.score { best = p }
+    }
+    print("{best.name.upper()} wins with {best.score} points")
+    print(best)
 }
 ```
 
 ```
-$ nyra run fib.nyra
-fib(0) = 0
-fib(1) = 1
-fib(2) = 1
-fib(3) = 2
-fib(4) = 3
-fib(5) = 5
+$ nyra run scores.nyra
+GRACE wins with 47 points
+Player(name: "grace", score: 47)
 ```
 
 ## Why Nyra
@@ -65,21 +69,30 @@ compiler to tell the AI exactly what to fix.
   makes them machine-readable, so an agent can loop *write, check, fix, run* without a human. Each message says
   what was expected and what was found, and `nyra explain E0201` explains any code with a wrong and a fixed
   program ([`docs/ERRORS.md`](docs/ERRORS.md)).
-- **Compact programs.** One-line functions, string interpolation and `if` as a value keep code short.
-  A benchmark of first-try correctness and token count against Python is coming in v0.4.
+- **Compact programs.** One-line functions, string interpolation, `if` as a value and built-in methods
+  on strings and arrays keep code short. A benchmark of first-try correctness and token count against
+  Python is coming in v0.4.
+- **Values, not references.** Arrays, strings and structs are copied on assignment (cheaply, copy on
+  write), so nothing changes behind your back; a function changes a caller's variable only through an
+  `inout` parameter that the call names too.
 - **Same output everywhere.** Every example runs on both backends in CI and must match byte for byte.
 
 ## Features
 
 - **Two backends from one source:** native code through C99 (`gcc`, `clang` or `tcc`) and JavaScript
   (Node.js or the browser).
-- **Strict static types:** `int`, `float`, `bool`, `str`, with local inference and no implicit conversions.
+- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays and structs, with local inference
+  and no implicit conversions.
+- **Real data (v0.3):** structs, arrays, strings and chars with methods (`split`, `replace`, `slice`,
+  `sort`, `join`, ...), `inout` parameters, `break` and `continue`. Memory is freed by reference counting,
+  with no garbage collector, and `free`, `arena` and `keep` say when if you want to.
 - **Short code (v0.2):** one-line functions, `+=` and friends, string interpolation, `if` as a value.
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
-  and a build cache that skips the C compiler when the program has not changed.
-- **Fast and small:** the compiler takes about 0.1 to 0.3 ms per file and the C compiler about 0.4 s
+  runtime errors with the exact position, and a build cache that skips the C compiler when the program
+  has not changed.
+- **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
-- **Not yet:** arrays, structs, string functions, input (see the [roadmap](#roadmap)). Nyra is 0.x, so the
+- **Not yet:** maps, modules, a standard library, input (see the [roadmap](#roadmap)). Nyra is 0.x, so the
   syntax may still change before 1.0.
 
 ## Install
@@ -111,10 +124,10 @@ nyra build examples/hello.nyra        # a native executable next to the source
 nyra check examples/hello.nyra        # only report errors
 ```
 
-Save the program above as `fib.nyra` and run `nyra fib.nyra`. You never pass flags to the C compiler:
-Nyra calls it with `-O2 -fwrapv` (plus `-s` to strip the executable) and caches the result, so running
-an unchanged program again skips the C compiler. Editor support: syntax highlighting for VS Code is in
-[`editors/vscode`](editors/vscode).
+Save the program above as `scores.nyra` and run `nyra scores.nyra`. You never pass flags to the C
+compiler: Nyra calls it with `-O2 -fwrapv -ffp-contract=off` (plus `-s` to strip the executable) and
+caches the result, so running an unchanged program again skips the C compiler. Editor support: syntax
+highlighting for VS Code is in [`editors/vscode`](editors/vscode).
 
 ## Using Nyra with an AI
 
@@ -155,13 +168,18 @@ you then run `nyra run prog.nyra` yourself. If your AI cannot open links, paste 
 ## Language tour
 
 ```rust
+struct Point { x: int, y: int }                 // a struct: named fields, uppercase name
+
 fn add(a: int, b: int) -> int = a + b          // one-line function: the expression is the result
 fn greet(name: str) = print("hi {name}")       // no `->`: returns nothing
+fn dist2(p: Point) -> int = p.x * p.x + p.y * p.y
 
 fn gcd(a: int, b: int) -> int {                // block body: `ret` returns
     if b == 0 { ret a }
     ret gcd(b, a % b)
 }
+
+fn bump(inout n: int) { n += 1 }               // `inout`: may change the caller's variable
 
 fn main() {                                    // every program starts here
     let x = 5                                  // immutable, type inferred
@@ -173,22 +191,41 @@ fn main() {                                    // every program starts here
     while total < 20 { total += 7 }
     if total > 20 && !(x == 0) { print("over") } else { print("under") }
 
-    print("sum: {add(x, 2)}, size: {size}")    // interpolation; {{ and }} are literal braces
+    var xs = [3, 1, 2]                         // an array: [int]
+    xs.push(4)
+    xs.sort()                                  // [1, 2, 3, 4]
+    for v in xs {
+        if v == 3 { break }                    // `break` and `continue` work in every loop
+        print(v)                               // 1 2
+    }
+    let p = Point(x: 3, y: 4)                  // every field is named
+    print("{p} has dist2 {dist2(p)}")          // Point(x: 3, y: 4) has dist2 25
+    let word = "nyra"
+    print(word.upper() + "!")                  // NYRA!: `+` joins two strings
+    print(word[0] == 'n')                      // true: s[i] is a char
+    bump(inout total)                          // the call says `inout` too
+    print("sum: {add(x, 2)}, size: {size}, total: {total}")   // {{ and }} are literal braces
     print(float(x) / 2.0)                      // 2.5: conversions are always explicit
     print(gcd(48, 18))                         // 6
     greet("nyra")
 }
 ```
 
-- **Types:** `int` (64-bit), `float` (64-bit), `bool`, `str`. Signatures are fully typed; locals are inferred.
+- **Types:** `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]` and structs.
+  Signatures are fully typed; locals are inferred.
 - **No implicit conversions:** `1 + 2.0` is error `E0210`; write `float(1) + 2.0`. `7 / 2` is `3`, and a
   float prints in its shortest form: `print(2.0)` shows `2`.
-- **No shadowing, no null, no semicolons.** `let` is immutable, `var` can be reassigned, and a name is
-  declared once per function.
+- **No shadowing, no null, no semicolons.** `let` is immutable, `var` can be reassigned, and a name
+  cannot be declared again while it is visible.
+- **Values, not references:** assigning or passing an array or a struct copies it; only an `inout`
+  parameter changes the caller's variable.
+- **Strings** are UTF-8 and count characters: `s[i]` is a `char` (`'a'`), `+` joins two strings, and
+  `==` and `<` compare them by content. Arrays and structs print as Nyra code.
 - **Conditions must be `bool`:** `if n != 0`, not `if n`.
-- **Strings** compare by value with `==`. There is no string `+`: join text with interpolation, `"{a}{b}"`.
-- **Builtins:** `print(x)` (one argument), `int(x)`, `float(x)`. No `break`, no input, no arrays yet.
-- **Operators**, high to low: `-` `!` · `*` `/` `%` · `+` `-` · `<` `<=` `>` `>=` · `==` `!=` · `&&` · `||`.
+- **Builtins:** `print(x)` (one argument), `str(x)`, `int(x)`, `float(x)`, `char(n)`; everything else is
+  a method, like `s.split(",")` or `xs.len()`. No input yet.
+- **Operators**, high to low: calls, fields, indexes, methods · `-` `!` · `*` `/` `%` · `+` `-` ·
+  `<` `<=` `>` `>=` · `==` `!=` · `&&` · `||`.
 
 The complete reference is [`docs/SPEC.md`](docs/SPEC.md); [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) adds
 every common mistake with its error code and fix.
@@ -211,23 +248,25 @@ every common mistake with its error code and fix.
 | `--time` | show how long each step took |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
-integer division by zero, which prints `runtime error[E0241]` with the file and position, identically on
+an index out of bounds, which prints `runtime error[E0240]` with the file and position, identically on
 both backends). `NYRA_CC` selects the C compiler.
 
 ## How it works
 
 ```
-                                                   ┌─► C99 ──► gcc / clang ──► native executable
-source.nyra ─► lexer ─► parser ─► type checker ────┤
-                                                   └─► JavaScript ──► Node.js / browser
+                                                         ┌─► C99 ──► gcc / clang ──► native executable
+source.nyra ─► lexer ─► parser ─► type checker ─► IR ────┤
+                                                         └─► JavaScript ──► Node.js / browser
 ```
 
 | File | Role |
 |---|---|
 | `src/lexer.rs` | text to tokens |
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
-| `src/check.rs` | type checking, collects every error in one pass |
+| `src/check.rs`, `src/check_v03.rs` | type checking, collects every error in one pass |
+| `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
+| `src/rt/c/`, `src/rt/js/` | the runtimes they embed: strings, arrays, printing, runtime errors |
 | `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 
@@ -237,9 +276,9 @@ source.nyra ─► lexer ─► parser ─► type checker ────┤
 |---|---|---|
 | v0.1 | core language, C and JavaScript backends, JSON errors | done |
 | v0.2 | short code: one-line functions, `+=`, string interpolation, `if` as a value, build cache | done |
-| v0.3 | structs, arrays, string functions, memory model (no GC) | next |
+| v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC) | done |
 | v0.4 | benchmark: first-try correctness and token count against Python | harness ready in [`bench/`](bench), results coming |
-| v0.5 | intermediate representation, WASM backend, browser playground | planned |
+| v0.5 | WASM backend and browser playground (the intermediate representation is done) | planned |
 | v0.6 | modules, standard library, C FFI | planned |
 | v1.0 | packages and addons, published VS Code extension, docs site | planned |
 
