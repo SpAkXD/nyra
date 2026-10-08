@@ -1,0 +1,9 @@
+{
+  "id": "sort_numbers",
+  "title": "Sort half a million numbers",
+  "category": "speed",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Generate 500,000 numbers: start with x = 12345 and 500,000 times replace x with the remainder of x times 48271 divided by 2147483647, taking each new x as the next number. The first three numbers are 595905495, 1558181227 and 1498755989. The products need 64-bit integers.\n\nSort the numbers in ascending order (a built-in sort is allowed). Number the positions of the sorted list from 1. The checksum is the sum, over all positions, of the position times the number at that position, as the remainder after dividing by 1000000007; take the remainder after every addition so that the values stay within 64 bits.\n\nPrint four lines, each one whole number: the smallest number, the largest number, the number at position 250001 of the sorted list, and the checksum.\n\nThe running time of the program is measured too, so make it reasonably fast.",
+  "expected_output": "2104\n2147476111\n1070969883\n812835382\n"
+}

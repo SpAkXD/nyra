@@ -1,0 +1,9 @@
+{
+  "id": "big_sieve",
+  "title": "Primes below two million",
+  "category": "speed",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Find every prime number below 2,000,000 by writing the sieve of Eratosthenes yourself: go through the numbers from 2 upwards and, for each number that is still marked prime, mark its multiples as not prime, starting from its square. For comparison, below 30 the primes are 2, 3, 5, 7, 11, 13, 17, 19, 23 and 29: there are 10 of them, their sum is 129, the largest is 29, and 4 pairs of them differ by exactly 2 (3 and 5, 5 and 7, 11 and 13, 17 and 19).\n\nPrint four lines, each one whole number, for the primes below 2,000,000: how many there are; their sum (it does not fit in 32 bits); the largest of them; and how many pairs p, p + 2 there are where both p and p + 2 are primes below 2,000,000.\n\nThe running time of the program is measured too, so make it reasonably fast.",
+  "expected_output": "148933\n142913828922\n1999993\n14871\n"
+}

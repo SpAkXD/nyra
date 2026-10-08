@@ -28,6 +28,7 @@ import platform
 import re
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -50,7 +51,7 @@ SOLUTIONS_DIR = BENCH_DIR / "solutions"
 RESULTS_DIR = BENCH_DIR / "results"
 DEFAULT_SPEC = REPO_DIR / "docs" / "SPEC.md"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3  # 3: runtime of every passing program (result.runtime_ms, result.timing, run.timing)
 LANG_ORDER = report.LANG_ORDER  # the languages, in table-column order; the first is the baseline of comparisons
 LANG_ALIASES = {"ts": "typescript", "rs": "rust", "py": "python"}
 MAX_OUTPUT_BYTES = 1_000_000  # a program that prints more than this is killed (runaway loop)
@@ -66,6 +67,9 @@ NODE_TS_FLAGS = ("--experimental-transform-types", "--disable-warning=Experiment
 # There is no Cargo project, so everything is on the command line: optimized (-O), edition 2021 (plain rustc would
 # use 2015), and warnings silenced so that the feedback after a failed build contains the errors only.
 RUSTC_FLAGS = ("-O", "--edition", "2021", "-A", "warnings", "--color", "never")
+DEFAULT_TIME_RUNS = 3  # timed runs of every passing program (after the run that judged it); the median is kept
+STARTUP_RUNS = 5  # runs of the hello-world program that measure a language's start-up cost
+PREFLIGHT_ID = "preflight"  # the task id of toolchain self-tests, which are never timed
 
 
 class HarnessError(Exception):
@@ -314,7 +318,7 @@ def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_
     program stuck in `while true { print(1) }` cannot exhaust memory. The command must be the
     program itself (not a launcher that spawns it): killing only reaches the direct child.
     """
-    start = time.monotonic()
+    start = time.perf_counter()
     proc = None
     for attempt in range(4):
         try:
@@ -362,13 +366,14 @@ def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_
         with contextlib.suppress(OSError):
             proc.kill()
         proc.wait()
+    elapsed = time.perf_counter() - start  # until the process exited: draining the pipes is not its time
     for t, stream in zip(threads, (proc.stdout, proc.stderr)):
         t.join(timeout=5)
         if not t.is_alive():  # never close a pipe another thread is still blocked on
             with contextlib.suppress(OSError, ValueError):
                 stream.close()
     return Proc(proc.returncode, bytes(bufs["out"]), bytes(bufs["err"]), timed_out=timed_out,
-                truncated=truncated.is_set(), elapsed=time.monotonic() - start)
+                truncated=truncated.is_set(), elapsed=elapsed)
 
 
 _SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL")
@@ -436,7 +441,11 @@ class EvalResult:
     stderr: str = ""
     exit_code: Optional[int] = None
     compile_ms: Optional[float] = None
-    run_ms: Optional[float] = None
+    run_ms: Optional[float] = None  # wall clock of the run that was judged (start-up included)
+    # Only for a passing program that was timed: the median of the timed runs minus the language's start-up cost
+    # (see Language.time_result), and the raw numbers behind it.
+    runtime_ms: Optional[float] = None
+    timing: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return {
@@ -445,6 +454,8 @@ class EvalResult:
             "exit_code": self.exit_code,
             "compile_ms": None if self.compile_ms is None else round(self.compile_ms, 1),
             "run_ms": None if self.run_ms is None else round(self.run_ms, 1),
+            "runtime_ms": None if self.runtime_ms is None else round(self.runtime_ms, 2),
+            "timing": self.timing,
         }
 
 
@@ -517,13 +528,47 @@ def judge_run(proc: Proc, task: Task, timeout: float, *, workdir: Path, compile_
     return EvalResult(False, "wrong_output", feedback=fb_wrong(actual, expected), **base)
 
 
+@dataclasses.dataclass
+class Built:
+    """A program that is ready to run in its scratch directory: the command, and what building it took."""
+    argv: list
+    compile_ms: Optional[float] = None
+
+
+# Timed runs never overlap each other (parallel jobs would slow each other down); compilers of other jobs may
+# still run meanwhile, which is why bench/speed.py, which runs nothing else, gives the cleaner numbers.
+TIMING_LOCK = threading.Lock()
+
+
+def time_command(argv, *, cwd, env, runs: int, timeout: float, expected: Optional[str] = None) -> tuple:
+    """Run a built program `runs` times, one after the other. Returns (wall-clock milliseconds of each run, problem):
+    problem is None, or why a run did not count (it failed, or printed something else than `expected`)."""
+    times: list = []
+    with TIMING_LOCK:
+        for _ in range(runs):
+            proc = run_limited(argv, cwd=cwd, env=env, timeout=timeout)
+            if proc.spawn_error or proc.timed_out or proc.truncated or proc.returncode != 0:
+                why = proc.spawn_error or ("timeout" if proc.timed_out else "output limit" if proc.truncated
+                                           else f"exit code {proc.returncode}")
+                return times, f"a timed run failed ({why})"
+            if expected is not None and normalize_output(proc.stdout.decode("utf-8", "replace")) != normalize_output(expected):
+                return times, "a timed run printed a different output"
+            times.append(proc.elapsed * 1000)
+    return times, None
+
+
 class Language:
     name = ""
     display = ""
     ext = ""
+    hello_world = ""  # prints 42; the toolchain self-test, and the program whose run time is the start-up cost
 
-    def __init__(self, timeout: float = 10.0):
+    def __init__(self, timeout: float = 10.0, time_runs: int = 0):
         self.timeout = timeout
+        self.time_runs = time_runs  # timed runs of every passing program (0: no timing)
+        self._startup: Optional[float] = None
+        self._startup_done = False
+        self._startup_lock = threading.Lock()
 
     @property
     def system_prompt(self) -> str:
@@ -536,19 +581,83 @@ class Language:
         path = self.reference_path(task_id)
         return path.read_text(encoding="utf-8") if path.is_file() else None
 
-    def evaluate(self, code: str, task: Task) -> EvalResult:
+    def build(self, code: str, wd: Path, env: dict):
+        """Write the program into `wd` and compile it if the language needs that. Returns a Built, or the
+        EvalResult of a program that never got to run (compile error, toolchain error)."""
         raise NotImplementedError
+
+    def diagnose(self, stderr: str, stdout: str) -> Optional[str]:
+        """The tool that rejected the program before it ran (an interpreter's syntax error), or None."""
+        return None
+
+    def clean_stderr(self, stderr: str) -> str:
+        return stderr
+
+    def evaluate(self, code: str, task: Task, timed: bool = True) -> EvalResult:
+        with scratch_dir() as wd:
+            env = child_env(wd)
+            built = self.build(code, wd, env)
+            if isinstance(built, EvalResult):
+                return built
+            return self.run_built(built, task, wd, env, timed)
+
+    def run_built(self, built: Built, task: Task, wd: Path, env: dict, timed: bool = True) -> EvalResult:
+        """Run a built program once and judge it; time it as well if it passed and timing is on."""
+        proc = run_limited(built.argv, cwd=wd, env=env, timeout=self.timeout)
+        result = judge_run(proc, task, self.timeout, workdir=wd, compile_ms=built.compile_ms,
+                           diagnose=self.diagnose, clean_stderr=self.clean_stderr)
+        if timed and result.passed and self.time_runs > 0 and task.id != PREFLIGHT_ID:
+            self.time_result(result, built, task, wd, env)
+        return result
+
+    def time_result(self, result: EvalResult, built: Built, task: Task, wd: Path, env: dict) -> None:
+        """Run a program that passed `time_runs` more times and keep the median wall clock, minus the language's
+        start-up cost (the median run time of its hello-world program, measured the same way), as runtime_ms.
+
+        The run that judged the program is not one of them: it is a warm-up (the first start of a fresh
+        executable can be slower, for example while an antivirus scans it). The compile time is not included."""
+        startup = self.startup_ms()
+        times, problem = time_command(built.argv, cwd=wd, env=env, runs=self.time_runs, timeout=self.timeout,
+                                      expected=task.expected_output)
+        result.timing = {"runs_ms": [round(t, 2) for t in times],
+                         "startup_ms": None if startup is None else round(startup, 2)}
+        if problem:
+            result.timing["error"] = problem
+            return
+        median = statistics.median(times)
+        result.timing["median_ms"] = round(median, 2)
+        result.runtime_ms = max(0.0, median - (startup or 0.0))
+
+    def startup_ms(self) -> Optional[float]:
+        """Median wall clock of the hello-world program: starting the interpreter, the runtime or the process.
+        Measured once per Language (None if it could not be measured)."""
+        with self._startup_lock:
+            if not self._startup_done:
+                self._startup_done = True
+                hello = Task(PREFLIGHT_ID, "", "", "42\n", "0.1", "", "", Path("."))
+                with scratch_dir() as wd:
+                    env = child_env(wd)
+                    built = self.build(self.hello_world, wd, env)
+                    if not isinstance(built, EvalResult):
+                        run_limited(built.argv, cwd=wd, env=env, timeout=self.timeout)  # warm-up
+                        times, problem = time_command(built.argv, cwd=wd, env=env, runs=max(STARTUP_RUNS, self.time_runs),
+                                                      timeout=self.timeout, expected=hello.expected_output)
+                        if not problem:
+                            self._startup = statistics.median(times)
+            return self._startup
+
+    def measured_startup_ms(self) -> Optional[float]:
+        """The start-up cost if it has been measured already (never measures it)."""
+        return self._startup
 
     def preflight(self) -> list:
         """Check that the toolchain works before any (paid) request is made. Returns warnings."""
-        hello = Task("preflight", "", "", "42\n", "0.1", "", "", Path("."))
+        hello = Task(PREFLIGHT_ID, "", "", "42\n", "0.1", "", "", Path("."))
         result = self.evaluate(self.hello_world, hello)
         if not result.passed:
             raise HarnessError(f"{self.display} toolchain self-test failed ({result.kind}): "
                                f"{(result.stderr or result.stdout).strip()[:500]}")
         return []
-
-    hello_world = ""
 
 
 class PythonLang(Language):
@@ -561,13 +670,13 @@ class PythonLang(Language):
     def system_prompt(self) -> str:
         return _PYTHON_SYSTEM
 
-    def evaluate(self, code: str, task: Task) -> EvalResult:
-        with scratch_dir() as wd:
-            write_source(wd / "main.py", code)
-            # -I: isolated mode (no user site-packages, no PYTHON* variables); -X utf8: same text encoding everywhere
-            proc = run_limited([sys.executable, "-I", "-X", "utf8", "main.py"], cwd=wd, env=child_env(wd),
-                               timeout=self.timeout)
-            return judge_run(proc, task, self.timeout, workdir=wd, diagnose=_python_diagnose)
+    def diagnose(self, stderr: str, stdout: str) -> Optional[str]:
+        return _python_diagnose(stderr, stdout)
+
+    def build(self, code: str, wd: Path, env: dict):
+        write_source(wd / "main.py", code)
+        # -I: isolated mode (no user site-packages, no PYTHON* variables); -X utf8: same text encoding everywhere
+        return Built([sys.executable, "-I", "-X", "utf8", "main.py"])
 
 
 class NyraLang(Language):
@@ -577,8 +686,8 @@ class NyraLang(Language):
     hello_world = "fn main() {\n    print(42)\n}\n"
 
     def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0,
-                 node: str = "node"):
-        super().__init__(timeout)
+                 node: str = "node", time_runs: int = 0):
+        super().__init__(timeout, time_runs)
         if backend not in ("native", "js"):
             raise UsageError("--backend must be native or js")
         self.bin = Path(nyra_bin)
@@ -620,36 +729,59 @@ class NyraLang(Language):
                             f"{self.version_text()}: the model is shown a spec that does not match the compiler")
         return warnings
 
-    def evaluate(self, code: str, task: Task) -> EvalResult:
+    def build(self, code: str, wd: Path, env: dict):
         js = self.backend == "js"
+        write_source(wd / "main.nyra", code)
+        started = time.perf_counter()
+        # The file name is relative so diagnostics read `"file":"main.nyra"` (no temp paths in the prompt).
+        chk = run_limited([self.bin, "check", "main.nyra", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
+        if chk.spawn_error:
+            raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {chk.spawn_error}")
+        out = chk.stdout.decode("utf-8", "replace").strip()
+        parsed = _loads(out)
+        if not isinstance(parsed, dict) or chk.returncode not in (0, 1):
+            detail = scrub_paths(chk.stderr.decode("utf-8", "replace") or out, wd).strip()
+            return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                              exit_code=chk.returncode)
+        if not parsed.get("ok", False):
+            return EvalResult(False, "compile_error", feedback=fb_compile("The Nyra compiler (`nyra check --json`)", out),
+                              errors=parsed.get("errors", []), stdout=out, exit_code=chk.returncode)
+        target = "main.js" if js else ("prog.exe" if os.name == "nt" else "prog")
+        build = run_limited([self.bin, "build", "main.nyra", "-o", target] + (["--js"] if js else []),
+                            cwd=wd, env=env, timeout=BUILD_TIMEOUT)
+        compile_ms = (time.perf_counter() - started) * 1000
+        if build.returncode != 0 or not (wd / target).exists():
+            detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
+            return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                              exit_code=build.returncode, compile_ms=compile_ms)
+        return Built([self.node, target] if js else [wd / target], compile_ms)
+
+    def self_repair(self, code: str, task: Task) -> dict:
+        """`nyra check --fix`: the compiler repairs the mistakes whose fix is unambiguous, without a model call (zero
+        tokens). Returns what happened: {"tried": True, "fixed": n, "changed": bool, "remaining": error codes left,
+        "result": verdict of the repaired program or None, "code": the repaired program, "detail": the compiler's
+        message when nothing was run}. The model's own repair loop is not affected."""
         with scratch_dir() as wd:
             env = child_env(wd)
             write_source(wd / "main.nyra", code)
-            started = time.monotonic()
-            # The file name is relative so diagnostics read `"file":"main.nyra"` (no temp paths in the prompt).
-            chk = run_limited([self.bin, "check", "main.nyra", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
-            if chk.spawn_error:
-                raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {chk.spawn_error}")
-            out = chk.stdout.decode("utf-8", "replace").strip()
-            parsed = _loads(out)
-            if not isinstance(parsed, dict) or chk.returncode not in (0, 1):
-                detail = scrub_paths(chk.stderr.decode("utf-8", "replace") or out, wd).strip()
-                return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
-                                  exit_code=chk.returncode)
-            if not parsed.get("ok", False):
-                return EvalResult(False, "compile_error", feedback=fb_compile("The Nyra compiler (`nyra check --json`)", out),
-                                  errors=parsed.get("errors", []), stdout=out, exit_code=chk.returncode)
-            target = "main.js" if js else ("prog.exe" if os.name == "nt" else "prog")
-            build = run_limited([self.bin, "build", "main.nyra", "-o", target] + (["--js"] if js else []),
-                                cwd=wd, env=env, timeout=BUILD_TIMEOUT)
-            compile_ms = (time.monotonic() - started) * 1000
-            if build.returncode != 0 or not (wd / target).exists():
-                detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
-                return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
-                                  exit_code=build.returncode, compile_ms=compile_ms)
-            argv = [self.node, target] if js else [wd / target]
-            proc = run_limited(argv, cwd=wd, env=env, timeout=self.timeout)
-            return judge_run(proc, task, self.timeout, workdir=wd, compile_ms=compile_ms)
+            before = (wd / "main.nyra").read_bytes()
+            fix = run_limited([self.bin, "check", "main.nyra", "--fix", "--json"], cwd=wd, env=env,
+                              timeout=CHECK_TIMEOUT)
+            if fix.spawn_error:
+                raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {fix.spawn_error}")
+            after = (wd / "main.nyra").read_bytes()
+            parsed = _loads(fix.stdout.decode("utf-8", "replace").strip())
+            fixed = parsed.get("fixed", 0) if isinstance(parsed, dict) else 0
+            out = {"tried": True, "fixed": fixed, "changed": after != before, "result": None, "detail": None,
+                   "remaining": [e.get("code") for e in (parsed.get("errors") or [])] if isinstance(parsed, dict) else []}
+            if fix.returncode != 0 or after == before or not (isinstance(parsed, dict) and parsed.get("ok")):
+                out["detail"] = scrub_paths(fix.stderr.decode("utf-8", "replace"), wd).strip()[-300:] or None
+                return out
+            repaired = after.decode("utf-8", "replace")
+        result = self.evaluate(repaired, task, timed=False)
+        out["code"] = repaired
+        out["result"] = result.to_dict()
+        return out
 
 
 def find_node(explicit: Optional[str] = None) -> str:
@@ -680,8 +812,8 @@ class TypeScriptLang(Language):
     ext = ".ts"
     hello_world = "const answer: number = 42;\nconsole.log(answer);\n"
 
-    def __init__(self, node: Optional[str] = None, timeout: float = 10.0):
-        super().__init__(timeout)
+    def __init__(self, node: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0):
+        super().__init__(timeout, time_runs)
         self.node = find_node(node)
         self._version_text: Optional[str] = None
 
@@ -709,13 +841,15 @@ class TypeScriptLang(Language):
                                f"{NODE_MIN_VERSION[0]}.{NODE_MIN_VERSION[1]} or newer is needed")
         return super().preflight()
 
-    def evaluate(self, code: str, task: Task) -> EvalResult:
-        with scratch_dir() as wd:
-            write_source(wd / "main.ts", code)
-            proc = run_limited([self.node, *NODE_TS_FLAGS, "main.ts"], cwd=wd, env=child_env(wd),
-                               timeout=self.timeout)
-            return judge_run(proc, task, self.timeout, workdir=wd, diagnose=_node_diagnose,
-                             clean_stderr=clean_node_stderr)
+    def diagnose(self, stderr: str, stdout: str) -> Optional[str]:
+        return _node_diagnose(stderr, stdout)
+
+    def clean_stderr(self, stderr: str) -> str:
+        return clean_node_stderr(stderr)
+
+    def build(self, code: str, wd: Path, env: dict):
+        write_source(wd / "main.ts", code)
+        return Built([self.node, *NODE_TS_FLAGS, "main.ts"])
 
 
 def _find_rust_tool(name: str) -> Optional[str]:
@@ -778,8 +912,8 @@ class RustLang(Language):
     ext = ".rs"
     hello_world = 'fn main() {\n    println!("42");\n}\n'
 
-    def __init__(self, rustc: Optional[str] = None, timeout: float = 10.0):
-        super().__init__(timeout)
+    def __init__(self, rustc: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0):
+        super().__init__(timeout, time_runs)
         self.explicit = rustc
         self.cmd: Optional[list] = None  # the working command; found lazily (preflight or the first evaluate)
         self._version_text: Optional[str] = None
@@ -830,29 +964,37 @@ class RustLang(Language):
     def evaluate(self, code: str, task: Task) -> EvalResult:
         return self._evaluate_with(self.command(), code, task)
 
+    def build(self, code: str, wd: Path, env: dict):
+        return self._build_with(self.command(), code, wd, env)
+
     def _evaluate_with(self, cmd: list, code: str, task: Task) -> EvalResult:
         with scratch_dir() as wd:
             env = child_env(wd)
-            write_source(wd / "main.rs", code)
-            target = "prog.exe" if os.name == "nt" else "prog"
-            build = run_limited([*cmd, *RUSTC_FLAGS, "main.rs", "-o", target], cwd=wd, env=env, timeout=BUILD_TIMEOUT)
-            if build.spawn_error:
-                raise HarnessError(f"cannot run `{_command_label(cmd)}`: {build.spawn_error}")
-            compile_ms = build.elapsed * 1000
-            detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
-            if build.timed_out:
+            built = self._build_with(cmd, code, wd, env)
+            if isinstance(built, EvalResult):
+                return built
+            return self.run_built(built, task, wd, env)
+
+    def _build_with(self, cmd: list, code: str, wd: Path, env: dict):
+        write_source(wd / "main.rs", code)
+        target = "prog.exe" if os.name == "nt" else "prog"
+        build = run_limited([*cmd, *RUSTC_FLAGS, "main.rs", "-o", target], cwd=wd, env=env, timeout=BUILD_TIMEOUT)
+        if build.spawn_error:
+            raise HarnessError(f"cannot run `{_command_label(cmd)}`: {build.spawn_error}")
+        compile_ms = build.elapsed * 1000
+        detail = scrub_paths(build.stderr.decode("utf-8", "replace"), wd).strip()
+        if build.timed_out:
+            return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
+                              exit_code=build.returncode, compile_ms=compile_ms)
+        if build.returncode != 0 or not (wd / target).exists():
+            # Exit 1 with `error[E0425]: ...` is the program's fault; a failed link, a missing component or
+            # an internal compiler error is the toolchain's (and says nothing about the program).
+            if _is_rustc_toolchain_failure(detail) or build.returncode not in (0, 1):
                 return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
                                   exit_code=build.returncode, compile_ms=compile_ms)
-            if build.returncode != 0 or not (wd / target).exists():
-                # Exit 1 with `error[E0425]: ...` is the program's fault; a failed link, a missing component or
-                # an internal compiler error is the toolchain's (and says nothing about the program).
-                if _is_rustc_toolchain_failure(detail) or build.returncode not in (0, 1):
-                    return EvalResult(False, "toolchain_error", feedback=fb_toolchain(detail), stderr=detail,
-                                      exit_code=build.returncode, compile_ms=compile_ms)
-                return EvalResult(False, "compile_error", feedback=fb_compile("The Rust compiler (`rustc`)", detail),
-                                  stderr=detail, exit_code=build.returncode, compile_ms=compile_ms)
-            proc = run_limited([wd / target], cwd=wd, env=env, timeout=self.timeout)
-            return judge_run(proc, task, self.timeout, workdir=wd, compile_ms=compile_ms)
+            return EvalResult(False, "compile_error", feedback=fb_compile("The Rust compiler (`rustc`)", detail),
+                              stderr=detail, exit_code=build.returncode, compile_ms=compile_ms)
+        return Built([wd / target], compile_ms)
 
 
 _RUSTC_TOOLCHAIN_FAILURES = ("error: linking with", "error: linker", "could not exec the linker", "internal compiler error",
@@ -898,18 +1040,18 @@ def canonical_lang(name: str) -> str:
 
 
 def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float,
-                   node: Optional[str] = None, rustc: Optional[str] = None) -> dict:
+                   node: Optional[str] = None, rustc: Optional[str] = None, time_runs: int = 0) -> dict:
     langs = {}
     for name in names:
         if name == "nyra":
             langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout,
-                                   node=find_node(node) if backend == "js" else "node")
+                                   node=find_node(node) if backend == "js" else "node", time_runs=time_runs)
         elif name == "python":
-            langs[name] = PythonLang(timeout=timeout)
+            langs[name] = PythonLang(timeout=timeout, time_runs=time_runs)
         elif name == "typescript":
-            langs[name] = TypeScriptLang(node, timeout=timeout)
+            langs[name] = TypeScriptLang(node, timeout=timeout, time_runs=time_runs)
         elif name == "rust":
-            langs[name] = RustLang(rustc, timeout=timeout)
+            langs[name] = RustLang(rustc, timeout=timeout, time_runs=time_runs)
         else:
             raise UsageError(f"unknown language {name!r}; available: {', '.join(LANG_ORDER)}")
     return langs
@@ -926,6 +1068,7 @@ class RunContext:
     abort: threading.Event = dataclasses.field(default_factory=threading.Event)
     fatal: list = dataclasses.field(default_factory=list)
     over_budget: Optional[Callable[[], bool]] = None  # --budget: called after every reply; True stops the run
+    self_repair: bool = False  # try `nyra check --fix` on a Nyra first attempt that does not compile
 
 
 def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
@@ -970,6 +1113,11 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
                 attempt["code_tokens"] = ctx.provider.count_tokens(code)
             try:
                 result = lang.evaluate(code, task)
+                if n == 1 and ctx.self_repair and isinstance(lang, NyraLang):
+                    # pass@1 with self-repair: the compiler's own --fix, once, at zero token cost. Measured on the
+                    # side; the model still gets its normal feedback and repair attempts.
+                    attempt["self_repair"] = (lang.self_repair(code, task) if result.kind == "compile_error"
+                                              else {"tried": False})
             except HarnessError as exc:
                 ctx.fatal.append(exc)
                 ctx.abort.set()
@@ -1123,6 +1271,14 @@ def toolchain_info(langs: dict) -> dict:
     return info
 
 
+def timing_info(plan) -> dict:
+    """How runtimes were measured, for the result file: timed runs per passing program, and each language's
+    start-up time (the median run time of its hello-world program), which is subtracted from the median."""
+    return {"runs": plan.args.time_runs, "statistic": "median", "jobs": plan.args.jobs,
+            "startup_ms": {n: (None if plan.langs[n].measured_startup_ms() is None
+                               else round(plan.langs[n].measured_startup_ms(), 2)) for n in plan.lang_names}}
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="run.py", description=__doc__.split("\n\n")[0],
@@ -1153,6 +1309,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rustc", help="the Rust compiler command, e.g. 'rustc +stable-x86_64-pc-windows-gnu' "
                                    "(default: found automatically; on Windows the GNU toolchain is preferred)")
     p.add_argument("--timeout", type=float, default=10.0, help="seconds a program may run (default: 10)")
+    p.add_argument("--time-runs", type=int, default=DEFAULT_TIME_RUNS, metavar="N",
+                   help="run every passing program N more times and keep the median run time, minus the language's "
+                        "start-up time (default: %d; 0: no timing)" % DEFAULT_TIME_RUNS)
     p.add_argument("--jobs", type=int, default=4, help="tasks evaluated in parallel (default: 4)")
     p.add_argument("--out", default=str(RESULTS_DIR), help="directory for the result files (default: bench/results)")
     p.add_argument("--max-tokens", type=int, default=16000,
@@ -1170,6 +1329,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="openrouter: stop the whole run once the calls so far have cost this many dollars")
     p.add_argument("--assume-output-tokens", type=int, default=1500, metavar="N",
                    help="--dry-run cost estimate: output tokens per attempt, thinking included (default: 1500)")
+    p.add_argument("--no-self-repair", action="store_true",
+                   help="do not try `nyra check --fix` on Nyra first attempts that do not compile (the \"pass@1 with "
+                        "self-repair\" metric; it never changes the other metrics)")
     p.add_argument("--no-count-tokens", action="store_true",
                    help="do not measure code-only tokens with the provider's token counter")
     p.add_argument("--mock-flaky", nargs="?", const="mix", choices=("mix",) + providers.DEFECTS,
@@ -1314,7 +1476,7 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
     args = plan.args
     nyra = plan.langs.get("nyra")
     ctx = RunContext(provider=provider, repairs=args.repairs, count_tokens=not args.no_count_tokens,
-                     over_budget=budget.exceeded if budget else None)
+                     over_budget=budget.exceeded if budget else None, self_repair=not args.no_self_repair)
     jobs = [(t, plan.langs[n], s) for t in plan.tasks for n in plan.lang_names for s in range(args.samples)]
     started = dt.datetime.now(dt.timezone.utc)
     records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
@@ -1349,6 +1511,7 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
             "mock_flaky": args.mock_flaky if provider.is_mock else None,
             "tokens_are_estimates": provider.tokens_are_estimates,
             "langs": plan.lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
+            "self_repair": None if nyra is None else not args.no_self_repair,
             "backend": nyra.backend if nyra else None, "jobs": args.jobs,
             "max_version": None if plan.max_version is None else f"{plan.max_version[0]}.{plan.max_version[1]}",
             "max_version_source": plan.max_source,
@@ -1356,6 +1519,7 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
             "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
                                                "sha256": nyra.spec_sha256},
             "node": plan.toolchains["node"], "rust": plan.toolchains["rust"],
+            "timing": timing_info(plan),
             "python": platform.python_version(), "platform": platform.platform(),
             "served_models": served, "served_by": served_by, "spent_usd": spent, "budget_usd": args.budget,
             "repo": _git_info(), "tasks_sha256": tasks_digest(), "warnings": warnings,
@@ -1413,8 +1577,8 @@ def _main(args) -> int:
     lang_names = [canonical_lang(n) for n in args.langs.split(",") if n.strip()]
     if not lang_names or len(set(lang_names)) != len(lang_names):
         raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python,typescript,rust")
-    if args.repairs < 0 or args.samples < 1 or args.jobs < 1:
-        raise UsageError("--repairs must be >= 0, --samples >= 1, --jobs >= 1")
+    if args.repairs < 0 or args.samples < 1 or args.jobs < 1 or args.time_runs < 0:
+        raise UsageError("--repairs must be >= 0, --samples >= 1, --jobs >= 1, --time-runs >= 0")
     if args.budget is not None and (args.provider != "openrouter" or args.budget <= 0):
         raise UsageError("--budget takes a positive number of dollars and needs --provider openrouter (the only "
                          "provider that reports what each call cost)")
@@ -1432,7 +1596,7 @@ def _main(args) -> int:
     model_ids = resolve_models(args)
 
     langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec),
-                           timeout=args.timeout, node=args.node, rustc=args.rustc)
+                           timeout=args.timeout, node=args.node, rustc=args.rustc, time_runs=args.time_runs)
     warnings: list = []
     for lang in langs.values():
         warnings += lang.preflight()
@@ -1507,6 +1671,9 @@ def _main(args) -> int:
 
     for p in plist:
         p.ensure_ready()  # a missing key or SDK stops the run here, before anything is spent
+    if args.time_runs:
+        for lang in langs.values():
+            lang.startup_ms()  # measured now, before the parallel jobs start, so that they cannot slow it down
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     plan = Plan(args=args, lang_names=lang_names, langs=langs, tasks=tasks, excluded=excluded, max_version=max_version,

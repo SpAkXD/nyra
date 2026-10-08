@@ -1,0 +1,9 @@
+{
+  "id": "int_nbody",
+  "title": "Integer n-body simulation",
+  "category": "speed",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "Five bodies move on an integer grid in three dimensions. Their starting positions (x, y, z) are, in this order: (-7, 17, -11), (9, 12, 5), (-9, 0, -4), (4, 6, 0) and (1, -13, 8). Every velocity starts at (0, 0, 0).\n\nEach time step has two phases. First, gravity: for every pair of bodies and for each of the three axes separately, if their coordinates on that axis differ, the body with the smaller coordinate gains 1 velocity on that axis and the other body loses 1; if the coordinates are equal, nothing changes. Only velocities change in this phase, so every pair compares the positions from before the step. Second, every body adds its velocity to its position on each axis. For example, two bodies on one axis at positions 3 and 5, both with velocity 0, have velocities 1 and -1 after one step, and positions 4 and 4.\n\nThe energy of a body is (|x| + |y| + |z|) multiplied by (|vx| + |vy| + |vz|), where vx, vy, vz is its velocity and |a| is the absolute value of a. The total energy is the sum over the five bodies.\n\nSimulate 20000 steps. After step 4000, 8000, 12000, 16000 and 20000, print the total energy on a line of its own. After the last step, print one line per body, in the starting order, with six whole numbers separated by single spaces: x y z vx vy vz.\n\nThe running time of the program is measured too, so make it reasonably fast.",
+  "expected_output": "63492\n148236\n138990\n176740\n215132\n-204 -88 271 -72 -35 -14\n311 459 -138 44 -5 3\n134 232 -279 -2 2 -42\n-153 -182 238 8 5 29\n-90 -399 -94 22 33 24\n"
+}

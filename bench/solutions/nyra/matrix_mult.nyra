@@ -1,0 +1,33 @@
+fn main() {
+    let n = 120
+    var a = [[0].repeat(n)].repeat(n)
+    var b = [[0].repeat(n)].repeat(n)
+    for i in 0..n {
+        for j in 0..n {
+            a[i][j] = (i * 31 + j * 17 + 7) % 100
+            b[i][j] = (i * 13 + j * 29 + 3) % 100
+        }
+    }
+    var c = [[0].repeat(n)].repeat(n)
+    for i in 0..n {
+        for j in 0..n {
+            var s = 0
+            for k in 0..n {
+                s += a[i][k] * b[k][j]
+            }
+            c[i][j] = s
+        }
+    }
+    var trace = 0
+    var total = 0
+    for i in 0..n {
+        trace += c[i][i]
+        for j in 0..n {
+            total += c[i][j]
+        }
+    }
+    print(trace)
+    print(total)
+    print(c[0][n - 1])
+    print(c[n - 1][0])
+}

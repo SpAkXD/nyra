@@ -10,6 +10,8 @@ wrote. What this script writes to bench/published/<name>.md and <name>.json is t
   * the headline per model x language: first-try success, success within the repairs, code tokens with the
     billed output tokens next to them, cost;
   * Nyra against each other language on the runs both got right first try;
+  * the runtime of the programs on the speed tasks, and the medians of tokens and runtime with the efficiency view
+    (code tokens x runtime, relative to Python);
   * a breakdown per task category;
   * a few notable failures: the tasks that never passed, compiler bugs, the Nyra compiler errors models hit
     most, the tasks hardest for Nyra on the first try.
@@ -42,7 +44,7 @@ if str(BENCH_DIR) not in sys.path:
 import report  # noqa: E402
 
 PUBLISHED_DIR = BENCH_DIR / "published"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: runtimes, medians and the efficiency view (models.*.efficiency, run.timing)
 # What must be equal for two result files to be comparable.
 SAME_EXPERIMENT = (("tasks_sha256", "task set"), ("langs", "languages"), ("repairs", "repairs"),
                    ("samples", "samples per task"), ("max_version", "task version limit"),
@@ -81,7 +83,8 @@ def load_results(paths: list) -> list:
         seen.add(path)
         data = _read_json(path)
         if _is_results(data):
-            loaded.append((path, data, hashlib.sha256(path.read_bytes()).hexdigest()))
+            # files from before the runtime measurement (schema 2) get the newer summary fields, left empty
+            loaded.append((path, report.ensure_current_summary(data), hashlib.sha256(path.read_bytes()).hexdigest()))
         elif isinstance(data, dict) and isinstance(data.get("models"), list):
             for entry in data["models"]:
                 name = entry.get("file") if isinstance(entry, dict) else None
@@ -307,6 +310,16 @@ def render_publication(name: str, loaded: list, notes: list, failures_per_model:
         tools.append("Python " + first["python"])
     if tools:
         facts.append("Tools: " + "; ".join(tools) + ".")
+    timing = first.get("timing") or {}
+    if timing.get("runs"):
+        startup = ", ".join(f"{report.display(l)} {report.ms(v)} ms" for l, v in (timing.get("startup_ms") or {}).items()
+                            if v is not None)
+        facts.append(f"Runtime: every passing program was run {timing['runs']} more times; the median minus the "
+                     "language's start-up time (median run time of its hello-world program"
+                     + (f": {startup}" if startup else "") + f") is its runtime. {timing.get('jobs', '?')} parallel "
+                     "job(s), so timings are indicative; `python bench/speed.py` times the reference solutions alone.")
+    elif not any(report.has_runtimes(r) for r in results_list):
+        facts.append("Runtime: not measured in these runs.")
     md += [f"- {f}" for f in facts] + [""]
 
     md += report.comparison_tables(results_list, "##")
@@ -325,6 +338,8 @@ def render_publication(name: str, loaded: list, notes: list, failures_per_model:
         md += report._table(["Metric"] + names, report.headline_rows(stats, mlangs, repairs, full=False)) + [""]
         if summary.get("paired") and len(mlangs) > 1:
             md += report._render_paired(summary["paired"], mlangs, names, summary["runs"], "####")
+        if summary.get("efficiency") and report.has_runtimes(results):
+            md += report.render_efficiency(summary["efficiency"], mlangs, "####", timing=run.get("timing"))
         if summary.get("by_category"):
             md += report._render_categories(summary["by_category"], mlangs, names, repairs, "####")
 
@@ -361,6 +376,16 @@ def render_publication(name: str, loaded: list, notes: list, failures_per_model:
            "- **Code tokens**: the program alone, counted with the model's own tokenizer. **Billed output tokens**: what the "
            "API charged for the whole reply, thinking included (many models think before they answer, so this is the larger "
            "number). They answer different questions: how compact is the language, and what did it cost.",
+           "- **pass@1 with self-repair** (Nyra only): pass@1 when a first attempt that did not compile is passed once "
+           "through `nyra check --fix`, which repairs unambiguous mistakes without a model call and costs no tokens. It is "
+           "measured on the side and changes no other number; the other languages have no such tool (`-`).",
+           "- **No program because the reply hit the token limit**: replies without a code block that stopped at the "
+           "output-token limit, usually because the model spent it thinking: a sign of the reasoning cost of a language.",
+           "- **Runtime**: how long the program that passed runs, on the `speed` tasks (heavier computations; the "
+           "other tasks finish in well under a millisecond). The median of several runs minus the language's start-up "
+           "time, compile time excluded; Nyra is the native executable, Python runs with `python -I`, TypeScript with "
+           "Node.js, Rust is built with `rustc -O`. **Efficiency** = (median code tokens / Python's) x (median runtime / "
+           "Python's), on the runs every language got right on the first try: Python is 1.00, lower is better.",
            "- Nyra is given its language spec in the prompt; the other languages rely on what the model already knows. The "
            "tasks are small, input-free programs written by the people who build Nyra. TypeScript is run by Node.js with "
            "the type annotations removed, not type-checked. Rust is compiled with `rustc -O`, edition 2021.",
@@ -374,7 +399,8 @@ def render_publication(name: str, loaded: list, notes: list, failures_per_model:
             "tasks": tasks_n, "tasks_sha256": first.get("tasks_sha256"), "samples": first["samples"], "repairs": repairs,
             "timeout_s": first["timeout_s"], "nyra": first.get("nyra"), "spec_sha256": spec.get("sha256"),
             "backend": first.get("backend"), "node": first.get("node"), "rust": first.get("rust"),
-            "python": first.get("python"), "harness_commits": commits, "uncommitted_changes": dirty,
+            "python": first.get("python"), "timing": first.get("timing"), "harness_commits": commits,
+            "uncommitted_changes": dirty,
         },
         "sources": [{"file": p.name, "sha256": digest} for p, _, digest in loaded],
         "models": {},
@@ -387,6 +413,7 @@ def render_publication(name: str, loaded: list, notes: list, failures_per_model:
             "complete": run.get("complete", True), "spent_usd": run.get("spent_usd"),
             "runs": summary["runs"], "excluded_runs": summary["excluded_runs"], "langs": summary["langs"],
             "paired": summary.get("paired"), "by_category": summary.get("by_category"),
+            "efficiency": summary.get("efficiency"),
             "notable_failures": per_model_failures[report.model_label(results)],
         }
     return "\n".join(md), data
