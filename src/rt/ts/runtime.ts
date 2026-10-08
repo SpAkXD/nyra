@@ -44,6 +44,10 @@ function ny_mod(a: number, b: number, line: number, col: number): number {
 function ny_check_step(k: number, line: number, col: number): void {
     if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+function ny_check_non_empty(n: number, max: number, line: number, col: number): void {
+    if (n === 0) ny_panic("E0247", max ? "max() of an empty array" : "min() of an empty array", "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 function ny_f2i(x: number, line: number, col: number): number {
     if (Number.isNaN(x) || x >= 9223372036854775807 || x < -9223372036854775808) {
@@ -283,6 +287,13 @@ function ny_sort<T>(a: T[], lt: (x: T, y: T) => boolean): void {
         for (let k = lo; k < hi; k++) a[k] = tmp[k];
     };
     sort(0, a.length);
+}
+// `xs.sort_by(x => key)`: the same merge sort on the positions, ordered by the keys
+function ny_sort_by<T, K>(a: T[], ks: K[], lt: (x: K, y: K) => boolean): void {
+    const idx = Array.from(ks, (_, i) => i);
+    ny_sort(idx, (i: number, j: number) => lt(ks[i], ks[j]));
+    const old = a.slice();
+    for (let i = 0; i < idx.length; i++) a[i] = old[idx[i]];
 }
 function ny_lt_num(x: number, y: number): boolean { return x < y; }
 // NaN sorts after every number (and NaNs keep their order)

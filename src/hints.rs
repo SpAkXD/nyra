@@ -129,8 +129,12 @@ pub fn undefined_function(w: &str) -> Option<String> {
         }
         "chr" | "fromCharCode" | "char_from" => "turn a code into a character with `char(n)`",
         "ord" | "charCodeAt" | "codePointAt" => "a character's code is `c.code()`; all codes of a string: `s.codes()`",
-        "sorted" | "sort" => "sort an array in place with `xs.sort()`",
-        "reversed" | "reverse" => "reverse an array in place with `xs.reverse()`; for a string: `s.chars()`, reverse, then `join(\"\")`",
+        "sorted" | "sort" => "sort an array in place with `xs.sort()`, or by a key with `xs.sort_by(x => key)`",
+        "reversed" | "reverse" => "`xs.reversed()` gives a reversed copy of an array or a string; `xs.reverse()` reverses an array in place",
+        "enumerate" => "for the position and the element write `for i, x in xs { ... }`",
+        "sum" | "any" | "all" => return Some(format!("`{w}` is a method: `xs.{w}()`{}", if w == "sum" { "" } else { " with a test, e.g. `xs.any(x => x > 0)`" })),
+        "map" | "filter" => return Some(format!("`{w}` is a method that takes a lambda: `xs.{w}(x => ...)`, or write a comprehension: `[x * 2 for x in xs if x > 0]`")),
+        "reduce" | "fold" => "`xs.fold(start, (acc, x) => ...)` combines the elements, e.g. `xs.fold(0, (acc, x) => acc + x)`",
         "split" | "join" | "trim" | "strip" | "upper" | "lower" | "replace" | "contains" | "startswith" | "endswith"
         | "push" | "append" | "pop" | "insert" | "remove" => {
             return Some(format!("`{w}` is a method: call it on the value, e.g. `x.{}(...)`", method_spelling(w)))
@@ -170,7 +174,7 @@ pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
     let w: String = name.chars().filter(|c| *c != '_').map(|c| c.to_ascii_lowercase()).collect();
     let r = recv;
     let own = match t {
-        Type::Array(_) => array_method(&w, name, r),
+        Type::Array(_) => array_method(&w, r),
         Type::Str => str_method(&w, r),
         Type::Char => char_method(&w, r),
         _ => None,
@@ -191,7 +195,7 @@ pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
     })
 }
 
-fn array_method(w: &str, name: &str, r: &str) -> Option<String> {
+fn array_method(w: &str, r: &str) -> Option<String> {
     Some(match w {
         "length" | "size" => format!("the length is `{r}.len()`"),
         "isempty" | "empty" => format!("compare the length: `{r}.len() == 0`"),
@@ -202,16 +206,25 @@ fn array_method(w: &str, name: &str, r: &str) -> Option<String> {
         "includes" | "has" | "contain" => format!("write `{r}.contains(x)`"),
         "indexof" | "find" | "position" => format!("`{r}.index_of(x)` gives the position of the first match, or -1"),
         "removeat" | "delete" | "erase" => format!("`{r}.remove(i)` removes the element at position `i` and gives it back"),
-        "first" | "front" => format!("the first element is `{r}[0]` (check `{r}.len() > 0` first)"),
+        "first" | "front" => format!("the first element is `{r}[0]` (check `{r}.len() > 0` first); the first that passes a test: `{r}.find_index(x => test)`"),
         "last" | "back" => format!("the last element is `{r}[{r}.len() - 1]` (check `{r}.len() > 0` first)"),
-        "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`)"),
-        "reversed" => format!("`{r}.reverse()` reverses in place (`{r}` must be a `var`)"),
+        "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`); `{r}.sort_by(x => key)` sorts by a key"),
+        "rev" | "toreversed" => format!("`{r}.reversed()` gives a reversed copy; `{r}.reverse()` reverses in place"),
+        "sortby" | "sortbykey" | "sortedby" => format!("`{r}.sort_by(x => key)` sorts in place by a key (`{r}` must be a `var`)"),
+        "reduce" | "inject" | "aggregate" => format!("`{r}.fold(start, (acc, x) => ...)` combines the elements, e.g. `{r}.fold(0, (acc, x) => acc + x)`"),
+        "findindex" | "indexwhere" => format!("`{r}.find_index(x => test)` gives the position of the first match, or -1"),
+        "some" | "anymatch" | "exists" => format!("`{r}.any(x => test)` is true if one element passes"),
+        "every" | "allmatch" | "forall" => format!("`{r}.all(x => test)` is true if every element passes"),
+        "select" | "where" => format!("`{r}.filter(x => test)` keeps the elements that pass"),
+        "collect" | "transform" => format!("`{r}.map(x => ...)` gives a new array of the results"),
+        "foreach" | "each" => format!("loop over the elements: `for x in {r} {{ ... }}` (`for i, x in {r}` also gives the position)"),
+        "enumerate" | "withindex" | "indexed" => format!("`for i, x in {r} {{ ... }}` gives each position and element"),
         "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
         "sublist" | "subarray" | "take" => format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`"),
         "concat" | "extend" | "addall" => format!("join arrays with `+`: `{r} + other`, or append in place with `{r} += other`"),
-        "map" | "filter" | "reduce" | "fold" | "foreach" | "any" | "all" | "sum" | "min" | "max" | "flatten" | "zip" => {
-            format!("arrays have no `.{name}()`: write a loop, `for x in {r} {{ ... }}` (Nyra has no closures)")
-        }
+        "flatten" | "flat" => format!("join the inner arrays: `{r}.fold(empty, (acc, x) => acc + x)` or a loop with `+=`"),
+        "zip" => format!("loop over the positions: `for i, x in {r} {{ ... other[i] ... }}`"),
+        "average" | "mean" | "avg" => format!("divide the sum by the length: `float({r}.sum()) / float({r}.len())`"),
         _ => return None,
     })
 }
@@ -242,7 +255,8 @@ fn str_method(w: &str, r: &str) -> Option<String> {
         "padstart" | "padend" | "ljust" | "rjust" | "center" | "zfill" => {
             format!("pad with `repeat`, e.g. `\" \".repeat(width - {r}.len()) + {r}` (the count must not be negative)")
         }
-        "reverse" | "reversed" => format!("reverse the characters: `var cs = {r}.chars()`, `cs.reverse()`, then `cs.join(\"\")`"),
+        "reverse" | "rev" => format!("`{r}.reversed()` gives the characters in reverse order"),
+        "map" | "filter" => format!("strings have no `.{w}()`: use a comprehension over the characters, e.g. `[c.upper() for c in {r} if c != ' ']`, or `{r}.chars().{w}(c => ...)`"),
         "isdigit" | "isnumeric" | "isdecimal" | "isalpha" | "isalnum" | "isupper" | "islower" | "isspace" => {
             format!("these are `char` methods (`c.is_digit()`, `c.is_letter()`, ...): test each character, `for c in {r} {{ ... }}`")
         }
@@ -285,6 +299,11 @@ pub fn method_rename(t: Type, name: &str) -> Option<&'static str> {
         (Type::Array(_) | Type::Str, "length" | "size") => "len",
         (Type::Array(_) | Type::Str, "includes" | "has" | "contain") => "contains",
         (Type::Array(_) | Type::Str, "indexof") => "index_of",
+        (Type::Array(_) | Type::Str, "rev" | "toreversed") => "reversed",
+        (Type::Array(_) | Type::Str, "findindex") => "find_index",
+        (Type::Array(_) | Type::Str, "every") => "all",
+        (Type::Array(_) | Type::Str, "some") => "any",
+        (Type::Array(_), "sortby" | "sortbykey") => "sort_by",
         (Type::Array(_), "append" | "add" | "pushback" | "addlast") => "push",
         (Type::Array(_), "popback" | "poplast" | "removelast") => "pop",
         (Type::Array(_), "removeat") => "remove",

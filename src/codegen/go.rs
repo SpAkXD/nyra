@@ -371,6 +371,11 @@ impl<'a> Gen<'a> {
                         }
                     }
                     RtOp::ArrReverse => format!("slices.Reverse({target}.items)"),
+                    RtOp::ArrSortBy => {
+                        let k = self.ty(&args[0]).elem().expect("verified: keys");
+                        let cmp = if k == Ty::Float { "nyCmpFloat".to_string() } else { format!("nyCmpOrd[{}]", gotype(k)) };
+                        format!("nySortBy({target}, {}, {cmp})", a[0])
+                    }
                     RtOp::ArrSwap => format!("nySwap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("nyExtend({target}, {})", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
@@ -487,6 +492,7 @@ impl<'a> Gen<'a> {
             RtOp::RemInt => format!("nyRem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyF2I({}, {at})", a[0]),
             RtOp::CheckStep => format!("nyCheckStep({}, {at})", a[0]),
+            RtOp::CheckNonEmpty => format!("nyCheckNonEmpty({}, {}, {at})", a[0], a[1]),
             RtOp::StrConcat => format!("{} + {}", self.expr(&args[0]), self.expr(&args[1])),
             RtOp::StrAt => format!("nyCharAt({}, {}, {at})", a[0], a[1]),
             RtOp::StrSlice => format!("nyStrSlice({}, {}, {}, {at})", a[0], a[1], a[2]),

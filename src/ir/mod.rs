@@ -247,6 +247,13 @@ pub enum RtOp {
     ArrAppend,
     /// `xs.swap(i, j)` (a `Mutate`, E0240).
     ArrSwap,
+    /// `xs.sort_by(x => key)` (a `Mutate`): the argument holds one key per element (`[int]`,
+    /// `[float]`, `[str]` or `[char]`); the elements are sorted by them like `ArrSort` sorts
+    /// values: stable, NaN after every number.
+    ArrSortBy,
+    /// `min()` / `max()`: the first argument is the number of elements seen, and 0 is runtime
+    /// error E0247; the second says which method it was (0: `min`, 1: `max`). Writes nowhere.
+    CheckNonEmpty,
     /// The `step` of a range: 0 is runtime error E0243. Writes nowhere.
     CheckStep,
     /// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters (never shorter).
@@ -294,6 +301,8 @@ impl RtOp {
             RtOp::ArrReverse => "arr_reverse",
             RtOp::ArrAppend => "arr_append",
             RtOp::ArrSwap => "arr_swap",
+            RtOp::ArrSortBy => "arr_sort_by",
+            RtOp::CheckNonEmpty => "check_non_empty",
             RtOp::CheckStep => "check_step",
             RtOp::StrPadLeft => "str_pad_left",
             RtOp::StrPadRight => "str_pad_right",
@@ -321,6 +330,7 @@ impl RtOp {
             RtOp::CharFrom => (&[Int], Some(Char)),
             RtOp::StrPadLeft | RtOp::StrPadRight => (&[Str, Int, Char], Some(Str)),
             RtOp::CheckStep => (&[Int], None),
+            RtOp::CheckNonEmpty => (&[Int, Int], None),
             _ => (&[], None),
         }
     }
@@ -366,6 +376,7 @@ impl RtOp {
                 | RtOp::ArrReverse
                 | RtOp::ArrAppend
                 | RtOp::ArrSwap
+                | RtOp::ArrSortBy
         )
     }
 }

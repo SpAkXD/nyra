@@ -300,6 +300,14 @@ impl Verifier<'_> {
                             RtOp::ArrSort | RtOp::ArrReverse => (vec![], None),
                             RtOp::ArrAppend => (vec![t], None),
                             RtOp::ArrSwap => (vec![Ty::Int, Ty::Int], None),
+                            RtOp::ArrSortBy => {
+                                let [keys] = args.as_slice() else { return Err("arr_sort_by takes the keys".into()) };
+                                let k = self.ty(keys)?;
+                                if !k.elem().is_some_and(|k| matches!(k, Ty::Int | Ty::Float | Ty::Str | Ty::Char)) {
+                                    return Err(format!("arr_sort_by with keys of type {}", k.name()));
+                                }
+                                (vec![k], None)
+                            }
                             _ => return Err(format!("{} does not change a place", op.name())),
                         };
                         if *op == RtOp::ArrSort && !matches!(elem, Ty::Int | Ty::Float | Ty::Str | Ty::Char) {

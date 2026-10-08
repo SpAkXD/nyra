@@ -103,6 +103,13 @@ function ny_sort(a, lt) {
     };
     sort(0, a.length);
 }
+// `xs.sort_by(x => key)`: the same merge sort on the positions, ordered by the keys
+function ny_sort_by(a, ks, lt) {
+    const idx = Array.from(ks, (_, i) => i);
+    ny_sort(idx, (i, j) => lt(ks[i], ks[j]));
+    const old = a.slice();
+    for (let i = 0; i < idx.length; i++) a[i] = old[idx[i]];
+}
 function ny_lt_num(x, y) { return x < y; }
 // NaN sorts after every number (and NaNs keep their order), like the C runtime
 function ny_lt_float(x, y) { return x < y || (y !== y && x === x); }

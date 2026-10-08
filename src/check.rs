@@ -10,6 +10,8 @@ use crate::check_v03::{self as v3, StructInfo};
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
 
+mod lambda;
+
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
 /// Builtins a program may also define itself (its own definition wins).
 pub const MATH: &[&str] = &["abs", "min", "max"];
@@ -45,6 +47,8 @@ enum Decl {
     /// an `inout` parameter: changeable, like a `var`
     Inout,
     Loop,
+    /// a parameter of a lambda (`x` in `x => x * 2`)
+    Lambda,
 }
 
 struct Var {
@@ -92,6 +96,8 @@ struct Checker {
     arena_depth: usize,
     /// Variables that were freed with `free(x)` and not assigned since.
     freed: HashMap<String, Freed>,
+    /// How many lambdas enclose the current expression: inside one, nothing can be changed.
+    lambda_depth: usize,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -106,6 +112,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         chain: None,
         arena_depth: 0,
         freed: HashMap::new(),
+        lambda_depth: 0,
     };
 
     // structs first: functions and bodies refer to them
@@ -263,7 +270,14 @@ fn collect_decls(b: &[Stmt], out: &mut Vec<(String, Span)>) {
                 }
             }
             StmtKind::While { body, .. } | StmtKind::Arena(body) => collect_decls(body, out),
-            StmtKind::For { var, body, .. } | StmtKind::ForEach { var, body, .. } => {
+            StmtKind::For { var, body, .. } => {
+                out.push((var.clone(), s.span));
+                collect_decls(body, out);
+            }
+            StmtKind::ForEach { var, index, body, .. } => {
+                if let Some(i) = index {
+                    out.push((i.clone(), s.span));
+                }
                 out.push((var.clone(), s.span));
                 collect_decls(body, out);
             }
@@ -288,7 +302,7 @@ fn show(e: &Expr) -> Option<String> {
         ExprKind::Bool(b) => b.to_string(),
         ExprKind::Char(c) => v3::show_char(*c),
         ExprKind::Str(s) if s.len() <= 16 && !s.contains(['"', '\\', '\n', '\t', '\r']) => format!("\"{s}\""),
-        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) => return None,
+        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::Comprehension(_) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
             let a: Option<Vec<String>> = args.iter().map(show).collect();
@@ -308,6 +322,10 @@ fn show(e: &Expr) -> Option<String> {
         }
         ExprKind::Labeled(l, v) => format!("{l}: {}", show(v)?),
         ExprKind::Inout(v) => format!("inout {}", show(v)?),
+        ExprKind::Lambda(ps, body) => match ps.as_slice() {
+            [(p, _)] => format!("{p} => {}", show(body)?),
+            _ => format!("({}) => {}", ps.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>().join(", "), show(body)?),
+        },
     };
     (s.len() <= 48).then_some(s)
 }
@@ -490,6 +508,16 @@ impl Checker {
                     format!("`{name}` is already the loop variable of an enclosing `for` (line {})", pspan.line),
                     format!("use a different name for the inner variable, e.g. `{}`", if name == "i" { "j" } else { "inner" }),
                 ),
+                Decl::Lambda => (
+                    format!("`{name}` is already the parameter of an enclosing lambda (line {})", pspan.line),
+                    "use a different name for the inner variable or parameter".to_string(),
+                ),
+            };
+            // a lambda's parameter is the easiest one to rename
+            let hint = if decl == Decl::Lambda {
+                format!("give the lambda's parameter a name that is not used yet, e.g. `{}`", lambda::fresh_name(name, |n| self.lookup(n).is_some()))
+            } else {
+                hint
             };
             self.errs.push(Diag::new("E0206", msg, span).hint(hint));
         } else if let Some(sig) = self.fns.get(name) {
@@ -782,7 +810,7 @@ impl Checker {
 
     /// A loop body. A `free(x)` inside reaches the uses of the next round, so variables freed in
     /// the body (and not assigned in it) count as maybe-freed while the body is checked.
-    fn loop_body(&mut self, body: &mut [Stmt], var: Option<(&str, Type, Span)>) {
+    fn loop_body(&mut self, body: &mut [Stmt], vars: &[(&str, Type, Span)]) {
         let before = self.freed.clone();
         let (mut frees, mut assigned) = (Vec::new(), Vec::new());
         v3::frees_in(body, &mut frees, &mut assigned);
@@ -792,7 +820,7 @@ impl Checker {
             }
         }
         self.scopes.push(HashMap::new());
-        if let Some((name, t, span)) = var {
+        for &(name, t, span) in vars {
             self.declare(name, t, Decl::Loop, span);
         }
         self.block(body);
@@ -848,7 +876,7 @@ impl Checker {
             StmtKind::While { cond, body } => {
                 let t = self.expr(cond);
                 self.cond(t, cond, "`while`");
-                self.loop_body(body, None);
+                self.loop_body(body, &[]);
             }
             StmtKind::For { var, start, end, step, body } => {
                 let a = self.expr(start);
@@ -859,9 +887,9 @@ impl Checker {
                     let t = self.expr(k);
                     self.range_bound(t, k, "step");
                 }
-                self.loop_body(body, Some((var, Type::Int, span)));
+                self.loop_body(body, &[(var, Type::Int, span)]);
             }
-            StmtKind::ForEach { var, iter, body } => {
+            StmtKind::ForEach { var, index, iter, body } => {
                 let it = self.expr(iter);
                 let elem = match it {
                     t if t.is_unknown() => Type::Unknown,
@@ -880,7 +908,10 @@ impl Checker {
                         Type::Unknown
                     }
                 };
-                self.loop_body(body, Some((var, elem, span)));
+                match index {
+                    Some(i) => self.loop_body(body, &[(i, Type::Int, span), (var, elem, span)]),
+                    None => self.loop_body(body, &[(var, elem, span)]),
+                }
             }
             StmtKind::Break | StmtKind::Continue => {}
             StmtKind::Arena(body) => {
@@ -966,6 +997,10 @@ impl Checker {
                                 format!("cannot assign to `{name}`: it is the loop variable of a `for`"),
                                 "loop variables cannot be changed: use a `while` loop with a `var` counter instead".to_string(),
                             ),
+                            Decl::Lambda => (
+                                format!("cannot assign to `{name}`: it is the parameter of a lambda"),
+                                "a lambda only computes a value from its parameters".to_string(),
+                            ),
                             _ => (
                                 format!("cannot assign to `{name}`: it was declared with `let` on line {}", dspan.line),
                                 format!("declare it with `var` to make it changeable: `var {name} = ...` on line {}", dspan.line),
@@ -1029,6 +1064,10 @@ impl Checker {
     /// `e` is changed (assigned into, a mutating method, `inout`): it must be a place whose root
     /// variable can change.
     fn check_place(&mut self, e: &Expr, what: &str, span: Span) {
+        if self.lambda_depth > 0 {
+            self.errs.push(lambda::changes(e, what, span));
+            return;
+        }
         if let ExprKind::Index(b, _) = &e.kind {
             if b.ty == Type::Str {
                 self.errs.push(
@@ -1071,8 +1110,9 @@ impl Checker {
             ),
             Decl::Loop => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` is the loop variable of a `for`"), span)
-                    .hint("the loop variable is a copy of each element: change the array itself, e.g. `xs[i] = ...` in `for i in 0..xs.len()`"),
+                    .hint("the loop variable is a copy of each element: change the array itself, e.g. `xs[i] = ...` in `for i, x in xs`"),
             ),
+            Decl::Lambda => {}
         }
     }
 
@@ -1301,6 +1341,11 @@ impl Checker {
                 );
                 Type::Unknown
             }
+            ExprKind::Lambda(..) => {
+                self.errs.push(lambda::misplaced(span));
+                Type::Unknown
+            }
+            ExprKind::Comprehension(c) => self.comprehension(c),
             ExprKind::Inout(v) => {
                 self.expr(v);
                 self.errs.push(
@@ -1489,6 +1534,9 @@ impl Checker {
                 self.arg_type(a, None);
             }
             return Type::Unknown;
+        }
+        if let Some(t) = self.lambda_method(recv, rt, name, args, span) {
+            return t;
         }
         let Some(sig) = v3::method_sig(rt, name) else {
             for a in args.iter_mut() {
@@ -2184,6 +2232,7 @@ impl Checker {
             Decl::Param => Some((format!("cannot {name} parameter `{var}`: the caller owns it"), "only variables declared with `let` or `var` in this function can be freed or kept".to_string())),
             Decl::Inout => Some((format!("cannot {name} `inout` parameter `{var}`: the caller still needs a value"), format!("assign a new value instead: `{var} = ...`"))),
             Decl::Loop => Some((format!("cannot {name} the loop variable `{var}`"), "the loop variable is a copy of each element: there is nothing to free".to_string())),
+            Decl::Lambda => Some((format!("cannot {name} the lambda parameter `{var}`"), "a lambda only reads values: there is nothing to free".to_string())),
             _ if !t.is_unknown() && !self.managed(t) => Some((
                 format!("nothing to {name}: `{var}` is {}, which owns no heap memory", article(t)),
                 "only strings, arrays and structs that contain them can be freed or kept".to_string(),

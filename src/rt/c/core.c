@@ -94,6 +94,13 @@ static int64_t nyrt_mod(int64_t a, int64_t b, int line, int col) {
 static void nyrt_check_step(int64_t k, int line, int col) {
     if (k == 0) nyrt_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+static void nyrt_check_non_empty(int64_t n, int64_t max, int line, int col) {
+    if (n == 0) {
+        nyrt_panic("E0247", max ? "max() of an empty array" : "min() of an empty array",
+                   "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+    }
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 static int64_t nyrt_f2i(double x, int line, int col) {
     if (x != x || x >= 9223372036854775807.0 || x < -9223372036854775808.0) {

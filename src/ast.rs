@@ -159,8 +159,8 @@ pub enum StmtKind {
     /// `for var in start..end`
     /// `for var in start..end` or `for var in start..end step k` (`k` may be negative)
     For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
-    /// `for var in iter` over an array or a string
-    ForEach { var: String, iter: Expr, body: Vec<Stmt> },
+    /// `for var in iter` over an array or a string; `for index, var in iter` also counts from 0
+    ForEach { var: String, index: Option<String>, iter: Expr, body: Vec<Stmt> },
     Break,
     Continue,
     /// `arena { ... }`: everything allocated inside is freed together at `}`.
@@ -261,4 +261,27 @@ pub enum ExprKind {
     Labeled(String, Box<Expr>),
     /// `inout place`: only as an argument
     Inout(Box<Expr>),
+    /// `x => body` or `(a, b) => body`: only as an argument of the array methods that take one
+    /// (`map`, `filter`, ...). Lowering turns it into a loop, so it never exists at run time.
+    Lambda(Vec<(String, Span)>, Box<Expr>),
+    /// `[elem for var in src if cond]`: a new array, built by a loop like `map` and `filter`
+    Comprehension(Box<Comp>),
+}
+
+/// `[elem for var in src if cond]`. Like a lambda's body, `elem` and `cond` only read variables.
+#[derive(Debug)]
+pub struct Comp {
+    pub elem: Expr,
+    /// The loop variable (one-element slice, so it reads like a lambda's parameters).
+    pub var: [(String, Span); 1],
+    pub src: CompSrc,
+    pub cond: Option<Expr>,
+}
+
+#[derive(Debug)]
+pub enum CompSrc {
+    /// an array or a string
+    Each(Expr),
+    /// `a..b` or `a..b step k`
+    Range(Expr, Expr, Option<Expr>),
 }

@@ -125,10 +125,14 @@ impl Parser {
         }
         match self.peek() {
             Tok::Ident(w) => self.number_suffix(w).map(|(h, _)| h).or_else(|| hints::word(w)),
-            Tok::Assign if self.arrow_ahead() => Some(
-                "`=>` does not exist: Nyra has no lambdas or closures; define a named function, e.g. `fn double(x: int) -> int = x * 2`"
+            Tok::FatArrow => Some(
+                "`=>` only starts the body of a lambda, which is an argument of an array method: `xs.map(x => x * 2)`; elsewhere define a named function, e.g. `fn double(x: int) -> int = x * 2`"
                     .into(),
             ),
+            // `x -> x * 2` (Java, Kotlin): a lambda arrow is `=>`
+            Tok::Arrow if matches!(self.prev().map(|p| &p.tok), Some(Tok::Ident(_))) => {
+                Some("a lambda is written with `=>`: `x => x * 2`".into())
+            }
             Tok::Assign if self.glued_to(&Tok::Eq) || self.glued_to(&Tok::Ne) => {
                 Some("`===` and `!==` do not exist: compare with `==` and `!=`".into())
             }
@@ -156,7 +160,8 @@ impl Parser {
                 None => Edit::replace(here, w, word_fix(w)?),
             },
             // `a === b`: the third `=` goes
-            Tok::Assign if !self.arrow_ahead() && (self.glued_to(&Tok::Eq) || self.glued_to(&Tok::Ne)) => Edit::replace(here, "=", ""),
+            Tok::Assign if self.glued_to(&Tok::Eq) || self.glued_to(&Tok::Ne) => Edit::replace(here, "=", ""),
+            Tok::Arrow if matches!(self.prev().map(|p| &p.tok), Some(Tok::Ident(_))) => Edit::replace(here, "->", "=>"),
             Tok::LBrace => return self.struct_literal_fix(),
             _ => return None,
         };
@@ -247,13 +252,6 @@ impl Parser {
         }
         let call = if fields.is_empty() { format!("{name}(field: value, ...)") } else { format!("{name}({})", fields.join(", ")) };
         Some(format!("a struct is built like a call, with every field named: `{call}`"))
-    }
-
-    /// True if the current token is an `=` that is directly followed by `>`: a `=>` arrow.
-    fn arrow_ahead(&self) -> bool {
-        let next = self.toks.get(self.pos + 1);
-        self.at(&Tok::Assign)
-            && next.is_some_and(|n| n.tok == Tok::Gt && n.span.line == self.span().line && n.span.col == self.span().col + 1)
     }
 
     /// `0xFF`, `1_000`, `1e5` and friends lex as a number followed by a word: say what to write,
@@ -588,9 +586,6 @@ impl Parser {
             Tok::Newline => d.hint("the expression must start on the same line as `=`: `fn f() -> int = 1`"),
             Tok::Ret => d.hint("a one-line function returns its expression itself, so there is no `ret`: `fn f(x: int) -> int = x`"),
             Tok::LBrace => d.hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`"),
-            Tok::Gt if self.glued_to(&Tok::Assign) => {
-                d.hint("`=>` does not exist: a one-line function is written `fn f(x: int) -> int = x * 2`")
-            }
             _ => d,
         }
     }
@@ -685,6 +680,10 @@ impl Parser {
                 let fix = typed.then(|| Edit::replace(here, ":", " ->"));
                 Some(("the return type is written after an arrow: `fn f(a: int) -> int {`".to_string(), fix))
             }
+            Tok::FatArrow if is_fn => Some((
+                "`=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`".to_string(),
+                None,
+            )),
             Tok::Ident(t) if is_fn && hints::is_type_word(t) => {
                 let fix = (t != "void").then(|| Edit::replace(here, t, format!("-> {t}")));
                 Some((format!("the return type is written after an arrow: `fn f() -> {t} {{`"), fix))
@@ -698,7 +697,6 @@ impl Parser {
                 // `if x = 1 {`: there is no assignment in a condition, so it is a comparison
                 let compare = matches!(what, "if" | "while")
                     && self.at(&Tok::Assign)
-                    && !self.arrow_ahead()
                     && !self.glued_to(&Tok::Eq)
                     && !self.glued_to(&Tok::Ne)
                     && !matches!(self.peek_at(1), Tok::Assign);
@@ -934,11 +932,17 @@ impl Parser {
             }
             Tok::For => {
                 self.bump();
-                let (var, _) = self.ident("a loop variable", "loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`")?;
-                self.expect(Tok::In, "`in`").map_err(|d| {
-                    let hint = self.two_variables_hint(&var);
-                    d.or_hint(hint.unwrap_or_else(|| "loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`".into()))
-                })?;
+                const LOOPS: &str = "loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`";
+                let (first, _) = self.ident("a loop variable", LOOPS)?;
+                // `for i, x in xs`: the position, then the element
+                let (index, var) = if self.at(&Tok::Comma) && matches!(self.peek_at(1), Tok::Ident(_)) {
+                    self.bump();
+                    let (second, _) = self.ident("a loop variable", LOOPS)?;
+                    (Some(first), second)
+                } else {
+                    (None, first)
+                };
+                self.expect(Tok::In, "`in`").map_err(|d| d.or_hint(LOOPS))?;
                 let start = self.expr()?;
                 if let ExprKind::Call(f, args) = &start.kind {
                     if f == "range" {
@@ -955,6 +959,11 @@ impl Parser {
                         return Err(self.unexpected("`..`").hint(hint).fix_opt(fix));
                     }
                 }
+                if self.at(&Tok::DotDot) && index.is_some() {
+                    return Err(self.unexpected("`{` to start the body of this `for`").hint(
+                        "`for i, x in xs` goes over an array or a string; over a range the variable is already the position: `for i in a..b`",
+                    ));
+                }
                 if self.at(&Tok::DotDot) {
                     self.bump();
                     let end = self.expr()?;
@@ -968,7 +977,7 @@ impl Parser {
                     StmtKind::For { var, start, end, step, body }
                 } else {
                     let body = self.loop_body("for")?;
-                    StmtKind::ForEach { var, iter: start, body }
+                    StmtKind::ForEach { var, index, iter: start, body }
                 }
             }
             Tok::Break | Tok::Continue => {
@@ -1020,26 +1029,6 @@ impl Parser {
             }
         };
         Ok(Stmt { kind, span })
-    }
-
-    /// `for i, x in xs` (or `enumerate(xs)`): a loop has one variable. Shows how to get the position and the element.
-    fn two_variables_hint(&self, first: &str) -> Option<String> {
-        if !self.at(&Tok::Comma) {
-            return None;
-        }
-        let Tok::Ident(second) = &self.toks.get(self.pos + 1)?.tok else { return None };
-        if self.toks.get(self.pos + 2)?.tok != Tok::In {
-            return None;
-        }
-        let at = |n: usize| self.toks.get(self.pos + n).map(|t| &t.tok);
-        let seq = match (at(3), at(4), at(5)) {
-            (Some(Tok::Ident(f)), Some(Tok::LParen), Some(Tok::Ident(inner))) if f == "enumerate" => inner.clone(),
-            (Some(Tok::Ident(s)), next, _) if next != Some(&Tok::LParen) && next != Some(&Tok::Dot) => s.clone(),
-            _ => "xs".to_string(),
-        };
-        Some(format!(
-            "a loop has one variable: to get the position and the element write `for {first} in 0..{seq}.len() {{ let {second} = {seq}[{first}] ... }}`"
-        ))
     }
 
     /// The body of a loop: `break` and `continue` are allowed inside.
@@ -1274,6 +1263,10 @@ impl Parser {
                     }
                     items.push(self.expr()?);
                     self.skip_newlines();
+                    if items.len() == 1 && self.at(&Tok::For) {
+                        let elem = items.pop().expect("one element");
+                        return self.comprehension(elem, open, span);
+                    }
                     match self.peek() {
                         Tok::Comma => {
                             self.bump();
@@ -1310,6 +1303,14 @@ impl Parser {
                 self.bump();
                 ExprKind::Bool(false)
             }
+            Tok::Ident(name) if matches!(self.peek_at(1), Tok::FatArrow) => {
+                self.bump();
+                return self.lambda(vec![(name, span)], span);
+            }
+            // `lambda x: x * 2` (Python)
+            Tok::Ident(name) if name == "lambda" && matches!(self.peek_at(1), Tok::Ident(_) | Tok::Colon) => {
+                return Err(self.python_lambda());
+            }
             Tok::Ident(name) => {
                 self.bump();
                 if self.at(&Tok::LParen) {
@@ -1318,6 +1319,19 @@ impl Parser {
                 } else {
                     ExprKind::Var(name)
                 }
+            }
+            Tok::LParen if self.lambda_ahead() => {
+                // `(a, b) => body`
+                self.bump();
+                let mut params = Vec::new();
+                while !self.at(&Tok::RParen) {
+                    let p = self.bump();
+                    if let Tok::Ident(n) = p.tok {
+                        params.push((n, p.span));
+                    }
+                }
+                self.bump();
+                return self.lambda(params, span);
             }
             Tok::LParen => {
                 let open = self.bump().span;
@@ -1330,6 +1344,99 @@ impl Parser {
             _ => return Err(self.expression_expected()),
         };
         self.postfix(Expr::new(kind, span))
+    }
+
+    /// `[elem for x in src if cond]` after `elem`, at `for`.
+    fn comprehension(&mut self, elem: Expr, open: Span, span: Span) -> PResult<Expr> {
+        self.bump();
+        let (var, vspan) = self.ident("a loop variable", "a comprehension looks like `[x * x for x in xs if x > 0]`")?;
+        if self.at(&Tok::Comma) {
+            return Err(self.unexpected("`in`").hint(
+                "a comprehension has one variable; for the position too, use a loop: `for i, x in xs { ... }`",
+            ));
+        }
+        self.expect(Tok::In, "`in`").map_err(|d| d.or_hint("a comprehension looks like `[x * x for x in xs if x > 0]`"))?;
+        let first = self.expr()?;
+        let src = if self.at(&Tok::DotDot) {
+            self.bump();
+            let end = self.expr()?;
+            let step = if matches!(self.peek(), Tok::Ident(w) if w == "step") {
+                self.bump();
+                Some(self.expr()?)
+            } else {
+                None
+            };
+            CompSrc::Range(first, end, step)
+        } else {
+            CompSrc::Each(first)
+        };
+        self.skip_newlines();
+        let cond = if self.at(&Tok::If) {
+            self.bump();
+            Some(self.expr()?)
+        } else {
+            None
+        };
+        self.skip_newlines();
+        if !self.at(&Tok::RBracket) {
+            let d = self.unexpected(&format!("`]` to close the comprehension opened at {}:{}", open.line, open.col));
+            return Err(if self.at(&Tok::For) {
+                d.hint("a comprehension has one `for`: for nested loops write `for` statements and `push`")
+            } else {
+                d.or_hint("a comprehension looks like `[x * x for x in xs if x > 0]`")
+            });
+        }
+        self.bump();
+        let comp = Comp { elem, var: [(var, vspan)], src, cond };
+        self.postfix(Expr::new(ExprKind::Comprehension(Box::new(comp)), span))
+    }
+
+    /// True at `(a, b) =>`: the parameters of a lambda (names separated by commas).
+    fn lambda_ahead(&self) -> bool {
+        let mut k = 1;
+        loop {
+            match self.peek_at(k) {
+                Tok::RParen => return matches!(self.peek_at(k + 1), Tok::FatArrow),
+                Tok::Ident(_) => {}
+                _ => return false,
+            }
+            match self.peek_at(k + 1) {
+                Tok::Comma => k += 2,
+                Tok::RParen => return matches!(self.peek_at(k + 2), Tok::FatArrow),
+                _ => return false,
+            }
+        }
+    }
+
+    /// The `=>` and the body of a lambda whose parameters are read.
+    fn lambda(&mut self, params: Vec<(String, Span)>, span: Span) -> PResult<Expr> {
+        self.expect(Tok::FatArrow, "`=>`")?;
+        let body = self.expr()?;
+        Ok(Expr::new(ExprKind::Lambda(params, Box::new(body)), span))
+    }
+
+    /// `lambda x: x * 2` at the word `lambda`: Nyra writes `x => x * 2`.
+    fn python_lambda(&self) -> Diag {
+        let at = self.span();
+        let d = Diag::new("E0101", "`lambda` is not part of Nyra: a lambda is written `x => x * 2`", at);
+        let generic = "write the parameters, `=>` and the body: `x => x * 2` or `(a, b) => a + b`";
+        // `lambda a, b:` becomes `(a, b) =>`
+        let mut names = Vec::new();
+        let mut k = 1;
+        loop {
+            let Tok::Ident(n) = self.peek_at(k) else { return d.hint(generic) };
+            names.push(n.clone());
+            match self.peek_at(k + 1) {
+                Tok::Comma => k += 2,
+                Tok::Colon => break,
+                _ => return d.hint(generic),
+            }
+        }
+        let Some(colon) = self.toks.get(self.pos + k + 1).filter(|t| t.span.line == at.line) else { return d.hint(generic) };
+        let params = if names.len() == 1 { names[0].clone() } else { format!("({})", names.join(", ")) };
+        let old = format!("lambda {}:", names.join(", "));
+        d.hint(format!("write `{params} => ...`: the parameters, `=>`, then the body"))
+            .fix(vec![Edit::range(at, after(colon.span, ":"), &old, format!("{params} =>"))])
     }
 
     /// The arguments of a call after its `(`: `a`, `inout place` or `label: value`.
@@ -1459,7 +1566,12 @@ impl Parser {
             Tok::RParen if matches!(before, Some(Tok::LParen)) => {
                 d.hint("empty parentheses are not a value: put an expression inside, or remove them")
             }
-            Tok::Fn => d.hint("functions are not values (there are no lambdas or closures): define a named `fn` at the top level"),
+            Tok::Fn => d.hint(
+                "functions are not values: an array method takes a lambda, `xs.map(x => x * 2)`; anything else needs a named `fn` at the top level",
+            ),
+            Tok::LBrace if before == Some(&Tok::FatArrow) => {
+                d.hint("the body of a lambda is one expression, without braces or `ret`: `x => x * 2`")
+            }
             Tok::While | Tok::For | Tok::Let | Tok::Var | Tok::Ret => {
                 d.hint(format!("`{}` starts a statement, not a value: put it on its own line", t.text()))
             }

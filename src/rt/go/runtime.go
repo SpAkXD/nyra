@@ -82,6 +82,17 @@ func nyRem(a, b int64, line, col int) int64 {
 }
 
 // `for i in a..b step k`: a step of 0 would never end.
+// nyCheckNonEmpty is `xs.min()` / `xs.max()` of an empty array (`n` elements seen).
+func nyCheckNonEmpty(n, max int64, line, col int) {
+	if n == 0 {
+		msg := "min() of an empty array"
+		if max != 0 {
+			msg = "max() of an empty array"
+		}
+		nyFail("E0247", msg, "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col)
+	}
+}
+
 func nyCheckStep(k int64, line, col int) {
 	if k == 0 {
 		nyFail("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col)
@@ -514,6 +525,31 @@ func nyCmpFloat(x, y float64) int {
 		return -1
 	}
 	if lt(y, x) {
+		return 1
+	}
+	return 0
+}
+
+// nySortBy is `xs.sort_by(x => key)`: a stable sort of the positions by the keys, then the
+// elements move to their places.
+func nySortBy[T any, K any](a *Array[T], ks *Array[K], c func(K, K) int) {
+	idx := make([]int, len(ks.items))
+	for i := range idx {
+		idx[i] = i
+	}
+	slices.SortStableFunc(idx, func(i, j int) int { return c(ks.items[i], ks.items[j]) })
+	old := slices.Clone(a.items)
+	for k, i := range idx {
+		a.items[k] = old[i]
+	}
+}
+
+// nyCmpOrd orders ints, chars and strings (strings by code points: UTF-8 bytes keep that order).
+func nyCmpOrd[K int64 | rune | string](x, y K) int {
+	if x < y {
+		return -1
+	}
+	if y < x {
 		return 1
 	}
 	return 0
