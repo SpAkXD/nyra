@@ -11,6 +11,8 @@ use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
+/// Builtins a program may also define itself (its own definition wins).
+pub const MATH: &[&str] = &["abs", "min", "max"];
 
 struct Sig {
     params: Vec<Type>,
@@ -494,11 +496,6 @@ impl Checker {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a function (line {})", sig.span.line), span)
                     .hint(format!("a variable cannot share a function's name: rename the variable, e.g. `{name}_value`")),
-            );
-        } else if BUILTINS.contains(&name) {
-            self.errs.push(
-                Diag::new("E0206", format!("`{name}` is already the name of a builtin function"), span)
-                    .hint(format!("a variable cannot share a builtin's name: rename the variable, e.g. `{name}_value`")),
             );
         } else if let Some(sd) = self.structs.get(name) {
             self.errs.push(
@@ -1780,12 +1777,43 @@ impl Checker {
         t
     }
 
+    /// `abs(x)`, `min(a, b)`, `max(a, b)` on two `int`s or two `float`s.
+    fn math(&mut self, name: &str, args: &mut [Expr], span: Span) -> Type {
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
+        let want = if name == "abs" { 1 } else { 2 };
+        let example = if name == "abs" { "abs(x)" } else if name == "min" { "min(a, b)" } else { "max(a, b)" };
+        if tys.len() != want {
+            self.errs.push(
+                Diag::new("E0204", format!("`{name}` takes {} but {} {} given", count(want, "argument"), tys.len(), was_were(tys.len())), span)
+                    .hint(format!("call it as `{example}`")),
+            );
+            return Type::Unknown;
+        }
+        if tys.iter().any(|t| t.is_unknown()) {
+            return Type::Unknown;
+        }
+        let t = tys[0];
+        if !matches!(t, Type::Int | Type::Float) || tys.iter().any(|x| *x != t) {
+            let found = tys.iter().map(|t| format!("`{}`", t.name())).collect::<Vec<_>>().join(" and ");
+            self.errs.push(
+                Diag::new("E0203", format!("`{name}` needs two `int`s or two `float`s, found {found}"), args[0].span)
+                    .hint("convert first: `float(n)` or `int(x)`, so both are the same number type"),
+            );
+            return Type::Unknown;
+        }
+        t
+    }
+
     fn call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
         if self.structs.contains_key(name) {
             return self.construct(name, args, span);
         }
         if BUILTINS.contains(&name) {
             return self.builtin(name, args, span);
+        }
+        // `abs`, `min` and `max` are builtins unless the program defines its own
+        if MATH.contains(&name) && !self.fns.contains_key(name) {
+            return self.math(name, args, span);
         }
 
         let Some(sig) = self.fns.get(name) else {

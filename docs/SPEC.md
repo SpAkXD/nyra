@@ -13,8 +13,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 - One statement per line. There are no semicolons. A line may break inside `( )`, between the
   elements of `[ ]`, and after a binary operator.
 - Everything is evaluated left to right: arguments, operands and the parts of a string.
-- Names use letters, digits and `_` (`row_count`, `x2`, `_`), but never a builtin's name: `print`,
-  `str`, `int`, `float`, `char`, `free`, `keep`. Comments: `// to end of line`.
+- Names use letters, digits and `_` (`row_count`, `x2`, `_`). Comments: `// to end of line`.
 
 ## Types
 | type | values |
@@ -96,10 +95,11 @@ Parentheses group: `(a + b) * c`.
 | `int(x)` | float → int, truncating toward zero (NaN or out of range: E0245); str → int: `int("-42")` (other text: E0244) |
 | `float(x)` | int → float; str → float: `float("2.5")`, `float("1e3")` (other text: E0244) |
 | `char(n)` | code → char: `char(65)` is `'A'` (invalid code: E0246) |
+| `abs(x)` · `min(a, b)` · `max(a, b)` | on `int`s or on `float`s (a program may define its own instead) |
 
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. Every other `{` or `}` in a string is
-doubled: `"{{[]}}"` is the text `{[]}`. `"` is not allowed inside `{ }` (use a variable).
+doubled: `"{{[]}}"` is the text `{[]}`. Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
 `a + b` joins two strings. Lengths and positions count characters (code points): `"héllo".len()`
 is 5, and `s[i]` is a `char` (from 0). A char is not a `str` and not an `int`; convert explicitly:
 ```nyra

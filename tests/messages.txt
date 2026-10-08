@@ -379,13 +379,13 @@ fn main() {
     print("{n == "x"}")
 }
 ----
-error[E0006]: quotes are not allowed inside `{ }` in a string
-  --> case.nyra:3:12
+error[E0210]: cannot use `==` on `int` and `str`: `==` needs two values of the same type
+  --> case.nyra:3:15
   |
 3 |     print("{n == "x"}")
-  |            ^
-  = hint: put the text in a variable first (`let t = "x"`), then write `{t}` in the string
-  = explain: nyra explain E0006
+  |               ^
+  = hint: `==` compares two values of one type: convert one side (`float(x)`, `int(x)`) or write the literal with the right type
+  = explain: nyra explain E0210
 
 nyra: 1 error(s)
 ==== lex_semicolon
@@ -3219,18 +3219,18 @@ error[E0201]: undefined variable `zzz`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
-==== chk_undef_fn_abs
+==== chk_abs_two_args
 fn main() {
-    print(abs(-3))
+    print(abs(-3, 4))
 }
 ----
-error[E0202]: undefined function `abs`
+error[E0204]: `abs` takes 1 argument but 2 were given
   --> case.nyra:2:11
   |
-2 |     print(abs(-3))
+2 |     print(abs(-3, 4))
   |           ^
-  = hint: Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`
-  = explain: nyra explain E0202
+  = hint: call it as `abs(x)`
+  = explain: nyra explain E0204
 
 nyra: 1 error(s)
 ==== chk_undef_fn_input
@@ -3290,18 +3290,18 @@ error[E0202]: undefined function `println`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
-==== chk_undef_fn_recipe_max
+==== chk_max_mixed
 fn main() {
-    print(max(1, 2))
+    print(max(1, 2.5))
 }
 ----
-error[E0202]: undefined function `max`
-  --> case.nyra:2:11
+error[E0203]: `max` needs two `int`s or two `float`s, found `int` and `float`
+  --> case.nyra:2:15
   |
-2 |     print(max(1, 2))
-  |           ^
-  = hint: Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`
-  = explain: nyra explain E0202
+2 |     print(max(1, 2.5))
+  |               ^
+  = hint: convert first: `float(n)` or `int(x)`, so both are the same number type
+  = explain: nyra explain E0203
 
 nyra: 1 error(s)
 ==== chk_undef_fn_sqrt
@@ -3500,17 +3500,18 @@ error[E0201]: undefined variable `x`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
-==== chk_var_builtin
+==== chk_var_is_function
+fn size() -> int = 3
 fn main() {
-    let int = 1
+    let size = 1
 }
 ----
-error[E0206]: `int` is already the name of a builtin function
-  --> case.nyra:2:5
+error[E0206]: `size` is already the name of a function (line 1)
+  --> case.nyra:3:5
   |
-2 |     let int = 1
+3 |     let size = 1
   |     ^
-  = hint: a variable cannot share a builtin's name: rename the variable, e.g. `int_value`
+  = hint: a variable cannot share a function's name: rename the variable, e.g. `size_value`
   = explain: nyra explain E0206
 
 nyra: 1 error(s)

@@ -1011,6 +1011,23 @@ impl<'a> Lower<'a> {
                 }
             }
             "free" | "keep" => Expr::Bool(false),
+            // the builtins `abs`, `min` and `max` (unless the program defines its own): pure choices
+            "abs" | "min" | "max" if !self.ids.contains_key(name) => {
+                let v = self.operands(&args.iter().collect::<Vec<_>>(), out);
+                let float = e.ty == Type::Float;
+                let lt = if float { BinOp::FLt } else { BinOp::ILt };
+                let b = |x: &Expr| Box::new(x.clone());
+                if name == "abs" {
+                    let x = &v[0];
+                    let zero = if float { Expr::Float(0.0) } else { Expr::Int(0) };
+                    let neg = Expr::Unary(if float { UnOp::FNeg } else { UnOp::INeg }, b(x));
+                    return Expr::Select(Box::new(Expr::Binary(lt, b(x), Box::new(zero))), Box::new(neg), b(x));
+                }
+                let (x, y) = (&v[0], &v[1]);
+                // min: `b < a ? b : a` keeps the first on a tie; max: `a < b ? b : a`
+                let cond = if name == "min" { Expr::Binary(lt, b(y), b(x)) } else { Expr::Binary(lt, b(x), b(y)) };
+                Expr::Select(Box::new(cond), b(y), b(x))
+            }
             _ => {
                 let Some(&func) = self.ids.get(name) else {
                     // `Point(x: 1, y: 2)`: the fields in declaration order (the checker made sure)

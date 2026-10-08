@@ -178,7 +178,7 @@ fn main() {
 ## E0006: bad `{` or `}` in a string
 - **Kind:** compile error · **Since:** v0.2
 - **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a double quote inside the braces.
-- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Double quotes are not allowed inside `{ }`: put the text in a variable first.
+- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
 - **Common causes:**
   - printing a literal brace (JSON, code, a set) without doubling it
   - a placeholder `{}` copied from a Rust or Python format string: name the variable, `"{x}"`
@@ -329,9 +329,9 @@ fn main() {
 ## E0202: undefined function
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** A call `name(...)` refers to a function that is not defined in the file and is not one of the builtins `print`, `int`, `float`, `str`, `char`, `free` and `keep`, and not a struct either.
-- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `abs` or `sqrt` should do.
+- **Why Nyra has this rule:** There is no standard library yet, so every helper is written in the program itself. A missing function is reported, with the recipe for common ones, instead of guessing what `sqrt` or `pow` should do.
 - **Common causes:**
-  - a library function from another language: `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `input`
+  - a library function from another language: `pow`, `sqrt`, `floor`, `input` (`abs`, `min` and `max` are builtins)
   - `len(xs)`: the length is a method, `xs.len()`
   - `println`, `printf` or `echo`: the output function is `print(x)`
   - a typo in a function name (the hint suggests the closest one)
@@ -340,15 +340,21 @@ fn main() {
 - **Wrong:**
 ```rust
 fn main() {
-    print(abs(-3))
+    print(pow(2, 10))
 }
 ```
 - **Fixed:**
 ```rust
-fn abs(x: int) -> int = if x < 0 { -x } else { x }
+fn pow(b: int, e: int) -> int {
+    var r = 1
+    for i in 0..e {
+        r *= b
+    }
+    ret r
+}
 
 fn main() {
-    print(abs(-3))
+    print(pow(2, 10))
 }
 ```
 - **Related:** E0201, E0204

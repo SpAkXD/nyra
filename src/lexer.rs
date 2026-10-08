@@ -359,8 +359,20 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                     let mut j = start;
                     let mut depth = 0usize;
                     let mut end = None;
-                    while j < cs.len() && cs[j] != '\n' && cs[j] != '"' {
+                    while j < cs.len() && cs[j] != '\n' {
                         match cs[j] {
+                            // a string or char literal inside the code (`{xs.join(", ")}`): skip it whole,
+                            // so its quotes and braces belong to it
+                            q @ ('"' | '\'') => {
+                                let mut k = j + 1;
+                                while k < cs.len() && cs[k] != q && cs[k] != '\n' {
+                                    k += if cs[k] == '\\' { 2 } else { 1 };
+                                }
+                                if k >= cs.len() || cs[k] != q {
+                                    break;
+                                }
+                                j = k;
+                            }
                             '{' => depth += 1,
                             '}' if depth == 0 => {
                                 end = Some(j);
@@ -389,29 +401,13 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                             i = e + 1;
                         }
                         None => {
-                            // a quote before any `}`: either a quote inside `{ }` (if a `}` follows
-                            // later on the line) or a `{` that is never closed
-                            let close_later = cs[j..].iter().take_while(|c| **c != '\n').position(|c| *c == '}');
-                            match close_later {
-                                Some(k) if cs.get(j) == Some(&'"') => {
-                                    errs.push(
-                                        Diag::new("E0006", "quotes are not allowed inside `{ }` in a string", here)
-                                            .hint("put the text in a variable first (`let t = \"x\"`), then write `{t}` in the string"),
-                                    );
-                                    // skip the whole `{ ... }`, so its quotes do not start new strings
-                                    let e = j + k;
-                                    col += e + 1 - i;
-                                    i = e + 1;
-                                }
-                                _ => {
-                                    errs.push(
-                                        Diag::new("E0006", "unclosed `{` in a string: no matching `}` before the end of the string", here)
-                                            .hint("add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`"),
-                                    );
-                                    col += j - i;
-                                    i = j;
-                                }
-                            }
+                            // the string (or the line) ends before a `}`: a `{` that is never closed
+                            errs.push(
+                                Diag::new("E0006", "unclosed `{` in a string: no matching `}` before the end of the string", here)
+                                    .hint("add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`"),
+                            );
+                            col += j - i;
+                            i = j;
                         }
                     }
                     continue;
