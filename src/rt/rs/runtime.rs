@@ -93,8 +93,16 @@ fn ny_num(x: f64) -> String {
         return if x > 0.0 { "Infinity" } else { "-Infinity" }.into();
     }
     let sign = if x < 0.0 { "-" } else { "" };
-    // `{:e}` gives the shortest digits: "1.2345e-7"
-    let e = format!("{:e}", x.abs());
+    // the fewest digits that read back as x; between two such numbers the even one (the
+    // exact decimal rounding of `{:.N$e}`, like the C runtime's printf)
+    let mut e = format!("{:e}", x.abs());
+    for p in 0..17 {
+        let t = format!("{:.*e}", p, x.abs());
+        if t.parse::<f64>() == Ok(x.abs()) {
+            e = t;
+            break;
+        }
+    }
     let (mant, exp) = e.split_once('e').unwrap_or((&e, "0"));
     let digits: String = mant.chars().filter(|c| *c != '.').collect();
     let k = digits.len() as i32;

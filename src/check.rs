@@ -1427,7 +1427,7 @@ impl Checker {
             let no_params = self.fns.get(&full).is_some_and(|s| s.params.is_empty());
             self.errs.push(
                 Diag::new("E0307", format!("`{full}` is a function, not a value"), span)
-                    .hint(format!("call it: `{full}(...)`"))
+                    .hint(format!("call it: `{full}({})`", if no_params { "" } else { "..." }))
                     .fix_opt(no_params.then(|| Edit::replace(span, &name, format!("{name}()")))),
             );
             return Some(Type::Unknown);

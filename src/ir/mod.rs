@@ -106,6 +106,11 @@ impl Module {
     pub fn uses_std(&self) -> bool {
         self.uses(&|op| matches!(op, RtOp::Std(_)))
     }
+
+    /// True if the program writes or reads JSON.
+    pub fn uses_json(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::JsonStr | RtOp::JsonParse))
+    }
 }
 
 pub struct Func {

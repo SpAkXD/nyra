@@ -1,0 +1,7 @@
+// expect: E0309
+use json
+
+fn main() {
+    let x = json.parse("[1, 2]")
+    print(x)
+}

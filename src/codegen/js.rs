@@ -22,6 +22,7 @@ const PRELUDE: &str = include_str!("../rt/js/core.js");
 const STRINGS: &str = include_str!("../rt/js/str.js");
 const ARRAYS: &str = include_str!("../rt/js/arr.js");
 const STD: &str = include_str!("../rt/js/std.js");
+const JSON: &str = include_str!("../rt/js/json.js");
 
 /// A Nyra name as a JavaScript identifier. Nyra allows any letter (`x²`, `größe`); characters
 /// JavaScript does not accept in names are spelled out as `_u{hex}_`.
@@ -61,6 +62,19 @@ fn tdesc(t: Ty) -> String {
         Ty::Str => "s".into(),
         Ty::Array(_) => format!("[{}", tdesc(t.elem().expect("an array"))),
         _ => "S".into(),
+    }
+}
+
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ["a", T], or a struct's class.
+fn jdesc(t: Ty) -> String {
+    match t {
+        Ty::Int => "\"i\"".into(),
+        Ty::Float => "\"f\"".into(),
+        Ty::Bool => "\"b\"".into(),
+        Ty::Char => "\"c\"".into(),
+        Ty::Str => "\"s\"".into(),
+        Ty::Array(_) => format!("[\"a\", {}]", jdesc(t.elem().expect("an array"))),
+        _ => format!("nyS_{}", ident(&t.struct_name().expect("a struct"))),
     }
 }
 
@@ -124,8 +138,24 @@ pub fn gen(m: &Module, file: &str) -> String {
     if std {
         out.push_str(STD);
     }
+    let json = m.uses_json();
+    if json {
+        out.push_str(JSON);
+    }
     out.push('\n');
     classes(m, &mut out);
+    if json {
+        // the fields of each struct for `json.str` and `json.parse`, after every class exists
+        for (_, s) in &m.structs.0 {
+            let fields: Vec<String> = s
+                .fields
+                .iter()
+                .map(|(f, t)| format!("[{}, \"{}\", {}]", crate::diag::json_str(f), jfield(f), jdesc(*t)))
+                .collect();
+            let _ = writeln!(out, "nyS_{}.ny_jf = [{}];", ident(&s.name), fields.join(", "));
+        }
+        out.push('\n');
+    }
     for f in &m.funcs {
         let n = names::locals(f, name, "ny_");
         let _ = writeln!(out, "function {}({}) {{", name(&f.name), n[..f.params].join(", "));
@@ -476,6 +506,11 @@ impl Gen<'_> {
                 let mut parts = a.clone();
                 parts.push(at.to_string());
                 format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => format!("ny_jenc({}, {})", a[0], jdesc(self.ty(&args[0]))),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("ny_jparse({}, {}, {at})", a[0], jdesc(t))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

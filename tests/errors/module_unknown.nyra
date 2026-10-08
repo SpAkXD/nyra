@@ -1,0 +1,6 @@
+// expect: E0300
+use maths
+
+fn main() {
+    print(1)
+}

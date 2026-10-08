@@ -26,6 +26,7 @@ const RESERVED: &[&str] = &[
 /// The Python runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/py/runtime.py");
 const STD: &str = include_str!("../rt/py/std.py");
+const JSON: &str = include_str!("../rt/py/json.py");
 
 /// A Nyra name as a Python identifier: `ny...` names belong to the runtime, and names Python
 /// itself uses (keywords, builtins the program calls) get a `_`.
@@ -61,6 +62,19 @@ fn tdesc(t: Ty) -> String {
         Ty::Str => "s".into(),
         Ty::Array(_) => format!("[{}", tdesc(t.elem().expect("an array"))),
         _ => "S".into(),
+    }
+}
+
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ("a", T), or a struct's class.
+fn jdesc(t: Ty) -> String {
+    match t {
+        Ty::Int => "\"i\"".into(),
+        Ty::Float => "\"f\"".into(),
+        Ty::Bool => "\"b\"".into(),
+        Ty::Char => "\"c\"".into(),
+        Ty::Str => "\"s\"".into(),
+        Ty::Array(_) => format!("(\"a\", {})", jdesc(t.elem().expect("an array"))),
+        _ => name(&t.struct_name().expect("a struct")),
     }
 }
 
@@ -213,6 +227,16 @@ pub fn gen(m: &Module, file: &str) -> String {
         "import json\nimport math\nimport os\nimport re\nimport sys\n\n\n",
     ));
     classes(m, &mut out);
+    let json = m.uses_json();
+    if json {
+        // the fields of each struct for `json.str` and `json.parse`, after every class exists
+        for (_, s) in &m.structs.0 {
+            let fields: Vec<String> =
+                s.fields.iter().map(|(f, t)| format!("({}, \"{}\", {})", lit(f), name(f), jdesc(*t))).collect();
+            let _ = writeln!(out, "{}.ny_jf = [{}]", name(&s.name), fields.join(", "));
+        }
+        out.push_str("\n\n");
+    }
     for f in &m.funcs {
         let info = Info::new(f);
         // Python variables belong to the whole function, and two Nyra variables with the same
@@ -254,6 +278,9 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
     if m.uses_std() {
         out.push_str(STD);
+    }
+    if json {
+        out.push_str(JSON);
     }
     let _ = write!(out, "\n\nif __name__ == \"__main__\":\n    ny_main({})\n", name(&m.func(m.main).name));
     out
@@ -608,6 +635,11 @@ impl<'a> Gen<'a> {
                 let mut parts = a.clone();
                 parts.push(at.to_string());
                 format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => format!("ny_jenc({}, {})", a[0], jdesc(self.ty(&args[0]))),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("ny_jparse({}, {}, {at})", a[0], jdesc(t))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

@@ -10,6 +10,7 @@ const PRELUDE: &str = include_str!("../rt/c/core.c");
 const STRINGS: &str = include_str!("../rt/c/str.c");
 const ARRAYS: &str = include_str!("../rt/c/arr.c");
 const STD: &str = include_str!("../rt/c/std.c");
+const JSON: &str = include_str!("../rt/c/json.c");
 
 const RESERVED: &[&str] = &[
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
@@ -183,6 +184,109 @@ fn structs(m: &Module, out: &mut String) {
     out.push('\n');
 }
 
+/// The arrays and structs whose values `json.str` writes or `json.parse` reads, with the ones
+/// inside them: each gets a generated encoder `nyJE_<k>` and decoder `nyJD_<k>`.
+fn json_types(m: &Module) -> Vec<Ty> {
+    fn add(m: &Module, t: Ty, v: &mut Vec<Ty>) {
+        if !matches!(t, Ty::Array(_) | Ty::Struct(_)) || v.contains(&t) {
+            return;
+        }
+        v.push(t);
+        match t {
+            Ty::Array(_) => add(m, t.elem().expect("an array"), v),
+            _ => {
+                for (_, ft) in &m.structs.get(t).expect("a struct").fields {
+                    add(m, *ft, v);
+                }
+            }
+        }
+    }
+    fn walk(m: &Module, f: &Func, ss: &[Stmt], v: &mut Vec<Ty>) {
+        for s in ss {
+            match &s.kind {
+                StmtKind::Op { op: RtOp::JsonStr, args, .. } => add(m, args[0].ty(f), v),
+                StmtKind::Op { op: RtOp::JsonParse, dst: Some(d), .. } => add(m, f.local(*d).ty, v),
+                StmtKind::If { then, els, .. } => {
+                    walk(m, f, then, v);
+                    walk(m, f, els, v);
+                }
+                StmtKind::Loop { head, body, step, .. } => {
+                    walk(m, f, head, v);
+                    walk(m, f, body, v);
+                    walk(m, f, step, v);
+                }
+                StmtKind::ForEach { body, .. } => walk(m, f, body, v),
+                _ => {}
+            }
+        }
+    }
+    let mut v = Vec::new();
+    for f in &m.funcs {
+        walk(m, f, &f.body, &mut v);
+    }
+    v
+}
+
+/// The JSON encoder (`enc`) or decoder of a type.
+fn jfn(json: &[Ty], t: Ty, enc: bool) -> String {
+    let (rt, gen) = if enc { ("nyrt_jenc", "nyJE") } else { ("nyrt_jdec", "nyJD") };
+    match t {
+        Ty::Array(_) | Ty::Struct(_) => format!("{gen}_{}", json.iter().position(|x| *x == t).expect("collected by json_types")),
+        _ => format!("{rt}_{}", rt_name(t)),
+    }
+}
+
+/// The encoders and decoders of the arrays and structs in `json`.
+fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
+    for k in 0..json.len() {
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *v);\nstatic void nyJD_{k}(nyrt_jp *p, void *out);");
+    }
+    for (k, t) in json.iter().enumerate() {
+        if let Some(elem) = t.elem() {
+            let _ = writeln!(
+                out,
+                "static void nyJE_{k}(nyrt_buf *b, const void *v) {{ nyrt_jenc_arr(b, v, {}); }}\nstatic void nyJD_{k}(nyrt_jp *p, void *out) {{ nyrt_jdec_arr(p, out, {}, {}); }}",
+                jfn(json, elem, true),
+                desc(elem),
+                jfn(json, elem, false)
+            );
+            continue;
+        }
+        let info = m.structs.get(*t).expect("a struct");
+        let n = ctype(*t);
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let key = format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
+            let _ = writeln!(out, "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});", string_lit(&key), key.len(), jfn(json, *ft, true), field(info, i));
+        }
+        if info.fields.is_empty() {
+            out.push_str("    nyrt_buf_lit(b, \"{\", 1);\n");
+        }
+        out.push_str("    nyrt_buf_lit(b, \"}\", 1);\n}\n");
+        let _ = writeln!(out, "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};\n    bool seen[{}] = {{0}};", info.fields.len().max(1));
+        out.push_str("    if (nyrt_jopen(p, '{', \"an object\")) {\n        do {\n            nyrt_str *k = nyrt_jkey(p);\n            ");
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let f = field(info, i);
+            let again = if m.managed(*ft) { format!("if (seen[{i}]) {} ", release(*ft, &format!("v.{f}"))) } else { String::new() };
+            let _ = write!(
+                out,
+                "if (k->len == {} && memcmp(k->data, {}, {}) == 0) {{\n                {again}nyrt_jpush_key(p, {});\n                {}(p, &v.{f});\n                nyrt_jpop(p);\n                seen[{i}] = true;\n            }} else ",
+                fname.len(),
+                string_lit(fname),
+                fname.len(),
+                string_lit(fname),
+                jfn(json, *ft, false)
+            );
+        }
+        out.push_str("nyrt_jskip(p);\n            nyrt_str_release(k);\n        } while (nyrt_jnext(p, '}'));\n    }\n");
+        for (i, (fname, _)) in info.fields.iter().enumerate() {
+            let _ = writeln!(out, "    if (!seen[{i}]) nyrt_jmissing(p, {});", string_lit(fname));
+        }
+        let _ = writeln!(out, "    *({n} *)out = v;\n}}");
+    }
+    out.push('\n');
+}
+
 /// The C name of a function: `ny_<name>` for the program's own, `nyM_<module>_<name>` for the
 /// standard library's functions written in Nyra (named `module.name`).
 fn fn_name(name: &str) -> String {
@@ -221,6 +325,12 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push('\n');
     }
     structs(m, &mut out);
+    let json = json_types(m);
+    if m.uses_json() {
+        out.push_str(JSON);
+        out.push('\n');
+        json_funcs(m, &json, &mut out);
+    }
     // string literals: read-only objects that are never freed (reference count 0); `const` also
     // lets the C compiler see that releasing one never reaches free()
     for (i, s) in m.strs.iter().enumerate() {
@@ -255,7 +365,7 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is used through its pointer: `(*p)`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0 };
+        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, json: &json };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -278,6 +388,8 @@ struct Gen<'a> {
     indent: usize,
     /// Counter for helper names (loop cursors, element pointers).
     tmp: usize,
+    /// The arrays and structs that are written as or read from JSON (see `json_types`).
+    json: &'a [Ty],
 }
 
 impl Gen<'_> {
@@ -663,6 +775,26 @@ impl Gen<'_> {
                 let mut parts = a.clone();
                 parts.push(at.to_string());
                 format!("nyrt_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => {
+                let d = self.local(dst.expect("verified: a destination")).to_string();
+                let t = self.ty(&args[0]);
+                let line = format!("{}(&nyrt_b, {});", jfn(self.json, t, true), self.addr(&args[0], t));
+                self.line("{");
+                self.indent += 1;
+                self.line("nyrt_buf nyrt_b = nyrt_buf_new();");
+                self.line(&line);
+                self.line(&format!("{d} = nyrt_buf_done(&nyrt_b);"));
+                self.indent -= 1;
+                self.line("}");
+                return;
+            }
+            RtOp::JsonParse => {
+                let d = dst.expect("verified: a destination");
+                let t = self.f.local(d).ty;
+                let line = format!("nyrt_jparse({}, {}, &{}, {at});", a[0], jfn(self.json, t, false), self.local(d));
+                self.line(&line);
+                return;
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

@@ -27,6 +27,7 @@ const RESERVED: &[&str] = &[
 /// The Rust runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/rs/runtime.rs");
 const STD: &str = include_str!("../rt/rs/std.rs");
+const JSON: &str = include_str!("../rt/rs/json.rs");
 
 /// A Nyra name as a Rust identifier: `ny...` names belong to the runtime, and Rust's own words get a `_`.
 fn name(n: &str) -> String {
@@ -118,6 +119,39 @@ fn structs(m: &Module, out: &mut String) {
     }
 }
 
+/// How each struct is written as JSON and read from it (`json.str`, `json.parse`).
+fn json_impls(m: &Module, out: &mut String) {
+    for (_, s) in &m.structs.0 {
+        let n = name(&s.name);
+        let _ = writeln!(out, "impl NyJson for {n} {{\n    fn ny_jenc(&self, out: &mut String) {{");
+        for (k, (f, _)) in s.fields.iter().enumerate() {
+            let key = format!("{}{}:", if k == 0 { "{" } else { "," }, crate::diag::json_str(f));
+            let _ = writeln!(out, "        out.push_str({});\n        self.{}.ny_jenc(out);", lit(&key), name(f));
+        }
+        if s.fields.is_empty() {
+            out.push_str("        out.push('{');\n");
+        }
+        out.push_str("        out.push('}');\n    }\n    fn ny_jdec(p: &mut NyJP) -> Self {\n");
+        for (k, (_, t)) in s.fields.iter().enumerate() {
+            let _ = writeln!(out, "        let mut f{k}: Option<{}> = None;", rstype(*t));
+        }
+        out.push_str("        if p.open(b'{', \"an object\") {\n            loop {\n                let k = p.key();\n                match k.as_str() {\n");
+        for (k, (f, t)) in s.fields.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "                    {} => {{\n                        p.path.push({}.to_string());\n                        f{k} = Some(<{} as NyJson>::ny_jdec(p));\n                        p.path.pop();\n                    }}",
+                lit(f),
+                lit(&format!(".{f}")),
+                rstype(*t)
+            );
+        }
+        out.push_str("                    _ => p.skip(),\n                }\n                if !p.next(b'}') {\n                    break;\n                }\n            }\n        }\n");
+        let fields: Vec<String> =
+            s.fields.iter().enumerate().map(|(k, (f, _))| format!("{}: f{k}.unwrap_or_else(|| p.missing({}))", name(f), lit(f))).collect();
+        let _ = writeln!(out, "        {n} {{ {} }}\n    }}\n}}\n", fields.join(", "));
+    }
+}
+
 /// `file` is the source path as given to nyra; runtime errors report it.
 pub fn gen(m: &Module, file: &str) -> String {
     let mut out = String::from(concat!(
@@ -126,6 +160,10 @@ pub fn gen(m: &Module, file: &str) -> String {
         "use std::rc::Rc;\n\n",
     ));
     structs(m, &mut out);
+    let json = m.uses_json();
+    if json {
+        json_impls(m, &mut out);
+    }
     for f in &m.funcs {
         let info = Info::new(f);
         let n = names::scoped(f, name, "ny_", &info.loop_var);
@@ -159,6 +197,9 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
     if m.uses_std() {
         out.push_str(STD);
+    }
+    if json {
+        out.push_str(JSON);
     }
     out
 }
@@ -665,6 +706,11 @@ impl<'a> Gen<'a> {
             RtOp::ArrJoin => {
                 let f = if self.ty(&args[0]).elem() == Some(Ty::Char) { "ny_join_chars" } else { "ny_join" };
                 format!("{f}({}, {})", self.borrow(&args[0]), self.str_ref(&args[1]))
+            }
+            RtOp::JsonStr => format!("ny_jstr(&{})", self.expr(&args[0])),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("ny_jparse::<{}>({}, {at})", rstype(t), self.str_ref(&args[0]))
             }
             RtOp::Std(f) => {
                 // strings are passed as `&str`

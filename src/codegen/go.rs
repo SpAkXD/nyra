@@ -27,6 +27,7 @@ const RESERVED: &[&str] = &[
 /// The Go runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/go/runtime.go");
 const STD: &str = include_str!("../rt/go/std.go");
+const JSON: &str = include_str!("../rt/go/json.go");
 
 /// A Nyra name as a Go identifier: `ny...` names belong to the runtime, and Go's own words get a `_`.
 fn name(n: &str) -> String {
@@ -167,6 +168,10 @@ pub fn gen(m: &Module, file: &str) -> String {
         more
     );
     structs(m, &mut out);
+    let json = m.uses_json();
+    if json {
+        json_funcs(m, &mut out);
+    }
     for f in &m.funcs {
         let info = Info::new(f);
         let n = names::scoped(f, name, "ny_", &info.loop_var);
@@ -198,7 +203,59 @@ pub fn gen(m: &Module, file: &str) -> String {
     if std {
         out.push_str(STD);
     }
+    if json {
+        out.push_str(JSON);
+    }
     out
+}
+
+/// The decoder of a type for `json.parse`: a function `func(*nyJP) T`.
+fn jdec(t: Ty) -> String {
+    match t {
+        Ty::Int => "nyJInt".into(),
+        Ty::Float => "nyJFloat".into(),
+        Ty::Bool => "nyJBool".into(),
+        Ty::Char => "nyJChar".into(),
+        Ty::Str => "nyJStr".into(),
+        Ty::Array(_) => format!("nyJArr({})", jdec(t.elem().expect("an array"))),
+        _ => format!("nyJD_{}", name(&t.struct_name().expect("a struct"))),
+    }
+}
+
+/// How each struct is written as JSON (a method) and read from it (a function).
+fn json_funcs(m: &Module, out: &mut String) {
+    for (_, s) in &m.structs.0 {
+        let n = name(&s.name);
+        let _ = writeln!(out, "func (v {n}) nyJEnc(b *strings.Builder) {{");
+        for (k, (f, _)) in s.fields.iter().enumerate() {
+            let key = format!("{}{}:", if k == 0 { "{" } else { "," }, crate::diag::json_str(f));
+            let _ = writeln!(out, "\tb.WriteString({})\n\tnyJEnc(b, v.{})", lit(&key), name(f));
+        }
+        if s.fields.is_empty() {
+            out.push_str("\tb.WriteByte('{')\n");
+        }
+        out.push_str("\tb.WriteByte('}')\n}\n\n");
+        let _ = writeln!(out, "func nyJD_{n}(p *nyJP) {n} {{\n\tvar v {n}");
+        if !s.fields.is_empty() {
+            let _ = writeln!(out, "\tvar seen [{}]bool", s.fields.len());
+        }
+        out.push_str("\tif p.open('{', \"an object\") {\n\t\tfor {\n\t\t\tswitch p.key() {\n");
+        for (k, (f, t)) in s.fields.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "\t\t\tcase {}:\n\t\t\t\tp.path = append(p.path, {})\n\t\t\t\tv.{} = {}(p)\n\t\t\t\tp.path = p.path[:len(p.path)-1]\n\t\t\t\tseen[{k}] = true",
+                lit(f),
+                lit(&format!(".{f}")),
+                name(f),
+                jdec(*t)
+            );
+        }
+        out.push_str("\t\t\tdefault:\n\t\t\t\tp.skip()\n\t\t\t}\n\t\t\tif !p.next('}') {\n\t\t\t\tbreak\n\t\t\t}\n\t\t}\n\t}\n");
+        for (k, (f, _)) in s.fields.iter().enumerate() {
+            let _ = writeln!(out, "\tif !seen[{k}] {{\n\t\tp.missing({})\n\t}}", lit(f));
+        }
+        out.push_str("\treturn v\n}\n\n");
+    }
 }
 
 struct Gen<'a> {
@@ -293,7 +350,9 @@ impl<'a> Gen<'a> {
     /// `x := value` when `s` declares `x`, else `x = value`. A local nobody reads is not
     /// declared (Go rejects it); the value is still computed for its effects.
     fn set(&mut self, s: &Stmt, l: LocalId, value: String) {
-        let line = if self.info.unread(l) {
+        // (an `inout` parameter is read by the caller)
+        let inout = (l.0 as usize) < self.f.params && self.f.locals[l.0 as usize].inout;
+        let line = if self.info.unread(l) && !inout {
             if constant_text(&value) {
                 return;
             }
@@ -537,6 +596,11 @@ impl<'a> Gen<'a> {
                 let mut parts = a.clone();
                 parts.push(at.to_string());
                 format!("nyStd_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => format!("nyJStrOf({})", a[0]),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("nyJParse({}, {}, {at})", a[0], jdec(t))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

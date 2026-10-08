@@ -1,0 +1,6 @@
+// expect: E0306
+use random
+
+fn main() {
+    print(random.randint(1, 6))
+}
