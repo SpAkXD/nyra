@@ -1,0 +1,64 @@
+// ages: 0 is a dead cell
+fn live_neighbours(g: [[int]], r: int, c: int) -> int {
+    let rows = g.len()
+    let cols = g[0].len()
+    var n = 0
+    for dr in -1..2 {
+        for dc in -1..2 {
+            if dr != 0 || dc != 0 {
+                let rr = (r + dr + rows) % rows
+                let cc = (c + dc + cols) % cols
+                if g[rr][cc] > 0 { n += 1 }
+            }
+        }
+    }
+    ret n
+}
+
+fn step(g: [[int]]) -> [[int]] {
+    var next = g
+    for r in 0..g.len() {
+        for c in 0..g[r].len() {
+            let n = live_neighbours(g, r, c)
+            if g[r][c] == 0 {
+                next[r][c] = if n == 3 { 1 } else { 0 }
+            } else if (n == 2 || n == 3) && g[r][c] + 1 < 5 {
+                next[r][c] = g[r][c] + 1
+            } else {
+                next[r][c] = 0
+            }
+        }
+    }
+    ret next
+}
+
+fn main() {
+    let start = ["#......#", "..##....", ".#..#...", "..##....", "........", "#.....##"]
+    var grid: [[int]] = []
+    for line in start {
+        var row: [int] = []
+        for ch in line {
+            row.push(if ch == '#' { 1 } else { 0 })
+        }
+        grid.push(row)
+    }
+    for gen in 1..8 {
+        grid = step(grid)
+        var alive = 0
+        var oldest = 0
+        for row in grid {
+            for age in row {
+                if age > 0 { alive += 1 }
+                if age > oldest { oldest = age }
+            }
+        }
+        print("gen {gen}: {alive} alive, oldest {oldest}")
+    }
+    for row in grid {
+        var line = ""
+        for age in row {
+            line += if age > 0 { str(age) } else { "." }
+        }
+        print(line)
+    }
+}

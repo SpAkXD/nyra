@@ -1,0 +1,58 @@
+struct Customer {
+    name: str
+    arrival: int
+    service: int
+    vip: bool
+}
+
+fn on_break(teller: int, minute: int) -> bool = teller == 3 && minute >= 20 && minute <= 29
+
+fn main() {
+    let data = "ann 0 5 regular; bob 0 3 regular; cy 1 4 vip; dee 2 6 regular; eli 2 2 vip; fay 3 4 regular; gus 5 1 regular; hal 18 9 regular; ivy 19 3 vip; jon 20 4 regular; kim 20 5 vip; lou 22 4 regular; max 27 1 regular; ned 30 2 vip"
+    var customers: [Customer] = []
+    for item in data.split("; ") {
+        let w = item.split(" ")
+        customers.push(Customer(name: w[0], arrival: int(w[1]), service: int(w[2]), vip: w[3] == "vip"))
+    }
+    let tellers = 3
+    // the minute each teller becomes free; a teller whose service ends at t is free at t
+    var free_at = [0].repeat(tellers)
+    var line: [int] = []          // indexes of waiting customers, front first
+    var waits = [0].repeat(customers.len())
+    var served = 0
+    var t = 0
+    while served < customers.len() {
+        // the customers arriving at t join the line
+        for i in 0..customers.len() {
+            if customers[i].arrival == t {
+                if customers[i].vip {
+                    var pos = 0
+                    while pos < line.len() && customers[line[pos]].vip { pos += 1 }
+                    line.insert(pos, i)
+                } else {
+                    line.push(i)
+                }
+            }
+        }
+        // the front of the line goes to the free teller with the lowest number
+        for k in 0..tellers {
+            if line.len() == 0 { break }
+            if free_at[k] <= t && !on_break(k + 1, t) {
+                let i = line.remove(0)
+                let c = customers[i]
+                waits[i] = t - c.arrival
+                free_at[k] = t + c.service
+                print("{t} {c.name} teller {k + 1} wait {waits[i]} end {free_at[k]}")
+                served += 1
+            }
+        }
+        t += 1
+    }
+    var total = 0
+    var longest = 0
+    for i in 0..customers.len() {
+        total += waits[i]
+        if waits[i] > waits[longest] { longest = i }
+    }
+    print("total wait {total}, longest wait {waits[longest]} ({customers[longest].name})")
+}

@@ -1,0 +1,71 @@
+struct Decoded {
+    ok: bool
+    text: str
+}
+
+fn encode(text: str) -> str {
+    let cs = text.chars()
+    var out = ""
+    var i = 0
+    while i < cs.len() {
+        let c = cs[i]
+        var j = i
+        while j < cs.len() && cs[j] == c { j += 1 }
+        let n = j - i
+        if c == '~' {
+            out += "~{n}~"
+        } else if n >= 4 {
+            out += "~{n}{c}"
+        } else {
+            out += str(c).repeat(n)
+        }
+        i = j
+    }
+    ret out
+}
+
+fn plain(c: char) -> bool = c.is_lower() || c == '.'
+
+fn decode(code: str) -> Decoded {
+    let cs = code.chars()
+    var out = ""
+    var i = 0
+    while i < cs.len() {
+        let c = cs[i]
+        if c != '~' {
+            if !plain(c) { ret Decoded(ok: false, text: "") }
+            out += str(c)
+            i += 1
+            continue
+        }
+        i += 1
+        if i >= cs.len() || !cs[i].is_digit() || cs[i] == '0' { ret Decoded(ok: false, text: "") }
+        var n = 0
+        while i < cs.len() && cs[i].is_digit() {
+            n = n * 10 + cs[i].code() - '0'.code()
+            i += 1
+        }
+        if i >= cs.len() || !(plain(cs[i]) || cs[i] == '~') { ret Decoded(ok: false, text: "") }
+        out += str(cs[i]).repeat(n)
+        i += 1
+    }
+    ret Decoded(ok: true, text: out)
+}
+
+fn main() {
+    let texts = ["aaaabbbcccccd", "~~x", ".......", "abc", "zzzzzzzzzzzzzz~", "a~~~~b"]
+    for t in texts {
+        print("encode {t} -> {encode(t)}")
+    }
+    let codes = ["~4a~3~b", "~04a", "~2ab", "a~b", "~12z", "~5", "ab~3~~", "x~1~y", "q7", "~10.~4~", "~1~~1~", "a~3B"]
+    for code in codes {
+        let d = decode(code)
+        if !d.ok {
+            print("decode {code} -> invalid")
+        } else if encode(d.text) == code {
+            print("decode {code} -> {d.text}")
+        } else {
+            print("decode {code} -> {d.text} (non-canonical)")
+        }
+    }
+}

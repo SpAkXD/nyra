@@ -1,0 +1,81 @@
+fn abs(x: int) -> int = if x < 0 { -x } else { x }
+
+fn broken() -> str = "!"   // never a group name
+
+fn row_index(letter: str) -> int = "ABCDEF".index_of(letter)
+
+fn main() {
+    let seats = 10
+    // the owner of each seat by row and seat (from 0); "" is free
+    var hall = [[""].repeat(seats)].repeat(6)
+    hall[2][4] = broken()
+    hall[2][5] = broken()
+    hall[4][0] = broken()
+    let order = ["C", "D", "B", "E", "A", "F"]
+    let requests = "ann 4; bob 4; cat 2; dan 10; eve 1; fay 6; cancel bob; gus 5; hal 3; cancel zed; ivy 9; jo 2; kai 8; lea 3"
+    for request in requests.split("; ") {
+        let w = request.split(" ")
+        if w[0] == "cancel" {
+            let name = w[1]
+            var n = 0
+            for r in 0..hall.len() {
+                for s in 0..seats {
+                    if hall[r][s] == name {
+                        hall[r][s] = ""
+                        n += 1
+                    }
+                }
+            }
+            if n == 0 {
+                print("{name} has no booking")
+            } else {
+                print("{name} cancelled ({n} seats)")
+            }
+            continue
+        }
+        let name = w[0]
+        let k = int(w[1])
+        var booked = false
+        for letter in order {
+            let r = row_index(letter)
+            // the best block start (seat number from 1); distances are doubled to stay whole
+            var best = -1
+            var best_dist = 0
+            for start in 1..seats - k + 2 {
+                var all_free = true
+                for s in start..start + k {
+                    if hall[r][s - 1] != "" { all_free = false }
+                }
+                if all_free {
+                    let dist = abs(2 * start + k - 1 - 11)
+                    if best < 0 || dist < best_dist {
+                        best = start
+                        best_dist = dist
+                    }
+                }
+            }
+            if best > 0 {
+                for s in best..best + k { hall[r][s - 1] = name }
+                let last = best + k - 1
+                if k == 1 {
+                    print("{name}: {letter}{best}")
+                } else {
+                    print("{name}: {letter}{best}-{letter}{last}")
+                }
+                booked = true
+                break
+            }
+        }
+        if !booked {
+            print("{name}: no room")
+        }
+    }
+    let letters = "ABCDEF"
+    for r in 0..hall.len() {
+        var line = "{letters[r]} "
+        for owner in hall[r] {
+            line += if owner == broken() { "x" } else if owner == "" { "." } else { "#" }
+        }
+        print(line)
+    }
+}
