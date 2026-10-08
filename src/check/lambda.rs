@@ -92,7 +92,7 @@ impl Checker {
                     } else {
                         (
                             "`[int]`, `[float]`, `[str]` or `[char]`",
-                            format!("compare a key of each element: `{r}.fold({r}[0], (best, x) => if key(x) {} key(best) {{ x }} else {{ best }})`", if name == "min" { "<" } else { ">" }),
+                            format!("keep the best element with `fold`, e.g. `{r}.fold({r}[0], (best, x) => if x.score {} best.score {{ x }} else {{ best }})`", if name == "min" { "<" } else { ">" }),
                         )
                     };
                     self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
@@ -221,6 +221,10 @@ impl Checker {
                 _ => None,
             };
             let t = if fname.is_some() { Type::Unknown } else { self.expr(a) };
+            if fname.is_none() && t.is_unknown() {
+                // reported already (`let f = x => ...`, an undefined name)
+                return Type::Unknown;
+            }
             let p = if params.last() == Some(&Type::Char) { "c" } else { "x" };
             let hint = match (fname, shown) {
                 (Some(f), _) if params.len() == 2 => format!("call the function in a lambda: `(acc, {p}) => {f}(acc, {p})`"),

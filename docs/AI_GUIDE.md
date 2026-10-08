@@ -239,14 +239,15 @@ that works (section 6 has the usual replacements).
   closed, so put the test values in the program (`let n = 12`, `let data = [3, 1, 2]`).
 - **Types**: no maps or dictionaries, sets, tuples, enums, `Option`, `Result`, generics or type
   aliases. Use an array of structs for a map, `contains` for a set, a struct for a tuple.
-- **Methods you may expect**: arrays have no `map`, `filter`, `reduce`, `sum`, `min`, `max`, `count`,
-  `find`, `sort_by` or `append`; strings have no `format`, `pad`, `trim_start`, `char_at`, `reverse` or
-  `is_digit` (chars have `is_digit`). Write a loop or a small function (section 6). `sort()` works
-  only on `[int]`, `[float]`, `[str]` and `[char]`, ascending.
-- **Syntax**: no `for i, x in xs` (loop over `0..xs.len()`), no slices `xs[a..b]` (`xs.slice(a, b)`),
-  no negative indexes, no `match`, `switch`, `?:`, `do-while`, `loop`, labeled `break` or `elif`.
-- **Declarations**: no global variables, nested functions, closures, lambdas, overloading, default
-  arguments, methods on structs (`impl`, `self`), imports or modules. One file is one program.
+- **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
+  (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
+  have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
+  anything else with `sort_by(x => key)`.
+- **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `?:`,
+  `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
+- **Declarations**: no global variables, nested functions, function values, overloading, default
+  arguments, methods on structs (`impl`, `self`), imports or modules. One file is one program. A lambda
+  (`x => x * 2`) is only an argument of an array method, and it cannot change variables.
 - **Library**: no `abs`, `min`, `max`, `pow`, `sqrt`, `floor`... Write them yourself (section 6).
 - **Errors**: no exceptions, `null`, `assert`, `panic` or `exit`. A failing operation stops the program
   with a runtime error (section 5).
@@ -282,6 +283,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0210 | operator on wrong types | `int + float`, `"a" + 1`, `"a" + 'b'`, `'a' + 1`, `c == "a"`, `xs + 5`, `"a" < 1`, `a < b < c` |
 | E0211 | bad `main` | no parameters and no return type |
 | E0212 | bad `if` value | an `if` used as a value needs an `else`, exactly one expression per branch, and the same type in both |
+| E0213 | lambda used as a value | a lambda is only an argument: `xs.map(x => x * 2)`; to name it, write a `fn` |
+| E0214 | lambda changes a variable | variables are read-only inside a lambda: use the method's result, or a `for` loop |
+| E0215 | bad lambda argument | `xs.count(x => x == 3)`, not `xs.count(3)`; `fold` takes `(acc, x) => ...` |
 | E0220 | field defined twice | rename one of them |
 | E0221 | lowercase struct name | `struct Point`, not `struct point` |
 | E0222 | struct contains itself | keep the children in an array: `kids: [Node]` |
@@ -290,7 +294,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0225 | fields unnamed or out of order | `Point(x: 1, y: 2)`, in declaration order |
 | E0226 | named argument to a function | names are only for structs: `add(1, 2)` |
 | E0227 | unknown method | the `hint` lists the methods of the type; structs have none: `fn area(r: Rect)` |
-| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort` needs `[int]`, `[float]`, `[str]` or `[char]` |
+| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str` or `char`; `sum` needs numbers |
 | E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable |
 | E0230 | type of `[]` unknown | `var xs: [int] = []` |
 | E0231 | mixed array elements | one type per array; a struct for mixed data |
@@ -320,6 +324,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0244 | text is not a number | `int(s)` takes digits with an optional `-`; `float(s)` also a `.` part and an exponent |
 | E0245 | `int(x)` of NaN, infinity or a float too big for an `int` | check the value before converting |
 | E0246 | `char(n)` of an invalid code | codes go from 0 to 1114111, except 55296 to 57343 |
+| E0247 | `min()` or `max()` of an empty array | check `xs.len() > 0` first, or use `fold` with a start value |
 | E0249 | out of memory | `repeat` makes at most 536,870,888 bytes of text (UTF-16 units with `--js`, the same for ASCII) or 100,000,000 elements |
 
 ## 6. Recipes

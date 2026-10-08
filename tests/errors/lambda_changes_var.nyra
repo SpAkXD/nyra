@@ -1,0 +1,6 @@
+// expect: E0214
+fn main() {
+    var seen: [int] = []
+    let xs = [1, 2]
+    print(xs.map(x => seen.pop() + x))
+}

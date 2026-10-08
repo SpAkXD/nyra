@@ -1,0 +1,5 @@
+// expect: E0206
+fn main() {
+    let x = 1
+    print([1, 2].map(x => x + 1))
+}

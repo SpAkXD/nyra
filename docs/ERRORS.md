@@ -23,7 +23,7 @@ design may still change.
 | E0001-E0006 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
-| E0201-E0212 | type checker | names, types, `ret`, conditions |
+| E0201-E0215 | type checker | names, types, `ret`, conditions, lambdas |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
@@ -31,7 +31,7 @@ design may still change.
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248, E0309,
+Codes are stable: a number is never reused for another error. Numbers that are not listed (E0216-E0219, E0248, E0309,
 E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -234,13 +234,14 @@ fn main() {
 - **Why Nyra has this rule:** The grammar is small and strict on purpose: `ret` is the only way to return, braces are always required and `{` stays on the line of its `fn`, `if`, `else`, `while` or `for`, and there is one statement per line. So every program has exactly one spelling, and a model that knows another language is corrected at the first deviation.
 - **Common causes:**
   - `return`, `elif`, `elseif`, `and`, `or`, `not`, `function`, `def`: Nyra spells them `ret`, `else if`, `&&`, `||`, `!`, `fn`
-  - `i++`, `i--`, `2 ** 3`, `0..=9`, `x => x * 2`, `a === b`: these operators do not exist
+  - `i++`, `i--`, `2 ** 3`, `0..=9`, `a === b`: these operators do not exist
+  - a lambda written as in another language, `lambda x: x * 2`, `|x| x * 2` or `x -> x * 2`: write `x => x * 2`
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
   - code outside a function: only `fn` and `struct` definitions may be at the top level (no globals, no `import`)
   - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
-  - `for i, x in xs` or `enumerate(xs)`: a loop has one variable, so write `for i in 0..xs.len()` and read `xs[i]`
+  - `for (i, x) in xs`: write the two variables without parentheses, `for i, x in xs`
   - `break` or `continue` outside a loop: to leave a function write `ret`
   - `0xFF`, `1_000` and `1e5` number forms: write `255`, `1000`, `100000.0`
   - `=` where `==` was meant, as in `if x = 1 {`
@@ -644,6 +645,81 @@ fn main() {
 }
 ```
 - **Related:** E0101, E0203, E0209
+
+## E0213: lambda used as a value
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A lambda (`x => x * 2`) appears somewhere other than as the argument of an array method that takes one: `map`, `filter`, `count`, `any`, `all`, `find_index`, `sort_by` or `fold`. It was stored in a variable, passed to a function of the program, returned or printed.
+- **Why Nyra has this rule:** Nyra has no function values. A lambda is compiled into the loop of the method it belongs to, so it costs nothing at run time and can only exist in that place.
+- **Common causes:**
+  - `let double = x => x * 2`, as a JavaScript arrow function or a Python `lambda` would be stored
+  - passing a lambda to a function you wrote, `apply(xs, x => x + 1)`
+- **Wrong:**
+```rust
+fn main() {
+    let double = x => x * 2
+    print([1, 2, 3].map(double))
+}
+```
+- **Fixed:**
+```rust
+fn double(x: int) -> int = x * 2
+
+fn main() {
+    print([1, 2, 3].map(x => double(x)))
+}
+```
+- **Related:** E0215, E0101
+
+## E0214: a lambda cannot change variables
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** Something inside a lambda (or inside the element or condition of a comprehension) would change a variable: a method that changes its receiver (`push`, `pop`, `sort`, ...) or an `inout` argument. Inside a lambda every variable is read-only.
+- **Why Nyra has this rule:** A chain such as `xs.filter(...).map(...).sum()` runs as one loop, element by element. If a lambda could change variables, the result would depend on that order and on how often each lambda runs; read-only lambdas give the same answer however the chain is written, and the result says everything the call does.
+- **Common causes:**
+  - collecting into another array from inside `map`, `ys.push(x)`: use the array that `map` or `filter` returns
+  - counting with a variable from inside a lambda: use `count`, `sum` or `fold`
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [1, 2, 3]
+    var big: [int] = []
+    let n = xs.count(x => big.pop() > x)
+    print(n)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [1, 2, 3]
+    let big = xs.filter(x => x > 1)
+    print(big, big.len())
+}
+```
+- **Related:** E0205, E0229
+
+## E0215: bad lambda argument
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A method that takes a lambda got something else, or a lambda of the wrong shape: a value or a function name instead of a lambda, the wrong number of parameters (`fold` takes two, the others one), or a body that returns nothing.
+- **Why Nyra has this rule:** The method calls the lambda once per element with fixed parameters, and uses its value: a test (`filter`, `count`, `any`, `all`, `find_index`), a new element (`map`), a key (`sort_by`) or the next value (`fold`).
+- **Common causes:**
+  - `xs.count(3)` as in Python: count with a test, `xs.count(x => x == 3)`
+  - a function name, `xs.map(double)`: call it in a lambda, `xs.map(x => double(x))`
+  - `xs.fold(0, x => ...)` with one parameter: `fold` passes the value so far and the element, `(acc, x) => acc + x`
+  - `xs.map(x => print(x))`: to do something for each element write a `for` loop
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [1, 3, 3]
+    print(xs.count(3))
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [1, 3, 3]
+    print(xs.count(x => x == 3))
+}
+```
+- **Related:** E0213, E0204, E0203
 
 ## E0220: duplicate field in a struct
 - **Kind:** compile error · **Since:** v0.3
@@ -1478,6 +1554,36 @@ fn main() {
 }
 ```
 - **Related:** E0244, E0245
+
+## E0247: min or max of an empty array
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `xs.min()` or `xs.max()` was called on an array with no elements (also after a `filter` or `map` in the same chain, such as `xs.filter(x => x > 100).min()` when nothing passes), so there is no smallest or largest element. The message is "min() of an empty array" or "max() of an empty array" with the position of the method, and the program exits with code 101.
+- **Why Nyra has this rule:** There is no null and no "minus infinity" for every type, so an empty array has no honest answer; the program stops with the same error on every backend.
+- **Common causes:**
+  - an array that is empty because of an earlier branch or because no line of the input matched
+  - a filter that lets nothing through
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [3, 8, 5]
+    print(xs.max())
+    print(xs.filter(x => x > 10).min())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [3, 8, 5]
+    print(xs.max())
+    let big = xs.filter(x => x > 10)
+    if big.len() > 0 {
+        print(big.min())
+    } else {
+        print("none")
+    }
+}
+```
+- **Related:** E0242, E0240
 
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3

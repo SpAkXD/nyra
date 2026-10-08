@@ -1,0 +1,5 @@
+// expect: E0228
+fn main() {
+    let xs = [true, false]
+    print(xs.sum())
+}

@@ -1539,7 +1539,8 @@ impl Checker {
             return t;
         }
         let Some(sig) = v3::method_sig(rt, name) else {
-            for a in args.iter_mut() {
+            // (a lambda argument is not judged: the method is the mistake)
+            for a in args.iter_mut().filter(|a| !matches!(a.kind, ExprKind::Lambda(..))) {
                 self.expr(a);
             }
             let methods = v3::methods_of(rt);

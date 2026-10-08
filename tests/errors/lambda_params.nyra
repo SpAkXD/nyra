@@ -1,0 +1,5 @@
+// expect: E0215
+fn main() {
+    let xs = [1, 2]
+    print(xs.fold(0, x => x))
+}
