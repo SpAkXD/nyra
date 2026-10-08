@@ -31,6 +31,11 @@ nyra explain E0201 --json      # what an error code means: why, causes, a wrong 
 Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
 `101` runtime error (see the bottom of section 5). `nyra run prog.nyra --json` reports runtime errors as JSON too.
 
+**If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
+same loop needs no files: `nyra_check {code}` returns the JSON above, `nyra_run {code, backend}` returns
+`stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
+the language spec.
+
 **If you cannot run commands** (you are answering in a chat): follow the rules below, go through the
 checklist in section 8, and give the user the code, the output you expect, and the command to run it
 (`nyra run prog.nyra`). Binaries: <https://github.com/SpAkXD/nyra/releases/latest>. `nyra --version`

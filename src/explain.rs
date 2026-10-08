@@ -355,7 +355,7 @@ fn render_list(all: &[Entry]) -> String {
     out.trim_end().to_string() + "\n"
 }
 
-fn list_json(all: &[Entry]) -> String {
+pub fn list_json(all: &[Entry]) -> String {
     let items: Vec<String> = all
         .iter()
         .map(|e| {
@@ -372,7 +372,7 @@ fn list_json(all: &[Entry]) -> String {
     format!("{{\"codes\":[{}]}}", items.join(","))
 }
 
-fn entry_json(e: &Entry) -> String {
+pub fn entry_json(e: &Entry) -> String {
     let strs = |v: &[String]| v.iter().map(|s| json_str(s)).collect::<Vec<_>>().join(",");
     format!(
         "{{\"code\":{},\"title\":{},\"kind\":{},\"since\":{},\"planned\":{},\"what\":{},\"why\":{},\"causes\":[{}],\"wrong\":{},\"fixed\":{},\"related\":[{}]}}",
@@ -404,7 +404,7 @@ The same text is in docs/ERRORS.md.
 ";
 
 /// `E0201`, `e0201`, `0201` and `201` all name the same code.
-fn normalize(arg: &str) -> String {
+pub fn normalize(arg: &str) -> String {
     let up = arg.trim().to_ascii_uppercase();
     let digits = up.strip_prefix('E').unwrap_or(&up);
     if !digits.is_empty() && digits.len() <= 4 && digits.chars().all(|c| c.is_ascii_digit()) {
@@ -412,6 +412,26 @@ fn normalize(arg: &str) -> String {
     } else {
         up
     }
+}
+
+/// The parsed error database (`docs/ERRORS.md`, embedded at build time).
+pub fn database() -> Result<Vec<Entry>, String> {
+    parse(DB).map_err(|e| format!("the error database (docs/ERRORS.md) is malformed: {e}"))
+}
+
+/// The nearest known code to a mistyped one (at most two edits away).
+pub fn closest<'a>(code: &str, all: &'a [Entry]) -> Option<&'a Entry> {
+    all.iter()
+        .map(|e| (levenshtein(code, &e.code), e))
+        .filter(|(d, _)| *d <= 2)
+        .min_by_key(|(d, e)| (*d, e.code.clone()))
+        .map(|(_, e)| e)
+}
+
+/// `{"ok":false,"error":"unknown error code `E9`","did_you_mean":"E0009"}`
+pub fn unknown_json(arg: &str, close: Option<&Entry>) -> String {
+    let close = close.map(|e| json_str(&e.code)).unwrap_or_else(|| "null".into());
+    format!("{{\"ok\":false,\"error\":{},\"did_you_mean\":{close}}}", json_str(&format!("unknown error code `{arg}`")))
 }
 
 pub fn run(args: Vec<String>) -> ExitCode {
@@ -435,10 +455,10 @@ pub fn run(args: Vec<String>) -> ExitCode {
         eprintln!("nyra: `nyra explain` takes one error code at a time\n\n{USAGE}");
         return ExitCode::from(2);
     }
-    let all = match parse(DB) {
+    let all = match database() {
         Ok(all) => all,
         Err(e) => {
-            eprintln!("nyra: the error database (docs/ERRORS.md) is malformed: {e}");
+            eprintln!("nyra: {e}");
             return ExitCode::from(2);
         }
     };
@@ -454,15 +474,9 @@ pub fn run(args: Vec<String>) -> ExitCode {
             ExitCode::SUCCESS
         }
         None => {
-            let close = all
-                .iter()
-                .map(|e| (levenshtein(&code, &e.code), e))
-                .filter(|(d, _)| *d <= 2)
-                .min_by_key(|(d, e)| (*d, e.code.clone()))
-                .map(|(_, e)| e);
+            let close = closest(&code, &all);
             if json {
-                let close = close.map(|e| json_str(&e.code)).unwrap_or_else(|| "null".into());
-                println!("{{\"ok\":false,\"error\":{},\"did_you_mean\":{close}}}", json_str(&format!("unknown error code `{arg}`")));
+                println!("{}", unknown_json(arg, close));
             } else {
                 eprintln!("nyra: unknown error code `{arg}`");
                 if let Some(e) = close {

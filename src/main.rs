@@ -6,11 +6,13 @@ mod diag;
 mod explain;
 mod hints;
 mod ir;
+mod json;
 mod lexer;
+mod mcp;
 mod parser;
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 use std::time::{Duration, Instant};
 
 const USAGE: &str = "\
@@ -21,6 +23,7 @@ usage:
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors
   nyra explain [CODE]       explain an error code (without CODE: list all codes)
+  nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -121,6 +124,9 @@ fn main() -> ExitCode {
     if std::env::args().nth(1).as_deref() == Some("explain") {
         return explain::run(std::env::args().skip(2).collect());
     }
+    if std::env::args().nth(1).as_deref() == Some("mcp") {
+        return mcp::run(std::env::args().skip(2).collect());
+    }
     let opts = match parse_args() {
         Ok(o) => o,
         Err(msg) => {
@@ -156,23 +162,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let mut module = match ir::lower::lower(&prog) {
-        Ok(m) => m,
-        Err(what) => return fail(format!("not supported yet: {what} (coming later in v0.3)")),
-    };
-    // NYRA_OPT=0 (for tests and debugging) skips the optimization passes
-    if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
-        ir::opt::optimize(&mut module);
-    }
-    if let Err(e) = ir::verify::verify(&module) {
-        return fail(format!("internal error: the compiler produced invalid IR ({e}); please report this bug"));
-    }
-    if std::env::var_os("NYRA_DUMP").is_some_and(|v| v == "ir") {
-        eprint!("{}", ir::print::print(&module));
-    }
-    let code = match opts.target {
-        Target::Js => codegen::js::gen(&module, &opts.file),
-        Target::Native | Target::C => codegen::c::gen(&module, &opts.file),
+    let code = match generate(&prog, opts.target, &opts.file) {
+        Ok(code) => code,
+        Err(msg) => return fail(msg),
     };
     let nyra_time = start.elapsed();
     let stem = Path::new(&opts.file).file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
@@ -182,6 +174,36 @@ fn main() -> ExitCode {
     } else {
         run(&opts, &code, &stem, nyra_time)
     }
+}
+
+/// The back half of the compiler: a checked program to C or JavaScript source.
+/// `file` is the name the generated code reports in runtime errors.
+fn generate(prog: &ast::Program, target: Target, file: &str) -> Result<String, String> {
+    let mut module = ir::lower::lower(prog).map_err(|what| format!("not supported yet: {what} (coming later in v0.3)"))?;
+    // NYRA_OPT=0 (for tests and debugging) skips the optimization passes
+    if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
+        ir::opt::optimize(&mut module);
+    }
+    if let Err(e) = ir::verify::verify(&module) {
+        return Err(format!("internal error: the compiler produced invalid IR ({e}); please report this bug"));
+    }
+    if std::env::var_os("NYRA_DUMP").is_some_and(|v| v == "ir") {
+        eprint!("{}", ir::print::print(&module));
+    }
+    Ok(match target {
+        Target::Js => codegen::js::gen(&module, file),
+        Target::Native | Target::C => codegen::c::gen(&module, file),
+    })
+}
+
+const NO_CC: &str = "no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js";
+
+/// The executable for generated C, built in the shared temp dir (see `cc_cached`).
+fn native(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
+    let Some(compiler) = find_cc() else {
+        return Err(fail(NO_CC));
+    };
+    cc_cached(&compiler, code, stem, source, &temp_dir(), false).map_err(fail)
 }
 
 fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
@@ -201,7 +223,7 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     let mut cc_part = String::new();
     if opts.target == Target::Native {
-        let (exe, cc_time) = match cc_cached(code, stem, &opts.file) {
+        let (exe, cc_time) = match native(code, stem, &opts.file) {
             Ok(r) => r,
             Err(code) => return code,
         };
@@ -220,15 +242,15 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     let mut cc_time = None;
     let mut cmd = if opts.target == Target::Js {
-        let js_path = match write_temp(&format!("{stem}.js"), code) {
+        let js_path = match write_temp(&temp_dir(), &format!("{stem}.js"), code) {
             Ok(p) => p,
-            Err(code) => return code,
+            Err(msg) => return fail(msg),
         };
         let mut c = Command::new("node");
         c.arg(js_path);
         c
     } else {
-        let exe = match cc_cached(code, stem, &opts.file) {
+        let exe = match native(code, stem, &opts.file) {
             Ok((exe, t)) => {
                 cc_time = t;
                 exe
@@ -255,11 +277,15 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     }
 }
 
-fn write_temp(name: &str, contents: &str) -> Result<PathBuf, ExitCode> {
-    let dir = std::env::temp_dir().join("nyra");
-    std::fs::create_dir_all(&dir).map_err(|e| fail(format!("cannot create `{}`: {e}", dir.display())))?;
+/// Where `nyra run` puts generated code and cached executables.
+fn temp_dir() -> PathBuf {
+    std::env::temp_dir().join("nyra")
+}
+
+fn write_temp(dir: &Path, name: &str, contents: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create `{}`: {e}", dir.display()))?;
     let path = dir.join(name);
-    std::fs::write(&path, contents).map_err(|e| fail(format!("cannot write `{}`: {e}", path.display())))?;
+    std::fs::write(&path, contents).map_err(|e| format!("cannot write `{}`: {e}", path.display()))?;
     Ok(path)
 }
 
@@ -282,20 +308,25 @@ fn fnv1a(parts: &[&[u8]]) -> u64 {
     h
 }
 
-/// Compiles generated C into an executable in the temp dir. If the same C code was
+/// Compiles generated C into an executable in `dir`. If the same C code was
 /// already compiled with the same compiler and flags, the old executable is reused.
 /// Returns the executable and the C compiler's time (`None` when cached).
-fn cc_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
-    let Some(compiler) = find_cc() else {
-        return Err(fail("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js"));
-    };
+/// With `capture`, the C compiler's messages go into the error instead of the terminal.
+fn cc_cached(
+    compiler: &str,
+    code: &str,
+    stem: &str,
+    source: &str,
+    dir: &Path,
+    capture: bool,
+) -> Result<(PathBuf, Option<Duration>), String> {
     let key = format!("{:016x}", fnv1a(&[code.as_bytes(), compiler.as_bytes(), CC_FLAGS.join(" ").as_bytes()]));
     // Builds are grouped per source file, so two projects that both have a
     // `main.nyra` never evict each other's cached executables.
     let full = std::fs::canonicalize(source).unwrap_or_else(|_| PathBuf::from(source));
     let group = format!("{stem}-{:08x}-", fnv1a(&[full.to_string_lossy().as_bytes()]) as u32);
     let exe_suffix = std::env::consts::EXE_SUFFIX;
-    let c_path = write_temp(&format!("{group}{key}.c"), code)?;
+    let c_path = write_temp(dir, &format!("{group}{key}.c"), code)?;
     let exe = c_path.with_file_name(format!("{group}{key}{exe_suffix}"));
     if exe.exists() {
         return Ok((exe, None));
@@ -304,11 +335,11 @@ fn cc_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
     // Build to a temporary, per-process name first so an interrupted or
     // concurrent build never looks cached.
     let partial = c_path.with_file_name(format!("{group}{key}.{}.partial{exe_suffix}", std::process::id()));
-    let t = cc(&compiler, &c_path, &partial)?;
+    let t = cc(compiler, &c_path, &partial, capture)?;
     if let Err(e) = std::fs::rename(&partial, &exe) {
         let _ = std::fs::remove_file(&partial);
         if !exe.exists() {
-            return Err(fail(format!("cannot write `{}`: {e}", exe.display())));
+            return Err(format!("cannot write `{}`: {e}", exe.display()));
         }
     }
 
@@ -328,7 +359,7 @@ fn cc_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
 }
 
 /// Runs the C compiler. Returns how long it took.
-fn cc(cc: &str, c_path: &Path, exe: &Path) -> Result<Duration, ExitCode> {
+fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, String> {
     let mut cmd = Command::new(cc);
     // A compiler given by full path needs its own directory on PATH to find its DLLs/tools.
     if let Some(dir) = Path::new(&cc).parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -338,10 +369,22 @@ fn cc(cc: &str, c_path: &Path, exe: &Path) -> Result<Duration, ExitCode> {
         }
     }
     let t = Instant::now();
-    let status = cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path).status();
-    match status {
-        Ok(s) if s.success() => Ok(t.elapsed()),
-        _ => Err(fail(format!("`{cc}` failed to compile the generated C (this is a nyra bug)"))),
+    cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
+    let failed = format!("`{cc}` failed to compile the generated C (this is a nyra bug)");
+    if !capture {
+        return match cmd.status() {
+            Ok(s) if s.success() => Ok(t.elapsed()),
+            _ => Err(failed),
+        };
+    }
+    match cmd.stdin(Stdio::null()).output() {
+        Ok(out) if out.status.success() => Ok(t.elapsed()),
+        Ok(out) => {
+            let text = String::from_utf8_lossy(&out.stderr);
+            let short: String = text.trim().chars().take(2000).collect();
+            Err(if short.is_empty() { failed } else { format!("{failed}:\n{short}") })
+        }
+        Err(_) => Err(failed),
     }
 }
 
