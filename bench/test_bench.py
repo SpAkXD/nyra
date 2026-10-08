@@ -2847,7 +2847,7 @@ class MockPipelineFourLanguages(NeedsRust):
         self.assertIn("-O", run_meta["rust"]["flags"].split())
         self.assertIsNone(run_meta["nyra"])
         self.assertNotIn(os.path.expanduser("~"), json.dumps(run_meta))
-        self.assertEqual(results["schema"], 2)
+        self.assertEqual(results["schema"], 3)
 
     def test_each_defect_is_repaired_in_typescript_and_rust(self):
         expected_kind = {"no_code": "no_code", "syntax": "compile_error", "runtime": "runtime_error",
@@ -2993,6 +2993,413 @@ class VerifyCommandLine(unittest.TestCase):
         self.assertIn("2 with a TypeScript reference", out.getvalue())
         self.assertIn("(typescript)", out.getvalue())
         self.assertNotIn("rust", out.getvalue().replace("not checked here (--skip): nyra, rust", ""))
+
+
+# ============================================================ runtime, speed tasks, self-repair
+
+
+class SpeedTasks(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tasks = [t for t in run.load_tasks() if t.category == report.SPEED_CATEGORY]
+
+    def test_the_speed_tier_exists_and_says_that_time_is_measured(self):
+        self.assertTrue(5 <= len(self.tasks) <= 12, len(self.tasks))
+        for t in self.tasks:
+            self.assertEqual(t.min_version, "0.3", t.id)  # only Nyra features that exist today
+            self.assertIn("running time of the program is measured", t.prompt, t.id)
+            for lang, ext in (("python", ".py"), ("nyra", ".nyra"), ("typescript", ".ts"), ("rust", ".rs")):
+                self.assertTrue((run.SOLUTIONS_DIR / lang / f"{t.id}{ext}").is_file(), f"{t.id}{ext}")
+
+    def test_speed_outputs_stay_exact_in_every_language(self):
+        # whole numbers below 2^53, so the JavaScript backend and TypeScript print them exactly
+        for t in self.tasks:
+            for number in re.findall(r"-?\d+", t.expected_output):
+                self.assertLess(abs(int(number)), 2 ** 53, t.id)
+
+
+class Timing(unittest.TestCase):
+    def test_a_passing_program_is_timed_and_the_start_up_is_subtracted(self):
+        lang = run.PythonLang(timeout=10, time_runs=3)
+        r = lang.evaluate("print(1)\n", _task("1\n"))
+        self.assertTrue(r.passed)
+        self.assertEqual(len(r.timing["runs_ms"]), 3)
+        self.assertEqual(r.timing["median_ms"], round(sorted(r.timing["runs_ms"])[1], 2))
+        startup = lang.measured_startup_ms()
+        self.assertIsNotNone(startup)
+        self.assertAlmostEqual(r.runtime_ms, max(0.0, sorted(r.timing["runs_ms"])[1] - startup), delta=0.02)
+        d = r.to_dict()
+        self.assertIn("runtime_ms", d)
+        self.assertEqual(d["timing"], r.timing)
+
+    def test_the_start_up_is_measured_once(self):
+        lang = run.PythonLang(timeout=10, time_runs=1)
+        calls = []
+        real = run.time_command
+
+        def spy(*a, **kw):
+            calls.append(kw["runs"])
+            return real(*a, **kw)
+
+        with mock.patch.object(run, "time_command", spy):
+            first = lang.startup_ms()
+            self.assertEqual(lang.startup_ms(), first)
+            lang.evaluate("print(1)\n", _task("1\n"))
+        self.assertEqual(calls, [run.STARTUP_RUNS, 1])  # the start-up runs, then one timed run of the program
+
+    def test_failing_programs_and_switched_off_timing_are_not_timed(self):
+        r = run.PythonLang(timeout=10, time_runs=2).evaluate("print(2)\n", _task("1\n"))
+        self.assertEqual((r.kind, r.runtime_ms, r.timing), ("wrong_output", None, None))
+        r = run.PythonLang(timeout=10).evaluate("print(1)\n", _task("1\n"))
+        self.assertEqual((r.passed, r.runtime_ms, r.timing), (True, None, None))
+        r = run.PythonLang(timeout=10, time_runs=2).evaluate("print(1)\n", _task("1\n"), timed=False)
+        self.assertIsNone(r.timing)
+
+    def test_a_timed_run_that_prints_something_else_does_not_count(self):
+        code = ("import os\nn = int(open('n').read()) if os.path.exists('n') else 0\n"
+                "open('n', 'w').write(str(n + 1))\nprint(1 if n == 0 else 2)\n")
+        r = run.PythonLang(timeout=10, time_runs=2).evaluate(code, _task("1\n"))
+        self.assertTrue(r.passed)  # the verdict is the judged run's
+        self.assertIsNone(r.runtime_ms)
+        self.assertIn("different output", r.timing["error"])
+
+    def test_the_toolchain_self_test_is_never_timed(self):
+        lang = run.PythonLang(timeout=10, time_runs=2)
+        with mock.patch.object(run.Language, "time_result", side_effect=AssertionError("timed")):
+            self.assertEqual(lang.preflight(), [])
+
+
+def speed_records(table, langs, sample=0):
+    """table: {task: {lang: (code_tokens, runtime_ms or None)}}; every run passes first try."""
+    out = []
+    for task, cells in table.items():
+        for lang in langs:
+            tokens, runtime = cells[lang]
+            rec = ReportSummary.rec(task, lang, True, True, code_tokens=tokens, sample=sample)
+            rec["attempts"][0]["result"]["runtime_ms"] = runtime
+            out.append(rec)
+    return out
+
+
+class RuntimeReport(unittest.TestCase):
+    LANGS = ["nyra", "python", "typescript", "rust"]
+    CATS = {"s1": "speed", "s2": "speed", "s3": "speed", "m": "math"}
+
+    def table(self):
+        # code tokens / runtime: Nyra 200 tokens and 5 ms, Python 500 tokens and 1 s (the owner's example)
+        return {
+            "s1": {"nyra": (200, 4.0), "python": (500, 900.0), "typescript": (400, 50.0), "rust": (600, 0.2)},
+            "s2": {"nyra": (200, 5.0), "python": (500, 1000.0), "typescript": (400, 60.0), "rust": (600, 0.3)},
+            "s3": {"nyra": (200, 6.0), "python": (500, 1100.0), "typescript": (400, 70.0), "rust": (600, 0.4)},
+            "m": {"nyra": (200, 900.0), "python": (500, 0.0), "typescript": (400, 0.0), "rust": (600, 0.0)},
+        }
+
+    def summary(self):
+        return report.summarize(speed_records(self.table(), self.LANGS), self.LANGS, self.CATS)
+
+    def test_medians_and_the_efficiency_formula(self):
+        eff = self.summary()["efficiency"]
+        self.assertEqual((eff["reference"], eff["runs"], eff["speed_runs"]), ("python", 4, 3))
+        nyra, py, rust = eff["langs"]["nyra"], eff["langs"]["python"], eff["langs"]["rust"]
+        self.assertEqual((nyra["median_code_tokens"], nyra["median_runtime_ms"]), (200, 5.0))  # task m is not timed
+        self.assertEqual((py["tokens_factor"], py["runtime_factor"], py["efficiency"]), (1.0, 1.0, 1.0))
+        self.assertAlmostEqual(nyra["tokens_factor"], 0.4)
+        self.assertAlmostEqual(nyra["runtime_factor"], 0.005)
+        self.assertAlmostEqual(nyra["efficiency"], 0.002)
+        # Rust's 0.3 ms is below the floor: it counts as 1 ms, so noise cannot make it look infinitely fast
+        self.assertAlmostEqual(rust["runtime_factor"], report.RUNTIME_FLOOR_MS / 1000.0)
+        self.assertAlmostEqual(rust["efficiency"], 1.2 * 0.001)
+
+    def test_per_language_runtime_is_over_speed_tasks_only(self):
+        stats = self.summary()["langs"]
+        self.assertEqual((stats["nyra"]["median_runtime_ms_speed"], stats["nyra"]["runtime_runs_speed"]), (5.0, 3))
+        self.assertEqual(stats["python"]["median_code_tokens_first_attempt"], 500)
+        self.assertIsNone(report.summarize(speed_records(self.table(), self.LANGS), self.LANGS)["langs"]["nyra"]
+                          ["median_runtime_ms_speed"])  # no categories: nothing is known to be a speed task
+
+    def test_without_python_the_first_language_is_the_reference(self):
+        langs = ["nyra", "rust"]
+        eff = report.summarize(speed_records(self.table(), langs), langs, self.CATS)["efficiency"]
+        self.assertEqual(eff["reference"], "nyra")
+        self.assertEqual(eff["langs"]["nyra"]["efficiency"], 1.0)
+
+    def test_the_model_report_shows_the_medians_and_every_speed_task(self):
+        results = fake_results("vendor/m", speed_records(self.table(), self.LANGS), self.LANGS, self.CATS,
+                               timing={"runs": 3, "startup_ms": {}})
+        md = report.render_markdown(results, {})
+        for needle in ("## Tokens and runtime (medians)", "## Runtime per speed task (ms)",
+                       "**Runtime, speed tasks** (median ms, passed runs)", "| s2 | 5.00 | 1,000 | 60.0 | 0.30 |",
+                       "**0.002**", "median of 3 timed runs"):
+            self.assertIn(needle, md)
+        self.assertTrue(md.isascii())
+
+    def test_the_comparison_has_a_runtime_and_an_efficiency_table_only_when_measured(self):
+        timed = fake_results("vendor/m", speed_records(self.table(), self.LANGS), self.LANGS, self.CATS)
+        md = report.render_comparison([timed])
+        self.assertIn("## Runtime on `speed` tasks (median ms)", md)
+        self.assertIn("| vendor/m | 0.002 | 1.00 | 0.048 | 0.0012 |", md)
+        untimed = speed_records(self.table(), self.LANGS)
+        for r in untimed:
+            r["attempts"][0]["result"]["runtime_ms"] = None
+        md = report.render_comparison([fake_results("vendor/m", untimed, self.LANGS, self.CATS)])
+        self.assertNotIn("Runtime on", md)
+        self.assertNotIn("Efficiency", md)
+
+    def test_formatting(self):
+        self.assertEqual([report.ms(v) for v in (None, 1234.4, 56.78, 8.904)], ["n/a", "1,234", "56.8", "8.90"])
+        self.assertEqual([report.factor_text(v) for v in (None, 1.0, 0.4239, 0.00208)], ["n/a", "1.00", "0.42", "0.0021"])
+        self.assertIsNone(report.factor(1.0, 0.0))
+        self.assertEqual(report.factor(0.2, 4.0, 1.0), 0.25)
+
+
+class TokenLimitAndSelfRepairReport(unittest.TestCase):
+    def records(self):
+        rec = ReportSummary.rec
+        hit = rec("a", "nyra", False, True, kind="no_code", attempts=2)
+        hit["attempts"][0]["stop_reason"] = "max_tokens"
+        hit["attempts"][0]["self_repair"] = {"tried": False}
+        fixed = rec("b", "nyra", False, True, kind="compile_error", attempts=2)
+        fixed["attempts"][0]["self_repair"] = {"tried": True, "changed": True, "fixed": 1,
+                                               "result": {"passed": True, "kind": "pass"}}
+        unfixed = rec("c", "nyra", False, True, kind="compile_error", attempts=2)
+        unfixed["attempts"][0]["self_repair"] = {"tried": True, "changed": False, "fixed": 0, "result": None}
+        ok = rec("d", "nyra", True, True)
+        ok["attempts"][0]["self_repair"] = {"tried": False}
+        py = [rec(t, "python", True, True) for t in "abcd"]
+        py_hit = rec("e", "python", False, False, kind="no_code", attempts=2)
+        for a in py_hit["attempts"]:
+            a["stop_reason"] = "max_tokens"
+        e = rec("e", "nyra", True, True)
+        e["attempts"][0]["self_repair"] = {"tried": False}
+        return [hit, fixed, unfixed, ok, e] + py + [py_hit]
+
+    def test_statistics(self):
+        s = report.summarize(self.records(), ["nyra", "python"])["langs"]
+        nyra, py = s["nyra"], s["python"]
+        self.assertEqual((nyra["pass_at_1"], nyra["pass_at_1_self_repair"]), (2, 3))
+        self.assertEqual((nyra["self_repair_tried"], nyra["self_repair_changed"], nyra["self_repair_passed"]), (2, 1, 1))
+        self.assertIsNone(py["pass_at_1_self_repair"])  # no such tool: not measured, not faked
+        self.assertEqual((nyra["no_code_max_tokens_first_attempt"], nyra["no_code_max_tokens_attempts"]), (1, 1))
+        self.assertEqual((py["no_code_max_tokens_first_attempt"], py["no_code_max_tokens_attempts"]), (1, 2))
+
+    def test_reports_label_both_numbers(self):
+        results = fake_results("vendor/m", self.records(), ["nyra", "python"])
+        md = report.render_markdown(results, {})
+        self.assertIn("| pass@1 with self-repair (`nyra check --fix`, no model call) | 60% (3/5) [23-88%], +1 of 2 "
+                      "tried | - |", md)
+        self.assertIn("| No program: the reply hit the token limit (first attempts / all attempts) | 1 / 1 | 1 / 2 |", md)
+        self.assertIn("| of which the reply hit the token limit | 1 | 1 |", md)
+        self.assertIn("**pass@1 with self-repair** (Nyra only)", md)
+        cmp_md = report.render_comparison([results])
+        self.assertIn("## First-try success with Nyra's self-repair", cmp_md)
+        self.assertIn("| vendor/m | 60% (3/5), +1 of 2 tried | - |", cmp_md)
+        self.assertIn("## No program because the reply hit the token limit", cmp_md)
+
+    def test_runs_without_either_have_no_such_rows(self):
+        recs = [ReportSummary.rec("a", lang, True, True) for lang in ("nyra", "python")]
+        md = report.render_markdown(fake_results("m", recs, ["nyra", "python"]), {})
+        self.assertNotIn("self-repair (", md)
+        self.assertNotIn("token limit (first", md)
+
+
+class OldResultFiles(unittest.TestCase):
+    """Result files written before runtimes were measured (schema 2) must stay readable."""
+
+    def old(self, model):
+        recs = four_language_records({(t, lang): True for t in ("a", "b") for lang in LANGS4})
+        results = fake_results(model, recs, LANGS4, {"a": "math", "b": "speed"})
+        for r in recs:
+            for a in r["attempts"]:
+                a["result"].pop("runtime_ms", None)
+        for stats in results["summary"]["langs"].values():  # the summary as schema 2 wrote it
+            for key in [k for k in stats if "median" in k or "runtime" in k or "self_repair" in k or "max_tokens" in k]:
+                del stats[key]
+        del results["summary"]["efficiency"]
+        return results
+
+    def test_an_old_summary_is_recomputed_with_empty_runtime_cells(self):
+        results = report.ensure_current_summary(self.old("m"))
+        self.assertIn("efficiency", results["summary"])
+        self.assertIsNone(results["summary"]["efficiency"]["langs"]["nyra"]["median_runtime_ms"])
+        self.assertEqual(results["summary"]["langs"]["nyra"]["pass_at_1"], 2)  # the old numbers stay
+        self.assertFalse(report.has_runtimes(results))
+
+    def test_publish_reads_old_and_new_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.json"
+            path.write_text(json.dumps(self.old("vendor/old")), encoding="utf-8")
+            md, data, _ = publish.publish([path], "x", Path(tmp) / "pub", write=False)
+        self.assertIn("Runtime: not measured in these runs.", md)
+        self.assertNotIn("## Runtime on", md)
+        self.assertIsNone(data["models"]["vendor/old"]["efficiency"]["langs"]["nyra"]["efficiency"])
+
+    def test_publish_includes_runtime_and_efficiency(self):
+        rt = RuntimeReport()
+        results = fake_results("vendor/new", speed_records(rt.table(), LANGS4), LANGS4, rt.CATS,
+                               timing={"runs": 3, "jobs": 4, "startup_ms": {"python": 20.0, "nyra": 5.0}})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "new.json"
+            path.write_text(json.dumps(results), encoding="utf-8")
+            md, data, _ = publish.publish([path], "x", Path(tmp) / "pub", write=False)
+        for needle in ("## Runtime on `speed` tasks (median ms)", "## Efficiency: code tokens x runtime",
+                       "#### Tokens and runtime (medians)", "every passing program was run 3 more times",
+                       "Python 20.0 ms", "**Efficiency** = (median code tokens / Python's)"):
+            self.assertIn(needle, md)
+        self.assertAlmostEqual(data["models"]["vendor/new"]["efficiency"]["langs"]["nyra"]["efficiency"], 0.002)
+        self.assertEqual(data["run"]["timing"]["runs"], 3)
+        self.assertTrue(md.isascii())
+
+
+@needs_nyra
+class NyraSelfRepair(unittest.TestCase):
+    BROKEN = "fn main() {\n    print(f(2))\n}\nfn f(x: int) -> int {\n    return x + 40\n}\n"  # `return`: E0201
+
+    def test_the_compiler_repairs_an_unambiguous_mistake(self):
+        lang = run.NyraLang(NYRA, timeout=10)
+        self.assertEqual(lang.evaluate(self.BROKEN, _task("42\n")).kind, "compile_error")
+        out = lang.self_repair(self.BROKEN, _task("42\n"))
+        self.assertTrue(out["tried"] and out["changed"])
+        self.assertTrue(out["result"]["passed"], out)
+        self.assertIn("ret x + 40", out["code"])
+
+    def test_a_mistake_without_a_fix_is_left_alone(self):
+        out = run.NyraLang(NYRA, timeout=10).self_repair("fn main() {\n    print(nothing)\n}\n", _task("1\n"))
+        self.assertEqual((out["changed"], out["result"]), (False, None))
+        self.assertIn("E0201", out["remaining"])
+
+    def run_once(self, reply, **ctx):
+        class Fixed(providers.Provider):
+            name, default_model = "f", "f"
+
+            def complete(self, system, messages, meta):
+                text = reply if meta["attempt"] == 1 else "```\nfn main() {\n    print(42)\n}\n```"
+                return providers.Reply(text, providers.Usage(1, 1))
+
+        return run.run_one(_task("42\n"), run.NyraLang(NYRA, timeout=10), 0,
+                           run.RunContext(provider=Fixed(), repairs=1, count_tokens=False, **ctx))
+
+    def test_the_attempt_loop_records_it_on_the_side(self):
+        rec = self.run_once("```\n" + self.BROKEN + "```", self_repair=True)
+        first = rec["attempts"][0]
+        self.assertEqual(first["result"]["kind"], "compile_error")
+        self.assertTrue(first["self_repair"]["result"]["passed"])
+        # the model still got its feedback and its repair attempt: plain pass@1 is unchanged
+        self.assertEqual((rec["first_try"], rec["attempts_used"], rec["status"]), (False, 2, "pass"))
+        self.assertNotIn("self_repair", rec["attempts"][1])
+        good = self.run_once("```\nfn main() {\n    print(42)\n}\n```", self_repair=True)
+        self.assertEqual(good["attempts"][0]["self_repair"], {"tried": False})
+        off = self.run_once("```\n" + self.BROKEN + "```")
+        self.assertNotIn("self_repair", off["attempts"][0])
+
+
+@needs_nyra
+class MockPipelineTiming(unittest.TestCase):
+    def run_main_out(self, *extra):
+        with tempfile.TemporaryDirectory() as out:
+            code, stdout, stderr = _run_main("--provider", "mock", "--langs", "nyra,python", "--tasks",
+                                             "fizzbuzz,matrix_mult", "--out", out, "-q", *extra)
+            results = json.loads(next(Path(out).glob("*.json")).read_text(encoding="utf-8"))
+        return code, stdout, stderr, results
+
+    def test_every_passing_program_is_timed_and_the_method_is_recorded(self):
+        code, stdout, stderr, results = self.run_main_out("--time-runs", "2")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(results["schema"], 3)
+        timing = results["run"]["timing"]
+        self.assertEqual((timing["runs"], timing["statistic"]), (2, "median"))
+        self.assertTrue(all(timing["startup_ms"][lang] > 0 for lang in ("nyra", "python")))
+        for rec in results["records"]:
+            res = rec["attempts"][0]["result"]
+            self.assertEqual(len(res["timing"]["runs_ms"]), 2)
+            self.assertGreaterEqual(res["runtime_ms"], 0)
+            self.assertEqual(rec["attempts"][0]["self_repair"] if rec["lang"] == "nyra" else None,
+                             {"tried": False} if rec["lang"] == "nyra" else None)
+        self.assertTrue(results["run"]["self_repair"])
+        stats = results["summary"]["langs"]
+        self.assertEqual((stats["nyra"]["runtime_runs_speed"], stats["python"]["runtime_runs_speed"]), (1, 1))
+        self.assertIn("## Tokens and runtime (medians)", stdout)
+        self.assertIn("| matrix_mult |", stdout)
+
+    def test_timing_and_self_repair_can_be_switched_off(self):
+        code, _, stderr, results = self.run_main_out("--time-runs", "0", "--no-self-repair")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(results["run"]["timing"]["runs"], 0)
+        self.assertFalse(results["run"]["self_repair"])
+        for rec in results["records"]:
+            self.assertIsNone(rec["attempts"][0]["result"]["runtime_ms"])
+            self.assertNotIn("self_repair", rec["attempts"][0])
+        code, _, stderr = _run_main("--provider", "mock", "--time-runs", "-1", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("--time-runs", stderr)
+
+
+class SpeedTool(unittest.TestCase):
+    """bench/speed.py: the reference solutions timed alone, no model."""
+
+    def setUp(self):
+        import speed
+        self.speed = speed
+
+    def main(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = self.speed.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_the_default_is_the_speed_tasks(self):
+        tasks = run.load_tasks()
+        chosen = self.speed.select_tasks(tasks, None, False)
+        self.assertEqual({t.category for t in chosen}, {report.SPEED_CATEGORY})
+        self.assertEqual(len(self.speed.select_tasks(tasks, None, True)), len(tasks))
+        self.assertEqual([t.id for t in self.speed.select_tasks(tasks, "fizz*", False)], ["fizzbuzz"])
+        with self.assertRaises(run.UsageError):
+            self.speed.select_tasks(tasks, "no_such_task", False)
+
+    def test_a_python_only_run_prints_the_table_and_writes_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, err = self.main("--tasks", "fizzbuzz,gcd_pairs", "--langs", "python", "--runs", "2",
+                                       "--out", tmp, "-q")
+            files = sorted(p.name for p in Path(tmp).iterdir())
+            data = json.loads(next(Path(tmp).glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(code, 0, err)
+        self.assertEqual([f.rsplit("-", 2)[-2:] for f in files], [["speed", "references.json"],
+                                                                  ["speed", "references.md"]])
+        self.assertIn("## Runtime (ms)", out)
+        self.assertIn("| **Relative to Python** | **1.00** |", out)
+        self.assertEqual(data["kind"], "speed-references")
+        self.assertEqual(data["summary"]["tasks"], ["fizzbuzz", "gcd_pairs"])
+        cell = data["results"]["fizzbuzz"]["python"]
+        self.assertTrue(cell["passed"])
+        self.assertEqual(len(cell["timing"]["runs_ms"]), 2)
+        self.assertIsNotNone(data["startup_ms"]["python"])
+
+    def test_summary_and_rendering(self):
+        results = {"t1": {"nyra": {"passed": True, "kind": "pass", "runtime_ms": 10.0, "compile_ms": 500.0},
+                          "python": {"passed": True, "kind": "pass", "runtime_ms": 1000.0, "compile_ms": None}},
+                   "t2": {"nyra": {"passed": False, "kind": "wrong_output"},
+                          "python": {"passed": True, "kind": "pass", "runtime_ms": 3000.0, "compile_ms": None}}}
+        summary = self.speed.summarize(results, ["nyra", "python"])
+        self.assertEqual(summary["tasks"], ["t1"])  # only the tasks every language ran
+        self.assertAlmostEqual(summary["langs"]["nyra"]["runtime_factor"], 0.01)
+        data = {"langs": ["nyra", "python"], "summary": summary, "machine": {"platform": "p", "python": "3", "nyra": "n"},
+                "backend": "native", "date": "d", "tasks": ["t1", "t2"], "runs": 5, "results": results,
+                "startup_ms": {"nyra": 1.0, "python": 20.0}}
+        md = self.speed.render(data)
+        self.assertIn("| t2 | FAIL (wrong_output) | 3,000 |", md)
+        self.assertIn("| **Relative to Python** | **0.01** | **1.00** |", md)
+        self.assertIn("| Compile (median over the tasks) | 500 | - |", md)
+
+    def test_bad_arguments(self):
+        self.assertEqual(self.main("--runs", "0", "--langs", "python")[0], 2)
+        self.assertEqual(self.main("--langs", "python,python")[0], 2)
+
+    @unittest.skipUnless(NYRA and NODE, "needs the nyra compiler and Node.js")
+    def test_nyra_runs_as_a_native_executable_and_on_the_js_backend(self):
+        for backend in ("native", "js"):
+            code, out, err = self.main("--tasks", "fizzbuzz", "--langs", "nyra,python", "--runs", "1", "--no-files",
+                                       "-q", "--backend", backend)
+            self.assertEqual(code, 0, err)
+            self.assertIn(f"({backend})", out)
 
 
 class ContinuousIntegration(unittest.TestCase):
