@@ -4,7 +4,8 @@
 //! Transport: stdio, one JSON-RPC 2.0 message per line. Requests are answered in order. Nothing
 //! but protocol messages is ever written to stdout (the C compiler's output is captured).
 //!
-//!     tools       nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build
+//!     tools       nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build,
+//!                 nyra_outline, nyra_show, nyra_edit (symbol-addressed editing, see edit.rs)
 //!     resources   nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}
 //!
 //! Programs are compiled in-process with the same pipeline as the CLI. Generated files and cached
@@ -34,7 +35,7 @@ const MAX_TIMEOUT_MS: u64 = 60_000;
 
 const INSTRUCTIONS: &str = "Nyra is a small, strictly typed language that is not in your training data. \
 Before writing Nyra, call nyra_spec once (part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
-Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code.";
+Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code. To change an existing program, do not resend it: nyra_outline it, nyra_show the symbols you need, and nyra_edit them by name.";
 
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
@@ -53,7 +54,7 @@ agents can check, run and learn Nyra. Add it to Claude Code with:
 
   claude mcp add nyra -- nyra mcp
 
-Tools: nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build.
+Tools: nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build, nyra_outline, nyra_show, nyra_edit.
 Resources: nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
 ";
 
@@ -247,6 +248,7 @@ impl Server {
                     "nyra_run" => self.run_tool(args),
                     "nyra_explain" => explain_tool(args),
                     "nyra_build" => build(args),
+                    "nyra_outline" | "nyra_show" | "nyra_edit" => crate::edit::tool(name, args),
                     _ => return Err(rpc_err(INVALID_PARAMS, format!("Unknown tool: {name}"))),
                 };
                 let (text, is_error) = match out {
@@ -379,7 +381,11 @@ impl Server {
 }
 
 fn tools() -> Json {
-    Json::parse(TOOLS).expect("TOOLS is valid JSON")
+    let mut tools = Json::parse(TOOLS).expect("TOOLS is valid JSON");
+    if let (Json::Arr(all), Ok(Json::Arr(more))) = (&mut tools, Json::parse(crate::edit::TOOLS)) {
+        all.extend(more);
+    }
+    tools
 }
 
 fn resources() -> Json {
@@ -603,7 +609,10 @@ mod tests {
         let tools = tools();
         let names: Vec<&str> =
             tools.as_array().unwrap().iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
-        assert_eq!(names, ["nyra_spec", "nyra_check", "nyra_run", "nyra_explain", "nyra_build"]);
+        assert_eq!(
+            names,
+            ["nyra_spec", "nyra_check", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"]
+        );
         for t in tools.as_array().unwrap() {
             assert_eq!(t.get("inputSchema").and_then(|s| s.get("type")).and_then(Json::as_str), Some("object"));
         }

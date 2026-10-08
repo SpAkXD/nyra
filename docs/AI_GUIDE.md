@@ -54,7 +54,55 @@ Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example n
 **If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
 same loop needs no files: `nyra_check {code}` returns the JSON above, `nyra_run {code, backend}` returns
 `stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
-the language spec.
+the language spec. `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
+symbol, as described next.
+
+**Changing a program that already exists: edit by symbol, do not resend the file.** Rewriting a whole
+file to change one function costs the whole file in output tokens on every turn. Nyra addresses
+functions, structs and fields (`Struct.field`) by name:
+
+```
+nyra outline prog.nyra             # one line per symbol: `45-52 fn find(items: [Item], sku: str) -> int`
+nyra show prog.nyra find Item.tags # the source of those symbols, exactly as in the file
+nyra edit prog.nyra < change.txt   # apply an edit script (below); --json for a JSON summary
+nyra edit prog.nyra --set find "fn find(items: [Item], sku: str) -> int = items.len()"
+nyra edit prog.nyra --rename find index_of_sku   # the definition and every call
+```
+
+The edit script (stdin, or `edits` of the `nyra_edit` tool) is either plain definitions, each of which
+replaces the symbol of the same name or is added at the end, or commands, each followed by its code:
+
+```
+@replace discount
+fn discount(total: int) -> int {
+    ret total / 10
+}
+@add after discount
+fn tax(total: int) -> int = total / 5
+@delete old_helper
+@rename Item.stock in_stock
+@add-field Order note: str after customer
+```
+
+- Each edit replaces the exact source range of its symbol; every other byte of the file stays as it
+  was (line breaks too). The comment lines right above a definition belong to it: `@replace` keeps
+  them unless the new code starts with its own `//` lines, `@delete` removes them.
+- `@rename` changes the definition and the real references only (calls, constructions, type
+  annotations, `x.field` reads and `field:` labels), never strings, comments or a same-named field of
+  another struct. The new name must not be used anywhere in the file yet.
+- The edits of one script apply in order and the result is checked once: an edit that **adds** errors is
+  refused, nothing is written, and you get the errors with the symbol each is in. So a change that
+  needs several symbols (a new field and the functions that build the struct) goes in one script.
+  `--force` applies anyway; `--fix` first repairs mistakes that have a certain fix (as in `check --fix`).
+  Errors that the file already had do not block an edit, so you can repair a broken file one symbol at
+  a time.
+- The top-level statements of a script are not a symbol: give the program a `fn main` if you will edit it.
+
+What it saves, measured on `tests/edit/inventory.nyra` (209 lines, 5072 bytes, about 1450 tokens):
+changing one function (`discount`) by sending the file again costs the whole file; `nyra edit` with the
+new function costs 208 bytes sent and a 58-byte reply (about 75 tokens), **95% less**. Reading the
+file first as `nyra outline` (1195 bytes) and `nyra show discount` (270 bytes) instead of in full saves
+most of the reading side too.
 
 **If you cannot run commands** (you are answering in a chat): follow the rules below, go through the
 checklist in section 8, and give the user the code, the output you expect, and the command to run it

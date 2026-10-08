@@ -23,6 +23,8 @@ Let the compiler repair simple mistakes first: `nyra check prog.nyra --json --fi
 
 MCP: `nyra mcp` is a Model Context Protocol server (stdio) built into the compiler; add it with `claude mcp add nyra -- nyra mcp` or `{"command":"nyra","args":["mcp"]}`. Its tools are `nyra_spec` (this language's spec), `nyra_check`, `nyra_run` (native or JS), `nyra_explain` and `nyra_build`, so an agent needs no files or shell.
 
+Editing: to change a program that exists, do not resend it. `nyra outline prog.nyra` lists its functions and structs with line ranges, `nyra show prog.nyra name` prints one, and `nyra edit prog.nyra` takes new definitions on stdin (each replaces the symbol of its name) or commands (`@replace NAME`, `@add after NAME`, `@delete NAME`, `@rename NAME NEW`, `@add-field Struct name: type`). The rest of the file stays byte-identical, and an edit that adds errors is refused. The MCP tools `nyra_outline`, `nyra_show` and `nyra_edit` do the same.
+
 ## Docs
 
 - [AI guide](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/AI_GUIDE.md): read this first. The workflow, every rule as do and don't, what does not exist yet, all error codes with fixes, recipes and complete programs.
