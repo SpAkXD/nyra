@@ -2,7 +2,8 @@
 
 use std::fmt::Write;
 
-use super::{bare, names};
+use super::{bare, names, scope::mentions};
+use crate::ast::Span;
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StructInfo, Ty, UnOp};
 
 /// The C runtime, emitted before every program (`@FILE@` becomes the source path).
@@ -279,9 +280,56 @@ impl Gen<'_> {
     }
 
     fn stmts(&mut self, ss: &[Stmt]) {
-        for s in ss {
-            self.stmt(s);
+        let mut k = 0;
+        while k < ss.len() {
+            if self.format_append(&ss[k..]) {
+                k += 3;
+                continue;
+            }
+            self.stmt(&ss[k]);
+            k += 1;
         }
+    }
+
+    /// `s += "{x}"` (also `s += str(x)`): the parts go straight into `s` when it has no other
+    /// owner, instead of into a new string that is appended and freed. The IR is
+    /// `t = format(..); s += t; drop t`, with parts that do not read `s`.
+    fn format_append(&mut self, ss: &[Stmt]) -> bool {
+        let [a, b, c, ..] = ss else { return false };
+        let StmtKind::Op { dst: Some(t), op: RtOp::Format, args: parts } = &a.kind else { return false };
+        let StmtKind::Mutate { dst: None, op: RtOp::StrAppend, place, args } = &b.kind else { return false };
+        if !place.path.is_empty() || !matches!(args.as_slice(), [Expr::Local(x)] if x == t) || place.root == *t {
+            return false;
+        }
+        if !matches!(c.kind, StmtKind::Drop(d) if d == *t) || parts.iter().any(|p| mentions(p, place.root)) {
+            return false;
+        }
+        let s = self.local(place.root).to_string();
+        self.line("{");
+        self.indent += 1;
+        self.line(&format!("nyrt_buf nyrt_b = nyrt_buf_on(&{s});"));
+        for p in parts {
+            let line = self.put("nyrt_buf", p);
+            self.line(&line);
+        }
+        self.line(&format!("nyrt_buf_back(&nyrt_b, &{s});"));
+        self.indent -= 1;
+        self.line("}");
+        true
+    }
+
+    /// `NYRT_ELEMS(T, xs)[nyrt_ix(xs, i, line, col)]`: element `i` of the array `xs` (an
+    /// expression without effects), its index checked (E0240).
+    fn elem(&self, xs: &str, elem: Ty, i: &Expr, span: Span) -> String {
+        format!("NYRT_ELEMS({}, {xs})[nyrt_ix({xs}, {}, {}, {})]", ctype(elem), self.arg(i), span.line, span.col)
+    }
+
+    /// A pointer to element `i` of the array at the lvalue `xs`: returns `(*p)`.
+    fn elem_slot(&mut self, xs: &str, elem: Ty, i: &Expr, span: Span) -> String {
+        let p = self.fresh("p");
+        let line = format!("{} *{p} = &{};", ctype(elem), self.elem(xs, elem, i, span));
+        self.line(&line);
+        format!("(*{p})")
     }
 
     fn local(&self, l: LocalId) -> &str {
@@ -359,26 +407,14 @@ impl Gen<'_> {
                     self.line("}");
                 }
             }
-            StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at),
+            StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at, s.span),
             StmtKind::Store { place, value } => {
                 self.line("{");
                 self.indent += 1;
                 let (parent, last) = self.place_parent(place);
                 let t = self.ty(value);
                 let slot = match last {
-                    Some((i, span)) => {
-                        let p = self.fresh("p");
-                        let line = format!(
-                            "{} *{p} = ({}*)nyrt_arr_at({parent}, {}, {}, {});",
-                            ctype(t),
-                            ctype(t),
-                            self.arg(&i),
-                            span.line,
-                            span.col
-                        );
-                        self.line(&line);
-                        format!("(*{p})")
-                    }
+                    Some((i, span)) => self.elem_slot(&parent, t, &i, span),
                     None => parent,
                 };
                 let v = self.arg(value);
@@ -464,22 +500,12 @@ impl Gen<'_> {
             match step {
                 Step::Index(i, span) => {
                     // this array is about to change below this point
-                    self.line(&format!("nyrt_arr_unique(&{lv});"));
+                    self.line(&format!("nyrt_arr_mut(&{lv});"));
                     if k + 1 == n {
                         return (lv, Some((i.clone(), *span)));
                     }
                     let elem = t.elem().expect("verified: an array");
-                    let ptr = self.fresh("p");
-                    let line = format!(
-                        "{} *{ptr} = ({}*)nyrt_arr_at({lv}, {}, {}, {});",
-                        ctype(elem),
-                        ctype(elem),
-                        self.arg(i),
-                        span.line,
-                        span.col
-                    );
-                    self.line(&line);
-                    lv = format!("(*{ptr})");
+                    lv = self.elem_slot(&lv, elem, i, *span);
                     t = elem;
                 }
                 Step::Field(k) => {
@@ -499,17 +525,7 @@ impl Gen<'_> {
             None => parent,
             Some((i, span)) => {
                 let t = self.place_ty(p);
-                let ptr = self.fresh("p");
-                let line = format!(
-                    "{} *{ptr} = ({}*)nyrt_arr_at({parent}, {}, {}, {});",
-                    ctype(t),
-                    ctype(t),
-                    self.arg(&i),
-                    span.line,
-                    span.col
-                );
-                self.line(&line);
-                format!("(*{ptr})")
+                self.elem_slot(&parent, t, &i, span)
             }
         }
     }
@@ -528,18 +544,47 @@ impl Gen<'_> {
     fn mutate(&mut self, dst: Option<LocalId>, op: RtOp, place: &Place, args: &[Expr], at: &str) {
         self.line("{");
         self.indent += 1;
-        let lv = self.place(place);
         let t = self.place_ty(place);
+        let elem = t.elem();
+        if op == RtOp::ArrPush {
+            // the value first: it may read the array's length
+            let e = elem.expect("verified: an array");
+            let line = format!("{} nyrt_v = {};", ctype(e), self.arg(&args[0]));
+            self.line(&line);
+        }
+        let lv = self.place(place);
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let d = dst.map(|d| self.local(d).to_string());
-        let elem = t.elem();
         if elem.is_some() && op != RtOp::ArrAppend {
-            self.line(&format!("nyrt_arr_unique(&{lv});"));
+            self.line(&format!("nyrt_arr_mut(&{lv});"));
         }
         let call = match op {
             RtOp::StrAppend => format!("nyrt_str_append(&{lv}, {});", a[0]),
             RtOp::ArrAppend => format!("nyrt_arr_append(&{lv}, {});", a[0]),
-            RtOp::ArrPush => format!("nyrt_arr_push(&{lv}, {});", self.addr(&args[0], elem.expect("an array"))),
+            RtOp::ArrPush => {
+                // in place while there is room; the new element gets its owner from the array
+                let e = elem.expect("verified: an array");
+                let slot = format!("NYRT_ELEMS({}, {lv})[{lv}->len]", ctype(e));
+                self.line(&format!("if (NYRT_UNLIKELY({lv}->len == {lv}->cap)) nyrt_arr_grow(&{lv}, 1);"));
+                self.line(&format!("{slot} = nyrt_v;"));
+                if self.m.managed(e) {
+                    self.line(&retain(e, &slot));
+                }
+                format!("{lv}->len++;")
+            }
+            RtOp::ArrPop if d.is_some() => {
+                let e = elem.expect("verified: an array");
+                self.line(&format!("if (NYRT_UNLIKELY({lv}->len == 0)) nyrt_pop_empty({at});"));
+                format!("{} = NYRT_ELEMS({}, {lv})[--{lv}->len];", d.as_deref().unwrap_or_default(), ctype(e))
+            }
+            RtOp::ArrSwap => {
+                let e = elem.expect("verified: an array");
+                let ct = ctype(e);
+                self.line(&format!("int64_t nyrt_i = nyrt_ix({lv}, {}, {at}), nyrt_j = nyrt_ix({lv}, {}, {at});", a[0], a[1]));
+                self.line(&format!("{ct} nyrt_x = NYRT_ELEMS({ct}, {lv})[nyrt_i];"));
+                self.line(&format!("NYRT_ELEMS({ct}, {lv})[nyrt_i] = NYRT_ELEMS({ct}, {lv})[nyrt_j];"));
+                format!("NYRT_ELEMS({ct}, {lv})[nyrt_j] = nyrt_x;")
+            }
             RtOp::ArrInsert => {
                 format!("nyrt_arr_insert(&{lv}, {}, {}, {at});", a[0], self.addr(&args[1], elem.expect("an array")))
             }
@@ -556,7 +601,6 @@ impl Gen<'_> {
                 }
             }
             RtOp::ArrSort => format!("nyrt_arr_sort(&{lv});"),
-            RtOp::ArrSwap => format!("nyrt_arr_swap(&{lv}, {}, {}, {at});", a[0], a[1]),
             RtOp::ArrReverse => format!("nyrt_arr_reverse(&{lv});"),
             other => unreachable!("{} does not change a place", other.name()),
         };
@@ -565,7 +609,7 @@ impl Gen<'_> {
         self.line("}");
     }
 
-    fn op(&mut self, dst: Option<LocalId>, op: RtOp, args: &[Expr], at: &str) {
+    fn op(&mut self, dst: Option<LocalId>, op: RtOp, args: &[Expr], at: &str, span: Span) {
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let call = match op {
             RtOp::Print => {
@@ -596,10 +640,17 @@ impl Gen<'_> {
                 let t = self.f.local(dst.expect("checked")).ty;
                 let elem = t.elem().expect("verified: an array");
                 self.line(&format!("{d} = nyrt_arr_new({}, {});", desc(elem), args.len()));
-                for x in args {
+                for (k, x) in args.iter().enumerate() {
                     // the array becomes one more owner of each element
-                    let line = format!("nyrt_arr_push(&{d}, {});", self.addr(x, elem));
+                    let slot = format!("NYRT_ELEMS({}, {d})[{k}]", ctype(elem));
+                    let line = format!("{slot} = {};", self.arg(x));
                     self.line(&line);
+                    if self.m.managed(elem) {
+                        self.line(&retain(elem, &slot));
+                    }
+                }
+                if !args.is_empty() {
+                    self.line(&format!("{d}->len = {};", args.len()));
                 }
                 return;
             }
@@ -616,7 +667,7 @@ impl Gen<'_> {
             }
             RtOp::ArrGet => {
                 let elem = self.ty(&args[0]).elem().expect("verified: an array");
-                format!("*({}*)nyrt_arr_at({}, {}, {at})", ctype(elem), a[0], a[1])
+                self.elem(&a[0], elem, &args[1], span)
             }
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),

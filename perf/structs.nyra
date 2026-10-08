@@ -1,0 +1,39 @@
+// array-of-structs updates: 100,000 particles bouncing in a box for 200 steps
+struct Particle {
+    x: int
+    y: int
+    vx: int
+    vy: int
+}
+
+fn main() {
+    var seed = 12345
+    var ps: [Particle] = []
+    for i in 0..100000 {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        let x = (seed / 65536) % 1000
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        let y = (seed / 65536) % 1000
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        ps.push(Particle(x: x, y: y, vx: (seed / 65536) % 7 - 3, vy: (seed / 1024) % 5 - 2))
+    }
+    for step in 0..200 {
+        for i in 0..ps.len() {
+            ps[i].x += ps[i].vx
+            ps[i].y += ps[i].vy
+            if ps[i].x < 0 || ps[i].x >= 1000 {
+                ps[i].vx = -ps[i].vx
+            }
+            if ps[i].y < 0 || ps[i].y >= 1000 {
+                ps[i].vy = -ps[i].vy
+            }
+        }
+    }
+    var sx = 0
+    var sy = 0
+    for p in ps {
+        sx += p.x
+        sy += p.y
+    }
+    print("{sx} {sy}")
+}

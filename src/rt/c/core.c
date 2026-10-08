@@ -6,6 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Branch hints and cold paths: the fast path of an index check or a write stays small enough to
+// inline, and the error paths move out of the hot loops.
+#if defined(__GNUC__) || defined(__clang__)
+#define NYRT_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define NYRT_COLD __attribute__((noinline, cold))
+#define NYRT_NORETURN __attribute__((noinline, cold, noreturn))
+#else
+#define NYRT_UNLIKELY(x) (x)
+#define NYRT_COLD
+#define NYRT_NORETURN
+#endif
+
 static const char *const nyrt_file = @FILE@;
 
 // Formats a float exactly like JavaScript's String(x): the shortest digits that
@@ -63,7 +75,7 @@ static void nyrt_json_str(const char *s) {
     }
     fputc('"', stderr);
 }
-static void nyrt_panic(const char *code, const char *msg, const char *hint, int line, int col) {
+static NYRT_NORETURN void nyrt_panic(const char *code, const char *msg, const char *hint, int line, int col) {
     fflush(stdout);
     if (getenv("NYRA_JSON")) {
         fprintf(stderr, "{\"ok\":false,\"errors\":[{\"code\":\"%s\",\"message\":", code);
@@ -80,14 +92,17 @@ static void nyrt_panic(const char *code, const char *msg, const char *hint, int 
     exit(101);
 }
 // int / and %: division by zero is a runtime error; MIN / -1 wraps (x86 would trap).
-static int64_t nyrt_div(int64_t a, int64_t b, int line, int col) {
-    if (b == 0) nyrt_panic("E0241", "division by zero", "check the divisor first", line, col);
-    if (b == -1) return (int64_t)(0 - (uint64_t)a);
+static NYRT_NORETURN void nyrt_div_zero(int line, int col) {
+    nyrt_panic("E0241", "division by zero", "check the divisor first", line, col);
+}
+static inline int64_t nyrt_div(int64_t a, int64_t b, int line, int col) {
+    if (NYRT_UNLIKELY(b == 0)) nyrt_div_zero(line, col);
+    if (NYRT_UNLIKELY(b == -1)) return (int64_t)(0 - (uint64_t)a);
     return a / b;
 }
-static int64_t nyrt_mod(int64_t a, int64_t b, int line, int col) {
-    if (b == 0) nyrt_panic("E0241", "division by zero", "check the divisor first", line, col);
-    if (b == -1) return 0;
+static inline int64_t nyrt_mod(int64_t a, int64_t b, int line, int col) {
+    if (NYRT_UNLIKELY(b == 0)) nyrt_div_zero(line, col);
+    if (NYRT_UNLIKELY(b == -1)) return 0;
     return a % b;
 }
 // `for i in a..b step k`: a step of 0 would never end.

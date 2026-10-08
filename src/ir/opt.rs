@@ -9,14 +9,261 @@
 
 use std::collections::HashMap;
 
-use super::{Arg, BinOp, Expr, FuncId, Module, Place, RtOp, Step, Stmt, StmtKind, StrId, UnOp};
+use super::{Arg, BinOp, Expr, FuncId, LocalId, Module, Place, RtOp, Step, Stmt, StmtKind, StrId, UnOp};
 
 pub fn optimize(m: &mut Module) {
     let mut strs = Interner::new(&mut m.strs);
     for f in &mut m.funcs {
         stmts(&mut f.body, &mut strs);
     }
+    for f in &mut m.funcs {
+        let temp: Vec<bool> = f.locals.iter().map(|l| l.name.is_none()).collect();
+        let managed: Vec<bool> = f.locals.iter().map(|l| m.structs.managed(l.ty)).collect();
+        early_drops(&mut f.body, &temp);
+        dup_drop_pairs(&mut f.body, &managed);
+    }
     unused_fns(m);
+}
+
+// ---- reference counting ----------------------------------------------------------------------
+//
+// Lowering releases the temporaries of a statement at its end and gives an element read from an
+// array its own owner (`dup`) for as long as the statement runs. Both are safe and often too
+// much: `dp[i][j] = dp[i - 1][j] + 1` holds an extra owner of row `i - 1` while row `i` is
+// written, and a row `dp[i]` read in the same statement would even be copied by that write
+// (copy on write sees two owners). Two passes take the extra work out:
+//
+// - `early_drops`: a temporary is released right after the last statement that mentions it.
+//   Nothing after that statement can use the temporary, so the release only happens earlier.
+// - `dup_drop_pairs`: `dup x` followed by `drop x`, with only statements in between that
+//   cannot free or change any value (reads, plain assignments, calls without `inout`), is an
+//   owner that nobody needed: both go.
+
+/// Calls `f` with every local that `s` (and the statements nested in it) reads or writes.
+fn stmt_locals(s: &Stmt, f: &mut dyn FnMut(LocalId)) {
+    fn expr(e: &Expr, f: &mut dyn FnMut(LocalId)) {
+        match e {
+            Expr::Local(l) => f(*l),
+            Expr::Unary(_, x) | Expr::IntToFloat(x) | Expr::Field(x, _, _) => expr(x, f),
+            Expr::Binary(_, a, b) => {
+                expr(a, f);
+                expr(b, f);
+            }
+            Expr::Select(c, a, b) => {
+                expr(c, f);
+                expr(a, f);
+                expr(b, f);
+            }
+            Expr::Pure(_, args) => args.iter().for_each(|a| expr(a, f)),
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => {}
+        }
+    }
+    fn place(p: &Place, f: &mut dyn FnMut(LocalId)) {
+        f(p.root);
+        for s in &p.path {
+            if let Step::Index(i, _) = s {
+                expr(i, f);
+            }
+        }
+    }
+    match &s.kind {
+        StmtKind::Set(l, e) => {
+            f(*l);
+            expr(e, f);
+        }
+        StmtKind::Call { dst, args, .. } => {
+            dst.iter().for_each(|d| f(*d));
+            for a in args {
+                match a {
+                    Arg::Val(e) => expr(e, f),
+                    Arg::InOut(p) => place(p, f),
+                }
+            }
+        }
+        StmtKind::Op { dst, args, .. } => {
+            dst.iter().for_each(|d| f(*d));
+            args.iter().for_each(|a| expr(a, f));
+        }
+        StmtKind::Store { place: p, value } => {
+            place(p, f);
+            expr(value, f);
+        }
+        StmtKind::Mutate { dst, place: p, args, .. } => {
+            dst.iter().for_each(|d| f(*d));
+            place(p, f);
+            args.iter().for_each(|a| expr(a, f));
+        }
+        StmtKind::If { cond, then, els } => {
+            expr(cond, f);
+            then.iter().chain(els).for_each(|s| stmt_locals(s, f));
+        }
+        StmtKind::Loop { head, cond, body, step } => {
+            expr(cond, f);
+            head.iter().chain(body).chain(step).for_each(|s| stmt_locals(s, f));
+        }
+        StmtKind::ForEach { var, iter, body } => {
+            f(*var);
+            expr(iter, f);
+            body.iter().for_each(|s| stmt_locals(s, f));
+        }
+        StmtKind::Return(Some(e)) => expr(e, f),
+        StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => f(*l),
+        StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => {}
+    }
+}
+
+fn stmt_mentions(s: &Stmt, l: LocalId) -> bool {
+    let mut found = false;
+    stmt_locals(s, &mut |x| found |= x == l);
+    found
+}
+
+/// The blocks nested in a statement.
+fn blocks_mut(s: &mut Stmt) -> Vec<&mut Vec<Stmt>> {
+    match &mut s.kind {
+        StmtKind::If { then, els, .. } => vec![then, els],
+        StmtKind::Loop { head, body, step, .. } => vec![head, body, step],
+        StmtKind::ForEach { body, .. } => vec![body],
+        _ => Vec::new(),
+    }
+}
+
+/// Moves the release of each temporary up to right after the last statement that mentions it.
+fn early_drops(ss: &mut Vec<Stmt>, temp: &[bool]) {
+    for s in ss.iter_mut() {
+        for b in blocks_mut(s) {
+            early_drops(b, temp);
+        }
+    }
+    for k in 0..ss.len() {
+        let StmtKind::Drop(t) = ss[k].kind else { continue };
+        if !temp[t.0 as usize] {
+            continue;
+        }
+        let mut j = k;
+        while j > 0 && !stmt_mentions(&ss[j - 1], t) && !matches!(ss[j - 1].kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue) {
+            j -= 1;
+        }
+        // a `dup` stays right after the statement that set its local (backends pair them up)
+        while j < k && matches!(ss[j].kind, StmtKind::Dup(_)) {
+            j += 1;
+        }
+        if j < k {
+            let s = ss.remove(k);
+            ss.insert(j, s);
+        }
+    }
+}
+
+/// True if `s` cannot free or change any value that already exists, nor write `l`: it only
+/// reads, computes new values, assigns plain locals or calls functions without `inout`.
+fn harmless(s: &Stmt, l: LocalId, managed: &[bool]) -> bool {
+    let all = |ss: &[Stmt]| ss.iter().all(|s| harmless(s, l, managed));
+    match &s.kind {
+        StmtKind::Set(d, _) => *d != l && !managed[d.0 as usize],
+        StmtKind::Op { dst, .. } => *dst != Some(l),
+        StmtKind::Call { dst, args, .. } => *dst != Some(l) && args.iter().all(|a| matches!(a, Arg::Val(_))),
+        StmtKind::Dup(d) => *d != l,
+        StmtKind::If { then, els, .. } => all(then) && all(els),
+        StmtKind::Loop { head, body, step, .. } => all(head) && all(body) && all(step),
+        StmtKind::ForEach { var, body, .. } => *var != l && all(body),
+        StmtKind::Store { .. }
+        | StmtKind::Mutate { .. }
+        | StmtKind::Drop(_)
+        | StmtKind::Free(_)
+        | StmtKind::Keep(_)
+        | StmtKind::Return(_)
+        | StmtKind::Break
+        | StmtKind::Continue => false,
+    }
+}
+
+/// True if every mention of `l` in `s` reads into it: an element (`arr_get(l, i)`), a field or
+/// its length. Such a borrowed value may be a reference in a backend (Rust); other uses may not.
+fn only_projected(s: &Stmt, l: LocalId) -> bool {
+    fn count(e: &Expr, l: LocalId, n: &mut usize) {
+        match e {
+            Expr::Field(x, _, _) if matches!(**x, Expr::Local(y) if y == l) => *n += 1,
+            Expr::Pure(super::PureFn::ArrLen, args) if matches!(args.as_slice(), [Expr::Local(y)] if *y == l) => *n += 1,
+            Expr::Unary(_, x) | Expr::IntToFloat(x) | Expr::Field(x, _, _) => count(x, l, n),
+            Expr::Binary(_, a, b) => {
+                count(a, l, n);
+                count(b, l, n);
+            }
+            Expr::Select(c, a, b) => {
+                count(c, l, n);
+                count(a, l, n);
+                count(b, l, n);
+            }
+            Expr::Pure(_, args) => args.iter().for_each(|a| count(a, l, n)),
+            _ => {}
+        }
+    }
+    fn walk(s: &Stmt, l: LocalId, n: &mut usize) {
+        let e = |x: &Expr, n: &mut usize| count(x, l, n);
+        match &s.kind {
+            StmtKind::Set(_, x) => e(x, n),
+            StmtKind::Call { args, .. } => args.iter().for_each(|a| {
+                if let Arg::Val(x) = a {
+                    e(x, n)
+                }
+            }),
+            StmtKind::Op { op, args, .. } => {
+                for (k, x) in args.iter().enumerate() {
+                    if k == 0 && *op == RtOp::ArrGet && matches!(x, Expr::Local(y) if *y == l) {
+                        *n += 1;
+                    } else {
+                        e(x, n);
+                    }
+                }
+            }
+            StmtKind::If { cond, then, els } => {
+                e(cond, n);
+                then.iter().chain(els).for_each(|s| walk(s, l, n));
+            }
+            StmtKind::Loop { head, cond, body, step } => {
+                e(cond, n);
+                head.iter().chain(body).chain(step).for_each(|s| walk(s, l, n));
+            }
+            StmtKind::ForEach { iter, body, .. } => {
+                e(iter, n);
+                body.iter().for_each(|s| walk(s, l, n));
+            }
+            _ => {}
+        }
+    }
+    let (mut all, mut projected) = (0, 0);
+    stmt_locals(s, &mut |x| all += usize::from(x == l));
+    walk(s, l, &mut projected);
+    all == projected
+}
+
+/// Removes `dup x` ... `drop x` when everything in between is `harmless` and only reads
+/// elements, fields or the length of `x`.
+fn dup_drop_pairs(ss: &mut Vec<Stmt>, managed: &[bool]) {
+    for s in ss.iter_mut() {
+        for b in blocks_mut(s) {
+            dup_drop_pairs(b, managed);
+        }
+    }
+    // inner pairs first: once they are gone, the pairs around them can go too
+    let mut a = ss.len();
+    while a > 0 {
+        a -= 1;
+        let StmtKind::Dup(l) = ss[a].kind else { continue };
+        let mut b = a + 1;
+        while b < ss.len()
+            && !matches!(ss[b].kind, StmtKind::Drop(d) if d == l)
+            && harmless(&ss[b], l, managed)
+            && only_projected(&ss[b], l)
+        {
+            b += 1;
+        }
+        if b < ss.len() && matches!(ss[b].kind, StmtKind::Drop(d) if d == l) {
+            ss.remove(b);
+            ss.remove(a);
+        }
+    }
 }
 
 struct Interner<'a> {
