@@ -1,0 +1,9 @@
+{
+  "id": "meeting_slots",
+  "title": "Meeting slot finder",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "Schedule meetings for four people (ann, bob, cat and dan) on one day. Times are written `HH:MM` on a 24-hour clock. Everyone is available only from 09:00 to 17:00, and not during their busy periods. A period `S-E` covers the time from S up to E, so something else may start exactly at E or end exactly at S. The busy periods are:\n- ann: 09:00-10:30, 12:00-13:00, 15:45-17:00\n- bob: 09:30-11:15, 13:00-14:00\n- cat: 11:00-12:15, 14:30-15:15\n- dan: 10:00-10:45, 13:30-16:00\nProcess the requests listed at the end in order. A request `NAMES DURATION` (NAMES are names joined by `+`) asks for the earliest meeting of DURATION minutes for all those people. The meeting must start at a time whose minutes are 00, 15, 30 or 45, lie completely within 09:00 to 17:00, and overlap no busy period of any of those people. If there is one, print `NAMES: S-E` and add the meeting to the busy periods of each of those people; otherwise print `NAMES: no slot`.\nAfter the requests, print for each person, in the order ann, bob, cat, dan, `NAME free: ` followed by the periods of the day in which that person is free, in time order and separated by `, `: each free period is as long as possible (periods that touch are one period) and written `S-E`. If the person has no free time, print `none` after `free: `.\nRequests, in order: ann+bob 60; bob+cat+dan 30; ann+cat 45; ann+bob+cat+dan 30; dan 120; cat+dan 15; ann+bob 45; bob 120.",
+  "expected_output": "ann+bob: 14:00-15:00\nbob+cat+dan: 09:00-09:30\nann+cat: 13:00-13:45\nann+bob+cat+dan: no slot\ndan: 10:45-12:45\ncat+dan: 09:30-09:45\nann+bob: 11:15-12:00\nbob: 15:00-17:00\nann free: 10:30-11:15, 13:45-14:00, 15:00-15:45\nbob free: 12:00-13:00\ncat free: 09:45-11:00, 12:15-13:00, 13:45-14:30, 15:15-17:00\ndan free: 09:45-10:00, 12:45-13:30, 16:00-17:00\n"
+}

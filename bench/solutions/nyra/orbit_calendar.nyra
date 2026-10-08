@@ -1,0 +1,97 @@
+struct Date {
+    y: int
+    m: int
+    d: int
+}
+
+fn is_leap(y: int) -> bool = (y % 6 == 0 && y % 90 != 0) || y % 360 == 0
+
+fn month_days(y: int, m: int) -> int {
+    if m < 10 { ret 36 }
+    if is_leap(y) { ret 42 }
+    ret 41
+}
+
+fn year_days(y: int) -> int = 9 * 36 + month_days(y, 10)
+
+fn valid(dt: Date) -> bool {
+    ret dt.y >= 1 && dt.m >= 1 && dt.m <= 10 && dt.d >= 1 && dt.d <= month_days(dt.y, dt.m)
+}
+
+fn parse(text: str) -> Date {
+    let p = text.split("-")
+    ret Date(y: int(p[0]), m: int(p[1]), d: int(p[2]))
+}
+
+// days since 0001-01-01
+fn ordinal(dt: Date) -> int {
+    var n = 0
+    for y in 1..dt.y { n += year_days(y) }
+    for m in 1..dt.m { n += month_days(dt.y, m) }
+    ret n + dt.d - 1
+}
+
+fn from_ordinal(ord: int) -> Date {
+    var n = ord
+    var y = 1
+    while n >= year_days(y) {
+        n -= year_days(y)
+        y += 1
+    }
+    var m = 1
+    while n >= month_days(y, m) {
+        n -= month_days(y, m)
+        m += 1
+    }
+    ret Date(y: y, m: m, d: n + 1)
+}
+
+fn weekdays() -> [str] = ["Ari", "Bel", "Cor", "Dun", "Eld", "Fen"]
+
+fn pad(n: int, width: int) -> str {
+    let s = str(n)
+    ret "0".repeat(width - s.len()) + s
+}
+
+fn show(ord: int) -> str {
+    let dt = from_ordinal(ord)
+    let wd = weekdays()[ord % 6]
+    ret "{pad(dt.y, 4)}-{pad(dt.m, 2)}-{pad(dt.d, 2)} {wd}"
+}
+
+fn answer(query: str) -> str {
+    let w = query.split(" ")
+    if w[0] == "ADD" {
+        let dt = parse(w[1])
+        if !valid(dt) { ret "invalid date" }
+        ret show(ordinal(dt) + int(w[2]))
+    }
+    if w[0] == "DIFF" {
+        let a = parse(w[1])
+        let b = parse(w[2])
+        if !valid(a) || !valid(b) { ret "invalid date" }
+        ret str(ordinal(b) - ordinal(a))
+    }
+    // NTH k WEEKDAY YYYY-MM
+    let k = int(w[1])
+    let target = weekdays().index_of(w[2])
+    let p = w[3].split("-")
+    let first = Date(y: int(p[0]), m: int(p[1]), d: 1)
+    if !valid(first) { ret "invalid date" }
+    let start = ordinal(first)
+    var seen = 0
+    for d in 0..month_days(first.y, first.m) {
+        if (start + d) % 6 == target {
+            seen += 1
+            if seen == k { ret show(start + d) }
+        }
+    }
+    ret "none"
+}
+
+fn main() {
+    let queries = "ADD 0001-01-01 0; ADD 0359-10-40 3; ADD 0360-10-41 1; ADD 0450-03-17 -1000; DIFF 0090-10-41 0091-01-01; DIFF 0721-05-30 0001-01-01; ADD 0539-10-42 1; NTH 3 Dun 0540-07; NTH 7 Fen 0012-10; NTH 7 Ari 0013-10; DIFF 0180-10-42 0181-01-01; ADD 0002-01-01 -365; NTH 7 Bel 0013-10; ADD 0005-11-01 1; ADD 0359-01-01 365"
+    for q in queries.split("; ") {
+        print(answer(q))
+    }
+}

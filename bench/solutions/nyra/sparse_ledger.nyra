@@ -1,0 +1,130 @@
+struct Cell {
+    name: str
+    month: int
+    value: int
+}
+
+// the position of the cell NAME M, or -1
+fn find(cells: [Cell], name: str, month: int) -> int {
+    for i in 0..cells.len() {
+        if cells[i].name == name && cells[i].month == month {
+            ret i
+        }
+    }
+    ret -1
+}
+
+// the position of the cell NAME M, created with 0 if it is not there yet
+fn cell_at(inout cells: [Cell], name: str, month: int) -> int {
+    let i = find(cells, name, month)
+    if i >= 0 {
+        ret i
+    }
+    cells.push(Cell(name: name, month: month, value: 0))
+    ret cells.len() - 1
+}
+
+fn value_of(cells: [Cell], name: str, month: int) -> int {
+    let i = find(cells, name, month)
+    ret if i >= 0 { cells[i].value } else { 0 }
+}
+
+fn pad_left(s: str, width: int) -> str {
+    if s.len() >= width { ret s }
+    ret " ".repeat(width - s.len()) + s
+}
+
+fn pad_right(s: str, width: int) -> str {
+    if s.len() >= width { ret s }
+    ret s + " ".repeat(width - s.len())
+}
+
+fn main() {
+    let commands = "add rent 1 900; add food 1 250; add food 2 -40; move rent 1 food 2 100; move food 2 rent 3 200; add fun 12 75; clear fun 12; clear fun 12; add rent 3 1300; move rent 3 rent 3 50; add zoo 5 0; add tax 4 -1300; move rent 3 tax 4 1300; add food 1 -250; add car 7 15; move car 7 car 8 15; add tax 10 -75; add food 10 12000; move food 10 rent 10 2500"
+    var cells: [Cell] = []
+    for command in commands.split("; ") {
+        let w = command.split(" ")
+        if w[0] == "add" {
+            let i = cell_at(inout cells, w[1], int(w[2]))
+            cells[i].value += int(w[3])
+            print("{w[1]} {w[2]} = {cells[i].value}")
+        } else if w[0] == "move" {
+            let n = int(w[5])
+            let a = cell_at(inout cells, w[1], int(w[2]))
+            let b = cell_at(inout cells, w[3], int(w[4]))
+            if cells[a].value < n {
+                print("move rejected")
+            } else {
+                cells[a].value -= n
+                cells[b].value += n
+                print("{w[1]} {w[2]} = {cells[a].value}, {w[3]} {w[4]} = {cells[b].value}")
+            }
+        } else if w[0] == "clear" {
+            let i = cell_at(inout cells, w[1], int(w[2]))
+            if cells[i].value == 0 {
+                print("{w[1]} {w[2]} already empty")
+            } else {
+                let old = cells[i].value
+                cells[i].value = 0
+                print("{w[1]} {w[2]} cleared (was {old})")
+            }
+        }
+    }
+
+    // the accounts and months that have a non-zero cell
+    var names: [str] = []
+    var months: [int] = []
+    for c in cells {
+        if c.value != 0 {
+            if !names.contains(c.name) { names.push(c.name) }
+            if !months.contains(c.month) { months.push(c.month) }
+        }
+    }
+    names.sort()
+    months.sort()
+
+    // the table as text, one row of cells per line
+    var rows: [[str]] = []
+    var header = ["account"]
+    for m in months { header.push(str(m)) }
+    header.push("total")
+    rows.push(header)
+    var col_sums = [0].repeat(months.len())
+    var grand = 0
+    for name in names {
+        var row = [name]
+        var row_sum = 0
+        for j in 0..months.len() {
+            let v = value_of(cells, name, months[j])
+            row.push(if v == 0 { "-" } else { str(v) })
+            row_sum += v
+            col_sums[j] += v
+        }
+        row.push(str(row_sum))
+        grand += row_sum
+        rows.push(row)
+    }
+    var last = ["total"]
+    for s in col_sums { last.push(str(s)) }
+    last.push(str(grand))
+    rows.push(last)
+
+    let ncols = header.len()
+    var widths = [0].repeat(ncols)
+    for row in rows {
+        for j in 0..ncols {
+            if row[j].len() > widths[j] { widths[j] = row[j].len() }
+        }
+    }
+    for row in rows {
+        var parts: [str] = []
+        for j in 0..ncols {
+            if j == 0 {
+                parts.push(if j == ncols - 1 { row[j] } else { pad_right(row[j], widths[j]) })
+            } else {
+                parts.push(pad_left(row[j], widths[j]))
+            }
+        }
+        print(parts.join("  "))
+    }
+}

@@ -1,0 +1,144 @@
+// a passage from `a` in direction `dir` to `b`; it also leads back from `b` the opposite way
+struct Passage {
+    a: str
+    dir: str
+    b: str
+    locked: bool
+}
+
+struct Thing {
+    name: str
+    place: str          // a room, or "player"
+}
+
+struct Exit {
+    index: int          // which passage, or -1
+    to: str
+}
+
+fn opposite(d: str) -> str {
+    if d == "north" { ret "south" }
+    if d == "south" { ret "north" }
+    if d == "east" { ret "west" }
+    if d == "west" { ret "east" }
+    if d == "down" { ret "up" }
+    ret "down"
+}
+
+fn exit_of(ps: [Passage], room: str, d: str) -> Exit {
+    for i in 0..ps.len() {
+        if ps[i].a == room && ps[i].dir == d {
+            ret Exit(index: i, to: ps[i].b)
+        }
+        if ps[i].b == room && opposite(ps[i].dir) == d {
+            ret Exit(index: i, to: ps[i].a)
+        }
+    }
+    ret Exit(index: -1, to: "")
+}
+
+fn names_at(things: [Thing], place: str) -> [str] {
+    var out: [str] = []
+    for t in things {
+        if t.place == place { out.push(t.name) }
+    }
+    out.sort()
+    ret out
+}
+
+fn thing_at(things: [Thing], name: str, place: str) -> int {
+    for i in 0..things.len() {
+        if things[i].name == name && things[i].place == place { ret i }
+    }
+    ret -1
+}
+
+fn main() {
+    var ps = [
+        Passage(a: "hall", dir: "north", b: "library", locked: false),
+        Passage(a: "hall", dir: "east", b: "kitchen", locked: false),
+        Passage(a: "kitchen", dir: "north", b: "pantry", locked: false),
+        Passage(a: "kitchen", dir: "down", b: "cellar", locked: false),
+        Passage(a: "library", dir: "east", b: "study", locked: true),
+        Passage(a: "study", dir: "south", b: "pantry", locked: false),
+    ]
+    var things = [
+        Thing(name: "lamp", place: "hall"),
+        Thing(name: "key", place: "pantry"),
+        Thing(name: "rope", place: "pantry"),
+        Thing(name: "book", place: "study"),
+        Thing(name: "coin", place: "cellar"),
+    ]
+    let dirs = ["down", "east", "north", "south", "up", "west"]
+    var room = "hall"
+    var visited: [str] = []
+    let commands = "look; go north; unlock east; go east; go south; take lamp; go west; go east; go down; take coin; take coin; go up; go north; take key; drop coin; take key; inventory; go west; look; go north; unlock west; unlock west; go west; unlock east; drop lamp; go south; go east; go down; look; unlock up; take rope; go north; take coin; go south; go west; drop coin; inventory"
+    for command in commands.split("; ") {
+        let words = command.split(" ")
+        let op = words[0]
+        if op == "go" {
+            let d = words[1]
+            let e = exit_of(ps, room, d)
+            if e.index < 0 {
+                print("no exit {d}")
+            } else if ps[e.index].locked {
+                print("the door is locked")
+            } else if e.to == "cellar" && thing_at(things, "lamp", "player") < 0 {
+                print("too dark to enter")
+            } else {
+                room = e.to
+                if room != "hall" && !visited.contains(room) { visited.push(room) }
+                print("you are in {room}")
+            }
+        } else if op == "take" {
+            let x = words[1]
+            let i = thing_at(things, x, room)
+            if i < 0 {
+                print("no {x} here")
+            } else if names_at(things, "player").len() >= 2 {
+                print("hands full")
+            } else {
+                things[i].place = "player"
+                print("taken {x}")
+            }
+        } else if op == "drop" {
+            let x = words[1]
+            let i = thing_at(things, x, "player")
+            if i < 0 {
+                print("you have no {x}")
+            } else {
+                things[i].place = room
+                print("dropped {x}")
+            }
+        } else if op == "unlock" {
+            let d = words[1]
+            let e = exit_of(ps, room, d)
+            if e.index < 0 {
+                print("no exit {d}")
+            } else if !ps[e.index].locked {
+                print("nothing to unlock")
+            } else if thing_at(things, "key", "player") < 0 {
+                print("you need the key")
+            } else {
+                ps[e.index].locked = false
+                print("unlocked")
+            }
+        } else if op == "look" {
+            let here = names_at(things, room)
+            let items = if here.len() == 0 { "none" } else { here.join(", ") }
+            var exits: [str] = []
+            for d in dirs {
+                if exit_of(ps, room, d).index >= 0 { exits.push(d) }
+            }
+            let exit_text = exits.join(", ")
+            print("{room} | items: {items} | exits: {exit_text}")
+        } else if op == "inventory" {
+            let carried = names_at(things, "player")
+            let items = if carried.len() == 0 { "nothing" } else { carried.join(", ") }
+            print("carrying: {items}")
+        }
+    }
+    var score = 10 * visited.len()
+    if thing_at(things, "coin", "hall") >= 0 { score += 25 }
+    print("score {score}")
+}

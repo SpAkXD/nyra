@@ -1,0 +1,9 @@
+{
+  "id": "aging_life",
+  "title": "Game of Life with ageing cells on a torus",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "Simulate a variant of the Game of Life on a grid of 6 rows and 8 columns whose edges wrap around: the row above the top row is the bottom row, the row below the bottom row is the top row, and likewise the column left of the first column is the last column and the column right of the last column is the first. So every cell has exactly 8 neighbours (diagonals included). Every live cell has an age. In the start grid below, `#` is a live cell of age 1 and `.` is a dead cell. In each generation all cells change at the same time, based only on the grid of the previous generation:\n- a dead cell with exactly 3 live neighbours becomes live, with age 1;\n- a live cell with 2 or 3 live neighbours stays live and its age grows by 1, except that a cell whose age would become 5 dies instead;\n- every other live cell dies, and every other dead cell stays dead.\nRun 7 generations. After each generation G print `gen G: P alive, oldest A`, where P is the number of live cells and A the largest age among them (0 if no cell is live). After the 7th generation's line, print the final grid, one row per line, showing a live cell as its age (a single digit) and a dead cell as `.`.\nThe start grid, from the top row to the bottom row: `#......#`, `..##....`, `.#..#...`, `..##....`, `........`, `#.....##`.",
+  "expected_output": "gen 1: 14 alive, oldest 2\ngen 2: 10 alive, oldest 3\ngen 3: 11 alive, oldest 4\ngen 4: 8 alive, oldest 4\ngen 5: 8 alive, oldest 3\ngen 6: 6 alive, oldest 3\ngen 7: 6 alive, oldest 4\n........\n........\n.2......\n41......\n.1.....2\n1.......\n"
+}

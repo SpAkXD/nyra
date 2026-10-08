@@ -1,0 +1,93 @@
+// "[2 -1; 1 3]" -> [[2, -1], [1, 3]]
+fn parse(text: str) -> [[int]] {
+    var m: [[int]] = []
+    for row in text.slice(1, text.len() - 1).split("; ") {
+        var r: [int] = []
+        for w in row.split(" ") { r.push(int(w)) }
+        m.push(r)
+    }
+    ret m
+}
+
+fn mul(a: [[int]], b: [[int]]) -> [[int]] {
+    var out = [[0].repeat(b[0].len())].repeat(a.len())
+    for i in 0..a.len() {
+        for j in 0..b[0].len() {
+            for k in 0..b.len() { out[i][j] += a[i][k] * b[k][j] }
+        }
+    }
+    ret out
+}
+
+fn transpose(a: [[int]]) -> [[int]] {
+    var out = [[0].repeat(a.len())].repeat(a[0].len())
+    for i in 0..a.len() {
+        for j in 0..a[0].len() { out[j][i] = a[i][j] }
+    }
+    ret out
+}
+
+// the matrix without row 0 and column `col`
+fn minor(a: [[int]], col: int) -> [[int]] {
+    var out: [[int]] = []
+    for i in 1..a.len() {
+        var r: [int] = []
+        for j in 0..a.len() {
+            if j != col { r.push(a[i][j]) }
+        }
+        out.push(r)
+    }
+    ret out
+}
+
+fn det(a: [[int]]) -> int {
+    if a.len() == 1 { ret a[0][0] }
+    var total = 0
+    var sign = 1
+    for j in 0..a.len() {
+        total += sign * a[0][j] * det(minor(a, j))
+        sign = -sign
+    }
+    ret total
+}
+
+fn show(title: str, m: [[int]]) {
+    print(title)
+    var widths = [0].repeat(m[0].len())
+    for row in m {
+        for j in 0..row.len() {
+            let w = str(row[j]).len()
+            if w > widths[j] { widths[j] = w }
+        }
+    }
+    for row in m {
+        var parts: [str] = []
+        for j in 0..row.len() {
+            let s = str(row[j])
+            parts.push(" ".repeat(widths[j] - s.len()) + s)
+        }
+        print(parts.join("  "))
+    }
+}
+
+fn main() {
+    let a = parse("[2 -1 0; 1 3 -2; 0 4 1]")
+    let b = parse("[1 2; -3 0; 5 -1]")
+    let c = parse("[2 -1; 1 3]")
+    let d = parse("[3 1 2 -1; 1 2 0 -2; 4 -1 6 -3; 5 0 2 1]")
+    let ab = mul(a, b)
+    show("A*B", ab)
+    show("(A*B)^T", transpose(ab))
+    var c6 = c
+    for i in 0..5 { c6 = mul(c6, c) }
+    show("C^6", c6)
+    var r = mul(a, a)
+    for i in 0..3 {
+        for j in 0..3 {
+            r[i][j] -= 3 * a[i][j]
+            if i == j { r[i][j] += 2 }
+        }
+    }
+    show("A*A-3A+2I", r)
+    print("det(D) = {det(d)}")
+}
