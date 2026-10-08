@@ -69,6 +69,9 @@ compiler to tell the AI exactly what to fix.
   makes them machine-readable, so an agent can loop *write, check, fix, run* without a human. Each message says
   what was expected and what was found, and `nyra explain E0201` explains any code with a wrong and a fixed
   program ([`docs/ERRORS.md`](docs/ERRORS.md)).
+- **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
+  `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
+  fix, and `--fix` applies them all: a slip costs no extra model call.
 - **Compact programs.** One-line functions, string interpolation, `if` as a value and built-in methods
   on strings and arrays keep code short. A benchmark of first-try correctness and token count against
   Python is coming in v0.4.
@@ -149,11 +152,36 @@ read links** (Gemini, ChatGPT, Claude, ...) and ask for a program:
 An agent that can run commands follows one loop: **write, check, fix, run**.
 
 ```
-nyra check prog.nyra --json   # -> {"ok":false,"errors":[{"code":"E0210","line":3,"col":13,...}]}
-# fix each error using its code, position and hint; repeat until "ok":true
-nyra explain E0210 --json     # if the hint is not enough: what the code means, why, causes, wrong and fixed program
+nyra check prog.nyra --json --fix   # repairs what has a certain fix, then -> {"ok":true,...} or the errors left
+# fix each remaining error using its code, position and hint; repeat until "ok":true
+nyra explain E0210 --json           # if the hint is not enough: what the code means, why, causes, wrong and fixed program
 nyra run prog.nyra
 ```
+
+### Self-repair with `--fix`
+
+Many mistakes have exactly one possible repair: `return x` is `ret x`, a `;` goes, `elif` is `else if`,
+`and` is `&&`, `True` is `true`, `'hello'` is `"hello"`, `xs.length()` is `xs.len()`, `string` is `str`,
+`Point { x: 1 }` is `Point(x: 1)`, `5.` is `5.0`, `print "hi"` is `print("hi")`. Such an error carries a
+**fix**, and `nyra check --fix` (or `run --fix`, `build --fix`) applies every fix, checks again (a few
+rounds, since fixing the syntax can reveal a type error with its own fix) and, if the program then
+compiles, writes it back, prints the edits to stderr as a diff and goes on. If an error without a fix
+remains, the file is left unchanged and the errors are reported as usual. A program that compiles is
+never touched.
+
+**Agents should run `--fix` (or apply the JSON `fix` themselves) before asking a model to repair a
+program**: a mistake with a fix then costs no model call and no tokens. In the JSON form the fix is a
+list of edits, each replacing the text from `line`:`col` up to (not including) `end_line`:`end_col`
+with `text` (columns count characters, from 1):
+
+```
+{"code":"E0101","message":"`return` is not part of Nyra: ...","line":2,"col":12,"hint":"Nyra spells it `ret`: ...",
+ "fix":[{"line":2,"col":5,"end_line":2,"end_col":11,"text":"ret"}]}
+```
+
+A fix is only given where it is certain. When there are alternatives there is a hint and no fix: a typo
+(`cout`: `count`?), `null`, Go's `:=` (`let` or `var`?), `number` (`int` or `float`?), `n + 0.5` with an
+`int` `n` (convert `n`, or declare it a float?).
 
 An AI that cannot run code (a plain chat) can still write correct programs by following the guide;
 you then run `nyra run prog.nyra` yourself. If your AI cannot open links, paste the contents of
@@ -245,6 +273,7 @@ every common mistake with its error code and fix.
 | `--c` | with `build`: write the generated C instead of an executable |
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
+| `--fix` | with `check`, `run` and `build`: apply the fixes that errors carry, check again, and write the file back if it then compiles |
 | `--time` | show how long each step took |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
@@ -268,6 +297,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
 | `src/rt/c/`, `src/rt/js/` | the runtimes they embed: strings, arrays, printing, runtime errors |
 | `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |
+| `src/fix.rs` | `--fix`: checks, applies and repeats the fixes that errors carry |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 
 ## Roadmap

@@ -10,7 +10,8 @@ nyra explain                  # every code with its title
 ```
 
 Errors from `nyra check file.nyra --json` carry the code (`"code":"E0201"`) and a `hint` that usually contains the
-fix already; this file explains the rule behind it. The programs under **Wrong** and **Fixed** are tested: for every
+fix already; this file explains the rule behind it. When the repair is certain (`return` for `ret`, a `;`, `'text'`, ...)
+the error also carries it as a `fix` of text edits, and `nyra check --fix` applies it. The programs under **Wrong** and **Fixed** are tested: for every
 code the compiler can emit, the wrong program produces exactly that code and the fixed program compiles and runs.
 Codes marked *planned* are described in the design for a future version; the compiler does not emit them yet and the
 design may still change.
