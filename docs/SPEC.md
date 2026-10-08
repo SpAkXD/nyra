@@ -225,6 +225,12 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
 
 ## Known differences between backends
-- `int` overflow wraps natively; with `--js`, ints are exact only up to 2^53 (9007199254740991).
-- Deep recursion (thousands of calls with `--js`, more natively) crashes without a Nyra error:
-  JS throws `RangeError`; a native program dies and may lose output it has not written yet.
+The targets are native (C), `--js`, `--py`, `--ts`, `--rs` and `--go`; everything else, runtime errors
+included, is the same on each.
+- `int` overflow wraps natively and with `--py`, `--rs` and `--go`; with `--js` and `--ts`, ints are exact
+  only up to 2^53 (9007199254740991).
+- Deep recursion crashes without a Nyra error: `--js`/`--ts` throw `RangeError` after thousands of
+  calls, `--py` raises `RecursionError` after 100,000, a native or `--rs` program dies when its stack
+  ends and may lose output it has not written yet; `--go` grows its stack to 1 GB.
+- When the system itself runs out of memory (not a `repeat` that is too long, which is E0249
+  everywhere), only native and `--js`/`--ts` report E0249; `--py` does too, without a position.

@@ -78,12 +78,12 @@ compiler to tell the AI exactly what to fix.
 - **Values, not references.** Arrays, strings and structs are copied on assignment (cheaply, copy on
   write), so nothing changes behind your back; a function changes a caller's variable only through an
   `inout` parameter that the call names too.
-- **Same output everywhere.** Every example runs on both backends in CI and must match byte for byte.
+- **Same output everywhere.** Every example runs on every backend in CI and must match byte for byte.
 
 ## Features
 
-- **Two backends from one source:** native code through C99 (`gcc`, `clang` or `tcc`) and JavaScript
-  (Node.js or the browser).
+- **Six targets from one source:** native code through C99 (`gcc`, `clang` or `tcc`), JavaScript
+  (Node.js or the browser), and readable [Python, TypeScript, Rust and Go](#targets).
 - **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays and structs, with local inference
   and no implicit conversions.
 - **Real data (v0.3):** structs, arrays, strings and chars with methods (`split`, `replace`, `slice`,
@@ -295,6 +295,38 @@ fn main() {                                    // every program starts here
 The complete reference is [`docs/SPEC.md`](docs/SPEC.md); [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) adds
 every common mistake with its error code and fix.
 
+## Targets
+
+One Nyra file compiles to six targets. All of them come from the same intermediate representation, so
+the output, the order things happen in and the runtime errors (code, message, position, exit code 101)
+are the same on each; the tests run every example on every target that is installed.
+
+| Target | `--target` | `nyra build` writes | `nyra run` needs |
+|---|---|---|---|
+| native | `native` (default) | an executable | a C compiler (`gcc`, `clang`, `cc`, `tcc`; `NYRA_CC`) |
+| C | `c` | `file.c` | (same as native) |
+| JavaScript | `js` (`--js`) | `file.js` | Node.js |
+| Python | `py` (`--py`) | `file.py` | Python 3.8+ (`python3` or `python`; `NYRA_PYTHON`) |
+| TypeScript | `ts` (`--ts`) | `file.ts` | Node.js 22.6+ (it strips the types) |
+| Rust | `rs` (`--rs`) | `file.rs` | `rustc` (`NYRA_RUSTC`) |
+| Go | `go` (`--go`) | `file.go` | Go 1.23+ (`go`; `NYRA_GO`) |
+
+```sh
+nyra build --target py scores.nyra        # writes scores.py
+nyra build --target rs scores.nyra -o -   # prints the Rust code
+nyra run --go scores.nyra                 # builds with `go build` (cached) and runs it
+```
+
+The generated code reads like code a person would write in that language: typed signatures, variables
+declared where they are first needed, counted loops as `for` loops, structs as classes or structs, and a
+small runtime at the end of the file for what the language does differently (64-bit wrapping ints in
+Python, character-based string indexes, JavaScript's number format, checked indexes). Values keep Nyra's
+semantics: arrays and structs are copied on write (a shared mark in Python, TypeScript and Go,
+`Rc::make_mut` in Rust), and an `inout` parameter becomes a returned value in Python
+(`x, y = swap(x, y)`), a `{ v }` box in TypeScript, `&mut T` in Rust and a pointer in Go. Build the Rust
+file with overflow checks off (`rustc -O -C overflow-checks=off`, as `nyra run` does): Nyra ints wrap.
+See [known differences](docs/SPEC.md#known-differences-between-backends) for the few edge cases.
+
 ## CLI
 
 | Command | What it does |
@@ -307,7 +339,8 @@ every common mistake with its error code and fix.
 
 | Option | Meaning |
 |---|---|
-| `--js` | use the JavaScript backend instead of native |
+| `--target <t>` | the [target](#targets): `native` (default), `c`, `js`, `py`, `ts`, `rs` or `go` |
+| `--js` `--py` `--ts` `--rs` `--go` | short for `--target js` and so on |
 | `--c` | with `build`: write the generated C instead of an executable |
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
@@ -316,14 +349,15 @@ every common mistake with its error code and fix.
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
 an index out of bounds, which prints `runtime error[E0240]` with the file and position, identically on
-both backends). `NYRA_CC` selects the C compiler.
+every target). `NYRA_CC`, `NYRA_PYTHON`, `NYRA_RUSTC` and `NYRA_GO` select the tools.
 
 ## How it works
 
 ```
                                                          ┌─► C99 ──► gcc / clang ──► native executable
-source.nyra ─► lexer ─► parser ─► type checker ─► IR ────┤
-                                                         └─► JavaScript ──► Node.js / browser
+                                                         ├─► JavaScript ──► Node.js / browser
+source.nyra ─► lexer ─► parser ─► type checker ─► IR ────┼─► Python, TypeScript
+                                                         └─► Rust, Go ──► rustc / go build
 ```
 
 | File | Role |
@@ -332,8 +366,8 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
 | `src/check.rs`, `src/check_v03.rs` | type checking, collects every error in one pass |
 | `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
-| `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
-| `src/rt/c/`, `src/rt/js/` | the runtimes they embed: strings, arrays, printing, runtime errors |
+| `src/codegen/` | the backends: `c.rs`, `js.rs`, `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
+| `src/rt/*/` | the runtimes they embed: strings, arrays, printing, runtime errors |
 | `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |
 | `src/fix.rs` | `--fix`: checks, applies and repeats the fixes that errors carry |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
