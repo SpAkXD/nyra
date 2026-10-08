@@ -1,0 +1,9 @@
+{
+  "id": "look_and_say",
+  "title": "Look-and-say strings",
+  "category": "speed",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "The look-and-say step reads a string of digits from left to right in groups of equal neighbouring digits and writes, for each group, its length followed by its digit. For example \"2333111\" is one 2, three 3s and three 1s, so the next string is \"123331\"; \"11\" becomes \"21\", and \"1211\" becomes \"111221\".\n\nStart with the string \"2333111\" and apply the step 40 times. After step 5, 10, 15, 20, 25, 30, 35 and 40, print the step number and the length of the string at that point, separated by a single space. After the last step, print how many digits 1, 2 and 3 the final string contains, as three whole numbers separated by single spaces.\n\nThe running time of the program is measured too, so make it reasonably fast.",
+  "expected_output": "5 20\n10 64\n15 258\n20 940\n25 3676\n30 13798\n35 52224\n40 196294\n97255 62820 36219\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "matrix_mult",
+  "title": "Integer matrix product",
+  "category": "speed",
+  "difficulty": "medium",
+  "min_version": "0.3",
+  "prompt": "A and B are 120 by 120 matrices whose rows and columns are numbered from 0 to 119. The entry in row i and column j of A is the remainder of 31i + 17j + 7 divided by 100, and that of B is the remainder of 13i + 29j + 3 divided by 100 (so A has 7 and B has 3 in row 0, column 0).\n\nCompute the product C = AB: the entry in row i and column j of C is the sum, for k from 0 to 119, of A's entry in row i and column k times B's entry in row k and column j.\n\nPrint four lines, each one whole number: the sum of the entries of C on its diagonal (row i, column i); the sum of all entries of C (it does not fit in 32 bits); the entry of C in row 0 and column 119; and the entry of C in row 119 and column 0.\n\nThe running time of the program is measured too, so make it reasonably fast.",
+  "expected_output": "35185600\n4231664000\n304340\n286040\n"
+}
