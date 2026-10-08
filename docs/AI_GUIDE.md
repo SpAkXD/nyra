@@ -10,14 +10,15 @@ If a feature is not described, it does not exist yet (section 4).
 ## 1. Workflow
 
 ```
-nyra check prog.nyra --json    # compile only; prints {"ok":true,"errors":[]} when clean
+nyra check prog.nyra --json    # compile only (and run the `ex` examples); {"ok":true,"errors":[]} when clean
+nyra test prog.nyra --json     # run the `ex` examples: {"ok":..,"examples":3,"passed":2,"failed":1,"errors":[..]}
 nyra check prog.nyra --json --fix   # the same, after repairing every mistake that has a certain fix
 nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
 nyra run prog.nyra --js        # or run on Node.js
 nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
 ```
 
-1. Write the program to `prog.nyra`.
+1. Write the program to `prog.nyra`, with 1-2 examples after every non-trivial function (below).
 2. Run `nyra check prog.nyra --json`. If `"ok"` is `false`, fix **every** entry of `errors`, then check
    again. Each error has a stable `code`, a `message`, `line`, `col` and a `hint`:
    ```json
@@ -48,11 +49,54 @@ Each edit replaces the text from `line`:`col` up to, not including, `end_line`:`
 with several possible repairs has a `hint` and no `fix` (a typo, `null`, `:=`, `n + 0.5` with an `int` n):
 those are yours to decide.
 
+**Check your logic with examples, before running anything.** After a function, write what it should
+give for one or two inputs, worked out by hand:
+
+```rust
+fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
+
+fn largest(xs: [int]) -> int {
+    var best = xs[0]
+    for x in xs {
+        if x > best { best = x }
+    }
+    ret best
+}
+ex largest([3, 9, 4]) == 9, largest([1, 2, 7]) == 7, largest([-5]) == -5
+
+fn main() {
+    print(largest([sq(2), 3]))
+}
+```
+
+`ex` takes `bool` conditions separated by commas, at the end of a one-line function or on lines after
+a function's closing `}`. They may use only literals and calls (no variables), they are never compiled
+into the program, and `nyra check` runs every one of them while compiling: a wrong function becomes a
+compile error with the value it really gave, at no cost when the program runs. A `largest` that
+skips the last element (`for i in 1..xs.len() - 1`) gets:
+
+```json
+{"code":"E0250","message":"example `largest([1, 2, 7]) == 7` is false: `largest([1, 2, 7])` is 2, not 7","line":10,"col":29,"hint":"if the example is right, `largest` is wrong for xs = [1, 2, 7]: trace `largest` with these values and fix it; ...","actual":"2","expected":"7"}
+```
+
+- Write 1-2 examples for every function with a loop, a branch or arithmetic you could get wrong;
+  skip them for one-line wrappers. Include one edge case: 0, an empty array or string, a negative
+  number, the last element, two equal values.
+- Work the expected value out yourself. Never copy it from the program's output: the example would
+  then confirm the bug.
+- When an example fails (E0250), assume the function is wrong and trace it with the arguments the
+  hint names. Change the example only if you are sure it expects the wrong value.
+- E0251 means the example hits a runtime error inside the function (an empty array, a division by
+  0): handle that input in the function, or give the example an input the function is meant to take.
+  E0253 means it did not finish (a loop that never ends); keep examples small.
+- Compare floats with a range, not `==`: `ex mean([1.0, 2.0]) > 1.49, mean([1.0, 2.0]) < 1.51`.
+
 Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
 `101` runtime error (see the bottom of section 5). `nyra run prog.nyra --json` reports runtime errors as JSON too.
 
 **If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
-same loop needs no files: `nyra_check {code}` returns the JSON above, `nyra_run {code, backend}` returns
+same loop needs no files: `nyra_check {code}` returns the JSON above (failed examples included),
+`nyra_test {code}` the result of every example, `nyra_run {code, backend}` returns
 `stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
 the language spec. `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
 symbol, as described next.
@@ -128,6 +172,7 @@ fn gcd(a: int, b: int) -> int {               // block body: return with `ret`
     if b == 0 { ret a }
     ret gcd(b, a % b)
 }
+ex gcd(48, 18) == 6, gcd(7, 0) == 7           // examples: checked while compiling, never run
 
 fn total(items: [Item]) -> int {
     var sum = 0
@@ -223,6 +268,7 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Braces in strings | `print("{")`, `print("{}")` (E0006) | `print("{{")`, `print("{{}}")` |
 | No quotes inside `{ }` | `print("{f("a")}")` (E0006) | `let t = f("a")`, then `print("{t}")` |
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
+| Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
 | Literals | `.5`, `5.`, `1e5`, `1_000`, `0xFF` (E0001, E0101) | `0.5`, `5.0`, `100000.0`, `1000`, `255` |
 | Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `c ? a : b` (E0101, E0210, E0001) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `if c { a } else { b }` |
 
@@ -296,7 +342,7 @@ that works (section 6 has the usual replacements).
   arguments, methods on structs (`impl`, `self`), imports or modules. One file is one program.
 - **Library**: no `abs`, `min`, `max`, `pow`, `sqrt`, `floor`... Write them yourself (section 6).
 - **Errors**: no exceptions, `null`, `assert`, `panic` or `exit`. A failing operation stops the program
-  with a runtime error (section 5).
+  with a runtime error (section 5). To check a function, write examples: `ex f(2) == 4` (section 1).
 - **Output**: `print` always ends the line. There is no `printf` and no format specifier (`{x:.2f}` is
   an error): a float always prints in its shortest form, so `12.5` is never shown as `12.50`. Pad text
   yourself with `" ".repeat(n)` (section 6).
@@ -349,6 +395,10 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0237 | wrong `inout` | `inout` at the call exactly when the parameter is `inout`; two `inout` arguments must be different variables |
 | E0238 | wrong `free`, `keep` or `arena` | only local `str`, array or struct variables; outer strings and arrays are read-only inside `arena` |
 | E0239 | use after `free` | give the `var` a new value first, or move `free` after the last use |
+| E0250 | example is false | the message has both values: fix the function for the arguments in the hint (or the example, if it expects the wrong value) |
+| E0251 | example stops with a runtime error | the function fails for that input: handle it (an empty array, 0), or use an input it accepts |
+| E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
+| E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 
@@ -628,4 +678,6 @@ More programs with expected output live in
    on all paths (a one-line `=` function needs none).
 8. Indexes stay in `0..len`, and literal braces in strings are doubled (`{{` `}}`); nothing inside
    `{ }` contains a `"`.
-9. You stated the output the program should print, and how to run it: `nyra run prog.nyra`.
+9. Every function with a loop, a branch or tricky arithmetic has 1-2 `ex` examples with values you
+   worked out by hand, one of them an edge case (0, empty, negative, the last element).
+10. You stated the output the program should print, and how to run it: `nyra run prog.nyra`.

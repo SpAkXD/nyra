@@ -238,6 +238,9 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
     for f in &mut prog.funcs {
         c.func(f);
     }
+    for ex in &mut prog.examples {
+        c.example(&mut ex.expr);
+    }
     c.errs
 }
 
@@ -768,6 +771,28 @@ impl Checker {
                 )
                 .hint(hint)
                 .fix_opt(fix),
+            );
+        }
+    }
+
+    /// An `ex` condition: it sees no variables, and it must be a `bool` (it is run by `examples.rs`).
+    fn example(&mut self, e: &mut Expr) {
+        self.ret = Type::Void;
+        self.fname = String::new();
+        self.decls.clear();
+        self.freed.clear();
+        self.scopes = vec![HashMap::new()];
+        let t = self.expr_with(e, Some(Type::Bool));
+        if t != Type::Bool && !t.is_unknown() {
+            let what = show(e).map_or("this example".to_string(), |s| format!("`{s}`"));
+            let hint = match (t, show(e)) {
+                (Type::Void, _) => "an example checks a value: call a function that returns one and compare the result, e.g. `ex sq(3) == 9`".to_string(),
+                (_, Some(s)) => format!("compare it with the value you expect: `ex {s} == ...`"),
+                _ => "write a condition that must be true, e.g. `ex sq(3) == 9`".to_string(),
+            };
+            let got = if t == Type::Void { "returns nothing".to_string() } else { format!("is {}", article(t)) };
+            self.errs.push(
+                Diag::new("E0252", format!("an example must be a `bool` condition, but {what} {got}"), start(e)).hint(hint),
             );
         }
     }

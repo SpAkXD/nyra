@@ -6,7 +6,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
-- A program is `fn` and `struct` definitions in any order plus either `fn main()` or statements at
+- A program is `fn` and `struct` definitions and `ex` examples in any order plus either `fn main()` or statements at
   the top level (a script: they run in order, like the body of `main`). No global variables:
   functions cannot see the script's variables.
 - Every function signature is fully typed. Local variable types are inferred.
@@ -41,6 +41,23 @@ fn show(n: int) {                     // no `->`: returns nothing
 `fn main()` has no parameters and no return type. A function with a return type must `ret` on
 every path. Functions may call each other in any order, and recurse. Parameters cannot be changed:
 copy one into a `var`, or declare it `inout` (see Values).
+
+## Examples
+```nyra
+fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
+fn dist(a: int, b: int) -> int {
+    if a > b { ret a - b }
+    ret b - a
+}
+ex dist(7, 2) == 5, dist(2, 7) == 5
+```
+`ex` lists `bool` conditions, separated by commas: at the end of a one-line function, or on lines of
+their own outside functions (a line may break after a comma). They see no variables, only literals and
+calls, and are never compiled into the program: `nyra check`, `run` and `build` evaluate each one while
+compiling. A false one is error E0250 with both values (`dist(2, 7)` is -5, not 5), one that stops
+with a runtime error is E0251, one that is not a `bool` E0252, and one that runs more than 1,000,000
+steps or 10,000 nested calls E0253. `nyra test file.nyra` runs them and counts what passed. `ex` is a
+keyword only at the start of an example, so it can still name a variable.
 
 ## Variables
 ```nyra
@@ -201,7 +218,7 @@ like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.300000000
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 
 ## Errors
-`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0239), a `message`,
+`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0239, E0250–E0253), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
 and a fixed program; [ERRORS.md](ERRORS.md) has them all.
 

@@ -341,11 +341,22 @@ impl Parser {
     fn program(&mut self) -> Program {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
+        let mut examples = Vec::new();
         let mut top: Vec<Stmt> = Vec::new();
         loop {
             self.skip_newlines();
             match self.peek() {
                 Tok::Eof => break,
+                // `ex f(3) == 9`: examples, usually of the function right before them
+                _ if self.example_ahead() => {
+                    match self.examples() {
+                        Ok(list) => examples.extend(list),
+                        Err(d) => {
+                            self.errs.push(d);
+                            self.sync_stmt();
+                        }
+                    }
+                }
                 Tok::Fn => match self.func() {
                     Ok(f) => funcs.push(f),
                     Err(d) => {
@@ -400,7 +411,38 @@ impl Parser {
                 funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
             }
         }
-        Program { funcs, structs }
+        Program { funcs, structs, examples }
+    }
+
+    /// True at `ex` followed by the start of a condition on the same line: a line of examples.
+    /// (`ex` stays an ordinary name: `ex = 1`, `ex(2)` and `ex.len()` are not examples.)
+    fn example_ahead(&self) -> bool {
+        let Tok::Ident(w) = self.peek() else { return false };
+        let next = &self.toks[(self.pos + 1).min(self.toks.len() - 1)];
+        w == "ex"
+            && next.span.line == self.span().line
+            && matches!(
+                next.tok,
+                Tok::Ident(_) | Tok::Int(_) | Tok::Float(_) | Tok::Str(_) | Tok::Interp(_) | Tok::Char(_) | Tok::True
+                    | Tok::False | Tok::Not | Tok::Minus
+            )
+    }
+
+    /// `ex cond, cond, ...`: one or more `bool` conditions; a line may break after a comma.
+    fn examples(&mut self) -> PResult<Vec<Example>> {
+        self.bump();
+        let mut list = Vec::new();
+        loop {
+            let expr = self.expr()?;
+            list.push(Example { expr });
+            if !self.at(&Tok::Comma) {
+                break;
+            }
+            self.bump();
+            self.skip_newlines();
+        }
+        self.end_stmt_after(None, Some("separate the examples with commas: `ex sq(3) == 9, sq(-2) == 4`"))?;
+        Ok(list)
     }
 
     /// True if the token here starts a statement that may stand at the top level of a script.
@@ -552,10 +594,13 @@ impl Parser {
             // one-line function: the expression is the body (and the return value)
             self.bump();
             let e = self.expr().map_err(|d| self.one_line_fn_error(d))?;
-            self.end_stmt_after(
-                None,
-                Some("a one-line function is a single expression: use a block `{ ... }` for several statements"),
-            )?;
+            // `fn sq(x: int) -> int = x * x  ex sq(3) == 9`: the examples are read next
+            if !self.example_ahead() {
+                self.end_stmt_after(
+                    None,
+                    Some("a one-line function is a single expression: use a block `{ ... }` for several statements"),
+                )?;
+            }
             let espan = e.span;
             let kind = if ret == Type::Void { StmtKind::Expr(e) } else { StmtKind::Ret(Some(e)) };
             vec![Stmt { kind, span: espan }]
@@ -826,6 +871,9 @@ impl Parser {
             && self.toks[self.pos - 3].tok == Tok::LParen
             && matches!(&self.toks[self.pos - 2].tok, Tok::Ident(w) if hints::nyra_type(w).is_some());
         let hint = match (t, first) {
+            (_, Some("ex")) => {
+                "examples go outside functions: put `ex ...` on its own line after the function's closing `}`, or at the end of a one-line function".to_string()
+            }
             _ if after_cast => {
                 let Tok::Ident(w) = &self.toks[self.pos - 2].tok else { unreachable!() };
                 let ty = hints::nyra_type(w).unwrap_or("float");
