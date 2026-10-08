@@ -87,7 +87,8 @@ fn rune_lit(c: u32) -> String {
         Some('\n') => "'\\n'".into(),
         Some('\r') => "'\\r'".into(),
         Some('\t') => "'\\t'".into(),
-        Some(ch) if c >= 0x20 && c != 0x7f => format!("'{ch}'"),
+        // (a quote or parenthesis is spelled out, so `bare` never mistakes it for a delimiter)
+        Some(ch) if c >= 0x20 && c != 0x7f && !matches!(ch, '"' | '(' | ')') => format!("'{ch}'"),
         _ => format!("'\\U{c:08x}'"),
     }
 }

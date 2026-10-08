@@ -78,7 +78,9 @@ fn char_lit(c: u32) -> String {
         Some('\n') => "'\\n'".into(),
         Some('\r') => "'\\r'".into(),
         Some('\t') => "'\\t'".into(),
-        Some(ch) if c >= 0x20 && c != 0x7f => format!("'{ch}'"),
+        Some('"') => "'\\\"'".into(),
+        // (a parenthesis is spelled out, so `bare` never mistakes it for one around an expression)
+        Some(ch) if c >= 0x20 && c != 0x7f && ch != '(' && ch != ')' => format!("'{ch}'"),
         _ => format!("'\\u{{{c:x}}}'"),
     }
 }
@@ -585,7 +587,16 @@ impl<'a> Gen<'a> {
             RtOp::Format => {
                 let (fmt, values) = self.format_parts(args);
                 if values.is_empty() {
-                    format!("ny_str(\"{fmt}\")")
+                    // only text: the string itself (not a `format!` string with doubled braces)
+                    let text: String = args
+                        .iter()
+                        .map(|p| match p {
+                            Expr::Str(id) => self.m.str(*id).to_string(),
+                            Expr::Int(n) => n.to_string(),
+                            _ => String::new(),
+                        })
+                        .collect();
+                    format!("ny_str({})", lit(&text))
                 } else {
                     format!("Rc::new(format!(\"{fmt}\", {}))", values.join(", "))
                 }
@@ -758,6 +769,10 @@ impl<'a> Gen<'a> {
                     _ => format!("({a} {} {b})", op.symbol()),
                 }
             }
+            // a managed value is cloned in its branch (an `if` would move it out of its variable)
+            Expr::Select(c, a, b) if !self.copy_type(a.ty(self.f)) => {
+                format!("(if {} {{ {}.clone() }} else {{ {}.clone() }})", self.arg(c), self.expr(a), self.expr(b))
+            }
             Expr::Select(c, a, b) => format!("(if {} {{ {} }} else {{ {} }})", self.arg(c), self.arg(a), self.arg(b)),
             Expr::IntToFloat(x) => format!("({} as f64)", self.expr(x)),
             Expr::Field(x, k, _) => {
@@ -781,8 +796,8 @@ impl<'a> Gen<'a> {
                     PureFn::CharIsLower => format!("{}.is_ascii_lowercase()", self.expr(&args[0])),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
                     PureFn::ArrLen => format!("({}.len() as i64)", self.expr(&args[0])),
-                    PureFn::ArrContains => format!("{}.contains(&{})", self.expr(&args[0]), self.owned(&args[1])),
-                    PureFn::ArrIndexOf => format!("ny_index_of({}, &{})", self.borrow(&args[0]), self.owned(&args[1])),
+                    PureFn::ArrContains => format!("{}.contains(&{})", self.expr(&args[0]), self.expr(&args[1])),
+                    PureFn::ArrIndexOf => format!("ny_index_of({}, &{})", self.borrow(&args[0]), self.expr(&args[1])),
                 }
             }
         }
