@@ -8,6 +8,7 @@ mod hints;
 mod ir;
 mod json;
 mod lexer;
+mod mcp;
 mod parser;
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ usage:
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors
   nyra explain [CODE]       explain an error code (without CODE: list all codes)
+  nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -121,6 +123,9 @@ fn main() -> ExitCode {
     // `nyra explain [CODE] [--json]` needs no source file
     if std::env::args().nth(1).as_deref() == Some("explain") {
         return explain::run(std::env::args().skip(2).collect());
+    }
+    if std::env::args().nth(1).as_deref() == Some("mcp") {
+        return mcp::run(std::env::args().skip(2).collect());
     }
     let opts = match parse_args() {
         Ok(o) => o,
