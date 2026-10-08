@@ -1,0 +1,7 @@
+// expect: E0243 at 4:25
+fn main() {
+    let k = 0
+    for i in 0..10 step k {
+        print(i)
+    }
+}

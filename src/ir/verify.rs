@@ -299,6 +299,7 @@ impl Verifier<'_> {
                             RtOp::ArrRemove => (vec![Ty::Int], Some(elem)),
                             RtOp::ArrSort | RtOp::ArrReverse => (vec![], None),
                             RtOp::ArrAppend => (vec![t], None),
+                            RtOp::ArrSwap => (vec![Ty::Int, Ty::Int], None),
                             _ => return Err(format!("{} does not change a place", op.name())),
                         };
                         if *op == RtOp::ArrSort && !matches!(elem, Ty::Int | Ty::Float | Ty::Str | Ty::Char) {

@@ -471,6 +471,11 @@ impl<'a> Gen<'a> {
                         }
                     }
                     RtOp::ArrReverse => format!("Rc::make_mut({}).reverse()", self.place(place, &[root]).mut_ref()),
+                    RtOp::ArrSwap => {
+                        let i = self.operand(&args[0], root, Use::Value);
+                        let j = self.operand(&args[1], root, Use::Value);
+                        format!("ny_swap({}, {i}, {j}, {at})", self.place(place, &[root]).mut_ref())
+                    }
                     RtOp::ArrAppend => {
                         let ys = self.operand(&args[0], root, Use::Borrow);
                         format!("ny_append({}, {ys})", self.place(place, &[root]).mut_ref())
@@ -604,6 +609,9 @@ impl<'a> Gen<'a> {
             RtOp::StrChars => format!("Rc::new({}.chars().collect())", self.str_ref(&args[0])),
             RtOp::StrCodes => format!("Rc::new({}.chars().map(|c| c as i64).collect())", self.str_ref(&args[0])),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", self.str_ref(&args[0]), self.str_ref(&args[1])),
+            RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", self.str_ref(&args[0]), a[1], a[2]),
+            RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::ArrNew => {
                 let items: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
                 format!("Rc::new(vec![{}])", items.join(", "))

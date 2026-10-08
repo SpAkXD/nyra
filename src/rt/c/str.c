@@ -310,6 +310,19 @@ static nyrt_str *nyrt_str_repeat(const nyrt_str *s, int64_t n, int line, int col
     r->nchars = s->nchars * n;
     return r;
 }
+// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters.
+static nyrt_str *nyrt_str_pad(const nyrt_str *s, int64_t n, nyrt_char c, bool left) {
+    NYRT_LIVE(s);
+    int64_t missing = n - s->nchars;
+    if (missing > NYRT_MAX_STR) nyrt_oom(0, 0);
+    char t[4];
+    int k = nyrt_utf8_encode(c, t);
+    nyrt_buf b = nyrt_buf_new();
+    if (!left) nyrt_buf_str(&b, s);
+    for (int64_t i = 0; i < missing; i++) nyrt_buf_add(&b, t, k);
+    if (left) nyrt_buf_str(&b, s);
+    return nyrt_buf_done(&b);
+}
 // str(c): never allocates for ASCII (immortal one-character strings).
 static nyrt_str *nyrt_char_str(nyrt_char c) {
     static nyrt_str ascii[128];

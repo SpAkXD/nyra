@@ -7,10 +7,12 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 use crate::check_v03::{self as v3, StructInfo};
-use crate::diag::{suggest, Diag};
+use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
+/// Builtins a program may also define itself (its own definition wins).
+pub const MATH: &[&str] = &["abs", "min", "max"];
 
 struct Sig {
     params: Vec<Type>,
@@ -113,9 +115,12 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
             if let Some(first) = fixed.get(..1) {
                 fixed = first.to_uppercase() + &fixed[1..];
             }
+            // the uses of the old name are fixed after it (they then differ from the struct only in case)
+            let free = !prog.structs.iter().any(|o| o.name == fixed) && !prog.funcs.iter().any(|f| f.name == fixed);
             c.errs.push(
                 Diag::new("E0221", format!("struct name `{}` must start with an uppercase letter", sd.name), sd.span)
-                    .hint(format!("write `struct {fixed}`: type names start uppercase, variables and functions lowercase")),
+                    .hint(format!("write `struct {fixed}`: type names start uppercase, variables and functions lowercase"))
+                    .fix_opt(free.then(|| Edit::replace(sd.span, &sd.name, fixed.clone()))),
             );
         }
         if let Some(first) = c.structs.get(&sd.name) {
@@ -375,6 +380,36 @@ fn number_text(e: &Expr, want: Type) -> Option<String> {
     }
 }
 
+/// Where an expression starts in the source: the span of `a + b` is the `+`, of `xs.len()` the `len`.
+/// (A parenthesized expression starts before this; edits that insert here check the text before.)
+fn start(e: &Expr) -> Span {
+    match &e.kind {
+        ExprKind::Binary(_, l, _) => start(l),
+        ExprKind::Method(r, ..) | ExprKind::Field(r, _) | ExprKind::Index(r, _) => start(r),
+        _ => e.span,
+    }
+}
+
+/// `2` written as `2.0`, where a `float` is needed: the only change that keeps the number.
+fn float_literal(e: &Expr) -> Option<Edit> {
+    match e.kind {
+        ExprKind::Int(n) => Some(Edit::replace(e.span, &n.to_string(), format!("{n}.0"))),
+        _ => None,
+    }
+}
+
+/// `"a"` written as `'a'`, where a `char` is needed.
+fn char_literal(e: &Expr) -> Option<Edit> {
+    let ExprKind::Str(text) = &e.kind else { return None };
+    let mut cs = text.chars();
+    match (cs.next(), cs.next()) {
+        (Some(c), None) if !c.is_control() && !matches!(c, '\'' | '\\' | '"' | '{' | '}') => {
+            Some(Edit::replace(e.span, &format!("\"{c}\""), format!("'{c}'")))
+        }
+        _ => None,
+    }
+}
+
 /// `show` of the callee if the expression is a call, else a generic phrase.
 fn call_text(e: &Expr) -> String {
     match (&e.kind, show(e)) {
@@ -395,7 +430,9 @@ impl Checker {
         // the name of a function: the call parentheses are probably missing
         if let Some(sig) = self.fns.get(name) {
             let args = if sig.params.is_empty() { String::new() } else { sig.names.join(", ") };
-            return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}({args})`"));
+            // without parameters there is only one call to write
+            let fix = (sig.params.is_empty() && !assigning).then(|| Edit::replace(span, name, format!("{name}()")));
+            return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}({args})`")).fix_opt(fix);
         }
         if BUILTINS.contains(&name) {
             return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}(x)`"));
@@ -413,10 +450,16 @@ impl Checker {
             });
         }
         if let Some(h) = hints::undefined_variable(name) {
-            return d.hint(h);
+            let to = match name {
+                "return" => Some("ret"),
+                "True" => Some("true"),
+                "False" => Some("false"),
+                _ => None,
+            };
+            return d.hint(h).fix_opt(to.map(|t| Edit::replace(span, name, t)));
         }
-        if let Some(h) = suggest(name, self.scopes.iter().flat_map(|s| s.keys().map(String::as_str))) {
-            return d.hint(h);
+        if let Some((h, fix)) = suggest_fix(name, self.scopes.iter().flat_map(|s| s.keys().map(String::as_str))) {
+            return d.hint(h).fix_opt(fix.map(|f| Edit::replace(span, name, f)));
         }
         d.hint(if assigning {
             format!("declare it first with `var {name} = ...`: `{name} = ...` can only change a variable that exists")
@@ -453,11 +496,6 @@ impl Checker {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a function (line {})", sig.span.line), span)
                     .hint(format!("a variable cannot share a function's name: rename the variable, e.g. `{name}_value`")),
-            );
-        } else if BUILTINS.contains(&name) {
-            self.errs.push(
-                Diag::new("E0206", format!("`{name}` is already the name of a builtin function"), span)
-                    .hint(format!("a variable cannot share a builtin's name: rename the variable, e.g. `{name}_value`")),
             );
         } else if let Some(sd) = self.structs.get(name) {
             self.errs.push(
@@ -529,13 +567,19 @@ impl Checker {
             return;
         }
         let hint = self.mismatch_hint(want, got, e, &ctx);
+        let fix = match (want, got) {
+            (Type::Float, Type::Int) => float_literal(e),
+            (Type::Char, Type::Str) => char_literal(e),
+            _ => None,
+        };
         self.errs.push(
             Diag::new(
                 "E0203",
                 format!("type mismatch in {place}: expected `{}`, found `{}`", want.name(), got.name()),
                 e.span,
             )
-            .hint(hint),
+            .hint(hint)
+            .fix_opt(fix),
         );
     }
 
@@ -693,6 +737,11 @@ impl Checker {
         self.block(&mut f.body);
         if f.ret != Type::Void && !returns(&f.body) {
             let value = sample(f.ret);
+            // the last line computes the value: it only lacks the `ret`
+            let fix = match f.body.last() {
+                Some(Stmt { kind: StmtKind::Expr(e), span }) if e.ty == f.ret => Some(Edit::insert(*span, "ret ")),
+                _ => None,
+            };
             let hint = match f.body.last().map(|s| &s.kind) {
                 Some(StmtKind::Expr(e)) if e.ty == f.ret => match show(e) {
                     Some(s) => format!(
@@ -717,7 +766,8 @@ impl Checker {
                     format!("function `{}` is declared `-> {}` but not every path ends with `ret`", f.name, f.ret.name()),
                     f.span,
                 )
-                .hint(hint),
+                .hint(hint)
+                .fix_opt(fix),
             );
         }
     }
@@ -800,11 +850,15 @@ impl Checker {
                 self.cond(t, cond, "`while`");
                 self.loop_body(body, None);
             }
-            StmtKind::For { var, start, end, body } => {
+            StmtKind::For { var, start, end, step, body } => {
                 let a = self.expr(start);
                 self.range_bound(a, start, "start");
                 let b = self.expr(end);
                 self.range_bound(b, end, "end");
+                if let Some(k) = step {
+                    let t = self.expr(k);
+                    self.range_bound(t, k, "step");
+                }
                 self.loop_body(body, Some((var, Type::Int, span)));
             }
             StmtKind::ForEach { var, iter, body } => {
@@ -917,7 +971,9 @@ impl Checker {
                                 format!("declare it with `var` to make it changeable: `var {name} = ...` on line {}", dspan.line),
                             ),
                         };
-                        self.errs.push(Diag::new("E0205", msg, span).hint(hint));
+                        // it changes, so it was meant to be a `var`
+                        let fix = (decl == Decl::Let).then(|| Edit::replace(dspan, "let", "var"));
+                        self.errs.push(Diag::new("E0205", msg, span).hint(hint).fix_opt(fix));
                     } else if self.outer_arena_var(arena, t) {
                         self.errs.push(self.arena_error(name, span));
                     }
@@ -1003,7 +1059,8 @@ impl Checker {
             }
             Decl::Let => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` was declared with `let` on line {}", dspan.line), span)
-                    .hint(format!("declare it with `var` to make it changeable: `var {root} = ...` on line {}", dspan.line)),
+                    .hint(format!("declare it with `var` to make it changeable: `var {root} = ...` on line {}", dspan.line))
+                    .fix(vec![Edit::replace(dspan, "let", "var")]),
             ),
             Decl::Param => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` is a parameter, and parameters cannot be changed"), span)
@@ -1158,6 +1215,11 @@ impl Checker {
                 } else if ta.is_unknown() || tb.is_unknown() {
                     Type::Unknown
                 } else if ta != tb {
+                    let fix = match (ta, tb) {
+                        (Type::Int, Type::Float) => float_literal(a),
+                        (Type::Float, Type::Int) => float_literal(b),
+                        _ => None,
+                    };
                     let hint = match (ta, tb) {
                         (Type::Int, Type::Float) => match (&a.kind, show(a)) {
                             (ExprKind::Int(n), _) => format!("make both branches `float`: write the first as `{n}.0`"),
@@ -1177,7 +1239,8 @@ impl Checker {
                             format!("the branches of this `if` value have different types: `{}` and `{}`", ta.name(), tb.name()),
                             span,
                         )
-                        .hint(hint),
+                        .hint(hint)
+                        .fix_opt(fix),
                     );
                     Type::Unknown
                 } else {
@@ -1270,6 +1333,8 @@ impl Checker {
         let mut first: Option<Type> = None;
         // the first element as the program wrote it, and whether it is an int literal (for the hint)
         let mut first_shown: Option<(String, bool)> = None;
+        // `[1, 2, 2.5]`: the int literals before the first float, which all become floats
+        let mut int_literals: Option<Vec<Edit>> = Some(Vec::new());
         let mut bad = false;
         for it in items.iter_mut() {
             let t = self.expr_with(it, first.or(want_elem));
@@ -1291,6 +1356,11 @@ impl Checker {
                     first_shown = show(it).map(|s| (s, matches!(it.kind, ExprKind::Int(_))));
                 }
                 Some(f) if f != t => {
+                    let fix = match (f, t) {
+                        (Type::Float, Type::Int) => float_literal(it).map(|e| vec![e]),
+                        (Type::Int, Type::Float) => int_literals.take(),
+                        _ => None,
+                    };
                     let hint = match (f, t) {
                         (Type::Float, Type::Int) => match show(it) {
                             Some(s) if matches!(it.kind, ExprKind::Int(_)) => format!("write it as a float: `{s}.0`"),
@@ -1317,11 +1387,19 @@ impl Checker {
                             format!("array elements must all have one type: the first is `{}`, this one is `{}`", f.name(), t.name()),
                             it.span,
                         )
-                        .hint(hint),
+                        .hint(hint)
+                        .fix(fix.unwrap_or_default()),
                     );
                     bad = true;
                 }
                 _ => {}
+            }
+            if let Some(lits) = &mut int_literals {
+                match float_literal(it) {
+                    Some(e) if t == Type::Int => lits.push(e),
+                    _ if t == Type::Int => int_literals = None,
+                    _ => {}
+                }
             }
         }
         match first {
@@ -1341,18 +1419,21 @@ impl Checker {
                 return *t;
             }
             let names: Vec<&str> = info.fields.iter().map(|(f, _, _)| f.as_str()).collect();
-            let hint = match suggest(name, names.iter().copied()) {
-                Some(h) => h,
-                None if names.is_empty() => format!("`{sname}` has no fields"),
-                None => format!("the fields of `{sname}` are {}", names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")),
+            let (hint, fix) = match suggest_fix(name, names.iter().copied()) {
+                Some((h, f)) => (h, f.map(|f| Edit::replace(span, name, f))),
+                None if names.is_empty() => (format!("`{sname}` has no fields"), None),
+                None => (format!("the fields of `{sname}` are {}", names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")), None),
             };
-            self.errs.push(Diag::new("E0224", format!("`{sname}` has no field `{name}`"), span).hint(hint));
+            self.errs.push(Diag::new("E0224", format!("`{sname}` has no field `{name}`"), span).hint(hint).fix_opt(fix));
             return Type::Unknown;
         }
-        if v3::method_sig(bt, name).is_some() {
+        if let Some(sig) = v3::method_sig(bt, name) {
+            // `xs.len`: with no arguments to pass, the call is certain
+            let fix = sig.params.is_empty().then(|| Edit::replace(span, name, format!("{name}()")));
             self.errs.push(
                 Diag::new("E0236", format!("method `{name}` must be called"), span)
-                    .hint(format!("add the parentheses: `.{name}()`")),
+                    .hint(format!("add the parentheses: `.{name}()`"))
+                    .fix_opt(fix),
             );
             return Type::Unknown;
         }
@@ -1362,8 +1443,13 @@ impl Checker {
             _ => "c".into(),
         });
         // `xs.length`: what other languages write as a field is a method here
+        let renamed = hints::method_rename(bt, name).filter(|m| v3::method_sig(bt, m).is_some_and(|s| s.params.is_empty()));
         let hint = match hints::method(bt, name, &r) {
-            Some(h) => h,
+            Some(h) => {
+                let fix = renamed.map(|m| Edit::replace(span, name, format!("{m}()")));
+                self.errs.push(Diag::new("E0224", format!("`{}` has no field `{name}`", bt.name()), span).hint(h).fix_opt(fix));
+                return Type::Unknown;
+            }
             None => match bt {
                 Type::Array(_) | Type::Str | Type::Char => format!(
                     "`{}` has methods, not fields: {}",
@@ -1385,7 +1471,11 @@ impl Checker {
                 && !self.fns.contains_key(n.as_str())
                 && !self.decls.iter().any(|(d, _)| d == n);
             if let (true, Some(h)) = (unknown, hints::receiver(n)) {
-                self.errs.push(Diag::new("E0201", format!("undefined variable `{n}`"), recv.span).hint(h));
+                // `console.log(x)` prints one value, like `print(x)`
+                let prints = matches!((n.as_str(), name), ("console", "log") | ("fmt", "Println") | ("Console", "WriteLine"))
+                    && matches!(args, [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
+                let fix = prints.then(|| Edit::range(recv.span, after(span, name), &format!("{n}.{name}"), "print"));
+                self.errs.push(Diag::new("E0201", format!("undefined variable `{n}`"), recv.span).hint(h).fix_opt(fix));
                 for a in args.iter_mut() {
                     self.expr(a);
                 }
@@ -1411,11 +1501,22 @@ impl Checker {
                 Type::Char => "c".into(),
                 _ => "x".into(),
             });
+            // a method of another language that is the same operation under another name
+            let arity = |m: &str| v3::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
+            let mut fix = None;
             let hint = if rt == Type::Str && v3::CHAR_METHODS.contains(&name) {
                 format!("`{name}()` is a `char` method: use a character, `'A'.{name}()` or `s[0].{name}()`; all codes of a string: `s.codes()`")
             } else if let Some(h) = hints::method(rt, name, &shown) {
+                fix = hints::method_rename(rt, name).filter(|m| arity(m)).map(|m| vec![Edit::replace(span, name, m)]);
+                // `n.to_string()` is `str(n)`
+                let lower = name.to_ascii_lowercase().replace('_', "");
+                if let (ExprKind::Var(v), true, []) = (&recv.kind, matches!(lower.as_str(), "tostring" | "tostr" | "asstring"), &*args) {
+                    let call = format!("{name}()");
+                    fix = Some(vec![Edit::range(recv.span, after(span, &call), &format!("{v}.{call}"), format!("str({v})"))]);
+                }
                 h
-            } else if let Some(h) = suggest(name, methods.iter().copied()) {
+            } else if let Some((h, f)) = suggest_fix(name, methods.iter().copied()) {
+                fix = f.filter(|m| arity(m)).map(|m| vec![Edit::replace(span, name, m)]);
                 h
             } else if let Some(sname) = rt.struct_name() {
                 format!("structs have no methods: write a function `fn {name}(x: {sname})` and call `{name}(x)`")
@@ -1424,7 +1525,7 @@ impl Checker {
             } else {
                 format!("the methods of `{}` are {}", rt.name(), methods.iter().map(|m| format!("`{m}`")).collect::<Vec<_>>().join(" "))
             };
-            self.errs.push(Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(hint));
+            self.errs.push(Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(hint).fix(fix.unwrap_or_default()));
             return Type::Unknown;
         };
         // element types that some methods need
@@ -1446,6 +1547,11 @@ impl Checker {
                 );
             }
         }
+        // `s.pad_left(n)` fills with spaces; `s.pad_left(n, '0')` with a character
+        let mut sig = sig;
+        if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
+            sig.params.push(Type::Char);
+        }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
                 self.expr(a);
@@ -1465,8 +1571,13 @@ impl Checker {
                 .hint(format!("call it as `.{name}({})`", shown.join(", "))),
             );
         } else {
+            // the text searches also take a character: `"aeiou".contains(c)`
+            let search = rt == Type::Str && matches!(name, "contains" | "starts_with" | "ends_with" | "index_of");
             for (i, (a, p)) in args.iter_mut().zip(&sig.params).enumerate() {
                 let t = self.expr_with(a, Some(*p));
+                if search && t == Type::Char {
+                    continue;
+                }
                 self.expect_ty(*p, t, a, Ctx::MethodArg { m: name, idx: i });
             }
         }
@@ -1523,6 +1634,8 @@ impl Checker {
             BinOp::And | BinOp::Or => "two `bool`s",
         };
         let msg = format!("cannot use `{sym}` on `{}` and `{}`: `{sym}` needs {needs}", l.name(), r.name());
+        // a literal that only needs another spelling (`2` as `2.0`, `"a"` as `'a'`)
+        let mut literal_fix = None;
         let (ls, rs) = (show(le), show(re));
         let arithmetic = matches!(
             op,
@@ -1550,6 +1663,7 @@ impl Checker {
                     (true, Some(rs)) => format!("`{name}` is an `int`: convert the value (`{name} {sym} int({rs})` truncates toward zero) or declare `{name}` as a float"),
                     (false, _) if matches!(re.kind, ExprKind::Int(_)) => {
                         let n = if let ExprKind::Int(n) = re.kind { n } else { 0 };
+                        literal_fix = float_literal(re);
                         format!("`{name}` is a `float`: write the value as a float, `{name} {sym} {n}.0`")
                     }
                     (false, Some(rs)) => format!("`{name}` is a `float`: convert the value, `{name} {sym} float({rs})`"),
@@ -1565,7 +1679,10 @@ impl Checker {
                 };
                 let (a, b) = if int_left { (fix(le, &ls), operand(re)) } else { (operand(le), fix(re, &rs)) };
                 match (a, b) {
-                    (Some(a), Some(b)) => format!("use one type on both sides, e.g. `{a} {sym} {b}` (Nyra never converts numbers implicitly)"),
+                    (Some(a), Some(b)) => {
+                        literal_fix = float_literal(if int_left { le } else { re });
+                        format!("use one type on both sides, e.g. `{a} {sym} {b}` (Nyra never converts numbers implicitly)")
+                    }
                     _ => "Nyra never converts numbers implicitly: use `float(x)` on the `int` side, or `int(x)` on the `float` side".to_string(),
                 }
             }
@@ -1632,7 +1749,10 @@ impl Checker {
             } else if (l == Char && r == Str) || (l == Str && r == Char) {
                 let s = if l == Str { &ls } else { &rs };
                 match s.as_deref().and_then(|t| t.strip_prefix('"')).and_then(|t| t.strip_suffix('"')) {
-                    Some(t) if t.chars().count() == 1 => format!("a character is written in single quotes: `'{t}'`"),
+                    Some(t) if t.chars().count() == 1 => {
+                        literal_fix = char_literal(if l == Str { le } else { re });
+                        format!("a character is written in single quotes: `'{t}'`")
+                    }
                     _ => "compare a `char` with a `char` (`c == 'a'`), or text with text (`str(c) == s`)".to_string(),
                 }
             } else {
@@ -1643,7 +1763,7 @@ impl Checker {
         } else {
             format!("both sides of `{sym}` need the same numeric type: check the types of the two operands")
         };
-        self.errs.push(Diag::new("E0210", msg, span).hint(hint));
+        self.errs.push(Diag::new("E0210", msg, span).hint(hint).fix_opt(literal_fix));
         Type::Unknown
     }
 
@@ -1657,6 +1777,33 @@ impl Checker {
         t
     }
 
+    /// `abs(x)`, `min(a, b)`, `max(a, b)` on two `int`s or two `float`s.
+    fn math(&mut self, name: &str, args: &mut [Expr], span: Span) -> Type {
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
+        let want = if name == "abs" { 1 } else { 2 };
+        let example = if name == "abs" { "abs(x)" } else if name == "min" { "min(a, b)" } else { "max(a, b)" };
+        if tys.len() != want {
+            self.errs.push(
+                Diag::new("E0204", format!("`{name}` takes {} but {} {} given", count(want, "argument"), tys.len(), was_were(tys.len())), span)
+                    .hint(format!("call it as `{example}`")),
+            );
+            return Type::Unknown;
+        }
+        if tys.iter().any(|t| t.is_unknown()) {
+            return Type::Unknown;
+        }
+        let t = tys[0];
+        if !matches!(t, Type::Int | Type::Float) || tys.iter().any(|x| *x != t) {
+            let found = tys.iter().map(|t| format!("`{}`", t.name())).collect::<Vec<_>>().join(" and ");
+            self.errs.push(
+                Diag::new("E0203", format!("`{name}` needs two `int`s or two `float`s, found {found}"), args[0].span)
+                    .hint("convert first: `float(n)` or `int(x)`, so both are the same number type"),
+            );
+            return Type::Unknown;
+        }
+        t
+    }
+
     fn call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
         if self.structs.contains_key(name) {
             return self.construct(name, args, span);
@@ -1664,17 +1811,36 @@ impl Checker {
         if BUILTINS.contains(&name) {
             return self.builtin(name, args, span);
         }
+        // `abs`, `min` and `max` are builtins unless the program defines its own
+        if MATH.contains(&name) && !self.fns.contains_key(name) {
+            return self.math(name, args, span);
+        }
 
         let Some(sig) = self.fns.get(name) else {
             let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
             let d = Diag::new("E0202", format!("undefined function `{name}`"), span);
             // a struct's name too: `point(...)` after `struct Point` was renamed
             let names = self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied()).chain(self.structs.keys().map(String::as_str));
+            let mut fix = Vec::new();
             let hint = if self.lookup(name).is_some() {
                 format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
             } else if let Some(h) = hints::undefined_function(name) {
+                let plain = matches!(args, [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
+                match (name, &*args) {
+                    ("println" | "puts" | "writeln", _) if plain => fix.push(Edit::replace(span, name, "print")),
+                    ("return", _) => fix.push(Edit::replace(span, name, "ret")),
+                    // `len(xs)` is `xs.len()`
+                    ("len" | "length" | "size", [a]) if matches!(tys[0], Type::Array(_) | Type::Str) => {
+                        if let ExprKind::Var(v) = &a.kind {
+                            fix.push(Edit::range(span, a.span, &format!("{name}("), ""));
+                            fix.push(Edit::range(after(a.span, v), after(a.span, &format!("{v})")), ")", ".len()"));
+                        }
+                    }
+                    _ => {}
+                }
                 h
-            } else if let Some(h) = suggest(name, names) {
+            } else if let Some((h, f)) = suggest_fix(name, names) {
+                fix.extend(f.map(|f| Edit::replace(span, name, f)));
                 h
             } else if let Some(fields) = declared_fields(name, args, &tys) {
                 // `Vec2(x: 1.0, y: 2.0)` and no struct `Vec2`: it was probably meant as a struct
@@ -1682,7 +1848,7 @@ impl Checker {
             } else {
                 format!("define it: `fn {name}(...) {{ ... }}` (the builtins are `print`, `int`, `float`, `str`, `char`, `free` and `keep`)")
             };
-            self.errs.push(d.hint(hint));
+            self.errs.push(d.hint(hint).fix(fix));
             return Type::Unknown;
         };
         let _ = want;
@@ -1716,6 +1882,10 @@ impl Checker {
             return ret;
         }
         let plain = without_names(name, &names, args);
+        let in_order = args.iter().zip(&names).all(|(a, n)| match &a.kind {
+            ExprKind::Labeled(l, _) => l == n,
+            _ => true,
+        });
         // which variables the `inout` arguments change: each at most once per call
         let mut roots: Vec<(String, Span)> = Vec::new();
         for (i, a) in args.iter_mut().enumerate() {
@@ -1757,14 +1927,18 @@ impl Checker {
                             .hint(format!("write `inout {s}`: the call shows what can change, e.g. `{name}(inout {s})`")),
                     );
                 }
-                (ExprKind::Labeled(label, _), false) => {
+                (ExprKind::Labeled(label, v), false) => {
                     let label = label.clone();
                     let hint = match &plain {
                         Some(call) => format!("names are only for building structs: write the values in parameter order, `{call}`"),
                         None => format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order"),
                     };
+                    // the names are already in parameter order: dropping them changes nothing else
+                    let fix = in_order.then(|| Edit::range(a.span, start(v), &format!("{label}:"), ""));
                     self.errs.push(
-                        Diag::new("E0226", format!("named argument `{label}:` in a call to function `{name}`"), a.span).hint(hint),
+                        Diag::new("E0226", format!("named argument `{label}:` in a call to function `{name}`"), a.span)
+                            .hint(hint)
+                            .fix_opt(fix),
                     );
                 }
                 (_, false) => {
@@ -1784,6 +1958,25 @@ impl Checker {
         };
         let mut seen: Vec<String> = Vec::new();
         let mut order_reported = false;
+        // `Point(1, 2)`: one value per field, in order, so each value gets its field's name
+        let fits = args.len() == fields.len()
+            && args.iter().zip(&fields).all(|(a, (f, _, _))| match &a.kind {
+                ExprKind::Labeled(l, _) => l == f,
+                ExprKind::Inout(_) => false,
+                _ => true,
+            });
+        let labels: Vec<Edit> = if fits {
+            args.iter()
+                .enumerate()
+                .filter(|(_, a)| !matches!(a.kind, ExprKind::Labeled(..)))
+                .map(|(i, a)| {
+                    let before = if i == 0 { format!("{name}(") } else { ",".to_string() };
+                    Edit::insert(start(a), format!("{}: ", fields[i].0)).after(before)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         for (i, a) in args.iter_mut().enumerate() {
             let a_span = a.span;
             match &mut a.kind {
@@ -1793,8 +1986,11 @@ impl Checker {
                         None => {
                             self.expr(v);
                             let names: Vec<&str> = fields.iter().map(|(f, _, _)| f.as_str()).collect();
-                            let hint = suggest(&label, names.iter().copied()).unwrap_or_else(|| format!("build it as `{}`", template()));
-                            self.errs.push(Diag::new("E0224", format!("`{name}` has no field `{label}`"), a_span).hint(hint));
+                            let (hint, fix) = match suggest_fix(&label, names.iter().copied()) {
+                                Some((h, f)) => (h, f.map(|f| Edit::replace(a_span, &label, f))),
+                                None => (format!("build it as `{}`", template()), None),
+                            };
+                            self.errs.push(Diag::new("E0224", format!("`{name}` has no field `{label}`"), a_span).hint(hint).fix_opt(fix));
                         }
                         Some(j) => {
                             if j != i && !order_reported {
@@ -1823,7 +2019,8 @@ impl Checker {
                         order_reported = true;
                         self.errs.push(
                             Diag::new("E0225", format!("the fields of `{name}(...)` must be named, in declaration order"), a_span)
-                                .hint(format!("name every field: `{}`", template())),
+                                .hint(format!("name every field: `{}`", template()))
+                                .fix(labels.clone()),
                         );
                     }
                 }
@@ -1865,6 +2062,16 @@ impl Checker {
                 ),
                 _ => {}
             }
+        }
+        // `print(a, b, c)`: several values on one line, separated by spaces
+        if name == "print" && tys.len() > 1 {
+            for (a, t) in args.iter().zip(&tys) {
+                if *t == Type::Void {
+                    let msg = format!("`print` needs a value to show, but {} returns nothing", call_text(a));
+                    self.errs.push(Diag::new("E0203", msg, a.span).hint(self.no_value_hint(a)));
+                }
+            }
+            return ret;
         }
         if tys.len() != 1 {
             let hint = match name {

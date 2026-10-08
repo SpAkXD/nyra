@@ -1,0 +1,72 @@
+// "1200.50" -> 120050 cents
+fn cents(text: str) -> int {
+    let p = text.split(".")
+    ret int(p[0]) * 100 + int(p[1])
+}
+
+fn money(c: int) -> str {
+    let frac = c % 100
+    let tail = if frac < 10 { "0{frac}" } else { str(frac) }
+    ret "{c / 100}.{tail}"
+}
+
+fn min(a: int, b: int) -> int = if a < b { a } else { b }
+fn max(a: int, b: int) -> int = if a > b { a } else { b }
+
+// num / den rounded to the nearest int, halves to even (num >= 0, den > 0)
+fn round_half_even(num: int, den: int) -> int {
+    let q = num / den
+    let r = num % den
+    if 2 * r > den || (2 * r == den && q % 2 == 1) { ret q + 1 }
+    ret q
+}
+
+// one month's interest in cents on a balance of `b` cents
+fn interest(b: int) -> int {
+    let part1 = min(b, 100000)
+    let part2 = max(0, min(b, 500000) - 100000)
+    let part3 = max(0, b - 500000)
+    // yearly rates 1.5%, 2.4%, 3%, in thousandths: 15, 24, 30; and a twelfth of that
+    ret round_half_even(part1 * 15 + part2 * 24 + part3 * 30, 12000)
+}
+
+fn main() {
+    let months = [
+        "deposit 1200.00; withdraw 1500.00; withdraw 197.50",
+        "deposit 4000.50; withdraw 20.00",
+        "withdraw 3978.75; deposit 6000.00",
+        "withdraw 7500.00; withdraw 1997.76",
+        "withdraw 5011.26",
+        "withdraw 2.00; deposit 0.50",
+    ]
+    var balance = 0
+    var total_interest = 0
+    var total_fees = 0
+    for mi in 0..months.len() {
+        let month = mi + 1
+        var low = balance
+        for tx in months[mi].split("; ") {
+            let w = tx.split(" ")
+            let x = cents(w[1])
+            if w[0] == "deposit" {
+                balance += x
+            } else if balance - x < 0 {
+                print("month {month}: withdraw {w[1]} rejected")
+            } else {
+                balance -= x
+            }
+            low = min(low, balance)
+        }
+        let earned = interest(low)
+        balance += earned
+        var fee = 0
+        if low < 50000 {
+            fee = min(300, balance)
+        }
+        balance -= fee
+        total_interest += earned
+        total_fees += fee
+        print("month {month}: min {money(low)} interest {money(earned)} fee {money(fee)} balance {money(balance)}")
+    }
+    print("total interest {money(total_interest)} fees {money(total_fees)}")
+}

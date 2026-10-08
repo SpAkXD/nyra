@@ -1,0 +1,9 @@
+{
+  "id": "league_table",
+  "title": "League table with head-to-head",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "Compute the final table of a league from the results listed at the end. `Home X-Y Away` means that Home scored X goals and Away scored Y goals. A win gives 3 points, a draw 1 point and a loss 0 points. Rank the teams by these criteria, in order: 1) more points; 2) a larger goal difference (goals for minus goals against); 3) more goals for; 4) for teams still tied on all of 1 to 3, more points earned in the matches played between those tied teams only; 5) alphabetical order of the name.\nPrint a header line and then one line per team, in rank order. The columns are Pos (the rank, from 1), Team, P (played), W (won), D (drawn), L (lost), GF (goals for), GA (goals against), GD (goal difference) and Pts (points). GD is written with a sign: `+3` when positive, `-2` when negative, `0` when zero. Layout of every line: Pos right-aligned in 3 characters, a space, Team left-aligned in 6 characters, a space, then P, W, D and L each right-aligned in 2 characters, then GF, GA, GD and Pts each right-aligned in 3 characters, with a single space between all neighbouring columns. The header line uses the column names `Pos`, `Team`, `P`, `W`, `D`, `L`, `GF`, `GA`, `GD`, `Pts`, aligned the same way.\nResults: Ash 2-1 Bay; Cove 2-0 Ash; Dale 2-2 Ash; Ash 0-2 Elm; Fir 0-0 Ash; Bay 3-2 Cove; Dale 0-2 Bay; Elm 1-2 Bay; Bay 2-2 Fir; Cove 1-3 Dale; Cove 2-0 Elm; Fir 1-0 Cove; Elm 0-0 Dale; Dale 2-2 Fir; Elm 3-2 Fir.",
+  "expected_output": "Pos Team    P  W  D  L  GF  GA  GD Pts\n  1 Bay     5  3  1  1  10   7  +3  10\n  2 Elm     5  2  1  2   6   6   0   7\n  3 Dale    5  1  3  1   7   7   0   6\n  4 Fir     5  1  3  1   7   7   0   6\n  5 Cove    5  2  0  3   7   7   0   6\n  6 Ash     5  1  2  2   4   7  -3   5\n"
+}

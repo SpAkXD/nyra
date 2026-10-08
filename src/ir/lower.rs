@@ -111,7 +111,7 @@ fn mutates(e: &ast::Expr) -> bool {
     use ast::ExprKind as K;
     match &e.kind {
         K::Method(r, name, args) => {
-            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "sort" | "reverse")
+            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse")
                 || mutates(r)
                 || args.iter().any(mutates)
         }
@@ -404,10 +404,11 @@ impl<'a> Lower<'a> {
                 self.block(body, &mut b, true);
                 out.push(Stmt { kind: StmtKind::Loop { head, cond, body: b, step: Vec::new() }, span });
             }
-            ast::StmtKind::For { var, start, end, body } => {
-                // `for i in a..b`: both bounds are evaluated once, before the loop.
+            ast::StmtKind::For { var, start, end, step, body } => {
+                // `for i in a..b step k`: the bounds and the step are evaluated once, before the loop.
                 let a = self.expr(start, None, out);
                 let b = self.expr(end, None, out);
+                let k = step.as_ref().map(|k| self.expr(k, None, out));
                 self.scopes.push(Scope::default());
                 let i = self.declare(var, Ty::Int);
                 out.push(Stmt { kind: StmtKind::Set(i, a), span });
@@ -418,11 +419,40 @@ impl<'a> Lower<'a> {
                     out.push(Stmt { kind: StmtKind::Set(t, b), span });
                     Expr::Local(t)
                 };
+                let k = match k {
+                    None => Expr::Int(1),
+                    Some(k) if const_int(&k).is_some_and(|n| n != 0) => Expr::Int(const_int(&k).unwrap_or(1)),
+                    Some(k) => {
+                        let t = self.temp(Ty::Int);
+                        out.push(Stmt { kind: StmtKind::Set(t, k), span });
+                        let kspan = step.as_ref().map_or(span, |s| s.span);
+                        out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::CheckStep, args: vec![Expr::Local(t)] }, span: kspan });
+                        Expr::Local(t)
+                    }
+                };
                 self.end_statement(span, out);
-                let cond = Expr::Binary(BinOp::ILt, Box::new(Expr::Local(i)), Box::new(last));
+                let i_ = || Box::new(Expr::Local(i));
+                let cond = match &k {
+                    Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::ILt, i_(), Box::new(last)),
+                    Expr::Int(_) => Expr::Binary(BinOp::IGt, i_(), Box::new(last)),
+                    _ => {
+                        // the direction is known only at run time
+                        let up = Expr::Binary(
+                            BinOp::And,
+                            Box::new(Expr::Binary(BinOp::IGt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
+                            Box::new(Expr::Binary(BinOp::ILt, i_(), Box::new(last.clone()))),
+                        );
+                        let down = Expr::Binary(
+                            BinOp::And,
+                            Box::new(Expr::Binary(BinOp::ILt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
+                            Box::new(Expr::Binary(BinOp::IGt, i_(), Box::new(last))),
+                        );
+                        Expr::Binary(BinOp::Or, Box::new(up), Box::new(down))
+                    }
+                };
                 let mut bd = Vec::new();
                 self.block(body, &mut bd, true);
-                let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(Expr::Int(1)));
+                let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(k));
                 let step = vec![Stmt { kind: StmtKind::Set(i, next), span }];
                 self.scopes.pop();
                 out.push(Stmt { kind: StmtKind::Loop { head: Vec::new(), cond, body: bd, step }, span });
@@ -926,10 +956,26 @@ impl<'a> Lower<'a> {
         let span = e.span;
         match name {
             "print" => {
-                let parts = match &args[0].kind {
-                    ast::ExprKind::Interp(p) => self.parts(p, out),
-                    _ => vec![self.expr(&args[0], None, out)],
-                };
+                // `print(a, b)`: the values left to right, a space between them
+                let mut parts = Vec::new();
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        parts.push(Expr::Str(self.strs.intern(" ")));
+                    }
+                    let later = args[i + 1..].iter().any(mutates);
+                    match &a.kind {
+                        // an interpolated string: its parts directly (a later value that changes
+                        // a variable gets the string built first)
+                        ast::ExprKind::Interp(p) if !later => {
+                            let ps = self.parts(p, out);
+                            parts.extend(ps);
+                        }
+                        _ => {
+                            let x = self.expr(a, None, out);
+                            parts.push(if later { self.snapshot(x, a.ty, a.span, out) } else { x });
+                        }
+                    }
+                }
                 out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Print, args: parts }, span });
                 // `print` returns nothing, so this value is never used
                 Expr::Bool(false)
@@ -965,6 +1011,23 @@ impl<'a> Lower<'a> {
                 }
             }
             "free" | "keep" => Expr::Bool(false),
+            // the builtins `abs`, `min` and `max` (unless the program defines its own): pure choices
+            "abs" | "min" | "max" if !self.ids.contains_key(name) => {
+                let v = self.operands(&args.iter().collect::<Vec<_>>(), out);
+                let float = e.ty == Type::Float;
+                let lt = if float { BinOp::FLt } else { BinOp::ILt };
+                let b = |x: &Expr| Box::new(x.clone());
+                if name == "abs" {
+                    let x = &v[0];
+                    let zero = if float { Expr::Float(0.0) } else { Expr::Int(0) };
+                    let neg = Expr::Unary(if float { UnOp::FNeg } else { UnOp::INeg }, b(x));
+                    return Expr::Select(Box::new(Expr::Binary(lt, b(x), Box::new(zero))), Box::new(neg), b(x));
+                }
+                let (x, y) = (&v[0], &v[1]);
+                // min: `b < a ? b : a` keeps the first on a tie; max: `a < b ? b : a`
+                let cond = if name == "min" { Expr::Binary(lt, b(y), b(x)) } else { Expr::Binary(lt, b(x), b(y)) };
+                Expr::Select(Box::new(cond), b(y), b(x))
+            }
             _ => {
                 let Some(&func) = self.ids.get(name) else {
                     // `Point(x: 1, y: 2)`: the fields in declaration order (the checker made sure)
@@ -988,7 +1051,7 @@ impl<'a> Lower<'a> {
 
     fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
-        if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "sort" | "reverse") {
+        if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse") {
             // changes the receiver: a place, fixed before the arguments run
             let later = args.iter().any(mutates);
             let place = self.place(recv, later, out);
@@ -1000,6 +1063,7 @@ impl<'a> Lower<'a> {
                 "pop" => RtOp::ArrPop,
                 "insert" => RtOp::ArrInsert,
                 "remove" => RtOp::ArrRemove,
+                "swap" => RtOp::ArrSwap,
                 "sort" => RtOp::ArrSort,
                 _ => RtOp::ArrReverse,
             };
@@ -1016,7 +1080,19 @@ impl<'a> Lower<'a> {
         }
         let mut refs: Vec<&ast::Expr> = vec![recv];
         refs.extend(args.iter());
-        let all = self.operands(&refs, out);
+        let mut all = self.operands(&refs, out);
+        if recv.ty == Type::Str {
+            // a character searched for in text is the one-character string
+            if matches!(name, "contains" | "starts_with" | "ends_with" | "index_of") && args[0].ty == Type::Char {
+                let c = all.pop().expect("one argument");
+                let s = self.op(RtOp::Format, vec![c], Ty::Str, None, span, out);
+                all.push(s);
+            }
+            // `pad_left(n)` fills with spaces
+            if matches!(name, "pad_left" | "pad_right") && args.len() == 1 {
+                all.push(Expr::Char(' ' as u32));
+            }
+        }
         let pure = |f: PureFn| Some(f);
         let p = match (recv.ty, name) {
             (Type::Str, "len") => pure(PureFn::StrLen),
@@ -1050,6 +1126,8 @@ impl<'a> Lower<'a> {
             (Type::Str, "chars") => RtOp::StrChars,
             (Type::Str, "codes") => RtOp::StrCodes,
             (Type::Str, "split") => RtOp::StrSplit,
+            (Type::Str, "pad_left") => RtOp::StrPadLeft,
+            (Type::Str, "pad_right") => RtOp::StrPadRight,
             (_, "slice") => RtOp::ArrSlice,
             (_, "repeat") => RtOp::ArrRepeat,
             (_, "join") => RtOp::ArrJoin,

@@ -1,0 +1,91 @@
+struct Open {
+    bracket: char
+    line: int
+}
+
+fn is_opening(c: char) -> bool = c == '(' || c == '[' || c == '{'
+fn is_closing(c: char) -> bool = c == ')' || c == ']' || c == '}'
+
+fn closer_of(c: char) -> char {
+    if c == '(' { ret ')' }
+    if c == '[' { ret ']' }
+    ret '}'
+}
+
+// the first error of a snippet, or "" when it has none
+fn check(lines: [str]) -> str {
+    var stack: [Open] = []
+    var indents: [int] = []
+    var texts: [str] = []
+    for k in 0..lines.len() {
+        let line_no = k + 1
+        let bar = lines[k].index_of("|")
+        let indent = int(lines[k].slice(0, bar))
+        let text = lines[k].slice(bar + 1, lines[k].len())
+        indents.push(indent)
+        texts.push(text)
+
+        // rule 1: brackets; remember the line whose bracket the first character closes
+        var first_closes = -1
+        for i in 0..text.len() {
+            let c = text[i]
+            if is_opening(c) {
+                stack.push(Open(bracket: c, line: line_no))
+            } else if is_closing(c) {
+                if stack.len() == 0 {
+                    ret "line {line_no}: unexpected {c}"
+                }
+                let top = stack[stack.len() - 1]
+                let want = closer_of(top.bracket)
+                if want != c {
+                    ret "line {line_no}: expected {want} but found {c}"
+                }
+                if i == 0 { first_closes = top.line }
+                stack.pop()
+            }
+        }
+
+        // rule 2: indentation
+        var expected = 0
+        if k > 0 {
+            let prev = texts[k - 1]
+            if is_closing(text[0]) {
+                expected = indents[first_closes - 1]
+            } else if is_opening(prev[prev.len() - 1]) {
+                expected = indents[k - 1] + 4
+            } else {
+                expected = indents[k - 1]
+            }
+        }
+        if indent != expected {
+            ret "line {line_no}: indent {indent}, expected {expected}"
+        }
+    }
+    if stack.len() > 0 {
+        let top = stack[stack.len() - 1]
+        ret "line {top.line}: unclosed {top.bracket}"
+    }
+    ret ""
+}
+
+fn main() {
+    // literal braces in strings are doubled
+    let snippets = [
+        ["0|fn main() {{", "4|let xs = [1, 2,", "4|3]", "4|if x {{", "8|call(a, [b,", "8|c])", "4|}}", "0|}}"],
+        ["0|f(a, {{", "4|b: [1, 2)", "0|}})"],
+        ["0|g {{", "2|h()", "0|}}"],
+        ["0|a {{", "4|b {{", "8|c", "4|}}", "4|}}"],
+        ["0|x", "0|)"],
+        ["0|k(", "4|m[", "8|n", "4|]"],
+        ["2|a"],
+        ["0|f() {{", "0|}}", "0|g [", "4|1, (2", "4|)]"],
+        ["0|if a {{", "4|b", "0|}} else {{", "4|c", "0|}}"],
+        ["0|p {{", "3|q)"],
+        ["0|r([", "4|s", "0|])", "0|t"],
+    ]
+    for k in 0..snippets.len() {
+        let err = check(snippets[k])
+        let result = if err == "" { "ok" } else { err }
+        print("snippet {k + 1}: {result}")
+    }
+}

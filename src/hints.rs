@@ -118,6 +118,7 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "floor" | "ceil" | "round" | "trunc" => {
             "Nyra has no `floor`/`ceil`/`round`: `int(x)` truncates a float toward zero"
         }
+        "return" => return word(w),
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
         "string" | "String" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" | "sprintf" => {
             "convert with `str(x)`, or build text with interpolation, e.g. `\"{x}\"`"
@@ -273,6 +274,39 @@ fn char_method(w: &str, r: &str) -> Option<String> {
     })
 }
 
+/// The Nyra method that a method name of another language stands for, when it is the same
+/// operation under another name (`xs.length()` is `xs.len()`, `s.toUpperCase()` is `s.upper()`).
+/// Only exact equivalents are listed: `find` on an array takes a predicate in JavaScript, so it
+/// is not `index_of`, and `substr(start, count)` is not `slice(a, b)`. The caller also checks that
+/// the number of arguments fits.
+pub fn method_rename(t: Type, name: &str) -> Option<&'static str> {
+    let w: String = name.chars().filter(|c| *c != '_').map(|c| c.to_ascii_lowercase()).collect();
+    Some(match (t, w.as_str()) {
+        (Type::Array(_) | Type::Str, "length" | "size") => "len",
+        (Type::Array(_) | Type::Str, "includes" | "has" | "contain") => "contains",
+        (Type::Array(_) | Type::Str, "indexof") => "index_of",
+        (Type::Array(_), "append" | "add" | "pushback" | "addlast") => "push",
+        (Type::Array(_), "popback" | "poplast" | "removelast") => "pop",
+        (Type::Array(_), "removeat") => "remove",
+        (Type::Str, "find") => "index_of",
+        (Type::Str, "strip") => "trim",
+        (Type::Str, "startswith") => "starts_with",
+        (Type::Str, "endswith") => "ends_with",
+        (Type::Str, "substring") => "slice",
+        (Type::Str, "replaceall") => "replace",
+        (Type::Str, "tochararray" | "tochars" | "tolist") => "chars",
+        (Type::Str | Type::Char, "touppercase" | "uppercase" | "toupper" | "upcase") => "upper",
+        (Type::Str | Type::Char, "tolowercase" | "lowercase" | "tolower" | "downcase") => "lower",
+        (Type::Char, "isdigit" | "isnumeric" | "isdecimal" | "isasciidigit") => "is_digit",
+        (Type::Char, "isalpha" | "isalphabetic" | "isletter" | "isasciialphabetic") => "is_letter",
+        (Type::Char, "isupper" | "isuppercase") => "is_upper",
+        (Type::Char, "islower" | "islowercase") => "is_lower",
+        (Type::Char, "isspace" | "iswhitespace") => "is_space",
+        (Type::Char, "ord" | "tocode" | "codepoint" | "charcode") => "code",
+        _ => return None,
+    })
+}
+
 /// True for names that other languages use for a type (`string`, `i32`, `double`, `void`, ...).
 pub fn is_type_word(w: &str) -> bool {
     matches!(
@@ -294,6 +328,15 @@ pub fn nyra_type(w: &str) -> Option<&'static str> {
         "char" | "character" | "rune" => "char",
         _ => return None,
     })
+}
+
+/// The Nyra type to write for a type name of another language, when there is exactly one:
+/// `string` is `str` and `i32` is `int`, but TypeScript's `number` may be `int` or `float`.
+pub fn type_fix(w: &str) -> Option<&'static str> {
+    if w.eq_ignore_ascii_case("number") {
+        return None;
+    }
+    nyra_type(w)
 }
 
 /// What to do about a type name that does not exist.
@@ -347,6 +390,62 @@ pub fn quoted_text(open: char, text: &str) -> String {
         return format!("{kind}: write double quotes and `{{x}}` instead of `${{x}}`, e.g. \"total: {{x}}\"");
     }
     format!("{kind}: write \"{text}\" with straight double quotes")
+}
+
+/// The text of a quoted literal of another language as a Nyra string, when that is certain:
+/// `` `total: ${x}` `` is `"total: {x}"` and `“hi”` is `"hi"`. Text with braces (which would turn
+/// into interpolation), quotes or backslashes, and one letter in single typographic quotes (a
+/// `char`, or a string?) get no fix.
+pub fn quoted_fix(open: char, text: &str) -> Option<String> {
+    if text.contains(['"', '\\']) {
+        return None;
+    }
+    if open == '`' && text.contains("${") {
+        let mut out = String::new();
+        let mut rest = text;
+        while let Some(i) = rest.find("${") {
+            let (head, tail) = rest.split_at(i);
+            if head.contains(['{', '}']) {
+                return None;
+            }
+            out += head;
+            let close = tail.find('}')?;
+            let inner = &tail[2..close];
+            if inner.trim().is_empty() || inner.contains('{') {
+                return None;
+            }
+            out += &format!("{{{inner}}}");
+            rest = &tail[close + 1..];
+        }
+        if rest.contains(['{', '}']) {
+            return None;
+        }
+        return Some(format!("\"{out}{rest}\""));
+    }
+    if text.contains(['{', '}']) || (open == '\u{2018}' && text.chars().count() == 1) {
+        return None;
+    }
+    Some(format!("\"{text}\""))
+}
+
+/// What replaces a character that Nyra does not have, when it has exactly one meaning: `×` is `*`,
+/// `≤` is `<=`, and an invisible character is removed. (`&` may be a bit operation, so it has none.)
+pub fn char_fix(c: char) -> Option<&'static str> {
+    Some(match c {
+        '\u{00D7}' => "*",
+        '\u{00F7}' => "/",
+        '\u{2212}' | '\u{2013}' | '\u{2014}' => "-",
+        '\u{2264}' => "<=",
+        '\u{2265}' => ">=",
+        '\u{2260}' => "!=",
+        '\u{2192}' => "->",
+        '\u{2026}' => "..",
+        '\u{2227}' => "&&",
+        '\u{2228}' => "||",
+        '\u{00AC}' => "!",
+        c if invisible_char(c).is_some() => "",
+        _ => return None,
+    })
 }
 
 /// A name for characters that cannot be seen, so the message can say what they are.

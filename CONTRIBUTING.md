@@ -32,6 +32,7 @@ hand to check one program the same way.
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
 | `src/rt/c/`, `src/rt/js/` | the runtime code each backend embeds (strings, arrays, printing, runtime errors) |
 | `src/diag.rs`, `src/hints.rs` | error rendering, for humans and as JSON, and the hints that name the likely fix |
+| `src/fix.rs` | `--fix`: validates, applies and repeats the fixes that errors carry |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 | `docs/SPEC.md` | the language spec (the source of truth) |
 | `docs/AI_GUIDE.md`, `llms.txt` | what AIs read before writing Nyra |
@@ -58,6 +59,10 @@ hand to check one program the same way.
 - Create it with `Diag::new("E0xxx", message, span).hint("how to fix it")`. The message says what is
   wrong with the names and types involved (what was expected, what was found); the hint says how to fix
   it, with corrected code where possible. Every error needs a hint: agents rely on it.
+- If the mistake has exactly one possible repair, add it after the hint: `.hint(h).fix(vec![Edit::replace(span,
+  "return", "ret")])` (`src/diag.rs`). An edit names the text it replaces, so a wrong position drops the fix
+  instead of damaging code. Never guess: with alternatives, give a hint and no fix. Add a pair to
+  `tests/fix.rs`.
 - Add `tests/errors/<name>.nyra` whose first line is `// expect: E0xxx`.
 - Add the entry to `docs/ERRORS.md` (fields and order are described at the top of that file): what it
   means, why the rule exists, common causes, a **Wrong** program that produces exactly this code and a

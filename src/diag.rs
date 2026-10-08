@@ -1,5 +1,10 @@
 //! Diagnostics: every error has a stable code, a position and an optional fix hint.
 //! Rendered either for humans or as JSON for AI agents (`--json`).
+//!
+//! A diagnostic whose mistake has exactly one possible repair also carries a `fix`: text edits
+//! that turn the program into what the author meant. `nyra check --fix` applies them (see
+//! `fix.rs`), and `--json` prints them so an agent can apply them itself. A fix is only added
+//! where it is certain; when there are alternatives, there is a hint and no fix.
 
 use crate::ast::Span;
 
@@ -9,15 +14,64 @@ pub struct Diag {
     pub msg: String,
     pub span: Span,
     pub hint: Option<String>,
+    /// Edits that repair the mistake; empty when there is no certain fix.
+    pub fix: Vec<Edit>,
+}
+
+/// One edit of a fix: the text from `start` up to (not including) `end` becomes `text`.
+/// Positions are 1-based lines and columns counted in characters, like `Span`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Edit {
+    pub start: Span,
+    pub end: Span,
+    pub text: String,
+    /// What the replaced text must be, apart from whitespace. A fix whose edits do not find the
+    /// text they expect is dropped (`fix::validate`), so a wrong position never edits code.
+    pub old: String,
+    /// What the code right before `start` must end with, apart from whitespace (for insertions,
+    /// which replace nothing that could be checked): `Point(` before the first argument.
+    pub after: String,
+}
+
+impl Edit {
+    /// Replaces `old`, which starts at `start` and holds no line break, with `text`.
+    pub fn replace(start: Span, old: &str, text: impl Into<String>) -> Edit {
+        let end = after(start, old);
+        Edit { start, end, text: text.into(), old: old.to_string(), after: String::new() }
+    }
+
+    /// Replaces the range `start..end`, which must hold `old` and otherwise only whitespace.
+    pub fn range(start: Span, end: Span, old: &str, text: impl Into<String>) -> Edit {
+        Edit { start, end, text: text.into(), old: old.to_string(), after: String::new() }
+    }
+
+    /// The same edit, valid only where the code before it ends with `code`.
+    pub fn after(mut self, code: impl Into<String>) -> Edit {
+        self.after = code.into();
+        self
+    }
+
+    /// Inserts `text` at `at`.
+    pub fn insert(at: Span, text: impl Into<String>) -> Edit {
+        Edit { start: at, end: at, text: text.into(), old: String::new(), after: String::new() }
+    }
+}
+
+/// The position right after `text`, which starts at `s` and holds no line break.
+pub fn after(s: Span, text: &str) -> Span {
+    Span { line: s.line, col: s.col + text.chars().count() }
 }
 
 impl Diag {
     pub fn new(code: &'static str, msg: impl Into<String>, span: Span) -> Self {
-        Diag { code, msg: msg.into(), span, hint: None }
+        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new() }
     }
 
+    /// Sets the hint. A fix belongs to the hint it was made with, so a new hint drops it:
+    /// add the fix after the hint (`.hint(h).fix(edits)`).
     pub fn hint(mut self, hint: impl Into<String>) -> Self {
         self.hint = Some(hint.into());
+        self.fix.clear();
         self
     }
 
@@ -25,6 +79,30 @@ impl Diag {
     pub fn or_hint(mut self, hint: impl Into<String>) -> Self {
         if self.hint.is_none() {
             self.hint = Some(hint.into());
+        }
+        self
+    }
+
+    /// The edits that repair this mistake (they go with the current hint).
+    pub fn fix(mut self, edits: Vec<Edit>) -> Self {
+        self.fix = edits;
+        self
+    }
+
+    /// A fix of a single edit, if there is one.
+    pub fn fix_opt(self, edit: Option<Edit>) -> Self {
+        match edit {
+            Some(e) => self.fix(vec![e]),
+            None => self,
+        }
+    }
+
+    /// The same diagnostic with its position and its fix moved by `f` (for code inside a string).
+    pub fn moved(mut self, f: impl Fn(Span) -> Span) -> Self {
+        self.span = f(self.span);
+        for e in &mut self.fix {
+            e.start = f(e.start);
+            e.end = f(e.end);
         }
         self
     }
@@ -47,6 +125,9 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
         if let Some(h) = &d.hint {
             out += &format!("  = hint: {h}\n");
         }
+        if let Some(f) = crate::fix::preview(src, &d.fix) {
+            out += &format!("  = fix: {f}\n");
+        }
         out += &format!("  = explain: nyra explain {}\n", d.code);
         out.push('\n');
     }
@@ -58,17 +139,40 @@ pub fn render_json(diags: &[Diag], file: &str) -> String {
         .iter()
         .map(|d| {
             format!(
-                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}}}",
+                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}{}}}",
                 d.code,
                 json_str(&d.msg),
                 json_str(file),
                 d.span.line,
                 d.span.col,
-                d.hint.as_deref().map(json_str).unwrap_or_else(|| "null".into())
+                d.hint.as_deref().map(json_str).unwrap_or_else(|| "null".into()),
+                fix_json(&d.fix)
             )
         })
         .collect();
     format!("{{\"ok\":{},\"errors\":[{}]}}", diags.is_empty(), items.join(","))
+}
+
+/// `,"fix":[{"line":..,"col":..,"end_line":..,"end_col":..,"text":".."}]`, or nothing without a fix.
+/// Columns count characters; the end is exclusive.
+fn fix_json(fix: &[Edit]) -> String {
+    if fix.is_empty() {
+        return String::new();
+    }
+    let edits: Vec<String> = fix
+        .iter()
+        .map(|e| {
+            format!(
+                "{{\"line\":{},\"col\":{},\"end_line\":{},\"end_col\":{},\"text\":{}}}",
+                e.start.line,
+                e.start.col,
+                e.end.line,
+                e.end.col,
+                json_str(&e.text)
+            )
+        })
+        .collect();
+    format!(",\"fix\":[{}]", edits.join(","))
 }
 
 pub fn json_str(s: &str) -> String {
@@ -98,9 +202,21 @@ pub fn suggest<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) ->
         .into_iter()
         .map(|c| (levenshtein(name, c), c))
         .filter(|(d, c)| *d > 0 && (name.eq_ignore_ascii_case(c) || (long_enough && *d <= allowed)))
-        // ties go to the alphabetically first name, so hints never change between runs
-        .min_by_key(|&(d, c)| (d, c))
+        // a name that differs only in case comes first (`Print` is `print`, not `Point`); ties go to
+        // the alphabetically first name, so hints never change between runs
+        .min_by_key(|&(d, c)| (!name.eq_ignore_ascii_case(c), d, c))
         .map(|(_, c)| format!("did you mean `{c}`?"))
+}
+
+/// `suggest`, and with it the suggested name as a fix when it differs from `name` only in case
+/// and no other candidate does: `point` for `Point` is certain, `cout` for `count` is a guess.
+pub fn suggest_fix<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<(String, Option<&'a str>)> {
+    let all: Vec<&'a str> = candidates.into_iter().collect();
+    let hint = suggest(name, all.iter().copied())?;
+    let mut same = all.iter().copied().filter(|c| *c != name && c.eq_ignore_ascii_case(name));
+    let first = same.next();
+    let fix = first.filter(|c| same.all(|o| o == *c) && hint == format!("did you mean `{c}`?"));
+    Some((hint, fix))
 }
 
 pub fn levenshtein(a: &str, b: &str) -> usize {

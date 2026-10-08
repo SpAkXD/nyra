@@ -11,6 +11,7 @@ If a feature is not described, it does not exist yet (section 4).
 
 ```
 nyra check prog.nyra --json    # compile only; prints {"ok":true,"errors":[]} when clean
+nyra check prog.nyra --json --fix   # the same, after repairing every mistake that has a certain fix
 nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
 nyra run prog.nyra --js        # or run on Node.js
 nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
@@ -28,8 +29,32 @@ nyra explain E0201 --json      # what an error code means: why, causes, a wrong 
    with an older one, read ERRORS.md instead.)
 3. Run it and compare the output with what you expect.
 
+**Let the compiler fix simple mistakes first.** An error whose repair is certain carries a `fix`:
+`return` -> `ret`, a `;`, `elif` -> `else if`, `and`/`or`/`not` -> `&&`/`||`/`!`, `True` -> `true`,
+`'hello'` -> `"hello"`, `xs.length()` -> `xs.len()`, `string`/`i32` -> `str`/`int`, `Point { x: 1 }` ->
+`Point(x: 1)`, `Point(1, 2)` -> `Point(x: 1, y: 2)`, `5.` -> `5.0`, `2` -> `2.0` where a `float` is needed,
+`let` -> `var` for a variable that changes, `print "hi"` -> `print("hi")`, `{` on its own line, and more.
+`--fix` applies all of them, checks again and writes the file back when it then compiles (the edits
+are printed to stderr as a diff; `check --json` adds `"fixed":N`); `nyra run prog.nyra --fix` then runs
+the program. If an error without a fix remains, the file is not changed and you get the errors as usual.
+**Use `--fix` before you spend a model call on a repair.** In the JSON each fix is a list of edits:
+
+```json
+{"code":"E0005","message":"unexpected `;`: Nyra has no semicolons","file":"a.nyra","line":2,"col":14,"hint":"delete the `;`: ...","fix":[{"line":2,"col":14,"end_line":2,"end_col":15,"text":""}]}
+```
+
+Each edit replaces the text from `line`:`col` up to, not including, `end_line`:`end_col` with `text`
+(columns count characters from 1). To apply them yourself, go from the last edit to the first. An error
+with several possible repairs has a `hint` and no `fix` (a typo, `null`, `:=`, `n + 0.5` with an `int` n):
+those are yours to decide.
+
 Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
 `101` runtime error (see the bottom of section 5). `nyra run prog.nyra --json` reports runtime errors as JSON too.
+
+**If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
+same loop needs no files: `nyra_check {code}` returns the JSON above, `nyra_run {code, backend}` returns
+`stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
+the language spec.
 
 **If you cannot run commands** (you are answering in a chat): follow the rules below, go through the
 checklist in section 8, and give the user the code, the output you expect, and the command to run it

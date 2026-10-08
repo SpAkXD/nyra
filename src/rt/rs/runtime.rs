@@ -66,6 +66,13 @@ fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
     a.wrapping_rem(b)
 }
 
+/// `for i in a..b step k`: a step of 0 would never end.
+fn ny_check_step(k: i64, line: u32, col: u32) {
+    if k == 0 {
+        ny_fail("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
+    }
+}
+
 /// int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 fn ny_f2i(x: f64, line: u32, col: u32) -> i64 {
     if x.is_nan() || x >= 9223372036854775807.0 || x < -9223372036854775808.0 {
@@ -169,6 +176,19 @@ fn ny_str_repeat(s: &str, n: i64, line: u32, col: u32) -> Str {
         ny_oom(line, col);
     }
     Rc::new(s.repeat(n as usize))
+}
+
+/// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters.
+fn ny_pad(s: &str, n: i64, c: char, left: bool) -> Str {
+    let missing = n - ny_len(s);
+    if missing <= 0 {
+        return ny_str(s);
+    }
+    if missing > 536870888 {
+        ny_oom(0, 0);
+    }
+    let fill: String = std::iter::repeat(c).take(missing as usize).collect();
+    Rc::new(if left { fill + s } else { format!("{s}{fill}") })
 }
 
 fn ny_is_space(c: char) -> bool {
@@ -299,6 +319,17 @@ fn ny_remove<T: Clone>(xs: &mut Rc<Vec<T>>, i: i64, line: u32, col: u32) -> T {
         ny_oob(i, xs.len() as i64, line, col);
     }
     Rc::make_mut(xs).remove(i as usize)
+}
+
+fn ny_swap<T: Clone>(xs: &mut Rc<Vec<T>>, i: i64, j: i64, line: u32, col: u32) {
+    let n = xs.len() as i64;
+    if i < 0 || i >= n {
+        ny_oob(i, n, line, col);
+    }
+    if j < 0 || j >= n {
+        ny_oob(j, n, line, col);
+    }
+    Rc::make_mut(xs).swap(i as usize, j as usize);
 }
 
 fn ny_slice<T: Clone>(xs: &[T], a: i64, b: i64, line: u32, col: u32) -> Rc<Vec<T>> {

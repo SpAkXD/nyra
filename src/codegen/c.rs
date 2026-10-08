@@ -556,6 +556,7 @@ impl Gen<'_> {
                 }
             }
             RtOp::ArrSort => format!("nyrt_arr_sort(&{lv});"),
+            RtOp::ArrSwap => format!("nyrt_arr_swap(&{lv}, {}, {}, {at});", a[0], a[1]),
             RtOp::ArrReverse => format!("nyrt_arr_reverse(&{lv});"),
             other => unreachable!("{} does not change a place", other.name()),
         };
@@ -634,6 +635,9 @@ impl Gen<'_> {
             RtOp::StrChars => format!("nyrt_str_chars({})", a[0]),
             RtOp::StrCodes => format!("nyrt_str_codes({})", a[0]),
             RtOp::StrSplit => format!("nyrt_str_split({}, {}, {at})", a[0], a[1]),
+            RtOp::CheckStep => format!("nyrt_check_step({}, {at})", a[0]),
+            RtOp::StrPadLeft => format!("nyrt_str_pad({}, {}, {}, true)", a[0], a[1], a[2]),
+            RtOp::StrPadRight => format!("nyrt_str_pad({}, {}, {}, false)", a[0], a[1], a[2]),
             RtOp::ArrSlice => format!("nyrt_arr_slice({}, {}, {}, {at})", a[0], a[1], a[2]),
             RtOp::ArrRepeat => format!("nyrt_arr_repeat({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("nyrt_arr_concat({}, {})", a[0], a[1]),

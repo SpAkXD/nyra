@@ -73,6 +73,13 @@ def ny_mod(a, b, line, col):
     return ny_rem(a, b)
 
 
+def ny_check_step(k, line, col):
+    """`for i in a..b step k`: a step of 0 would never end."""
+    if k == 0:
+        ny_panic("E0243", "range step must not be 0",
+                 "use a positive step to count up and a negative one to count down", line, col)
+
+
 def ny_f2i(x, line, col):
     """int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error."""
     if x != x or x >= 9223372036854775807.0 or x < -9223372036854775808.0:
@@ -187,6 +194,16 @@ def ny_str_repeat(s, n, line, col):
     if ny_utf8_len(s) * n > 536870888:
         ny_oom(line, col)
     return s * n
+
+
+def ny_pad(s, n, c, left):
+    """`s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters."""
+    missing = n - len(s)
+    if missing <= 0:
+        return s
+    if missing > 536870888:
+        ny_oom(0, 0)
+    return c * missing + s if left else s + c * missing
 
 
 # char tests: ASCII only, like upper() and lower()
@@ -348,6 +365,12 @@ def ny_insert(xs, i, v, line, col):
 def ny_remove(xs, i, line, col):
     ny_ck(xs, i, line, col)
     return xs.pop(i)
+
+
+def ny_swap(xs, i, j, line, col):
+    ny_ck(xs, i, line, col)
+    ny_ck(xs, j, line, col)
+    xs[i], xs[j] = xs[j], xs[i]
 
 
 def ny_slice(xs, a, b, line, col):

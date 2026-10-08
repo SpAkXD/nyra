@@ -190,8 +190,16 @@ class TaskSet(unittest.TestCase):
         cls.tasks = run.load_tasks()
 
     def test_size_and_mix(self):
-        self.assertTrue(45 <= len(self.tasks) <= 60, len(self.tasks))
+        self.assertTrue(70 <= len(self.tasks) <= 90, len(self.tasks))
         self.assertEqual({t.min_version for t in self.tasks}, {"0.1", "0.2", "0.3"})
+
+    def test_hard_tier(self):
+        # the tier that keeps first tries below the ceiling; reports show it as its own category
+        hard = [t for t in self.tasks if t.category == "hard"]
+        self.assertTrue(25 <= len(hard) <= 35, len(hard))
+        for t in hard:
+            self.assertEqual((t.difficulty, t.min_version), ("hard", "0.3"), t.id)
+        self.assertEqual({t.id for t in self.tasks if t.difficulty == "hard"}, {t.id for t in hard})
 
     def test_every_category_is_documented(self):
         readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")

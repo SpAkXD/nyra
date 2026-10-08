@@ -40,6 +40,10 @@ function ny_mod(a: number, b: number, line: number, col: number): number {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
     return (a % b) + 0;
 }
+// `for i in a..b step k`: a step of 0 would never end.
+function ny_check_step(k: number, line: number, col: number): void {
+    if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 function ny_f2i(x: number, line: number, col: number): number {
     if (Number.isNaN(x) || x >= 9223372036854775807 || x < -9223372036854775808) {
@@ -109,6 +113,14 @@ function ny_str_repeat(s: string, n: number, line: number, col: number): string 
     // the engine's longest string (the other runtimes stop at the same length)
     if (s.length * n > 536870888) ny_oom(line, col);
     return s.repeat(n);
+}
+// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters.
+function ny_pad(s: string, n: number, c: number, left: boolean): string {
+    const missing = n - ny_len(s);
+    if (missing <= 0) return s;
+    if (missing > 536870888) ny_oom(0, 0);
+    const fill = String.fromCodePoint(c).repeat(missing);
+    return left ? fill + s : s + fill;
 }
 // char tests: ASCII only, like upper() and lower()
 function ny_char_is_digit(c: number): boolean { return c >= 48 && c <= 57; }
@@ -229,6 +241,13 @@ function ny_repeat<T>(a: T[], n: number, line: number, col: number): T[] {
     const r: T[] = [];
     for (let k = 0; k < n; k++) for (let i = 0; i < a.length; i++) r.push(a[i]);
     return ny_share_all(r);
+}
+function ny_swap<T>(a: T[], i: number, j: number, line: number, col: number): void {
+    ny_ck(a, i, line, col);
+    ny_ck(a, j, line, col);
+    const t = a[i];
+    a[i] = a[j];
+    a[j] = t;
 }
 // `xs += ys` on a unique `a`; `xs += xs` doubles it.
 function ny_append<T>(a: T[], b: T[]): void {

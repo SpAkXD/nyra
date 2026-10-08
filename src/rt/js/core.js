@@ -33,6 +33,10 @@ function ny_mod(a, b, line, col) {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
     return (a % b) + 0;
 }
+// `for i in a..b step k`: a step of 0 would never end.
+function ny_check_step(k, line, col) {
+    if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 function ny_f2i(x, line, col) {
     if (Number.isNaN(x) || x >= 9223372036854775807 || x < -9223372036854775808) {

@@ -1,0 +1,16 @@
+// abs, min and max; quotes inside { }; variables named like builtins
+let xs = ["a", "b", "c"]
+print("items: {xs.join(", ")} ({xs.len()} of them)")
+print("first: {'x'.code()} and {"q".upper()}")
+print(abs(-5), abs(3), abs(-2.5))
+print(min(3, 7), max(3, 7), min(2.5, -1.0), max(0 - 4, 0 - 9))
+var free = true
+let keep = 3
+if free {
+    print("free is", free, "keep is", keep)
+}
+var best = 0
+for v in [4, 9, 2] {
+    best = max(best, v)
+}
+print(best)
