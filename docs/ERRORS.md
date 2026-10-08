@@ -26,12 +26,13 @@ design may still change.
 | E0201-E0212 | type checker | names, types, `ret`, conditions |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 |
+| E0250-E0253 | examples | an `ex` example is false, stops with a runtime error, is not a `bool` or does not finish; checked while compiling |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248, E0309,
+Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248, E0254-E0259, E0309,
 E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -1502,6 +1503,149 @@ fn main() {
 }
 ```
 - **Related:** E0240, E0243
+
+## E0250: example is false
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An example written with `ex` after a function evaluates to `false`. Examples are run while the program compiles (by `nyra check`, `run`, `build` and `test`), so a function whose logic is wrong for an input of its examples does not compile. For a comparison the message gives the value of each side: "example `dist(2, 7) == 5` is false: `dist(2, 7)` is -5, not 5", and `--json` adds `"actual":"-5","expected":"5"` (values as Nyra code: strings in quotes). When the left side calls a function of the program, the hint names its parameters with the arguments of the example (`a = 2, b = 7`).
+- **Why Nyra has this rule:** A function and an example state the same fact in two ways: when they disagree, one of them is wrong, and it is cheaper to learn that before the program runs than from its output. Examples cost nothing at run time: they are never compiled into the program.
+- **Common causes:**
+  - a bug in the function for one kind of input: the other branch, a negative number, an empty array, the last element
+  - an off-by-one in a loop bound or a range
+  - an example that expects the wrong value: work it out by hand once more; change the example only when it is the wrong one, never just to match what the function returns
+  - comparing floats with `==`: `0.1 + 0.2 == 0.3` is false; compare with a value the function really returns, or test a range (`x > 0.29 && x < 0.31`)
+- **Wrong:**
+```rust
+// the distance between two numbers on a line
+fn dist(a: int, b: int) -> int {
+    if a > b { ret a - b }
+    ret a - b
+}
+ex dist(7, 2) == 5, dist(2, 7) == 5
+
+fn main() {
+    print(dist(2, 7))
+}
+```
+- **Fixed:**
+```rust
+// the distance between two numbers on a line
+fn dist(a: int, b: int) -> int {
+    if a > b { ret a - b }
+    ret b - a
+}
+ex dist(7, 2) == 5, dist(2, 7) == 5
+
+fn main() {
+    print(dist(2, 7))
+}
+```
+- **Related:** E0251, E0252, E0253
+
+## E0251: example stops with a runtime error
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** Running an example stops with a runtime error (E0240-E0249): "example `mean([]) == 0` stops with runtime error E0241: division by zero (at line 4:15 in `mean`)". The position in the message is where the error happened, in the function the example calls; the error itself points at the example.
+- **Why Nyra has this rule:** An example shows what a function does for an input. If the function cannot handle that input, the program would stop the same way when it meets it, so the compiler reports it before the program runs.
+- **Common causes:**
+  - a function that divides by a count that can be 0 (an average of an empty array)
+  - an index or `slice` past the end for a short or empty input
+  - `pop()` on an empty array, `int(s)` of text that is not a number
+  - an example that gives the function an input it was never meant to take: give it a valid one
+- **Wrong:**
+```rust
+fn mean(xs: [int]) -> int {
+    var total = 0
+    for x in xs { total += x }
+    ret total / xs.len()
+}
+ex mean([2, 4, 6]) == 4, mean([]) == 0
+
+fn main() {
+    print(mean([1, 2, 3]))
+}
+```
+- **Fixed:**
+```rust
+fn mean(xs: [int]) -> int {
+    if xs.len() == 0 { ret 0 }
+    var total = 0
+    for x in xs { total += x }
+    ret total / xs.len()
+}
+ex mean([2, 4, 6]) == 4, mean([]) == 0
+
+fn main() {
+    print(mean([1, 2, 3]))
+}
+```
+- **Related:** E0250, E0240, E0241
+
+## E0252: example is not a `bool`
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An `ex` example is a condition that must be true, so it must have the type `bool`: "an example must be a `bool` condition, but `sq(3)` is an `int`". A call that returns nothing (`print(1)`) is not an example either.
+- **Why Nyra has this rule:** An example states a fact about a value. A value alone states nothing: the compiler would not know what to expect.
+- **Common causes:**
+  - only the call, without the value it should give: `ex sq(3)` instead of `ex sq(3) == 9`
+  - `print(...)` as an example
+- **Wrong:**
+```rust
+fn sq(x: int) -> int = x * x   ex sq(3)
+
+fn main() {
+    print(sq(4))
+}
+```
+- **Fixed:**
+```rust
+fn sq(x: int) -> int = x * x   ex sq(3) == 9
+
+fn main() {
+    print(sq(4))
+}
+```
+- **Related:** E0250, E0209
+
+## E0253: example does not finish
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An example ran for more than 1,000,000 steps (statements run, plus the elements and characters it made), or more than 10,000 calls were nested, and the compiler stopped it: "example `digits(1234) == 4` did not finish within 1000000 steps". Usually the function it calls loops forever for that input.
+- **Why Nyra has this rule:** Examples run while the program compiles, so each one has a budget: the compiler must always finish, and quickly. A loop that never ends is found before the program runs, with the input that shows it.
+- **Common causes:**
+  - a `while` loop whose variable never changes (the step was forgotten, or changes another variable)
+  - recursion that never reaches its base case for this input (a negative number, an empty array)
+  - an example with a very large input: examples should be small; use the program itself for big inputs
+- **Wrong:**
+```rust
+fn digits(n: int) -> int {
+    var left = n
+    var count = 1
+    while left >= 10 {
+        count += 1
+    }
+    ret count
+}
+ex digits(7) == 1, digits(1234) == 4
+
+fn main() {
+    print(digits(2026))
+}
+```
+- **Fixed:**
+```rust
+fn digits(n: int) -> int {
+    var left = n
+    var count = 1
+    while left >= 10 {
+        left /= 10
+        count += 1
+    }
+    ret count
+}
+ex digits(7) == 1, digits(1234) == 4
+
+fn main() {
+    print(digits(2026))
+}
+```
+- **Related:** E0250, E0251
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet

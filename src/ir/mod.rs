@@ -12,6 +12,7 @@
 //! the counting; JavaScript marks values that have more than one owner as shared, so that a
 //! write copies them first.
 
+pub mod interp;
 pub mod lower;
 pub mod opt;
 pub mod print;

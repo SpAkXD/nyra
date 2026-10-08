@@ -3,6 +3,7 @@ mod check;
 mod check_v03;
 mod codegen;
 mod diag;
+mod examples;
 mod explain;
 mod fix;
 mod hints;
@@ -22,7 +23,8 @@ nyra - a language for AI agents
 usage:
   nyra run   <file.nyra>    compile and run
   nyra build <file.nyra>    compile to a native executable
-  nyra check <file.nyra>    only check for errors
+  nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
+  nyra test  <file.nyra>    run the `ex` examples and report each one that fails
   nyra explain [CODE]       explain an error code (without CODE: list all codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
   nyra <file.nyra>          same as `nyra run`
@@ -132,7 +134,7 @@ fn parse_args() -> Result<Opts, String> {
         positional.insert(0, "run".into());
     }
     match positional.as_slice() {
-        [cmd, file] if ["run", "build", "check"].contains(&cmd.as_str()) => {
+        [cmd, file] if ["run", "build", "check", "test"].contains(&cmd.as_str()) => {
             opts.cmd = cmd.clone();
             opts.file = file.clone();
             Ok(opts)
@@ -141,7 +143,18 @@ fn parse_args() -> Result<Opts, String> {
     }
 }
 
+/// Lexes, parses, type-checks and runs the examples: a program that passes can be generated.
 fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    let mut prog = front(src)?;
+    let errs = examples::run(&mut prog).errors;
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    Ok(prog)
+}
+
+/// Lexes, parses and type-checks, without running the examples.
+fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
         fix::validate(&mut errs, src);
@@ -190,6 +203,10 @@ fn main() -> ExitCode {
         Ok(s) => s,
         Err(e) => return fail(format!("cannot read `{}`: {e}", opts.file)),
     };
+
+    if opts.cmd == "test" {
+        return test(&opts, &src);
+    }
 
     let start = Instant::now();
     let mut fixed = 0;
@@ -248,6 +265,35 @@ fn main() -> ExitCode {
         build(&opts, &code, &stem, nyra_time)
     } else {
         run(&opts, &code, &stem, nyra_time)
+    }
+}
+
+/// `nyra test`: runs every example and reports each one that fails; exit code 1 if any does.
+fn test(opts: &Opts, src: &str) -> ExitCode {
+    let start = Instant::now();
+    let mut prog = match front(src) {
+        Ok(p) => p,
+        Err(diags) => {
+            if opts.json {
+                println!("{}", diag::render_json(&diags, &opts.file));
+            } else {
+                eprint!("{}", diag::render_human(&diags, &opts.file, src));
+                eprintln!("nyra: {} error(s)", diags.len());
+            }
+            return ExitCode::from(1);
+        }
+    };
+    let out = examples::run(&mut prog);
+    if opts.json {
+        println!("{}", examples::json(&out, &opts.file));
+    } else {
+        eprint!("{}", diag::render_human(&out.errors, &opts.file, src));
+        eprintln!("nyra: {} ({})", examples::summary(&out, &opts.file), ms(start.elapsed()));
+    }
+    if out.errors.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
 

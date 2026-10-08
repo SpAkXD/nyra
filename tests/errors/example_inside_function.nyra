@@ -1,0 +1,9 @@
+// expect: E0101
+fn inc(x: int) -> int {
+    ex inc(1) == 2
+    ret x + 1
+}
+
+fn main() {
+    print(inc(1))
+}

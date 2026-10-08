@@ -89,6 +89,11 @@ fn node_available() -> bool {
 const HELLO: &str = "fn main() {\n    for i in 0..3 {\n        print(\"hi {i}\")\n    }\n}\n";
 const TYPO: &str = "fn main() {\n    let count = 1\n    print(cout)\n}\n";
 const OUT_OF_BOUNDS: &str = "fn main() {\n    let xs = [1, 2]\n    print(\"before\")\n    print(xs[5])\n}\n";
+const WRONG_SQ: &str = "fn sq(x: int) -> int = x + x   ex sq(2) == 4, sq(3) == 9
+fn main() {
+    print(sq(5))
+}
+";
 const FOREVER: &str = "fn main() {\n    var i = 0\n    while true {\n        i += 1\n    }\n}\n";
 
 #[test]
@@ -118,6 +123,9 @@ fn a_whole_session() {
         "{not json".to_string(),
         request(21, "ping", "{}"),
         call(22, "nyra_run", &format!(r#"{{"code":{},"backend":"native"}}"#, esc(OUT_OF_BOUNDS))),
+        call(23, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(WRONG_SQ))),
+        call(24, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(WRONG_SQ))),
+        call(25, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(TYPO))),
     ];
     let replies = session(&requests);
     // one reply per request: none for the notification, one (id null) for the parse error
@@ -134,7 +142,7 @@ fn a_whole_session() {
     // tools/list
     let tools = result(&replies, 2).get("tools").and_then(Json::as_array).unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
-    for want in ["nyra_check", "nyra_run", "nyra_explain", "nyra_spec", "nyra_build"] {
+    for want in ["nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_spec", "nyra_build"] {
         assert!(names.contains(&want), "tools/list lacks {want}: {names:?}");
     }
     for t in tools {
@@ -153,6 +161,22 @@ fn a_whole_session() {
     assert_eq!(e.get("col").and_then(Json::as_u64), Some(11));
     assert!(e.get("hint").and_then(Json::as_str).unwrap().contains("count"));
     assert_eq!(tool_text(&replies, 4), (false, r#"{"ok":true,"errors":[]}"#.to_string()));
+
+    // nyra_test: every example, with the values of a false one; nyra_check reports the same error
+    let (is_error, test) = tool_json(&replies, 23);
+    assert!(!is_error);
+    assert_eq!(test.get("ok").and_then(Json::as_bool), Some(false));
+    assert_eq!(test.get("examples").and_then(Json::as_u64), Some(2));
+    assert_eq!(test.get("passed").and_then(Json::as_u64), Some(1));
+    assert_eq!(test.get("failed").and_then(Json::as_u64), Some(1));
+    let e = &test.get("errors").and_then(Json::as_array).unwrap()[0];
+    assert_eq!(e.get("code").and_then(Json::as_str), Some("E0250"));
+    assert_eq!(e.get("actual").and_then(Json::as_str), Some("6"));
+    assert_eq!(e.get("expected").and_then(Json::as_str), Some("9"));
+    assert_eq!(e.get("col").and_then(Json::as_u64), Some(47));
+    let (_, checked) = tool_json(&replies, 24);
+    assert_eq!(checked.get("errors"), test.get("errors"));
+    assert_eq!(tool_json(&replies, 25).1, check);
 
     // nyra_run, native (unless this machine has no C compiler) and JavaScript
     let (is_error, native) = tool_json(&replies, 5);

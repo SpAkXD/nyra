@@ -1,0 +1,7 @@
+// expect: E0251
+fn second(xs: [str]) -> str = xs[1]
+ex second(["a", "b"]) == "b", second(["a"]) == ""
+
+fn main() {
+    print(second(["x", "y", "z"]))
+}

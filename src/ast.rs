@@ -109,6 +109,14 @@ impl Type {
 pub struct Program {
     pub funcs: Vec<Func>,
     pub structs: Vec<StructDef>,
+    /// `ex` lines: checked at compile time, never compiled into the program.
+    pub examples: Vec<Example>,
+}
+
+/// One example of `ex f(3) == 9, f(-2) == 4`: a `bool` condition that must be true.
+#[derive(Debug)]
+pub struct Example {
+    pub expr: Expr,
 }
 
 #[derive(Debug)]

@@ -1,0 +1,7 @@
+// expect: E0252
+fn double(x: int) -> int = x * 2
+ex double(4)
+
+fn main() {
+    print(double(1))
+}

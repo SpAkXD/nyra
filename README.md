@@ -69,6 +69,9 @@ compiler to tell the AI exactly what to fix.
   makes them machine-readable, so an agent can loop *write, check, fix, run* without a human. Each message says
   what was expected and what was found, and `nyra explain E0201` explains any code with a wrong and a fixed
   program ([`docs/ERRORS.md`](docs/ERRORS.md)).
+- **Examples catch logic mistakes before anything runs.** `fn sq(x: int) -> int = x * x  ex sq(3) == 9`:
+  every `ex` condition is evaluated while the program compiles and never compiled into it, so a function
+  that is wrong for its own examples is a compile error that shows the value it really gave.
 - **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
   `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
   fix, and `--fix` applies them all: a slip costs no extra model call.
@@ -125,6 +128,7 @@ nyra run examples/hello.nyra          # compile and run natively
 nyra run examples/hello.nyra --js     # the same program on Node.js
 nyra build examples/hello.nyra        # a native executable next to the source
 nyra check examples/hello.nyra        # only report errors
+nyra test examples/inline_examples.nyra   # run the `ex` examples and count what passed
 ```
 
 Save the program above as `scores.nyra` and run `nyra scores.nyra`. You never pass flags to the C
@@ -197,6 +201,7 @@ both backends and the error database as tools, and needs no files or shell acces
 |---|---|
 | `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
 | `nyra_check` | `{code}` → the same JSON as `nyra check --json` |
+| `nyra_test` | `{code}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
 | `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |
 | `nyra_build` | `{code, target?: "c"\|"js"}` → the generated C or JavaScript |
@@ -333,7 +338,8 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 |---|---|
 | `nyra run <file>` | compile and run (`nyra <file>` is the same) |
 | `nyra build <file>` | compile to a native executable |
-| `nyra check <file>` | type-check only; exit code 0 means no errors |
+| `nyra check <file>` | type-check only (and evaluate the `ex` examples); exit code 0 means no errors |
+| `nyra test <file>` | run the `ex` examples and report each one that fails; exit code 0 means all passed |
 | `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list all codes |
 | `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
 
