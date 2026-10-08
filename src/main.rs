@@ -319,7 +319,9 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     let mut build_time: Option<Option<Duration>> = None;
     let mut cmd = match opts.target {
         Target::Js | Target::Ts | Target::Py => {
-            let path = match write_temp(&temp_dir(), &format!("{stem}.{}", opts.target.ext()), code) {
+            // named by the code, so two programs with the same name can run at the same time
+            let name = format!("{stem}-{:016x}.{}", fnv1a(&[code.as_bytes()]), opts.target.ext());
+            let path = match write_temp(&temp_dir(), &name, code) {
                 Ok(p) => p,
                 Err(msg) => return fail(msg),
             };
