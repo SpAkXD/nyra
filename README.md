@@ -35,19 +35,17 @@ struct Player {
     score: int
 }
 
-fn main() {
-    var players: [Player] = []
-    for entry in "ada:31 grace:47 alan:28".split(" ") {
-        let parts = entry.split(":")
-        players.push(Player(name: parts[0], score: int(parts[1])))
-    }
-    var best = players[0]
-    for p in players {
-        if p.score > best.score { best = p }
-    }
-    print("{best.name.upper()} wins with {best.score} points")
-    print(best)
+var players: [Player] = []
+for entry in "ada:31 grace:47 alan:28".split(" ") {
+    let parts = entry.split(":")
+    players.push(Player(name: parts[0], score: int(parts[1])))
 }
+var best = players[0]
+for p in players {
+    if p.score > best.score { best = p }
+}
+print("{best.name.upper()} wins with {best.score} points")
+print(best)
 ```
 
 ```

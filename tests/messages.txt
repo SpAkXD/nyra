@@ -2323,12 +2323,12 @@ nyra: 1 error(s)
 fn helper() {
 }
 ----
-error[E0208]: missing `fn main()`: a program starts running at `main`
+error[E0208]: nothing to run: the program has no statements at the top level and no `fn main()`
   --> case.nyra:1:1
   |
 1 | fn helper() {
   | ^
-  = hint: add the entry point: `fn main() { print("hello") }`
+  = hint: write the program's statements at the top level, e.g. `print("hello")`: they run in order
   = explain: nyra explain E0208
 
 nyra: 1 error(s)

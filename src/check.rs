@@ -211,8 +211,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
 
     match prog.funcs.iter().find(|f| f.name == "main") {
         None => c.errs.push(
-            Diag::new("E0208", "missing `fn main()`: a program starts running at `main`", Span { line: 1, col: 1 })
-                .hint("add the entry point: `fn main() { print(\"hello\") }`"),
+            Diag::new("E0208", "nothing to run: the program has no statements at the top level and no `fn main()`", Span { line: 1, col: 1 })
+                .hint("write the program's statements at the top level, e.g. `print(\"hello\")`: they run in order"),
         ),
         Some(f) if !f.params.is_empty() || f.ret != Type::Void => {
             let mut problems = Vec::new();

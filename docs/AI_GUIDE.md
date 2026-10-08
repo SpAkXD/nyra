@@ -91,49 +91,48 @@ fn double_all(inout xs: [int]) {              // `inout`: may change the caller'
     for i in 0..xs.len() { xs[i] *= 2 }
 }
 
-fn main() {                                   // required; no parameters, no return type
-    let x = 7                                 // immutable, type inferred (int)
-    var count = 0                             // mutable
-    let ratio: float = 2.5                    // type annotation is optional
-    count += x                                // also -= *= /= %=  (var only)
+// the program: statements at the top level run in order (no `fn main` needed)
+let x = 7                                 // immutable, type inferred (int)
+var count = 0                             // mutable
+let ratio: float = 2.5                    // type annotation is optional
+count += x                                // also -= *= /= %=  (var only)
 
-    if count > 20 && x != 0 {                 // the condition must be a bool
-        print("big")
-    } else if count == 7 {
-        print("seven")
-    } else {
-        print("small")
-    }
-    while count > 0 { count -= 5 }
-    for i in 0..3 { print(i) }                // 0, 1, 2: the end is exclusive
-    let bigger = if x > 3 { x } else { 3 }    // `if` as a value (needs `else`)
-
-    var nums = [3, 1, 2]                      // an array of int: [int]
-    nums.push(10)                             // changing an array needs `var`
-    nums.sort()                               // [1, 2, 3, 10]
-    double_all(inout nums)                    // the call says `inout` too
-    print(nums)                               // [2, 4, 6, 20]
-    var names: [str] = []                     // an empty array needs its type
-    names.push("ann")
-
-    let words = "red green blue".split(" ")   // ["red", "green", "blue"]
-    let w = words[2] + "!"                    // `+` joins two strings: "blue!"
-    print("{w} has {w.len()} chars and starts with {w[0]}")
-    for c in "hey" {                          // each char of a string
-        if c == 'e' { continue }              // chars use single quotes; `break` exists too
-        print(c.upper())                      // H, then Y
-    }
-
-    let cart = [Item(name: "pen", price: 3), Item(name: "ink", price: 9)]
-    print(total(cart))                        // 12
-    print(cart[0])                            // Item(name: "pen", price: 3)
-
-    print("x = {x}, sum = {add(x, 2)}, gcd = {gcd(48, 18)}")
-    print(float(x) / ratio)                   // 2.8: conversions are explicit, float(...) and int(...)
-    print(7 / 2)                              // 3: int division truncates
-    print(bigger + limit())                   // 107
-    shout("done")
+if count > 20 && x != 0 {                 // the condition must be a bool
+    print("big")
+} else if count == 7 {
+    print("seven")
+} else {
+    print("small")
 }
+while count > 0 { count -= 5 }
+for i in 0..3 { print(i) }                // 0, 1, 2: the end is exclusive
+let bigger = if x > 3 { x } else { 3 }    // `if` as a value (needs `else`)
+
+var nums = [3, 1, 2]                      // an array of int: [int]
+nums.push(10)                             // changing an array needs `var`
+nums.sort()                               // [1, 2, 3, 10]
+double_all(inout nums)                    // the call says `inout` too
+print(nums)                               // [2, 4, 6, 20]
+var names: [str] = []                     // an empty array needs its type
+names.push("ann")
+
+let words = "red green blue".split(" ")   // ["red", "green", "blue"]
+let w = words[2] + "!"                    // `+` joins two strings: "blue!"
+print("{w} has {w.len()} chars and starts with {w[0]}")
+for c in "hey" {                          // each char of a string
+    if c == 'e' { continue }              // chars use single quotes; `break` exists too
+    print(c.upper())                      // H, then Y
+}
+
+let cart = [Item(name: "pen", price: 3), Item(name: "ink", price: 9)]
+print(total(cart))                        // 12
+print(cart[0])                            // Item(name: "pen", price: 3)
+
+print("x = {x}, sum = {add(x, 2)}, gcd = {gcd(48, 18)}")
+print(float(x) / ratio)                   // 2.8: conversions are explicit, float(...) and int(...)
+print(7 / 2)                              // 3: int division truncates
+print(bigger + limit())                   // 107
+shout("done")
 ```
 
 Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]` and the structs you declare.
@@ -160,9 +159,9 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Bool conditions | `if n {`, `if xs {` (E0209) | `if n != 0 {`, `if xs.len() > 0 {` |
 | Return with `ret` | `return x` (E0101) | `ret x` |
 | Every path returns | `if x > 0 { ret 1 }` as the last statement (E0207) | add `ret 0` after it, or `else { ret 0 }` |
-| `main` takes nothing | `fn main() -> int` (E0211), no `main` (E0208) | `fn main() { ... }` |
+| Scripts need no `main` | `fn main()` around everything (it works, but costs tokens) | statements at the top level |
 | Ranges are exclusive | `0..=9` (E0101), `0.0..1.0` (E0203), `'a'..'z'` (E0210) | `0..10` with int bounds |
-| `print` takes one value | `print(a, b)` (E0204) | `print("{a} {b}")` |
+| `print` joins values with a space | `print(a + " " + b)` | `print(a, b)` |
 | `+` joins two strings | `"n=" + 5`, `s + c` with a char `c` (E0210) | `"n=" + str(5)`, `"n={n}"`, `s + str(c)` |
 | Chars use single quotes | `s[0] == "a"` (E0210), `'ab'` (E0007) | `s[0] == 'a'`, `"ab"` |
 | Char codes are explicit | `int(c)` (E0203), `c + 1` (E0210) | `c.code()`, `char(c.code() + 1)` |
@@ -275,9 +274,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0203 | type mismatch | wrong argument, return or assigned type: `float(x)` / `int(x)`, write `2.0` not `2`; `int(c)` of a char: `c.code()` |
 | E0204 | wrong argument count | `print` takes exactly one argument; methods take a fixed number (`s.split(" ")`) |
 | E0205 | changing what is not a `var` | `let` variables, parameters and loop variables are immutable: use `var`, or an `inout` parameter |
-| E0206 | name already defined | no shadowing, no duplicate functions or structs, no variable named like a function, a struct or a builtin (`print`, `str`, `int`, `float`, `char`, `free`, `keep`) |
+| E0206 | name already defined | no shadowing, no duplicate functions or structs, no variable named like a function or a struct |
 | E0207 | bad or missing `ret` | end every path of a `->` function with `ret value`; no `ret value` without `->` |
-| E0208 | no `fn main()` | add `fn main() { ... }` |
+| E0208 | no `fn main()` and no top-level statements | write the program's statements at the top level (a script) |
 | E0209 | condition is not `bool` | compare: `if n != 0`, `if xs.len() > 0` |
 | E0210 | operator on wrong types | `int + float`, `"a" + 1`, `"a" + 'b'`, `'a' + 1`, `c == "a"`, `xs + 5`, `"a" < 1`, `a < b < c` |
 | E0211 | bad `main` | no parameters and no return type |
@@ -434,18 +433,16 @@ fn first_divisor(n: int) -> int {              // smallest divisor above 1
 Count down, and build a line of text:
 
 ```rust
-fn main() {
-    var i = 3
-    while i > 0 {
-        print(i)                                // 3, 2, 1
-        i -= 1
-    }
-
-    var row = ""
-    for j in 0..5 { row += "*" }
-    print(row)                                  // *****
-    print("-".repeat(5))                        // -----
+var i = 3
+while i > 0 {
+    print(i)                                // 3, 2, 1
+    i -= 1
 }
+
+var row = ""
+for j in 0..5 { row += "*" }
+print(row)                                  // *****
+print("-".repeat(5))                        // -----
 ```
 
 ## 7. Complete programs
@@ -454,13 +451,11 @@ FizzBuzz (`for`, `else if`, `%`). Prints `1`, `2`, `Fizz`, `4`, `Buzz`, `Fizz`, 
 `11`, `Fizz`, `13`, `14`, `FizzBuzz`, one per line:
 
 ```rust
-fn main() {
-    for i in 1..16 {
-        if i % 15 == 0 { print("FizzBuzz") }
-        else if i % 3 == 0 { print("Fizz") }
-        else if i % 5 == 0 { print("Buzz") }
-        else { print(i) }
-    }
+for i in 1..16 {
+    if i % 15 == 0 { print("FizzBuzz") }
+    else if i % 3 == 0 { print("Fizz") }
+    else if i % 5 == 0 { print("Buzz") }
+    else { print(i) }
 }
 ```
 
@@ -480,24 +475,22 @@ fn index_of_word(counts: [Count], word: str) -> int {
     ret -1
 }
 
-fn main() {
-    let text = "the cat saw the dog and the dog saw the cat run"
-    var counts: [Count] = []
-    for w in text.split(" ") {
-        let i = index_of_word(counts, w)
-        if i == -1 {
-            counts.push(Count(word: w, n: 1))
-        } else {
-            counts[i].n += 1
-        }
+let text = "the cat saw the dog and the dog saw the cat run"
+var counts: [Count] = []
+for w in text.split(" ") {
+    let i = index_of_word(counts, w)
+    if i == -1 {
+        counts.push(Count(word: w, n: 1))
+    } else {
+        counts[i].n += 1
     }
-    for c in counts {
-        if c.n > 1 {
-            print("{c.word}: {c.n}")
-        }
-    }
-    print("{counts.len()} different words")
 }
+for c in counts {
+    if c.n > 1 {
+        print("{c.word}: {c.n}")
+    }
+}
+print("{counts.len()} different words")
 ```
 
 Title case and an acronym (chars, `str(c)`, `slice`, `join`). Prints `Portable Network Graphics`, then
@@ -509,17 +502,15 @@ fn capitalized(word: str) -> str {
     ret str(word[0].upper()) + word.slice(1, word.len())
 }
 
-fn main() {
-    let name = "portable network graphics"
-    var title: [str] = []
-    var acronym = ""
-    for w in name.split(" ") {
-        title.push(capitalized(w))
-        acronym += str(w[0].upper())
-    }
-    print(title.join(" "))
-    print(acronym)
+let name = "portable network graphics"
+var title: [str] = []
+var acronym = ""
+for w in name.split(" ") {
+    title.push(capitalized(w))
+    acronym += str(w[0].upper())
 }
+print(title.join(" "))
+print(acronym)
 ```
 
 One step of Conway's Game of Life (a 2D array `[[bool]]`, copies, nested loops). Prints a horizontal
@@ -561,15 +552,13 @@ fn show(g: [[bool]]) {
     }
 }
 
-fn main() {
-    var grid = [[false].repeat(5)].repeat(5)
-    grid[2][1] = true
-    grid[2][2] = true
-    grid[2][3] = true
-    show(grid)
-    print("")
-    show(step(grid))
-}
+var grid = [[false].repeat(5)].repeat(5)
+grid[2][1] = true
+grid[2][2] = true
+grid[2][3] = true
+show(grid)
+print("")
+show(step(grid))
 ```
 
 More programs with expected output live in
@@ -578,10 +567,10 @@ More programs with expected output live in
 
 ## 8. Checklist before you answer
 
-1. `fn main()` exists, and only `fn` and `struct` definitions are at the top level.
+1. The program is a script: statements at the top level, `fn` and `struct` definitions anywhere (no `fn main` needed).
 2. No `;`, `return`, `elif`, `++`, `0..=n`, `xs[a..b]`, `Point { x: 1 }`, or Allman-style `{` on its own line.
 3. Every name is unique inside its function (parameters, loop variables and locals), and no variable
-   shares a name with a function, a struct or a builtin (`print`, `str`, `int`, `float`, `char`, `free`, `keep`).
+   shares a name with a function or a struct.
 4. Both sides of every operator have the same type; floats are written with a dot (`2.0`);
    conversions are explicit (`float(n)`, `int(x)`, `str(x)`, `c.code()`, `char(n)`).
 5. Chars are in single quotes and compared with chars (`s[i] == 'a'`); `+` joins only two strings or two arrays.

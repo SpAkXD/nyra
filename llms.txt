@@ -4,9 +4,9 @@
 
 Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there is no input, no maps, no tuples and no modules yet). Read the AI guide before you write code.
 
-The ten most important rules for writing correct Nyra (v0.3):
+The ten most important rules for writing correct Nyra (v0.4):
 
-1. A program is a list of `fn` and `struct` definitions, in any order, and must contain `fn main() { ... }` (no parameters, no return type). Nothing else may be at the top level, so there are no global variables.
+1. A program is a script: its statements stand at the top level and run in order, so do not write `fn main()` (it is allowed, but costs tokens). `fn` and `struct` definitions may appear anywhere. Functions cannot see the script's variables (there are no globals).
 2. No semicolons. One statement per line. Braces are required and `{` stays on the same line as `fn`, `if`, `else`, `while` and `for`. Comments are `// ...`.
 3. Types are `int` (64-bit), `float`, `bool`, `str`, `char` (`'a'`), arrays `[T]` (`[1, 2, 3]`) and structs. Parameters and return types are always written (`fn add(a: int, b: int) -> int`); local types are inferred, but an empty array needs one: `var xs: [int] = []`.
 4. Types never convert implicitly: `1 + 2.0` and `"n=" + 5` are errors. Write `float(x)`, `int(x)` or `str(x)`, and write float literals with a dot (`2.0`, never `2`).
