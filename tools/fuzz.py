@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""A differential fuzzer for Nyra's two backends: C (native, through gcc) and JavaScript (Node).
+"""A differential fuzzer for Nyra's backends: C (native, through gcc) and JavaScript (Node), and
+with --targets also Python, TypeScript, Rust and Go (each compared with the native result).
 
 Each seed deterministically generates one random, well-typed Nyra program. The program is built
 once per backend and run: natively with NYRA_LEAKCHECK=1 (exit 102 is a memory bug) and on Node.
@@ -12,6 +13,7 @@ tools/fuzz_failures/<kind>-<seed>.nyra.
     python tools/fuzz.py --print 42                         # show the program of seed 42
     python tools/fuzz.py --check prog.nyra                  # run one file through the oracle
     python tools/fuzz.py --minimize prog.nyra               # shrink a failing file
+    python tools/fuzz.py --count 200 --targets py,ts,rs,go  # also the other targets
 
 The generator keeps an abstract state for every variable (how long its arrays and strings can
 be, at every level), so indexes stay in bounds, `pop` never sees an empty array, sizes stay
@@ -1739,6 +1741,11 @@ def generate(seed, feats=None):
 RUN_TIMEOUT = 20
 BUILD_TIMEOUT = 180
 
+# The other targets (--targets): run with `nyra run --target X` (which builds Rust and Go first)
+# and compared with the native build.
+OTHER_TARGETS = {"py": "python", "ts": "ts", "rs": "rust", "go": "go"}
+EXTRA = []
+
 
 class Result:
     """One program built for one backend (with or without the IR optimizer) and run."""
@@ -1751,7 +1758,8 @@ class Result:
 
     @property
     def label(self):
-        return ("native" if self.target == "c" else "js") + ("" if self.opt else " NYRA_OPT=0")
+        name = {"c": "native", "js": "js"}.get(self.target, OTHER_TARGETS.get(self.target, self.target))
+        return name + ("" if self.opt else " NYRA_OPT=0")
 
 
 def run_cmd(cmd, env, timeout, cwd=None):
@@ -1763,13 +1771,21 @@ def run_cmd(cmd, env, timeout, cwd=None):
 
 
 def build_and_run(src, target, opt, workdir):
-    """Builds workdir/src for target ("c" or "js") and runs it."""
+    """Builds workdir/src for target ("c", "js" or one of OTHER_TARGETS) and runs it."""
     res = Result(target, opt)
     env = dict(os.environ)
     for k in ("NYRA_OPT", "NYRA_LEAKCHECK", "NYRA_JSON", "NYRA_DUMP"):
         env.pop(k, None)
     if not opt:
         env["NYRA_OPT"] = "0"
+    if target in OTHER_TARGETS:
+        # `nyra run` builds and runs; exit 2 with a `nyra:` message is a failed build
+        rc, out, err = run_cmd([NYRA, "run", src, "--target", target], env, BUILD_TIMEOUT + RUN_TIMEOUT, cwd=workdir)
+        if rc == 2 and b"nyra:" in err:
+            res.build_rc, res.build_err = rc, err
+        else:
+            res.build_rc, res.rc, res.out, res.err = 0, rc, out, err
+        return res
     stem = os.path.splitext(src)[0]
     out = f"{stem}-{target}{'' if opt else '0'}" + (".js" if target == "js" else EXE)
     if os.path.exists(os.path.join(workdir, out)):
@@ -1822,6 +1838,8 @@ def build_failure(r):
     for key, kind in (("internal error", "crash-ir"), ("not supported yet", "crash-unsupported")):
         if key in t:
             return kind, next(l for l in t.split("\n") if key in l).strip()
+    if r.target in OTHER_TARGETS and "failed to compile the generated" in t:
+        return f"crash-{r.target}-build", t.strip().split("\n")[-1]
     if "failed to compile the generated C" in t:
         errs = [l.split("error:", 1)[1].strip() for l in t.split("\n") if "error:" in l]
         return "crash-cc", "gcc: " + errs[0] if errs else t.strip().split("\n")[-1]
@@ -1896,6 +1914,9 @@ def classify(results):
         elif r.target == "js" and r.rc not in (0, 101):
             add("crash-js", f"{r.label}: {js_error(r)}")
             bad.add(key)
+        elif r.target in OTHER_TARGETS and r.rc not in (0, 101):
+            add(f"crash-{r.target}", f"{r.label}: exit {r.rc}: {err_text(r).strip()[-300:]}")
+            bad.add(key)
     timeouts = [k for k, r in results.items() if r.rc is None]
     if timeouts:
         if len(timeouts) == len(results):
@@ -1921,6 +1942,8 @@ def classify(results):
     compare(("c", False), ("js", False), "diff-")
     compare(("c", True), ("c", False), "opt-native-")
     compare(("js", True), ("js", False), "opt-js-")
+    for t in OTHER_TARGETS:
+        compare(("c", True), (t, True), f"diff-{t}-")
     # one report per kind
     seen, out = set(), []
     for f in fails:
@@ -1945,6 +1968,11 @@ def oracle(src_text, workdir, keys=(("c", True), ("js", True)), name="prog.nyra"
 def keys_for(kind, detail):
     """The builds needed to see a failure of this kind again (fewer builds = faster shrinking)."""
     nat0 = "NYRA_OPT=0" in detail
+    for t in OTHER_TARGETS:
+        if kind.startswith(f"crash-{t}"):
+            return ((t, True),)
+        if kind.startswith(f"diff-{t}-"):
+            return (("c", True), (t, True))
     if kind in ("memory", "crash-native", "timeout-native"):
         return (("c", not nat0),)
     if kind in ("crash-js", "timeout-js"):
@@ -2339,6 +2367,7 @@ class Campaign:
         keys = [("c", True), ("js", True)]
         if opt0_selected(seed, self.args.opt0):
             keys += [("c", False), ("js", False)]
+        keys += [(t, True) for t in EXTRA]
         fails, _ = oracle(src, self.workdir(), keys)
         with self.lock:
             self.count += 1
@@ -2378,7 +2407,7 @@ class Campaign:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Differential fuzzer for the Nyra C and JavaScript backends.")
+    ap = argparse.ArgumentParser(description="Differential fuzzer for the Nyra backends.")
     ap.add_argument("--seed", type=int, default=1, help="first seed")
     ap.add_argument("--count", type=int, default=100, help="how many programs (seeds seed..seed+count-1)")
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
@@ -2394,7 +2423,12 @@ def main():
     ap.add_argument("--check", metavar="FILE", help="run a file through the oracle")
     ap.add_argument("--minimize", metavar="FILE", help="minimize a failing file")
     ap.add_argument("--kind", help="with --minimize: which failure to keep (default: the first)")
+    ap.add_argument("--targets", default="", help="also run on these targets, compared with native: py,ts,rs,go")
     args = ap.parse_args()
+    for t in filter(None, args.targets.split(",")):
+        if t not in OTHER_TARGETS:
+            raise SystemExit(f"unknown target `{t}` (known: {', '.join(OTHER_TARGETS)})")
+        EXTRA.append(t)
 
     if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -2409,7 +2443,7 @@ def main():
         with open(path, encoding="utf-8") as fh:
             src = fh.read()
         work = tempfile.mkdtemp(prefix="nyra_fuzz_")
-        fails, results = oracle(src, work, (("c", True), ("js", True), ("c", False), ("js", False)))
+        fails, results = oracle(src, work, (("c", True), ("js", True), ("c", False), ("js", False)) + tuple((t, True) for t in EXTRA))
         for r in results.values():
             print(f"{r.label}: build {r.build_rc}, exit {r.rc}")
         for f in fails:

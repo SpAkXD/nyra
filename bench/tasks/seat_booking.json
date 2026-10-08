@@ -1,0 +1,9 @@
+{
+  "id": "seat_booking",
+  "title": "Theatre seat booking",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "A small theatre has rows A to F (row A is nearest the stage), with seats numbered 1 to 10 from left to right in each row. Seats C5, C6 and E1 are broken and can never be booked. Process the requests listed at the end in order, printing one line for each:\n- `NAME k` books k adjacent free seats in a single row for the group NAME. The rows are tried in this order: C, D, B, E, A, F; the first row in that order that has k adjacent free seats is used. Within that row, choose the block of k adjacent free seats whose middle is closest to the middle of the row, which lies between seats 5 and 6 (the middle of seats 3 to 5 is seat 4, and the middle of seats 3 to 6 lies between seats 4 and 5); if two blocks are equally close, choose the one further to the left. Print `NAME: R` followed by the first and the last seat of the block, as in `NAME: D3-D5`, or as in `NAME: D4` for a single seat. If no row has k adjacent free seats, print `NAME: no room` and book nothing.\n- `cancel NAME` frees all the seats of the group NAME and prints `NAME cancelled (N seats)`; if NAME has no booked seats, it prints `NAME has no booking`.\nAfter the requests, print the seat map: one line per row from A to F, made of the row letter, a space, and then 10 characters for seats 1 to 10: `x` for a broken seat, `#` for a booked seat, and `.` for a free seat.\nRequests, in order: ann 4; bob 4; cat 2; dan 10; eve 1; fay 6; cancel bob; gus 5; hal 3; cancel zed; ivy 9; jo 2; kai 8; lea 3.",
+  "expected_output": "ann: C1-C4\nbob: C7-C10\ncat: D5-D6\ndan: B1-B10\neve: D4\nfay: E3-E8\nbob cancelled (4 seats)\ngus: A3-A7\nhal: C7-C9\nzed has no booking\nivy: F1-F9\njo: D7-D8\nkai: no room\nlea: D1-D3\nA ..#####...\nB ##########\nC ####xx###.\nD ########..\nE x.######..\nF #########.\n"
+}

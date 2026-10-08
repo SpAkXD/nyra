@@ -1,0 +1,114 @@
+// a result: a number, or `bad` after a division or remainder by zero
+struct Val {
+    n: int
+    bad: bool
+}
+
+// the next non-space character, or ' ' at the end
+fn peek(cs: [char], pos: int) -> char {
+    var p = pos
+    while p < cs.len() && cs[p] == ' ' { p += 1 }
+    if p < cs.len() { ret cs[p] }
+    ret ' '
+}
+
+// moves `pos` past the spaces and the next character
+fn advance(cs: [char], inout pos: int) {
+    while pos < cs.len() && cs[pos] == ' ' { pos += 1 }
+    pos += 1
+}
+
+fn sum(cs: [char], inout pos: int) -> Val {
+    var v = product(cs, inout pos)
+    while peek(cs, pos) == '+' || peek(cs, pos) == '-' {
+        let op = peek(cs, pos)
+        advance(cs, inout pos)
+        let r = product(cs, inout pos)
+        let n = if op == '+' { v.n + r.n } else { v.n - r.n }
+        v = Val(n: n, bad: v.bad || r.bad)
+    }
+    ret v
+}
+
+fn product(cs: [char], inout pos: int) -> Val {
+    var v = unary(cs, inout pos)
+    while peek(cs, pos) == '*' || peek(cs, pos) == '/' || peek(cs, pos) == '%' {
+        let op = peek(cs, pos)
+        advance(cs, inout pos)
+        let r = unary(cs, inout pos)
+        if op == '*' {
+            v = Val(n: v.n * r.n, bad: v.bad || r.bad)
+        } else if r.n == 0 {
+            v = Val(n: 0, bad: true)
+        } else if op == '/' {
+            v = Val(n: v.n / r.n, bad: v.bad || r.bad)
+        } else {
+            v = Val(n: v.n % r.n, bad: v.bad || r.bad)
+        }
+    }
+    ret v
+}
+
+fn unary(cs: [char], inout pos: int) -> Val {
+    if peek(cs, pos) == '-' {
+        advance(cs, inout pos)
+        let v = unary(cs, inout pos)
+        ret Val(n: -v.n, bad: v.bad)
+    }
+    ret power(cs, inout pos)
+}
+
+fn power(cs: [char], inout pos: int) -> Val {
+    let base = atom(cs, inout pos)
+    if peek(cs, pos) != '^' { ret base }
+    advance(cs, inout pos)
+    let e = power(cs, inout pos)
+    var r = 1
+    for i in 0..e.n { r *= base.n }
+    ret Val(n: r, bad: base.bad || e.bad)
+}
+
+fn atom(cs: [char], inout pos: int) -> Val {
+    if peek(cs, pos) == '(' {
+        advance(cs, inout pos)
+        let v = sum(cs, inout pos)
+        advance(cs, inout pos)          // the `)`
+        ret v
+    }
+    while cs[pos] == ' ' { pos += 1 }
+    var n = 0
+    while pos < cs.len() && cs[pos].is_digit() {
+        n = n * 10 + cs[pos].code() - '0'.code()
+        pos += 1
+    }
+    ret Val(n: n, bad: false)
+}
+
+fn main() {
+    let exprs = [
+        "1 + 2 * 3 - 4 / 2",
+        "10 - 4 - 3",
+        "2 ^ 3 ^ 2",
+        "-2 ^ 2",
+        "(-2) ^ 2",
+        "2 * (3 + 4) ^ 2",
+        "100 / 7 % 4",
+        "- - 3",
+        "8/3*3+8%3",
+        "((15 % 4) ^ 2 - -3) * 2",
+        "0 * (5 / (2 - 2))",
+        "0^0 + 2^10 - 1000",
+        "-(3 - 10) * -2 ^ 3",
+        "7 - (2 - (3 - (4 - 5)))",
+        "2 ^ (1 + 1) ^ 3",
+        "17 % 5 ^ 2 / 3",
+        "(1 + 2) * (3 % (4 - 4)) + 1",
+        "-3 ^ 2 * -(1 + 1) ^ 2",
+    ]
+    for e in exprs {
+        var pos = 0
+        let v = sum(e.chars(), inout pos)
+        let shown = if v.bad { "division by zero" } else { str(v.n) }
+        print("{e} = {shown}")
+    }
+}

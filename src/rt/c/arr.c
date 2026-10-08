@@ -122,6 +122,14 @@ static void nyrt_arr_remove(nyrt_arr **p, int64_t i, void *out, int line, int co
     memmove(a->data + i * sz, a->data + (i + 1) * sz, (size_t)((a->len - i - 1) * sz));
     a->len--;
 }
+static void nyrt_arr_swap(nyrt_arr **p, int64_t i, int64_t j, int line, int col) {
+    nyrt_arr *a = *p;
+    if (i < 0 || i >= a->len) nyrt_oob(i, a->len, line, col);
+    if (j < 0 || j >= a->len) nyrt_oob(j, a->len, line, col);
+    int64_t sz = a->ty->size;
+    char *x = a->data + i * sz, *y = a->data + j * sz;
+    for (int64_t k = 0; k < sz; k++) { char c = x[k]; x[k] = y[k]; y[k] = c; }
+}
 static void nyrt_arr_reverse(nyrt_arr **p) {
     nyrt_arr *a = *p;
     int64_t sz = a->ty->size;

@@ -68,6 +68,14 @@ function ny_char_upper(c) { return c >= 97 && c <= 122 ? c - 32 : c; }
 function ny_char_lower(c) { return c >= 65 && c <= 90 ? c + 32 : c; }
 function ny_is_space(c) { return c === 32 || c === 9 || c === 10 || c === 13; }
 function ny_char_str(c) { return String.fromCodePoint(c); }
+// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters.
+function ny_pad(s, n, c, left) {
+    const missing = n - ny_len(s);
+    if (missing <= 0) return s;
+    if (missing > 536870888) ny_oom(0, 0);
+    const fill = String.fromCodePoint(c).repeat(missing);
+    return left ? fill + s : s + fill;
+}
 function ny_char_from(n, line, col) {
     if (n < 0 || n > 1114111 || (n >= 55296 && n <= 57343)) {
         ny_panic("E0246", `char(${n}): not a valid character code`,

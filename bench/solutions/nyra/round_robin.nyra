@@ -1,0 +1,68 @@
+struct Job {
+    name: str
+    arrival: int
+    need: int
+    left: int
+    joined: bool
+    finish: int
+}
+
+fn slice_len() -> int = 3
+
+fn main() {
+    var jobs = [
+        Job(name: "A", arrival: 0, need: 5, left: 5, joined: false, finish: 0),
+        Job(name: "B", arrival: 1, need: 3, left: 3, joined: false, finish: 0),
+        Job(name: "C", arrival: 3, need: 8, left: 8, joined: false, finish: 0),
+        Job(name: "D", arrival: 11, need: 2, left: 2, joined: false, finish: 0),
+        Job(name: "E", arrival: 30, need: 4, left: 4, joined: false, finish: 0),
+        Job(name: "F", arrival: 30, need: 1, left: 1, joined: false, finish: 0),
+    ]
+    var queue: [int] = []
+    var t = 0
+    var prev = -1           // the job of the previous slice
+    var idle = false        // has the CPU been idle since the previous slice
+    var pending = -1        // the job of the slice that just ended, if it is not finished
+    while true {
+        for i in 0..jobs.len() {
+            if !jobs[i].joined && jobs[i].arrival <= t {
+                jobs[i].joined = true
+                queue.push(i)
+            }
+        }
+        if pending >= 0 {
+            queue.push(pending)
+            pending = -1
+        }
+        if queue.len() == 0 {
+            var next = -1
+            for jb in jobs {
+                if !jb.joined && (next < 0 || jb.arrival < next) { next = jb.arrival }
+            }
+            if next < 0 { break }
+            print("{t}-{next} idle")
+            t = next
+            idle = true
+            continue
+        }
+        let j = queue.remove(0)
+        if prev >= 0 && prev != j && !idle {
+            print("{t}-{t + 1} switch")
+            t += 1
+        }
+        let run = if jobs[j].left < slice_len() { jobs[j].left } else { slice_len() }
+        print("{t}-{t + run} {jobs[j].name}")
+        t += run
+        jobs[j].left -= run
+        if jobs[j].left == 0 {
+            jobs[j].finish = t
+        } else {
+            pending = j
+        }
+        prev = j
+        idle = false
+    }
+    for jb in jobs {
+        print("{jb.name} finish {jb.finish} wait {jb.finish - jb.arrival - jb.need}")
+    }
+}

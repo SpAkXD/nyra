@@ -1,8 +1,13 @@
 //! Backends. Each one turns the IR (see `crate::ir`) into source code for a target.
 
 pub mod c;
+pub mod go;
 pub mod js;
 mod names;
+pub mod py;
+pub mod rs;
+mod scope;
+pub mod ts;
 
 /// `(a + b)` → `a + b` when one pair of parentheses wraps the whole expression. Only for
 /// places where nothing binds tighter: a condition, an assignment's or `return`'s value, a call

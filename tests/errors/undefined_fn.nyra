@@ -1,4 +1,4 @@
 // expect: E0202
 fn main() {
-    print(abs(-3))
+    print(sqrt(16.0))
 }

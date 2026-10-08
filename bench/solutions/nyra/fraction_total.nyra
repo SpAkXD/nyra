@@ -1,0 +1,72 @@
+struct Frac {
+    num: int
+    den: int   // always positive
+}
+
+fn abs(x: int) -> int = if x < 0 { -x } else { x }
+
+fn gcd(a: int, b: int) -> int {
+    if b == 0 { ret a }
+    ret gcd(b, a % b)
+}
+
+// in lowest terms with a positive denominator; den must not be 0
+fn make(num: int, den: int) -> Frac {
+    var n = num
+    var d = den
+    if d < 0 {
+        n = -n
+        d = -d
+    }
+    let g = gcd(abs(n), d)
+    ret Frac(num: n / g, den: d / g)
+}
+
+fn parse(text: str) -> Frac {
+    let parts = text.split("/")
+    ret make(int(parts[0]), int(parts[1]))
+}
+
+fn add(a: Frac, b: Frac) -> Frac = make(a.num * b.den + b.num * a.den, a.den * b.den)
+fn mul(a: Frac, b: Frac) -> Frac = make(a.num * b.num, a.den * b.den)
+fn greater(a: Frac, b: Frac) -> bool = a.num * b.den > b.num * a.den
+
+fn show(f: Frac) -> str {
+    if f.den == 1 { ret str(f.num) }
+    let sign = if f.num < 0 { "-" } else { "" }
+    let n = abs(f.num)
+    if n < f.den { ret "{sign}{n}/{f.den}" }
+    ret "{sign}{n / f.den} {n % f.den}/{f.den}"
+}
+
+fn main() {
+    let ops = "add 1/2; sub 3/4; mul -2/3; div 5/6; add 7/3; div 0/5; mul 4/-6; add 10/4; sub -1/12; mul 0/7; add -9/4; div -3/2; sub 5/3; add 2/3; div 1/-4"
+    var total = make(0, 1)
+    var best = make(0, 1)
+    var best_at = 0
+    var k = 0
+    for op in ops.split("; ") {
+        k += 1
+        let w = op.split(" ")
+        let f = parse(w[1])
+        if w[0] == "div" && f.num == 0 {
+            print("{op}: cannot divide by zero, total {show(total)}")
+            continue
+        }
+        if w[0] == "add" {
+            total = add(total, f)
+        } else if w[0] == "sub" {
+            total = add(total, make(-f.num, f.den))
+        } else if w[0] == "mul" {
+            total = mul(total, f)
+        } else {
+            total = mul(total, make(f.den, f.num))
+        }
+        print("{op}: total {show(total)}")
+        if best_at == 0 || greater(total, best) {
+            best = total
+            best_at = k
+        }
+    }
+    print("largest total {show(best)} after operation {best_at}")
+}

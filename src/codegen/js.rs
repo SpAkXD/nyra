@@ -308,6 +308,7 @@ impl Gen<'_> {
                         format!("ny_sort({target}, {lt})")
                     }
                     RtOp::ArrReverse => format!("{target}.reverse()"),
+                    RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("ny_append({target}, {})", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
@@ -423,6 +424,9 @@ impl Gen<'_> {
             RtOp::CharFrom => format!("ny_char_from({}, {at})", a[0]),
             RtOp::StrChars | RtOp::StrCodes => format!("ny_chars({})", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
+            RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", a[0], a[1], a[2]),
+            RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", a[0], a[1], a[2]),
             RtOp::ArrNew => {
                 let items: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
                 format!("[{}]", items.join(", "))

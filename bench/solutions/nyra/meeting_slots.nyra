@@ -1,0 +1,96 @@
+struct Period {
+    s: int
+    e: int
+}
+
+struct Person {
+    name: str
+    busy: [Period]
+}
+
+fn parse_time(t: str) -> int {
+    let p = t.split(":")
+    ret int(p[0]) * 60 + int(p[1])
+}
+
+fn two(n: int) -> str = if n < 10 { "0{n}" } else { "{n}" }
+fn show_time(m: int) -> str = "{two(m / 60)}:{two(m % 60)}"
+fn show_period(p: Period) -> str = "{show_time(p.s)}-{show_time(p.e)}"
+
+fn parse_periods(text: str) -> [Period] {
+    var out: [Period] = []
+    for part in text.split(", ") {
+        let se = part.split("-")
+        out.push(Period(s: parse_time(se[0]), e: parse_time(se[1])))
+    }
+    ret out
+}
+
+fn find(people: [Person], name: str) -> int {
+    for i in 0..people.len() {
+        if people[i].name == name { ret i }
+    }
+    ret -1
+}
+
+fn is_free(p: Person, s: int, e: int) -> bool {
+    for b in p.busy {
+        if s < b.e && b.s < e { ret false }
+    }
+    ret true
+}
+
+fn free_periods(p: Person) -> [Period] {
+    var out: [Period] = []
+    var start = -1
+    for m in 540..1020 {
+        let open = is_free(p, m, m + 1)
+        if open && start < 0 { start = m }
+        if !open && start >= 0 {
+            out.push(Period(s: start, e: m))
+            start = -1
+        }
+    }
+    if start >= 0 { out.push(Period(s: start, e: 1020)) }
+    ret out
+}
+
+fn main() {
+    var people = [
+        Person(name: "ann", busy: parse_periods("09:00-10:30, 12:00-13:00, 15:45-17:00")),
+        Person(name: "bob", busy: parse_periods("09:30-11:15, 13:00-14:00")),
+        Person(name: "cat", busy: parse_periods("11:00-12:15, 14:30-15:15")),
+        Person(name: "dan", busy: parse_periods("10:00-10:45, 13:30-16:00")),
+    ]
+    let requests = "ann+bob 60; bob+cat+dan 30; ann+cat 45; ann+bob+cat+dan 30; dan 120; cat+dan 15; ann+bob 45; bob 120"
+    for req in requests.split("; ") {
+        let parts = req.split(" ")
+        let names = parts[0].split("+")
+        let dur = int(parts[1])
+        var found = -1
+        var s = 540
+        while s + dur <= 1020 && found < 0 {
+            var all_free = true
+            for n in names {
+                if !is_free(people[find(people, n)], s, s + dur) { all_free = false }
+            }
+            if all_free { found = s }
+            s += 15
+        }
+        if found < 0 {
+            print("{parts[0]}: no slot")
+        } else {
+            let meeting = Period(s: found, e: found + dur)
+            for n in names {
+                people[find(people, n)].busy.push(meeting)
+            }
+            print("{parts[0]}: {show_period(meeting)}")
+        }
+    }
+    for p in people {
+        var shown: [str] = []
+        for f in free_periods(p) { shown.push(show_period(f)) }
+        let text = if shown.len() == 0 { "none" } else { shown.join(", ") }
+        print("{p.name} free: {text}")
+    }
+}

@@ -245,6 +245,13 @@ pub enum RtOp {
     ArrReverse,
     /// `xs += ys` (a `Mutate`): appends in place when the array has only one owner.
     ArrAppend,
+    /// `xs.swap(i, j)` (a `Mutate`, E0240).
+    ArrSwap,
+    /// The `step` of a range: 0 is runtime error E0243. Writes nowhere.
+    CheckStep,
+    /// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters (never shorter).
+    StrPadLeft,
+    StrPadRight,
     /// `Point(x: 1, y: 2)`: the fields in declaration order; the struct becomes one more owner
     /// of each managed field value.
     StructNew,
@@ -286,6 +293,10 @@ impl RtOp {
             RtOp::ArrSort => "arr_sort",
             RtOp::ArrReverse => "arr_reverse",
             RtOp::ArrAppend => "arr_append",
+            RtOp::ArrSwap => "arr_swap",
+            RtOp::CheckStep => "check_step",
+            RtOp::StrPadLeft => "str_pad_left",
+            RtOp::StrPadRight => "str_pad_right",
             RtOp::StructNew => "struct_new",
         }
     }
@@ -308,6 +319,8 @@ impl RtOp {
             RtOp::StrToInt => (&[Str], Some(Int)),
             RtOp::StrToFloat => (&[Str], Some(Float)),
             RtOp::CharFrom => (&[Int], Some(Char)),
+            RtOp::StrPadLeft | RtOp::StrPadRight => (&[Str, Int, Char], Some(Str)),
+            RtOp::CheckStep => (&[Int], None),
             _ => (&[], None),
         }
     }
@@ -335,6 +348,8 @@ impl RtOp {
                 | RtOp::ArrPop
                 | RtOp::ArrRemove
                 | RtOp::StructNew
+                | RtOp::StrPadLeft
+                | RtOp::StrPadRight
         )
     }
 
@@ -350,6 +365,7 @@ impl RtOp {
                 | RtOp::ArrSort
                 | RtOp::ArrReverse
                 | RtOp::ArrAppend
+                | RtOp::ArrSwap
         )
     }
 }

@@ -1,0 +1,100 @@
+struct Item {
+    name: str
+    on_hand: int
+    reserved: int
+}
+
+// the position of the item called `name`, or -1
+fn find(items: [Item], name: str) -> int {
+    for i in 0..items.len() {
+        if items[i].name == name {
+            ret i
+        }
+    }
+    ret -1
+}
+
+fn available(it: Item) -> int = it.on_hand - it.reserved
+
+fn signed(d: int) -> str {
+    if d > 0 {
+        ret "+{d}"
+    }
+    ret str(d)
+}
+
+fn main() {
+    let commands = "receive bolt 12; reserve bolt 9; reserve nut 1; receive nut 4; reserve bolt 4; receive bolt 10; ship bolt 11; release bolt 1; reserve bolt 7; count bolt 6; count bolt 15; release bolt 7; ship nut 4; ship nut 1; receive washer 30; reserve washer 25; ship washer 1; count washer 26; count nut 0; ship bolt 15; receive bolt 5; release gear 2"
+    var items: [Item] = []
+    for command in commands.split("; ") {
+        let words = command.split(" ")
+        let op = words[0]
+        let name = words[1]
+        let n = int(words[2])
+        var i = find(items, name)
+        if op == "receive" && i < 0 {
+            items.push(Item(name: name, on_hand: 0, reserved: 0))
+            i = items.len() - 1
+        }
+        if i < 0 {
+            print("{name} unknown")
+            continue
+        }
+        let before = available(items[i])
+        var ok = true
+        if op == "receive" {
+            items[i].on_hand += n
+            print("{name} on-hand {items[i].on_hand} available {available(items[i])}")
+        } else if op == "reserve" {
+            if n > before {
+                ok = false
+                print("{name} reserve rejected (available {before})")
+            } else {
+                items[i].reserved += n
+                print("{name} reserved {items[i].reserved} available {available(items[i])}")
+            }
+        } else if op == "release" {
+            if n > items[i].reserved {
+                ok = false
+                print("{name} release rejected (reserved {items[i].reserved})")
+            } else {
+                items[i].reserved -= n
+                print("{name} reserved {items[i].reserved} available {available(items[i])}")
+            }
+        } else if op == "ship" {
+            if n > items[i].on_hand {
+                ok = false
+                print("{name} ship rejected (on-hand {items[i].on_hand})")
+            } else {
+                items[i].on_hand -= n
+                items[i].reserved -= n
+                if items[i].reserved < 0 {
+                    items[i].reserved = 0
+                }
+                print("{name} shipped {n} on-hand {items[i].on_hand} reserved {items[i].reserved}")
+            }
+        } else if op == "count" {
+            if n < items[i].reserved {
+                ok = false
+                print("{name} count rejected (reserved {items[i].reserved})")
+            } else {
+                let d = n - items[i].on_hand
+                items[i].on_hand = n
+                print("{name} adjusted by {signed(d)}")
+            }
+        }
+        if ok && available(items[i]) < 5 && before >= 5 {
+            print("{name} low stock")
+        }
+    }
+    print("---")
+    var names: [str] = []
+    for it in items {
+        names.push(it.name)
+    }
+    names.sort()
+    for nm in names {
+        let it = items[find(items, nm)]
+        print("{nm}: on-hand {it.on_hand}, reserved {it.reserved}, available {available(it)}")
+    }
+}
