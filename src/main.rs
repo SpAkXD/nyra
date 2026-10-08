@@ -4,6 +4,7 @@ mod check_v03;
 mod codegen;
 mod diag;
 mod explain;
+mod fix;
 mod hints;
 mod ir;
 mod json;
@@ -31,6 +32,8 @@ options:
   --c          (build) write the generated C source instead of an executable
   -o <path>    output path for `build` (`-o -` prints to stdout)
   --json       print errors as JSON (compile and runtime), for AI agents
+  --fix        apply the fixes the errors suggest, check again, and write the
+               file back if it then compiles (then run or build it as usual)
   --time       show how long each step took
 
 The C compiler is picked automatically (gcc, clang, cc or tcc);
@@ -61,13 +64,14 @@ struct Opts {
     out: Option<String>,
     json: bool,
     time: bool,
+    fix: bool,
 }
 
 fn parse_args() -> Result<Opts, String> {
     let mut args = std::env::args().skip(1);
     let mut positional = Vec::new();
     let mut opts =
-        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false };
+        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false };
     while let Some(a) = args.next() {
         match a.as_str() {
             "-h" | "--help" | "help" => return Err(USAGE.to_string()),
@@ -77,6 +81,7 @@ fn parse_args() -> Result<Opts, String> {
             "-o" => opts.out = Some(args.next().ok_or("-o needs a path")?),
             "--json" => opts.json = true,
             "--time" => opts.time = true,
+            "--fix" => opts.fix = true,
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -95,17 +100,22 @@ fn parse_args() -> Result<Opts, String> {
 }
 
 fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    // only fixes that match the source exactly are kept
+    let checked = |mut errs: Vec<diag::Diag>| {
+        fix::validate(&mut errs, src);
+        errs
+    };
     let (toks, errs) = lexer::lex(src);
     if !errs.is_empty() {
-        return Err(errs);
+        return Err(checked(errs));
     }
     let (mut prog, errs) = parser::parse(toks);
     if !errs.is_empty() {
-        return Err(errs);
+        return Err(checked(errs));
     }
     let errs = check::check(&mut prog);
     if !errs.is_empty() {
-        return Err(errs);
+        return Err(checked(errs));
     }
     Ok(prog)
 }
@@ -140,22 +150,45 @@ fn main() -> ExitCode {
     };
 
     let start = Instant::now();
+    let mut fixed = 0;
     let prog = match compile(&src) {
         Ok(p) => p,
         Err(diags) => {
-            if opts.json {
-                println!("{}", diag::render_json(&diags, &opts.file));
-            } else {
-                eprint!("{}", diag::render_human(&diags, &opts.file, &src));
-                eprintln!("nyra: {} error(s)", diags.len());
+            // --fix: apply the fixes and check again; the file changes only if it then compiles
+            let repaired = if opts.fix { fix::repair(&src, diags.clone(), compile) } else { None };
+            match repaired {
+                Some(r) => {
+                    if let Err(e) = std::fs::write(&opts.file, &r.text) {
+                        return fail(format!("cannot write `{}`: {e}", opts.file));
+                    }
+                    eprint!("nyra: fixed {} error(s) in {}:
+{}", r.fixed, opts.file, fix::diff(&src, &r.text));
+                    fixed = r.fixed;
+                    r.value
+                }
+                None => {
+                    if opts.json {
+                        println!("{}", diag::render_json(&diags, &opts.file));
+                    } else {
+                        eprint!("{}", diag::render_human(&diags, &opts.file, &src));
+                        eprintln!("nyra: {} error(s)", diags.len());
+                    }
+                    if opts.fix && diags.iter().any(|d| !d.fix.is_empty()) {
+                        eprintln!("nyra: --fix did not change {}: errors without a fix remain", opts.file);
+                    }
+                    return ExitCode::from(1);
+                }
             }
-            return ExitCode::from(1);
         }
     };
 
     if opts.cmd == "check" {
         if opts.json {
-            println!("{}", diag::render_json(&[], &opts.file));
+            let json = diag::render_json(&[], &opts.file);
+            match fixed {
+                0 => println!("{json}"),
+                n => println!("{},\"fixed\":{n}}}", &json[..json.len() - 1]),
+            }
         } else {
             eprintln!("nyra: no errors ({})", ms(start.elapsed()));
         }

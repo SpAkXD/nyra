@@ -1,7 +1,7 @@
 //! Turns source text into tokens. Newlines end statements, except inside `( )`.
 
 use crate::ast::{BinOp, Span};
-use crate::diag::Diag;
+use crate::diag::{Diag, Edit};
 use crate::hints;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -319,9 +319,18 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                                     "the escapes are `\\n` `\\t` `\\r` `\\\\` and `\\\"`; to write a literal backslash, double it: `\\\\{esc}`"
                                 ),
                             };
+                            // `\{` and `\'` have one meaning: a literal brace, a quote
+                            let fixed = match esc {
+                                '{' => Some("{{"),
+                                '}' => Some("}}"),
+                                '\'' => Some("'"),
+                                _ => None,
+                            };
+                            let at = Span { line, col };
                             errs.push(
-                                Diag::new("E0004", format!("unknown escape `\\{esc}` in a string"), Span { line, col })
-                                    .hint(hint),
+                                Diag::new("E0004", format!("unknown escape `\\{esc}` in a string"), at)
+                                    .hint(hint)
+                                    .fix_opt(fixed.map(|f| Edit::replace(at, &format!("\\{esc}"), f))),
                             );
                         }
                     }
@@ -494,10 +503,20 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 }
                 toks.push(Token { tok, span });
             }
-            None if c == ';' => errs.push(
-                Diag::new("E0005", "unexpected `;`: Nyra has no semicolons", span)
-                    .hint("delete the `;`: a new line already ends a statement, so put each statement on its own line"),
-            ),
+            None if c == ';' => errs.push(semicolon(&cs, i, span, paren_depth)),
+            None if c == '#' && hash_comment(&cs, i) => {
+                // a comment of another language: one error for the `#`, and the rest of the line is skipped
+                errs.push(
+                    Diag::new("E0001", "unexpected character `#`", span)
+                        .hint(hints::bad_char('#'))
+                        .fix(vec![Edit::replace(span, "#", "//")]),
+                );
+                while i < cs.len() && cs[i] != '\n' {
+                    i += 1;
+                    col += 1;
+                }
+                continue;
+            }
             None => {
                 // a quote from another language: report the whole literal once, not each quote
                 if let Some(close) = hints::quote_close(c) {
@@ -509,7 +528,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         } else {
                             format!("unexpected character `{c}`")
                         };
-                        errs.push(Diag::new("E0001", msg, span).hint(hints::quoted_text(c, &text)));
+                        let old: String = cs[i..i + k + 2].iter().collect();
+                        let fix = hints::quoted_fix(c, &text).map(|new| Edit::replace(span, &old, new));
+                        errs.push(Diag::new("E0001", msg, span).hint(hints::quoted_text(c, &text)).fix_opt(fix));
                         i += k + 2;
                         col += k + 2;
                         continue;
@@ -539,20 +560,76 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         None if c == '`' => "unexpected character '`' (a backtick)".to_string(),
         None => format!("unexpected character `{c}`"),
     };
-    let hint = if c == '.' && after.is_some_and(|a| a.is_ascii_digit()) {
+    let (hint, fix) = if c == '.' && after.is_some_and(|a| a.is_ascii_digit()) {
         let digits: String = cs[i + 1..].iter().take_while(|d| d.is_ascii_digit()).collect();
-        format!("a float needs digits on both sides of the dot: write `0.{digits}`")
+        // `1...5` is a range typo, not a float
+        let fix = (before != Some('.')).then(|| Edit::replace(span, ".", "0."));
+        (format!("a float needs digits on both sides of the dot: write `0.{digits}`"), fix)
     } else if c == '.' && before.is_some_and(|b| b.is_ascii_digit()) {
         let mut start = i;
         while start > 0 && cs[start - 1].is_ascii_digit() {
             start -= 1;
         }
         let digits: String = cs[start..i].iter().collect();
-        format!("a float needs digits on both sides of the dot: write `{digits}.0`")
+        // `5.len()` is not a float either
+        let fix = after
+            .is_none_or(|a| !(a.is_alphanumeric() || a == '_' || a == '.'))
+            .then(|| Edit::replace(span, ".", ".0"));
+        (format!("a float needs digits on both sides of the dot: write `{digits}.0`"), fix)
     } else {
-        hints::bad_char(c)
+        (hints::bad_char(c), hints::char_fix(c).map(|to| Edit::replace(span, &c.to_string(), to)))
     };
-    Diag::new("E0001", msg, span).hint(hint)
+    Diag::new("E0001", msg, span).hint(hint).fix_opt(fix)
+}
+
+/// E0005 for the `;` at `cs[i]`. At the end of a line (or before a `}`) it is deleted; between two
+/// statements on one line it becomes a line break. Inside `( )` or in the header of a `for`, `while`
+/// or `if` (`for i = 0; i < n; i++ {`) there is no fix: that line needs rewriting, not a deletion.
+fn semicolon(cs: &[char], i: usize, span: Span, paren_depth: usize) -> Diag {
+    let d = Diag::new("E0005", "unexpected `;`: Nyra has no semicolons", span)
+        .hint("delete the `;`: a new line already ends a statement, so put each statement on its own line");
+    let rest: String = cs[i + 1..].iter().take_while(|c| **c != '\n').collect();
+    let after = rest.trim_start();
+    let line_start = cs[..i].iter().rposition(|c| *c == '\n').map_or(0, |p| p + 1);
+    let line: String = cs[line_start..i].iter().collect();
+    if after.is_empty() || after.starts_with("//") || after.starts_with('}') || after.starts_with(';') {
+        // a `;` alone on its line goes with the line; otherwise with the spaces before it
+        let whole_line = line.trim().is_empty() && after.is_empty() && i + 1 + rest.chars().count() < cs.len();
+        let edit = if whole_line {
+            Edit::range(Span { line: span.line, col: 1 }, Span { line: span.line + 1, col: 1 }, ";", "")
+        } else {
+            let spaces = line.chars().rev().take_while(|c| *c == ' ' || *c == '\t').count();
+            Edit::range(Span { line: span.line, col: span.col - spaces }, Span { line: span.line, col: span.col + 1 }, ";", "")
+        };
+        return d.fix(vec![edit]);
+    }
+    let indent: String = line.chars().take_while(|c| *c == ' ' || *c == '\t').collect();
+    let header = ["for", "while", "if", "} else if"]
+        .iter()
+        .any(|k| line.trim_start().strip_prefix(k).is_some_and(|r| r.starts_with([' ', '('])));
+    if paren_depth > 0 || header {
+        return d;
+    }
+    let spaces = rest.chars().count() - after.chars().count();
+    let end = Span { line: span.line, col: span.col + 1 + spaces };
+    d.fix(vec![Edit::range(span, end, ";", format!("\n{indent}"))])
+}
+
+/// True if the `#` at `cs[i]` starts a comment of another language (`# note`, `#note` at the start
+/// of a line, `## title`, a `#!` first line), as opposed to `#[derive]`, `#include` or a `#` inside
+/// an expression.
+fn hash_comment(cs: &[char], i: usize) -> bool {
+    let line_start = cs[..i].iter().rposition(|c| *c == '\n').map_or(0, |p| p + 1);
+    let first_on_line = cs[line_start..i].iter().all(|c| *c == ' ' || *c == '\t');
+    let next = cs.get(i + 1).copied().unwrap_or('\n');
+    if first_on_line {
+        let word: String = cs[i + 1..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
+        let directive =
+            ["include", "define", "import", "pragma", "if", "ifdef", "ifndef", "endif", "else", "undef"].contains(&word.as_str());
+        let shebang = next == '!' && i == 0;
+        return shebang || !(directive || next == '[' || next == '!');
+    }
+    cs[i - 1].is_whitespace() && (next.is_whitespace() || next == '#')
 }
 
 /// A char literal as it is written in source: `'a'`, `'\n'`, `'\''`.
@@ -632,7 +709,11 @@ fn char_lit(cs: &[char], i: usize, span: Span, errs: &mut Vec<Diag>) -> (Tok, us
                 },
             )
         };
-        errs.push(Diag::new("E0007", msg, span).hint(hint));
+        // `'hello'` is text; with braces it would become interpolation, so those are left alone
+        let raw: String = cs[i + 1..j - 1].iter().collect();
+        let fix = (chars.len() > 1 && !raw.contains(['"', '\\', '{', '}']))
+            .then(|| Edit::replace(span, &format!("'{raw}'"), format!("\"{raw}\"")));
+        errs.push(Diag::new("E0007", msg, span).hint(hint).fix_opt(fix));
     }
     let value = chars.first().map_or(0, |c| *c as u32);
     (Tok::Char(value), len)
