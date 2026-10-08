@@ -87,6 +87,8 @@ pub struct Info {
     pub reads: Vec<u32>,
     /// Assignments of each local (`Set`, a destination, `free`).
     pub writes: Vec<u32>,
+    /// The reads that are only a `Dup` (a mark, not a use of the value).
+    pub dups: Vec<u32>,
     /// Locals that are changed in place (the root of a `Store`, `Mutate` or `inout` argument).
     pub changed: Vec<bool>,
     /// Locals with a Nyra name (the rest are compiler temporaries).
@@ -105,6 +107,7 @@ impl Info {
         let mut info = Info {
             reads: vec![0; n],
             writes: vec![0; n],
+            dups: vec![0; n],
             changed: vec![false; n],
             names: f.locals.iter().map(|l| l.name.is_some()).collect(),
             loop_var: vec![false; n],
@@ -112,6 +115,7 @@ impl Info {
             before: HashMap::new(),
         };
         reads(&f.body, &mut |l| info.reads[l.0 as usize] += 1);
+        count_dups(&f.body, &mut info.dups);
         writes(&f.body, &mut info);
         let mut w = Walk { info: &mut info, parent: vec![0], lca: vec![None; n] };
         w.block(&f.body, 0);
@@ -133,9 +137,9 @@ impl Info {
         self.before.get(&(s as *const Stmt)).map_or(&[], |v| v.as_slice())
     }
 
-    /// True if the local is only ever written (a value nobody reads).
+    /// True if nothing uses the local's value (it is only written, or only marked by `Dup`).
     pub fn unread(&self, l: LocalId) -> bool {
-        self.reads[l.0 as usize] == 0
+        self.reads[l.0 as usize] == self.dups[l.0 as usize]
     }
 }
 
@@ -185,6 +189,17 @@ pub fn reads(ss: &[Stmt], f: &mut dyn FnMut(LocalId)) {
             | StmtKind::Return(None)
             | StmtKind::Break
             | StmtKind::Continue => {}
+        }
+    }
+}
+
+fn count_dups(ss: &[Stmt], dups: &mut [u32]) {
+    for s in ss {
+        if let StmtKind::Dup(l) = s.kind {
+            dups[l.0 as usize] += 1;
+        }
+        for b in children(s) {
+            count_dups(b, dups);
         }
     }
 }
