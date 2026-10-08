@@ -159,6 +159,43 @@ An AI that cannot run code (a plain chat) can still write correct programs by fo
 you then run `nyra run prog.nyra` yourself. If your AI cannot open links, paste the contents of
 [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) into the chat first.
 
+### MCP server
+
+`nyra mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server built into the
+compiler, so any MCP client can use Nyra with no other setup: the agent gets the spec, the checker,
+both backends and the error database as tools, and needs no files or shell access.
+
+| Tool | What it does |
+|---|---|
+| `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
+| `nyra_check` | `{code}` → the same JSON as `nyra check --json` |
+| `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
+| `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |
+| `nyra_build` | `{code, target?: "c"\|"js"}` → the generated C or JavaScript |
+
+Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
+
+**Claude Code:**
+
+```
+claude mcp add nyra -- nyra mcp
+```
+
+**Claude Desktop:** Settings → Developer → Edit Config, then add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "nyra": { "command": "nyra", "args": ["mcp"] }
+  }
+}
+```
+
+**Cursor:** the same `mcpServers` entry in `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json`
+(every project). Gemini CLI reads it from `~/.gemini/settings.json`, and other clients take the
+command `nyra mcp` the same way. If `nyra` is not on the `PATH` the client sees, give the full path
+to the binary as `command`.
+
 > [!NOTE]
 > **For AI agents reading this page:** Nyra is not Rust (code blocks here say `rust` only so GitHub
 > highlights them). Do not guess syntax. Read
@@ -238,6 +275,7 @@ every common mistake with its error code and fix.
 | `nyra build <file>` | compile to a native executable |
 | `nyra check <file>` | type-check only; exit code 0 means no errors |
 | `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list all codes |
+| `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
 
 | Option | Meaning |
 |---|---|
