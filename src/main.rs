@@ -6,6 +6,7 @@ mod diag;
 mod explain;
 mod hints;
 mod ir;
+mod json;
 mod lexer;
 mod parser;
 
