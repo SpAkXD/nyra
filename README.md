@@ -200,6 +200,9 @@ both backends and the error database as tools, and needs no files or shell acces
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
 | `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |
 | `nyra_build` | `{code, target?: "c"\|"js"}` → the generated C or JavaScript |
+| `nyra_outline` | `{path}` or `{code}` → one line per function and struct with its line range |
+| `nyra_show` | `{path or code, name: "find Item.tags"}` → the source of those symbols |
+| `nyra_edit` | `{path or code, edits, force?, fix?}` → change symbols by name ([below](#editing-by-symbol)); a path is written in place and only a summary returns |
 
 Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
 
@@ -223,6 +226,40 @@ claude mcp add nyra -- nyra mcp
 (every project). Gemini CLI reads it from `~/.gemini/settings.json`, and other clients take the
 command `nyra mcp` the same way. If `nyra` is not on the `PATH` the client sees, give the full path
 to the binary as `command`.
+
+### Editing by symbol
+
+An agent that changes one function of a long program should not send the program again. `nyra edit`
+(and the `nyra_edit` tool) changes functions, structs and struct fields **by name**:
+
+```
+$ nyra outline shop.nyra
+shop.nyra: 209 lines
+4-10 struct Item { sku: str, name: str, price: int, stock: int, tags: [str] }
+...
+71-79 fn discount(total: int) -> int
+...
+$ nyra show shop.nyra discount            # just that function
+$ nyra edit shop.nyra < new_discount.txt  # the new `fn discount ...`: replaces the old one
+nyra: edited shop.nyra: replaced fn discount (lines 71-82)
+$ nyra edit shop.nyra --rename Item.stock in_stock
+nyra: edited shop.nyra: renamed field Item.stock -> in_stock, 7 references (line 8)
+```
+
+- **Operations:** replace a function or struct (send its new definition), add one (at the end, or
+  `after`/`before` another), delete one, rename one with every reference, add or remove a struct field.
+  Several go in one script (`@replace NAME`, `@add after NAME`, `@delete NAME`, `@rename NAME NEW`,
+  `@add-field Struct name: type`), or plain definitions replace the symbols of their names.
+- **Exact:** each edit replaces the source range of its symbol, so the rest of the file stays
+  byte-identical, including its line breaks (`\r\n` files stay `\r\n`). A rename uses the parser and the
+  checker: it changes calls, constructions, type annotations, field reads and labels, never strings,
+  comments or another struct's field of the same name.
+- **Checked:** the result must compile. An edit that adds errors is refused with those errors (each
+  names the symbol it is in) and the file is not written; `--force` applies it anyway and `--fix` runs
+  the [self-repair](#self-repair-with---fix) first.
+- **Cheap:** on the 209-line `tests/edit/inventory.nyra` (5072 bytes, about 1450 tokens), changing one
+  function costs 208 bytes of edit and a 58-byte reply, about 75 tokens: **95% less** than resending
+  the file. The outline of the whole file is 1195 bytes.
 
 > [!NOTE]
 > **For AI agents reading this page:** Nyra is not Rust (code blocks here say `rust` only so GitHub
@@ -336,6 +373,9 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `nyra check <file>` | type-check only; exit code 0 means no errors |
 | `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list all codes |
 | `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
+| `nyra outline <file>` | the functions and structs with signatures, fields and line ranges (`--json` too) |
+| `nyra show <file> <name>...` | the source of functions, structs or fields (`Struct.field`) |
+| `nyra edit <file> [edits]` | [change symbols by name](#editing-by-symbol): `--set`, `--add`, `--delete`, `--rename`, `--add-field`, or an edit script on stdin; `--force`, `--fix`, `--dry-run`, `--json` |
 
 | Option | Meaning |
 |---|---|

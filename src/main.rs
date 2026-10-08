@@ -3,6 +3,7 @@ mod check;
 mod check_v03;
 mod codegen;
 mod diag;
+mod edit;
 mod explain;
 mod fix;
 mod hints;
@@ -25,6 +26,9 @@ usage:
   nyra check <file.nyra>    only check for errors
   nyra explain [CODE]       explain an error code (without CODE: list all codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
+  nyra outline <file.nyra>  list the functions and structs with their lines
+  nyra show <file.nyra> <name>    print one function, struct or Struct.field
+  nyra edit <file.nyra>     change symbols by name (`nyra edit --help`)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -178,6 +182,9 @@ fn main() -> ExitCode {
     }
     if std::env::args().nth(1).as_deref() == Some("mcp") {
         return mcp::run(std::env::args().skip(2).collect());
+    }
+    if let Some(cmd @ ("outline" | "show" | "edit")) = std::env::args().nth(1).as_deref() {
+        return edit::run(cmd, std::env::args().skip(2).collect());
     }
     let opts = match parse_args() {
         Ok(o) => o,
