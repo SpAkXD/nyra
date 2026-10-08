@@ -1,0 +1,9 @@
+{
+  "id": "maze_keys",
+  "title": "Shortest maze paths with keys and doors",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "Find shortest paths through the mazes given at the end. In a maze, `#` is a wall, `.` is floor, `S` is the start, `G` is the goal, a lowercase letter is a key, and the uppercase form of the same letter is a door. A move goes one cell up (U), down (D), left (L) or right (R), onto a cell inside the maze that is not a wall. A door can be entered only if its key has been picked up earlier on the path; a key is picked up by entering its cell and is kept for the rest of the path. Doors stay doors (they can be passed any number of times once you have the key), and any cell may be visited more than once. S counts as floor, and the goal is reached as soon as G is entered.\nFor each maze, find the minimum number of moves from S to G. Among all paths with that minimum number of moves, choose the one whose move string comes first in alphabetical order (D before L before R before U). Print `maze K: N moves PATH`, for example `maze 9: 3 moves DRR`, or `maze K: no path` if G cannot be reached.\nThe mazes, each given as its rows from top to bottom:\n- maze 1: `S...#`, `.##.#`, `....G`\n- maze 2: `#########`, `#S..A..G#`, `#.#####.#`, `#...a.#.#`, `#########`\n- maze 3: `S.B.G`, `#.###`, `b.A.a`\n- maze 4: `#######`, `#a#.#b#`, `#.#.#.#`, `#..S..#`, `###A###`, `###B###`, `###G###`\n- maze 5: `S.#..`, `.##.#`, `...#G`\n- maze 6: `..S..`, `.###.`, `..G..`",
+  "expected_output": "maze 1: 6 moves DDRRRR\nmaze 2: 16 moves DDRRRLLLUURRRRRR\nmaze 3: 10 moves RDDLRUURRR\nmaze 4: 19 moves LLUUDDRRRRUUDDLLDDD\nmaze 5: no path\nmaze 6: 6 moves LLDDRR\n"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "matrix_report",
+  "title": "Matrix products and aligned printing",
+  "category": "hard",
+  "difficulty": "hard",
+  "min_version": "0.3",
+  "prompt": "Use these integer matrices, written row by row with the rows separated by `;`:\n- A = `[2 -1 0; 1 3 -2; 0 4 1]` (3 rows, 3 columns)\n- B = `[1 2; -3 0; 5 -1]` (3 rows, 2 columns)\n- C = `[2 -1; 1 3]` (2 rows, 2 columns)\n- D = `[3 1 2 -1; 1 2 0 -2; 4 -1 6 -3; 5 0 2 1]` (4 rows, 4 columns)\nPrint these five results in this order. Each matrix result is a title line followed by the rows of the matrix:\n1. title `A*B`: the matrix product of A and B (A on the left).\n2. title `(A*B)^T`: the transpose of that product (row i of the transpose is column i of the product).\n3. title `C^6`: the product of six copies of C.\n4. title `A*A-3A+2I`: the product of A with itself, minus 3 times A, plus 2 times the 3 by 3 identity matrix.\n5. the determinant of D, printed as a single line `det(D) = N`, with no rows after it.\nHow to print the rows of a matrix: within that matrix, each column is as wide as its longest entry (a minus sign counts as a character); every entry is right-aligned to its column's width, and neighbouring columns are separated by two spaces. Widths are computed separately for each printed matrix. No line has trailing spaces.",
+  "expected_output": "A*B\n  5   4\n-18   4\n -7  -1\n(A*B)^T\n5  -18  -7\n4    4  -1\nC^6\n-323  -360\n 360    37\nA*A-3A+2I\n-1  -2   2\n 2  -7  -2\n 4   4  -8\ndet(D) = -28\n"
+}
