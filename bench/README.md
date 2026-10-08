@@ -63,7 +63,7 @@ python bench/run.py --provider openrouter --models default --samples 5 --dry-run
 python bench/run.py --provider openrouter --models anthropic/claude-sonnet-5.5 --langs python --tasks fizzbuzz,gcd_pairs
 
 # 5. The real run. --budget stops everything once that many dollars have been spent; --jobs 8 because the API
-#    is the wait (6 models x 5 samples is about 8,000 requests: plan for hours, or start with --samples 1).
+#    is the wait (6 models x 5 samples is about 12,000 requests: plan for hours, or start with --samples 1).
 #    A few models by hand work the same way.
 python bench/run.py --provider openrouter --models default --samples 5 --jobs 8 --budget 100
 python bench/run.py --provider openrouter --models anthropic/claude-opus-5.5,openai/gpt-6-sol,google/gemini-3.8-flash
@@ -234,6 +234,9 @@ Known asymmetries (they are part of the question, but you should know them):
   trivialize a task (`gcd`, `pow(a, b, m)`, `sorted`), the prompt asks for the algorithm to be written out. Nothing
   checks that request (only the output is compared), so a program that uses the library call anyway passes and is
   shorter. Some tasks are still shorter in Python for that reason; Nyra's own standard library (v0.6) will change this.
+  In the hard tier the prompts forbid nothing, so the libraries help where they apply: Python's `fractions` for
+  `fraction_total`, sorting with a key function for `league_table` and `word_frequency`, dictionaries everywhere
+  (Nyra has no map type and models it as an array of structs).
 - **TypeScript is not type-checked** (Node only removes the annotations), so it is closer to JavaScript here than
   `tsc` would make it. Rust is the strictest: the compiler rejects what the others would run.
 - The error feedback differs because the toolchains differ: Nyra's compiler returns structured diagnostics with fix
@@ -254,13 +257,16 @@ Known asymmetries (they are part of the question, but you should know them):
 - A run has one sample per task by default and a model's output varies from run to run. `--samples 5` (or more)
   averages that noise out of each task's result, so use it before putting a number in a README. The 95% intervals
   deliberately use the number of **tasks** as their sample size, because repeating a task does not add a new task.
-  With 49 tasks the interval is roughly 7 to 14 points either way. Quote the count (`45/49`), not only the
+  With 77 tasks the interval is roughly 5 to 11 points either way. Quote the count (`70/77`), not only the
   percentage. The paired sign test compares the languages task by task for the same reason.
-- Most tasks are classic exercises. In a pilot run on the 29 tasks of Nyra 0.2, three cheap models solved every one
-  on the first try in Python, TypeScript and Rust, so at that ceiling a first-try rate cannot separate the languages
-  and the token numbers carry the comparison. The `rules` category (several stated rules and an exact output format)
-  is where first-try failures start: read its row in the per-category table, and remember that 6 tasks give a wide
-  interval (5/6 is 44% to 97%).
+- The first 49 tasks are mostly classic exercises. Three cheap models (`--effort low`) solved 96 to 100% of them on
+  the first try in every language, so at that ceiling a first-try rate cannot separate the languages and the token
+  numbers carry the comparison. The `hard` category (28 tasks; the references have a median of 50 lines in Python and
+  85 in Rust and Nyra: rule-dense simulations, parsers,
+  interpreters and exact layouts, every edge case stated in the prompt) exists to bring first tries below the
+  ceiling. Read its row in the per-category table as its own tier, next to the headline over all tasks, and remember
+  that 28 tasks still give a wide interval (24/28 is 69% to 94%). The `rules` category (6 tasks) is the step in
+  between.
 - Do not compare result files whose `tasks_sha256`, spec hash, compiler version or model differ (`publish.py` refuses
   to).
 - Sampling parameters such as temperature are not sent unless you pass them with `--extra-json` (the newest models
@@ -298,7 +304,7 @@ raw files. `publish.py` refuses mock runs, incomplete runs, and result files tha
 
 `min_version` is the first Nyra version in which a natural solution can be written (0.1: functions, ints, loops,
 one value per `print`; 0.2: string interpolation and compact syntax; 0.3: arrays, structs, strings with methods and
-`+`). There are 49 tasks: 22 for 0.1, 14 for 0.2, 13 for 0.3. Every task has a reference solution in all four
+`+`). There are 77 tasks: 22 for 0.1, 14 for 0.2, 41 for 0.3. Every task has a reference solution in all four
 languages; each Nyra reference uses only the features of its task's `min_version`.
 
 | category | tasks | what they exercise |
@@ -312,6 +318,7 @@ languages; each Nyra reference uses only the features of its task's `min_version
 | `arrays` | 4 | searching, sorting and marking in arrays |
 | `structs` | 1 | a record type with functions that take it |
 | `rules` | 6 | several stated rules and an exact output format, with edge cases spelled out in the prompt: `bank_ledger`, `receipt`, `calendar_month`, `word_wrap`, `prime_factorization`, `twisted_fizzbuzz`. The tier where first-try failures start |
+| `hard` | 28 | the hard tier (`"difficulty": "hard"`): programs of about 25 to 230 lines (median 50 in Python, 85 in Rust and Nyra) with many interacting rules, tie-breaks and exact formatting, all stated in the prompt. Simulations: `inventory_ledger`, `text_adventure`, `round_robin`, `vending_machine`, `snake_game`, `bank_tellers`, `library_loans`, `seat_booking`, `aging_life`, `four_in_row`, `meeting_slots`, `savings_interest` (tiered interest, round half to even). Parsers and interpreters: `expr_eval` (precedence, right-associative `^`), `stack_vm`, `spreadsheet_eval` (cycles and error propagation), `config_parser`, `polynomial_ops`, `indent_check`, `rle_codec`. Algorithms with a defined tie-break: `line_diff` (LCS edit script), `maze_keys` (BFS over keys, alphabetically first shortest path), `league_table` (head-to-head), `orbit_calendar` (date arithmetic in an invented calendar, so no date library helps), `fraction_total`, `matrix_report`, `sparse_ledger`, `table_format`, `word_frequency` |
 
 ### Adding a task
 
