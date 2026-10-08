@@ -61,6 +61,13 @@ function ny_arep(a, n, line, col) {
     for (let k = 0; k < n; k++) for (let i = 0; i < a.length; i++) r.push(a[i]);
     return ny_shall(r);
 }
+function ny_swap(a, i, j, line, col) {
+    ny_ck(a, i, line, col);
+    ny_ck(a, j, line, col);
+    const t = a[i];
+    a[i] = a[j];
+    a[j] = t;
+}
 // `xs += ys` on a unique `a`; `xs += xs` doubles it.
 function ny_append(a, b) {
     const n = b.length;

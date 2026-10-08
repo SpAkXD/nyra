@@ -800,11 +800,15 @@ impl Checker {
                 self.cond(t, cond, "`while`");
                 self.loop_body(body, None);
             }
-            StmtKind::For { var, start, end, body } => {
+            StmtKind::For { var, start, end, step, body } => {
                 let a = self.expr(start);
                 self.range_bound(a, start, "start");
                 let b = self.expr(end);
                 self.range_bound(b, end, "end");
+                if let Some(k) = step {
+                    let t = self.expr(k);
+                    self.range_bound(t, k, "step");
+                }
                 self.loop_body(body, Some((var, Type::Int, span)));
             }
             StmtKind::ForEach { var, iter, body } => {
@@ -1446,6 +1450,11 @@ impl Checker {
                 );
             }
         }
+        // `s.pad_left(n)` fills with spaces; `s.pad_left(n, '0')` with a character
+        let mut sig = sig;
+        if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
+            sig.params.push(Type::Char);
+        }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
                 self.expr(a);
@@ -1465,8 +1474,13 @@ impl Checker {
                 .hint(format!("call it as `.{name}({})`", shown.join(", "))),
             );
         } else {
+            // the text searches also take a character: `"aeiou".contains(c)`
+            let search = rt == Type::Str && matches!(name, "contains" | "starts_with" | "ends_with" | "index_of");
             for (i, (a, p)) in args.iter_mut().zip(&sig.params).enumerate() {
                 let t = self.expr_with(a, Some(*p));
+                if search && t == Type::Char {
+                    continue;
+                }
                 self.expect_ty(*p, t, a, Ctx::MethodArg { m: name, idx: i });
             }
         }
@@ -1865,6 +1879,16 @@ impl Checker {
                 ),
                 _ => {}
             }
+        }
+        // `print(a, b, c)`: several values on one line, separated by spaces
+        if name == "print" && tys.len() > 1 {
+            for (a, t) in args.iter().zip(&tys) {
+                if *t == Type::Void {
+                    let msg = format!("`print` needs a value to show, but {} returns nothing", call_text(a));
+                    self.errs.push(Diag::new("E0203", msg, a.span).hint(self.no_value_hint(a)));
+                }
+            }
+            return ret;
         }
         if tys.len() != 1 {
             let hint = match name {

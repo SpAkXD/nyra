@@ -1,4 +1,4 @@
-# Nyra v0.3 — language spec
+# Nyra v0.4 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
 context and the agent can write Nyra. For common mistakes and complete examples, see
@@ -6,7 +6,9 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
-- A program is `fn` and `struct` definitions in any order, one of them `fn main()`. No global variables.
+- A program is `fn` and `struct` definitions in any order plus either `fn main()` or statements at
+  the top level (a script: they run in order, like the body of `main`). No global variables:
+  functions cannot see the script's variables.
 - Every function signature is fully typed. Local variable types are inferred.
 - One statement per line. There are no semicolons. A line may break inside `( )`, between the
   elements of `[ ]`, and after a binary operator.
@@ -59,6 +61,7 @@ var n = 0
 if x > 3 { print("big") } else if x == 3 { print("three") } else { print("small") }
 while n < 10 { n += 1 }
 for i in 0..x + 1 { print(i) }   // 0 to 3: the end is exclusive
+for i in 10..0 step -2 { print(i) }  // 10 8 6 4 2: `step` counts by any int but 0
 for c in "hi" { print(c) }       // each char; `for v in xs` gives each element of an array
 for i in 0..10 {
     if i % 2 == 0 { continue }   // next round of the innermost loop
@@ -88,7 +91,7 @@ Parentheses group: `(a + b) * c`.
 ## Builtins
 | call | meaning |
 |---|---|
-| `print(x)` | print one value of any type, then a newline |
+| `print(x)` · `print(a, b)` | print values of any type, separated by a space, then a newline |
 | `str(x)` | any value → `str`, the text `print` shows |
 | `int(x)` | float → int, truncating toward zero (NaN or out of range: E0245); str → int: `int("-42")` (other text: E0244) |
 | `float(x)` | int → float; str → float: `float("2.5")`, `float("1e3")` (other text: E0244) |
@@ -109,8 +112,9 @@ print('7'.code() - '0'.code())    // 7: a digit's value
 | method | result |
 |---|---|
 | `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1` |
-| `s.contains(t)` `s.starts_with(t)` `s.ends_with(t)` | `bool` (`t` is a `str`) |
-| `s.index_of(t)` | first position of `t`, or `-1` |
+| `s.contains(t)` `s.starts_with(t)` `s.ends_with(t)` | `bool` (`t` is a `str` or a `char`) |
+| `s.index_of(t)` | first position of `t` (a `str` or a `char`), or `-1` |
+| `s.pad_left(n)` `s.pad_right(n)` | spaces added until `s` has `n` characters (never shorter); `s.pad_left(n, '0')` pads with a char |
 | `s.split(sep)` | `[str]`: `"a,b,,c".split(",")` is `["a", "b", "", "c"]` |
 | `s.replace(old, new)` · `s.repeat(n)` | every `old` replaced · `n` copies |
 | `s.trim()` | without leading and trailing spaces, tabs and newlines |
@@ -136,12 +140,13 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 | `xs.len()` | number of elements |
 | `xs.push(v)` · `xs.pop()` | add at the end · remove and return the last |
 | `xs.insert(i, v)` · `xs.remove(i)` | insert at index `i` (0 to len) · remove and return element `i` |
+| `xs.swap(i, j)` | exchange elements `i` and `j` |
 | `xs.contains(v)` · `xs.index_of(v)` | `bool` · first index or `-1` |
 | `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1` · `n` copies, one after another |
 | `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`) |
 | `xs.join(sep)` | `[str]` or `[char]` → one `str` |
 
-Changing an array (`xs[i] = v`, `+=`, `push pop insert remove sort reverse`) needs a `var`.
+Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse`) needs a `var`.
 
 ## Structs
 ```nyra

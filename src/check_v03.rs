@@ -14,10 +14,10 @@ pub struct MSig {
 }
 
 pub const ARRAY_METHODS: &[&str] =
-    &["len", "push", "pop", "insert", "remove", "slice", "contains", "index_of", "repeat", "sort", "reverse", "join"];
+    &["len", "push", "pop", "insert", "remove", "swap", "slice", "contains", "index_of", "repeat", "sort", "reverse", "join"];
 pub const STR_METHODS: &[&str] = &[
     "len", "chars", "codes", "slice", "contains", "starts_with", "ends_with", "index_of", "split", "replace", "trim", "upper",
-    "lower", "repeat",
+    "lower", "repeat", "pad_left", "pad_right",
 ];
 pub const CHAR_METHODS: &[&str] = &["code", "upper", "lower", "is_digit", "is_letter", "is_upper", "is_lower", "is_space"];
 
@@ -34,6 +34,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "pop" => m(vec![], e, true),
                 "insert" => m(vec![Int, e], Void, true),
                 "remove" => m(vec![Int], e, true),
+                "swap" => m(vec![Int, Int], Void, true),
                 "slice" => m(vec![Int, Int], t, false),
                 "contains" => m(vec![e], Bool, false),
                 "index_of" => m(vec![e], Int, false),
@@ -54,6 +55,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             "replace" => m(vec![Str, Str], Str, false),
             "trim" | "upper" | "lower" => m(vec![], Str, false),
             "repeat" => m(vec![Int], Str, false),
+            "pad_left" | "pad_right" => m(vec![Int], Str, false),
             _ => None,
         },
         Char => match name {

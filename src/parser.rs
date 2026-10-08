@@ -244,6 +244,7 @@ impl Parser {
     fn program(&mut self) -> Program {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
+        let mut top: Vec<Stmt> = Vec::new();
         loop {
             self.skip_newlines();
             match self.peek() {
@@ -267,6 +268,14 @@ impl Parser {
                     self.cut_blocks -= 1;
                     self.bump();
                 }
+                // a statement at the top level: the program is a script, its statements form `main`
+                _ if self.starts_script_statement() => match self.stmt() {
+                    Ok(s) => top.push(s),
+                    Err(d) => {
+                        self.errs.push(d);
+                        self.sync_stmt();
+                    }
+                },
                 _ => {
                     let d = self.top_level_error();
                     self.errs.push(d);
@@ -274,7 +283,41 @@ impl Parser {
                 }
             }
         }
+        if let Some(first) = top.first() {
+            let span = first.span;
+            if let Some(main) = funcs.iter().find(|f| f.name == "main") {
+                let hint = match &first.kind {
+                    StmtKind::Let { name, .. } => format!(
+                        "there are no global variables: a constant is a function, e.g. `fn {name}() -> int = 10`; or move the `let` into `main`"
+                    ),
+                    StmtKind::Expr(e) if matches!(&e.kind, ExprKind::Call(f, _) if f == "main") => {
+                        "`main` runs by itself when the program starts: do not call it".to_string()
+                    }
+                    _ => format!(
+                        "a program is either a script (statements at the top level) or has `fn main` (line {}): move these statements into `main`",
+                        main.span.line
+                    ),
+                };
+                self.errs.push(Diag::new("E0101", "statements at the top level and a `fn main` in the same program", span).hint(hint));
+            } else {
+                funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
+            }
+        }
         Program { funcs, structs }
+    }
+
+    /// True if the token here starts a statement that may stand at the top level of a script.
+    /// Words of other languages (`import`, `class`, `int main(`) keep their own errors.
+    fn starts_script_statement(&self) -> bool {
+        match self.peek() {
+            Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Arena | Tok::Ret => true,
+            Tok::Ident(w) => {
+                let c_style = hints::is_type_word(w) && matches!(self.peek_at(1), Tok::Ident(_));
+                hints::top_level_word(w).is_none() && !c_style
+            }
+            Tok::RBrace | Tok::Eof => false,
+            _ => false,
+        }
     }
 
     /// Something other than `fn` at the top level of the file.
@@ -735,8 +778,14 @@ impl Parser {
                 if self.at(&Tok::DotDot) {
                     self.bump();
                     let end = self.expr()?;
+                    let step = if matches!(self.peek(), Tok::Ident(w) if w == "step") {
+                        self.bump();
+                        Some(self.expr()?)
+                    } else {
+                        None
+                    };
                     let body = self.loop_body("for")?;
-                    StmtKind::For { var, start, end, body }
+                    StmtKind::For { var, start, end, step, body }
                 } else {
                     let body = self.loop_body("for")?;
                     StmtKind::ForEach { var, iter: start, body }

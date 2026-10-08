@@ -157,7 +157,8 @@ pub enum StmtKind {
     If { cond: Expr, then: Vec<Stmt>, els: Option<Vec<Stmt>> },
     While { cond: Expr, body: Vec<Stmt> },
     /// `for var in start..end`
-    For { var: String, start: Expr, end: Expr, body: Vec<Stmt> },
+    /// `for var in start..end` or `for var in start..end step k` (`k` may be negative)
+    For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
     /// `for var in iter` over an array or a string
     ForEach { var: String, iter: Expr, body: Vec<Stmt> },
     Break,

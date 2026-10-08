@@ -1,0 +1,40 @@
+// v0.4: shorter code. A script needs no `fn main`; print takes several values;
+// ranges can step; arrays swap; text pads; searches take a char.
+fn bubble(xs: [int]) -> [int] {
+    var a = xs
+    for i in 0..a.len() {
+        for j in 0..a.len() - 1 - i {
+            if a[j] > a[j + 1] {
+                a.swap(j, j + 1)
+            }
+        }
+    }
+    ret a
+}
+
+print("sorted:", bubble([5, 2, 9, 1]))
+print(1, 2.5, true, 'c', "text")
+for i in 10..0 step -3 {
+    print(i)
+}
+var evens: [int] = []
+for i in 0..10 step 2 {
+    evens.push(i)
+}
+print(evens)
+let k = 0 - 2
+var down = ""
+for i in 5..0 step k {
+    down += str(i)
+}
+print(down)
+var vowels = 0
+for c in "programming language" {
+    if "aeiou".contains(c) {
+        vowels += 1
+    }
+}
+print("vowels:", vowels)
+print("x".pad_left(4) + "|")
+print(str(7).pad_left(3, '0'), "ab".pad_right(5, '.'), "toolong".pad_left(3))
+print("héllo".index_of('l'), "abc".starts_with('a'), "abc".ends_with('z'))

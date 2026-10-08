@@ -1529,15 +1529,18 @@ error[E0101]: expected `fn` or `struct`, found `void`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== par_top_call
-print(1)
+==== par_script_and_main
+fn main() {
+    print(1)
+}
+print(2)
 ----
-error[E0101]: expected `fn` or `struct`, found `print`
-  --> case.nyra:1:1
+error[E0101]: statements at the top level and a `fn main` in the same program
+  --> case.nyra:4:1
   |
-1 | print(1)
+4 | print(2)
   | ^
-  = hint: `print(...)` is a call, and calls go inside a function: `fn main() { print(...) }`
+  = hint: a program is either a script (statements at the top level) or has `fn main` (line 1): move these statements into `main`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1577,12 +1580,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn` or `struct`, found keyword `let`
+error[E0101]: statements at the top level and a `fn main` in the same program
   --> case.nyra:1:1
   |
 1 | let max = 10
   | ^
-  = hint: there are no global variables: a constant is a function, e.g. `fn max() -> int = 10`
+  = hint: there are no global variables: a constant is a function, e.g. `fn max() -> int = 10`; or move the `let` into `main`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1592,12 +1595,12 @@ fn main() {
 }
 main()
 ----
-error[E0101]: expected `fn` or `struct`, found `main`
+error[E0101]: statements at the top level and a `fn main` in the same program
   --> case.nyra:4:1
   |
 4 | main()
   | ^
-  = hint: `main` runs by itself when the program starts: define it with `fn main() { ... }` and do not call it
+  = hint: `main` runs by itself when the program starts: do not call it
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1769,49 +1772,51 @@ error[E0204]: `print` takes exactly 1 argument but 0 were given
   = explain: nyra explain E0204
 
 nyra: 1 error(s)
-==== chk_args_print2
+==== chk_print_void_part
+fn log() {
+    print(1)
+}
 fn main() {
-    print("a", "b")
+    print("a", log())
 }
 ----
-error[E0204]: `print` takes exactly 1 argument but 2 were given
-  --> case.nyra:2:5
+error[E0203]: `print` needs a value to show, but `log()` returns nothing
+  --> case.nyra:5:16
   |
-2 |     print("a", "b")
-  |     ^
-  = hint: `print` takes one value: put the parts in one string, `print("a b")`
-  = explain: nyra explain E0204
+5 |     print("a", log())
+  |                ^
+  = hint: `log` has no return type, so it returns nothing: call it on its own line, or declare `fn log(...) -> int` and `ret` a value
+  = explain: nyra explain E0203
 
 nyra: 1 error(s)
-==== chk_args_print2v
+==== chk_range_step_float
 fn main() {
-    let a = 1
-    let b = 2
-    print(a, b)
+    for i in 0..10 step 0.5 {
+        print(i)
+    }
 }
 ----
-error[E0204]: `print` takes exactly 1 argument but 2 were given
-  --> case.nyra:4:5
+error[E0203]: type mismatch in the step of a range: expected `int`, found `float`
+  --> case.nyra:2:25
   |
-4 |     print(a, b)
-  |     ^
-  = hint: `print` takes one value: put the parts in one string, `print("{a} {b}")`
-  = explain: nyra explain E0204
+2 |     for i in 0..10 step 0.5 {
+  |                         ^
+  = hint: convert it with `int`: `int(0.5)` (truncates toward zero), or write an int
+  = explain: nyra explain E0203
 
 nyra: 1 error(s)
-==== chk_args_print_label
+==== chk_contains_int
 fn main() {
-    let total = 3
-    print("total:", total)
+    print("abc".contains(1))
 }
 ----
-error[E0204]: `print` takes exactly 1 argument but 2 were given
-  --> case.nyra:3:5
+error[E0203]: type mismatch in argument 1 of `.contains(...)`: expected `str`, found `int`
+  --> case.nyra:2:26
   |
-3 |     print("total:", total)
-  |     ^
-  = hint: `print` takes one value: put the parts in one string, `print("total: {total}")`
-  = explain: nyra explain E0204
+2 |     print("abc".contains(1))
+  |                          ^
+  = hint: build text with interpolation: `"{1}"`, or convert with `str(1)`
+  = explain: nyra explain E0203
 
 nyra: 1 error(s)
 ==== chk_args_user
@@ -3819,19 +3824,19 @@ error[E0101]: expected `fn` or `struct`, found `fun`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== f_missing_main_call
-fn helper() {
-    print(1)
+==== chk_swap_one_arg
+fn main() {
+    var xs = [1, 2]
+    xs.swap(0)
 }
-helper()
 ----
-error[E0101]: expected `fn` or `struct`, found `helper`
-  --> case.nyra:4:1
+error[E0204]: `.swap()` takes 2 arguments but 1 was given
+  --> case.nyra:3:8
   |
-4 | helper()
-  | ^
-  = hint: `helper(...)` is a call, and calls go inside a function: `fn main() { helper(...) }`
-  = explain: nyra explain E0101
+3 |     xs.swap(0)
+  |        ^
+  = hint: call it as `.swap(int, int)`
+  = explain: nyra explain E0204
 
 nyra: 1 error(s)
 ==== f_py_def
