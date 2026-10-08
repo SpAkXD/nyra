@@ -1345,7 +1345,7 @@ fn main() {
 
 ## E0243: bad argument value
 - **Kind:** runtime error · **Since:** v0.3
-- **What it means:** A method received an argument that has the right type but a value it cannot work with: `repeat(n)` with a negative `n` ("repeat count must be >= 0, got -1", on strings and on arrays), `replace("", x)` with an empty pattern ("replace() needs a non-empty pattern") or `split("")` with an empty separator ("split() needs a non-empty separator"; the hint says to use `s.chars()` for the characters of a string). The position is the method name, and the program exits with code 101.
+- **What it means:** A method received an argument that has the right type but a value it cannot work with: `repeat(n)` with a negative `n` ("repeat count must be >= 0, got -1", on strings and on arrays), `replace("", x)` with an empty pattern ("replace() needs a non-empty pattern") or `split("")` with an empty separator ("split() needs a non-empty separator"; the hint says to use `s.chars()` for the characters of a string). A range `for i in a..b step k` with `k` equal to 0 gives "range step must not be 0" (a loop that never ends). The position is the method name (or the step), and the program exits with code 101.
 - **Why Nyra has this rule:** These calls have no sensible result, and the host languages disagree about them: JavaScript splits `"abc".split("")` into characters and Python raises an error, and a negative repeat count is an error in JavaScript and an empty string in Python. A clear error beats an answer that depends on the backend.
 - **Common causes:**
   - `s.split("")` to get the characters: write `s.chars()`
