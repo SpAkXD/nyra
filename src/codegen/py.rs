@@ -25,6 +25,7 @@ const RESERVED: &[&str] = &[
 
 /// The Python runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/py/runtime.py");
+const STD: &str = include_str!("../rt/py/std.py");
 
 /// A Nyra name as a Python identifier: `ny...` names belong to the runtime, and names Python
 /// itself uses (keywords, builtins the program calls) get a `_`.
@@ -251,6 +252,9 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str("\n\n");
     }
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
+    if m.uses_std() {
+        out.push_str(STD);
+    }
     let _ = write!(out, "\n\nif __name__ == \"__main__\":\n    ny_main({})\n", name(&m.func(m.main).name));
     out
 }
@@ -600,6 +604,11 @@ impl<'a> Gen<'a> {
             RtOp::ArrConcat => format!("ny_concat({}, {})", a[0], a[1]),
             // a char is a one-character str: `[str]` and `[char]` join alike
             RtOp::ArrJoin => format!("{}.join({})", self.expr(&args[1]), a[0]),
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
+            }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         self.assign(dst, code);

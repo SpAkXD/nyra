@@ -9,6 +9,7 @@ use crate::ast::*;
 use crate::check_v03::{self as v3, StructInfo};
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
+use crate::stdlib;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
 /// Builtins a program may also define itself (its own definition wins).
@@ -92,6 +93,8 @@ struct Checker {
     arena_depth: usize,
     /// Variables that were freed with `free(x)` and not assigned since.
     freed: HashMap<String, Freed>,
+    /// The imported standard modules and where their `use` line is.
+    modules: Vec<(String, Span)>,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -106,7 +109,25 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         chain: None,
         arena_depth: 0,
         freed: HashMap::new(),
+        modules: Vec::new(),
     };
+
+    // the imported modules: their intrinsics are functions named `module.name`
+    for u in &prog.uses {
+        if stdlib::is_module(&u.module) && !c.modules.iter().any(|(m, _)| *m == u.module) {
+            c.modules.push((u.module.clone(), u.span));
+            for f in stdlib::StdFn::ALL.iter().filter(|f| f.path().0 == u.module) {
+                let sig = Sig {
+                    params: f.params().iter().map(|(_, t)| t.ty()).collect(),
+                    names: f.params().iter().map(|(n, _)| n.to_string()).collect(),
+                    inout: vec![false; f.params().len()],
+                    ret: f.ret().ty(),
+                    span: u.span,
+                };
+                c.fns.insert(f.full_name().to_string(), sig);
+            }
+        }
+    }
 
     // structs first: functions and bodies refer to them
     for sd in &prog.structs {
@@ -501,6 +522,11 @@ impl Checker {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a struct (line {})", sd.span.line), span)
                     .hint("variables start lowercase: rename the variable"),
+            );
+        } else if let Some((_, at)) = self.modules.iter().find(|(m, _)| m == name) {
+            self.errs.push(
+                Diag::new("E0206", format!("`{name}` is already the name of a module (`use {name}` on line {})", at.line), span)
+                    .hint(format!("a variable cannot share a module's name: rename the variable, e.g. `{name}_value`")),
             );
         }
         self.freed.remove(name);
@@ -1096,6 +1122,11 @@ impl Checker {
     /// The type of `e`. `want` is the type the context expects; only `[]` needs it.
     fn expr_with(&mut self, e: &mut Expr, want: Option<Type>) -> Type {
         let span = e.span;
+        // `math.sqrt(x)`, `math.pi`: an item of a module
+        if let Some(t) = self.module_item(e, want) {
+            e.ty = t;
+            return t;
+        }
         let t = match &mut e.kind {
             ExprKind::Int(_) => Type::Int,
             ExprKind::Float(_) => Type::Float,
@@ -1125,6 +1156,14 @@ impl Checker {
                     let name = name.clone();
                     self.check_freed(&name, span);
                     t
+                }
+                None if self.modules.iter().any(|(m, _)| m == name) => {
+                    let first = stdlib::names(name).into_iter().next().unwrap_or_default();
+                    self.errs.push(
+                        Diag::new("E0307", format!("`{name}` is a module, not a value"), span)
+                            .hint(format!("use the items of the module by their names, e.g. `{name}.{first}`")),
+                    );
+                    Type::Unknown
                 }
                 None if self.structs.contains_key(name.as_str()) => {
                     let fields: Vec<String> =
@@ -1312,6 +1351,139 @@ impl Checker {
         };
         e.ty = t;
         t
+    }
+
+    /// `module.name(args)` or `module.name`, where `module` is a standard module (and not a
+    /// variable). `None` for every other expression. A call becomes a call of the function named
+    /// `module.name`, a constant becomes its value.
+    fn module_item(&mut self, e: &mut Expr, want: Option<Type>) -> Option<Type> {
+        let (m, name, call) = match &e.kind {
+            ExprKind::Method(r, n, _) | ExprKind::Field(r, n) => match &r.kind {
+                ExprKind::Var(m) => (m.clone(), n.clone(), matches!(e.kind, ExprKind::Method(..))),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        if self.lookup(&m).is_some() || !stdlib::is_module(&m) {
+            return None;
+        }
+        let span = e.span;
+        let full = format!("{m}.{name}");
+        let check_args = |c: &mut Checker, e: &mut Expr| {
+            if let ExprKind::Method(_, _, args) = &mut e.kind {
+                for a in args.iter_mut() {
+                    c.arg_type(a, None);
+                }
+            }
+        };
+        if !self.modules.iter().any(|(x, _)| *x == m) {
+            // a function of the program that has the module's name: `fs.x` is then its own mistake
+            if self.fns.contains_key(&m) || self.decls.iter().any(|(d, _)| *d == m) {
+                return None;
+            }
+            let rspan = match &e.kind {
+                ExprKind::Method(r, ..) | ExprKind::Field(r, _) => r.span,
+                _ => span,
+            };
+            self.errs.push(
+                Diag::new("E0201", format!("undefined variable `{m}`"), rspan)
+                    .hint(format!("`{m}` is a standard module: add `use {m}` at the top of the file"))
+                    .fix(vec![Edit::insert(Span { line: 1, col: 1 }, format!("use {m}
+"))]),
+            );
+            check_args(self, e);
+            return Some(Type::Unknown);
+        }
+        if let Some(v) = stdlib::constant(&m, &name) {
+            if call {
+                let no_args = matches!(&e.kind, ExprKind::Method(_, _, a) if a.is_empty());
+                check_args(self, e);
+                self.errs.push(
+                    Diag::new("E0307", format!("`{full}` is a constant, not a function"), span)
+                        .hint(format!("drop the parentheses: `{full}`"))
+                        .fix_opt(no_args.then(|| Edit::replace(span, &format!("{name}()"), name.clone()))),
+                );
+                return Some(Type::Unknown);
+            }
+            e.kind = ExprKind::Float(v);
+            return Some(Type::Float);
+        }
+        let public = !name.starts_with('_');
+        let json = m == "json" && stdlib::JSON_FNS.contains(&name.as_str());
+        if !public || !(json || self.fns.contains_key(&full)) {
+            let items = stdlib::names(&m);
+            let (hint, fix) = match stdlib::renamed(&m, &name) {
+                Some(h) => (h.to_string(), None),
+                None => match suggest_fix(&name, items.iter().map(String::as_str)) {
+                    Some((h, f)) => (h, f.map(|f| Edit::replace(span, &name, f))),
+                    None => (format!("the items of `{m}` are {}", items.iter().map(|i| format!("`{i}`")).collect::<Vec<_>>().join(", ")), None),
+                },
+            };
+            check_args(self, e);
+            self.errs.push(Diag::new("E0306", format!("module `{m}` has no `{name}`"), span).hint(hint).fix_opt(fix));
+            return Some(Type::Unknown);
+        }
+        if !call {
+            let no_params = self.fns.get(&full).is_some_and(|s| s.params.is_empty());
+            self.errs.push(
+                Diag::new("E0307", format!("`{full}` is a function, not a value"), span)
+                    .hint(format!("call it: `{full}(...)`"))
+                    .fix_opt(no_params.then(|| Edit::replace(span, &name, format!("{name}()")))),
+            );
+            return Some(Type::Unknown);
+        }
+        let ExprKind::Method(_, _, args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("checked above") };
+        e.kind = ExprKind::Call(full.clone(), args);
+        let ExprKind::Call(_, args) = &mut e.kind else { unreachable!("just set") };
+        if json {
+            return Some(self.json_call(&name, args, span, want));
+        }
+        Some(self.call(&full, args, span, want))
+    }
+
+    /// `json.str(value)` of any value; `json.parse(text)` gives the type the context needs.
+    fn json_call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
+        let parse = name == "parse";
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, if parse { Some(Type::Str) } else { None })).collect();
+        let shown = if parse { "json.parse(text)" } else { "json.str(value)" };
+        for a in args.iter() {
+            match &a.kind {
+                ExprKind::Inout(_) => {
+                    self.errs.push(Diag::new("E0237", format!("the argument of `json.{name}` is not `inout`"), a.span).hint("remove `inout`"))
+                }
+                ExprKind::Labeled(label, _) => self.errs.push(
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `json.{name}`"), a.span)
+                        .hint(format!("write the value alone: `{shown}`")),
+                ),
+                _ => {}
+            }
+        }
+        if tys.len() != 1 {
+            self.errs.push(
+                Diag::new("E0204", format!("`json.{name}` takes exactly 1 argument but {} {} given", tys.len(), was_were(tys.len())), span)
+                    .hint(format!("call it as `{shown}`")),
+            );
+            return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
+        }
+        if !parse {
+            if tys[0] == Type::Void {
+                let msg = format!("`json.str` needs a value, but {} returns nothing", call_text(&args[0]));
+                self.errs.push(Diag::new("E0203", msg, args[0].span).hint(self.no_value_hint(&args[0])));
+            }
+            return Type::Str;
+        }
+        self.expect_ty(Type::Str, tys[0], &args[0], Ctx::Arg { f: "json.parse", idx: 0, param: "text" });
+        match want {
+            Some(t) if t.is_unknown() || (t != Type::Void && self.defined(t)) => t,
+            _ => {
+                self.errs.push(
+                    Diag::new("E0309", "`json.parse` needs to know the type it reads", span).hint(
+                        "give the value a type: `let p: Point = json.parse(text)`, `let xs: [int] = json.parse(text)`, or pass it where that type is expected",
+                    ),
+                );
+                Type::Unknown
+            }
+        }
     }
 
     /// `[a, b, c]`: every element has one type. `[]` takes its type from the context.

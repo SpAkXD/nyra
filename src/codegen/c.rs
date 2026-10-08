@@ -9,6 +9,7 @@ use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, St
 const PRELUDE: &str = include_str!("../rt/c/core.c");
 const STRINGS: &str = include_str!("../rt/c/str.c");
 const ARRAYS: &str = include_str!("../rt/c/arr.c");
+const STD: &str = include_str!("../rt/c/std.c");
 
 const RESERVED: &[&str] = &[
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
@@ -182,6 +183,15 @@ fn structs(m: &Module, out: &mut String) {
     out.push('\n');
 }
 
+/// The C name of a function: `ny_<name>` for the program's own, `nyM_<module>_<name>` for the
+/// standard library's functions written in Nyra (named `module.name`).
+fn fn_name(name: &str) -> String {
+    match name.split_once('.') {
+        Some((m, n)) => format!("nyM_{m}_{n}"),
+        None => format!("ny_{name}"),
+    }
+}
+
 /// `names` are the plain names; an `inout` parameter is a pointer.
 fn signature(f: &Func, names: &[String]) -> String {
     let params = if f.params == 0 {
@@ -195,7 +205,7 @@ fn signature(f: &Func, names: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    format!("static {} ny_{}({params})", f.ret.map_or("void".to_string(), ctype), f.name)
+    format!("static {} {}({params})", f.ret.map_or("void".to_string(), ctype), fn_name(&f.name))
 }
 
 /// `file` is the source path as given to nyra; runtime errors report it.
@@ -205,6 +215,11 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     out.push_str(ARRAYS);
     out.push('\n');
+    let std = m.uses_std();
+    if std {
+        out.push_str(STD);
+        out.push('\n');
+    }
     structs(m, &mut out);
     // string literals: read-only objects that are never freed (reference count 0); `const` also
     // lets the C compiler see that releasing one never reaches free()
@@ -245,10 +260,12 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str(&g.out);
         out.push_str("}\n\n");
     }
+    // the standard library reads the program's arguments
+    let (params, args) = if std { ("int argc, char **argv", "\n    nyrt_argc = argc;\n    nyrt_argv = argv;") } else { ("void", "") };
     let _ = write!(
         out,
-        "int main(void) {{\n    nyrt_init();\n    ny_{}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
-        m.func(m.main).name
+        "int main({params}) {{{args}\n    nyrt_init();\n    {}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
+        fn_name(&m.func(m.main).name)
     );
     out
 }
@@ -352,7 +369,7 @@ impl Gen<'_> {
                         }
                     }
                 }
-                let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, parts.join(", ")));
+                let line = self.assign(*dst, format!("{}({})", fn_name(&self.m.func(*func).name), parts.join(", ")));
                 self.line(&line);
                 if inout {
                     self.indent -= 1;
@@ -642,6 +659,11 @@ impl Gen<'_> {
             RtOp::ArrRepeat => format!("nyrt_arr_repeat({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("nyrt_arr_concat({}, {})", a[0], a[1]),
             RtOp::ArrJoin => format!("nyrt_arr_join({}, {})", a[0], a[1]),
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("nyrt_std_{}({})", f.rt_name(), parts.join(", "))
+            }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         let line = self.assign(dst, call);

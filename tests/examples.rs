@@ -1,9 +1,18 @@
 //! Runs every `examples/*.nyra` on every available backend and compares stdout
 //! with `examples/*.out`. Also checks that `tests/errors/*.nyra` report the
 //! error code named in their first line (`// expect: E0203`).
+//!
+//! An example may come with more files next to it:
+//! - `X.in`: its standard input (without one, the input is empty);
+//! - `X.args`: its arguments, one per line (passed after `--`);
+//! - `X.exit`: the exit code it must end with (else 0).
+//!
+//! Each run starts in an empty folder of its own, so an example may create files.
 
+use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn nyra() -> Command {
     Command::new(env!("CARGO_BIN_EXE_nyra"))
@@ -11,6 +20,39 @@ fn nyra() -> Command {
 
 fn available(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().is_ok()
+}
+
+/// Runs one example (or runtime error test) the way its side files say: `nyra run <example>
+/// <flags> -- <args>` in a new empty folder, with its input. Returns the output and the expected
+/// exit code.
+fn run_example(path: &PathBuf, flags: &[&str], env: &[(&str, &str)]) -> (Output, i32) {
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+    let side = |ext: &str| std::fs::read_to_string(path.with_extension(ext)).ok();
+    let full = std::fs::canonicalize(path).unwrap();
+    let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+    let dir = std::env::temp_dir()
+        .join("nyra-examples")
+        .join(format!("{stem}-{}-{}", std::process::id(), RUNS.fetch_add(1, Ordering::SeqCst)));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut cmd = nyra();
+    cmd.current_dir(&dir).arg("run").arg(&full).args(flags).envs(env.iter().copied());
+    if let Some(args) = side("args") {
+        cmd.arg("--").args(args.lines());
+    }
+    // (bytes: a test may feed text that is not UTF-8)
+    let input = std::fs::read(path.with_extension("in")).ok();
+    cmd.stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().unwrap();
+    if let Some(text) = input {
+        let mut stdin = child.stdin.take().unwrap();
+        // a program may stop reading early: a closed pipe is not an error here
+        let _ = stdin.write_all(&text);
+    }
+    let out = child.wait_with_output().unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let exit = side("exit").map_or(0, |e| e.trim().parse().expect("an .exit file holds a number"));
+    (out, exit)
 }
 
 fn files(dir: &str) -> Vec<PathBuf> {
@@ -41,16 +83,10 @@ fn examples_produce_expected_output_on_every_backend() {
         let Ok(expected) = std::fs::read_to_string(path.with_extension("out")) else { continue };
         for (target, flags, opt) in &targets {
             // NYRA_LEAKCHECK: native programs exit with 102 on a leak, a double free or a use after free
-            let out = nyra()
-                .arg("run")
-                .arg(&path)
-                .args(*flags)
-                .env("NYRA_OPT", opt)
-                .env("NYRA_LEAKCHECK", "1")
-                .output()
-                .unwrap();
-            assert!(
-                out.status.success(),
+            let (out, exit) = run_example(&path, flags, &[("NYRA_OPT", opt), ("NYRA_LEAKCHECK", "1")]);
+            assert_eq!(
+                out.status.code(),
+                Some(exit),
                 "{} [{target}] failed:\n{}",
                 path.display(),
                 String::from_utf8_lossy(&out.stderr)
@@ -79,7 +115,7 @@ fn runtime_errors_report_code_position_and_exit_101() {
         let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
         let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default();
         for flags in &backends {
-            let out = nyra().arg("run").arg(&path).args(*flags).output().unwrap();
+            let (out, _) = run_example(&path, flags, &[]);
             let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
             let label = format!("{} {:?}", path.display(), flags);
             assert_eq!(out.status.code(), Some(101), "{label}: exit code; stderr:\n{stderr}");
@@ -87,7 +123,7 @@ fn runtime_errors_report_code_position_and_exit_101() {
             assert!(stderr.contains(&format!(":{at}\n")) || stderr.contains(&format!(":{at}\r\n")), "{label}: position {at} missing:\n{stderr}");
             assert_eq!(stdout.replace("\r\n", "\n"), stdout_expected.replace("\r\n", "\n"), "{label}: stdout (must be flushed before the error)");
 
-            let json = nyra().arg("run").arg(&path).args(*flags).arg("--json").output().unwrap();
+            let (json, _) = run_example(&path, &[*flags, &["--json"][..]].concat(), &[]);
             let stderr = String::from_utf8_lossy(&json.stderr);
             assert!(stderr.contains(&format!("\"code\":\"{code}\"")) && stderr.contains("\"runtime\":true"), "{label} --json: {stderr}");
         }
@@ -140,15 +176,17 @@ fn check_on(path: &PathBuf, flags: &[&str]) -> Option<String> {
     let label = format!("{} {flags:?}", path.display());
     let src = std::fs::read_to_string(path).unwrap();
     let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: "));
-    let out = nyra().arg("run").arg(path).args(flags).output().unwrap();
-    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
     let Some(expect) = expect else {
         let expected = std::fs::read_to_string(path.with_extension("out")).ok()?.replace("\r\n", "\n");
-        if !out.status.success() {
-            return Some(format!("{label} failed:\n{stderr}"));
+        let (out, exit) = run_example(path, flags, &[]);
+        let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
+        if out.status.code() != Some(exit) {
+            return Some(format!("{label} failed (exit code {:?}, expected {exit}):\n{stderr}", out.status.code()));
         }
         return (stdout != expected).then(|| format!("{label} output differs:\n--- got\n{stdout}--- expected\n{expected}"));
     };
+    let (out, _) = run_example(path, flags, &[]);
+    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
     let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
     let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default().replace("\r\n", "\n");
     if out.status.code() != Some(101) {
@@ -160,7 +198,7 @@ fn check_on(path: &PathBuf, flags: &[&str]) -> Option<String> {
     if stdout != stdout_expected {
         return Some(format!("{label}: stdout (must be flushed before the error) was:\n{stdout}"));
     }
-    let json = nyra().arg("run").arg(path).args(flags).arg("--json").output().unwrap();
+    let (json, _) = run_example(path, &[flags, &["--json"][..]].concat(), &[]);
     let stderr = String::from_utf8_lossy(&json.stderr);
     if !(stderr.contains(&format!("\"code\":\"{code}\"")) && stderr.contains("\"runtime\":true")) {
         return Some(format!("{label} --json: {stderr}"));

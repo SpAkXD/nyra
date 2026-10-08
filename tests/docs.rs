@@ -5,8 +5,8 @@
 //! - `docs/SPEC.md` marks them `nyra`: the spec is pasted into prompts as plain text, where `rust`
 //!   would name the wrong language.
 //!
-//! A block without `fn main` becomes a program: its top-level `fn` and `struct` definitions stay
-//! at the top level and every other line goes into an appended `fn main()`.
+//! A block without `fn main` becomes a program: its `use` lines and top-level `fn` and `struct`
+//! definitions stay at the top level and every other line goes into an appended `fn main()`.
 
 use std::process::Command;
 
@@ -38,7 +38,7 @@ fn program(code: &str) -> String {
     let (mut items, mut body) = (String::new(), String::new());
     let mut in_item = false;
     for line in code.lines() {
-        let starts_item = line.starts_with("fn ") || line.starts_with("struct ");
+        let starts_item = line.starts_with("fn ") || line.starts_with("struct ") || line.starts_with("use ");
         if starts_item || in_item {
             items.push_str(line);
             items.push('\n');

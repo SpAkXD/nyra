@@ -21,10 +21,13 @@ const RESERVED: &[&str] = &[
     "process", "require", "module", "exports", "NyPanic", "NY_SURR", "NY_ESC", "Ref", "type", "declare",
     "namespace", "abstract", "as", "any", "boolean", "number", "string", "never", "unknown", "readonly",
     "keyof", "infer", "is", "asserts", "get", "set", "of", "constructor", "Boolean", "Map", "Set", "Date",
+    "NyExit", "TextDecoder", "Atomics", "SharedArrayBuffer", "Int32Array", "Uint32Array", "Uint8Array", "ArrayBuffer",
+    "DataView", "performance", "crypto",
 ];
 
 /// The TypeScript runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/ts/runtime.ts");
+const STD: &str = include_str!("../rt/ts/std.ts");
 
 /// A Nyra name as a TypeScript identifier. `ny...` names belong to the runtime (helpers `ny_*`),
 /// so user names that start with `ny` get a `_`, like reserved words.
@@ -169,6 +172,13 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str("}\n\n");
     }
     out.push_str(&RUNTIME.replace("@FILE@", &crate::diag::json_str(file)));
+    let std = m.uses_std();
+    if std {
+        out.push_str(STD);
+    }
+    // `os.exit(n)` throws `NyExit` (only programs that use the standard library can)
+    let exit = if std { "    if (e instanceof NyExit) {\n        if (ny_process !== undefined) ny_process.exitCode = e.code;\n    } else {\n" } else { "" };
+    let (inner, close) = if std { ("    ", "    }\n") } else { ("", "") };
     let _ = write!(
         out,
         concat!(
@@ -176,12 +186,19 @@ pub fn gen(m: &Module, file: &str) -> String {
             "try {{\n",
             "    {}();\n",
             "}} catch (e) {{\n",
-            "    console.error(ny_rescue(e).message);\n",
-            "    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
-            "    if (ny_process !== undefined) ny_process.exitCode = 101;\n",
+            "{}",
+            "{}    console.error(ny_rescue(e).message);\n",
+            "{}    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
+            "{}    if (ny_process !== undefined) ny_process.exitCode = 101;\n",
+            "{}",
             "}}\n",
         ),
-        name(&m.func(m.main).name)
+        name(&m.func(m.main).name),
+        exit,
+        inner,
+        inner,
+        inner,
+        close
     );
     out
 }
@@ -512,6 +529,11 @@ impl Gen<'_> {
                 } else {
                     format!("{}.join({})", self.expr(&args[0]), a[1])
                 }
+            }
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

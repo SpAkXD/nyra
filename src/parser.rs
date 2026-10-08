@@ -341,11 +341,20 @@ impl Parser {
     fn program(&mut self) -> Program {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
+        let mut uses = Vec::new();
         let mut top: Vec<Stmt> = Vec::new();
         loop {
             self.skip_newlines();
             match self.peek() {
                 Tok::Eof => break,
+                // `use math` (and other languages' `import math`, `from math import sqrt`)
+                Tok::Ident(w) if self.starts_use(w) => match self.use_line() {
+                    Ok(u) => uses.push(u),
+                    Err(d) => {
+                        self.errs.push(d);
+                        self.sync_stmt();
+                    }
+                },
                 Tok::Fn => match self.func() {
                     Ok(f) => funcs.push(f),
                     Err(d) => {
@@ -400,7 +409,51 @@ impl Parser {
                 funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
             }
         }
-        Program { funcs, structs }
+        Program { funcs, structs, uses }
+    }
+
+    /// True if the word here starts an import line: `use name`, `import name`, `from name import ...`.
+    fn starts_use(&self, w: &str) -> bool {
+        matches!(w, "use" | "import" | "from") && matches!(self.peek_at(1), Tok::Ident(_) | Tok::Str(_))
+    }
+
+    /// `use name`: one standard module per line. Other languages' forms are reported with the Nyra
+    /// spelling (`import math` is `use math`).
+    fn use_line(&mut self) -> PResult<Use> {
+        let span = self.span();
+        let Tok::Ident(word) = self.bump().tok else { unreachable!("starts_use checked it") };
+        if let Tok::Str(path) = self.peek().clone() {
+            return Err(Diag::new("E0302", format!("`{word} \"{path}\"`: only the standard modules can be imported"), self.span())
+                .hint(format!("a program is one file for now; the standard modules are {}: write e.g. `use math`", crate::stdlib::module_list())));
+        }
+        let (module, mspan) = self.ident("a module name", "write the module after `use`: `use math`")?;
+        if word == "from" {
+            // `from math import sqrt`: Nyra imports the module and names it at each call
+            return Err(Diag::new("E0302", format!("`from {module} import ...` does not exist in Nyra"), span)
+                .hint(format!("write `use {module}` and call the functions with the module name: `{module}.name(...)`")));
+        }
+        let mut d = None;
+        if word == "import" {
+            d = Some(
+                Diag::new("E0302", format!("`import {module}`: Nyra spells it `use {module}`"), span)
+                    .hint(format!("write `use {module}`"))
+                    .fix(vec![Edit::replace(span, "import", "use")]),
+            );
+        }
+        if !matches!(self.peek(), Tok::Newline | Tok::Eof) {
+            let rest = match self.peek() {
+                Tok::Dot => format!("`use {module}` imports the whole module: call its functions as `{module}.name(...)`, there is no `use {module}.name`"),
+                Tok::Comma => "one module per line: `use math` and `use text` on two lines".to_string(),
+                Tok::Ident(w) if w == "as" => format!("modules cannot be renamed: write `use {module}` and call `{module}.name(...)`"),
+                _ => format!("a `use` line names one module: `use {module}`"),
+            };
+            return Err(Diag::new("E0302", format!("unexpected {} after `use {module}`", self.found()), self.span()).hint(rest));
+        }
+        if let Some(d) = d {
+            // the line is otherwise fine: the program is still read as if it said `use`
+            self.errs.push(d);
+        }
+        Ok(Use { module, span: mspan })
     }
 
     /// True if the token here starts a statement that may stand at the top level of a script.
@@ -887,6 +940,13 @@ impl Parser {
 
     fn stmt(&mut self) -> PResult<Stmt> {
         let span = self.span();
+        if let Tok::Ident(w) = self.peek() {
+            if matches!(w.as_str(), "use" | "import") && matches!(self.peek_at(1), Tok::Ident(_)) {
+                let w = w.clone();
+                return Err(Diag::new("E0302", format!("`{w}` inside a block: imports go at the top of the file"), span)
+                    .hint("move the `use` line to the top of the file, outside every function"));
+            }
+        }
         let kind = match self.peek().clone() {
             Tok::Let | Tok::Var => {
                 let kw = self.bump().tok;

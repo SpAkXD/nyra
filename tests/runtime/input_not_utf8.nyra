@@ -1,0 +1,7 @@
+// expect: E0341 at 5:22
+use input
+
+fn main() {
+    let line = input.line()
+    print(line)
+}

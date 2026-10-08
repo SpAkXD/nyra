@@ -19,6 +19,7 @@ pub mod verify;
 
 use crate::ast::Span;
 pub use crate::ast::Type as Ty;
+pub use crate::stdlib::StdFn;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FuncId(pub u32);
@@ -84,6 +85,26 @@ impl Module {
 
     pub fn managed(&self, t: Ty) -> bool {
         self.structs.managed(t)
+    }
+
+    /// True if some statement of the program runs an operation for which `f` is true (a backend
+    /// adds a part of its runtime only when the program needs it).
+    pub fn uses(&self, f: &dyn Fn(RtOp) -> bool) -> bool {
+        fn any(ss: &[Stmt], f: &dyn Fn(RtOp) -> bool) -> bool {
+            ss.iter().any(|s| match &s.kind {
+                StmtKind::Op { op, .. } | StmtKind::Mutate { op, .. } => f(*op),
+                StmtKind::If { then, els, .. } => any(then, f) || any(els, f),
+                StmtKind::Loop { head, body, step, .. } => any(head, f) || any(body, f) || any(step, f),
+                StmtKind::ForEach { body, .. } => any(body, f),
+                _ => false,
+            })
+        }
+        self.funcs.iter().any(|func| any(&func.body, f))
+    }
+
+    /// True if the program calls the standard library (`RtOp::Std`).
+    pub fn uses_std(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::Std(_)))
     }
 }
 
@@ -255,6 +276,13 @@ pub enum RtOp {
     /// `Point(x: 1, y: 2)`: the fields in declaration order; the struct becomes one more owner
     /// of each managed field value.
     StructNew,
+    /// A standard library function (`fs.read(path)`): the runtime function `std_<module>_<name>`
+    /// of the backend, called with the operands and the position (a failure is a runtime error).
+    Std(StdFn),
+    /// `json.str(v)`: the JSON text of a value of any type (`dst: str`, owned).
+    JsonStr,
+    /// `json.parse(text)`: a value of the destination's type read from JSON text (E0345), owned.
+    JsonParse,
 }
 
 impl RtOp {
@@ -298,6 +326,9 @@ impl RtOp {
             RtOp::StrPadLeft => "str_pad_left",
             RtOp::StrPadRight => "str_pad_right",
             RtOp::StructNew => "struct_new",
+            RtOp::Std(f) => f.full_name(),
+            RtOp::JsonStr => "json_str",
+            RtOp::JsonParse => "json_parse",
         }
     }
 
@@ -350,7 +381,9 @@ impl RtOp {
                 | RtOp::StructNew
                 | RtOp::StrPadLeft
                 | RtOp::StrPadRight
-        )
+                | RtOp::JsonStr
+                | RtOp::JsonParse
+        ) || matches!(self, RtOp::Std(f) if f.owned())
     }
 
     /// True for the operations that change a place (`Mutate`).

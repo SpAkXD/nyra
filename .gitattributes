@@ -3,3 +3,6 @@
 
 # GitHub has no Nyra grammar yet: highlight .nyra files as Rust (close enough).
 *.nyra linguist-language=Rust
+
+# Standard input of the examples: kept byte for byte (some test `\r\n` line ends).
+*.in -text

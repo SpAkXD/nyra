@@ -109,6 +109,15 @@ impl Type {
 pub struct Program {
     pub funcs: Vec<Func>,
     pub structs: Vec<StructDef>,
+    /// The `use name` lines: the standard modules the program imports.
+    pub uses: Vec<Use>,
+}
+
+/// `use math`: the module's functions are then called as `math.sqrt(x)`.
+#[derive(Debug, Clone)]
+pub struct Use {
+    pub module: String,
+    pub span: Span,
 }
 
 #[derive(Debug)]

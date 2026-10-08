@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 
 use super::{
-    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind,
+    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind,
     StrId, StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
@@ -1027,6 +1027,23 @@ impl<'a> Lower<'a> {
                 // min: `b < a ? b : a` keeps the first on a tie; max: `a < b ? b : a`
                 let cond = if name == "min" { Expr::Binary(lt, b(y), b(x)) } else { Expr::Binary(lt, b(x), b(y)) };
                 Expr::Select(Box::new(cond), b(y), b(x))
+            }
+            // `json.str(v)` of any value, `json.parse(text)` into the type the checker gave the call
+            "json.str" | "json.parse" => {
+                let x = self.expr(&args[0], None, out);
+                let op = if name == "json.str" { RtOp::JsonStr } else { RtOp::JsonParse };
+                self.op(op, vec![x], e.ty, dst, span, out)
+            }
+            // a standard library function: its operands left to right, then the runtime call
+            _ if StdFn::from_name(name).is_some() => {
+                let f = StdFn::from_name(name).expect("matched above");
+                let refs: Vec<&ast::Expr> = args.iter().collect();
+                let vals = self.operands(&refs, out);
+                if e.ty == Type::Void {
+                    out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Std(f), args: vals }, span });
+                    return Expr::Bool(false);
+                }
+                self.op(RtOp::Std(f), vals, e.ty, dst, span, out)
             }
             _ => {
                 let Some(&func) = self.ids.get(name) else {

@@ -1,0 +1,4 @@
+// The math functions that every host computes a little differently, written in Nyra so that
+// every backend runs the same IEEE operations (see stdlib.rs).
+
+fn exp(x: float) -> float = x

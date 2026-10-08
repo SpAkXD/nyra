@@ -26,6 +26,7 @@ const RESERVED: &[&str] = &[
 
 /// The Rust runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/rs/runtime.rs");
+const STD: &str = include_str!("../rt/rs/std.rs");
 
 /// A Nyra name as a Rust identifier: `ny...` names belong to the runtime, and Rust's own words get a `_`.
 fn name(n: &str) -> String {
@@ -156,6 +157,9 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str("}\n\n");
     }
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
+    if m.uses_std() {
+        out.push_str(STD);
+    }
     out
 }
 
@@ -661,6 +665,13 @@ impl<'a> Gen<'a> {
             RtOp::ArrJoin => {
                 let f = if self.ty(&args[0]).elem() == Some(Ty::Char) { "ny_join_chars" } else { "ny_join" };
                 format!("{f}({}, {})", self.borrow(&args[0]), self.str_ref(&args[1]))
+            }
+            RtOp::Std(f) => {
+                // strings are passed as `&str`
+                let mut parts: Vec<String> =
+                    args.iter().map(|x| if self.ty(x) == Ty::Str { self.str_ref(x) } else { self.arg(x) }).collect();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };

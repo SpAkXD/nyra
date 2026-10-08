@@ -253,6 +253,23 @@ impl Verifier<'_> {
                         self.args(&args[1..], &[t], op.name())?;
                         Some(t)
                     }
+                    RtOp::Std(f) => {
+                        let params: Vec<Ty> = f.params().iter().map(|(_, t)| t.ty()).collect();
+                        self.args(args, &params, op.name())?;
+                        let r = f.ret().ty();
+                        (r != Ty::Void).then_some(r)
+                    }
+                    RtOp::JsonStr => {
+                        if args.len() != 1 {
+                            return Err("json_str takes 1 operand".into());
+                        }
+                        self.ty(&args[0])?;
+                        Some(Ty::Str)
+                    }
+                    RtOp::JsonParse => {
+                        self.args(args, &[Ty::Str], op.name())?;
+                        Some(dst_ty.ok_or("json_parse needs a destination")?)
+                    }
                     RtOp::ArrJoin => {
                         let elem = self.elem(args.first().ok_or("missing array")?, op.name())?;
                         if !matches!(elem, Ty::Str | Ty::Char) {

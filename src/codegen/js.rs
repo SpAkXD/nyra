@@ -12,13 +12,16 @@ const RESERVED: &[&str] = &[
     "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
     "try", "typeof", "var", "void", "while", "with", "yield", "undefined", "NaN", "Infinity", "console",
     "Math", "String", "Number", "Object", "Array", "JSON", "Symbol", "BigInt", "Error", "RangeError", "globalThis",
-    "process", "require", "module", "exports", "NyPanic", "NY_SURR", "NY_ESC",
+    "process", "require", "module", "exports", "NyPanic", "NY_SURR", "NY_ESC", "NyExit", "Buffer", "TextDecoder",
+    "Atomics", "SharedArrayBuffer", "Int32Array", "Uint32Array", "Uint8Array", "ArrayBuffer", "DataView", "Date",
+    "performance", "crypto",
 ];
 
 /// The JavaScript runtime, emitted before every program (`@FILE@` becomes the source path).
 const PRELUDE: &str = include_str!("../rt/js/core.js");
 const STRINGS: &str = include_str!("../rt/js/str.js");
 const ARRAYS: &str = include_str!("../rt/js/arr.js");
+const STD: &str = include_str!("../rt/js/std.js");
 
 /// A Nyra name as a JavaScript identifier. Nyra allows any letter (`x²`, `größe`); characters
 /// JavaScript does not accept in names are spelled out as `_u{hex}_`.
@@ -117,6 +120,10 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     out.push_str(STRINGS);
     out.push_str(ARRAYS);
+    let std = m.uses_std();
+    if std {
+        out.push_str(STD);
+    }
     out.push('\n');
     classes(m, &mut out);
     for f in &m.funcs {
@@ -134,18 +141,28 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str(&g.out);
         out.push_str("}\n\n");
     }
+    // `os.exit(n)` throws `NyExit` (only programs that use the standard library can)
+    let exit = if std { "    if (e instanceof NyExit) {\n        if (typeof process !== \"undefined\") process.exitCode = e.code;\n    } else {\n" } else { "" };
+    let (inner, close) = if std { ("    ", "    }\n") } else { ("", "") };
     let _ = write!(
         out,
         concat!(
             "try {{\n",
             "    {}();\n",
             "}} catch (e) {{\n",
-            "    console.error(ny_rescue(e).message);\n",
-            "    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
-            "    if (typeof process !== \"undefined\") process.exitCode = 101;\n",
+            "{}",
+            "{}    console.error(ny_rescue(e).message);\n",
+            "{}    // exitCode instead of process.exit(), so buffered stdout is never cut off\n",
+            "{}    if (typeof process !== \"undefined\") process.exitCode = 101;\n",
+            "{}",
             "}}\n",
         ),
-        name(&m.func(m.main).name)
+        name(&m.func(m.main).name),
+        exit,
+        inner,
+        inner,
+        inner,
+        close
     );
     out
 }
@@ -454,6 +471,11 @@ impl Gen<'_> {
                 } else {
                     format!("{}.join({})", self.expr(&args[0]), a[1])
                 }
+            }
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
