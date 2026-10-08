@@ -23,6 +23,8 @@ use super::{
 };
 use crate::ast::{self, Span, Type};
 
+mod lambda;
+
 /// Lowers a type-checked program. Fails for features the backends do not support yet.
 pub fn lower(prog: &ast::Program) -> Result<Module, String> {
     let ids: HashMap<String, FuncId> =
@@ -111,12 +113,19 @@ fn mutates(e: &ast::Expr) -> bool {
     use ast::ExprKind as K;
     match &e.kind {
         K::Method(r, name, args) => {
-            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse")
+            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse" | "sort_by")
                 || mutates(r)
                 || args.iter().any(mutates)
         }
         K::Call(_, args) => args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a)),
-        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) => mutates(x),
+        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) => mutates(x),
+        K::Comprehension(c) => {
+            let src = match &c.src {
+                ast::CompSrc::Each(x) => mutates(x),
+                ast::CompSrc::Range(a, b, k) => mutates(a) || mutates(b) || k.as_ref().is_some_and(mutates),
+            };
+            src || mutates(&c.elem) || c.cond.as_ref().is_some_and(mutates)
+        }
         K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
         K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
         K::Array(xs) => xs.iter().any(mutates),
@@ -145,6 +154,9 @@ struct Lower<'a> {
     pending: Vec<LocalId>,
     /// The first feature the backends cannot generate yet.
     unsupported: Option<String>,
+    /// Owned temporaries of the `map` steps of the chain loop being lowered: a `break` out of
+    /// that loop (`any`, `all`, `find_index`) releases them first.
+    chain_live: Vec<LocalId>,
 }
 
 impl<'a> Lower<'a> {
@@ -157,6 +169,7 @@ impl<'a> Lower<'a> {
             scopes: vec![Scope::default()],
             pending: Vec::new(),
             unsupported: None,
+            chain_live: Vec::new(),
         }
     }
 
@@ -405,51 +418,10 @@ impl<'a> Lower<'a> {
                 out.push(Stmt { kind: StmtKind::Loop { head, cond, body: b, step: Vec::new() }, span });
             }
             ast::StmtKind::For { var, start, end, step, body } => {
-                // `for i in a..b step k`: the bounds and the step are evaluated once, before the loop.
-                let a = self.expr(start, None, out);
-                let b = self.expr(end, None, out);
-                let k = step.as_ref().map(|k| self.expr(k, None, out));
                 self.scopes.push(Scope::default());
                 let i = self.declare(var, Ty::Int);
-                out.push(Stmt { kind: StmtKind::Set(i, a), span });
-                let last = if matches!(b, Expr::Int(_)) {
-                    b
-                } else {
-                    let t = self.temp(Ty::Int);
-                    out.push(Stmt { kind: StmtKind::Set(t, b), span });
-                    Expr::Local(t)
-                };
-                let k = match k {
-                    None => Expr::Int(1),
-                    Some(k) if const_int(&k).is_some_and(|n| n != 0) => Expr::Int(const_int(&k).unwrap_or(1)),
-                    Some(k) => {
-                        let t = self.temp(Ty::Int);
-                        out.push(Stmt { kind: StmtKind::Set(t, k), span });
-                        let kspan = step.as_ref().map_or(span, |s| s.span);
-                        out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::CheckStep, args: vec![Expr::Local(t)] }, span: kspan });
-                        Expr::Local(t)
-                    }
-                };
+                let (cond, k) = self.range(i, start, end, step.as_ref(), span, out);
                 self.end_statement(span, out);
-                let i_ = || Box::new(Expr::Local(i));
-                let cond = match &k {
-                    Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::ILt, i_(), Box::new(last)),
-                    Expr::Int(_) => Expr::Binary(BinOp::IGt, i_(), Box::new(last)),
-                    _ => {
-                        // the direction is known only at run time
-                        let up = Expr::Binary(
-                            BinOp::And,
-                            Box::new(Expr::Binary(BinOp::IGt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
-                            Box::new(Expr::Binary(BinOp::ILt, i_(), Box::new(last.clone()))),
-                        );
-                        let down = Expr::Binary(
-                            BinOp::And,
-                            Box::new(Expr::Binary(BinOp::ILt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
-                            Box::new(Expr::Binary(BinOp::IGt, i_(), Box::new(last))),
-                        );
-                        Expr::Binary(BinOp::Or, Box::new(up), Box::new(down))
-                    }
-                };
                 let mut bd = Vec::new();
                 self.block(body, &mut bd, true);
                 let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(k));
@@ -457,7 +429,7 @@ impl<'a> Lower<'a> {
                 self.scopes.pop();
                 out.push(Stmt { kind: StmtKind::Loop { head: Vec::new(), cond, body: bd, step }, span });
             }
-            ast::StmtKind::ForEach { var, iter, body } => {
+            ast::StmtKind::ForEach { var, index, iter, body } => {
                 // The loop keeps its own reference to the string or array (`it`), so the body
                 // may change the variable it came from without changing what the loop visits.
                 let elem = match iter.ty {
@@ -472,9 +444,19 @@ impl<'a> Lower<'a> {
                     self.scopes.last_mut().expect("pushed").owned.push(it);
                 }
                 self.end_statement(span, out);
+                // `for i, x in xs`: `i` counts from 0, one up at the start of every round
+                let counter = index.as_ref().map(|i| {
+                    let id = self.declare(i, Ty::Int);
+                    out.push(Stmt { kind: StmtKind::Set(id, Expr::Int(-1)), span });
+                    id
+                });
                 self.scopes.push(Scope { loop_body: true, ..Scope::default() });
                 let x = self.declare_borrowed(var, elem);
                 let mut bd = Vec::new();
+                if let Some(i) = counter {
+                    let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(Expr::Int(1)));
+                    bd.push(Stmt { kind: StmtKind::Set(i, next), span });
+                }
                 for st in body {
                     self.stmt(st, &mut bd);
                 }
@@ -578,6 +560,54 @@ impl<'a> Lower<'a> {
                 self.end_statement(span, out);
             }
         }
+    }
+
+    /// `i` from `a` to `b` (exclusive) by `k`, for `for i in a..b step k`: the bounds and the step
+    /// are evaluated once, before the loop. Sets `i` and returns the loop condition and the step.
+    fn range(&mut self, i: LocalId, start: &ast::Expr, end: &ast::Expr, step: Option<&ast::Expr>, span: Span, out: &mut Vec<Stmt>) -> (Expr, Expr) {
+        let a = self.expr(start, None, out);
+        let b = self.expr(end, None, out);
+        let k = step.map(|k| self.expr(k, None, out));
+        out.push(Stmt { kind: StmtKind::Set(i, a), span });
+
+        let last = if matches!(b, Expr::Int(_)) {
+            b
+        } else {
+            let t = self.temp(Ty::Int);
+            out.push(Stmt { kind: StmtKind::Set(t, b), span });
+            Expr::Local(t)
+        };
+        let k = match k {
+            None => Expr::Int(1),
+            Some(k) if const_int(&k).is_some_and(|n| n != 0) => Expr::Int(const_int(&k).unwrap_or(1)),
+            Some(k) => {
+                let t = self.temp(Ty::Int);
+                out.push(Stmt { kind: StmtKind::Set(t, k), span });
+                let kspan = step.as_ref().map_or(span, |s| s.span);
+                out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::CheckStep, args: vec![Expr::Local(t)] }, span: kspan });
+                Expr::Local(t)
+            }
+        };
+        let i_ = || Box::new(Expr::Local(i));
+        let cond = match &k {
+            Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::ILt, i_(), Box::new(last)),
+            Expr::Int(_) => Expr::Binary(BinOp::IGt, i_(), Box::new(last)),
+            _ => {
+                // the direction is known only at run time
+                let up = Expr::Binary(
+                    BinOp::And,
+                    Box::new(Expr::Binary(BinOp::IGt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
+                    Box::new(Expr::Binary(BinOp::ILt, i_(), Box::new(last.clone()))),
+                );
+                let down = Expr::Binary(
+                    BinOp::And,
+                    Box::new(Expr::Binary(BinOp::ILt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
+                    Box::new(Expr::Binary(BinOp::IGt, i_(), Box::new(last))),
+                );
+                Expr::Binary(BinOp::Or, Box::new(up), Box::new(down))
+            }
+        };
+        (cond, k)
     }
 
     /// `target = value` / `target op= value`.
@@ -856,6 +886,8 @@ impl<'a> Lower<'a> {
                 Expr::Field(Box::new(b), k, e.ty)
             }
             ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments"),
+            ast::ExprKind::Lambda(..) => self.not_yet("lambdas outside a method call"),
+            ast::ExprKind::Comprehension(c) => self.comprehension(c, e, out),
         }
     }
 
@@ -1051,6 +1083,9 @@ impl<'a> Lower<'a> {
 
     fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
+        if lambda::is_chain_method(recv.ty, name) {
+            return self.chain_method(recv, name, args, e, out);
+        }
         if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse") {
             // changes the receiver: a place, fixed before the arguments run
             let later = args.iter().any(mutates);
@@ -1077,6 +1112,28 @@ impl<'a> Lower<'a> {
             };
             out.push(Stmt { kind: StmtKind::Mutate { dst: Some(d), op, place, args: vals }, span });
             return Expr::Local(d);
+        }
+        if name == "reversed" {
+            // a copy, reversed in place: `xs.slice(0, len)` / the characters, then `reverse`
+            let v = self.expr(recv, None, out);
+            let (arr, t) = if recv.ty == Type::Str {
+                (RtOp::StrChars, Type::array(Ty::Char))
+            } else {
+                (RtOp::ArrSlice, recv.ty)
+            };
+            let args = if arr == RtOp::StrChars {
+                vec![v]
+            } else {
+                let len = Expr::Pure(PureFn::ArrLen, vec![v.clone()]);
+                vec![v, Expr::Int(0), len]
+            };
+            let Expr::Local(copy) = self.op(arr, args, t, None, span, out) else { unreachable!() };
+            out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::ArrReverse, place: Place::local(copy), args: Vec::new() }, span });
+            if recv.ty == Type::Str {
+                let sep = Expr::Str(self.strs.intern(""));
+                return self.op(RtOp::ArrJoin, vec![Expr::Local(copy), sep], Ty::Str, dst, span, out);
+            }
+            return Expr::Local(copy);
         }
         let mut refs: Vec<&ast::Expr> = vec![recv];
         refs.extend(args.iter());

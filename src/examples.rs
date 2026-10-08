@@ -14,6 +14,7 @@
 //! run by the IR interpreter (`ir::interp`) with a budget of steps and of nested calls. The IR is
 //! what every backend compiles, so an example computes exactly what the program would.
 
+use crate::ast;
 use crate::ast::{BinOp, Expr, ExprKind, Func, InterpPart, Program, Span, Stmt, StmtKind, Type, UnOp};
 use crate::diag::{json_str, render_json_errors, Diag};
 use crate::ir::interp::{self, Interp, Limits, RuntimeError, Stop, Value};
@@ -348,6 +349,14 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
             InterpPart::Expr(x) => first_call(x, fns),
             InterpPart::Lit(_) => None,
         }),
+        ExprKind::Lambda(_, body) => first_call(body, fns),
+        ExprKind::Comprehension(c) => {
+            let src = match &c.src {
+                ast::CompSrc::Each(x) => first_call(x, fns),
+                ast::CompSrc::Range(a, b, k) => first_call(a, fns).or_else(|| first_call(b, fns)).or_else(|| k.as_ref().and_then(|k| first_call(k, fns))),
+            };
+            src.or_else(|| first_call(&c.elem, fns)).or_else(|| c.cond.as_ref().and_then(|x| first_call(x, fns)))
+        }
         ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::Var(_) => None,
     }
 }
@@ -443,6 +452,25 @@ pub fn source(e: &Expr) -> String {
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),
         ExprKind::Inout(v) => format!("inout {}", source(v)),
+        ExprKind::Lambda(ps, body) => {
+            let names: Vec<&str> = ps.iter().map(|(n, _)| n.as_str()).collect();
+            if names.len() == 1 {
+                format!("{} => {}", names[0], source(body))
+            } else {
+                format!("({}) => {}", names.join(", "), source(body))
+            }
+        }
+        ExprKind::Comprehension(c) => {
+            let src = match &c.src {
+                ast::CompSrc::Each(x) => source(x),
+                ast::CompSrc::Range(a, b, k) => match k {
+                    Some(k) => format!("{}..{} step {}", source(a), source(b), source(k)),
+                    None => format!("{}..{}", source(a), source(b)),
+                },
+            };
+            let cond = c.cond.as_ref().map(|x| format!(" if {}", source(x))).unwrap_or_default();
+            format!("[{} for {} in {src}{cond}]", source(&c.elem), c.var[0].0)
+        }
     }
 }
 

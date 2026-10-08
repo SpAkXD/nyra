@@ -13,12 +13,19 @@ pub struct MSig {
     pub mutates: bool,
 }
 
-pub const ARRAY_METHODS: &[&str] =
-    &["len", "push", "pop", "insert", "remove", "swap", "slice", "contains", "index_of", "repeat", "sort", "reverse", "join"];
+pub const ARRAY_METHODS: &[&str] = &[
+    "len", "push", "pop", "insert", "remove", "swap", "slice", "contains", "index_of", "repeat", "sort", "reverse", "join", "reversed",
+    "map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max",
+];
 pub const STR_METHODS: &[&str] = &[
     "len", "chars", "codes", "slice", "contains", "starts_with", "ends_with", "index_of", "split", "replace", "trim", "upper",
-    "lower", "repeat", "pad_left", "pad_right",
+    "lower", "repeat", "pad_left", "pad_right", "reversed", "count", "any", "all", "find_index",
 ];
+/// The methods that take a lambda, plus `sum`, `min` and `max`, which run the same kind of loop
+/// (checked in `check/lambda.rs`, lowered to loops in `ir/lower.rs`).
+pub const LAMBDA_METHODS: &[&str] = &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max"];
+/// The lambda methods of a string: each character is tested.
+pub const STR_LAMBDA_METHODS: &[&str] = &["count", "any", "all", "find_index"];
 pub const CHAR_METHODS: &[&str] = &["code", "upper", "lower", "is_digit", "is_letter", "is_upper", "is_lower", "is_space"];
 
 /// The method `name` of type `t`, if it has one.
@@ -41,6 +48,11 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "repeat" => m(vec![Int], t, false),
                 "sort" | "reverse" => m(vec![], Void, true),
                 "join" => m(vec![Str], Str, false),
+                "reversed" => m(vec![], t, false),
+                // the types depend on the lambda: see `check/lambda.rs`
+                "sum" | "min" | "max" => m(vec![], e, false),
+                "map" | "filter" | "sort_by" | "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, name == "sort_by"),
+                "fold" => m(vec![Type::Unknown, Type::Unknown], Type::Unknown, false),
                 _ => None,
             }
         }
@@ -56,6 +68,8 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             "trim" | "upper" | "lower" => m(vec![], Str, false),
             "repeat" => m(vec![Int], Str, false),
             "pad_left" | "pad_right" => m(vec![Int], Str, false),
+            "reversed" => m(vec![], Str, false),
+            "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, false),
             _ => None,
         },
         Char => match name {

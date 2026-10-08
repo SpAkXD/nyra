@@ -66,6 +66,13 @@ fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
     a.wrapping_rem(b)
 }
 
+/// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+fn ny_check_non_empty(n: i64, max: i64, line: u32, col: u32) {
+    if n == 0 {
+        ny_fail("E0247", if max != 0 { "max() of an empty array" } else { "min() of an empty array" }, "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+    }
+}
+
 /// `for i in a..b step k`: a step of 0 would never end.
 fn ny_check_step(k: i64, line: u32, col: u32) {
     if k == 0 {
@@ -370,6 +377,25 @@ fn ny_sort_floats(xs: &mut Rc<Vec<f64>>) {
     use std::cmp::Ordering;
     let lt = |x: f64, y: f64| x < y || (y.is_nan() && !x.is_nan());
     Rc::make_mut(xs).sort_by(|a, b| if lt(*a, *b) { Ordering::Less } else if lt(*b, *a) { Ordering::Greater } else { Ordering::Equal });
+}
+
+/// `xs.sort_by(x => key)`: a stable sort of the positions by the keys (floats: NaN after every
+/// number), then the elements move to their places.
+fn ny_sort_by<T: Clone, K>(xs: &mut Rc<Vec<T>>, ks: &[K], lt: fn(&K, &K) -> bool) {
+    use std::cmp::Ordering;
+    let mut idx: Vec<usize> = (0..ks.len()).collect();
+    idx.sort_by(|&i, &j| if lt(&ks[i], &ks[j]) { Ordering::Less } else if lt(&ks[j], &ks[i]) { Ordering::Greater } else { Ordering::Equal });
+    let v = Rc::make_mut(xs);
+    let mut old: Vec<Option<T>> = std::mem::take(v).into_iter().map(Some).collect();
+    *v = idx.iter().map(|&i| old[i].take().expect("each position once")).collect();
+}
+
+fn ny_lt_ord<K: PartialOrd>(x: &K, y: &K) -> bool {
+    x < y
+}
+
+fn ny_lt_float(x: &f64, y: &f64) -> bool {
+    x < y || (y.is_nan() && !x.is_nan())
 }
 
 // ---- printing: arrays and structs as Nyra code ----

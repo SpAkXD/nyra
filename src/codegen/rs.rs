@@ -473,6 +473,11 @@ impl<'a> Gen<'a> {
                         }
                     }
                     RtOp::ArrReverse => format!("Rc::make_mut({}).reverse()", self.place(place, &[root]).mut_ref()),
+                    RtOp::ArrSortBy => {
+                        let keys = self.operand(&args[0], root, Use::Borrow);
+                        let lt = if self.ty(&args[0]).elem() == Some(Ty::Float) { "ny_lt_float" } else { "ny_lt_ord" };
+                        format!("ny_sort_by({}, {keys}, {lt})", self.place(place, &[root]).mut_ref())
+                    }
                     RtOp::ArrSwap => {
                         let i = self.operand(&args[0], root, Use::Value);
                         let j = self.operand(&args[1], root, Use::Value);
@@ -621,6 +626,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("Rc::new({}.chars().map(|c| c as i64).collect())", self.str_ref(&args[0])),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", self.str_ref(&args[0]), self.str_ref(&args[1])),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::ArrNew => {

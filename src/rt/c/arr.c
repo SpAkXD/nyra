@@ -382,3 +382,28 @@ static void nyrt_arr_sort(nyrt_arr **p) {
     else nyrt_merge_sort(a->data, tmp, 0, a->len, a->ty->size, a->ty->lt);
     free(tmp);
 }
+// `xs.sort_by(x => key)`: the same merge sort on the positions 0..len, ordered by `keys` (one key
+// per element), then the elements move to their new places (no reference count changes).
+static void nyrt_msort_by(int64_t *a, int64_t *tmp, int64_t lo, int64_t hi, const char *k, int64_t ksz, bool (*lt)(const void *, const void *)) {
+    if (hi - lo < 2) return;
+    int64_t mid = lo + (hi - lo) / 2;
+    nyrt_msort_by(a, tmp, lo, mid, k, ksz, lt);
+    nyrt_msort_by(a, tmp, mid, hi, k, ksz, lt);
+    int64_t i = lo, j = mid;
+    for (int64_t n = lo; n < hi; n++) tmp[n] = (j < hi && (i >= mid || lt(k + a[j] * ksz, k + a[i] * ksz))) ? a[j++] : a[i++];
+    memcpy(a + lo, tmp + lo, (size_t)(hi - lo) * sizeof(int64_t));
+}
+static void nyrt_arr_sort_by(nyrt_arr **p, const nyrt_arr *keys) {
+    nyrt_arr *a = *p;
+    int64_t n = a->len, sz = a->ty->size;
+    if (n < 2) return;
+    int64_t *idx = malloc((size_t)n * sizeof(int64_t) * 2);
+    char *moved = malloc((size_t)(n * sz));
+    if (!idx || !moved) nyrt_oom(0, 0);
+    for (int64_t i = 0; i < n; i++) idx[i] = i;
+    nyrt_msort_by(idx, idx + n, 0, n, keys->data, keys->ty->size, keys->ty->lt);
+    for (int64_t i = 0; i < n; i++) memcpy(moved + i * sz, a->data + idx[i] * sz, (size_t)sz);
+    memcpy(a->data, moved, (size_t)(n * sz));
+    free(idx);
+    free(moved);
+}

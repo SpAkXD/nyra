@@ -79,6 +79,7 @@ while n < 10 { n += 1 }
 for i in 0..x + 1 { print(i) }   // 0 to 3: the end is exclusive
 for i in 10..0 step -2 { print(i) }  // 10 8 6 4 2: `step` counts by any int but 0
 for c in "hi" { print(c) }       // each char; `for v in xs` gives each element of an array
+for i, c in "hi" { print(i, c) } // also the position: 0 h, then 1 i
 for i in 0..10 {
     if i % 2 == 0 { continue }   // next round of the innermost loop
     if i > 6 { break }           // leave the innermost loop
@@ -162,8 +163,32 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 | `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1` · `n` copies, one after another |
 | `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`) |
 | `xs.join(sep)` | `[str]` or `[char]` → one `str` |
+| `xs.reversed()` · `s.reversed()` | a reversed copy (`xs.reverse()` reverses in place) |
+| `xs.sum()` · `xs.min()` · `xs.max()` | `[int]`/`[float]` sum (0 when empty) · smallest/largest of `[int] [float] [str] [char]`, like `min(a, b)` from left to right (empty: E0247) |
 
-Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse`) needs a `var`.
+Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse sort_by`) needs a `var`.
+
+## Lambdas and comprehensions
+A lambda `x => expr` (or `(a, b) => expr`) is the argument of one of these methods, and nothing else:
+it is not a value. Its parameters take the element type; it reads variables but cannot change them
+(no `push`, `pop`, ... and no `inout` inside: E0214).
+```nyra
+let xs = [3, -1, 4]
+print(xs.filter(x => x > 0).map(x => x * x).sum())   // 25
+print([x * x for x in xs if x > 0], [i * 2 for i in 0..3])   // [9, 16] [0, 2, 4]
+```
+| method | result |
+|---|---|
+| `xs.map(x => e)` · `xs.filter(x => test)` | a new array of the results · of the elements that pass |
+| `xs.count(x => test)` · `xs.any(...)` · `xs.all(...)` | `int` · `bool` · `bool` (also on a `str`: each char) |
+| `xs.find_index(x => test)` | position of the first element that passes, or `-1` (also on a `str`) |
+| `xs.fold(start, (acc, x) => e)` | `acc` starts as `start` and becomes `e` for each element: the last `acc` |
+| `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key computed once per element |
+
+A chain of `map` and `filter` and the method that ends it run as one loop, element by element (no
+array in between); `any`, `all` and `find_index` stop at the answer. `[e for x in src if c]` (the
+`if` is optional) is a new array like `src.filter(x => c).map(x => e)`; `src` is an array, a string or
+a range `a..b` (with an optional `step`).
 
 ## Structs
 ```nyra
@@ -239,6 +264,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0244 | `int(s)` or `float(s)` of text that is not a number |
 | E0245 | `int(x)` of NaN, infinity or a float outside the int range |
 | E0246 | `char(n)` of an invalid code (valid: 0 to 1114111, except 55296 to 57343) |
+| E0247 | `min()` or `max()` of an empty array |
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
 
 ## Known differences between backends

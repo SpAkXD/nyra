@@ -73,6 +73,13 @@ def ny_mod(a, b, line, col):
     return ny_rem(a, b)
 
 
+def ny_check_non_empty(n, last, line, col):
+    """`xs.min()` / `xs.max()` of an empty array (`n` elements seen; `last` says which method)."""
+    if n == 0:
+        ny_panic("E0247", "max() of an empty array" if last else "min() of an empty array",
+                 "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col)
+
+
 def ny_check_step(k, line, col):
     """`for i in a..b step k`: a step of 0 would never end."""
     if k == 0:
@@ -413,6 +420,12 @@ def ny_index_of(xs, v):
 def ny_float_key(x):
     """Sorts floats like every backend: NaN after every number, equal values keep their order."""
     return (x != x, x)
+
+
+def ny_sort_by(xs, ks, key=None):
+    """`xs.sort_by(x => key)`: a stable sort of the positions by the keys, like `sort`."""
+    idx = sorted(range(len(ks)), key=ks.__getitem__ if key is None else lambda i: key(ks[i]))
+    xs[:] = [xs[i] for i in idx]
 
 
 # ---- printing: arrays and structs as Nyra code ----

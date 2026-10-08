@@ -321,7 +321,7 @@ impl<'m> Interp<'m> {
         let mut arg = || args.next().ok_or_else(|| bug("an operation without its operand"));
         // (the operands are computed before the place, like the backends do)
         let (a0, a1) = match op {
-            RtOp::StrAppend | RtOp::ArrPush | RtOp::ArrRemove | RtOp::ArrAppend => (Some(arg()?), None),
+            RtOp::StrAppend | RtOp::ArrPush | RtOp::ArrRemove | RtOp::ArrAppend | RtOp::ArrSortBy => (Some(arg()?), None),
             RtOp::ArrInsert | RtOp::ArrSwap => (Some(arg()?), Some(arg()?)),
             _ => (None, None),
         };
@@ -402,6 +402,30 @@ impl<'m> Interp<'m> {
                     });
                 } else {
                     v.sort_by(|a, b| compare(a, b).unwrap_or(Ordering::Equal));
+                }
+                None
+            }
+            (RtOp::ArrSortBy, Value::Arr(xs)) => {
+                // stable, by the parallel keys; NaN keys after every number, like every backend
+                let Some(Value::Arr(ks)) = a0 else { return Err(bug("sort_by without its keys")) };
+                let lt = |x: &Value, y: &Value| match (x, y) {
+                    (Value::Float(a), Value::Float(b)) => a < b || (b.is_nan() && !a.is_nan()),
+                    _ => compare(x, y) == Some(Ordering::Less),
+                };
+                let mut idx: Vec<usize> = (0..ks.len()).collect();
+                idx.sort_by(|&p, &q| {
+                    if lt(&ks[p], &ks[q]) {
+                        Ordering::Less
+                    } else if lt(&ks[q], &ks[p]) {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Equal
+                    }
+                });
+                let old = xs.as_ref().clone();
+                let v = Rc::make_mut(xs);
+                for (k, &from) in idx.iter().enumerate() {
+                    v[k] = old[from].clone();
                 }
                 None
             }
@@ -627,6 +651,18 @@ impl<'m> Interp<'m> {
                 let r = parts.join(sep);
                 self.tick(r.len() as u64)?;
                 text(r)
+            }
+            RtOp::CheckNonEmpty => {
+                if i(0)? == 0 {
+                    let msg = if i(1)? != 0 { "max() of an empty array" } else { "min() of an empty array" };
+                    return Err(fail(
+                        "E0247",
+                        msg.to_string(),
+                        "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`",
+                        span,
+                    ));
+                }
+                None
             }
             other => return Err(bug(&format!("{} outside of a `Mutate`", other.name()))),
         };

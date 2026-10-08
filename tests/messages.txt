@@ -823,12 +823,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected an expression, found `>`
-  --> case.nyra:1:15
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `=>`
+  --> case.nyra:1:14
   |
 1 | fn f(x: int) => x * 2
-  |               ^
-  = hint: `=>` does not exist: a one-line function is written `fn f(x: int) -> int = x * 2`
+  |              ^
+  = hint: `=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1040,7 +1040,7 @@ error[E0101]: expected `in`, found number `0`
   |
 2 |     for i 0..3 {
   |           ^
-  = hint: loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`
+  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1307,7 +1307,7 @@ error[E0101]: expected an expression, found keyword `fn`
   |
 2 |     let f = fn(x) x
   |             ^
-  = hint: functions are not values (there are no lambdas or closures): define a named `fn` at the top level
+  = hint: functions are not values: an array method takes a lambda, `xs.map(x => x * 2)`; anything else needs a named `fn` at the top level
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3767,13 +3767,13 @@ fn main() {
     let f = (x) => x * 2
 }
 ----
-error[E0101]: expected end of line, found `=`
-  --> case.nyra:2:17
+error[E0213]: a lambda is not a value: it can only be the argument of an array method
+  --> case.nyra:2:13
   |
 2 |     let f = (x) => x * 2
-  |                 ^
-  = hint: `=>` does not exist: Nyra has no lambdas or closures; define a named function, e.g. `fn double(x: int) -> int = x * 2`
-  = explain: nyra explain E0101
+  |             ^
+  = hint: pass it straight to a method, e.g. `xs.map(x => x * 2)` or `xs.filter(x => x > 0)`; to name a computation, define a function: `fn double(x: int) -> int = x * 2`
+  = explain: nyra explain E0213
 
 nyra: 1 error(s)
 ==== f_js_const
@@ -4731,17 +4731,17 @@ nyra: 1 error(s)
 ==== for_two_variables
 fn main() {
     let xs = [5, 6]
-    for i, x in xs {
+    for (i, x) in xs {
         print(i)
     }
 }
 ----
-error[E0101]: expected `in`, found `,`
-  --> case.nyra:3:10
+error[E0101]: expected a loop variable, found `(`
+  --> case.nyra:3:9
   |
-3 |     for i, x in xs {
-  |          ^
-  = hint: a loop has one variable: to get the position and the element write `for i in 0..xs.len() { let x = xs[i] ... }`
+3 |     for (i, x) in xs {
+  |         ^
+  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -4753,12 +4753,379 @@ fn main() {
     }
 }
 ----
-error[E0101]: expected `in`, found `,`
-  --> case.nyra:3:10
+error[E0202]: undefined function `enumerate`
+  --> case.nyra:3:20
   |
 3 |     for i, name in enumerate(names) {
-  |          ^
-  = hint: a loop has one variable: to get the position and the element write `for i in 0..names.len() { let name = names[i] ... }`
+  |                    ^
+  = hint: for the position and the element write `for i, x in xs { ... }`
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== lambda_python
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(lambda x: x * 2))
+}
+----
+error[E0101]: `lambda` is not part of Nyra: a lambda is written `x => x * 2`
+  --> case.nyra:3:18
+  |
+3 |     print(xs.map(lambda x: x * 2))
+  |                  ^
+  = hint: write `x => ...`: the parameters, `=>`, then the body
+  = fix: `print(xs.map(x => x * 2))`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_python_two
+fn main() {
+    let xs = [1, 2]
+    print(xs.fold(0, lambda a, x: a + x))
+}
+----
+error[E0101]: `lambda` is not part of Nyra: a lambda is written `x => x * 2`
+  --> case.nyra:3:22
+  |
+3 |     print(xs.fold(0, lambda a, x: a + x))
+  |                      ^
+  = hint: write `(a, x) => ...`: the parameters, `=>`, then the body
+  = fix: `print(xs.fold(0, (a, x) => a + x))`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_rust_pipes
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(|x| x * 2))
+}
+----
+error[E0001]: unexpected character `|`: a lambda is written `x => x * 2`
+  --> case.nyra:3:18
+  |
+3 |     print(xs.map(|x| x * 2))
+  |                  ^
+  = hint: write `x =>` instead of `|x|`: the parameters, `=>`, then the body
+  = fix: `print(xs.map(x => x * 2))`
+  = explain: nyra explain E0001
+
+nyra: 1 error(s)
+==== lambda_java_arrow
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(x -> x * 2))
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `map`, found `->`
+  --> case.nyra:3:20
+  |
+3 |     print(xs.map(x -> x * 2))
+  |                    ^
+  = hint: a lambda is written with `=>`: `x => x * 2`
+  = fix: `print(xs.map(x => x * 2))`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_block_body
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(x => { ret x * 2 }))
+}
+----
+error[E0101]: expected an expression, found `{`
+  --> case.nyra:3:23
+  |
+3 |     print(xs.map(x => { ret x * 2 }))
+  |                       ^
+  = hint: the body of a lambda is one expression, without braces or `ret`: `x => x * 2`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_stored
+fn main() {
+    let double = (x) => x * 2
+    print(double)
+}
+----
+error[E0213]: a lambda is not a value: it can only be the argument of an array method
+  --> case.nyra:2:18
+  |
+2 |     let double = (x) => x * 2
+  |                  ^
+  = hint: pass it straight to a method, e.g. `xs.map(x => x * 2)` or `xs.filter(x => x > 0)`; to name a computation, define a function: `fn double(x: int) -> int = x * 2`
+  = explain: nyra explain E0213
+
+nyra: 1 error(s)
+==== lambda_fn_name
+fn double(x: int) -> int = x * 2
+fn main() {
+    print([1, 2].map(double))
+}
+----
+error[E0215]: `.map()` needs a lambda here, e.g. `[1, 2].map(x => x * 2)`
+  --> case.nyra:3:22
+  |
+3 |     print([1, 2].map(double))
+  |                      ^
+  = hint: call the function in a lambda: `x => double(x)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_count_value
+fn main() {
+    print([1, 3, 3].count(3))
+}
+----
+error[E0215]: `.count()` needs a lambda here, e.g. `[1, 3, 3].count(x => x > 0)`
+  --> case.nyra:2:27
+  |
+2 |     print([1, 3, 3].count(3))
+  |                           ^
+  = hint: `.count()` takes a test: to count the elements equal to `3` write `.count(x => x == 3)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_find_value
+fn main() {
+    print([1, 3, 3].find_index(3))
+}
+----
+error[E0215]: `.find_index()` needs a lambda here, e.g. `[1, 3, 3].find_index(x => x > 0)`
+  --> case.nyra:2:32
+  |
+2 |     print([1, 3, 3].find_index(3))
+  |                                ^
+  = hint: `.find_index()` takes a test; to find the value `3` itself write `.index_of(3)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_no_value
+fn main() {
+    print([1, 2].map(x => print(x)))
+}
+----
+error[E0215]: the lambda of `.map()` gives no value: its body returns nothing
+  --> case.nyra:2:27
+  |
+2 |     print([1, 2].map(x => print(x)))
+  |                           ^
+  = hint: the body is the value the method uses, e.g. `[1, 2].map(x => x * 2)`; to do something for each element write a `for` loop
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_push_inside
+fn main() {
+    var ys: [int] = []
+    let n = [1, 2].count(x => ys.push(x) == 0)
+}
+----
+error[E0214]: a lambda cannot call `.push()` on `ys`: inside a lambda, variables are read-only
+  --> case.nyra:3:34
+  |
+3 |     let n = [1, 2].count(x => ys.push(x) == 0)
+  |                                  ^
+  = hint: let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead
+  = explain: nyra explain E0214
+
+error[E0210]: cannot use `==` on `void` and `int`: `==` needs two values of the same type
+  --> case.nyra:3:42
+  |
+3 |     let n = [1, 2].count(x => ys.push(x) == 0)
+  |                                          ^
+  = hint: `.push()` changes its receiver and returns nothing: call it on its own line, then use the value
+  = explain: nyra explain E0210
+
+nyra: 2 error(s)
+==== lambda_inout_inside
+fn bump(inout n: int) -> int {
+    n += 1
+    ret n
+}
+fn main() {
+    var k = 0
+    print([1, 2].map(x => bump(inout k)))
+}
+----
+error[E0214]: a lambda cannot pass `inout` `k`: inside a lambda, variables are read-only
+  --> case.nyra:7:32
+  |
+7 |     print([1, 2].map(x => bump(inout k)))
+  |                                ^
+  = hint: let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead
+  = explain: nyra explain E0214
+
+nyra: 1 error(s)
+==== lambda_fold_one_param
+fn main() {
+    print([1, 2].fold(0, x => x))
+}
+----
+error[E0215]: the lambda of `.fold()` takes 2 parameters, found 1
+  --> case.nyra:2:26
+  |
+2 |     print([1, 2].fold(0, x => x))
+  |                          ^
+  = hint: two parameters, the value so far and the element: `(acc, x) => ...`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_fold_float
+fn main() {
+    print([1.5, 2.0].fold(0, (acc, x) => acc + x))
+}
+----
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
+  --> case.nyra:2:46
+  |
+2 |     print([1.5, 2.0].fold(0, (acc, x) => acc + x))
+  |                                              ^
+  = hint: use one type on both sides, e.g. `float(acc) + x` (Nyra never converts numbers implicitly)
+  = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== lambda_sort_by_bool
+fn main() {
+    var xs = [1, 2]
+    xs.sort_by(x => x > 1)
+}
+----
+error[E0228]: `sort_by` needs a key of type `int`, `float`, `str` or `char`, found `bool`
+  --> case.nyra:3:21
+  |
+3 |     xs.sort_by(x => x > 1)
+  |                     ^
+  = hint: sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== lambda_sort_by_let
+fn main() {
+    let xs = [2, 1]
+    xs.sort_by(x => x)
+}
+----
+error[E0205]: cannot call `.sort_by()` on `xs`: `xs` was declared with `let` on line 2
+  --> case.nyra:3:8
+  |
+3 |     xs.sort_by(x => x)
+  |        ^
+  = hint: declare it with `var` to make it changeable: `var xs = ...` on line 2
+  = fix: `var xs = [2, 1]`
+  = explain: nyra explain E0205
+
+nyra: 1 error(s)
+==== lambda_min_bool
+fn main() {
+    print([true].min())
+}
+----
+error[E0228]: `min` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+  --> case.nyra:2:18
+  |
+2 |     print([true].min())
+  |                  ^
+  = hint: keep the best element with `fold`, e.g. `[true].fold([true][0], (best, x) => if x.score < best.score { x } else { best })`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== lambda_shadow
+fn main() {
+    let x = 3
+    print([1, 2].filter(x => x > 1))
+}
+----
+error[E0206]: `x` is already declared on line 2 (Nyra has no shadowing)
+  --> case.nyra:3:25
+  |
+3 |     print([1, 2].filter(x => x > 1))
+  |                         ^
+  = hint: give the lambda's parameter a name that is not used yet, e.g. `x2`
+  = explain: nyra explain E0206
+
+nyra: 1 error(s)
+==== lambda_reduce
+fn main() {
+    print([1, 2].reduce((a, b) => a + b))
+}
+----
+error[E0227]: `[int]` has no method `reduce`
+  --> case.nyra:2:18
+  |
+2 |     print([1, 2].reduce((a, b) => a + b))
+  |                  ^
+  = hint: `[1, 2].fold(start, (acc, x) => ...)` combines the elements, e.g. `[1, 2].fold(0, (acc, x) => acc + x)`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== lambda_str_map
+fn main() {
+    print("abc".map(c => c.upper()))
+}
+----
+error[E0227]: `str` has no method `map`
+  --> case.nyra:2:17
+  |
+2 |     print("abc".map(c => c.upper()))
+  |                 ^
+  = hint: strings have no `.map()`: use a comprehension over the characters, e.g. `[c.upper() for c in "abc" if c != ' ']`, or `"abc".chars().map(c => ...)`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== comp_two_for
+fn main() {
+    print([x * y for x in [1, 2] for y in [3, 4]])
+}
+----
+error[E0101]: expected `]` to close the comprehension opened at 2:11, found keyword `for`
+  --> case.nyra:2:34
+  |
+2 |     print([x * y for x in [1, 2] for y in [3, 4]])
+  |                                  ^
+  = hint: a comprehension has one `for`: for nested loops write `for` statements and `push`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== comp_over_int
+fn main() {
+    let n = 5
+    print([i * i for i in n])
+}
+----
+error[E0234]: cannot loop over `int` in a comprehension
+  --> case.nyra:3:27
+  |
+3 |     print([i * i for i in n])
+  |                           ^
+  = hint: to count, use a range: `[... for i in 0..n]`
+  = explain: nyra explain E0234
+
+nyra: 1 error(s)
+==== comp_cond_int
+fn main() {
+    print([x for x in [1, 2] if x % 2])
+}
+----
+error[E0209]: the condition of a comprehension's `if` must be `bool`, found `int`
+  --> case.nyra:2:35
+  |
+2 |     print([x for x in [1, 2] if x % 2])
+  |                                   ^
+  = hint: compare it: `x % 2 != 0`
+  = explain: nyra explain E0209
+
+nyra: 1 error(s)
+==== fn_fat_arrow_body
+fn f(x: int) -> int => x * 2
+fn main() {
+    print(f(1))
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `=>`
+  --> case.nyra:1:21
+  |
+1 | fn f(x: int) -> int => x * 2
+  |                     ^
+  = hint: `=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)

@@ -1,0 +1,4 @@
+// expect: E0247 at 4:30
+let xs = [3, 8, 5]
+print(xs.max())
+print(xs.filter(x => x > 10).min())

@@ -1,0 +1,4 @@
+// expect: E0203
+fn main() {
+    print([1, 2].filter(x => x + 1))
+}

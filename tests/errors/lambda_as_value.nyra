@@ -1,0 +1,5 @@
+// expect: E0213
+fn main() {
+    let double = x => x * 2
+    print(double)
+}

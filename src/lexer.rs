@@ -42,6 +42,8 @@ pub enum Tok {
     Colon,
     Dot,
     Arrow,
+    /// `=>` of a lambda: `x => x * 2`
+    FatArrow,
     DotDot,
     Plus,
     Minus,
@@ -130,6 +132,7 @@ impl Tok {
             Tok::Colon => ":",
             Tok::Dot => ".",
             Tok::Arrow => "->",
+            Tok::FatArrow => "=>",
             Tok::DotDot => "..",
             Tok::Plus => "+",
             Tok::Minus => "-",
@@ -436,6 +439,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
         let two = match (c, next) {
             ('-', '>') => Some(Tok::Arrow),
+            ('=', '>') => Some(Tok::FatArrow),
             ('.', '.') => Some(Tok::DotDot),
             ('=', '=') => Some(Tok::Eq),
             ('!', '=') => Some(Tok::Ne),
@@ -513,6 +517,20 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 }
                 continue;
             }
+            None if c == '|' && closure_params(&cs, i).is_some() => {
+                // `|x| x * 2` (Rust, Ruby): one error for the parameter list, which is skipped
+                let (len, params) = closure_params(&cs, i).unwrap_or_default();
+                let old: String = cs[i..i + len].iter().collect();
+                let new = if params.len() == 1 { format!("{} =>", params[0]) } else { format!("({}) =>", params.join(", ")) };
+                errs.push(
+                    Diag::new("E0001", "unexpected character `|`: a lambda is written `x => x * 2`", span)
+                        .hint(format!("write `{new}` instead of `{old}`: the parameters, `=>`, then the body"))
+                        .fix(vec![Edit::replace(span, &old, new)]),
+                );
+                i += len;
+                col += len;
+                continue;
+            }
             None => {
                 // a quote from another language: report the whole literal once, not each quote
                 if let Some(close) = hints::quote_close(c) {
@@ -545,6 +563,20 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     }
     toks.push(Token { tok: Tok::Eof, span: end });
     (toks, errs)
+}
+
+/// `|a, b|` at `cs[i]`: the length of the parameter list of a closure (Rust, Ruby) and its names.
+fn closure_params(cs: &[char], i: usize) -> Option<(usize, Vec<String>)> {
+    // only where a value starts (`map(|x| ...`, `f(a, |x| ...`, `= |x| ...`), not in `a | b | c`
+    let before = cs[..i].iter().rev().find(|c| **c != ' ' && **c != '\t');
+    if !matches!(before, Some('(' | ',' | '=')) {
+        return None;
+    }
+    let close = cs[i + 1..].iter().take_while(|c| **c != '\n').position(|c| *c == '|')? + i + 1;
+    let inside: String = cs[i + 1..close].iter().collect();
+    let names: Vec<String> = inside.split(',').map(|n| n.trim().to_string()).collect();
+    let word = |n: &String| n.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && n.chars().all(|c| c.is_alphanumeric() || c == '_');
+    names.iter().all(word).then_some((close + 1 - i, names))
 }
 
 /// E0001 for the character at `cs[i]`, with a hint about what was probably meant.

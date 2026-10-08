@@ -307,6 +307,14 @@ impl Gen<'_> {
                         };
                         format!("ny_sort({target}, {lt})")
                     }
+                    RtOp::ArrSortBy => {
+                        let lt = match self.ty(&args[0]).elem() {
+                            Some(Ty::Str) => "ny_lt_str",
+                            Some(Ty::Float) => "ny_lt_float",
+                            _ => "ny_lt_num",
+                        };
+                        format!("ny_sort_by({target}, {}, {lt})", a[0])
+                    }
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("ny_append({target}, {})", a[0]),
@@ -425,6 +433,7 @@ impl Gen<'_> {
             RtOp::StrChars | RtOp::StrCodes => format!("ny_chars({})", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", a[0], a[1], a[2]),
             RtOp::ArrNew => {
