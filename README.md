@@ -5,7 +5,7 @@
 <p align="center">
   <b>A small, strict programming language designed to be written by AI agents.</b><br>
   Compact syntax, no ambiguity, and compiler errors an agent can read and fix by itself.<br>
-  One source file compiles to a native executable (via C), or to C, JavaScript, TypeScript, Python, Rust or Go source.
+  One source file compiles to a native executable (via C) or to JavaScript. (Python, TypeScript, Rust and Go output is experimental.)
 </p>
 
 <p align="center">
@@ -87,8 +87,8 @@ compiler to tell the AI exactly what to fix.
 
 ## Features
 
-- **One source, six languages:** native executables through C99 (`gcc`, `clang` or `tcc`), or readable
-  C, JavaScript (Node.js or the browser), [TypeScript, Python, Rust and Go](#targets) source.
+- **Two supported targets:** native executables through C99 (`gcc`, `clang` or `tcc`) and JavaScript (Node.js or the
+  browser); readable C source too. [TypeScript, Python, Rust and Go](#targets) output is experimental.
 - **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps and structs, with local
   inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
 - **Real data:** structs, arrays, maps, strings and chars with methods (`split`, `replace`, `slice`,
@@ -157,6 +157,7 @@ docs, and the compiler corrects what is left. **Paste this repo's URL into any A
 | [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) | workflow, do/don't rules, what does not exist, error codes with fixes, complete programs | 40 KB, about 10,000 tokens |
 | [`docs/ERRORS.md`](docs/ERRORS.md) | the error database: every code, what it means, why, the usual causes, a wrong and a fixed program | 114 KB: look codes up one at a time with `nyra explain` |
 | [`examples/`](examples) | runnable programs, each with its expected output in a `.out` file | |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | what was deliberately not done yet, and why (for people changing the language) | 4 KB |
 
 The token counts are estimates (about 3.7 characters per token); the spec alone is enough to write
 programs, and the guide pays off when a model writes a lot of Nyra.
@@ -357,8 +358,10 @@ every common mistake with its error code and fix.
 
 ## Targets
 
-One Nyra file compiles to six languages (seven `--target` values: `native` builds an executable from the
-generated C, `c` writes that C). All of them come from the same intermediate representation, so
+One Nyra file compiles to a native executable (`native`, through C) or to JavaScript (`js`); `c` writes the generated C.
+These are the **supported** targets. The Python, TypeScript, Rust and Go targets are **experimental**: they are
+tested on every example and kept in step with the language, but they are not where the effort goes, they may change
+or lose features, and the benchmark, the docs and the error messages are written for native and JavaScript. All of them come from the same intermediate representation, so
 the output, the order things happen in and the runtime errors (code, message, position, exit code 101)
 are the same on each; the tests run every example on every target that is installed.
 
@@ -367,10 +370,10 @@ are the same on each; the tests run every example on every target that is instal
 | native | `native` (default) | an executable | a C compiler (`gcc`, `clang`, `cc`, `tcc`; `NYRA_CC`) |
 | C | `c` | `file.c` | (same as native) |
 | JavaScript | `js` (`--js`) | `file.js` | Node.js |
-| Python | `py` (`--py`) | `file.py` | Python 3.8+ (`python3` or `python`; `NYRA_PYTHON`) |
-| TypeScript | `ts` (`--ts`) | `file.ts` | Node.js 22.6+ (it strips the types) |
-| Rust | `rs` (`--rs`) | `file.rs` | `rustc` (`NYRA_RUSTC`) |
-| Go | `go` (`--go`) | `file.go` | Go 1.23+ (`go`; `NYRA_GO`) |
+| Python (experimental) | `py` (`--py`) | `file.py` | Python 3.8+ (`python3` or `python`; `NYRA_PYTHON`) |
+| TypeScript (experimental) | `ts` (`--ts`) | `file.ts` | Node.js 22.6+ (it strips the types) |
+| Rust (experimental) | `rs` (`--rs`) | `file.rs` | `rustc` (`NYRA_RUSTC`) |
+| Go (experimental) | `go` (`--go`) | `file.go` | Go 1.23+ (`go`; `NYRA_GO`) |
 
 ```sh
 nyra build --target py scores.nyra        # writes scores.py
@@ -405,8 +408,8 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 
 | Option | Meaning |
 |---|---|
-| `--target <t>` | the [target](#targets): `native` (default), `c`, `js`, `py`, `ts`, `rs` or `go` |
-| `--js` `--py` `--ts` `--rs` `--go` | short for `--target js` and so on |
+| `--target <t>` | the [target](#targets): `native` (default), `c`, `js`; experimental: `py`, `ts`, `rs`, `go` |
+| `--js` `--py` `--ts` `--rs` `--go` | short for `--target js` and so on (`--py`, `--ts`, `--rs` and `--go` are experimental) |
 | `--c` | with `build`: write the generated C instead of an executable |
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
@@ -432,7 +435,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
 | `src/check.rs`, `src/check/` | type checking, collects every error in one pass |
 | `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
-| `src/codegen/` | the backends: `c.rs`, `js.rs`, `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
+| `src/codegen/` | the backends: `c.rs`, `js.rs`, and the experimental `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
 | `src/rt/*/` | the runtimes they embed: strings, arrays, printing, runtime errors |
 | `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |
 | `src/fix.rs` | `--fix`: checks, applies and repeats the fixes that errors carry |

@@ -1,6 +1,6 @@
 # Nyra
 
-> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to a native executable (through C), or to C, JavaScript, TypeScript, Python, Rust or Go source, with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
+> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to a native executable (through C) or to JavaScript with the `nyra` command line tool (the supported targets; Python, TypeScript, Rust and Go output also exists but is experimental). It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
 
 Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there are no tuples and no modules of your own yet; maps are `[str: int]`, `["a": 1]`, `m[k]`, `m.get(k, 0)`; the standard library is imported with `use input`, `use os`, `use fs`, `use json`, `use time`, `use random`, `use math` and `use text`, and called as `math.sqrt(x)`). Read the AI guide before you write code.
 

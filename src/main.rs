@@ -35,8 +35,8 @@ usage:
   nyra <file.nyra>          same as `nyra run`
 
 options:
-  --target <t> the backend: native (default), c, js, py, ts, rs or go
-  --js --py --ts --rs --go   short for --target js / py / ts / rs / go
+  --target <t> the backend: native (default), c, js; experimental: py, ts, rs, go
+  --js --py --ts --rs --go   short for --target js / py / ts / rs / go (py, ts, rs, go: experimental)
   --c          (build) write the generated C source instead of an executable
   -o <path>    output path for `build` (`-o -` prints to stdout)
   --json       print errors as JSON (compile and runtime), for AI agents
@@ -45,6 +45,7 @@ options:
   --time       show how long each step took
 
 `build` writes an executable natively and source code for every other target.
+Supported targets: native and js. py, ts, rs and go are experimental.
 `run` needs the target's tool: a C compiler (gcc, clang, cc or tcc; NYRA_CC),
 node (js and ts), python3 (NYRA_PYTHON), rustc (NYRA_RUSTC) or go (NYRA_GO).
 ";

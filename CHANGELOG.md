@@ -29,6 +29,14 @@ Tools
   of pure calls; `perf/` compares native Nyra with hand-written C and Rust.
 - The benchmark measures runtime, efficiency and self-repair too.
 
+Project
+- The Python, TypeScript, Rust and Go targets are marked experimental (README, SPEC, `nyra --help`, llms.txt);
+  native (C) and JavaScript are the supported targets. No code or tests were removed.
+- The benchmark's Nyra reference solutions and the `examples/` are written as scripts in current style
+  (no `fn main`, `print(a, b)`, lambdas, comprehensions, maps, `for i, x in xs`); `examples/explicit_main.nyra`
+  keeps the `fn main` form.
+- `docs/DESIGN.md` records what was decided not to do yet, and why.
+
 ## v0.4.0 (2026-10-08)
 
 - Four more backends: Python, TypeScript, Rust and Go (`--target`), tested on every example.
