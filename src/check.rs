@@ -306,7 +306,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         prog.funcs.push(f);
     }
     // the tuple types the program uses are structs
-    let mut tuples: Vec<(&String, &StructInfo)> = c.structs.iter().filter(|(n, _)| n.starts_with(TUPLE_PREFIX)).collect();
+    let generated = |n: &String| n.starts_with(TUPLE_PREFIX) || n.starts_with(OPTION_PREFIX);
+    let mut tuples: Vec<(&String, &StructInfo)> = c.structs.iter().filter(|(n, _)| generated(n)).collect();
     tuples.sort_by(|a, b| a.0.cmp(b.0));
     for (name, info) in tuples {
         let fields = info.fields.iter().map(|(n, t, s)| Field { name: n.clone(), ty: *t, span: *s }).collect();
@@ -386,6 +387,9 @@ fn show(e: &Expr) -> Option<String> {
             let a: Option<Vec<String>> = items.iter().map(show).collect();
             format!("({})", a?.join(", "))
         }
+        ExprKind::None => "none".to_string(),
+        ExprKind::Some(x) => return show(x),
+        ExprKind::Coalesce(a, b) => format!("{} ?? {}", operand(a)?, operand(b)?),
         ExprKind::Fmt(..) | ExprKind::In(..) | ExprKind::Slice(..) => return None,
         ExprKind::Index(b, i) => format!("{}[{}]", operand(b)?, show(i)?),
         ExprKind::Field(b, f) => format!("{}.{f}", operand(b)?),
@@ -441,7 +445,8 @@ fn was_were(n: usize) -> &'static str {
 
 /// "an `int`", "a `float`"
 fn article(t: Type) -> String {
-    format!("{} `{}`", if t == Type::Int { "an" } else { "a" }, t.name())
+    let name = t.name();
+    format!("{} `{name}`", if name.starts_with("int") { "an" } else { "a" })
 }
 
 /// A value of the type, for "write `ret 0`" hints.
@@ -663,6 +668,13 @@ impl Checker {
                 self.check_type(v, span)
             }
             Type::Struct(_) => {
+                if let Some(inner) = t.option_inner() {
+                    let ok = self.check_type(inner, span);
+                    if ok {
+                        self.register_option(t);
+                    }
+                    return ok;
+                }
                 if let Some(elems) = t.tuple_elems() {
                     let mut ok = true;
                     for e in elems {
@@ -677,8 +689,12 @@ impl Checker {
                 if self.structs.contains_key(&name) {
                     return true;
                 }
-                let names: Vec<&str> =
-                    self.structs.keys().map(String::as_str).filter(|n| !n.starts_with(TUPLE_PREFIX)).collect();
+                let names: Vec<&str> = self
+                    .structs
+                    .keys()
+                    .map(String::as_str)
+                    .filter(|n| !n.starts_with(TUPLE_PREFIX) && !n.starts_with(OPTION_PREFIX))
+                    .collect();
                 let hint = if hints::nyra_type(&name).is_some() || hints::is_type_word(&name) {
                     hints::type_name(&name)
                 } else if let Some(s) = suggest(&name, names.iter().copied()) {
@@ -719,6 +735,32 @@ impl Checker {
         self.structs.insert(name, StructInfo { fields, span: at });
     }
 
+    /// Makes the struct of the optional type `t` known: the fields `has` and `val`.
+    fn register_option(&mut self, t: Type) {
+        let Some(inner) = t.option_inner() else { return };
+        let name = t.struct_name().unwrap_or_default();
+        if self.structs.contains_key(&name) {
+            return;
+        }
+        let at = Span { line: 0, col: 0 };
+        let fields = vec![("has".to_string(), Type::Bool, at), ("val".to_string(), inner, at)];
+        self.structs.insert(name, StructInfo { fields, span: at });
+    }
+
+    /// A value of type `got` goes where `want` is needed: a `T` is wrapped into a `T?`.
+    fn coerce(&mut self, e: &mut Expr, want: Type, got: Type) -> Type {
+        let Some(inner) = want.option_inner() else { return got };
+        if got != inner || got.is_unknown() || matches!(e.kind, ExprKind::None) {
+            return got;
+        }
+        let old = std::mem::replace(&mut e.kind, ExprKind::Int(0));
+        let mut value = Expr::new(old, e.span);
+        value.ty = got;
+        e.kind = ExprKind::Some(Box::new(value));
+        e.ty = want;
+        want
+    }
+
     /// Makes the structs of the tuple types inside `t` known.
     fn register_in(&mut self, t: Type) {
         match t {
@@ -738,6 +780,10 @@ impl Checker {
                     self.register_in(e);
                 }
                 self.register_tuple(t);
+                if let Some(inner) = t.option_inner() {
+                    self.register_in(inner);
+                    self.register_option(t);
+                }
             }
         }
     }
@@ -771,6 +817,7 @@ impl Checker {
                 Type::Map(_) => Some("map"),
                 Type::Array(_) => t.elem().and_then(|e| go(c, e, seen)),
                 Type::Struct(_) if t.is_tuple() => Some("tuple"),
+                Type::Struct(_) if t.is_option() => Some("optional"),
                 Type::Struct(_) => {
                     let n = t.struct_name()?;
                     if seen.contains(&n) {
@@ -1117,6 +1164,10 @@ impl Checker {
                 let declared = *ty;
                 let want = declared.filter(|w| self.check_type(*w, span));
                 let got = self.expr_with(value, want);
+                let got = match want {
+                    Some(w) => self.coerce(value, w, got),
+                    None => got,
+                };
                 let mut t = got;
                 if got == Type::Void {
                     self.errs.push(
@@ -1211,6 +1262,7 @@ impl Checker {
                 Some(e) => {
                     let want = (self.ret != Type::Void).then_some(self.ret);
                     let t = self.expr_with(e, want);
+                    let t = if self.ret == Type::Void { t } else { self.coerce(e, self.ret, t) };
                     if self.ret == Type::Void {
                         let shown = if t.is_unknown() || t == Type::Void { "int".to_string() } else { t.name() };
                         self.errs.push(
@@ -1314,6 +1366,7 @@ impl Checker {
             }
         };
         let got = self.expr_with(value, if op.is_none() { Some(tt) } else { None });
+        let got = if op.is_none() { self.coerce(value, tt, got) } else { got };
         match op {
             None => match &var_name {
                 Some(name) => {
@@ -1560,6 +1613,15 @@ impl Checker {
                 let same_side = matches!(op, BinOp::Eq | BinOp::Ne | BinOp::Add);
                 let lt = self.expr_with(l, if same_side { want.filter(|_| *op == BinOp::Add) } else { None });
                 let rt = self.expr_with(r, if same_side && !lt.is_unknown() { Some(lt) } else { None });
+                // `m.get(k) == 3`: the plain value is compared as an optional one
+                let (mut lt, mut rt) = (lt, rt);
+                if matches!(op, BinOp::Eq | BinOp::Ne) {
+                    if lt.option_inner() == Some(rt) {
+                        rt = self.coerce(r, lt, rt);
+                    } else if rt.option_inner() == Some(lt) {
+                        lt = self.coerce(l, rt, lt);
+                    }
+                }
                 let t = self.binary(*op, lt, rt, span, l, r, false);
                 if outer {
                     self.chain = None;
@@ -1571,7 +1633,13 @@ impl Checker {
                 let c = self.expr(cond);
                 self.cond(c, cond, "an `if` value");
                 let ta = self.expr_with(a, want);
+                // `if c { n } else { none }` where an optional is needed: the branches are optional
+                let ta = match want {
+                    Some(w) if w.is_option() => self.coerce(a, w, ta),
+                    _ => ta,
+                };
                 let tb = self.expr_with(b, if ta.is_unknown() { want } else { Some(ta) });
+                let tb = if ta.is_option() { self.coerce(b, ta, tb) } else { tb };
                 if ta == Type::Void || tb == Type::Void {
                     let (which, branch) = if ta == Type::Void { ("first", &**a) } else { ("second", &**b) };
                     self.errs.push(
@@ -1624,6 +1692,31 @@ impl Checker {
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
             ExprKind::Tuple(items) => self.tuple_lit(items, want),
+            ExprKind::None => match want {
+                Some(w) if w.is_option() => w,
+                Some(w) if w.is_unknown() => Type::Unknown,
+                Some(w) => {
+                    self.errs.push(
+                        Diag::new("E0276", format!("`none` is not a value of type `{}`", w.name()), span)
+                            .hint(format!("only an optional type can be `none`: declare it `{}?`", w.name())),
+                    );
+                    Type::Unknown
+                }
+                None => {
+                    self.errs.push(
+                        Diag::new("E0276", "cannot infer the type of `none`", span)
+                            .hint("say which optional type it is where it is declared: `var best: int? = none`, or compare it with a value: `x == none`"),
+                    );
+                    Type::Unknown
+                }
+            },
+            ExprKind::Some(inner) => {
+                let t = self.expr(inner);
+                let o = Type::option(t);
+                self.register_option(o);
+                o
+            }
+            ExprKind::Coalesce(a, b) => self.coalesce(a, b, span),
             ExprKind::In(item, container) => self.membership(item, container, span),
             ExprKind::Slice(base, lo, hi) => {
                 let bt = self.expr(base);
@@ -1718,8 +1811,29 @@ impl Checker {
             ExprKind::Field(base, name) => {
                 let bt = self.expr(base);
                 let shown = show(base);
-                let hidden = matches!(&base.kind, ExprKind::Var(v) if v.starts_with('\u{b7}'));
-                if bt.is_tuple() || (hidden && !bt.is_unknown()) {
+                let hidden = matches!(&base.kind, ExprKind::Var(v) if v.starts_with("\u{b7}t") || v.starts_with("\u{b7}l"));
+                let hidden_option = matches!(&base.kind, ExprKind::Var(v) if v.starts_with("\u{b7}o"));
+                if hidden_option && !bt.is_unknown() {
+                    match bt.option_inner() {
+                        Some(inner) => {
+                            if name == "has" {
+                                Type::Bool
+                            } else {
+                                inner
+                            }
+                        }
+                        None => {
+                            if !self.errs.iter().any(|d| d.code == "E0277" && d.span == span) {
+                                self.errs.push(
+                                    Diag::new("E0277", format!("`if let` needs an optional value, found {}", article(bt)), span).hint(
+                                        "the value must be an optional `T?`, such as `m.get(k)`, `xs.find(x => ...)` or `s.to_int()`: `if let v = m.get(k) { ... }`",
+                                    ),
+                                );
+                            }
+                            Type::Unknown
+                        }
+                    }
+                } else if bt.is_tuple() || (hidden && !bt.is_unknown()) {
                     let in_for = matches!(&base.kind, ExprKind::Var(v) if v.starts_with("\u{b7}l"));
                     self.tuple_field(bt, name, hidden, in_for, span)
                 } else {
@@ -1881,6 +1995,8 @@ impl Checker {
         if let Some(kind) = self.json_blocker(t) {
             let hint = if kind == "map" {
                 "use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"
+            } else if kind == "optional" {
+                "use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there"
             } else {
                 "use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`"
             };
@@ -1932,6 +2048,10 @@ impl Checker {
         for (k, v) in pairs.iter_mut() {
             let tk = self.expr_with(k, kt);
             let tv = self.expr_with(v, vt);
+            let tv = match vt {
+                Some(w) => self.coerce(v, w, tv),
+                None => tv,
+            };
             for (t, slot, e, what) in [(tk, &mut kt, &*k, "key"), (tv, &mut vt, &*v, "value")] {
                 if t == Type::Void || t.is_unknown() {
                     bad = true;
@@ -2005,6 +2125,37 @@ impl Checker {
             );
         }
         Type::Bool
+    }
+
+    /// `a ?? b`: the value of the optional `a`, or `b`.
+    fn coalesce(&mut self, a: &mut Expr, b: &mut Expr, span: Span) -> Type {
+        let at = self.expr(a);
+        if at.is_unknown() {
+            self.expr(b);
+            return Type::Unknown;
+        }
+        let Some(inner) = at.option_inner() else {
+            self.expr(b);
+            let shown = show(a).unwrap_or_else(|| "x".into());
+            self.errs.push(
+                Diag::new("E0277", format!("`??` needs an optional value on its left, found {}", article(at)), span)
+                    .hint(format!("`{shown}` always has a value; `??` is for an optional `T?` such as `m.get(k) ?? 0`")),
+            );
+            return Type::Unknown;
+        };
+        let bt = self.expr_with(b, Some(inner));
+        if bt.is_unknown() {
+            return inner;
+        }
+        if bt == inner || bt == at {
+            return bt;
+        }
+        let shown = show(b).unwrap_or_else(|| "the default".into());
+        self.errs.push(
+            Diag::new("E0277", format!("the default of `??` must be {} or `{}`, found {}", article(inner), at.name(), article(bt)), b.span)
+                .hint(format!("`{shown}` does not fit: write a default of type `{}`", inner.name())),
+        );
+        inner
     }
 
     /// `{x:spec}`: the specifier must make sense for the type of `x`.
@@ -2157,7 +2308,13 @@ impl Checker {
         let mut int_literals: Option<Vec<Edit>> = Some(Vec::new());
         let mut bad = false;
         for it in items.iter_mut() {
-            let t = self.expr_with(it, first.or(want_elem));
+            // `[str?]`: the elements are optional, so a plain `"a"` is wrapped and `none` fits
+            let hint = if want_elem.is_some_and(Type::is_option) { want_elem } else { first.or(want_elem) };
+            let t = self.expr_with(it, hint);
+            let t = match hint {
+                Some(w) => self.coerce(it, w, t),
+                None => t,
+            };
             if t == Type::Void {
                 self.errs.push(
                     Diag::new("E0203", format!("{} returns nothing, so it cannot be an array element", call_text(it)), it.span)
@@ -2233,6 +2390,13 @@ impl Checker {
         if bt.is_unknown() {
             return Type::Unknown;
         }
+        if bt.is_option() {
+            self.errs.push(
+                Diag::new("E0224", format!("`{}` is an optional value and has no field `{name}`", bt.name()), span)
+                    .hint("take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`"),
+            );
+            return Type::Unknown;
+        }
         if let Some(sname) = bt.struct_name() {
             let Some(info) = self.structs.get(&sname) else { return Type::Unknown };
             if let Some((_, t, _)) = info.fields.iter().find(|(f, _, _)| f == name) {
@@ -2286,6 +2450,32 @@ impl Checker {
         Type::Unknown
     }
 
+    /// `opt.is_some()`, `opt.is_none()`, `opt.unwrap()`.
+    fn option_method(&mut self, rt: Type, inner: Type, name: &str, args: &mut [Expr], span: Span) -> Type {
+        for a in args.iter_mut() {
+            self.arg_type(a, None);
+        }
+        if !matches!(name, "is_some" | "is_none" | "unwrap") {
+            self.errs.push(
+                Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(
+                    "an optional value has `is_some()`, `is_none()` and `unwrap()`; to get the value use `x ?? default` or `if let v = x { ... }`",
+                ),
+            );
+            return Type::Unknown;
+        }
+        if !args.is_empty() {
+            self.errs.push(
+                Diag::new("E0204", format!("`.{name}()` takes 0 arguments but {} {} given", args.len(), was_were(args.len())), span)
+                    .hint(format!("call it as `.{name}()`")),
+            );
+        }
+        if name == "unwrap" {
+            inner
+        } else {
+            Type::Bool
+        }
+    }
+
     /// `recv.name(args)` on an array, a string or a char.
     fn method(&mut self, recv: &mut Expr, name: &str, args: &mut [Expr], span: Span) -> Type {
         // `console.log(x)`, `Math.sqrt(x)`: a library object of another language
@@ -2310,6 +2500,9 @@ impl Checker {
                 self.arg_type(a, None);
             }
             return Type::Unknown;
+        }
+        if let Some(inner) = rt.option_inner() {
+            return self.option_method(rt, inner, name, args, span);
         }
         if let Some(t) = self.lambda_method(recv, rt, name, args, span) {
             return t;
@@ -2404,6 +2597,7 @@ impl Checker {
         // `m.get(k, default)`
         if let (Some((_, v)), "get", 2) = (rt.map_kv(), name, args.len()) {
             sig.params.push(v);
+            sig.ret = v;
         }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
@@ -2428,6 +2622,7 @@ impl Checker {
             let search = rt == Type::Str && (matches!(name, "contains" | "starts_with" | "ends_with" | "index_of") || name == "trim");
             for (i, (a, p)) in args.iter_mut().zip(&sig.params).enumerate() {
                 let t = self.expr_with(a, Some(*p));
+                let t = self.coerce(a, *p, t);
                 if search && t == Type::Char {
                     continue;
                 }
@@ -2771,7 +2966,7 @@ impl Checker {
         };
         let _ = want;
         let (params, names, inout, ret, shown) = (sig.params.clone(), sig.names.clone(), sig.inout.clone(), sig.ret, sig.show(name));
-        let tys: Vec<Type> = args
+        let mut tys: Vec<Type> = args
             .iter_mut()
             .enumerate()
             .map(|(i, a)| {
@@ -2779,6 +2974,12 @@ impl Checker {
                 self.arg_type(a, w)
             })
             .collect();
+        // a `T` goes into a parameter of type `T?`
+        for (i, a) in args.iter_mut().enumerate() {
+            if let (Some(&p), false) = (params.get(i), matches!(a.kind, ExprKind::Inout(_) | ExprKind::Labeled(..))) {
+                tys[i] = self.coerce(a, p, tys[i]);
+            }
+        }
         if params.len() != tys.len() {
             let hint = if tys.len() < params.len() {
                 let missing: Vec<String> =
@@ -2942,6 +3143,7 @@ impl Checker {
                             }
                             let want = fields[j].1;
                             let t = self.expr_with(v, Some(want));
+                            let t = self.coerce(v, want, t);
                             a.ty = t;
                             let v: &Expr = v;
                             self.expect_ty(want, t, v, Ctx::Field { s: name, f: &label });

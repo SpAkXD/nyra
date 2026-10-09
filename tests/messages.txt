@@ -322,13 +322,13 @@ fn main() {
     let x = 1 > 0 ? 1 : 2
 }
 ----
-error[E0001]: unexpected character `?`
+error[E0101]: expected end of line, found `?`
   --> case.nyra:2:19
   |
 2 |     let x = 1 > 0 ? 1 : 2
   |                   ^
-  = hint: Nyra has no `?`: for a conditional value write `if cond { a } else { b }`
-  = explain: nyra explain E0001
+  = hint: `?` goes right after a type to make it optional (`int?`); Nyra has no `c ? a : b`: write `if cond { a } else { b }`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== lex_quote_in_braces
@@ -3360,7 +3360,7 @@ error[E0201]: undefined variable `null`
   |
 2 |     let x = null
   |             ^
-  = hint: Nyra has no null: every variable always holds a value of its type
+  = hint: Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -3872,7 +3872,7 @@ error[E0201]: undefined variable `None`
   |
 2 |     let x = None
   |             ^
-  = hint: Nyra has no null: every variable always holds a value of its type
+  = hint: Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -5535,5 +5535,148 @@ error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
   |     ^
   = hint: `for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`
   = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== none_without_type
+fn main() {
+    let a = none
+    print(a)
+}
+----
+error[E0276]: cannot infer the type of `none`
+  --> case.nyra:2:13
+  |
+2 |     let a = none
+  |             ^
+  = hint: say which optional type it is where it is declared: `var best: int? = none`, or compare it with a value: `x == none`
+  = explain: nyra explain E0276
+
+nyra: 1 error(s)
+==== none_not_optional
+fn main() {
+    let a: int = none
+    print(a)
+}
+----
+error[E0276]: `none` is not a value of type `int`
+  --> case.nyra:2:18
+  |
+2 |     let a: int = none
+  |                  ^
+  = hint: only an optional type can be `none`: declare it `int?`
+  = explain: nyra explain E0276
+
+nyra: 1 error(s)
+==== coalesce_not_optional
+fn main() {
+    let n = 5
+    print(n ?? 3)
+}
+----
+error[E0277]: `??` needs an optional value on its left, found an `int`
+  --> case.nyra:3:13
+  |
+3 |     print(n ?? 3)
+  |             ^
+  = hint: `n` always has a value; `??` is for an optional `T?` such as `m.get(k) ?? 0`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== coalesce_default_type
+fn main() {
+    let m = ["a": 1]
+    print(m.get("a") ?? "none")
+}
+----
+error[E0277]: the default of `??` must be an `int` or `int?`, found a `str`
+  --> case.nyra:3:25
+  |
+3 |     print(m.get("a") ?? "none")
+  |                         ^
+  = hint: `"none"` does not fit: write a default of type `int`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== if_let_not_optional
+fn main() {
+    let n = 5
+    if let v = n {
+        print(v)
+    }
+}
+----
+error[E0277]: `if let` needs an optional value, found an `int`
+  --> case.nyra:3:5
+  |
+3 |     if let v = n {
+  |     ^
+  = hint: the value must be an optional `T?`, such as `m.get(k)`, `xs.find(x => ...)` or `s.to_int()`: `if let v = m.get(k) { ... }`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== option_field
+struct P {
+    x: int
+}
+
+fn main() {
+    let p: P? = P(x: 1)
+    print(p.x)
+}
+----
+error[E0224]: `P?` is an optional value and has no field `x`
+  --> case.nyra:7:13
+  |
+7 |     print(p.x)
+  |             ^
+  = hint: take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`
+  = explain: nyra explain E0224
+
+nyra: 1 error(s)
+==== option_json
+use json
+
+fn main() {
+    let x: int? = 5
+    print(json.str(x))
+}
+----
+error[E0309]: `json.str` cannot handle the optional type in `int?` yet
+  --> case.nyra:5:16
+  |
+5 |     print(json.str(x))
+  |                ^
+  = hint: use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there
+  = explain: nyra explain E0309
+
+nyra: 1 error(s)
+==== option_wrong_type
+fn main() {
+    let t: int? = "x"
+    print(t)
+}
+----
+error[E0203]: type mismatch in `let t: int?`: expected `int?`, found `str`
+  --> case.nyra:2:19
+  |
+2 |     let t: int? = "x"
+  |                   ^
+  = hint: change the value to an `int?`, or change the declared type: `let t: str = ...`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== option_unknown_method
+fn main() {
+    let t: int? = 3
+    print(t.len())
+}
+----
+error[E0227]: `int?` has no method `len`
+  --> case.nyra:3:13
+  |
+3 |     print(t.len())
+  |             ^
+  = hint: an optional value has `is_some()`, `is_none()` and `unwrap()`; to get the value use `x ?? default` or `if let v = x { ... }`
+  = explain: nyra explain E0227
 
 nyra: 1 error(s)

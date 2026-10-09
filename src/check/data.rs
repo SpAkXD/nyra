@@ -44,6 +44,7 @@ pub const ARRAY_METHODS: &[&str] = &[
     "min_by",
     "max_by",
     "chunks",
+    "find",
 ];
 pub const STR_METHODS: &[&str] = &[
     "len",
@@ -64,6 +65,8 @@ pub const STR_METHODS: &[&str] = &[
     "pad_right",
     "reversed",
     "chunks",
+    "to_int",
+    "to_float",
     "count",
     "any",
     "all",
@@ -72,7 +75,7 @@ pub const STR_METHODS: &[&str] = &[
 /// The methods that take a lambda, plus `sum`, `min` and `max`, which run the same kind of loop
 /// (checked in `check/lambda.rs`, lowered to loops in `ir/lower.rs`).
 pub const LAMBDA_METHODS: &[&str] =
-    &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max", "sorted_by", "min_by", "max_by"];
+    &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max", "sorted_by", "min_by", "max_by", "find"];
 /// The lambda methods of a string: each character is tested.
 pub const STR_LAMBDA_METHODS: &[&str] = &["count", "any", "all", "find_index"];
 pub const MAP_METHODS: &[&str] = &["len", "has", "get", "set", "remove", "keys", "values", "items"];
@@ -102,7 +105,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "chunks" => m(vec![Int], Type::array(t), false),
                 // the types depend on the lambda: see `check/lambda.rs`
                 "sum" | "min" | "max" => m(vec![], e, false),
-                "map" | "filter" | "sort_by" | "sorted_by" | "min_by" | "max_by" | "count" | "any" | "all" | "find_index" => {
+                "map" | "filter" | "sort_by" | "sorted_by" | "min_by" | "max_by" | "count" | "any" | "all" | "find_index" | "find" => {
                     m(vec![Type::Unknown], Type::Unknown, name == "sort_by")
                 }
                 "fold" => m(vec![Type::Unknown, Type::Unknown], Type::Unknown, false),
@@ -123,6 +126,8 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             "pad_left" | "pad_right" => m(vec![Int], Str, false),
             "reversed" => m(vec![], Str, false),
             "chunks" => m(vec![Int], Type::array(Str), false),
+            "to_int" => m(vec![], Type::option(Int), false),
+            "to_float" => m(vec![], Type::option(Type::Float), false),
             "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, false),
             _ => None,
         },
@@ -131,7 +136,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             match name {
                 "len" => m(vec![], Int, false),
                 "has" => m(vec![k], Bool, false),
-                "get" => m(vec![k], v, false),
+                "get" => m(vec![k], Type::option(v), false),
                 "set" => m(vec![k, v], Void, true),
                 "remove" => m(vec![k], Void, true),
                 "keys" => m(vec![], Type::array(k), false),

@@ -33,6 +33,7 @@ design may still change.
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
+| E0350-E0354 | run time (v0.6) | `unwrap()` of `none` (E0350) |
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259, E0276-E0289 (until used),
@@ -60,12 +61,11 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ## E0001: unexpected character
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
-- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
+- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > ! ?` plus the two-character forms `-> .. ?? == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
+- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
 - **Common causes:**
   - a `#` comment: Nyra comments start with `//`
   - backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes (single quotes hold one character, `'a'`)
-  - `?` and `:` as a ternary: write `if cond { a } else { b }` as a value
   - a single `&` or `|`: write `&&` or `||`
   - `.5` or `5.`: a float needs digits on both sides of the dot (`0.5`, `5.0`)
   - `$`, `@`, `^`, `~` or a backslash outside a string or a character
@@ -2088,6 +2088,52 @@ fn main() {
 ```
 - **Related:** E0203, E0210
 
+## E0276: `none` has no optional type
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `none` is the empty value of an optional type `T?`, but here nothing says which `T`, or the type that is needed is not optional. `none` takes its type from where it goes: a declared type, a parameter, a field, a `ret`, or the other side of `==`.
+- **Why Nyra has this rule:** There is no null in Nyra: only a value declared `int?` can be missing, so every `none` is checked against an optional type, like the empty array `[]` is.
+- **Common causes:**
+  - `let a = none`: there is nothing to infer the type from
+  - `let n: int = none`, or passing `none` where a plain `int` is expected
+- **Wrong:**
+```rust
+fn main() {
+    let a = none
+    print(a)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let a: int? = none
+    print(a)
+}
+```
+- **Related:** E0277, E0230
+
+## E0277: optional value used the wrong way
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An operation that needs an optional value `T?` got a plain value (`n ?? 3` or `if let v = n` with `n` an `int`), or the default of `??` has another type than the value inside the optional.
+- **Why Nyra has this rule:** `??` and `if let` exist to deal with a value that may be missing; on a value that is always there they are a mistake, and a default of the wrong type would give the result two types.
+- **Common causes:**
+  - `x ?? 0` where `x` is not optional
+  - `m.get("a") ?? "none"` for a map of ints
+- **Wrong:**
+```rust
+fn main() {
+    let n = 5
+    print(n ?? 3)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let m = ["a": 5]
+    print(m.get("a") ?? 3)
+}
+```
+- **Related:** E0276, E0203
+
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
 - **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
@@ -2861,3 +2907,26 @@ fn main() {
 }
 ```
 - **Related:** E0309, E0244
+
+## E0350: unwrap of none
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** `opt.unwrap()` was called on an optional value that holds `none`. The program stops with exit code 101.
+- **Why Nyra has this rule:** `unwrap()` says "this value is there"; when it is not, continuing would invent a value. Prefer `opt ?? default` or `if let v = opt { ... }`, which handle the empty case.
+- **Common causes:**
+  - `m.get(key).unwrap()` for a key the map does not have
+  - `xs.find(x => ...).unwrap()` when no element passes
+- **Wrong:**
+```rust
+fn main() {
+    let x: int? = none
+    print(x.unwrap())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let x: int? = none
+    print(x ?? 0)
+}
+```
+- **Related:** E0248, E0247

@@ -318,10 +318,12 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
             ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
                 expr(x, m, own)
             }
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) => {
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
                 expr(a, m, own);
                 expr(b, m, own);
             }
+            ExprKind::Some(x) => expr(x, m, own),
+            ExprKind::None => {}
             ExprKind::Slice(b, lo, hi) => {
                 expr(b, m, own);
                 lo.iter_mut().chain(hi.iter_mut()).for_each(|x| expr(x, m, own));

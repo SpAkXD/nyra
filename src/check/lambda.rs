@@ -141,6 +141,11 @@ impl Checker {
                     "map" => Type::array(body),
                     "filter" => rt,
                     "count" | "find_index" => Type::Int,
+                    "find" => {
+                        let found = Type::option(elem);
+                        self.register_in(found);
+                        found
+                    }
                     "any" | "all" => Type::Bool,
                     "sorted_by" | "min_by" | "max_by" => {
                         self.register_in(body);

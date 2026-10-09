@@ -704,6 +704,13 @@ impl<'m> Interp<'m> {
                 self.tick(r.len() as u64)?;
                 text(r)
             }
+            RtOp::CheckSome => {
+                let Some(Value::Bool(has)) = args.first() else { return Err(bug("unwrap without a flag")) };
+                if !*has {
+                    return Err(fail("E0350", "unwrap() of none".to_string(), "check `x != none` first, or give a default with `x ?? value`", span));
+                }
+                None
+            }
             RtOp::CheckNonEmpty => {
                 if i(0)? == 0 {
                     let msg = if i(1)? != 0 { "max() of an empty array" } else { "min() of an empty array" };
@@ -994,6 +1001,18 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 out.push('?');
                 return;
             };
+            // an optional: `none`, or `Some(value)`
+            if info.option {
+                match (&fields[0], &fields[1]) {
+                    (Value::Bool(true), v) => {
+                        out.push_str("Some(");
+                        show_in(m, v, out);
+                        out.push(')');
+                    }
+                    _ => out.push_str("none"),
+                }
+                return;
+            }
             if !info.tuple {
                 out.push_str(&info.name);
             }

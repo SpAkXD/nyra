@@ -30,6 +30,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
 | `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
 | `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
+| `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
 
 ## Functions
@@ -134,6 +135,7 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 | `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char · tuple,tuple of those → bool |
 | `==` `!=` | same type on both sides → bool (strings, arrays and structs compare by content) |
 | `x in xs` | `bool`: `xs` has the element `x` (`[T]`); `s` has the char or text `x` (`str`); `m` has the key `x` (`[K: V]`) |
+| `a ?? b` | `a` is `T?`, `b` is `T` (→ `T`) or `T?` (→ `T?`); between the comparisons and `+`, groups to the right |
 | `&&` `\|\|` | bool; the right side runs only when needed |
 
 Parentheses group: `(a + b) * c`.
@@ -183,6 +185,7 @@ print('7'.code() - '0'.code())    // 7: a digit's value
 | `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1`; also `s[a..b]`, `s[a..]`, `s[..b]` |
 | `s.contains(t)` `s.starts_with(t)` `s.ends_with(t)` | `bool` (`t` is a `str` or a `char`) |
 | `s.index_of(t)` | first position of `t` (a `str` or a `char`), or `-1` |
+| `s.to_int()` · `s.to_float()` | `int?` · `float?`: the number, or `none` when `int(s)` / `float(s)` would fail |
 | `s.pad_left(n)` `s.pad_right(n)` | spaces added until `s` has `n` characters (never shorter); `s.pad_left(n, '0')` pads with a char |
 | `s.split(sep)` | `[str]`: `"a,b,,c".split(",")` is `["a", "b", "", "c"]` |
 | `s.replace(old, new)` · `s.repeat(n)` | every `old` replaced · `n` copies |
@@ -236,6 +239,7 @@ print([x * x for x in xs if x > 0], [i * 2 for i in 0..3])   // [9, 16] [0, 2, 4
 | `xs.map(x => e)` · `xs.filter(x => test)` | a new array of the results · of the elements that pass |
 | `xs.count(x => test)` · `xs.any(...)` · `xs.all(...)` | `int` · `bool` · `bool` (also on a `str`: each char) |
 | `xs.find_index(x => test)` | position of the first element that passes, or `-1` (also on a `str`) |
+| `xs.find(x => test)` | `T?`: the first element that passes, or `none` |
 | `xs.fold(start, (acc, x) => e)` | `acc` starts as `start` and becomes `e` for each element: the last `acc` |
 | `xs.sorted_by(x => key)` | a new sorted array, like `sort_by`: `words.sorted_by(w => (-w.count, w.text))` sorts by count descending, then text |
 | `xs.min_by(x => key)` · `xs.max_by(x => key)` | the first element with the smallest / largest key (an empty array: E0247) |
@@ -257,7 +261,7 @@ for name in ages { print(name) }        // the keys, in insertion order
 | method | result |
 |---|---|
 | `m.len()` · `m.has(k)` | number of entries · `bool` |
-| `m.get(k)` · `m.get(k, default)` | the value (like `m[k]`) · the value or `default` |
+| `m.get(k)` · `m.get(k, default)` | `V?`: the value or `none` · the value or `default` |
 | `m.set(k, v)` · `m.remove(k)` | like `m[k] = v` · removes `k` (nothing happens if it is missing) |
 | `m.keys()` · `m.values()` · `m.items()` | arrays, in insertion order; `items` gives the pairs `[(K, V)]`: `for (k, v) in m.items()` |
 
@@ -306,6 +310,35 @@ count is E0272. Tuples are values like structs: they are copied, compare with `=
 `<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
 (or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
 int that stands for it) and `json` cannot read or write one (use a struct).
+
+## Optional values
+```nyra
+let ages = ["ann": 31, "bob": 27]
+let a: int? = ages.get("ann")                // Some(31); a missing key gives none
+print(a, ages.get("cy"))                     // Some(31) none
+print(ages.get("cy") ?? 0)                   // 0: the value, or the default
+if let n = ages.get("bob") {                 // runs when there is a value, named n
+    print("bob is {n}")
+} else {
+    print("no bob")
+}
+var best: int? = none                        // none needs the type: `int?`
+for x in [4, 9, 2] {
+    if best == none || x > (best ?? 0) {     // compare with none, or with a plain value
+        best = x
+    }
+}
+print(best, best.is_some(), best.unwrap())   // Some(9) true 9
+let first_even = [3, 5, 8, 6].find(x => x % 2 == 0)   // Some(8)
+print("12".to_int(), "x".to_int(), "2.5".to_float())  // Some(12) none Some(2.5)
+```
+`T?` holds a `T` or `none`; a plain `T` goes where a `T?` is expected (`let a: int? = 5`, `ret x` in a function
+`-> int?`, an argument). It prints as `Some(31)` or `none`, and `==` and `!=` compare by content (also with a
+plain value: `m.get(k) == 3`). `x ?? d` is `x`'s value, or `d` (evaluated only when needed); `d` may itself be
+optional. `if let v = x { ... } else { ... }` binds `v` in the first block only. `x.is_some()`, `x.is_none()` and
+`x.unwrap()` (E0350 at run time when it holds none) are the only methods; to use a field or a method of the
+value, take it out first. `none` needs a known optional type (E0276), `??` and `if let` need an optional on the
+left (E0277). Optionals cannot be map keys or go through `json`.
 
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
@@ -397,6 +430,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
 | E0255 | int overflow: `+`, `-`, `*`, negation, `abs` or `/` (only `MIN / -1`) outside -2^63 to 2^63 - 1 |
 | E0256 | `--js`/`--ts` only: an int beyond 2^53 - 1 (9007199254740991), which JavaScript would round |
+| E0350 | `opt.unwrap()` of `none` |
 | E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |

@@ -63,7 +63,7 @@ impl H {
                 let e = arr.elem().unwrap_or(Type::Unknown);
                 let (call, test) = if *max { ("max", "ks[best] < ks[i]") } else { ("min", "ks[i] < ks[best]") };
                 format!(
-                    "fn __h(xs: {}, ks: {}) -> {} {{\n    if xs.len() == 0 {{\n        var none: [int] = []\n        none.{call}()\n    }}\n    var best = 0\n    for i in 1..xs.len() {{\n        if {test} {{ best = i }}\n    }}\n    ret xs[best]\n}}\n",
+                    "fn __h(xs: {}, ks: {}) -> {} {{\n    if xs.len() == 0 {{\n        var nothing: [int] = []\n        nothing.{call}()\n    }}\n    var best = 0\n    for i in 1..xs.len() {{\n        if {test} {{ best = i }}\n    }}\n    ret xs[best]\n}}\n",
                     arr.name(),
                     Type::array(*key).name(),
                     e.name()

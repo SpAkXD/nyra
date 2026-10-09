@@ -76,6 +76,10 @@ enum Sink<'e> {
         acc: LocalId,
         lambda: &'e ast::Expr,
     },
+    /// `find`: the first element that passes, as an optional (`acc` starts as `none`)
+    Find {
+        acc: LocalId,
+    },
 }
 
 /// The parameters and the body of a lambda argument (the checker allows nothing else).
@@ -128,7 +132,7 @@ impl Lower<'_> {
         let span = e.span;
         let lambda = args.last();
         match name {
-            "map" | "filter" | "count" | "any" => steps.push(Step::of(&args[0], name != "map", false)),
+            "map" | "filter" | "count" | "any" | "find" => steps.push(Step::of(&args[0], name != "map", false)),
             "all" => steps.push(Step::of(&args[0], true, true)),
             _ => {}
         }
@@ -170,6 +174,14 @@ impl Lower<'_> {
                         Sink::FindIndex { acc, pos, lambda: &args[0] }
                     }
                 }
+            }
+            "find" => {
+                let inner = e.ty.option_inner().expect("`find` gives an optional");
+                let none = self.default_value(inner, span, out);
+                let Expr::Local(acc) = self.op(RtOp::StructNew, vec![Expr::Bool(false), none], e.ty, None, span, out) else {
+                    unreachable!()
+                };
+                Sink::Find { acc }
             }
             "any" | "all" => {
                 let acc = self.temp(Ty::Bool);
@@ -223,6 +235,7 @@ impl Lower<'_> {
             | Sink::Sum { acc, .. }
             | Sink::Count { acc }
             | Sink::Stop { acc, .. }
+            | Sink::Find { acc }
             | Sink::FindIndex { acc, .. } => Expr::Local(acc),
             Sink::Best { m, n, max, elem } => {
                 let which = int(i64::from(max));
@@ -387,6 +400,14 @@ impl Lower<'_> {
             Sink::Count { acc } => out.push(st(add(acc, Expr::Int(1), BinOp::IAdd), span)),
             Sink::Stop { acc, value } => {
                 out.push(st(StmtKind::Set(acc, Expr::Bool(value)), span));
+                self.stop(span, out);
+            }
+            Sink::Find { acc } => {
+                // the first element that passed: the optional now holds it (`none` held a default to release)
+                if self.managed(self.ty_of(acc)) {
+                    out.push(st(StmtKind::Drop(acc), span));
+                }
+                out.push(st(StmtKind::Op { dst: Some(acc), op: RtOp::StructNew, args: vec![Expr::Bool(true), cur] }, span));
                 self.stop(span, out);
             }
             Sink::FindIndex { acc, pos, lambda } => {

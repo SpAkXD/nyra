@@ -78,6 +78,10 @@ function ny_mod(a: number, b: number, line: number, col: number): number {
 function ny_check_step(k: number, line: number, col: number): void {
     if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `opt.unwrap()` of `none`.
+function ny_check_some(has: boolean, line: number, col: number): void {
+    if (!has) ny_panic("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col);
+}
 // `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
 function ny_check_non_empty(n: number, max: number, line: number, col: number): void {
     if (n === 0) ny_panic("E0247", max ? "max() of an empty array" : "min() of an empty array", "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);

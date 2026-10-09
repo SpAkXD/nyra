@@ -35,10 +35,14 @@ thread_local! {
     static MAPS: RefCell<Vec<(Type, Type)>> = const { RefCell::new(Vec::new()) };
     /// The element types of the tuple types, by struct id (a tuple type is a struct, see `Type::tuple`).
     static TUPLES: RefCell<HashMap<u32, Vec<Type>>> = RefCell::new(HashMap::new());
+    /// The inner type of the optional types, by struct id.
+    static OPTIONS: RefCell<HashMap<u32, Type>> = RefCell::new(HashMap::new());
 }
 
 /// The name prefix of the structs that stand for tuple types. No program can write it as a type.
 pub const TUPLE_PREFIX: &str = "Tup_";
+/// The same for optional types `T?` (a struct with a flag `has` and a value `val`).
+pub const OPTION_PREFIX: &str = "Opt_";
 
 impl Type {
     /// `[elem]`. An array of an unknown type is unknown.
@@ -117,6 +121,34 @@ impl Type {
         t
     }
 
+    /// The optional type `inner?`: a struct with the fields `has` and `val`. An optional of an
+    /// unknown type (or of nothing) is unknown.
+    pub fn option(inner: Type) -> Type {
+        if inner.is_unknown() || inner == Type::Void {
+            return Type::Unknown;
+        }
+        let name = format!("{OPTION_PREFIX}o{}", inner.mangle());
+        let t = Type::structure(&name);
+        if let Type::Struct(id) = t {
+            OPTIONS.with(|m| {
+                m.borrow_mut().entry(id).or_insert(inner);
+            });
+        }
+        t
+    }
+
+    /// The type inside an optional type.
+    pub fn option_inner(self) -> Option<Type> {
+        match self {
+            Type::Struct(id) => OPTIONS.with(|m| m.borrow().get(&id).copied()),
+            _ => None,
+        }
+    }
+
+    pub fn is_option(self) -> bool {
+        self.option_inner().is_some()
+    }
+
     /// The element types of a tuple type.
     pub fn tuple_elems(self) -> Option<Vec<Type>> {
         match self {
@@ -147,8 +179,9 @@ impl Type {
             },
             Type::Struct(_) => {
                 let name = self.struct_name().unwrap_or_default();
-                match name.strip_prefix(TUPLE_PREFIX) {
-                    Some(rest) if self.is_tuple() => rest.to_string(),
+                match (name.strip_prefix(TUPLE_PREFIX), name.strip_prefix(OPTION_PREFIX)) {
+                    (Some(rest), _) if self.is_tuple() => rest.to_string(),
+                    (_, Some(rest)) if self.is_option() => rest.to_string(),
                     _ => format!("S{}{name}", name.len()),
                 }
             }
@@ -181,9 +214,10 @@ impl Type {
             Type::Void => "void".into(),
             Type::Unknown => "?".into(),
             Type::Array(_) => format!("[{}]", self.elem().map(Type::name).unwrap_or_default()),
-            Type::Struct(_) => match self.tuple_elems() {
-                Some(es) => format!("({})", es.iter().map(|t| t.name()).collect::<Vec<_>>().join(", ")),
-                None => self.struct_name().unwrap_or_default(),
+            Type::Struct(_) => match (self.tuple_elems(), self.option_inner()) {
+                (Some(es), _) => format!("({})", es.iter().map(|t| t.name()).collect::<Vec<_>>().join(", ")),
+                (_, Some(inner)) => format!("{}?", inner.name()),
+                _ => self.struct_name().unwrap_or_default(),
             },
             Type::Map(_) => match self.map_kv() {
                 Some((k, v)) => format!("[{}: {}]", k.name(), v.name()),
@@ -413,8 +447,9 @@ impl Expr {
             | ExprKind::Labeled(_, x)
             | ExprKind::Inout(x)
             | ExprKind::Lambda(_, x)
+            | ExprKind::Some(x)
             | ExprKind::Fmt(x, _) => x.each_mut(f),
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) => {
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
                 a.each_mut(f);
                 b.each_mut(f);
             }
@@ -462,7 +497,13 @@ impl Expr {
                     x.each_mut(f);
                 }
             }
-            ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::Var(_) => {}
+            ExprKind::Int(_)
+            | ExprKind::Float(_)
+            | ExprKind::Bool(_)
+            | ExprKind::Str(_)
+            | ExprKind::Char(_)
+            | ExprKind::Var(_)
+            | ExprKind::None => {}
         }
     }
 }
@@ -535,6 +576,12 @@ pub enum ExprKind {
     Array(Vec<Expr>),
     /// `(a, b)`: a tuple of two or more values
     Tuple(Vec<Expr>),
+    /// `none`: an optional value that holds nothing
+    None,
+    /// An optional value that holds this one. Made by the checker where a `T` goes into a `T?`.
+    Some(Box<Expr>),
+    /// `a ?? b`: the value of the optional `a`, or `b` when it holds nothing
+    Coalesce(Box<Expr>, Box<Expr>),
     /// `value:spec` inside `{ }` of a string: the value as text, aligned, padded or rounded
     Fmt(Box<Expr>, FmtSpec),
     /// `x in xs`: is the element, character or key there

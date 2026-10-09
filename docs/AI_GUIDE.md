@@ -229,7 +229,7 @@ print(bigger + limit())                   // 107
 shout("done")
 ```
 
-Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)` and the structs you declare.
+Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)`, optionals `T?` and the structs you declare.
 Function signatures are always fully typed; local types are inferred. The builtins are `print(x)`,
 `str(x)`, `int(x)`, `float(x)`, `char(n)`, `free(x)` and `keep(x)`; everything else on strings, chars
 and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are in the spec.
@@ -272,7 +272,7 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
 | Literals | `.5`, `5.`, `1e5`, `1_000`, `0xFF` (E0001, E0101) | `0.5`, `5.0`, `100000.0`, `1000`, `255` |
-| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `c ? a : b` (E0101, E0210, E0001) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `if c { a } else { b }` |
+| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `c ? a : b` (E0101, E0210) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `if c { a } else { b }` |
 
 Good to know:
 
@@ -300,6 +300,11 @@ Good to know:
   `x in xs` (also `c in s`, `k in m`), `zip(a, b)` (pairs `[(A, B)]`), `xs.chunks(n)`, slices `xs[1..3]`
   `s[..4]` `xs[2..]`, `s.trim("-_")`, `m.items()` (pairs), `fn f(var n: int)` (a copy the function may
   change) and `r.area()` for `fn area(r: Rect)`.
+- A value that may be missing is an optional: `m.get(k)`, `xs.find(x => x > 3)` and `s.to_int()` give a `V?` that
+  is a value or `none`. Unwrap with `m.get(k) ?? 0`, `if let v = m.get(k) { ... } else { ... }` or
+  `.unwrap()` (stops with E0350 on `none`); test with `x != none` or `x.is_some()`. Declare one with
+  `var best: int? = none` (`none` needs the type), return one with `fn f() -> int?` and `ret none` or `ret x`.
+  `m.get(k, 0)` still gives the default directly; `index_of` still gives `-1`.
 - A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
   `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
   `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
@@ -344,8 +349,9 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, enums, `Option`, `Result`, generics or type aliases. Use a map
-  `[str: bool]` or `contains` for a set. Tuples `(int, str)` (section 2) and maps `[K: V]` (section 6) exist.
+- **Types**: no sets, enums, `Result`, generics or type aliases. Use a map
+  `[str: bool]` or `contains` for a set. Tuples `(int, str)`, optionals `int?` (section 3) and maps `[K: V]`
+  (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
   have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]`, `[char]` and arrays of tuples
@@ -360,7 +366,7 @@ that works (section 6 has the usual replacements).
   method, and it cannot change variables.
 - **Library**: `abs`, `min` and `max` are builtins; everything else is a module function, never a
   global one: `math.sqrt(x)` after `use math`, not `sqrt(x)`.
-- **Errors**: no exceptions, `null`, `assert` or `panic`. A failing operation stops the program with a
+- **Errors**: no exceptions, `null`, `assert` or `panic` (a value that may be missing is an optional `int?`). A failing operation stops the program with a
   runtime error (section 5); `os.exit(code)` stops it on purpose. To check a function, write examples:
   `ex f(2) == 4` (section 1).
 - **Output**: `print` ends the line unless its last argument is `end:` (`print(x, end: " ")`). There is
@@ -374,7 +380,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 
 | Code | Meaning | Usual cause and fix |
 |---|---|---|
-| E0001 | unexpected character | `#`, `?`, `.5`, `5.`, single `&` or `\|`: use `//`, `if` / `else`, `0.5`, `&&` |
+| E0001 | unexpected character | `#`, `.5`, `5.`, single `&` or `\|`: use `//`, `0.5`, `&&` |
 | E0002 | unterminated string | strings end on the same line: close with `"`, use `\n` for line breaks |
 | E0003 | number too large | `int` max is 9223372036854775807 |
 | E0004 | unknown escape | strings know `\n` `\t` `\r` `\\` `\"`; chars also `\'` |
@@ -429,6 +435,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0275 | `in` cannot look for this value | `x in xs` needs `x` of the element type, `xs` an array, string or map |
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
 | E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
+| E0276 | `none` without an optional type | `var best: int? = none`; `none` cannot be a plain `int` |
+| E0277 | optional used the wrong way | `??` and `if let` need a `T?` on the left; the default must be a `T` |
 | E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |
 | E0273 | no such tuple position | a pair has `.0` and `.1` |
 
@@ -450,6 +458,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0245 | `int(x)` of NaN, infinity or a float too big for an `int` | check the value before converting |
 | E0246 | `char(n)` of an invalid code | codes go from 0 to 1114111, except 55296 to 57343 |
 | E0247 | `min()` or `max()` of an empty array | check `xs.len() > 0` first, or use `fold` with a start value |
+| E0350 | `unwrap()` of `none` | use `x ?? default` or `if let v = x { ... }`, or check `x != none` first |
 | E0249 | out of memory | `repeat` makes at most 536,870,888 bytes of text (UTF-16 units with `--js`, the same for ASCII) or 100,000,000 elements |
 
 ## 6. Recipes

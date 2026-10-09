@@ -93,6 +93,13 @@ fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
     a.wrapping_rem(b)
 }
 
+/// `opt.unwrap()` of `none`.
+fn ny_check_some(has: bool, line: u32, col: u32) {
+    if !has {
+        ny_fail("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col);
+    }
+}
+
 /// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
 fn ny_check_non_empty(n: i64, max: i64, line: u32, col: u32) {
     if n == 0 {

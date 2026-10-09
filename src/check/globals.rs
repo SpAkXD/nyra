@@ -439,10 +439,12 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
         ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
             lambda_names(x, out)
         }
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) => {
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
             lambda_names(a, out);
             lambda_names(b, out);
         }
+        ExprKind::Some(x) => lambda_names(x, out),
+        ExprKind::None => {}
         ExprKind::Slice(b, lo, hi) => {
             lambda_names(b, out);
             lo.iter().chain(hi.iter()).for_each(|x| lambda_names(x, out));

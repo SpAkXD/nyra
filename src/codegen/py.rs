@@ -263,7 +263,23 @@ fn classes(m: &Module, out: &mut String) {
             pieces.push(Piece::Value(value));
         }
         pieces.push(Piece::Text(")".into()));
-        let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return {}\n\n", fstring(&pieces));
+        if s.option {
+            // `none`, or `Some(value)`
+            let (has, val) = (&fields[0], &fields[1]);
+            let t = s.fields[1].1;
+            let value = match t {
+                Ty::Char | Ty::Str => format!("ny_show(self.{val}, '{}')", tdesc(t)),
+                _ => shown_in_fstring(t, &format!("self.{val}")),
+            };
+            let some = [Piece::Text("Some(".into()), Piece::Value(value), Piece::Text(")".into())];
+            let _ = writeln!(
+                out,
+                "\n    def __repr__(self) -> str:\n        if not self.{has}:\n            return \"none\"\n        return {}\n\n",
+                fstring(&some)
+            );
+        } else {
+            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return {}\n\n", fstring(&pieces));
+        }
     }
 }
 
@@ -702,6 +718,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("NyList(map(ord, {}))", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, True)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, False)", a[0], a[1], a[2]),

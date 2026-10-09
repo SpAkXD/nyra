@@ -246,7 +246,17 @@ fn classes(m: &Module, out: &mut String) {
             })
             .collect();
         let head = if s.tuple { String::new() } else { template_text(&s.name) };
-        let _ = writeln!(out, "    ny_fmt(): string {{\n        return `{head}({})`;\n    }}", parts.concat());
+        if s.option {
+            let _ = writeln!(
+                out,
+                "    ny_fmt(): string {{\n        return this.{0} ? `Some(${{ny_fmt(this.{1}, \"{2}\")}})` : \"none\";\n    }}",
+                fields[0],
+                fields[1],
+                tdesc(s.fields[1].1)
+            );
+        } else {
+            let _ = writeln!(out, "    ny_fmt(): string {{\n        return `{head}({})`;\n    }}", parts.concat());
+        }
         out.push_str("}\n\n");
     }
 }
@@ -665,6 +675,7 @@ impl Gen<'_> {
             RtOp::StrChars | RtOp::StrCodes => format!("ny_chars({})", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", a[0], a[1], a[2]),

@@ -62,6 +62,10 @@ pub enum Tok {
     And,
     Or,
     Not,
+    /// `?` of an optional type `int?`
+    Question,
+    /// `??`
+    Coalesce,
     Newline,
     Eof,
 }
@@ -149,6 +153,8 @@ impl Tok {
             Tok::And => "&&",
             Tok::Or => "||",
             Tok::Not => "!",
+            Tok::Question => "?",
+            Tok::Coalesce => "??",
             _ => "",
         }
     }
@@ -445,6 +451,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ('!', '=') => Some(Tok::Ne),
             ('<', '=') => Some(Tok::Le),
             ('>', '=') => Some(Tok::Ge),
+            ('?', '?') => Some(Tok::Coalesce),
             ('&', '&') => Some(Tok::And),
             ('|', '|') => Some(Tok::Or),
             ('+', '=') => Some(Tok::OpAssign(BinOp::Add)),
@@ -496,6 +503,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             '<' => Some(Tok::Lt),
             '>' => Some(Tok::Gt),
             '!' => Some(Tok::Not),
+            '?' => Some(Tok::Question),
             _ => None,
         };
         match one {

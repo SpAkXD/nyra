@@ -1,0 +1,7 @@
+// expect: E0277
+fn main() {
+    let n = 5
+    if let v = n {
+        print(v)
+    }
+}

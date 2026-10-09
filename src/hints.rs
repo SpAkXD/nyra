@@ -18,7 +18,7 @@ pub fn word(w: &str) -> Option<String> {
         "not" => "write `!` for logical not: `!done`",
         "then" => "Nyra has no `then`: the body of an `if` is `{ ... }` on the same line as the `if`",
         "null" | "nil" | "None" | "NULL" | "undefined" => {
-            "Nyra has no null: every variable always holds a value of its type"
+            "Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`"
         }
         "True" | "False" => "write `true` or `false` in lowercase",
         "mut" => "write `var` for a variable that changes: `var x = 0`",
@@ -405,9 +405,8 @@ pub fn type_name(name: &str) -> String {
             "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
-        "tuple" | "pair" => {
-            "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
-        }
+        "tuple" | "pair" => "a tuple type is written with parentheses, e.g. `(int, str)`; a value `(1, \"a\")`".to_string(),
+        "option" | "optional" | "maybe" | "nullable" => "an optional type is written with a question mark after the type, e.g. `int?`".to_string(),
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()
         }

@@ -79,7 +79,8 @@ fn struct_table(prog: &ast::Program) -> Structs {
         let fields: Vec<(String, Ty)> = def.fields.iter().map(|f| (f.name.clone(), f.ty)).collect();
         let managed = fields.iter().any(|(_, t)| table.managed(*t));
         let tuple = Ty::Struct(id).is_tuple();
-        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple }));
+        let option = Ty::Struct(id).is_option();
+        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple, option }));
     }
     let mut ids: Vec<u32> = defs.keys().copied().collect();
     ids.sort_unstable();
@@ -162,9 +163,11 @@ fn mutates(e: &ast::Expr) -> bool {
         K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
         K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
         K::Array(xs) | K::Tuple(xs) => xs.iter().any(mutates),
+        K::Some(x) => mutates(x),
+        K::Coalesce(a, b) => mutates(a) || mutates(b),
         K::MapLit(pairs) => pairs.iter().any(|(k, v)| mutates(k) || mutates(v)),
         K::Interp(parts) => parts.iter().any(|p| matches!(p, ast::InterpPart::Expr(x) if mutates(x))),
-        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => false,
+        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) | K::None => false,
     }
 }
 
@@ -188,6 +191,11 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
             each_expr(b, f);
         }
         K::Call(_, xs) | K::Array(xs) | K::Tuple(xs) => xs.iter().for_each(|x| each_expr(x, f)),
+        K::Some(x) => each_expr(x, f),
+        K::Coalesce(a, b) => {
+            each_expr(a, f);
+            each_expr(b, f);
+        }
         K::Method(r, _, xs) => {
             each_expr(r, f);
             xs.iter().for_each(|x| each_expr(x, f));
@@ -217,7 +225,7 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
                 each_expr(x, f);
             }
         }
-        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => {}
+        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) | K::None => {}
     }
 }
 
@@ -1490,6 +1498,16 @@ impl<'a> Lower<'a> {
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
             }
+            ast::ExprKind::None => {
+                let inner = e.ty.option_inner().expect("`none` has an optional type");
+                let d = self.default_value(inner, span, out);
+                self.op(RtOp::StructNew, vec![Expr::Bool(false), d], e.ty, dst, span, out)
+            }
+            ast::ExprKind::Some(x) => {
+                let v = self.expr(x, None, out);
+                self.op(RtOp::StructNew, vec![Expr::Bool(true), v], e.ty, dst, span, out)
+            }
+            ast::ExprKind::Coalesce(a, b) => self.coalesce(a, b, e, dst, out),
             ast::ExprKind::In(item, container) => {
                 let v = self.operands(&[item.as_ref(), container.as_ref()], out);
                 let [x, c]: [Expr; 2] = v.try_into().expect("two operands");
@@ -1810,6 +1828,88 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// The value a `none` holds in its `val`: zeros, empty text, empty arrays, structs of those.
+    fn default_value(&mut self, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        match t {
+            Ty::Int => Expr::Int(0),
+            Ty::Float => Expr::Float(0.0),
+            Ty::Bool => Expr::Bool(false),
+            Ty::Char => Expr::Char(0),
+            Ty::Str => Expr::Str(self.strs.intern("")),
+            Ty::Array(_) => self.op(RtOp::ArrNew, Vec::new(), t, None, span, out),
+            Ty::Map(_) => self.op(RtOp::MapNew, Vec::new(), t, None, span, out),
+            Ty::Struct(_) => {
+                let fields: Vec<Ty> = self.structs.get(t).expect("a struct").fields.iter().map(|(_, ft)| *ft).collect();
+                let vals: Vec<Expr> = fields.into_iter().map(|ft| self.default_value(ft, span, out)).collect();
+                self.op(RtOp::StructNew, vals, t, None, span, out)
+            }
+            _ => Expr::Int(0),
+        }
+    }
+
+    /// `a ?? b`: `b` runs only when `a` holds nothing.
+    fn coalesce(&mut self, a: &ast::Expr, b: &ast::Expr, e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+        let span = e.span;
+        let inner = a.ty.option_inner().expect("`??` has an optional on its left");
+        let av = self.expr(a, None, out);
+        let av = if mutates(b) || !matches!(av, Expr::Local(_)) { self.snapshot(av, a.ty, a.span, out) } else { av };
+        let has = Expr::Field(Box::new(av.clone()), 0, Ty::Bool);
+        // `a ?? b` with an optional `b` is an optional; else the value itself
+        let found = if e.ty == a.ty { av.clone() } else { Expr::Field(Box::new(av), 1, inner) };
+        let saved = std::mem::take(&mut self.pending);
+        let (facts, mark) = self.save();
+        let mut tb = Vec::new();
+        let bv = self.expr(b, None, &mut tb);
+        self.restore(facts, mark);
+        let pb = std::mem::take(&mut self.pending);
+        if tb.is_empty() && pb.is_empty() {
+            self.pending = saved;
+            return Expr::Select(Box::new(has), Box::new(found), Box::new(bv));
+        }
+        // `b` has effects: only the taken branch runs them
+        let d = match dst {
+            Some(d) => d,
+            None => self.temp(e.ty),
+        };
+        let mut ta = Vec::new();
+        self.init(d, found, span, &mut ta);
+        self.pending = pb;
+        self.init(d, bv, span, &mut tb);
+        self.end_statement(span, &mut tb);
+        self.pending = saved;
+        if dst.is_none() && self.managed(e.ty) {
+            self.pending.push(d);
+        }
+        out.push(Stmt { kind: StmtKind::If { cond: has, then: ta, els: tb }, span });
+        Expr::Local(d)
+    }
+
+    /// `m.get(k)`: `Some(value)` or `none`.
+    fn map_get_option(&mut self, all: Vec<Expr>, v: Ty, opt: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let d = match dst {
+            Some(d) => d,
+            None => self.temp(opt),
+        };
+        let cond = Expr::Pure(PureFn::MapHas, all.clone());
+        let item = self.temp(v);
+        let then = vec![
+            Stmt { kind: StmtKind::Op { dst: Some(item), op: RtOp::MapGet, args: all }, span },
+            Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(true), Expr::Local(item)] }, span },
+        ];
+        // the default of the empty case is made (and released) in its own branch
+        let saved = std::mem::take(&mut self.pending);
+        let mut els = Vec::new();
+        let dv = self.default_value(v, span, &mut els);
+        els.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(false), dv] }, span });
+        self.end_statement(span, &mut els);
+        self.pending = saved;
+        out.push(Stmt { kind: StmtKind::If { cond, then, els }, span });
+        if dst.is_none() && self.managed(opt) {
+            self.pending.push(d);
+        }
+        Expr::Local(d)
+    }
+
     /// A second owner of the array `v` in a temporary of this statement: a helper that replaces the
     /// array it changes (`inout`) can still read the old one through it.
     fn extra_owner(&mut self, v: Expr, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
@@ -1857,6 +1957,19 @@ impl<'a> Lower<'a> {
             let v = self.chain_method(recv, name, args, e, out);
             self.restore(facts, mark);
             return v;
+        }
+        // `opt.is_some()`, `opt.is_none()`, `opt.unwrap()`
+        if let Some(inner) = recv.ty.option_inner() {
+            let v = self.expr(recv, None, out);
+            let has = Expr::Field(Box::new(v.clone()), 0, Ty::Bool);
+            return match name {
+                "is_some" => has,
+                "is_none" => Expr::Unary(UnOp::Not, Box::new(has)),
+                _ => {
+                    out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::CheckSome, args: vec![has] }, span });
+                    Expr::Field(Box::new(v), 1, inner)
+                }
+            };
         }
         // `xs.sort()` of tuples: the helper function sorts the array by the tuples themselves
         if name == "sort" && recv.ty.elem().is_some_and(Ty::is_tuple) {
@@ -1965,7 +2078,7 @@ impl<'a> Lower<'a> {
             return match name {
                 "len" => Expr::Pure(PureFn::MapLen, all),
                 "has" => Expr::Pure(PureFn::MapHas, all),
-                "get" if all.len() == 2 => self.map_read(RtOp::MapGet, all, v, span, out),
+                "get" if all.len() == 2 => self.map_get_option(all, v, e.ty, dst, span, out),
                 "get" => self.map_read(RtOp::MapGetOr, all, v, span, out),
                 "keys" => self.op(RtOp::MapKeys, all, e.ty, dst, span, out),
                 _ => self.op(RtOp::MapValues, all, e.ty, dst, span, out),
@@ -1982,6 +2095,27 @@ impl<'a> Lower<'a> {
             if matches!(name, "pad_left" | "pad_right") && args.len() == 1 {
                 all.push(Expr::Char(' ' as u32));
             }
+        }
+        // `s.to_int()`, `s.to_float()`: `Some(number)` when `int(s)` / `float(s)` would work
+        if recv.ty == Type::Str && matches!(name, "to_int" | "to_float") {
+            let float = name == "to_float";
+            let ok = self.temp(Ty::Bool);
+            let check = if float { StdFn::TextIsFloat } else { StdFn::TextIsInt };
+            out.push(Stmt { kind: StmtKind::Op { dst: Some(ok), op: RtOp::Std(check), args: vec![all[0].clone()] }, span });
+            let d = match dst {
+                Some(d) => d,
+                None => self.temp(e.ty),
+            };
+            let n = self.temp(if float { Ty::Float } else { Ty::Int });
+            let parse = if float { RtOp::StrToFloat } else { RtOp::StrToInt };
+            let zero = if float { Expr::Float(0.0) } else { Expr::Int(0) };
+            let then = vec![
+                Stmt { kind: StmtKind::Op { dst: Some(n), op: parse, args: vec![all[0].clone()] }, span },
+                Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(true), Expr::Local(n)] }, span },
+            ];
+            let els = vec![Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(false), zero] }, span }];
+            out.push(Stmt { kind: StmtKind::If { cond: Expr::Local(ok), then, els }, span });
+            return Expr::Local(d);
         }
         let pure = |f: PureFn| Some(f);
         let p = match (recv.ty, name) {

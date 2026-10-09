@@ -1,0 +1,9 @@
+// expect: E0224
+struct P {
+    x: int
+}
+
+fn main() {
+    let p: P? = P(x: 1)
+    print(p.x)
+}

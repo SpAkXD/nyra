@@ -208,7 +208,16 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let body = if parts.is_empty() { String::new() } else { format!(" + {}", parts.join(" + \", \" + ")) };
         let head = if s.tuple { "(".to_string() } else { format!("{}(", s.name) };
-        let _ = writeln!(out, "    ny_fmt() {{ return \"{head}\"{body} + \")\"; }}");
+        if s.option {
+            let (has, val) = (&fields[0], &fields[1]);
+            let _ = writeln!(
+                out,
+                "    ny_fmt() {{ return this.{has} ? \"Some(\" + ny_fmt(this.{val}, \"{}\") + \")\" : \"none\"; }}",
+                tdesc(s.fields[1].1)
+            );
+        } else {
+            let _ = writeln!(out, "    ny_fmt() {{ return \"{head}\"{body} + \")\"; }}");
+        }
         out.push_str("}\n");
     }
     if !m.structs.0.is_empty() {
@@ -576,6 +585,7 @@ impl Gen<'_> {
             RtOp::StrChars | RtOp::StrCodes => format!("ny_chars({})", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", a[0], a[1], a[2]),

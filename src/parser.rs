@@ -218,6 +218,10 @@ impl Parser {
                 Some("Nyra has no block comments: start every comment line with `//`".into())
             }
             Tok::LBrace => self.struct_literal_hint(),
+            Tok::Question => Some(
+                "`?` goes right after a type to make it optional (`int?`); Nyra has no `c ? a : b`: write `if cond { a } else { b }`".into(),
+            ),
+            Tok::Coalesce => Some("`??` needs a value on both sides: `x ?? default`".into()),
             _ => None,
         }
     }
@@ -797,7 +801,17 @@ impl Parser {
         self.same_depth(|p| p.ty_inner(hint))
     }
 
+    /// A type, then any number of `?`: `int?` is an optional `int`.
     fn ty_inner(&mut self, hint: &str) -> PResult<Type> {
+        let mut t = self.ty_base(hint)?;
+        while self.at(&Tok::Question) {
+            self.bump();
+            t = Type::option(t);
+        }
+        Ok(t)
+    }
+
+    fn ty_base(&mut self, hint: &str) -> PResult<Type> {
         let span = self.span();
         if self.at(&Tok::LParen) {
             // `(int, str)`: a tuple type
@@ -1437,14 +1451,37 @@ impl Parser {
     }
 
     fn if_stmt(&mut self) -> PResult<Stmt> {
-        self.same_depth(|p| p.if_chain())
+        let mut stmts = self.same_depth(|p| p.if_chain())?;
+        let first = stmts.remove(0);
+        self.queue.append(&mut stmts);
+        Ok(first)
     }
 
     /// `if`, and each `else if` one level deeper (the rest of the chain is inside the `else`).
-    fn if_chain(&mut self) -> PResult<Stmt> {
+    /// `if let v = opt { ... }` is a hidden `let` of `opt`, then an `if` on whether it holds a
+    /// value, whose block starts with `let v = <the value>`: the hidden `let` comes first.
+    fn if_chain(&mut self) -> PResult<Vec<Stmt>> {
         let span = self.expect(Tok::If, "`if`")?;
-        let cond = self.expr()?;
-        let then = self.block("if")?;
+        let mut stmts = Vec::new();
+        let mut bound = None;
+        let cond = if self.at(&Tok::Let) {
+            self.bump();
+            let hint = "`if let v = expr {`: the name takes the value when there is one";
+            let (name, nspan) = self.ident("a name for the value", hint)?;
+            self.expect(Tok::Assign, "`=`").map_err(|d| d.or_hint(hint))?;
+            let value = self.expr()?;
+            let tmp = self.hidden_name().replace('t', "o");
+            stmts.push(Stmt { kind: StmtKind::Let { name: tmp.clone(), mutable: false, ty: None, value }, span });
+            bound = Some((name, nspan, tmp.clone()));
+            Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp), span)), "has".to_string()), span)
+        } else {
+            self.expr()?
+        };
+        let mut then = self.block("if")?;
+        if let Some((name, nspan, tmp)) = bound {
+            let value = Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp), span)), "val".to_string()), span);
+            then.insert(0, Stmt { kind: StmtKind::Let { name, mutable: false, ty: None, value }, span: nspan });
+        }
         // `else` may sit on the line after the closing `}`.
         let save = self.pos;
         self.skip_newlines();
@@ -1452,7 +1489,7 @@ impl Parser {
             self.bump();
             if self.at(&Tok::If) {
                 self.deeper()?;
-                Some(vec![self.if_chain()?])
+                Some(self.if_chain()?)
             } else {
                 Some(self.block("else")?)
             }
@@ -1460,7 +1497,8 @@ impl Parser {
             self.pos = save;
             None
         };
-        Ok(Stmt { kind: StmtKind::If { cond, then, els }, span })
+        stmts.push(Stmt { kind: StmtKind::If { cond, then, els }, span });
+        Ok(stmts)
     }
 
     // ---- expressions -----------------------------------------------------
@@ -1500,6 +1538,15 @@ impl Parser {
                     p.skip_newlines();
                     let rhs = p.binary(5)?;
                     lhs = Expr::new(ExprKind::In(Box::new(lhs), Box::new(rhs)), span);
+                    continue;
+                }
+                // `a ?? b` ranks above the comparisons and below `+`; it groups to the right
+                if p.at(&Tok::Coalesce) && 5 >= min_prec {
+                    p.deeper()?;
+                    let span = p.bump().span;
+                    p.skip_newlines();
+                    let rhs = p.binary(5)?;
+                    lhs = Expr::new(ExprKind::Coalesce(Box::new(lhs), Box::new(rhs)), span);
                     continue;
                 }
                 let Some((op, prec)) = Self::binop(p.peek()) else { break };
@@ -1806,6 +1853,10 @@ impl Parser {
             Tok::False => {
                 self.bump();
                 ExprKind::Bool(false)
+            }
+            Tok::Ident(name) if name == "none" && !matches!(self.peek_at(1), Tok::LParen | Tok::FatArrow) => {
+                self.bump();
+                ExprKind::None
             }
             Tok::Ident(name) if matches!(self.peek_at(1), Tok::FatArrow) => {
                 self.bump();
