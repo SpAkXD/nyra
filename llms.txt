@@ -1,10 +1,12 @@
 # Nyra
 
-> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to native code (through C) or to JavaScript with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
+> Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to a native executable (through C), or to C, JavaScript, TypeScript, Python, Rust or Go source, with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
 
 Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there are no tuples and no modules of your own yet; maps are `[str: int]`, `["a": 1]`, `m[k]`, `m.get(k, 0)`; the standard library is imported with `use input`, `use os`, `use fs`, `use json`, `use time`, `use random`, `use math` and `use text`, and called as `math.sqrt(x)`). Read the AI guide before you write code.
 
-The ten most important rules for writing correct Nyra (v0.4):
+This file describes Nyra v0.5. Check the version you have with `nyra --version`: an older compiler lacks some of what is described here, and Nyra is pre-1.0, so the syntax may still change.
+
+The ten most important rules for writing correct Nyra (v0.5):
 
 1. A program is a script: its statements stand at the top level and run in order, so do not write `fn main()` (it is allowed, but costs tokens). `fn` and `struct` definitions may appear anywhere. The script's top-level `let`/`var` variables are visible in every function, which may change the `var`s (`var pos = 0` then `fn advance() { pos += 1 }`): no need to pass them as parameters. Declare them before the first call that uses them.
 2. No semicolons. One statement per line. Braces are required and `{` stays on the same line as `fn`, `if`, `else`, `while` and `for`. Comments are `// ...`.

@@ -2369,7 +2369,11 @@ impl Checker {
                                 format!("`inout` arguments must be different variables: `{root}` is passed twice (also at column {})", first.col),
                                 a.span,
                             )
-                            .hint("change one of them through a temporary: copy into a `var`, call, then assign back"),
+                            .hint(if matches!(place.kind, ExprKind::Index(..)) {
+                                format!("two elements of one array: to exchange them write `{root}.swap(i, j)`; else change one through a temporary (copy into a `var`, call, then assign back)")
+                            } else {
+                                "change one of them through a temporary: copy into a `var`, call, then assign back".to_string()
+                            }),
                         );
                     } else {
                         if let Some(g) = self.global_ref(&root) {

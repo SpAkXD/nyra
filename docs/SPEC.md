@@ -1,4 +1,4 @@
-# Nyra v0.4 — language spec
+# Nyra v0.5 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
 context and the agent can write Nyra. For common mistakes and complete examples, see
@@ -23,7 +23,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | type | values |
 |---|---|
 | `int` | 64-bit signed: `42`, `-7`; overflow stops the program (E0255), it never wraps |
-| `float` | 64-bit: `2.5`, `3.0` (always a dot with digits on both sides) |
+| `float` | 64-bit: `2.5`, `3.0` (always a dot with digits on both sides; no exponent: `5e-324` is an error, `float("5e-324")` works) |
 | `bool` | `true`, `false` |
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \0 \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
@@ -164,7 +164,7 @@ print('7'.code() - '0'.code())    // 7: a digit's value
 | `s.split(sep)` | `[str]`: `"a,b,,c".split(",")` is `["a", "b", "", "c"]` |
 | `s.replace(old, new)` · `s.repeat(n)` | every `old` replaced · `n` copies |
 | `s.trim()` | without leading and trailing spaces, tabs and newlines |
-| `s.upper()` `s.lower()` · `s.chars()` · `s.codes()` | ASCII case · `[char]` · `[int]` |
+| `s.upper()` `s.lower()` · `s.chars()` · `s.codes()` | ASCII case only (`"é".upper()` is `"é"`) · `[char]` · `[int]` |
 | `c.code()` · `c.upper()` `c.lower()` | `int` · `char` (ASCII) |
 | `c.is_digit()` `c.is_letter()` `c.is_upper()` `c.is_lower()` `c.is_space()` | `bool` (ASCII only) |
 
@@ -269,7 +269,8 @@ var y = 2
 swap(inout x, inout y)                // x is 2, y is 1
 ```
 The argument is a `var`, an `inout` parameter, or a field or element of one (`inout p.x`,
-`inout xs[i]`). Two `inout` arguments of one call must be different variables.
+`inout xs[i]`). Two `inout` arguments of one call must be different variables, so
+`swap(inout xs[i], inout xs[j])` is an error (E0237): exchange two elements with `xs.swap(i, j)`.
 
 ## Memory
 Memory is freed automatically: reference counting, no garbage collector. Three statements say

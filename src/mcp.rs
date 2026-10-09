@@ -43,7 +43,7 @@ const TOOLS: &str = r#"[
 {"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
-{"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code with its title.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
 
@@ -456,7 +456,7 @@ fn read_resource(uri: &str) -> Option<(&'static str, String)> {
     match uri {
         "nyra://spec" => Some(("text/markdown", SPEC.to_string())),
         "nyra://guide" => Some(("text/markdown", GUIDE.to_string())),
-        "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?))),
+        "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?, false))),
         _ => {
             let code = explain::normalize(uri.strip_prefix("nyra://errors/")?);
             let all = explain::database().ok()?;
@@ -537,7 +537,8 @@ fn build(args: &Json) -> Result<String, String> {
 fn explain_tool(args: &Json) -> Result<String, String> {
     let all = explain::database().map_err(tool_error)?;
     let Some(arg) = optional_str(args, "code")? else {
-        return Ok(explain::list_json(&all));
+        let planned = matches!(args.get("planned"), Some(Json::Bool(true)));
+        return Ok(explain::list_json(&all, planned));
     };
     let code = explain::normalize(arg);
     match all.iter().find(|e| e.code == code) {

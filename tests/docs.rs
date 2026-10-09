@@ -1,4 +1,5 @@
-//! Keeps the docs honest: every Nyra code block in them must type-check.
+//! Keeps the docs honest: every Nyra code block in them must type-check, and run without a
+//! runtime error (on JavaScript when Node.js is installed, else natively when a C compiler is).
 //!
 //! - `README.md` and `docs/AI_GUIDE.md` mark Nyra blocks `rust` (GitHub has no Nyra grammar, so
 //!   Rust highlighting is borrowed).
@@ -9,7 +10,7 @@
 //! order and whose top-level variables the functions can use. A block of definitions alone gets an
 //! empty `fn main()`.
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// The contents of every fenced block marked `lang` in a markdown file.
 fn blocks(markdown: &str, lang: &str) -> Vec<String> {
@@ -76,6 +77,14 @@ g()
 fn nyra_code_blocks_in_the_docs_compile() {
     let dir = std::env::temp_dir().join("nyra-docs-test");
     std::fs::create_dir_all(&dir).unwrap();
+    let works = |cmd: &str| Command::new(cmd).arg("--version").output().is_ok();
+    let backend: Option<&[&str]> = if works("node") {
+        Some(&["--js"])
+    } else if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| works(c)) {
+        Some(&[])
+    } else {
+        None
+    };
 
     for (file, lang) in [("README.md", "rust"), ("docs/AI_GUIDE.md", "rust"), ("docs/SPEC.md", "nyra")] {
         let markdown = std::fs::read_to_string(file).unwrap();
@@ -94,6 +103,24 @@ fn nyra_code_blocks_in_the_docs_compile() {
                 i + 1,
                 String::from_utf8_lossy(&out.stdout)
             );
+
+            // ... and runs, in a folder of its own (it may write files), without arguments or input
+            let Some(flags) = backend else { continue };
+            let run_dir = dir.join(format!("run-{}-{}", file.replace(['/', '.'], "_"), i + 1));
+            let _ = std::fs::remove_dir_all(&run_dir);
+            std::fs::create_dir_all(&run_dir).unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_nyra"))
+                .current_dir(&run_dir)
+                .arg("run")
+                .arg(&path)
+                .args(flags)
+                .stdin(Stdio::null())
+                .output()
+                .unwrap();
+            let _ = std::fs::remove_dir_all(&run_dir);
+            // a program may end itself with `os.exit(n)` (a usage message without arguments)
+            let ok = out.status.success() || (source.contains("os.exit(") && out.status.code() != Some(101));
+            assert!(ok, "{file}: code block {} fails when it runs\n{source}\n{}", i + 1, String::from_utf8_lossy(&out.stderr));
         }
     }
 

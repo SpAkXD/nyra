@@ -302,13 +302,16 @@ Symmetric by construction:
 
 Known asymmetries (they are part of the question, but you should know them):
 
-- Nyra is given its spec (about 1,300 tokens of extra input on every call); the other languages are not, and have
+- Nyra is given its spec on every call: the system prompt `run.py` sends is about 20,800 characters for Nyra
+  (`docs/SPEC.md` is about 20 KB) against about 360 for Python, so roughly 20,500 characters, an estimated 5,500
+  tokens, of extra input per call (the exact counts are the provider's, in each run's results). The other
+  languages are not given a spec, and have
   years of pre-training behind them. That is the situation of any new language; the headline answers "how well does a
   model do with this spec", not "how good is Nyra in the abstract".
 - Python and TypeScript have large standard libraries and Nyra has almost none yet. Where a library call would
   trivialize a task (`gcd`, `pow(a, b, m)`, `sorted`), the prompt asks for the algorithm to be written out. Nothing
   checks that request (only the output is compared), so a program that uses the library call anyway passes and is
-  shorter. Some tasks are still shorter in Python for that reason; Nyra's own standard library (v0.6) will change this.
+  shorter. Some tasks are still shorter in Python for that reason; Nyra's standard library (v0.5) narrows this.
   In the hard tier the prompts forbid nothing, so the libraries help where they apply: Python's `fractions` for
   `fraction_total`, sorting with a key function for `league_table` and `word_frequency`, dictionaries everywhere
   (Nyra has no map type and models it as an array of structs).

@@ -28,7 +28,7 @@ usage:
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
-  nyra explain [CODE]       explain an error code (without CODE: list all codes)
+  nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
   nyra outline <file.nyra>  list the functions and structs with their lines
   nyra show <file.nyra> <name>    print one function, struct or Struct.field

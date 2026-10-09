@@ -6,7 +6,8 @@ causes, a wrong program that produces the code and a fixed one. Read an entry wi
 ```
 nyra explain E0201            # the entry, for humans
 nyra explain E0201 --json     # the same entry as JSON, for tools and AI agents
-nyra explain                  # every code with its title
+nyra explain                  # every code the compiler reports, with its title
+nyra explain --planned        # the same, with the planned codes of future designs
 ```
 
 Errors from `nyra check file.nyra --json` carry the code (`"code":"E0201"`) and a `hint` that usually contains the
