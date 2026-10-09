@@ -1219,12 +1219,8 @@ pub fn outline_text(text: &str, file: &str) -> String {
         out += &format!("{} {}{}\n", range(lines.line(i.start), lines.line(i.end)), i.sig, needs(&eff[k]));
     }
     if !o.script.is_empty() {
-        out += &format!(
-            "{} script ({} statements){}\n",
-            script_ranges(&o, &lines).join(","),
-            o.script.len(),
-            needs(&eff[o.items.len()])
-        );
+        out +=
+            &format!("{} script ({} statements){}\n", script_ranges(&o, &lines).join(","), o.script.len(), needs(&eff[o.items.len()]));
     }
     out
 }

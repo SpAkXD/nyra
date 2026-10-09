@@ -614,11 +614,8 @@ fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Resul
     let module = sandbox::module(&prog).map_err(tool_error)?;
     let compile_ms = ms(start.elapsed());
     let report = sandbox::run(&module, cfg);
-    let mut fields = vec![
-        ("ok", Json::from(report.exit == 0)),
-        ("exit", Json::from(report.exit as i64)),
-        ("stdout", report.stdout.clone().into()),
-    ];
+    let mut fields =
+        vec![("ok", Json::from(report.exit == 0)), ("exit", Json::from(report.exit as i64)), ("stdout", report.stdout.clone().into())];
     if let Some(what) = &report.internal {
         fields.push(("stderr", format!("internal error in the interpreter: {what}").into()));
     }

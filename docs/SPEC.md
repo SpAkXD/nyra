@@ -348,6 +348,9 @@ the module, the capability and the flag to add, and nothing runs. Which capabili
 | `nyra run f.nyra --sandbox` | nothing, plus what `--allow` names |
 | MCP `nyra_run` | `input`, plus the tool's `allow` list |
 
+Granting `os` also shows the program the environment variables of the process, and `fs` every file the
+process can reach (in the sandbox: every file below the working folder): grant only what a task needs.
+
 `nyra outline --json` lists what each function needs, also through the functions it calls: each function
 and the script have `"effects": ["fs", "input"]` (the capabilities, sorted; `[]` for a pure function), and
 `"capabilities"` at the top is what the whole program needs, which is the `--allow` list that runs it.
@@ -402,6 +405,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |
 | E0345 | `json.parse`: not JSON, or not the shape of the type: `expected an int at $.items[0].count` |
+| E0355-E0359 | `--interp` / `--sandbox` only: a limit of the interpreter was reached (steps, memory, output, call depth, time); exit codes 120 to 124, see Capabilities and the sandbox |
 
 ## Known differences between backends
 The targets are native (C), `--js`, `--py`, `--ts`, `--rs` and `--go`; everything else, runtime errors
@@ -417,3 +421,6 @@ included, is the same on each.
   ends and may lose output it has not written yet; `--go` grows its stack to 1 GB.
 - When the system itself runs out of memory (not a `repeat` that is too long, which is E0249
   everywhere), only native and `--js`/`--ts` report E0249; `--py` does too, without a position.
+- The interpreter (`--interp`, `--sandbox`) prints what the native target prints, ints included (no E0256),
+  with these differences: `time.sleep_ms` does not wait (a virtual clock), a recursion that is too deep is
+  E0358 instead of a crash, and the sandbox confines file paths to the working folder.

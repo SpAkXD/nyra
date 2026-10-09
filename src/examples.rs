@@ -125,7 +125,17 @@ pub fn run(prog: &mut Program) -> Outcome {
             kind => {
                 let e = Expr { kind, span: op_span, ty };
                 let call = call_of(&e, &prog.funcs);
-                plans.push(Plan { text, span, suspect, builtins_only, cmp: None, right_literal: false, call, func, forall: forall.clone() });
+                plans.push(Plan {
+                    text,
+                    span,
+                    suspect,
+                    builtins_only,
+                    cmp: None,
+                    right_literal: false,
+                    call,
+                    func,
+                    forall: forall.clone(),
+                });
                 split.push(None);
                 prog.funcs.push(synthetic(format!("ex#{i}"), e, Type::Bool, span, &forall));
             }

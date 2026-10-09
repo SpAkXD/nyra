@@ -64,13 +64,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Config {
         Config {
-            limits: Limits {
-                steps: DEFAULT_FUEL,
-                depth: DEFAULT_DEPTH,
-                memory: DEFAULT_MEMORY,
-                output: DEFAULT_OUTPUT,
-                wall_ms: 0,
-            },
+            limits: Limits { steps: DEFAULT_FUEL, depth: DEFAULT_DEPTH, memory: DEFAULT_MEMORY, output: DEFAULT_OUTPUT, wall_ms: 0 },
             args: Vec::new(),
             stdin: None,
             confined: false,

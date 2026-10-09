@@ -109,14 +109,20 @@ pub fn enforce(prog: &Program, grant: &Grant, flag: impl Fn(&str) -> String) -> 
         seen.push(&u.module);
         let what = CAPABILITIES.iter().find(|(c, _)| *c == cap).map_or("", |(_, w)| *w);
         let granted = grant.names();
-        let now = if granted.is_empty() { "this run grants none".to_string() } else { format!("this run grants {}", granted.join(", ")) };
+        let now =
+            if granted.is_empty() { "this run grants none".to_string() } else { format!("this run grants {}", granted.join(", ")) };
         errs.push(
             Diag::new(
                 "E0290",
                 format!("module `{}` needs the capability `{cap}` ({what}), which is not granted: {now}", u.module),
                 u.span,
             )
-            .hint(format!("{}, or remove `use {}` and the code that calls it; the capabilities are {}", flag(cap), u.module, list())),
+            .hint(format!(
+                "{}, or remove `use {}` and the code that calls it; the capabilities are {}",
+                flag(cap),
+                u.module,
+                list()
+            )),
         );
     }
     errs

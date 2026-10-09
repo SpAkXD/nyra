@@ -86,9 +86,8 @@ fn in_parallel(items: Vec<PathBuf>, check: impl Fn(&PathBuf) -> Option<String> +
 /// One example in the interpreter: `None` when it behaves like the compiled programs.
 fn example_in(path: &PathBuf, flags: &[&str]) -> Option<String> {
     let expected = std::fs::read_to_string(path.with_extension("out")).ok()?.replace("\r\n", "\n");
-    let args: Vec<String> = std::fs::read_to_string(path.with_extension("args"))
-        .map(|a| a.lines().map(String::from).collect())
-        .unwrap_or_default();
+    let args: Vec<String> =
+        std::fs::read_to_string(path.with_extension("args")).map(|a| a.lines().map(String::from).collect()).unwrap_or_default();
     let stdin = std::fs::read(path.with_extension("in")).unwrap_or_default();
     let want_exit = std::fs::read_to_string(path.with_extension("exit")).map_or(0, |e| e.trim().parse::<i32>().unwrap());
     let dir = fresh(&path.file_stem().unwrap().to_string_lossy());
@@ -134,6 +133,9 @@ fn the_interpreter_reports_runtime_errors_like_the_compiled_programs() {
         let dir = fresh(&path.file_stem().unwrap().to_string_lossy());
         let file = std::fs::canonicalize(path).unwrap();
         let out = run(&dir, &file, &["--interp"], &[], &stdin);
+        let _ = std::fs::remove_dir_all(&dir);
+        // (a folder of its own: the program may create files)
+        let dir = fresh(&path.file_stem().unwrap().to_string_lossy());
         let json = run(&dir, &file, &["--interp", "--json"], &[], &stdin);
         let _ = std::fs::remove_dir_all(&dir);
         let (err, label) = (stderr(&out), path.display());
@@ -147,7 +149,10 @@ fn the_interpreter_reports_runtime_errors_like_the_compiled_programs() {
             return Some(format!("{label}: stdout was\n{}", stdout(&out)));
         }
         let j = stderr(&json);
-        if !(j.contains(&format!("\"code\":\"{code}\"")) && j.contains("\"runtime\":true") && j.contains(&format!("\"line\":{}", at.split(':').next().unwrap()))) {
+        if !(j.contains(&format!("\"code\":\"{code}\""))
+            && j.contains("\"runtime\":true")
+            && j.contains(&format!("\"line\":{}", at.split(':').next().unwrap())))
+        {
             return Some(format!("{label} --json: {j}"));
         }
         None
@@ -198,7 +203,11 @@ fn a_limit_flag_runs_the_program_in_the_interpreter() {
     // no --interp: --fuel implies it
     let out = run(&dir, &file, &["--fuel", "5000"], &[], b"");
     assert_eq!(out.status.code(), Some(120), "{}", stderr(&out));
-    assert!(stderr(&out).contains("runtime error[E0355]: step limit reached: the program ran more than 5000 steps"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("runtime error[E0355]: step limit reached: the program ran more than 5000 steps"),
+        "{}",
+        stderr(&out)
+    );
     // sizes: 4k, 1M ... ; bad values are usage errors
     let out = run(&dir, &file, &["--max-memory", "banana"], &[], b"");
     assert_eq!(out.status.code(), Some(2));
@@ -267,7 +276,12 @@ fn check(dir: &Path, file: &Path, flags: &[&str]) -> (i32, Json) {
 }
 
 fn codes(json: &Json) -> Vec<String> {
-    json.get("errors").and_then(|e| e.as_array()).unwrap().iter().map(|e| e.get("code").and_then(Json::as_str).unwrap().to_string()).collect()
+    json.get("errors")
+        .and_then(|e| e.as_array())
+        .unwrap()
+        .iter()
+        .map(|e| e.get("code").and_then(Json::as_str).unwrap().to_string())
+        .collect()
 }
 
 #[test]
@@ -297,7 +311,13 @@ fn a_run_without_the_capability_cannot_use_the_module() {
     assert_eq!(codes(&json), ["E0290"]);
     let message = json.get("errors").and_then(|e| e.as_array()).unwrap()[0].get("message").and_then(Json::as_str).unwrap().to_string();
     assert!(message.contains("module `os`") && message.contains("this run grants fs"), "{message}");
-    for flags in [&["--allow", "fs,os"][..], &["--allow", "fs", "--allow", "os"], &["--allow=fs,os"], &["--sandbox", "--allow", "all"], &["--allow", "all"]] {
+    for flags in [
+        &["--allow", "fs,os"][..],
+        &["--allow", "fs", "--allow", "os"],
+        &["--allow=fs,os"],
+        &["--sandbox", "--allow", "all"],
+        &["--allow", "all"],
+    ] {
         let (code, json) = check(&dir, &file, flags);
         assert_eq!((code, codes(&json)), (0, Vec::<String>::new()), "{flags:?}");
     }
@@ -309,7 +329,11 @@ fn a_run_without_the_capability_cannot_use_the_module() {
 
     // pure modules need nothing
     let pure = dir.join("pure.nyra");
-    std::fs::write(&pure, "use math\nuse text\nuse json\nuse time\nuse random\nfn main() {\n    print(text.fixed(math.sqrt(2.0), 2))\n}\n").unwrap();
+    std::fs::write(
+        &pure,
+        "use math\nuse text\nuse json\nuse time\nuse random\nfn main() {\n    print(text.fixed(math.sqrt(2.0), 2))\n}\n",
+    )
+    .unwrap();
     let (code, _) = check(&dir, &pure, &["--sandbox"]);
     assert_eq!(code, 0);
 
@@ -467,7 +491,8 @@ fn main() {
 
     // a runtime error for one input is E0251 and says which
     let boom = dir.join("boom.nyra");
-    std::fs::write(&boom, "fn inv(n: int) -> int = 100 / n\nex for n in -3..4: inv(n) != 0\n\nfn main() {\n    print(inv(4))\n}\n").unwrap();
+    std::fs::write(&boom, "fn inv(n: int) -> int = 100 / n\nex for n in -3..4: inv(n) != 0\n\nfn main() {\n    print(inv(4))\n}\n")
+        .unwrap();
     let out = nyra().current_dir(&dir).args(["check", "--json"]).arg(&boom).output().unwrap();
     let json = Json::parse(stdout(&out).trim()).unwrap();
     let e = &json.get("errors").and_then(Json::as_array).unwrap()[0];

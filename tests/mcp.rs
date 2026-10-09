@@ -433,7 +433,10 @@ fn capabilities_and_the_sandbox() {
     assert_eq!(oob.get("exit").and_then(Json::as_u64), Some(101));
     assert_eq!(oob.get("stdout").and_then(Json::as_str), Some("before\n"));
     assert_eq!(oob.get("errors").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str), Some("E0240"));
-    assert_eq!(tool_json(&replies, 14).1.get("errors").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str), Some("E0201"));
+    assert_eq!(
+        tool_json(&replies, 14).1.get("errors").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str),
+        Some("E0201")
+    );
     let (is_error, zero) = tool_json(&replies, 15);
     assert!(is_error, "{zero:?}");
 

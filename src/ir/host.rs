@@ -500,9 +500,8 @@ fn list_dir(dir: &str, span: Span) -> Result<Vec<String>, Stop> {
 }
 
 fn in_text(b: Vec<u8>, what: &str, span: Span) -> Result<String, Stop> {
-    String::from_utf8(b).map_err(|_| {
-        fail("E0341", format!("{what}: the input is not valid UTF-8"), "standard input must be UTF-8 text", span)
-    })
+    String::from_utf8(b)
+        .map_err(|_| fail("E0341", format!("{what}: the input is not valid UTF-8"), "standard input must be UTF-8 text", span))
 }
 
 /// The lines of a text: each without its `\n` (and a `\r` before it); no last empty line.
@@ -525,9 +524,9 @@ fn getenv(name: &str, span: Span) -> Result<Option<String>, Stop> {
         return Ok(None);
     }
     let Some(v) = std::env::var_os(name) else { return Ok(None) };
-    v.into_string().map(Some).map_err(|_| {
-        fail("E0341", "os.env: the value is not valid UTF-8".into(), "environment variables must be UTF-8 text", span)
-    })
+    v.into_string()
+        .map(Some)
+        .map_err(|_| fail("E0341", "os.env: the value is not valid UTF-8".into(), "environment variables must be UTF-8 text", span))
 }
 
 fn is_float(s: &str) -> bool {

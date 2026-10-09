@@ -481,7 +481,7 @@ impl<'m> Interp<'m> {
         let m = self.m;
         match &s.kind {
             StmtKind::Set(l, e) => {
-                let v = eval(m, &self.strs, locals, e)?;
+                let v = eval(&self.strs, locals, e)?;
                 locals[l.0 as usize] = v;
             }
             StmtKind::Call { dst, func, args } => {
@@ -490,9 +490,9 @@ impl<'m> Interp<'m> {
                 let mut places = Vec::new();
                 for (k, a) in args.iter().enumerate() {
                     match a {
-                        Arg::Val(e) => vals.push(eval(m, &self.strs, locals, e)?),
+                        Arg::Val(e) => vals.push(eval(&self.strs, locals, e)?),
                         Arg::InOut(p) => {
-                            let path = resolve(m, &self.strs, locals, p)?;
+                            let path = resolve(&self.strs, locals, p)?;
                             vals.push(self.place(locals, p.root.0 as usize, &path)?.clone());
                             places.push((k, p.root.0 as usize, path));
                         }
@@ -508,16 +508,36 @@ impl<'m> Interp<'m> {
                 }
             }
             StmtKind::Op { dst, op, args } => {
+                // the arithmetic that loops are made of, without the general machinery; a result
+                // that is an error (overflow, a zero divisor) is made by the general path below
+                if let (RtOp::AddInt | RtOp::SubInt | RtOp::MulInt | RtOp::DivInt | RtOp::RemInt, [a, b], Some(d)) =
+                    (*op, args.as_slice(), dst)
+                {
+                    if let (Value::Int(x), Value::Int(y)) = (eval(&self.strs, locals, a)?, eval(&self.strs, locals, b)?) {
+                        let r = match op {
+                            RtOp::AddInt => x.checked_add(y),
+                            RtOp::SubInt => x.checked_sub(y),
+                            RtOp::MulInt => x.checked_mul(y),
+                            RtOp::DivInt if y != 0 => x.checked_div(y),
+                            RtOp::RemInt if y != 0 => Some(x.wrapping_rem(y)),
+                            _ => None,
+                        };
+                        if let Some(r) = r {
+                            locals[d.0 as usize] = Value::Int(r);
+                            return Ok(Flow::Normal);
+                        }
+                    }
+                }
                 let ty = dst.map(|d| f.local(d).ty);
                 // (most operations have few operands: they go in a buffer on the stack)
                 let r = if args.len() <= 4 {
                     let mut buf = [Value::Unset, Value::Unset, Value::Unset, Value::Unset];
                     for (k, a) in args.iter().enumerate() {
-                        buf[k] = eval(m, &self.strs, locals, a)?;
+                        buf[k] = eval(&self.strs, locals, a)?;
                     }
                     self.op(*op, &buf[..args.len()], ty, s.span)?
                 } else {
-                    let vals = args.iter().map(|a| eval(m, &self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
+                    let vals = args.iter().map(|a| eval(&self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
                     self.op(*op, &vals, ty, s.span)?
                 };
                 if let (Some(v), Some(d)) = (r, dst) {
@@ -525,20 +545,20 @@ impl<'m> Interp<'m> {
                 }
             }
             StmtKind::Store { place, value } => {
-                let v = eval(m, &self.strs, locals, value)?;
-                let path = resolve(m, &self.strs, locals, place)?;
+                let v = eval(&self.strs, locals, value)?;
+                let path = resolve(&self.strs, locals, place)?;
                 *self.place(locals, place.root.0 as usize, &path)? = v;
             }
             StmtKind::Mutate { dst, op, place, args } => {
-                let vals = args.iter().map(|a| eval(m, &self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
-                let path = resolve(m, &self.strs, locals, place)?;
+                let vals = args.iter().map(|a| eval(&self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
+                let path = resolve(&self.strs, locals, place)?;
                 let r = self.mutate(locals, place.root.0 as usize, &path, *op, vals, s.span)?;
                 if let (Some(d), Some(v)) = (dst, r) {
                     locals[d.0 as usize] = v;
                 }
             }
             StmtKind::If { cond, then, els } => {
-                let branch = if truth(&eval(m, &self.strs, locals, cond)?)? { then } else { els };
+                let branch = if truth(&eval(&self.strs, locals, cond)?)? { then } else { els };
                 return self.block(f, locals, branch);
             }
             StmtKind::Loop { head, cond, body, step } => loop {
@@ -549,7 +569,7 @@ impl<'m> Interp<'m> {
                     Flow::Return(v) => return Ok(Flow::Return(v)),
                     Flow::Continue => return Err(bug("`continue` in the head of a loop")),
                 }
-                if !truth(&eval(m, &self.strs, locals, cond)?)? {
+                if !truth(&eval(&self.strs, locals, cond)?)? {
                     break;
                 }
                 match self.block(f, locals, body)? {
@@ -563,7 +583,7 @@ impl<'m> Interp<'m> {
             },
             StmtKind::ForEach { var, iter, body } => {
                 // the loop goes over the value as it was when it started
-                let items: Vec<Value> = match eval(m, &self.strs, locals, iter)? {
+                let items: Vec<Value> = match eval(&self.strs, locals, iter)? {
                     Value::Str(s) => s.chars().map(Value::Char).collect(),
                     Value::Arr(xs) => xs.iter().cloned().collect(),
                     _ => return Err(bug("`for` over a value that is not a string or an array")),
@@ -582,7 +602,7 @@ impl<'m> Interp<'m> {
             StmtKind::Continue => return Ok(Flow::Continue),
             StmtKind::Return(e) => {
                 let v = match e {
-                    Some(e) => Some(eval(m, &self.strs, locals, e)?),
+                    Some(e) => Some(eval(&self.strs, locals, e)?),
                     None => None,
                 };
                 return Ok(Flow::Return(v));
@@ -1091,11 +1111,11 @@ fn truth(v: &Value) -> Result<bool, Stop> {
 }
 
 /// The indexes of a place, computed (they are pure expressions).
-fn resolve(m: &Module, strs: &[Rc<String>], locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
+fn resolve(strs: &[Rc<String>], locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
     p.path
         .iter()
         .map(|s| match s {
-            Step::Index(e, span) => match eval(m, strs, locals, e)? {
+            Step::Index(e, span) => match eval(strs, locals, e)? {
                 Value::Int(i) => Ok(At::Index(i, *span)),
                 _ => Err(bug("an index that is not an int")),
             },
@@ -1105,7 +1125,7 @@ fn resolve(m: &Module, strs: &[Rc<String>], locals: &[Value], p: &Place) -> Resu
 }
 
 /// A pure expression. It cannot fail: only a malformed IR can make this an error.
-fn eval(m: &Module, strs: &[Rc<String>], locals: &[Value], e: &Expr) -> Result<Value, Stop> {
+fn eval(strs: &[Rc<String>], locals: &[Value], e: &Expr) -> Result<Value, Stop> {
     Ok(match e {
         Expr::Int(n) => Value::Int(*n),
         Expr::Float(x) => Value::Float(*x),
@@ -1116,30 +1136,30 @@ fn eval(m: &Module, strs: &[Rc<String>], locals: &[Value], e: &Expr) -> Result<V
             Some(Value::Unset) | None => return Err(bug("a local read before it has a value")),
             Some(v) => v.clone(),
         },
-        Expr::Unary(op, x) => match (op, eval(m, strs, locals, x)?) {
+        Expr::Unary(op, x) => match (op, eval(strs, locals, x)?) {
             (UnOp::INeg, Value::Int(n)) => Value::Int(n.wrapping_neg()),
             (UnOp::FNeg, Value::Float(x)) => Value::Float(-x),
             (UnOp::Not, Value::Bool(b)) => Value::Bool(!b),
             _ => return Err(bug("a unary operator on the wrong type")),
         },
-        Expr::Binary(op, a, b) => binary(*op, eval(m, strs, locals, a)?, eval(m, strs, locals, b)?)?,
+        Expr::Binary(op, a, b) => binary(*op, eval(strs, locals, a)?, eval(strs, locals, b)?)?,
         Expr::Select(c, a, b) => {
-            if truth(&eval(m, strs, locals, c)?)? {
-                eval(m, strs, locals, a)?
+            if truth(&eval(strs, locals, c)?)? {
+                eval(strs, locals, a)?
             } else {
-                eval(m, strs, locals, b)?
+                eval(strs, locals, b)?
             }
         }
-        Expr::IntToFloat(x) => match eval(m, strs, locals, x)? {
+        Expr::IntToFloat(x) => match eval(strs, locals, x)? {
             Value::Int(n) => Value::Float(n as f64),
             _ => return Err(bug("float() of a value that is not an int")),
         },
-        Expr::Field(x, k, _) => match eval(m, strs, locals, x)? {
+        Expr::Field(x, k, _) => match eval(strs, locals, x)? {
             Value::Struct(_, fields) => fields.get(*k as usize).cloned().ok_or_else(|| bug("a field that does not exist"))?,
             _ => return Err(bug("a field of a value that is not a struct")),
         },
         Expr::Pure(p, args) => {
-            let vals = args.iter().map(|a| eval(m, strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
+            let vals = args.iter().map(|a| eval(strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
             pure(*p, &vals)?
         }
     })
@@ -1210,6 +1230,12 @@ fn binary(op: BinOp, a: Value, b: Value) -> Result<Value, Stop> {
         (IAdd, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_add(*y)),
         (ISub, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_sub(*y)),
         (IMul, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_mul(*y)),
+        (ILt, Value::Int(x), Value::Int(y)) => Value::Bool(x < y),
+        (ILe, Value::Int(x), Value::Int(y)) => Value::Bool(x <= y),
+        (IGt, Value::Int(x), Value::Int(y)) => Value::Bool(x > y),
+        (IGe, Value::Int(x), Value::Int(y)) => Value::Bool(x >= y),
+        (IEq, Value::Int(x), Value::Int(y)) => Value::Bool(x == y),
+        (INe, Value::Int(x), Value::Int(y)) => Value::Bool(x != y),
         (IDiv, Value::Int(x), Value::Int(y)) if *y != 0 => Value::Int(x.wrapping_div(*y)),
         (IRem, Value::Int(x), Value::Int(y)) if *y != 0 => Value::Int(x.wrapping_rem(*y)),
         (FAdd, Value::Float(x), Value::Float(y)) => Value::Float(x + y),
@@ -1544,8 +1570,9 @@ mod tests {
                 continue;
             }
             let stdin = std::fs::read(path.with_extension("in")).unwrap_or_default();
-            let args: Vec<String> =
-                std::fs::read_to_string(path.with_extension("args")).map(|a| a.lines().map(String::from).collect()).unwrap_or_default();
+            let args: Vec<String> = std::fs::read_to_string(path.with_extension("args"))
+                .map(|a| a.lines().map(String::from).collect())
+                .unwrap_or_default();
             let want_exit = std::fs::read_to_string(path.with_extension("exit")).ok().map(|e| e.trim().parse::<i32>().unwrap());
             let ran = run_with(&src, &stdin, &args, Limits::new(2_000_000_000, 100_000));
             assert!(ran.err.is_none(), "{}: {:?}", path.display(), ran.err);
@@ -1629,10 +1656,7 @@ mod tests {
     fn maps_run_in_insertion_order() {
         let src = "fn main() {\n    var m = [\"b\": 1, \"a\": 2]\n    m[\"c\"] = 3\n    m.remove(\"b\")\n    m[\"b\"] = 9\n    print(m, m.len(), m.has(\"c\"), m.get(\"z\", -1), m == [\"c\": 3, \"a\": 2, \"b\": 9])\n    print(m.keys(), m.values())\n    for k in m { print(k, m[k]) }\n    let e: [int: str] = [:]\n    print(e, e.len())\n    print(m[\"nope\"])\n}\n";
         let ran = run_main(src);
-        assert_eq!(
-            ran.out,
-            "[\"a\": 2, \"c\": 3, \"b\": 9] 3 true -1 true\n[\"a\", \"c\", \"b\"] [2, 3, 9]\na 2\nc 3\nb 9\n[:] 0\n"
-        );
+        assert_eq!(ran.out, "[\"a\": 2, \"c\": 3, \"b\": 9] 3 true -1 true\n[\"a\", \"c\", \"b\"] [2, 3, 9]\na 2\nc 3\nb 9\n[:] 0\n");
         let e = ran.err.expect("a missing key stops the program");
         assert_eq!((e.code, e.msg.as_str()), ("E0248", "key \"nope\" is not in the map"));
     }
@@ -1656,7 +1680,8 @@ mod tests {
 
     #[test]
     fn sleeping_moves_a_virtual_clock_and_costs_steps() {
-        let src = "use time\nfn main() {\n    let t = time.mono_ms()\n    time.sleep_ms(5000)\n    print(time.mono_ms() - t >= 5000.0)\n}\n";
+        let src =
+            "use time\nfn main() {\n    let t = time.mono_ms()\n    time.sleep_ms(5000)\n    print(time.mono_ms() - t >= 5000.0)\n}\n";
         let started = std::time::Instant::now();
         let ran = run_main(src);
         assert_eq!(ran.out, "true\n");

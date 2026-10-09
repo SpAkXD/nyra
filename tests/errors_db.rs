@@ -169,11 +169,8 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
             // the limits of the interpreter (E0355 to E0359): the program asks for its flags, and
             // the exit code says which limit it was
             let own: Vec<&str> = wrong_flags.iter().map(String::as_str).collect();
-            let run_flags = if !own.is_empty() {
-                Some(own)
-            } else {
-                backend.filter(|f| !js_only || f.contains(&"--js")).map(|f| f.to_vec())
-            };
+            let run_flags =
+                if !own.is_empty() { Some(own) } else { backend.filter(|f| !js_only || f.contains(&"--js")).map(|f| f.to_vec()) };
             let want_exit = match code.as_str() {
                 "E0355" => 120,
                 "E0356" => 121,

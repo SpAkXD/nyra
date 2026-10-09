@@ -218,7 +218,10 @@ fn parse_args() -> Result<Opts, String> {
                 match a.as_str() {
                     "--fuel" => opts.fuel = Some(n),
                     "--max-depth" if n > sandbox::MAX_DEPTH as u64 => {
-                        return Err(format!("--max-depth is at most {} (deeper calls would overflow the stack of the interpreter)", sandbox::MAX_DEPTH));
+                        return Err(format!(
+                            "--max-depth is at most {} (deeper calls would overflow the stack of the interpreter)",
+                            sandbox::MAX_DEPTH
+                        ));
                     }
                     "--max-depth" => opts.max_depth = Some(n as usize),
                     _ => opts.max_time = Some(n),
@@ -434,7 +437,7 @@ fn test(opts: &Opts, src: &str, grant: &caps::Grant) -> ExitCode {
     let start = Instant::now();
     let front = |src: &str| {
         let prog = front(src)?;
-        let errs = caps::enforce(&prog, grant, &cli_flag);
+        let errs = caps::enforce(&prog, grant, cli_flag);
         if errs.is_empty() {
             Ok(prog)
         } else {
