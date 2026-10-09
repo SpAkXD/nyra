@@ -3,9 +3,14 @@
 </p>
 
 <p align="center">
-  <b>A small, strict programming language designed to be written by AI agents.</b><br>
-  Compact syntax, no ambiguity, and compiler errors an agent can read and fix by itself.<br>
-  One source file compiles to a native executable (via C), or to C, JavaScript, TypeScript, Python, Rust or Go source.
+  <b>The language agents can run unsupervised.</b><br>
+  Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare.<br>
+  A small, strict language designed to be written by AI agents. One source file compiles to a native executable (via C), or to C, JavaScript, TypeScript, Python, Rust or Go source.
+</p>
+
+<p align="center">
+  <sub>Speed and cost are measured: see <a href="#honest-numbers">Honest numbers</a>. The "touch nothing it didn't declare" part
+  (capabilities, deny by default) is <b>coming in v0.6</b>; until then a program has the rights of its process.</sub>
 </p>
 
 <p align="center">
@@ -15,6 +20,8 @@
 </p>
 
 <p align="center">
+  <a href="#why-nyra">Why Nyra</a> ·
+  <a href="#honest-numbers">Honest numbers</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#using-nyra-with-an-ai">Use it with an AI</a> ·
   <a href="#language-tour">Language tour</a> ·
@@ -56,8 +63,44 @@ Player(name: "grace", score: 47)
 
 ## Why Nyra
 
-Most languages are designed for people to read. Nyra is designed for an AI to **write**, and for the
-compiler to tell the AI exactly what to fix.
+An agent that writes code can now also run it, and that is where the trouble starts: either you trust
+generated code with your machine, or you start a VM or container for every call. Nyra is a language for
+that code-execution step.
+
+| | What you get | Status |
+|---|---|---|
+| **Safe to run** | A program can use only what it declares. Files, network and the like are capabilities, denied by default and checked by the compiler: `nyra run prog.nyra --allow fs`. No VM per call. | **Coming in v0.6** |
+| **Fast** | Native code through C. About 5-6 ms against about 300 ms for Python on the benchmark's speed tasks, and within about 1.2x of hand-written C on [`perf/`](perf). | Measured |
+| **Near Python in cost** | About 1.2-1.3x Python's code tokens, and shorter than Rust (Opus 475 vs 523, Sonnet 408 vs 523). Not cheaper than Python: see [Honest numbers](#honest-numbers). | Measured |
+| **Right on the first try** | On 83 tasks: Opus 98%, Sonnet 96%, Haiku 4.5 66% (Python: 78%). The compiler repairs the simple slips itself. | Measured |
+
+**Who it is for**
+
+- People building **agent harnesses** who need a code-execution tool without a VM per call.
+- Teams running **cheap models at volume**, where one-way-to-do-it syntax, strict types and
+  self-repairing errors turn a failed attempt into a cheap one.
+- **Evaluation builders** who need deterministic, replayable programs: the same output on every
+  backend, byte for byte.
+
+**What sets it apart.** None of these ideas is new alone; together, in a small language with published
+agent-success numbers, they are:
+
+- **Capabilities as compile errors** (v0.6). Using a power you did not declare is an ordinary
+  compile error with a code, a position and a hint, so the agent learns what it lacks in the check
+  step, and you see what a program can do before it runs. Until it ships, run code you do not trust
+  in a container or VM (see [MCP server](#mcp-server)).
+- **A compiler that repairs, with published numbers.** An error with exactly one possible repair
+  (`return` for `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries
+  a machine-applicable fix, and `--fix` applies them all: a slip costs no extra model call. How much
+  that helps is in the [benchmark](bench/published): Sonnet 96% to 100%, Haiku 66% to 67%.
+- **Examples as part of the type check.** `fn sq(x: int) -> int = x * x  ex sq(3) == 9`: every `ex`
+  condition is evaluated while the program compiles and never compiled into it, so a function that is
+  wrong for its own examples is a compile error that shows the value it really gave.
+
+More on who Nyra is for, what it claims and what it does not: [`docs/POSITIONING.md`](docs/POSITIONING.md).
+
+**A language a model can write.** Most languages are designed for people to read. Nyra is designed for
+an AI to *write*, and for the compiler to tell the AI exactly what to fix.
 
 - **Familiar tokens, tiny grammar.** It reads like Rust, Go and TypeScript, so a model half-knows it
   already, and the whole language fits in one prompt ([`docs/SPEC.md`](docs/SPEC.md)).
@@ -67,12 +110,6 @@ compiler to tell the AI exactly what to fix.
   makes them machine-readable, so an agent can loop *write, check, fix, run* without a human. Each message says
   what was expected and what was found, and `nyra explain E0201` explains any code with a wrong and a fixed
   program ([`docs/ERRORS.md`](docs/ERRORS.md)).
-- **Examples catch logic mistakes before anything runs.** `fn sq(x: int) -> int = x * x  ex sq(3) == 9`:
-  every `ex` condition is evaluated while the program compiles and never compiled into it, so a function
-  that is wrong for its own examples is a compile error that shows the value it really gave.
-- **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
-  `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
-  fix, and `--fix` applies them all: a slip costs no extra model call.
 - **Compact programs.** One-line functions, string interpolation, `if` as a value, lambdas and built-in
   methods on strings and arrays keep code short. [`bench/`](bench) measures first-try correctness and
   token count against Python, TypeScript and Rust.
@@ -84,6 +121,42 @@ compiler to tell the AI exactly what to fix.
   program stops with a runtime error (E0255 for a 64-bit overflow, which every backend reports;
   E0256 only on JavaScript) instead of printing a rounded number. Use the native, Rust, Go or Python
   target for such programs.
+
+## Honest numbers
+
+Measured on 2026-10-09 with Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5: 83 deterministic tasks, four
+languages, one sample per task. Full tables, per-category results and the failures are in
+[`bench/published/`](bench/published/2026-10-v0.5-anthropic.md).
+
+| First-try pass | Nyra | Python | TypeScript | Rust |
+|---|---|---|---|---|
+| Opus 5.5 | 98% | 100% | 100% | 100% |
+| Sonnet 5.5 | 96% | 99% | 98% | 99% |
+| Haiku 4.5 | 66% | 78% | 86% | 76% |
+
+| Code tokens of the first attempt | Nyra | Python | TypeScript | Rust |
+|---|---|---|---|---|
+| Opus 5.5 | 475 | 375 | 492 | 523 |
+| Sonnet 5.5 | 408 | 338 | 439 | 523 |
+| Haiku 4.5 | 638 | 519 | 638 | 665 |
+
+| Runtime on the speed tasks (median ms) | Nyra | Python | TypeScript | Rust |
+|---|---|---|---|---|
+| Opus 5.5 | 5.4 | 272 | 63 | 2.9 |
+| Sonnet 5.5 | 6.4 | 373 | 69 | 5.0 |
+| Haiku 4.5 | 32 | 573 | 73 | 10 |
+
+What the numbers do not say:
+
+- **Cost is near Python, not below it.** Nyra uses about 1.2-1.3x Python's code tokens, and more billed
+  output tokens (Opus 691 vs 433, thinking included). Its prompt carries the spec, and a run costs several
+  times Python's in this benchmark (Opus $0.062 vs $0.013). It is shorter than Rust in code tokens only.
+- **Speed is Rust's class, not Rust.** Rust was faster on the speed tasks for every model, and the programs
+  were written by the models, so they differ per language.
+- **Haiku 4.5 is not there.** 66% against Python's 78% on the first try, 82% against 93% within 3 repairs.
+- **The tasks are small** and were written by the people who build Nyra. Nyra gets its spec in the
+  prompt, and the other languages rely on what the model learned in training.
+- **Safety is not in this table.** Capabilities are not built yet, so nothing here measures them.
 
 ## Features
 
@@ -224,7 +297,7 @@ an error reply and the server keeps going. A program started by `nyra_run` is st
 timeout and gets at most 1 GiB of memory and a CPU-time budget (a Job Object on Windows, `setrlimit`
 on Linux and macOS; macOS does not enforce the memory limit). These limits protect the machine from
 a runaway program, but they are no sandbox: the program can read and write files and use the network
-like any process of yours. For code you do not trust, run `nyra mcp` inside a container or VM.
+like any process of yours. For code you do not trust, run `nyra mcp` inside a container or VM. Capabilities that deny a program everything it did not declare (`--allow fs`) are planned for v0.6; until they ship, a container or VM is the boundary.
 
 **Claude Code:**
 
@@ -447,7 +520,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC); the intermediate representation, the error database and `nyra explain` | done |
 | v0.4 | `--fix` self-repair, the `nyra mcp` server, Python, TypeScript, Rust and Go backends, scripts, `print(a, b)`, the benchmark harness and its hard tier | done |
 | v0.5 | lambdas and comprehensions, `ex` examples, `nyra outline`/`show`/`edit`, the standard library (`use math`, `fs`, `json`, ...), maps, script variables, native speed and compile-time evaluation, checked ints | in progress |
-| v0.6 | modules of your own, packages, C FFI | planned |
+| v0.6 | capabilities (`--allow fs`, deny by default), modules of your own, packages, C FFI | planned |
 | later | WASM backend and browser playground, published VS Code extension, docs site, 1.0 | planned |
 
 Nyra is pre-1.0: the syntax may still change between versions (see [CHANGELOG.md](CHANGELOG.md)).
