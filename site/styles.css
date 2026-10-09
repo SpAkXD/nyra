@@ -209,6 +209,8 @@ html.menu-open { overflow: hidden; }
 .hero h1 { max-width: 11.5em; }
 .hero h1 em { font-style: normal; }
 .hero h1 em .wi, .no-split.hero h1 em { background: linear-gradient(100deg, var(--teal) 10%, var(--mint) 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* gradient text paints only inside the box: extend it below the baseline so descenders (g, p, y) are not cut */
+.hero h1 em .wi, .no-split.hero h1 em { padding-bottom: .16em; margin-bottom: -.16em; }
 .hero .sub { margin-top: 22px; font-size: clamp(1.05rem, 2.6vw, 1.2rem); line-height: 1.6; color: var(--tx2); max-width: 34em; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 @media (max-width: 479px) { .hero .cta .btn { flex: 1 1 100%; } }
@@ -717,3 +719,16 @@ code.big { display: inline-block; font-size: 1.15rem; font-weight: 600; color: v
 @media (prefers-reduced-motion: reduce) and (min-width: 900px) { .space { grid-template-columns: 1fr 1fr; } .pc-out { grid-column: 1 / -1; } }
 .loop .ln.ok { stroke: rgba(98,246,181,.35); stroke-dasharray: 4 6; }
 .loop .okl { fill: var(--mint); }
+
+/* benchmark: three bars per language, one per model */
+.lane3 { grid-template-columns: 92px 1fr 92px; }
+.lane3 .q { font-size: 11px; color: #94A3B8; text-align: right; white-space: nowrap; }
+.trk3 { display: grid; gap: 3px; }
+.trk3 i { display: block; height: 5px; border-radius: 999px; width: var(--w); }
+.trk3 .m0, .legend3 .m0 { background: #0BD8B6; }
+.trk3 .m1, .legend3 .m1 { background: #60A5FA; }
+.trk3 .m2, .legend3 .m2 { background: #F59E0B; }
+.legend3 { display: inline-flex; align-items: center; gap: 6px; }
+.legend3 i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-left: 6px; }
+@media (min-width: 1000px) { .lane3 { grid-template-columns: 120px 1fr 110px; } }
+@media (max-width: 520px) { .lane3 { grid-template-columns: 70px 1fr 88px; gap: 8px; } .lane3 .q { font-size: 10px; } .legend3 { font-size: 10px; } }

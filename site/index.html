@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nyra · A programming language for AI agents</title>
-<meta name="description" content="Nyra is a small, strict programming language designed to be written by AI agents. Compiler errors an agent can read and fix by itself. One source file compiles to native code through C, or to JavaScript.">
+<meta name="description" content="Nyra is a small, strict programming language designed to be written by AI agents. Compiler errors an agent can read and fix by itself. One source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go.">
 <meta name="theme-color" content="#000714">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -75,7 +75,7 @@
   </nav>
   <div class="ms-foot" style="--k:8">
     <a class="btn btn-teal" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
-    <p>MIT license · Nyra v0.3</p>
+    <p>MIT license · Nyra v0.5</p>
   </div>
 </div>
 
@@ -86,9 +86,9 @@
   <canvas id="gl" aria-hidden="true"></canvas>
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="wrap hero-in" id="heroIn">
-    <a class="announce rv" href="#language"><span class="ping" aria-hidden="true"></span><b>v0.3</b><span>Real data: strings, arrays, structs</span><span class="arr" aria-hidden="true">→</span></a>
+    <a class="announce rv" href="#roadmap"><span class="ping" aria-hidden="true"></span><b>v0.5</b><span>Standard library, lambdas, near-C speed</span><span class="arr" aria-hidden="true">→</span></a>
     <h1 class="split rv" style="--d:1">A programming language built for <em>AI agents to write.</em></h1>
-    <p class="sub rv" style="--d:2">Small and strict, with errors that tell an agent exactly what to write. One source file compiles to native code through C, or to JavaScript, and prints the same thing on both.</p>
+    <p class="sub rv" style="--d:2">Small and strict, with errors that tell an agent exactly what to write. One source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go, and prints the same thing on every one.</p>
     <div class="cta rv" style="--d:3">
       <a class="btn btn-teal mag" href="#install"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Get started</a>
       <a class="btn btn-ghost" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
@@ -217,7 +217,7 @@ fib(5) = 5</pre></div>
     </div>
     <div class="trio">
       <article class="card tilt rv"><span class="num" aria-hidden="true">01</span><h3>A stable code</h3><p>Codes never change meaning. <code class="i">nyra explain E0230</code> prints what it means, why the rule exists, the usual causes, and a wrong and a fixed program.</p></article>
-      <article class="card tilt rv" style="--d:1"><span class="num" aria-hidden="true">02</span><h3>An exact position</h3><p>File, line and column, the same on both backends. Runtime errors carry them too, with <code class="i">"runtime":true</code> in the JSON.</p></article>
+      <article class="card tilt rv" style="--d:1"><span class="num" aria-hidden="true">02</span><h3>An exact position</h3><p>File, line and column, the same on every backend. Runtime errors carry them too, with <code class="i">"runtime":true</code> in the JSON.</p></article>
       <article class="card tilt rv" style="--d:2"><span class="num" aria-hidden="true">03</span><h3>A hint that says what to write</h3><p>Not "syntax error", but the line to type: a closest-name suggestion, the missing type, the keyword you meant.</p></article>
     </div>
   </div>
@@ -326,7 +326,7 @@ fn main() {
       </div>
     </div>
   </div>
-  <p class="wrap foot-note rv">The IR above is the compiler's real dump for this program. Every example in the repository runs on both backends in CI and must match byte for byte.</p>
+  <p class="wrap foot-note rv">The IR above is the compiler's real dump for this program. Every example in the repository runs on all six backends in CI and must match byte for byte.</p>
 </section>
 
 <!-- ================= MEMORY + LANGUAGE (paper) ================= -->
@@ -392,7 +392,7 @@ fn main() {
 <section class="sec" id="language">
   <div class="wrap">
     <div class="sec-h">
-      <p class="eyebrow rv">Language · v0.3</p>
+      <p class="eyebrow rv">Language · v0.5</p>
       <h2 class="split rv">Small enough to hold in your head.</h2>
       <p class="lead rv">Version 0.3 adds real data: strings and chars with methods, arrays, structs, <code class="i">inout</code> parameters, <code class="i">break</code> and <code class="i">continue</code>, and explicit memory control. Every program below was compiled and run; the output is what the compiler printed, identical on native and JavaScript.</p>
     </div>
@@ -619,24 +619,24 @@ nyra run hello.nyra --js</pre></div></li>
 <section class="sec" id="bench">
   <div class="wrap">
     <div class="sec-h">
-      <p class="eyebrow rv">Benchmark · v0.4</p>
+      <p class="eyebrow rv">Benchmark · first results</p>
       <h2 class="split rv">Does an agent get it right on the first try?</h2>
-      <p class="lead rv">We built a harness to find out. Results come later, and nothing is claimed until they do.</p>
+      <p class="lead rv">83 tasks, four languages, three Claude models. Strong models write Nyra about as reliably as Python, small models are not there yet. Nyra programs run about 50× faster than Python; the code is about 1.25× as long. Every number is published, the bad ones too.</p>
     </div>
     <div class="bench">
-      <div class="win lanes rv" role="img" aria-label="Placeholder chart: results are pending">
-        <div class="hd"><span>first-try correctness</span><span class="pill pill-mono pend"><span class="live" aria-hidden="true"></span>results pending</span></div>
-        <div class="lane"><b>Nyra</b><div class="trk"><i></i></div><span class="q">?</span></div>
-        <div class="lane"><b>Python</b><div class="trk"><i></i></div><span class="q">?</span></div>
-        <div class="lane"><b>TypeScript</b><div class="trk"><i></i></div><span class="q">?</span></div>
-        <div class="lane"><b>Rust</b><div class="trk"><i></i></div><span class="q">?</span></div>
-        <p class="lanes-f">No numbers until the runs are done.</p>
+      <div class="win lanes rv" role="img" aria-label="First-try pass rate on 83 tasks. Opus 5.5: Nyra 98, Python 100, TypeScript 100, Rust 100 percent. Sonnet 5.5: Nyra 96, Python 99, TypeScript 98, Rust 99. Haiku 4.5: Nyra 66, Python 78, TypeScript 86, Rust 76.">
+        <div class="hd"><span>first-try pass rate, %</span><span class="pill pill-mono legend3"><i class="m0"></i>Opus 5.5 <i class="m1"></i>Sonnet 5.5 <i class="m2"></i>Haiku 4.5</span></div>
+        <div class="lane lane3"><b>Nyra</b><div class="trk3"><i class="m0" style="--w:98%"></i><i class="m1" style="--w:96%"></i><i class="m2" style="--w:66%"></i></div><span class="q">98 / 96 / 66</span></div>
+        <div class="lane lane3"><b>Python</b><div class="trk3"><i class="m0" style="--w:100%"></i><i class="m1" style="--w:99%"></i><i class="m2" style="--w:78%"></i></div><span class="q">100 / 99 / 78</span></div>
+        <div class="lane lane3"><b>TypeScript</b><div class="trk3"><i class="m0" style="--w:100%"></i><i class="m1" style="--w:98%"></i><i class="m2" style="--w:86%"></i></div><span class="q">100 / 98 / 86</span></div>
+        <div class="lane lane3"><b>Rust</b><div class="trk3"><i class="m0" style="--w:100%"></i><i class="m1" style="--w:99%"></i><i class="m2" style="--w:76%"></i></div><span class="q">100 / 99 / 76</span></div>
+        <p class="lanes-f">After up to 3 repairs with the compiler's feedback, Opus and Sonnet reach 83/83 in every language. Speed tasks: Nyra ~5 ms, Python ~300 ms. October 2026, Nyra v0.5.</p>
       </div>
       <ul class="metrics">
         <li class="card rv"><span class="num" aria-hidden="true">01</span><b>First-try correctness.</b> How often a model's first program prints exactly the expected output.</li>
         <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">02</span><b>Repairs.</b> The same, when failures are followed by the compiler's feedback and a few retries.</li>
         <li class="card rv"><span class="num" aria-hidden="true">03</span><b>Code length.</b> Tokens and characters of the program the model wrote.</li>
-        <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">04</span><b>Fair by construction.</b> Same tasks, same prompt, same repair budget for all four languages, many models through OpenRouter. Nyra's prompt includes its spec and the others rely on pre-training: a known asymmetry, stated up front.</li>
+        <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">04</span><b>Fair by construction.</b> Same tasks, same prompt, same repair budget for all four languages; Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5 through the Anthropic API, earlier runs through OpenRouter. Nyra's prompt includes its spec and the others rely on pre-training: a known asymmetry, stated up front.</li>
       </ul>
     </div>
   </div>
@@ -652,11 +652,11 @@ nyra run hello.nyra --js</pre></div></li>
     <ol class="road" id="road">
       <span class="rt" aria-hidden="true"><i id="rf"></i></span>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.1</p><div><h3>Core <span class="tag">done</span></h3><p>Functions, <code class="i">int</code> <code class="i">float</code> <code class="i">bool</code> <code class="i">str</code>, <code class="i">if</code>, <code class="i">while</code>, <code class="i">for</code>, the C and JavaScript backends, JSON errors.</p></div></div></li>
-      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.2</p><div><h3>Short code <span class="tag">released</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors, and a typed IR under both backends.</p></div></div></li>
-      <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.3</p><div><h3>Real data <span class="tag">now</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></div></div></li>
-      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.4</p><div><h3>The proof <span class="tag">harness ready</span></h3><p>The benchmark: first-try correctness and code length against Python, TypeScript and Rust. Results coming.</p></div></div></li>
-      <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>More targets <span class="tag">planned</span></h3><p>A WebAssembly backend and a browser playground that runs the compiler itself.</p></div></div></li>
-      <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Big programs <span class="tag">planned</span></h3><p>Modules and imports, a standard library, and a C foreign function interface.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.2</p><div><h3>Short code <span class="tag">done</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors and a typed IR.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.3</p><div><h3>Real data <span class="tag">done</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.4</p><div><h3>Self-repair <span class="tag">done</span></h3><p>Scripts without <code class="i">fn main</code>, <code class="i">nyra check --fix</code>, an MCP server for agents, Python, TypeScript, Rust and Go backends, and a harder benchmark tier.</p></div></div></li>
+      <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>Libraries and speed <span class="tag">now</span></h3><p>Lambdas and comprehensions, <code class="i">ex</code> examples checked while compiling, a standard library (input, files, JSON, math, time, random), maps, script variables in functions, native code near C speed, and the first benchmark results.</p></div></div></li>
+      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Stricter and in the browser <span class="tag">next</span></h3><p>Checked integer overflow, a WebAssembly backend and a browser playground, modules of your own and a C foreign function interface.</p></div></div></li>
       <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v1.0</p><div><h3>Ecosystem <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></div></div></li>
     </ol>
   </div>
@@ -690,7 +690,7 @@ nyra run hello.nyra --js</pre></div></li>
       <a class="totop" href="#top"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
     </div>
     <div class="fb-word" id="fbword" aria-hidden="true"><svg viewBox="-8 -8 288 122"><defs><linearGradient id="gfw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g fill="none" stroke="url(#gfw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/><path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/><path d="M152 0V64M152 28A28 28 0 0 1 180 0"/><circle cx="238" cy="32" r="32"/><path d="M270 0V64"/></g></svg></div>
-    <div class="fb-bot"><p>MIT license · Nyra v0.3</p><p>Built in the open.</p></div>
+    <div class="fb-bot"><p>MIT license · Nyra v0.5</p><p>Built in the open.</p></div>
   </div>
 </footer>
 </body>
