@@ -233,6 +233,12 @@ mod tests {
     }
 
     #[test]
+    fn windows_line_breaks_stay_and_a_ternary_on_several_lines_is_indented() {
+        let src = "fn main() {\r\nlet x = true\r\n? 1\r\n: 2\r\nprint(x)\r\n}\r\n";
+        assert_eq!(format(src), "fn main() {\r\n    let x = true\r\n        ? 1\r\n        : 2\r\n    print(x)\r\n}\r\n");
+    }
+
+    #[test]
     fn a_word_that_starts_with_ret_stays() {
         let src = "fn main() {\nlet retry = 1\nprint(retry)\n}\n";
         assert_eq!(format(src), "fn main() {\n    let retry = 1\n    print(retry)\n}\n");
