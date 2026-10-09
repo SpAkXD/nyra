@@ -140,6 +140,10 @@ fn place(m: &Module, f: &Func, p: &Place) -> String {
                 let _ = write!(s, "[{}]", expr(m, f, i));
                 t = t.elem().unwrap_or(t);
             }
+            Step::Key(i, _) => {
+                let _ = write!(s, "{{{}}}", expr(m, f, i));
+                t = t.map_kv().map_or(t, |(_, v)| v);
+            }
             Step::Field(k) => {
                 let field = m.structs.get(t).and_then(|info| info.fields.get(*k as usize));
                 match field {

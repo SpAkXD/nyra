@@ -81,7 +81,7 @@ fn stmt_locals(s: &Stmt, f: &mut dyn FnMut(LocalId)) {
     fn place(p: &Place, f: &mut dyn FnMut(LocalId)) {
         f(p.root);
         for s in &p.path {
-            if let Step::Index(i, _) = s {
+            if let Step::Index(i, _) | Step::Key(i, _) = s {
                 expr(i, f);
             }
         }
@@ -437,7 +437,7 @@ fn fold_op(op: RtOp, args: &[Expr], dst: Option<LocalId>, strs: &mut Interner) -
 fn exprs_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
     fn place(p: &mut Place, f: &mut dyn FnMut(&mut Expr)) {
         for s in &mut p.path {
-            if let Step::Index(i, _) = s {
+            if let Step::Index(i, _) | Step::Key(i, _) = s {
                 f(i);
             }
         }
@@ -684,7 +684,7 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
 
 fn fold_place(p: &mut Place, strs: &mut Interner) {
     for s in &mut p.path {
-        if let Step::Index(i, _) = s {
+        if let Step::Index(i, _) | Step::Key(i, _) = s {
             fold(i, strs);
         }
     }

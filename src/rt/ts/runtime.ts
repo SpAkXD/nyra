@@ -330,6 +330,15 @@ function ny_mget<K, V>(m: Map<K, V>, k: K, kt: string, line: number, col: number
     return m.get(k) as V;
 }
 function ny_mgetor<K, V>(m: Map<K, V>, k: K, d: V): V { return m.has(k) ? (m.get(k) as V) : d; }
+// `m[k]`, made unique for a change in place (copied and stored back when it was shared).
+function ny_mu(m: Map<any, any>, k: any, kt: string, line: number, col: number): any {
+    let v = ny_mget(m, k, kt, line, col);
+    if (v !== null && typeof v === "object" && v.ny_s) {
+        v = ny_copy(v);
+        m.set(k, v);
+    }
+    return v;
+}
 function ny_index_of<T>(a: T[], v: T): number {
     for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
     return -1;

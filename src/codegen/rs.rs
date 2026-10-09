@@ -694,6 +694,19 @@ impl<'a> Gen<'a> {
                     pos = Pos::Ref(format!("ny_at_mut({}, {idx}, {}, {})", pos.mut_ref(), span.line, span.col));
                     t = t.elem().expect("verified: an array");
                 }
+                Step::Key(key, span) => {
+                    // `m[k]`: the value under the key (the map is copied first when it is shared)
+                    let kx = if borrowed.iter().any(|r| mentions(key, *r)) {
+                        let v = self.fresh("k");
+                        let line = format!("let {v} = {};", self.owned(key));
+                        self.line(&line);
+                        v
+                    } else {
+                        self.owned(key)
+                    };
+                    pos = Pos::Ref(format!("ny_mat_mut({}, &{kx}, {}, {})", pos.mut_ref(), span.line, span.col));
+                    t = t.map_kv().expect("verified: a map").1;
+                }
                 Step::Field(k) => {
                     let info = self.m.structs.get(t).expect("verified: a struct");
                     let f = name(&info.fields[*k as usize].0);
@@ -713,6 +726,7 @@ impl<'a> Gen<'a> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }

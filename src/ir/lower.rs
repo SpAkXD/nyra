@@ -1211,8 +1211,9 @@ impl<'a> Lower<'a> {
             ast::ExprKind::Index(base, index) => {
                 let mut p = self.place(base, fix || mutates(index), out);
                 let i = self.expr(index, None, out);
-                let i = if fix && !i.is_const() { self.snapshot(i, Ty::Int, index.span, out) } else { i };
-                p.path.push(Step::Index(i, e.span));
+                let i = if fix && !i.is_const() { self.snapshot(i, index.ty, index.span, out) } else { i };
+                // `m[k]` of a map: the value under the key
+                p.path.push(if base.ty.map_kv().is_some() { Step::Key(i, e.span) } else { Step::Index(i, e.span) });
                 p
             }
             ast::ExprKind::Field(base, name) => {
@@ -1236,6 +1237,13 @@ impl<'a> Lower<'a> {
                     out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::ArrGet, args: vec![cur, i.clone()] }, span: *span });
                     cur = Expr::Local(d);
                     cur_ty = elem;
+                }
+                Step::Key(k, span) => {
+                    let (_, vt) = cur_ty.map_kv().expect("a key step reads a map");
+                    let d = self.temp(vt);
+                    out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::MapGet, args: vec![cur, k.clone()] }, span: *span });
+                    cur = Expr::Local(d);
+                    cur_ty = vt;
                 }
                 Step::Field(k) => {
                     let ft = self.structs.get(cur_ty).expect("a field step reads a struct").fields[*k as usize].1;

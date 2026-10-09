@@ -545,6 +545,17 @@ func nyMGet[K comparable, V any](m *Map[K, V], k K, line, col int) V {
 	return m.vals[i]
 }
 
+// nyMSlot is the address of m[k], to change it in place: E0248 when the key is missing.
+func nyMSlot[K comparable, V any](m *Map[K, V], k K, line, col int) *V {
+	i, ok := m.index[k]
+	if !ok {
+		var b strings.Builder
+		nyShowAny(&b, k)
+		nyFail("E0248", "key "+b.String()+" is not in the map", "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col)
+	}
+	return &m.vals[i]
+}
+
 func nyMGetOr[K comparable, V any](m *Map[K, V], k K, d V) V {
 	if i, ok := m.index[k]; ok {
 		return m.vals[i]

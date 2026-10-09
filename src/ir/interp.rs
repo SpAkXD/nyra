@@ -745,6 +745,7 @@ fn resolve(m: &Module, locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
                 _ => Err(bug("an index that is not an int")),
             },
             Step::Field(k) => Ok(At::Field(*k as usize)),
+            Step::Key(..) => Err(bug("a map in an example")),
         })
         .collect()
 }

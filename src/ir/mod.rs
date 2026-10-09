@@ -168,6 +168,9 @@ pub enum Step {
     Index(Expr, Span),
     /// A field of a struct, by position.
     Field(u32),
+    /// `[k]` of a map: the value under the key. A missing key is runtime error E0248 (the span is
+    /// the `[`); the map on the way is made unique first, like an array.
+    Key(Expr, Span),
 }
 
 impl Place {
@@ -776,7 +779,7 @@ pub fn visit_locals(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut LocalId)) {
 fn place_locals(p: &mut Place, f: &mut dyn FnMut(&mut LocalId)) {
     f(&mut p.root);
     for s in &mut p.path {
-        if let Step::Index(e, _) = s {
+        if let Step::Index(e, _) | Step::Key(e, _) = s {
             expr_locals(e, f);
         }
     }

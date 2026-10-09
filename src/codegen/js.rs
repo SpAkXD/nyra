@@ -508,6 +508,15 @@ impl Gen<'_> {
         let n = p.path.len();
         for (k, step) in p.path.iter().enumerate() {
             let key = match step {
+                Step::Key(key, span) => {
+                    // `m[k]`: the value under the key, unique (a missing key is E0248)
+                    let (kt, vt) = t.map_kv().expect("verified: a map");
+                    t = vt;
+                    let r = self.fresh("p");
+                    self.line(&format!("const {r} = ny_mu({lv}, {}, \"{}\", {}, {});", self.arg(key), tdesc(kt), span.line, span.col));
+                    lv = r;
+                    continue;
+                }
                 Step::Index(i, span) => {
                     t = t.elem().expect("verified: an array");
                     format!("ny_ck({lv}, {}, {}, {})", self.arg(i), span.line, span.col)
@@ -535,6 +544,7 @@ impl Gen<'_> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
