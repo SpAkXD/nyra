@@ -1,0 +1,55 @@
+use input
+
+let digit_chars = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+// the base written in `s`, or 0 when it is not a base from 2 to 36
+fn base_of(s: str) -> int {
+    if s.len() < 1 || s.len() > 2 || !s.all(c => c.is_digit()) { ret 0 }
+    let b = int(s)
+    if b < 2 || b > 36 { ret 0 }
+    ret b
+}
+
+fn to_base(n: int, base: int) -> str {
+    if n == 0 { ret "0" }
+    var m = if n < 0 { 0 - n } else { n }
+    var out = ""
+    while m > 0 {
+        out = str(digit_chars[m % base]) + out
+        m = m / base
+    }
+    ret if n < 0 { "-" + out } else { out }
+}
+
+for line in input.lines() {
+    let parts = line.split(" ")
+    if parts.len() != 3 {
+        print("invalid")
+        continue
+    }
+    let src = base_of(parts[1])
+    let dst = base_of(parts[2])
+    if src == 0 || dst == 0 {
+        print("invalid")
+        continue
+    }
+    let negative = parts[0].starts_with("-")
+    let body = if negative { parts[0].slice(1, parts[0].len()).lower() } else { parts[0].lower() }
+    var ok = body != ""
+    var value = 0
+    for c in body {
+        let d = digit_chars.index_of(c)
+        if d < 0 || d >= src {
+            ok = false
+            break
+        }
+        value = value * src + d
+    }
+    if !ok {
+        print("invalid")
+    } else if negative {
+        print(to_base(0 - value, dst))
+    } else {
+        print(to_base(value, dst))
+    }
+}

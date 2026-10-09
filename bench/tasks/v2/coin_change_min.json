@@ -1,0 +1,37 @@
+{
+  "id": "coin_change_min",
+  "title": "Fewest coins",
+  "category": "dynamic-programming",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line with the coin values (positive integers separated by single spaces; each coin may be used any number of times), then one amount per line (a non-negative integer). For each amount print the smallest number of coins that add up to it exactly, followed by the coins used, largest first, in the form `N: v1 v2 ...`. When several combinations use that fewest number of coins, use the one that has the most of the largest coin, then the most of the next largest one, and so on. Amount 0 needs no coins and prints `0:`. Print `impossible` when the amount cannot be made.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1 5 10 25\n63\n30\n0\n7\n",
+      "expected_output": "6: 25 25 10 1 1 1\n2: 25 5\n0:\n3: 5 1 1\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "2\n7\n8\n0\n",
+      "expected_output": "impossible\n4: 2 2 2 2\n0:\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1 3 4\n6\n7\n12\n1\n",
+      "expected_output": "2: 3 3\n2: 4 3\n3: 4 4 4\n1: 1\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "25 10 5 1\n99\n100\n41\n",
+      "expected_output": "9: 25 25 25 10 10 1 1 1 1\n4: 25 25 25 25\n4: 25 10 5 1\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "5 7\n1\n12\n23\n24\n35\n36\n",
+      "expected_output": "impossible\n2: 7 5\nimpossible\n4: 7 7 5 5\n5: 7 7 7 7 7\n6: 7 7 7 5 5 5\n"
+    }
+  ]
+}

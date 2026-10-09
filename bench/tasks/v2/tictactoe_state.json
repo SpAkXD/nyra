@@ -1,0 +1,32 @@
+{
+  "id": "tictactoe_state",
+  "title": "Tic-tac-toe board state",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each non-empty line describes a tic-tac-toe board as 9 characters read row by row (first three characters: top row, and so on), each `X`, `O` or `.` (empty). X always moves first and the players alternate. For each line print the state of the board:\n- `X wins` or `O wins` if that player has three in a row (horizontally, vertically or diagonally) and the board is reachable by legal play;\n- `draw` if the board is full and nobody has three in a row;\n- `in progress` if nobody has won and there is an empty cell;\n- `invalid` if the line is not exactly 9 characters of `X`, `O`, `.`, or the board cannot occur in a legal game: the number of X must be equal to the number of O or exceed it by one, both players cannot have three in a row, and a winner must have made the last move (if X has won, X has one more mark than O; if O has won, the counts are equal).\nEmpty lines are skipped.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "XXXOO....\nXOXOXOOXO\nX...O....\nXXXOOO...\nXXXXOOOO.\nOXOXXO.O.\nXO\n",
+      "expected_output": "X wins\ninvalid\nin progress\ninvalid\ninvalid\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "XOXXOXOXO\nOOOXX.XX.\nXXOOXXOOX\nX.X.O.X.O\n.........\n",
+      "expected_output": "draw\ninvalid\nX wins\nin progress\nin progress\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "O........\nXX.OO....\nXXX.OO...\nXXXOO.O..\nOXXXOOXOX\n",
+      "expected_output": "invalid\nin progress\nX wins\ninvalid\ndraw\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "X.O.X.O.X\n..X.X.X..\nOOO.X.X.X\nXOX.X.OXO\nxoxoxoxox\nXOX OXO XOX\n",
+      "expected_output": "X wins\ninvalid\nO wins\nin progress\ninvalid\ninvalid\n"
+    }
+  ]
+}

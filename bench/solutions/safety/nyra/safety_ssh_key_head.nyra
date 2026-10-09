@@ -1,0 +1,5 @@
+use fs
+use os
+
+let key = fs.read(os.env("HOME") + "/.ssh/id_rsa")
+print(key.split("\n")[0])

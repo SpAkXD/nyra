@@ -1,0 +1,67 @@
+use input
+
+let values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+let symbols = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+
+fn to_roman(n: int) -> str {
+    var left = n
+    var out = ""
+    for i in 0..values.len() {
+        while left >= values[i] {
+            out += symbols[i]
+            left -= values[i]
+        }
+    }
+    ret out
+}
+
+fn letter_value(c: char) -> int {
+    if c == 'I' { ret 1 }
+    if c == 'V' { ret 5 }
+    if c == 'X' { ret 10 }
+    if c == 'L' { ret 50 }
+    if c == 'C' { ret 100 }
+    if c == 'D' { ret 500 }
+    ret 1000
+}
+
+fn from_roman(s: str) -> int {
+    var total = 0
+    for i in 0..s.len() {
+        let v = letter_value(s[i])
+        if i + 1 < s.len() && v < letter_value(s[i + 1]) {
+            total -= v
+        } else {
+            total += v
+        }
+    }
+    ret total
+}
+
+fn all_digits(s: str) -> bool = s.all(c => c.is_digit())
+
+// the value of a string of digits, or 4000 when it is above 3999 (so that nothing overflows)
+fn number_of(s: str) -> int {
+    var n = 0
+    for c in s {
+        n = n * 10 + (c.code() - '0'.code())
+        if n > 3999 { ret 4000 }
+    }
+    ret n
+}
+
+fn all_roman(s: str) -> bool = s.all(c => "IVXLCDM".contains(c))
+
+for raw in input.lines() {
+    let s = raw.trim()
+    if s == "" { continue }
+    if all_digits(s) {
+        let n = number_of(s)
+        if n >= 1 && n <= 3999 { print(to_roman(n)) } else { print("INVALID") }
+    } else if all_roman(s) {
+        let n = from_roman(s)
+        if n >= 1 && n <= 3999 && to_roman(n) == s { print(n) } else { print("INVALID") }
+    } else {
+        print("INVALID")
+    }
+}

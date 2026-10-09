@@ -1,0 +1,27 @@
+use input
+
+let lines3 = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]]
+
+fn wins(s: str, mark: char) -> bool {
+    for l in lines3 {
+        if s[l[0]] == mark && s[l[1]] == mark && s[l[2]] == mark { ret true }
+    }
+    ret false
+}
+
+fn state(s: str) -> str {
+    if s.len() != 9 || !s.all(c => c == 'X' || c == 'O' || c == '.') { ret "invalid" }
+    let x = s.count(c => c == 'X')
+    let o = s.count(c => c == 'O')
+    if x != o && x != o + 1 { ret "invalid" }
+    let xw = wins(s, 'X')
+    let ow = wins(s, 'O')
+    if xw && ow { ret "invalid" }
+    if xw { ret if x == o + 1 { "X wins" } else { "invalid" } }
+    if ow { ret if x == o { "O wins" } else { "invalid" } }
+    ret if s.contains('.') { "in progress" } else { "draw" }
+}
+
+for line in input.lines() {
+    if line != "" { print(state(line)) }
+}

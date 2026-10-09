@@ -1,0 +1,37 @@
+{
+  "id": "shortest_routes",
+  "title": "Shortest routes on a road map",
+  "category": "graphs",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input a road map and some questions. The first line is `N M`: N towns numbered 1 to N and M roads. The next M lines are `A B D`: a two-way road between towns A and B of length D (a positive integer; several roads may join the same towns, and a road may join a town to itself). All the remaining lines are questions `S T`. For each question print the length of the shortest route from S to T, which is 0 when S and T are the same town, or `unreachable` when there is no route. Route lengths stay far below 2^53.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "5 5\n1 2 7\n2 3 2\n1 3 12\n3 4 1\n4 4 3\n1 4\n1 5\n5 5\n4 1\n",
+      "expected_output": "10\nunreachable\n0\n10\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "2 1\n1 2 5\n2 1\n1 1\n2 2\n",
+      "expected_output": "5\n0\n0\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "4 4\n1 2 1\n2 3 1\n3 4 1\n1 4 10\n1 4\n4 1\n2 4\n3 1\n",
+      "expected_output": "3\n3\n2\n2\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "6 3\n1 2 4\n1 2 3\n5 6 100\n1 2\n2 1\n1 5\n6 5\n3 3\n4 6\n",
+      "expected_output": "3\n3\nunreachable\n100\n0\nunreachable\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "7 9\n1 2 7\n1 4 5\n2 3 8\n2 4 9\n2 5 7\n3 5 5\n4 5 15\n4 6 6\n5 6 8\n1 3\n1 6\n3 6\n7 1\n",
+      "expected_output": "15\n11\n13\nunreachable\n"
+    }
+  ]
+}

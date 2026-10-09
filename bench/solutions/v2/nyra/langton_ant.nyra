@@ -1,0 +1,23 @@
+use input
+
+let steps = int(input.line().trim())
+var black: [int: bool] = [:]
+var x = 0
+var y = 0
+var facing = 0
+let dx = [0, 1, 0, -1]
+let dy = [-1, 0, 1, 0]
+for _ in 0..steps {
+    let key = (y + 5000) * 10000 + (x + 5000)
+    if black.has(key) {
+        facing = (facing + 3) % 4
+        black.remove(key)
+    } else {
+        facing = (facing + 1) % 4
+        black[key] = true
+    }
+    x += dx[facing]
+    y += dy[facing]
+}
+let names = "URDL"
+print("black={black.len()} x={x} y={y} facing={names[facing]}")

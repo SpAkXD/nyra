@@ -1,0 +1,25 @@
+use input
+
+let letters = "ABC"
+let replies = "XYZ"
+var part1 = 0
+var part2 = 0
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line == "" { continue }
+    if line.len() != 3 || !letters.contains(line[0]) || line[1] != ' ' || !replies.contains(line[2]) {
+        print("line {n}: invalid")
+        continue
+    }
+    let opp = letters.index_of(line[0])
+    let second = replies.index_of(line[2])
+    let diff = (second - opp + 3) % 3
+    var result = 0
+    if diff == 0 { result = 3 }
+    if diff == 1 { result = 6 }
+    part1 += second + 1 + result
+    let mine = (opp + second + 2) % 3
+    part2 += mine + 1 + 3 * second
+}
+print("part1={part1} part2={part2}")

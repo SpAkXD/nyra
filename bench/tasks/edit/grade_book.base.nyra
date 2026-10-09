@@ -1,0 +1,236 @@
+// A grade book: reads commands from standard input, one per line.
+//
+//     student NAME                  register a student
+//     score NAME COURSE POINTS      record a score (0 to 100) of a student in a course
+//     average NAME                  the average of a student's scores
+//     grade NAME                    the letter grade for that average
+//     courses NAME                  the average per course
+//     ranking                       the students from the best to the weakest average
+//     report                        every student with average and grade
+
+use input
+
+struct Score {
+    course: str
+    points: int
+}
+
+struct Student {
+    name: str
+    scores: [Score]
+}
+
+struct Book {
+    students: [Student]
+}
+
+// a whole number from 0 to 100 written with digits only, or -1
+fn parse_points(text: str) -> int {
+    if text.len() == 0 || text.len() > 3 || !text.all(c => c.is_digit()) { ret -1 }
+    let value = int(text)
+    ret if value <= 100 { value } else { -1 }
+}
+
+fn find_student(book: Book, name: str) -> int {
+    for i in 0..book.students.len() {
+        if book.students[i].name == name { ret i }
+    }
+    ret -1
+}
+
+// the scores that count towards the student's average
+fn counted(student: Student) -> [Score] = student.scores
+
+fn total_points(student: Student) -> int {
+    var total = 0
+    for score in counted(student) {
+        total += score.points
+    }
+    ret total
+}
+
+// the average in tenths, rounded half up
+fn average10(total: int, count: int) -> int = (total * 20 + count) / (2 * count)
+
+fn format_tenths(value: int) -> str = "{value / 10}.{value % 10}"
+
+fn letter(total: int, count: int) -> str {
+    if total >= 90 * count { ret "A" }
+    if total >= 80 * count { ret "B" }
+    if total >= 70 * count { ret "C" }
+    if total >= 60 * count { ret "D" }
+    ret "F"
+}
+
+fn cmd_student(inout book: Book, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: student NAME")
+        ret
+    }
+    if find_student(book, args[1]) >= 0 {
+        print("error: {args[1]} is already registered")
+        ret
+    }
+    book.students.push(Student(name: args[1], scores: []))
+    print("registered {args[1]}")
+}
+
+fn cmd_score(inout book: Book, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: score NAME COURSE POINTS")
+        ret
+    }
+    let at = find_student(book, args[1])
+    if at < 0 {
+        print("error: unknown student {args[1]}")
+        ret
+    }
+    let points = parse_points(args[3])
+    if points < 0 {
+        print("error: bad points")
+        ret
+    }
+    book.students[at].scores.push(Score(course: args[2], points: points))
+    print("recorded {points} for {args[1]} in {args[2]}")
+}
+
+fn cmd_average(book: Book, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: average NAME")
+        ret
+    }
+    let at = find_student(book, args[1])
+    if at < 0 {
+        print("error: unknown student {args[1]}")
+        ret
+    }
+    let student = book.students[at]
+    let count = counted(student).len()
+    if count == 0 {
+        print("{student.name} has no scores")
+        ret
+    }
+    print("{student.name}: {format_tenths(average10(total_points(student), count))} ({count} scores)")
+}
+
+fn cmd_grade(book: Book, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: grade NAME")
+        ret
+    }
+    let at = find_student(book, args[1])
+    if at < 0 {
+        print("error: unknown student {args[1]}")
+        ret
+    }
+    let student = book.students[at]
+    let count = counted(student).len()
+    if count == 0 {
+        print("{student.name} has no scores")
+        ret
+    }
+    print("{student.name}: {letter(total_points(student), count)}")
+}
+
+fn cmd_courses(book: Book, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: courses NAME")
+        ret
+    }
+    let at = find_student(book, args[1])
+    if at < 0 {
+        print("error: unknown student {args[1]}")
+        ret
+    }
+    let student = book.students[at]
+    let scores = counted(student)
+    if scores.len() == 0 {
+        print("{student.name} has no scores")
+        ret
+    }
+    print("{student.name} courses:")
+    var courses: [str] = []
+    for score in scores {
+        if !courses.contains(score.course) { courses.push(score.course) }
+    }
+    courses.sort()
+    for course in courses {
+        var total = 0
+        var count = 0
+        for score in scores {
+            if score.course == course {
+                total += score.points
+                count += 1
+            }
+        }
+        print("  {course}: {format_tenths(average10(total, count))} ({count})")
+    }
+}
+
+fn rank_key(student: Student) -> int = 0 - total_points(student) * 1000000 / counted(student).len()
+
+fn cmd_ranking(book: Book, args: [str]) {
+    var ranked = book.students.filter(s => counted(s).len() > 0)
+    if ranked.len() == 0 {
+        print("no ranking yet")
+        ret
+    }
+    ranked.sort_by(s => s.name)
+    ranked.sort_by(s => rank_key(s))
+    for i, student in ranked {
+        let count = counted(student).len()
+        let total = total_points(student)
+        print("{i + 1}. {student.name} {format_tenths(average10(total, count))} {letter(total, count)}")
+    }
+}
+
+fn cmd_report(book: Book, args: [str]) {
+    if book.students.len() == 0 {
+        print("no students")
+        ret
+    }
+    var sorted = book.students
+    sorted.sort_by(s => s.name)
+    for student in sorted {
+        let count = counted(student).len()
+        if count == 0 {
+            print("{student.name} -")
+        } else {
+            let total = total_points(student)
+            print("{student.name} {format_tenths(average10(total, count))} {letter(total, count)} ({count})")
+        }
+    }
+}
+
+fn execute(inout book: Book, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "student" {
+        cmd_student(inout book, args)
+    } else if command == "score" {
+        cmd_score(inout book, args)
+    } else if command == "average" {
+        cmd_average(book, args)
+    } else if command == "grade" {
+        cmd_grade(book, args)
+    } else if command == "courses" {
+        cmd_courses(book, args)
+    } else if command == "ranking" {
+        cmd_ranking(book, args)
+    } else if command == "report" {
+        cmd_report(book, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var book = Book(students: [])
+    for line in input.lines() {
+        execute(inout book, line)
+    }
+}

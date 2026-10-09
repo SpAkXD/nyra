@@ -1,0 +1,61 @@
+use input
+
+fn digits(s: str, from: int, to: int) -> bool {
+    for i in from..to {
+        if !s[i].is_digit() { ret false }
+    }
+    ret true
+}
+
+// the number written by the digits s[from..to]
+fn num(s: str, from: int, to: int) -> int = int(s.slice(from, to))
+
+fn valid_stamp(line: str) -> bool {
+    if line.len() < 21 { ret false }
+    if line[4] != '-' || line[7] != '-' || line[10] != ' ' || line[13] != ':' || line[16] != ':' || line[19] != ' ' { ret false }
+    if !digits(line, 0, 4) || !digits(line, 5, 7) || !digits(line, 8, 10) { ret false }
+    if !digits(line, 11, 13) || !digits(line, 14, 16) || !digits(line, 17, 19) { ret false }
+    let month = num(line, 5, 7)
+    let day = num(line, 8, 10)
+    ret month >= 1 && month <= 12 && day >= 1 && day <= 31 && num(line, 11, 13) <= 23 && num(line, 14, 16) <= 59 && num(line, 17, 19) <= 59
+}
+
+var debug = 0
+var info = 0
+var warn = 0
+var errors = 0
+var last = "none"
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line == "" { continue }
+    var ok = false
+    if valid_stamp(line) {
+        let rest = line.slice(20, line.len())
+        let sp = rest.index_of(" ")
+        if sp > 0 && sp < rest.len() - 1 {
+            let level = rest.slice(0, sp)
+            let message = rest.slice(sp + 1, rest.len())
+            if level == "DEBUG" {
+                debug += 1
+                ok = true
+            } else if level == "INFO" {
+                info += 1
+                ok = true
+            } else if level == "WARN" {
+                warn += 1
+                ok = true
+            } else if level == "ERROR" {
+                errors += 1
+                last = message
+                ok = true
+            }
+        }
+    }
+    if !ok { print("line {n}: malformed") }
+}
+print("DEBUG: {debug}")
+print("INFO: {info}")
+print("WARN: {warn}")
+print("ERROR: {errors}")
+print("last error: {last}")

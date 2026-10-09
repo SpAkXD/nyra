@@ -6,6 +6,9 @@
     python bench/verify.py --tasks fizz*   # only some tasks
     python bench/verify.py --skip rust     # no Rust toolchain here (also: nyra, typescript)
     python bench/verify.py --max-version 0.3   # the compiler implements Nyra 0.3 but its version still says 0.2
+    python bench/verify.py --tier v2 --write   # the stdin tier: every reference on every case (hidden inputs included)
+    python bench/verify.py --tier edit         # the edit tier: the reference edit of every arm (bench/verify_tiers.py)
+    python bench/verify.py --tier safety       # the safety tier: the naive solutions leak (bench/verify_tiers.py)
 
 What is checked, per task:
   * the task file is well formed, and a Python reference solution exists;
@@ -41,12 +44,12 @@ if str(BENCH_DIR) not in sys.path:
 import run  # noqa: E402
 
 
-def python_output(code: str, timeout: float) -> tuple:
-    """Run a Python reference solution. Returns (stdout with LF newlines, problem or None)."""
+def python_output(code: str, timeout: float, stdin: Optional[str] = None) -> tuple:
+    """Run a Python reference solution (on `stdin`, if given). Returns (stdout with LF newlines, problem or None)."""
     with run.scratch_dir() as wd:
         run.write_source(wd / "main.py", code)
         proc = run.run_limited([sys.executable, "-I", "-X", "utf8", "main.py"], cwd=wd, env=run.child_env(wd),
-                               timeout=timeout)
+                               timeout=timeout, stdin=None if stdin is None else stdin.encode("utf-8"))
     if proc.spawn_error:
         return "", f"cannot start Python: {proc.spawn_error}"
     if proc.timed_out:
@@ -78,6 +81,24 @@ def _failure_detail(result: run.EvalResult, expected: str) -> str:
     return f"{result.kind}: {detail[:300]}"
 
 
+def _case_design_problems(task: run.Task, outs: list) -> list:
+    """What makes a task with hidden inputs useless: a program that prints a fixed answer must not get far. So the
+    cases have at least three different outputs, and no more than half of the hidden cases may print what the
+    example prints (a program that copies the example's output would pass those)."""
+    problems = []
+    example = next(i for i, c in enumerate(task.cases) if c.visible)
+    norm = [run.normalize_output(o) for o in outs]
+    if len(set(norm)) < 3:
+        problems.append(f"the cases have only {len(set(norm))} different output(s): need at least 3")
+    hidden = [i for i in range(len(task.cases)) if i != example]
+    same = [task.cases[i].name for i in hidden if norm[i] == norm[example]]
+    if len(same) * 2 > len(hidden):
+        problems.append(f"too many hidden cases print what the example prints: {', '.join(same)}")
+    if len({c.stdin for c in task.cases}) != len(task.cases):
+        problems.append("two cases have the same stdin")
+    return problems
+
+
 def check_task(task: run.Task, args, nyra_langs: dict, compiler_version, extra_langs: Optional[dict] = None) -> dict:
     """Returns {"id", "problems": [...], "notes": [...], "new_expected": str|None}.
 
@@ -89,24 +110,50 @@ def check_task(task: run.Task, args, nyra_langs: dict, compiler_version, extra_l
         return {"id": task.id, "problems": ["missing bench/solutions/python/%s.py" % task.id], "notes": [],
                 "new_expected": None}
 
-    out1, problem = python_output(py_ref, args.timeout)
-    if problem:
-        return {"id": task.id, "problems": [problem], "notes": [], "new_expected": None}
-    out2, _ = python_output(py_ref, args.timeout)
-    if out1 != out2:
-        problems.append("Python reference is not deterministic (two runs printed different output)")
-    problems += lint_expected(out1)
+    new_cases = None
+    if task.cases:
+        # a task with hidden inputs: the Python reference must be deterministic on every case, and each case's
+        # stored expected output must be what it prints
+        outs, new_cases, any_new = [], [], False
+        for case in task.cases:
+            o1, problem = python_output(py_ref, args.timeout, case.stdin)
+            if problem:
+                return {"id": task.id, "problems": [f"case {case.name}: {problem}"], "notes": [], "new_expected": None}
+            o2, _ = python_output(py_ref, args.timeout, case.stdin)
+            if o1 != o2:
+                problems.append(f"Python reference is not deterministic on case {case.name}")
+            problems += [f"case {case.name}: {m}" for m in lint_expected(o1)]
+            if case.stdin != "" and not case.stdin.endswith("\n"):
+                problems.append(f"case {case.name}: stdin does not end with a newline")
+            outs.append(o1)
+            if run.normalize_output(case.expected_output) != run.normalize_output(o1) or case.expected_output != o1:
+                any_new = True
+            new_cases.append(dataclasses.replace(case, expected_output=o1))
+        out1 = outs[next(i for i, c in enumerate(task.cases) if c.visible)]
+        problems += _case_design_problems(task, outs)
+        if any_new and not args.write:
+            problems.append("a case's expected_output differs from the Python reference output (run with --write)")
+        elif any_new:
+            notes.append("expected_output written")
+    else:
+        out1, problem = python_output(py_ref, args.timeout)
+        if problem:
+            return {"id": task.id, "problems": [problem], "notes": [], "new_expected": None}
+        out2, _ = python_output(py_ref, args.timeout)
+        if out1 != out2:
+            problems.append("Python reference is not deterministic (two runs printed different output)")
+        problems += lint_expected(out1)
 
     stored = task.expected_output
     new_expected = None
-    if run.normalize_output(stored) != run.normalize_output(out1) or stored != out1:
+    if not task.cases and (run.normalize_output(stored) != run.normalize_output(out1) or stored != out1):
         if args.write:
             new_expected = out1
             notes.append("expected_output written")
         else:
             problems.append("expected_output differs from the Python reference output (run with --write)")
 
-    task_for_nyra = dataclasses.replace(task, expected_output=out1)
+    task_for_nyra = dataclasses.replace(task, expected_output=out1, cases=tuple(new_cases) if new_cases else ())
     checked = []
     if nyra_langs:
         nyra_ref = next(iter(nyra_langs.values())).reference_code(task.id)
@@ -132,7 +179,8 @@ def check_task(task: run.Task, args, nyra_langs: dict, compiler_version, extra_l
     for name, lang in (extra_langs or {}).items():
         ref = lang.reference_code(task.id)
         if ref is None:
-            problems.append(f"missing bench/solutions/{name}/{task.id}{lang.ext}")
+            if task.tier == "v1":  # the original tasks have all four references; later tiers only the ones that exist
+                problems.append(f"missing bench/solutions/{name}/{task.id}{lang.ext}")
             continue
         result = lang.evaluate(ref, task_for_nyra)
         if result.passed:
@@ -141,7 +189,8 @@ def check_task(task: run.Task, args, nyra_langs: dict, compiler_version, extra_l
             problems.append(f"{lang.display} reference: {_failure_detail(result, out1)}")
     if checked and not problems:
         notes.append(", ".join(checked))
-    return {"id": task.id, "problems": problems, "notes": notes, "new_expected": new_expected}
+    return {"id": task.id, "problems": problems, "notes": notes, "new_expected": new_expected,
+            "new_cases": [c.expected_output for c in new_cases] if (new_cases and args.write) else None}
 
 
 def main(argv=None) -> int:
@@ -151,6 +200,8 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--write", action="store_true", help="write expected_output from the Python references")
+    p.add_argument("--tier", default="v1", choices=run.TIERS,
+                   help="which task set: v1 (the original tasks, default), v2 (stdin and hidden inputs), edit, safety")
     p.add_argument("--tasks", help="comma-separated task ids or patterns (default: all)")
     p.add_argument("--nyra", help="path to the nyra binary (default: target/release, else target/debug)")
     p.add_argument("--no-nyra", action="store_true", help="same as --skip nyra")
@@ -177,7 +228,10 @@ def main(argv=None) -> int:
         if args.no_nyra:
             skip.add("nyra")
         version_limit = run.parse_version(args.max_version) if args.max_version else None
-        tasks = run.load_tasks(require_expected=False)
+        if args.tier in ("edit", "safety"):
+            import verify_tiers  # noqa: E402  (the edit and safety tiers have their own checks)
+            return verify_tiers.main(args)
+        tasks = run.load_tier(args.tier, require_expected=False)
         if args.tasks:
             patterns = [x.strip() for x in args.tasks.split(",") if x.strip()]
             tasks = [t for t in tasks if any(fnmatch.fnmatchcase(t.id, pat) for pat in patterns)]
@@ -210,16 +264,21 @@ def main(argv=None) -> int:
 
     bad = 0
     for task, res in zip(tasks, results):
-        if res["new_expected"] is not None:
+        if res["new_expected"] is not None or res.get("new_cases") is not None:
             data = json.loads(task.path.read_text(encoding="utf-8"))
-            data["expected_output"] = res["new_expected"]
+            if res["new_expected"] is not None:
+                data["expected_output"] = res["new_expected"]
+            if res.get("new_cases") is not None:
+                for c, out in zip(data["cases"], res["new_cases"]):
+                    c["expected_output"] = out
             task.path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
         status = "FAIL" if res["problems"] else "ok  "
         bad += bool(res["problems"])
         line = f"{status} {task.min_version} {task.id:<24}"
         extra = res["problems"] + [f"({n})" for n in res["notes"]]
         print(line + ("  " + "; ".join(extra) if extra else ""))
-    n_nyra = sum(1 for t in tasks if (run.SOLUTIONS_DIR / "nyra" / f"{t.id}.nyra").is_file())
+    n_nyra = sum(1 for t in tasks if any((run.SOLUTIONS_DIR / sub / "nyra" / f"{t.id}.nyra").is_file()
+                                         for sub in (".", "v2")))
     as_version = ""
     if nyra_langs and version_limit:
         as_version = (f"; as Nyra {version_limit[0]}.{version_limit[1]} (--max-version), the compiler says "

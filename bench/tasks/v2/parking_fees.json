@@ -1,0 +1,37 @@
+{
+  "id": "parking_fees",
+  "title": "Parking garage fees",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "A parking garage logs events, one per line of standard input: `HH:MM IN PLATE` or `HH:MM OUT PLATE` (a 24-hour time of the same day, and a plate made of letters and digits). Lines are in chronological order. Process them in order:\n- `IN` for a car that is not inside: it enters. `IN` for a car that is already inside: print `line N: already inside`.\n- `OUT` for a car that is inside: it leaves, and you print `PLATE paid $F` where F is its fee. `OUT` for a car that is not inside: print `line N: not inside`.\n(N counts the lines from 1; these messages replace any other output for that line, and the event is ignored.)\nA stay of m minutes (the OUT time minus the IN time; it is 0 or more) costs nothing when m is at most 15; otherwise $2 for every hour or part of an hour (m = 16 to 60 costs $2, m = 61 to 120 costs $4, and so on), but never more than $20 for one stay.\nAfter the last line print `revenue=$R` for the sum of the fees, and `still inside: ` followed by the plates of the cars still inside, sorted in plain character order and separated by commas, or `still inside: none`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "08:00 IN AB123\n08:10 IN ZZ9\n08:12 OUT ZZ9\n09:05 OUT AB123\n09:06 OUT AB123\n10:00 IN K1\n10:30 IN K1\n",
+      "expected_output": "ZZ9 paid $0\nAB123 paid $4\nline 5: not inside\nline 7: already inside\nrevenue=$4\nstill inside: K1\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "00:00 IN A\n23:59 OUT A\n12:00 IN B\n12:15 OUT B\n12:16 IN B\n12:32 OUT B\n",
+      "expected_output": "A paid $20\nB paid $0\nB paid $2\nrevenue=$22\nstill inside: none\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "10:00 IN Q\n10:00 OUT Q\n10:00 IN Q\n11:00 OUT Q\n11:00 IN Q\n13:00 OUT Q\n13:00 IN Q\n13:01 OUT Q\n",
+      "expected_output": "Q paid $0\nQ paid $2\nQ paid $4\nQ paid $0\nrevenue=$6\nstill inside: none\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "07:00 IN c2\n07:01 IN B1\n07:02 IN a3\n20:00 OUT B1\n",
+      "expected_output": "B1 paid $20\nrevenue=$20\nstill inside: a3,c2\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "",
+      "expected_output": "revenue=$0\nstill inside: none\n"
+    }
+  ]
+}

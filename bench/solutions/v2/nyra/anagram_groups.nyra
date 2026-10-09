@@ -1,0 +1,47 @@
+use input
+
+var seen: [str] = []
+var words: [str] = []
+var keys: [str] = []
+for raw in input.lines() {
+    let word = raw.trim()
+    if word == "" { continue }
+    let lower = word.lower()
+    if seen.contains(lower) { continue }
+    seen.push(lower)
+    var letters = lower.chars()
+    letters.sort()
+    words.push(word)
+    keys.push(letters.join(""))
+}
+// order the words alphabetically (lowercase), so that every group comes out sorted
+var order: [int] = []
+for i in 0..words.len() {
+    order.push(i)
+}
+for i in 1..order.len() {
+    var j = i
+    while j > 0 && words[order[j - 1]].lower() > words[order[j]].lower() {
+        order.swap(j - 1, j)
+        j -= 1
+    }
+}
+var printed = 0
+var done = [false].repeat(words.len())
+for a in 0..order.len() {
+    let i = order[a]
+    if done[i] { continue }
+    var group: [str] = []
+    for b in a..order.len() {
+        let k = order[b]
+        if !done[k] && keys[k] == keys[i] {
+            group.push(words[k])
+            done[k] = true
+        }
+    }
+    if group.len() >= 2 {
+        print(group.join(" "))
+        printed += 1
+    }
+}
+if printed == 0 { print("no anagrams") }

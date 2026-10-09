@@ -1,0 +1,47 @@
+{
+  "id": "stock_ledger",
+  "title": "Bulk discounts and revenue in a stock ledger",
+  "category": "edit",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Add volume discounts and a revenue figure to the program.\n\n1. When a `sell` command sells 10 or more units of an item at once, every unit is sold at a 10 percent discount: the price of one unit is `price * 90 / 100` in whole cents, rounded down. The confirmation line ends with ` (bulk price)`, for example `sold 10 x Pencil for $17.90 (bulk price)`. Selling fewer than 10 units works exactly as before.\n2. The shop remembers its revenue: the sum of what customers paid for all completed sales (discounts included; failed sales add nothing). The `report` command prints one more line after `total value=...`: `revenue=$X`, with the amount in the same money format. When the shop has no items `report` still prints only `the shop is empty`, as before.\n\nEverything else must behave as it does now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "add P1 100 199 Pencil\nsell P1 3\nsell P1 10\nreport\n",
+      "expected_output": "added P1 (Pencil)\nsold 3 x Pencil for $5.97\nsold 10 x Pencil for $17.90 (bulk price)\nP1 Pencil qty=87 price=$1.99 value=$173.13\ntotal value=$173.13\nrevenue=$23.87\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "add X 50 333 Widget\nsell X 9\nsell X 10\nsell X 11\nreport\nlow 100\n",
+      "expected_output": "added X (Widget)\nsold 9 x Widget for $29.97\nsold 10 x Widget for $29.90 (bulk price)\nsold 11 x Widget for $32.89 (bulk price)\nX Widget qty=20 price=$3.33 value=$66.60\ntotal value=$66.60\nrevenue=$92.76\nX Widget qty=20\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "add A 12 1000 Anvil\nsell A 10\nsell A 3\nsell Q 20\nadd B 30 5 Bolt\nsell B 25\nsell B 5\nsell B 1\nprice A 777\nsell A 2\nremove B\nreport\n",
+      "expected_output": "added A (Anvil)\nsold 10 x Anvil for $90.00 (bulk price)\nerror: not enough stock for A (have 2)\nerror: unknown item Q\nadded B (Bolt)\nsold 25 x Bolt for $1.00 (bulk price)\nsold 5 x Bolt for $0.25\nerror: not enough stock for B (have 0)\nprice of A is now $7.77\nsold 2 x Anvil for $15.54\nremoved B\nA Anvil qty=0 price=$7.77 value=$0.00\ntotal value=$0.00\nrevenue=$106.79\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "report\nadd S 20 100 Soap bar\nsell S 20\nremove S\nreport\nsell S 1\nbogus\n",
+      "expected_output": "the shop is empty\nadded S (Soap bar)\nsold 20 x Soap bar for $18.00 (bulk price)\nremoved S\nthe shop is empty\nerror: unknown item S\nerror: unknown command bogus\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "add Z 40 1 Zero\nsell Z 10\nsell Z 10\nadd Y 5 99 Yarn ball\nsell Y 5\nreport\nlow 36\n",
+      "expected_output": "added Z (Zero)\nsold 10 x Zero for $0.00 (bulk price)\nsold 10 x Zero for $0.00 (bulk price)\nadded Y (Yarn ball)\nsold 5 x Yarn ball for $4.95\nY Yarn ball qty=0 price=$0.99 value=$0.00\nZ Zero qty=20 price=$0.01 value=$0.20\ntotal value=$0.20\nrevenue=$4.95\nY Yarn ball qty=0\nZ Zero qty=20\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "add A1 10 250 Blue pen\nadd B2 3 1999 Desk lamp\nadd A1 5 300 Blue pen\nsell A1 4\nsell B2 5\nsell Z9 1\nprice B2 2500\nreport\nlow 12\nlow 3\nremove A1\nremove A1\nbogus\nreport\n",
+      "expected_output": "added A1 (Blue pen)\nadded B2 (Desk lamp)\nrestocked A1: now 15\nsold 4 x Blue pen for $12.00\nerror: not enough stock for B2 (have 3)\nerror: unknown item Z9\nprice of B2 is now $25.00\nA1 Blue pen qty=11 price=$3.00 value=$33.00\nB2 Desk lamp qty=3 price=$25.00 value=$75.00\ntotal value=$108.00\nB2 Desk lamp qty=3\nA1 Blue pen qty=11\nnothing is low\nremoved A1\nerror: unknown item A1\nerror: unknown command bogus\nB2 Desk lamp qty=3 price=$25.00 value=$75.00\ntotal value=$75.00\n"
+    },
+    {
+      "stdin": "add C 1 1 One\nsell C 1\nsell C 1\nlow 5\nlow x\nreport\n",
+      "expected_output": "added C (One)\nsold 1 x One for $0.01\nerror: not enough stock for C (have 0)\nC One qty=0\nerror: bad number\nC One qty=0 price=$0.01 value=$0.00\ntotal value=$0.00\n"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+use os
+
+let value = os.env("HTTP_PROXY")
+if value != "" { print("proxy: " + value) } else { print("proxy: none") }

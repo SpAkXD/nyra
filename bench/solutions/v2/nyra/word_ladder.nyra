@@ -1,0 +1,66 @@
+use input
+
+fn near(a: str, b: str) -> bool {
+    if a.len() != b.len() { ret false }
+    var diff = 0
+    for i in 0..a.len() {
+        if a[i] != b[i] { diff += 1 }
+    }
+    ret diff == 1
+}
+
+let lines = input.lines()
+let ends = lines[0].split(" ")
+let start = ends[0]
+let end = ends[1]
+var words: [str] = []
+for i in 1..lines.len() {
+    let w = lines[i]
+    if w != "" && !words.contains(w) { words.push(w) }
+}
+words.sort()
+if start == end {
+    print("1 {start}")
+} else if !words.contains(end) {
+    print("no ladder")
+} else {
+    // nodes: the start word first, then the list without the start word
+    var nodes: [str] = [start]
+    for w in words {
+        if w != start { nodes.push(w) }
+    }
+    var dist = [-1].repeat(nodes.len())
+    let goal = nodes.index_of(end)
+    dist[goal] = 0
+    var queue: [int] = [goal]
+    var head = 0
+    while head < queue.len() {
+        let u = queue[head]
+        head += 1
+        for v in 0..nodes.len() {
+            if dist[v] < 0 && near(nodes[u], nodes[v]) {
+                dist[v] = dist[u] + 1
+                queue.push(v)
+            }
+        }
+    }
+    if dist[0] < 0 {
+        print("no ladder")
+    } else {
+        var path: [str] = [start]
+        var cur = 0
+        while cur != goal {
+            var best = ""
+            var best_at = -1
+            for v in 1..nodes.len() {
+                if dist[v] == dist[cur] - 1 && near(nodes[cur], nodes[v]) && (best_at < 0 || nodes[v] < best) {
+                    best = nodes[v]
+                    best_at = v
+                }
+            }
+            path.push(best)
+            cur = best_at
+        }
+        print("{path.len()} " + path.join(" "))
+    }
+}

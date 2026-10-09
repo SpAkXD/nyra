@@ -1,0 +1,47 @@
+{
+  "id": "library_desk",
+  "title": "Loan limit and a gentler fine at a library desk",
+  "category": "edit",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Change the lending rules of the library desk.\n\n1. Loan limit. A member may have at most 3 books on loan at the same time. A `borrow` for a member who already has 3 prints `error: NAME already has 3 books` and lends nothing. This check comes after the other `borrow` checks (bad day, unknown member, unknown book, book already on loan).\n2. Fines. A book that comes back at most 3 days after its due day costs nothing (a grace period). A book that comes back later costs 10 cents for every day after its due day (the grace days are counted too: 5 days late costs $0.50), but never more than $5.00 per book. The message of a `return` after the due day is `NAME returned ID N days late, fine $X` as before when there is a fine, and `NAME returned ID N days late, no fine` when the fine is zero because of the grace period; N is always the number of days after the due day. A book returned on or before its due day still prints `... on time`.\n\nEverything else must behave as it does now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "member ann\nbook b1 Dune\nbook b2 Emma\nborrow ann b1 10\nreturn ann b1 27\nborrow ann b2 30\nreturn ann b2 80\nfines ann\n",
+      "expected_output": "welcome ann\nadded book b1: Dune\nadded book b2: Emma\nann borrowed b1, due day 24\nann returned b1 3 days late, no fine\nann borrowed b2, due day 44\nann returned b2 36 days late, fine $3.60\nann owes $3.60\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "member x\nbook a A\nbook b B\nbook c C\nbook d D\nborrow x a 0\nborrow x b 1\nborrow x c 2\nborrow x d 3\nreturn x b 5\nborrow x d 6\nstatus\n",
+      "expected_output": "welcome x\nadded book a: A\nadded book b: B\nadded book c: C\nadded book d: D\nx borrowed a, due day 14\nx borrowed b, due day 15\nx borrowed c, due day 16\nerror: x already has 3 books\nx returned b on time\nx borrowed d, due day 20\na A: on loan to x (due day 14)\nb B: available\nc C: on loan to x (due day 16)\nd D: on loan to x (due day 20)\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "member m\nbook k K\nborrow m k 0\nreturn m k 14\nborrow m k 20\nreturn m k 37\nborrow m k 40\nreturn m k 54\nborrow m k 60\nreturn m k 78\nborrow m k 100\nreturn m k 200\nfines m\n",
+      "expected_output": "welcome m\nadded book k: K\nm borrowed k, due day 14\nm returned k on time\nm borrowed k, due day 34\nm returned k 3 days late, no fine\nm borrowed k, due day 54\nm returned k on time\nm borrowed k, due day 74\nm returned k 4 days late, fine $0.40\nm borrowed k, due day 114\nm returned k 86 days late, fine $5.00\nm owes $5.40\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "member p\nmember q\nbook 1 One\nbook 2 Two\nbook 3 Three\nbook 4 Four\nborrow p 1 0\nborrow q 2 0\nborrow q 3 5\nborrow q 4 5\nborrow z 1 0\nborrow p 9 0\nborrow p 2 0\nlate 20\nlate 25\nlate 14\nreturn p 1 20\nfines p\nstatus\n",
+      "expected_output": "welcome p\nwelcome q\nadded book 1: One\nadded book 2: Two\nadded book 3: Three\nadded book 4: Four\np borrowed 1, due day 14\nq borrowed 2, due day 14\nq borrowed 3, due day 19\nq borrowed 4, due day 19\nerror: unknown member z\nerror: unknown book 9\nerror: 2 is already on loan\np 1 due 14 (6 days late)\nq 2 due 14 (6 days late)\nq 3 due 19 (1 days late)\nq 4 due 19 (1 days late)\np 1 due 14 (11 days late)\nq 2 due 14 (11 days late)\nq 3 due 19 (6 days late)\nq 4 due 19 (6 days late)\nnothing is overdue\np returned 1 6 days late, fine $0.60\np owes $0.60\n1 One: available\n2 Two: on loan to q (due day 14)\n3 Three: on loan to q (due day 19)\n4 Four: on loan to q (due day 19)\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "late 5\nmember r\nbook Z Zed\nborrow r Z 3\nreturn r Z 17\nreturn r Z 18\nborrow r Z 20\nreturn q Z 21\nborrow r Z 21\nreturn r Z 38\nfines r\nborrow r Z x\n",
+      "expected_output": "nothing is overdue\nwelcome r\nadded book Z: Zed\nr borrowed Z, due day 17\nr returned Z on time\nerror: r does not have Z\nr borrowed Z, due day 34\nerror: q does not have Z\nerror: Z is already on loan\nr returned Z 4 days late, fine $0.40\nr owes $0.40\nerror: bad day\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "member ann\nmember bob\nmember ann\nbook b1 Dune\nbook b2 Emma novel\nbook b1 Again\nborrow ann b1 10\nborrow bob b1 11\nborrow bob b2 11\nlate 24\nlate 25\nlate 26\nreturn bob b2 20\nreturn bob b1 30\nreturn ann b1 24\nreturn ann b1 25\nborrow ann b1 30\nreturn ann b1 50\nfines ann\nfines bob\nfines zed\nstatus\nbogus\n",
+      "expected_output": "welcome ann\nwelcome bob\nerror: ann is already a member\nadded book b1: Dune\nadded book b2: Emma novel\nerror: book b1 already exists\nann borrowed b1, due day 24\nerror: b1 is already on loan\nbob borrowed b2, due day 25\nnothing is overdue\nann b1 due 24 (1 days late)\nann b1 due 24 (2 days late)\nbob b2 due 25 (1 days late)\nbob returned b2 on time\nerror: bob does not have b1\nann returned b1 on time\nerror: ann does not have b1\nann borrowed b1, due day 44\nann returned b1 6 days late, fine $0.60\nann owes $0.60\nbob owes $0.00\nerror: unknown member zed\nb1 Dune: available\nb2 Emma novel: available\nerror: unknown command bogus\n"
+    },
+    {
+      "stdin": "status\nlate 1\nlate x\nborrow a b\nmember a\nbook q Quo\nborrow a q 5\nreturn a q 5\nborrow a q 5\nreturn a q 4\n",
+      "expected_output": "no books\nnothing is overdue\nerror: bad day\nerror: usage: borrow NAME ID DAY\nwelcome a\nadded book q: Quo\na borrowed q, due day 19\na returned q on time\na borrowed q, due day 19\na returned q on time\n"
+    }
+  ]
+}

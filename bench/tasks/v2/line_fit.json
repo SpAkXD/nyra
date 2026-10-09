@@ -1,0 +1,42 @@
+{
+  "id": "line_fit",
+  "title": "Fit a straight line",
+  "category": "floats",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input, each holding a point `X Y`: two decimal numbers separated by a single space (an optional minus sign, digits, and optionally a `.` followed by digits). Blank lines are skipped; any other line prints `line N: bad point` (N counts the lines from 1) and is ignored. Fit the least-squares line y = a*x + b through the points: with n points, a = (n*Sxy - Sx*Sy) / (n*Sxx - Sx*Sx) and b = (Sy - a*Sx) / n, where Sx, Sy, Sxy and Sxx are the sums of x, y, x*y and x*x over the points, added in input order. Print `n=N slope=A intercept=B`, with A and B written with exactly 4 digits after the decimal point, rounded to the nearest. When there are fewer than two points, or when n*Sxx - Sx*Sx is 0 (all x equal), print `n=N undefined`. Every answer in the tests is well away from a rounding tie.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1 2\n2 4.1\n3 5.9\noops\n4 8.2\n\n5 9.8\n",
+      "expected_output": "line 4: bad point\nn=5 slope=1.9700 intercept=0.0900\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0 0\n1 1\n",
+      "expected_output": "n=2 slope=1.0000 intercept=0.0000\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1 1\n1 2\n1 3\n",
+      "expected_output": "n=3 undefined\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "-2 7.5\n-1 4.25\n0 2.1\n1 -0.4\n2 -3.9\n3 -6.2\n",
+      "expected_output": "n=6 slope=-2.7271 intercept=1.9219\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "5 5\n",
+      "expected_output": "n=1 undefined\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "10 100\n20 195\n30 310\n40 395\n50 510\n60 590\n70 705\n",
+      "expected_output": "n=7 slope=10.0179 intercept=0.0000\n"
+    }
+  ]
+}

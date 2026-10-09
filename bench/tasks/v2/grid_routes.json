@@ -1,0 +1,47 @@
+{
+  "id": "grid_routes",
+  "title": "Routes through a grid with holes",
+  "category": "dynamic-programming",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line `ROWS COLS`, then ROWS lines of COLS characters, `.` for a free cell and `#` for a blocked one. A route goes from the top-left cell to the bottom-right cell, moving one cell right or one cell down at a time, only through free cells. Print the number of different routes modulo 1000000007. If the start or the end is blocked there are no routes (print 0).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "3 3\n...\n.#.\n...\n",
+      "expected_output": "2\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1 1\n.\n",
+      "expected_output": "1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "2 2\n..\n..\n",
+      "expected_output": "2\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "3 4\n...#\n....\n#...\n",
+      "expected_output": "8\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "30 30\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n..............................\n",
+      "expected_output": "289070178\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "4 4\n#...\n....\n....\n....\n",
+      "expected_output": "0\n"
+    },
+    {
+      "name": "hidden6",
+      "stdin": "5 5\n.....\n.###.\n.....\n.###.\n.....\n",
+      "expected_output": "3\n"
+    }
+  ]
+}

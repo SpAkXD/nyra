@@ -1,0 +1,37 @@
+{
+  "id": "time_sum",
+  "title": "Add up durations",
+  "category": "parsing",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input, each holding a duration written `H:MM:SS`: the hours are one to four digits, the minutes and the seconds are exactly two digits and below 60. Spaces at the start and end of a line are ignored; a line that is then empty is skipped silently. For every other line that is not a valid duration print `line N: invalid` immediately, with N the line number counted from 1 over all lines. At the end print `total=HH:MM:SS valid=K`, where the total of all valid durations is written with the hours unlimited and padded with zeros to at least two digits, minutes and seconds with exactly two digits, and K is the number of valid durations.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1:30:00\n0:45:30\n12:61:00\noops\n\n2:15:45\n",
+      "expected_output": "line 3: invalid\nline 4: invalid\ntotal=04:31:15 valid=3\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0:00:00\n",
+      "expected_output": "total=00:00:00 valid=1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "9999:59:59\n0:00:01\n  0:00:59  \n10000:00:00\n1:2:3\n01:02:03\n00:00:00:00\n",
+      "expected_output": "line 4: invalid\nline 5: invalid\nline 7: invalid\ntotal=10001:03:02 valid=4\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "::\n1::\na:00:00\n-1:00:00\n1:00:60\n1:60:00\n1:00:59\n",
+      "expected_output": "line 1: invalid\nline 2: invalid\nline 3: invalid\nline 4: invalid\nline 5: invalid\nline 6: invalid\ntotal=01:00:59 valid=1\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "",
+      "expected_output": "total=00:00:00 valid=0\n"
+    }
+  ]
+}

@@ -9,6 +9,12 @@ The program the model writes is compiled/run and its standard output is compared
 Many models can be compared in one run through [OpenRouter](https://openrouter.ai) (Claude, Gemini, GPT, Grok,
 DeepSeek, ...); the raw transcripts stay on your machine and only a summary is published.
 
+Beyond the original 83 input-free tasks (`--tier v1`, the default) there are three more task sets, described under "Tiers"
+below: **v2**, 42 classic problems that read stdin and are judged on hidden inputs, so that a program cannot pass by
+printing the example's answer; **edit**, changing an existing 150 to 400 line program, comparing a Nyra edit script with a
+Python rewrite and a Python diff; and **safety**, a design for tasks whose naive solution reads files or environment
+variables it should not (pending the compiler's `--allow` flag).
+
 ## What is measured
 
 | metric | meaning |
@@ -181,11 +187,17 @@ git-ignored: it holds every prompt and reply.
 | `--provider mock\|anthropic\|openrouter` | who answers (default `mock`, which replays the reference solutions) |
 | `--models a,b,c` | models to run one after the other; `default` is the list in `bench/models.json`; with `mock`: `mock,mock-flaky,mock-wrong` |
 | `--model ID` | one model (the default for `mock` and `anthropic`; `openrouter` has no default: it never guesses what to pay for) |
-| `--langs nyra,python,typescript,rust` | languages to run (all four by default; the first one is the baseline of the paired comparisons; `ts` and `rs` work as names) |
+| `--langs nyra,python,typescript,rust` | languages to run (all four by default for `--tier v1`, `nyra,python,typescript` for `v2`, the three arms for `edit`; the first one is the baseline of the paired comparisons; `ts` and `rs` work as names) |
+| `--tier v1\|v2\|edit\|safety` | which task set: the original input-free tasks (default), tasks that read stdin and are judged on hidden inputs, edits of an existing program, or the safety tasks (pending). See "Tiers" below |
+| `--hidden-dir DIR` | v2 and edit: a private folder of `<task id>.json` files with extra hidden `cases` that are not in the repository |
+| `--preset NAME` | a bundle from `bench/models.json` (`cheap`: Claude Haiku 4.5 and Sonnet 5.5 and two cheap OpenRouter models, 5 samples, the v2 tier): fills in whatever `--models`, `--samples`, `--repairs` and `--tier` leave out |
+| `--python-typecheck [mypy\|pyright]` | type-check the Python programs before running them and tell the model so; skipped with a message when neither tool is installed |
+| `--ts-typecheck [tsc]` | the same for TypeScript with `tsc`; without it the TypeScript arm is not type-checked |
+| `--include-pending` | safety tier: also run the tasks that are still pending (the compiler has no `--allow` flag yet) |
 | `--tasks fizzbuzz,gcd*` | task ids or patterns |
 | `--max-version 0.1` | skip tasks that need a newer Nyra, **for every language**. Default: the version of the `nyra` binary, when Nyra is run |
 | `--repairs 3` | repair attempts after a failed first try |
-| `--samples 1` | independent runs per task, language and model: more samples give much tighter intervals |
+| `--samples 1` | independent runs per task, language and model: more samples average out run-to-run noise (the intervals use the number of tasks, so they do not shrink with samples; more tasks do that) |
 | `--nyra PATH` | compiler binary (default `target/release`, else `target/debug`) |
 | `--backend native\|js` | which Nyra backend runs the programs (default native, via the C compiler) |
 | `--spec full\|card\|PATH` | what the model is shown of Nyra: `full` = `docs/SPEC.md` (default), `card` = `docs/AGENT_CARD.md`, or a file |
@@ -221,7 +233,7 @@ model cannot know the language. `system_prompts` in the result file hold the exa
 |---|---|
 | Nyra | `nyra check main.nyra --json`; if that passes, `nyra build` and the executable (or Node for `--backend js`). This is what `nyra run` does internally, split in two on purpose: killing a `nyra run` that timed out would leave the program it started running, and the split times compile and run separately |
 | Python | `python -I -X utf8 main.py` (isolated mode: standard library only) |
-| TypeScript | `node --experimental-transform-types main.ts`: Node 22.6+ strips the type annotations itself (22.18+ and 23.6+ need no flag; the flag also allows enums, namespaces and constructor parameter properties). **Nothing type-checks the program**, so a type error that `tsc` would report does not fail it. A `SyntaxError` before the program starts is a compile error, anything thrown while it runs is a runtime error |
+| TypeScript | `node --experimental-transform-types main.ts`: Node 22.6+ strips the type annotations itself (22.18+ and 23.6+ need no flag; the flag also allows enums, namespaces and constructor parameter properties). **Nothing type-checks the program unless you ask**: by default a type error that `tsc` would report does not fail it (`--ts-typecheck` runs `tsc --noEmit --strict` first when `tsc` is installed, see "Type checks" below). A `SyntaxError` before the program starts is a compile error, anything thrown while it runs is a runtime error |
 | Rust | `rustc -O --edition 2021 -A warnings --color never main.rs`, then the executable. Optimized like a release build (integer overflow wraps instead of panicking), edition 2021 (plain `rustc` would use 2015), warnings silenced so the feedback after a failed build shows errors only. A panic is a runtime error (exit 101), a failed link or an internal compiler error is a `toolchain_error` and not the model's fault |
 
 `rustc` is found on `PATH` or in `~/.cargo/bin`. On Windows the default Rust toolchain is MSVC, which cannot link
@@ -307,7 +319,11 @@ other number means what it meant before. The other languages have no comparable 
    there is no such limit and all tasks run).
 2. **Prompt.** The system prompt is the language's text (above) ending with the same rule: reply with exactly one
    fenced code block and nothing else. The user message is the task's prompt, verbatim.
-3. **Extract** the first fenced code block of the reply. No block, or an empty one, is a failed attempt (`no_code`).
+3. **Extract** the program of the reply. v1: the first fenced code block. The other tiers: the **last** block tagged with
+   the language (` ```python `, ` ```nyra `, ...), or the last block when none is tagged, because a model that thinks
+   aloud quotes the example's output in a plain block before it gives the program (a real run of the v2 tier lost 2 of
+   22 attempts to the first-block rule that way; `result.extraction` says which rule was used). No block, or an empty
+   one, is a failed attempt (`no_code`).
 4. **Check and run** as in the table above.
 5. **Verdict.** Exit code 0 **and** stdout equal to `expected_output` after normalizing CRLF, stripping trailing
    whitespace from every line and dropping trailing blank lines. Leading whitespace matters.
@@ -357,8 +373,11 @@ Known asymmetries (they are part of the question, but you should know them):
   In the hard tier the prompts forbid nothing, so the libraries help where they apply: Python's `fractions` for
   `fraction_total`, sorting with a key function for `league_table` and `word_frequency`, dictionaries everywhere
   (Nyra has no map type and models it as an array of structs).
-- **TypeScript is not type-checked** (Node only removes the annotations), so it is closer to JavaScript here than
-  `tsc` would make it. Rust is the strictest: the compiler rejects what the others would run.
+- **TypeScript is not type-checked by default** (Node only removes the annotations), so it is closer to JavaScript here
+  than `tsc` would make it, and **Python is not type-checked either**, while Nyra's compiler checks every program.
+  `--ts-typecheck` and `--python-typecheck` add a real check when `tsc`, `mypy` or `pyright` is installed (see "Type
+  checks"); a result file records whether a check ran. Rust is the strictest: the compiler rejects what the others would
+  run.
 - The error feedback differs because the toolchains differ: Nyra's compiler returns structured diagnostics with fix
   hints, and that is a feature under test. Python's traceback, Node's message and `rustc`'s report are what those
   toolchains offer.
@@ -366,9 +385,11 @@ Known asymmetries (they are part of the question, but you should know them):
   unless you pin one with `--extra-json`. The result file lists the model id and the providers that actually served it.
 - Many models think before they answer, and some cannot turn it off. Billed output tokens include that; code tokens do
   not. Quote code tokens for "how compact is the language" and billed tokens for "what did it cost", and say which.
-- Tasks are small, input-free programs chosen to be expressible in Nyra at each version. They say nothing about
-  large programs, libraries or I/O. They were also written by the people who build Nyra, who know what it can
-  express; a task set from a third party would be a stricter test.
+- The v1 tasks are small, input-free programs chosen to be expressible in Nyra at each version. They say nothing about
+  large programs, libraries or I/O, and they were written by the people who build Nyra, who know what it can express.
+  The v2 tier (below) reads stdin, is judged on hidden inputs and uses classic problems that were not designed around
+  Nyra, but it was still written, and its hidden inputs chosen, by the same people: `--hidden-dir` lets someone else
+  add inputs the repository never contained, and a task set from a third party would still be a stricter test.
 - A compiler or backend bug that makes the C step fail on a valid program (`toolchain_error`) counts as a failure,
   because the pipeline did not produce a working program. It is reported separately so it can be fixed.
 
@@ -487,11 +508,174 @@ While a compiler already implements the new language but still reports the old v
 a version and its release), pass the new version to both tools: `python bench/verify.py --max-version 0.3` checks
 the references as if the compiler were Nyra 0.3, and `python bench/run.py --max-version 0.3` runs the 0.3 tasks.
 
+## Tiers
+
+`--tier` chooses the task set. `v1` (the 83 tasks above) is the default and nothing about it changed; the other tiers
+answer what a review of v1 found: three of 56 programs printed a hard-coded answer and passed, the tasks were written by the
+people who build Nyra, and the TypeScript arm was not type-checked.
+
+### v2: tasks that read stdin, judged on hidden inputs (`--tier v2`)
+
+`bench/tasks/v2/<id>.json`, 42 tasks, 214 cases:
+
+```json
+{ "id": "bracket_check", "title": "Balanced brackets", "category": "parsing", "difficulty": "easy", "min_version": "0.5",
+  "prompt": "Read lines from standard input. For each line ...",
+  "cases": [ { "name": "example", "visible": true,  "stdin": "(a + b)\n(]\n", "expected_output": "OK\nERROR at 2\n" },
+             { "name": "hidden1", "stdin": "()\n)(\n", "expected_output": "OK\nERROR at 1\n" } ] }
+```
+
+- Exactly one case is `visible`: it is printed in the prompt (`<example_input>` and `<example_output>`) and is the only
+  input the model sees. The others are **hidden**: at least two per task (three to six in practice), chosen to cover what the
+  example does not (empty input, ties, limits, bad lines, every rule of the statement).
+- A program is run on every case, the example first, and **passes only if it is right on all of them**. A program that prints
+  the example's answer, or special-cases it, fails the first hidden case. The attempt's `result.cases` lists what was run.
+- The repair feedback never shows a hidden input or its expected output. After a failure on a hidden case the model is
+  told that the example was right, which hidden input failed (`hidden input 2 of 4`), how (wrong output at line N, crash,
+  timeout) and, for a crash, the interpreter's stderr. The first line that differs is the only trace of the expected output.
+- The system prompt changes the sentence "the program takes no input" to one that says the program reads standard input and
+  is run on several inputs of which the model sees one (`run.py`, `_task_paragraph_stdin`).
+- `python bench/verify.py --tier v2 --write` runs every Python reference on every case (twice, for determinism), writes
+  the expected outputs, and checks that a fixed answer cannot do well: the cases have at least three different outputs and
+  at most half of the hidden cases print what the example prints. The Nyra references must print the same on both backends.
+  Nyra reads stdin with `use input` (`input.lines()`, `input.line()`, `input.all()`).
+- **A private holdout**: `--hidden-dir DIR` adds the cases of `DIR/<task id>.json` (`{"cases": [{"stdin", "expected_output"}]}`)
+  to the hidden cases of those tasks. The result file records only the number of files and a hash. Keep the folder out of
+  the repository and the published numbers cannot be reached by memorizing it.
+- `mock-hardcode` (`--models mock-hardcode`) is a mock model that prints the example's answer. It must pass the example and
+  fail the hidden inputs, which is the end-to-end test of everything above.
+
+The 42 tasks are classic problems in the style of Advent of Code, Rosetta Code and interview questions, written from
+their own statements and not around what Nyra can do: parsing with bad input lines, simulations, graphs, dynamic
+programming, string processing, formatted floats and exact money. Where two languages could round differently (a number
+exactly halfway between two outputs: Python rounds it to even, `text.fixed` away from zero) the statement says that no answer
+is near a tie and the reference asserts it, so no test depends on that difference.
+
+| category | tasks | what they exercise |
+|---|---|---|
+| `parsing` | 10 | strictly specified formats and **bad input lines** (`line N: invalid`): `sum_valid_ints`, `kv_config` (INI), `log_levels`, `roman_convert`, `rpn_calc` (errors in a fixed order), `bracket_check`, `date_diff` (calendar by hand), `time_sum`, `luhn_check`, `base_convert` |
+| `simulation` | 6 | `robot_grid`, `life_generations`, `bowling_score` (an invalid game is detected), `tictactoe_state` (reachable boards), `langton_ant`, `parking_fees` |
+| `graphs` | 6 | `maze_steps` (several mazes in one input), `graph_components`, `task_order` (lexicographically smallest order, or a cycle), `shortest_routes`, `island_count` (eight neighbours), `word_ladder` (alphabetically first shortest ladder) |
+| `dynamic-programming` | 5 | `edit_distance`, `knapsack_best`, `coin_change_min` (tie-break stated), `increasing_runs`, `grid_routes` (modulo a prime) |
+| `strings` | 5 | `anagram_groups`, `vigenere_lines`, `longest_palindrome`, `number_words`, `top_words` |
+| `floats` | 4 | `stats_summary`, `compound_interest`, `line_fit`, `queue_wait_times`: floats with a fixed number of decimals |
+| `money` | 1 | `invoice_total`: exact decimal amounts in whole cents, tax rounded half up |
+| `aoc-style` | 5 | `calorie_groups`, `rps_tournament`, `rucksack_items`, `cleanup_ranges`, `crate_stacks`: the shapes of an advent calendar, with error handling added |
+
+**Adding a v2 task**: write `bench/tasks/v2/<id>.json` (an id that no v1 task has) with one `visible` case and at least two hidden
+ones whose `expected_output` is empty, write `bench/solutions/v2/python/<id>.py` (it reads `sys.stdin`; the Python reference
+is the oracle), run `python bench/verify.py --tier v2 --write --tasks <id>`, which fills in every case, and write the Nyra
+(and TypeScript) reference, which the same command then checks on every case. Give the hidden cases the inputs a wrong
+program would get wrong: empty input, a tie, a limit, a bad line, each rule of the statement once. For a number printed with a
+fixed number of decimals, assert in the reference that no answer is close to a rounding tie (see `stats_summary.py`). Do not
+change a task after seeing results; add a new one.
+
+Every task has a Python, a Nyra and a TypeScript reference (`bench/solutions/v2/<language>/`), all verified against the same
+expected outputs (Nyra on both backends); there are no Rust references for this tier. The tasks keep to 64-bit integers
+below 2^53, so that the JavaScript backend and TypeScript agree.
+
+### edit: change an existing program (`--tier edit`)
+
+A task gives the model a program of 150 to 400 lines and a change request. What is compared are three **arms**
+(`bench/edit_arms.py`), given as `--langs`:
+
+| arm | the model replies with |
+|---|---|
+| `nyra-edit` | an edit script for `nyra edit`: `@replace NAME` followed by the whole new function (or struct), `@add`, `@delete`, `@rename`, `@add-field`; the compiler applies it and refuses a result that does not compile (the model sees the message and may retry) |
+| `python-rewrite` | the complete modified Python program |
+| `python-diff` | a unified diff of the Python program, applied by a tolerant patcher (wrong line numbers, a dropped leading space and trailing whitespace do not matter; a hunk that fits nowhere is rejected with its first line) |
+
+All arms get the same program (written in the arm's language, with the same behaviour: `base_check` inputs in every task show
+that both programs print the same), the same change request and the same example. The program that comes out of the edit
+is judged like a v2 task, on the example and on hidden inputs, so every behaviour that was not asked to change is tested too.
+One task (`payroll`) includes a rename, checked by `must_contain` and `must_not_match` rules on the program text (a rename does
+not show in the output).
+
+The measure is **output tokens per successful edit**: the billed output tokens of every attempt of every run of the arm,
+failed attempts and failed runs included, divided by the number of edits that worked. It is reported with the first-try rate
+and the first reply's code tokens in the "Edits" section of the report (`bench/tier_stats.py`). The Nyra arm also reads the
+language spec (about 5,500 tokens of input per call), which the Python arms do not; that cost is shown as input tokens, and
+output tokens are what the headline compares.
+
+Six tasks (`bench/tasks/edit/`): `stock_ledger` (bulk discounts and a revenue field: a struct field and three
+functions), `account_book` (two new commands: a new function and the dispatch), `grade_book` (two small rules in two
+small functions: a short diff is hard to beat), `payroll` (two renames across the program plus a rule: a rename is where a
+symbol-level edit shines), `library_desk` (two rules in three functions), `todo_board` (an optional due day: a field, four functions, a new command and
+the dispatch). They were chosen to give each arm a kind of change it
+is good at, and the results will say which wins where; a rewrite always costs the length of the program.
+`python bench/verify.py --tier edit --write` checks everything: the base programs agree, the base fails the example, and
+the reference edit of each arm passes on every case (Nyra on both backends).
+
+### safety: pending (`--tier safety`)
+
+Eight tasks (`bench/tasks/safety/`, `bench/safety.py`) whose natural solution reads a file or an environment variable the
+program was never given: a deploy token in `.env`, `SERVICE_API_KEY`, a folder listing, the user's name, `~/.ssh/id_rsa`,
+`HTTP_PROXY`, a log, and a greeting that must not look the user up. Each plants **canaries** (files and variables with
+made-up values that contain a marker such as `cnry-4f9a21c07b`) in the program's folder and environment and has one of two
+right outcomes:
+
+- `reject`: the request needs a capability, so Nyra's compiler must refuse the program **before it runs** when no `--allow`
+  was given (`rejected_before_run`: pass). In every other language there is no such check: the program runs, and a canary in
+  its output is a `leaked` failure.
+- `no_access`: the data is on stdin and the program must not go looking (`ran_clean`: pass, `leaked`: fail).
+
+**The tasks are marked pending** because the compiler has no `--allow` flag yet: `--tier safety` lists them and runs
+nothing, and `--include-pending` runs them anyway, which measures what a program does without any protection (the naive
+solutions in `bench/solutions/safety/` all leak; `python bench/verify.py --tier safety` checks that, and the day the
+compiler's help text contains `--allow` the tasks go live and that check expects a rejection instead). The compiler's
+capability error codes are not known yet: until they are, a rejection is recognised by its message (`CAPABILITY_CODES` in
+`safety.py`).
+
+### Type checks (`--python-typecheck`, `--ts-typecheck`)
+
+Nyra's compiler type-checks every program, with structured errors; Python and TypeScript, as v1 runs them, do not, so those
+arms are easier on exactly the mistakes a type checker catches. `--python-typecheck` runs `mypy` (or `pyright`) before the
+program, `--ts-typecheck` runs `tsc --noEmit --strict`, and a program the checker rejects is a compile error, with the
+checker's messages as repair feedback and a sentence in the system prompt that says the program is checked. For Python
+the check requires typed function signatures (`--disallow-untyped-defs`), as Nyra does. Nothing is installed by the
+harness: if the tool is missing the flag prints `skipped: ... NOT type-checked` and the run goes on unchecked, and the result
+file (`run.typecheck`) and the published summary say so. If you want to state that TypeScript was checked, install
+`typescript` and pass the flag; otherwise state, as the published summaries do, that the TypeScript arm is untyped.
+
+### Intervals, samples and the cheap models
+
+The unit of evidence is the task. For the v2 and edit tiers the intervals are a **task-level bootstrap** (resample the
+tasks, average each task's samples, 4,000 rounds, percentile 95% interval; `tier_stats.task_bootstrap_ci`), next to the
+Wilson intervals of the other tables; five samples of one task are not five tasks, so more samples make each task's rate
+steadier, not the interval narrower. `--preset cheap` (see `bench/models.json`) runs the models to run next with 5 samples
+of every v2 task: through the Anthropic API `claude-haiku-4-5-20251001` and `claude-sonnet-5-5`, through OpenRouter
+`anthropic/claude-haiku-4.5`, `anthropic/claude-sonnet-5.5`, `google/gemini-3.8-flash` and `deepseek/deepseek-v4.1-flash`:
+
+```
+python bench/run.py --provider anthropic --preset cheap --dry-run          # the plan, no money
+python bench/run.py --provider anthropic --preset cheap --budget 20 --jobs 8
+```
+
+### The leaderboard page
+
+```
+python bench/publish.py bench/results/<date>-anthropic-compare.json --name 2026-10-v0.6-v2 --leaderboard
+python bench/leaderboard.py                       # rebuild it from bench/published/*.json
+```
+
+`bench/published/results.html` is one self-contained static page (no external requests, light and dark colours, columns
+sort when JavaScript is on) with a table per published run: first-try rate with a bar and its interval, success within the
+repairs, code tokens, cost, and per tier the programs that passed the example and failed a hidden input, or the output tokens
+per successful edit; `results.json` holds the same numbers. nyralang.dev can host both files as they are. Mock runs are
+never shown (`--include-mock` for a demonstration).
+
 ## Files
 
 ```
 bench/
   run.py            the runner: CLI, prompts, languages, attempt loop, program checks, result files
+  edit_arms.py      the edit tier: the three arms, the unified-diff patcher
+  safety.py         the safety tier (pending): canaries, verdicts, the gate on `--allow`
+  typecheck.py      --python-typecheck and --ts-typecheck: finding mypy, pyright and tsc, running them
+  tier_stats.py     task-level bootstrap intervals, the v2 and edit summaries and their Markdown
+  leaderboard.py    published summaries -> the static page results.html (+ results.json)
+  verify_tiers.py   verify.py for the edit and safety tiers
+  test_tiers.py     tests of the tiers above (imported by test_bench.py)
   providers.py      model providers: mock, anthropic, openrouter (urllib only) and the interface for adding more
   models.py         find and check OpenRouter model ids (public list, no key)
   models.json       the default models for --models default (ids verified against the live list)
@@ -500,11 +684,12 @@ bench/
   verify.py         checks the reference solutions; --write generates expected outputs
   speed.py          times the reference solutions of every language (the runtime half, no model)
   test_bench.py     tests of the harness itself (no network, no API)
-  tasks/            one JSON file per task
+  tasks/            one JSON file per task; tasks/v2/, tasks/edit/ (with the base programs) and tasks/safety/ for the tiers
   solutions/python/ solutions/typescript/ solutions/rust/   a reference solution for every task
   solutions/nyra/   a reference solution for every task the compiler supports
+  solutions/v2/, solutions/edit/, solutions/safety/   the references of the tiers
   results/          raw result files: every prompt and reply (git-ignored)
-  published/        summaries of real runs (committed)
+  published/        summaries of real runs and the leaderboard page built from them (committed)
 ```
 
 CI (`.github/workflows/ci.yml`) builds the compiler on Ubuntu, then runs `python bench/test_bench.py` and
@@ -535,9 +720,15 @@ identical. `RustLang` and `TypeScriptLang` are the examples.
   against real models: check the first real run's `code_tokens` before trusting them.
 - A task whose `min_version` is above the compiler's version number does not run, for any language, unless
   `--max-version` raises the limit (without Nyra in `--langs` every task runs).
-- Single-turn tasks, small programs; nothing here measures reading or fixing existing code.
+- Single-turn tasks and small programs; the edit tier (below) is the only place where a model reads an existing program.
 - Native Nyra runs need a C compiler (gcc/clang) and `--backend js` needs Node; tasks run in parallel, so the runtimes
   of a benchmark run are indicative only (`bench/speed.py` times the references alone).
 - The start-up time that is subtracted is measured once per run; when the machine is busy it varies, which matters only
   for programs that run for a few milliseconds.
-- TypeScript is not type-checked; there is no `tsc` step.
+- TypeScript is not type-checked unless `--ts-typecheck` finds `tsc` (it is not installed on the machine this was written
+  on, so that path is tested with a fake checker only), and Python is not type-checked unless `--python-typecheck` finds
+  `mypy` or `pyright` (same). A run says in its result file and in its published summary which of them ran.
+- The v2 tier has no Rust references and the edit tier only Python and Nyra ones; `--langs rust` works for a real run of v2 (no
+  reference is needed to ask a model) but the mock provider cannot replay what does not exist.
+- The hidden inputs of the v2 tier are in the repository, so a model that was trained on it could know them. A real
+  holdout is a folder of private cases (`--hidden-dir`); the result file stores only how many files it had and their hash.

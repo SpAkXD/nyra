@@ -1,0 +1,94 @@
+--- a/main.py
++++ b/main.py
+@@ -20,6 +20,7 @@
+     title: str
+     priority: int
+     done: bool
++    due: int  # a day number, or -1 when the task has no due day
+ 
+ 
+ @dataclass
+@@ -47,7 +48,8 @@
+ 
+ 
+ def describe(todo: Todo) -> str:
+-    return f"#{todo.id} [{todo.priority}] {todo.title}"
++    text = f"#{todo.id} [{todo.priority}] {todo.title}"
++    return text + (f" (due {todo.due})" if todo.due >= 0 else "")
+ 
+ 
+ def cmd_add(board: Board, args: list) -> None:
+@@ -58,9 +60,21 @@
+     if not valid_priority(priority):
+         print("error: priority must be 1, 2 or 3")
+         return
+-    title = " ".join(args[2:])
+-    board.todos.append(Todo(board.next_id, title, priority, False))
+-    print(f"added #{board.next_id}: {title} (priority {priority})")
++    due = -1
++    words = args[2:]
++    if words[0].startswith("@"):
++        due = parse_number(words[0][1:])
++        if due < 0:
++            print("error: bad due day")
++            return
++        words = words[1:]
++        if len(words) == 0:
++            print("error: usage: add PRIORITY TITLE")
++            return
++    title = " ".join(words)
++    board.todos.append(Todo(board.next_id, title, priority, False, due))
++    suffix = f", due {due}" if due >= 0 else ""
++    print(f"added #{board.next_id}: {title} (priority {priority}{suffix})")
+     board.next_id += 1
+ 
+ 
+@@ -127,7 +141,7 @@
+     if len(open_todos) == 0:
+         print("nothing to do")
+         return
+-    for todo in sorted(open_todos, key=lambda t: (t.priority, t.id)):
++    for todo in sorted(open_todos, key=lambda t: (0 if t.due >= 0 else 1, t.due if t.due >= 0 else 0, t.priority, t.id)):
+         print(describe(todo))
+ 
+ 
+@@ -137,12 +151,29 @@
+         return
+     for todo in board.todos:
+         mark = "x" if todo.done else " "
+-        print(f"#{todo.id} [{mark}] [{todo.priority}] {todo.title}")
++        due = f" (due {todo.due})" if todo.due >= 0 else ""
++        print(f"#{todo.id} [{mark}] [{todo.priority}] {todo.title}{due}")
+ 
+ 
+ def cmd_stats(board: Board, args: list) -> None:
+     done = len([todo for todo in board.todos if todo.done])
+     print(f"open={len(board.todos) - done} done={done}")
++
++
++def cmd_overdue(board: Board, args: list) -> None:
++    if len(args) != 2:
++        print("error: usage: overdue DAY")
++        return
++    day = parse_number(args[1])
++    if day < 0:
++        print("error: bad day")
++        return
++    late = [todo for todo in board.todos if not todo.done and 0 <= todo.due < day]
++    if len(late) == 0:
++        print("nothing is overdue")
++        return
++    for todo in sorted(late, key=lambda t: (t.due, t.id)):
++        print(f"#{todo.id} {todo.title} was due {todo.due}")
+ 
+ 
+ def execute(board: Board, line: str) -> None:
+@@ -166,6 +197,8 @@
+         cmd_all(board, args)
+     elif command == "stats":
+         cmd_stats(board, args)
++    elif command == "overdue":
++        cmd_overdue(board, args)
+     else:
+         print(f"error: unknown command {command}")
+ 

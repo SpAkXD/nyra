@@ -1,0 +1,37 @@
+{
+  "id": "crate_stacks",
+  "title": "Rearranging crates",
+  "category": "aoc-style",
+  "difficulty": "hard",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Standard input has two parts separated by one blank line. The first part draws stacks of crates, as in this example (the bottom of each stack is the line just above the numbers; a crate is a letter in square brackets; stack k is the k-th column, the numbers line gives the stacks `1 2 3`, and lines may be shorter than the others because trailing spaces are removed):\n\n```\n    [D]\n[N] [C]\n[Z] [M] [P]\n 1   2   3\n```\n\nThe second part is a list of moves `move N from A to B`: take N crates from the top of stack A and put them on stack B. Do the whole list twice, each time starting from the drawn stacks: in the first run the crates are moved one at a time (so they end up in reverse order on the new stack); in the second run all N crates are lifted together and keep their order. A move that asks for more crates than the stack A holds, or names a stack that does not exist, prints `line N: impossible move` (N is the line number in the input, counted from 1) and changes nothing; this is the same in both runs, so print it once, before the results. Blank lines in the move list are skipped.\n\nThen print two lines: `one at a time: XYZ` and `all at once: XYZ`, listing the letter on top of each stack from stack 1 to the last one, with `-` for an empty stack.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "    [D]\n[N] [C]\n[Z] [M] [P]\n 1   2   3\n\nmove 1 from 2 to 1\nmove 3 from 1 to 3\nmove 2 from 2 to 1\nmove 1 from 1 to 2\n",
+      "expected_output": "one at a time: CMZ\nall at once: MCD\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "[A]\n 1 \n\nmove 1 from 1 to 1\nmove 2 from 1 to 1\n",
+      "expected_output": "line 5: impossible move\none at a time: A\nall at once: A\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "[A] [B]\n 1   2 \n\nmove 1 from 1 to 2\nmove 1 from 2 to 1\nmove 2 from 2 to 1\nmove 1 from 1 to 3\nmove 5 from 1 to 2\n",
+      "expected_output": "line 6: impossible move\nline 7: impossible move\nline 8: impossible move\none at a time: AB\nall at once: AB\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "        [X]\n    [Y] [Z]\n[P] [Q] [R] [S]\n 1   2   3   4\n\nmove 3 from 3 to 1\n\nmove 2 from 1 to 4\nmove 1 from 2 to 3\nmove 1 from 4 to 2\n",
+      "expected_output": "one at a time: XZYR\nall at once: RXYZ\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "[M]     [N]\n[A] [B] [C]\n 1   2   3 \n\nmove 2 from 1 to 2\nmove 2 from 3 to 2\nmove 1 from 2 to 1\nmove 4 from 2 to 3\n",
+      "expected_output": "one at a time: C-B\nall at once: N-C\n"
+    }
+  ]
+}

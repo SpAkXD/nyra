@@ -1,0 +1,35 @@
+use input
+use text
+
+var arrivals: [int] = []
+var services: [int] = []
+for line in input.lines() {
+    var parts: [str] = []
+    for t in line.split(" ") {
+        if t != "" { parts.push(t) }
+    }
+    if parts.len() == 2 {
+        arrivals.push(int(parts[0]))
+        services.push(int(parts[1]))
+    }
+}
+print("customers={arrivals.len()}")
+if arrivals.len() > 0 {
+    var free_at = 0
+    var total_wait = 0
+    var max_wait = 0
+    var busy = 0
+    for i in 0..arrivals.len() {
+        let start = max(arrivals[i], free_at)
+        let wait = start - arrivals[i]
+        total_wait += wait
+        max_wait = max(max_wait, wait)
+        free_at = start + services[i]
+        busy += services[i]
+    }
+    let span = free_at - arrivals[0]
+    let average = float(total_wait) / float(arrivals.len())
+    let share = float(busy) * 100.0 / float(span)
+    print("average wait={text.fixed(average, 2)} max wait={max_wait}")
+    print("busy={text.fixed(share, 1)}%")
+}

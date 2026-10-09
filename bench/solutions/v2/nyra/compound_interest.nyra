@@ -1,0 +1,16 @@
+use input
+use text
+
+let parts = input.line().trim().split(" ")
+let principal = float(parts[0])
+let rate = float(parts[1])
+let years = int(parts[2])
+let periods = int(parts[3])
+var balance = principal
+for year in 1..years + 1 {
+    for _ in 0..periods {
+        balance = balance * (1.0 + rate / 100.0 / float(periods))
+    }
+    print("Year {year}: {text.fixed(balance, 2)}")
+}
+print("interest earned: {text.fixed(balance - principal, 2)}")

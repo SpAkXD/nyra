@@ -1,0 +1,32 @@
+{
+  "id": "edit_distance",
+  "title": "Edit distance between words",
+  "category": "dynamic-programming",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each line holds two strings separated by a single `|` (either of them may be empty, neither contains `|`). For each line print the Levenshtein distance between them: the fewest single-character insertions, deletions and substitutions that turn the first string into the second. Comparison is case-sensitive and every character counts, spaces included. Lines without exactly one `|` print `invalid`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "kitten|sitting\nflaw|lawn\n|abc\nsame|same\nab|ba\noops\n",
+      "expected_output": "3\n2\n3\n0\n2\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "|\na|\n|a\na|a\na|b\nintention|execution\n",
+      "expected_output": "0\n1\n1\n0\n1\n5\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "Sunday|Saturday\nsunday|Sunday\na b|ab\n  |\na||b\nabc|def|ghi\n",
+      "expected_output": "3\n1\n1\n2\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "horse|ros\nalgorithm|altruistic\nxyzxyzxyz|xyxyxy\naaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbb\n",
+      "expected_output": "3\n6\n3\n20\n"
+    }
+  ]
+}

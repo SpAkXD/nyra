@@ -1,0 +1,50 @@
+use input
+
+// an amount written with digits and at most two decimals, in hundredths; -1 when it is not one
+fn parse_money(s: str) -> int {
+    let parts = s.split(".")
+    if parts.len() > 2 { ret -1 }
+    if parts[0].len() == 0 || !parts[0].all(c => c.is_digit()) || parts[0].len() > 12 { ret -1 }
+    var cents = 0
+    if parts.len() == 2 {
+        if parts[1].len() < 1 || parts[1].len() > 2 || !parts[1].all(c => c.is_digit()) { ret -1 }
+        cents = int(parts[1])
+        if parts[1].len() == 1 { cents = cents * 10 }
+    }
+    ret int(parts[0]) * 100 + cents
+}
+
+fn money(cents: int) -> str = "{cents / 100}." + str(cents % 100).pad_left(2, '0')
+
+var subtotal = 0
+var rate = 0
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line.trim() == "" { continue }
+    if line.starts_with("tax=") {
+        let r = parse_money(line.slice(4, line.len()))
+        if r < 0 {
+            print("line {n}: invalid")
+        } else {
+            rate = r
+        }
+        continue
+    }
+    let parts = line.split(";")
+    var ok = false
+    if parts.len() == 3 && parts[0] != "" && parts[1].len() >= 1 && parts[1].len() <= 4 && parts[1].all(c => c.is_digit()) {
+        let qty = int(parts[1])
+        let price = parse_money(parts[2])
+        if qty >= 1 && qty <= 9999 && price >= 0 {
+            subtotal += qty * price
+            print("{parts[0]}: {qty} x {money(price)} = {money(qty * price)}")
+            ok = true
+        }
+    }
+    if !ok { print("line {n}: invalid") }
+}
+let tax = (subtotal * rate + 5000) / 10000
+print("subtotal={money(subtotal)}")
+print("tax={money(tax)}")
+print("total={money(subtotal + tax)}")

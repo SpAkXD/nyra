@@ -1,0 +1,56 @@
+@add-field Shop revenue: int
+@replace cmd_sell
+fn cmd_sell(inout shop: Shop, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: sell SKU QTY")
+        ret
+    }
+    let qty = parse_count(args[2])
+    if qty <= 0 {
+        print("error: bad number")
+        ret
+    }
+    let at = find_item(shop, args[1])
+    if at < 0 {
+        print("error: unknown item {args[1]}")
+        ret
+    }
+    let item = shop.items[at]
+    if item.qty < qty {
+        print("error: not enough stock for {item.sku} (have {item.qty})")
+        ret
+    }
+    shop.items[at].qty -= qty
+    var unit = item.price
+    var note = ""
+    if qty >= 10 {
+        unit = item.price * 90 / 100
+        note = " (bulk price)"
+    }
+    shop.revenue += qty * unit
+    print("sold {qty} x {item.name} for {money(qty * unit)}{note}")
+}
+@replace cmd_report
+fn cmd_report(shop: Shop, args: [str]) {
+    if shop.items.len() == 0 {
+        print("the shop is empty")
+        ret
+    }
+    var total = 0
+    var sorted = shop.items
+    sorted.sort_by(it => it.sku)
+    for item in sorted {
+        let value = item.qty * item.price
+        total += value
+        print("{item.sku} {item.name} qty={item.qty} price={money(item.price)} value={money(value)}")
+    }
+    print("total value={money(total)}")
+    print("revenue={money(shop.revenue)}")
+}
+@replace main
+fn main() {
+    var shop = Shop(items: [], revenue: 0)
+    for line in input.lines() {
+        execute(inout shop, line)
+    }
+}

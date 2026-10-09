@@ -937,7 +937,8 @@ class WarmUpBeforeTheJobs(unittest.TestCase):
         langs = run.make_languages(["nyra", "python"], nyra=None, backend="native", spec=run.resolve_spec("card"),
                                    timeout=10)
         provider = _WarmMock(reference=lambda lang, tid: langs[lang].reference_code(tid), log=log)
-        args = run.build_parser().parse_args(["--provider", "mock", "--jobs", "3", "-q"])
+        # --repairs and --samples are filled in by the CLI per tier; run_model is called directly here
+        args = run.build_parser().parse_args(["--provider", "mock", "--jobs", "3", "-q", "--tier", "v1", "--repairs", "3", "--samples", "1"])
         tasks = [t for t in run.load_tasks() if t.id in ("fizzbuzz", "gcd_pairs")]
         plan = run.Plan(args=args, lang_names=["nyra", "python"], langs=langs, tasks=tasks, excluded=[],
                         max_version=None, max_source=None, warnings=[], toolchains={"node": None, "rust": None})
@@ -3504,7 +3505,7 @@ class OldResultFiles(unittest.TestCase):
 
 @needs_nyra
 class NyraSelfRepair(unittest.TestCase):
-    BROKEN = "fn main() {\n    print(f(2))\n}\nfn f(x: int) -> int {\n    return x + 40\n}\n"  # `return`: E0201
+    BROKEN = "fn main() {\n    print(f(2))\n}\nfn f(x: int) -> int {\n    return x + 40;\n}\n"  # `;`: E0005, which --fix removes
 
     def test_the_compiler_repairs_an_unambiguous_mistake(self):
         lang = run.NyraLang(NYRA, timeout=10)
@@ -3512,7 +3513,7 @@ class NyraSelfRepair(unittest.TestCase):
         out = lang.self_repair(self.BROKEN, _task("42\n"))
         self.assertTrue(out["tried"] and out["changed"])
         self.assertTrue(out["result"]["passed"], out)
-        self.assertIn("ret x + 40", out["code"])
+        self.assertIn("return x + 40\n", out["code"])
 
     def test_a_mistake_without_a_fix_is_left_alone(self):
         out = run.NyraLang(NYRA, timeout=10).self_repair("fn main() {\n    print(nothing)\n}\n", _task("1\n"))
@@ -3678,9 +3679,14 @@ class Readme(unittest.TestCase):
         # the ids the README tells the reader to type must be ids the harness itself ships and verified
         readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
         shipped = set(modelsmod.default_model_ids())
+        for name in modelsmod.preset_names():  # the ids of the presets are checked against OpenRouter too (models.py --check)
+            shipped |= set(modelsmod.load_preset(name).get("openrouter", []))
         for mid in set(re.findall(r"\b(?:anthropic|openai|google|x-ai|deepseek)/[A-Za-z0-9._-]+", readme)):
             self.assertIn(mid, shipped, f"README mentions {mid}, which is not in bench/models.json")
 
+
+# The tests of the tiers beyond v1 (hidden inputs, edits, safety, type checks, presets, the leaderboard) live in their own file.
+from test_tiers import *  # noqa: E402,F401,F403
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

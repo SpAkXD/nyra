@@ -1,0 +1,30 @@
+use input
+
+fn is_count(s: str) -> bool = s.len() > 0 && s.len() < 15 && s.all(c => c.is_digit())
+
+var contained = 0
+var overlapping = 0
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line == "" { continue }
+    var ok = false
+    let pair = line.split(",")
+    if pair.len() == 2 {
+        let left = pair[0].split("-")
+        let right = pair[1].split("-")
+        if left.len() == 2 && right.len() == 2 && is_count(left[0]) && is_count(left[1]) && is_count(right[0]) && is_count(right[1]) {
+            let a = int(left[0])
+            let b = int(left[1])
+            let c = int(right[0])
+            let d = int(right[1])
+            if a <= b && c <= d {
+                ok = true
+                if (a <= c && d <= b) || (c <= a && b <= d) { contained += 1 }
+                if a <= d && c <= b { overlapping += 1 }
+            }
+        }
+    }
+    if !ok { print("line {n}: invalid") }
+}
+print("contained={contained} overlapping={overlapping}")

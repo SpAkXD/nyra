@@ -1,0 +1,41 @@
+use input
+
+let lines = input.lines()
+let head = lines[0].split(" ")
+let n = int(head[0])
+let m = int(head[1])
+var ea: [int] = []
+var eb: [int] = []
+var ed: [int] = []
+for i in 0..m {
+    let p = lines[1 + i].split(" ")
+    ea.push(int(p[0]))
+    eb.push(int(p[1]))
+    ed.push(int(p[2]))
+}
+let unreached = -1
+for qi in 1 + m..lines.len() {
+    let q = lines[qi].split(" ")
+    let s = int(q[0])
+    let t = int(q[1])
+    var dist = [unreached].repeat(n + 1)
+    var done = [false].repeat(n + 1)
+    dist[s] = 0
+    while true {
+        var u = -1
+        for v in 1..n + 1 {
+            if !done[v] && dist[v] >= 0 && (u < 0 || dist[v] < dist[u]) { u = v }
+        }
+        if u < 0 { break }
+        done[u] = true
+        for e in 0..m {
+            var other = -1
+            if ea[e] == u { other = eb[e] }
+            if eb[e] == u { other = ea[e] }
+            if other >= 0 && (dist[other] < 0 || dist[u] + ed[e] < dist[other]) {
+                dist[other] = dist[u] + ed[e]
+            }
+        }
+    }
+    if dist[t] >= 0 { print(dist[t]) } else { print("unreachable") }
+}

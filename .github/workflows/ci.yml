@@ -71,3 +71,9 @@ jobs:
         run: python bench/test_bench.py
       - name: Reference solutions
         run: python bench/verify.py
+      - name: Reference solutions of the v2 tier (stdin, hidden inputs)
+        run: python bench/verify.py --tier v2 --skip rust,typescript
+      - name: Reference edits of the edit tier
+        run: python bench/verify.py --tier edit
+      - name: Safety tier (pending: the naive solutions leak until the compiler has --allow)
+        run: python bench/verify.py --tier safety

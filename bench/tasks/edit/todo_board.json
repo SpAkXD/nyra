@@ -1,0 +1,47 @@
+{
+  "id": "todo_board",
+  "title": "Due days on a to-do board",
+  "category": "edit",
+  "difficulty": "hard",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Give the tasks of the to-do board an optional due day.\n\n1. `add PRIORITY @DAY TITLE...`: a first title word that starts with `@` is a due day (a whole number written with digits after the `@`, for example `@5`) and is not part of the title. A bad one (`@x`, a lone `@`) prints `error: bad due day` and adds nothing; a due day with no title after it prints the usual usage error. Without a due day `add` works exactly as before. The confirmation of a task with a due day reads `added #ID: TITLE (priority P, due D)`.\n2. `list` shows the open tasks that have a due day first, ordered by due day, then priority, then id; after them come the open tasks without a due day, ordered by priority and id as before. Every task with a due day is shown with ` (due D)` at the end of its line, in `list` and in `all`.\n3. A new command `overdue DAY` lists the open tasks whose due day is before DAY, ordered by due day and then id, one per line as `#ID TITLE was due D`. When there are none it prints `nothing is overdue`; a DAY that is not a whole number prints `error: bad day`, and a wrong number of arguments prints `error: usage: overdue DAY`.\n\nEverything else must behave as it does now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "add 2 Write report\nadd 1 @5 Fix bug\nadd 3 @2 Buy milk\nadd 1 Call mom\nlist\noverdue 4\noverdue 9\ndone 3\nall\nlist\n",
+      "expected_output": "added #1: Write report (priority 2)\nadded #2: Fix bug (priority 1, due 5)\nadded #3: Buy milk (priority 3, due 2)\nadded #4: Call mom (priority 1)\n#3 [3] Buy milk (due 2)\n#2 [1] Fix bug (due 5)\n#4 [1] Call mom\n#1 [2] Write report\n#3 Buy milk was due 2\n#3 Buy milk was due 2\n#2 Fix bug was due 5\ncompleted #3\n#1 [ ] [2] Write report\n#2 [ ] [1] Fix bug (due 5)\n#3 [x] [3] Buy milk (due 2)\n#4 [ ] [1] Call mom\n#2 [1] Fix bug (due 5)\n#4 [1] Call mom\n#1 [2] Write report\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "add 1 @x Nope\nadd 1 @ Nope\nadd 2 @7\nadd 2 @007 Zero padded\nadd 3 @0 Today\nall\noverdue 0\noverdue 1\noverdue y\noverdue\n",
+      "expected_output": "error: bad due day\nerror: bad due day\nerror: usage: add PRIORITY TITLE\nadded #1: Zero padded (priority 2, due 7)\nadded #2: Today (priority 3, due 0)\n#1 [ ] [2] Zero padded (due 7)\n#2 [ ] [3] Today (due 0)\nnothing is overdue\n#2 Today was due 0\nerror: bad day\nerror: usage: overdue DAY\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "add 2 @3 Alpha\nadd 1 @3 Beta\nadd 3 @3 Gamma\nadd 1 @1 Delta\nadd 1 Epsilon\nadd 3 Zeta\nlist\nmove 6 1\nmove 3 2\nlist\noverdue 4\nstats\n",
+      "expected_output": "added #1: Alpha (priority 2, due 3)\nadded #2: Beta (priority 1, due 3)\nadded #3: Gamma (priority 3, due 3)\nadded #4: Delta (priority 1, due 1)\nadded #5: Epsilon (priority 1)\nadded #6: Zeta (priority 3)\n#4 [1] Delta (due 1)\n#2 [1] Beta (due 3)\n#1 [2] Alpha (due 3)\n#3 [3] Gamma (due 3)\n#5 [1] Epsilon\n#6 [3] Zeta\n#6 now has priority 1\n#3 now has priority 2\n#4 [1] Delta (due 1)\n#2 [1] Beta (due 3)\n#1 [2] Alpha (due 3)\n#3 [2] Gamma (due 3)\n#5 [1] Epsilon\n#6 [1] Zeta\n#4 Delta was due 1\n#1 Alpha was due 3\n#2 Beta was due 3\n#3 Gamma was due 3\nopen=6 done=0\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "add 1 @10 A\nadd 1 @10 B\ndone 1\ndone 1\nundo 1\nlist\ndrop 2\noverdue 99\nall\ndrop 2\nundo 2\nstats\nbogus\n",
+      "expected_output": "added #1: A (priority 1, due 10)\nadded #2: B (priority 1, due 10)\ncompleted #1\nerror: #1 is already done\nreopened #1\n#1 [1] A (due 10)\n#2 [1] B (due 10)\ndropped #2\n#1 A was due 10\n#1 [ ] [1] A (due 10)\nerror: no task 2\nerror: no task 2\nopen=1 done=0\nerror: unknown command bogus\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "list\nall\noverdue 5\nadd 4 @1 Too urgent\nadd 2 @1 Fine @2 words\noverdue 2\nlist\nmove 1 3\nall\n",
+      "expected_output": "nothing to do\nthe board is empty\nnothing is overdue\nerror: priority must be 1, 2 or 3\nadded #1: Fine @2 words (priority 2, due 1)\n#1 Fine @2 words was due 1\n#1 [2] Fine @2 words (due 1)\n#1 now has priority 3\n#1 [ ] [3] Fine @2 words (due 1)\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "add 2 Write report\nadd 1 Fix bug\nadd 3 Buy milk\nadd 1 Call mom\nlist\nall\ndone 3\nundo 3\nundo 3\nmove 2 3\nlist\ndrop 1\nstats\nadd 9 No\nadd x No\nadd 1\ndone 99\nbogus\n",
+      "expected_output": "added #1: Write report (priority 2)\nadded #2: Fix bug (priority 1)\nadded #3: Buy milk (priority 3)\nadded #4: Call mom (priority 1)\n#2 [1] Fix bug\n#4 [1] Call mom\n#1 [2] Write report\n#3 [3] Buy milk\n#1 [ ] [2] Write report\n#2 [ ] [1] Fix bug\n#3 [ ] [3] Buy milk\n#4 [ ] [1] Call mom\ncompleted #3\nreopened #3\nerror: #3 is not done\n#2 now has priority 3\n#4 [1] Call mom\n#1 [2] Write report\n#2 [3] Fix bug\n#3 [3] Buy milk\ndropped #1\nopen=3 done=0\nerror: priority must be 1, 2 or 3\nerror: priority must be 1, 2 or 3\nerror: usage: add PRIORITY TITLE\nerror: no task 99\nerror: unknown command bogus\n"
+    },
+    {
+      "stdin": "list\nall\nstats\nadd 1 @4 Looks like a title\nlist\nall\noverdue 2\n",
+      "expected_output": "nothing to do\nthe board is empty\nopen=0 done=0\nadded #1: @4 Looks like a title (priority 1)\n#1 [1] @4 Looks like a title\n#1 [ ] [1] @4 Looks like a title\nerror: unknown command overdue\n"
+    }
+  ]
+}

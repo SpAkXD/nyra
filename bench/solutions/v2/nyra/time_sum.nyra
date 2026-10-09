@@ -1,0 +1,29 @@
+use input
+
+fn digits(s: str, lo: int, hi: int) -> bool = s.len() >= lo && s.len() <= hi && s.all(c => c.is_digit())
+
+var total = 0
+var valid = 0
+var n = 0
+for raw in input.lines() {
+    n += 1
+    let s = raw.trim()
+    if s == "" { continue }
+    let parts = s.split(":")
+    var ok = false
+    if parts.len() == 3 && digits(parts[0], 1, 4) && digits(parts[1], 2, 2) && digits(parts[2], 2, 2) {
+        let h = int(parts[0])
+        let m = int(parts[1])
+        let sec = int(parts[2])
+        if m < 60 && sec < 60 {
+            total += h * 3600 + m * 60 + sec
+            valid += 1
+            ok = true
+        }
+    }
+    if !ok { print("line {n}: invalid") }
+}
+let hours = str(total / 3600).pad_left(2, '0')
+let minutes = str(total % 3600 / 60).pad_left(2, '0')
+let seconds = str(total % 60).pad_left(2, '0')
+print("total={hours}:{minutes}:{seconds} valid={valid}")
