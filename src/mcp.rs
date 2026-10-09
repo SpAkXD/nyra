@@ -619,6 +619,9 @@ fn execute(mut cmd: Command, stdin: &str, timeout: Duration, node: bool) -> std:
         thread::sleep(pause);
         pause = (pause * 2).min(Duration::from_millis(5));
     };
+    // Windows: closing the job here kills anything the program left running. Elsewhere `Limited`
+    // holds nothing, so the drop does nothing there.
+    #[allow(clippy::drop_non_drop)]
     drop(limited);
     let elapsed = start.elapsed();
     let collect = |h: Option<JoinHandle<(Vec<u8>, bool)>>| h.and_then(|h| h.join().ok()).unwrap_or_default();
