@@ -137,7 +137,8 @@ impl Checker {
     /// The script variable `name` refers to in the function being checked, if any.
     pub(super) fn global_of(&self, name: &str) -> Option<usize> {
         let g = &self.g;
-        if !g.script || g.in_main || g.in_example || self.fname.is_empty() || g.cur.own.contains(name) {
+        // a bundled module's functions (`math.exp`) never see the program's script variables
+        if !g.script || g.in_main || g.in_example || self.fname.is_empty() || self.fname.contains('.') || g.cur.own.contains(name) {
             return None;
         }
         if self.local(name).is_some() {

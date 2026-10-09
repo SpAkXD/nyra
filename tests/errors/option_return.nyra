@@ -1,0 +1,7 @@
+// expect: E0262
+fn find(xs: [int], x: int) -> int? {
+    ret xs.index_of(x)
+}
+fn main() {
+    print(find([1], 1))
+}

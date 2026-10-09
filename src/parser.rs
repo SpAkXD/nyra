@@ -442,6 +442,8 @@ impl Parser {
                         self.sync_top();
                     }
                 },
+                // `class P { ... }` and `impl P { ... }`: other languages' ways to put functions with data
+                _ if self.container_ahead() => self.foreign_container(),
                 // the `}` of a block that a nested `fn` cut short: that error already covers it
                 Tok::RBrace if self.cut_blocks > 0 => {
                     self.cut_blocks -= 1;
@@ -655,7 +657,19 @@ impl Parser {
                     self.bump();
                     break;
                 }
-                Tok::Eof | Tok::Fn | Tok::Struct => {
+                // a method: report it once, read it like a function so it causes no more errors, go on
+                Tok::Fn => {
+                    let d = self.method_in_struct(&name);
+                    self.errs.push(d);
+                    if let Err(d) = self.func() {
+                        self.errs.push(d);
+                        return Err(self
+                            .unexpected(&format!("`}}` to close `struct {name}`"))
+                            .hint("add the missing `}` after the last field"));
+                    }
+                    continue;
+                }
+                Tok::Eof | Tok::Struct => {
                     return Err(self
                         .unexpected(&format!("`}}` to close `struct {name}`"))
                         .hint("add the missing `}` after the last field"))
@@ -682,6 +696,105 @@ impl Parser {
             }
         }
         Ok(StructDef { name, fields, span })
+    }
+
+    /// E0263 for the `fn` here, written inside `struct name { }`.
+    fn method_in_struct(&self, name: &str) -> Diag {
+        let at = self.span();
+        let method = match self.peek_at(1) {
+            Tok::Ident(m) => m.clone(),
+            _ => "area".to_string(),
+        };
+        let var: String = name.chars().next().map(|c| c.to_lowercase().collect()).unwrap_or_else(|| "p".into());
+        Diag::new("E0263", format!("functions cannot be written inside `struct {name}`: a struct holds only fields"), at).hint(format!(
+            "Nyra has no methods: write `fn {method}` after the struct and pass the struct as a parameter, `fn {method}({var}: {name})`; call it as `{method}({var})`"
+        ))
+    }
+
+    /// True at `class Name {` or `impl Name {` (the `{` on the same line).
+    fn container_ahead(&self) -> bool {
+        let Tok::Ident(w) = self.peek() else { return false };
+        if w != "class" && w != "impl" {
+            return false;
+        }
+        if !matches!(self.peek_at(1), Tok::Ident(_)) {
+            return false;
+        }
+        let line = self.span().line;
+        let mut n = 2;
+        while self.toks.get(self.pos + n).is_some_and(|t| t.span.line == line && !matches!(t.tok, Tok::Eof)) {
+            if self.toks[self.pos + n].tok == Tok::LBrace {
+                return true;
+            }
+            n += 1;
+        }
+        false
+    }
+
+    /// `class P { ... }` (E0264) or `impl P { ... }` (E0263): one error, then the whole block is skipped,
+    /// so its methods cause no more errors.
+    fn foreign_container(&mut self) {
+        let at = self.span();
+        let Tok::Ident(word) = self.bump().tok else { return };
+        let mut name = match self.peek() {
+            Tok::Ident(n) => n.clone(),
+            _ => String::new(),
+        };
+        // `impl Trait for Type {`: the type is what the methods belong to
+        let line = at.line;
+        let mut k = 0;
+        while self.toks.get(self.pos + k).is_some_and(|t| t.span.line == line && t.tok != Tok::LBrace) {
+            if matches!(&self.toks[self.pos + k].tok, Tok::Ident(f) if f == "for") {
+                if let Some(Token { tok: Tok::Ident(t), .. }) = self.toks.get(self.pos + k + 1) {
+                    name = t.clone();
+                }
+            }
+            k += 1;
+        }
+        while !matches!(self.peek(), Tok::LBrace | Tok::Eof) {
+            self.bump();
+        }
+        // skip the block, remembering the first function in it and whether it holds only fields
+        let (mut depth, mut method, mut only_fields) = (0usize, None::<String>, true);
+        loop {
+            match self.bump().tok {
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                Tok::Fn => {
+                    only_fields = false;
+                    if method.is_none() {
+                        if let Tok::Ident(m) = self.peek() {
+                            method = Some(m.clone());
+                        }
+                    }
+                }
+                Tok::LParen => only_fields = false,
+                Tok::Eof => break,
+                _ => {}
+            }
+            if depth == 0 && matches!(self.peek(), Tok::Eof) {
+                break;
+            }
+        }
+        let var: String = name.chars().next().map(|c| c.to_lowercase().collect()).unwrap_or_else(|| "p".into());
+        let m = method.unwrap_or_else(|| "area".into());
+        let d = if word == "class" {
+            Diag::new("E0264", format!("`class {name}`: Nyra has no classes, only structs"), at)
+                .hint(format!(
+                    "write `struct {name} {{ field: int }}` for the data, and its functions after it as plain functions that take the struct: `fn {m}({var}: {name})`"
+                ))
+                .fix_opt(only_fields.then(|| Edit::replace(at, "class", "struct")))
+        } else {
+            Diag::new("E0263", format!("`impl {name}`: Nyra has no `impl` blocks, functions are written outside the struct"), at).hint(
+                format!("remove the `impl {name} {{ }}` wrapper and write `fn {m}({var}: {name})` on its own, with the struct as a parameter; call it as `{m}({var})`"),
+            )
+        };
+        self.errs.push(d);
     }
 
     fn func(&mut self) -> PResult<Func> {
@@ -788,6 +901,15 @@ impl Parser {
             return Ok(Type::array(elem));
         }
         let (name, name_span) = self.ident("a type", hint)?;
+        // `Option<int>`, `Optional[int]`: Nyra has no optional values
+        if matches!(name.as_str(), "Option" | "Optional" | "Maybe") && matches!(self.peek(), Tok::Lt | Tok::LBracket) {
+            return Err(Diag::new(
+                "E0262",
+                format!("`{name}<T>` is an optional type: Nyra has no optional values and no null"),
+                name_span,
+            )
+            .hint(hints::OPTION_HINT));
+        }
         match name.as_str() {
             "int" => Ok(Type::Int),
             "float" => Ok(Type::Float),
@@ -1583,10 +1705,20 @@ impl Parser {
             Tok::Interp(parts) => {
                 self.bump();
                 let mut out = Vec::new();
+                let mut dollar = false;
                 for p in parts {
                     match p {
-                        StrPart::Lit(s) => out.push(InterpPart::Lit(s)),
-                        StrPart::Code(code, base) => out.push(InterpPart::Expr(self.sub_expr(&code, base)?)),
+                        StrPart::Lit(s) => {
+                            dollar = s.ends_with('$');
+                            out.push(InterpPart::Lit(s));
+                        }
+                        StrPart::Code(code, base) => {
+                            if dollar && !self.in_string && base.col >= 3 {
+                                hints::dollar_brace(&code, Span { line: base.line, col: base.col - 2 });
+                            }
+                            dollar = false;
+                            out.push(InterpPart::Expr(self.sub_expr(&code, base)?));
+                        }
                     }
                 }
                 ExprKind::Interp(out)

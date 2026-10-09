@@ -139,8 +139,8 @@ fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) 
     let (kind, since) = kind_line
         .split_once(" · **Since:** ")
         .ok_or_else(|| format!("{code} (line {kind_no}): Kind must read `compile error · **Since:** v0.1`"))?;
-    if kind != "compile error" && kind != "runtime error" {
-        return Err(format!("{code} (line {kind_no}): the kind is `compile error` or `runtime error`, found `{kind}`"));
+    if kind != "compile error" && kind != "runtime error" && kind != "warning" {
+        return Err(format!("{code} (line {kind_no}): the kind is `compile error`, `runtime error` or `warning`, found `{kind}`"));
     }
     let planned = since.starts_with("planned for ");
     let version_ok = |v: &str| v.strip_prefix("v0.").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
@@ -334,8 +334,9 @@ fn render_list(all: &[Entry], planned: bool) -> String {
     let mut out = String::from("Nyra error codes. `nyra explain CODE` shows an entry; add --json for JSON.\n\n");
     let width = all.iter().map(|e| e.title.chars().count()).max().unwrap_or(0).min(56);
     type Section = (&'static str, fn(&Entry) -> bool);
-    let sections: [Section; 3] = [
+    let sections: [Section; 4] = [
         ("compile errors", |e| !e.planned && e.kind == "compile error"),
+        ("warnings (the build still succeeds)", |e| !e.planned && e.kind == "warning"),
         ("run-time errors (the program stops with exit code 101)", |e| !e.planned && e.kind == "runtime error"),
         ("planned, not in the compiler yet", |e| e.planned),
     ];

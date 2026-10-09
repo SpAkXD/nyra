@@ -1,0 +1,10 @@
+// expect: E0263
+struct P { x: int }
+impl P {
+    fn area(self) -> int {
+        ret self.x
+    }
+}
+fn main() {
+    print(1)
+}

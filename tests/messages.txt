@@ -4075,13 +4075,13 @@ impl P {
 fn main() {
 }
 ----
-error[E0101]: expected `fn` or `struct`, found `impl`
+error[E0263]: `impl P`: Nyra has no `impl` blocks, functions are written outside the struct
   --> case.nyra:4:1
   |
 4 | impl P {
   | ^
-  = hint: Nyra has no `impl`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`
-  = explain: nyra explain E0101
+  = hint: remove the `impl P { }` wrapper and write `fn area(p: P)` on its own, with the struct as a parameter; call it as `area(p)`
+  = explain: nyra explain E0263
 
 nyra: 1 error(s)
 ==== f_string_index_assign
@@ -5276,5 +5276,209 @@ error[E0103]: the code is nested more than 256 levels deep
   |                                                                                                                                                                                                                                                                         ^
   = hint: split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own
   = explain: nyra explain E0103
+
+nyra: 1 error(s)
+==== negative_index_last
+let xs = [1, 2, 3]
+print(xs[-1])
+----
+error[E0261]: an index cannot be negative: -1 is always out of bounds
+  --> case.nyra:2:10
+  |
+2 | print(xs[-1])
+  |          ^
+  = hint: Nyra has no positions counted from the end: write `xs[xs.len() - 1]` for the element 1 from the end
+  = fix: `print(xs[xs.len() - 1])`
+  = explain: nyra explain E0261
+
+nyra: 1 error(s)
+==== negative_index_string_computed_base
+fn main() {
+    let s = "abc"
+    print(s[-2])
+    print("abc"[-1])
+}
+----
+error[E0261]: an index cannot be negative: -2 is always out of bounds
+  --> case.nyra:3:13
+  |
+3 |     print(s[-2])
+  |             ^
+  = hint: Nyra has no positions counted from the end: write `s[s.len() - 2]` for the element 2 from the end
+  = fix: `print(s[s.len() - 2])`
+  = explain: nyra explain E0261
+
+error[E0261]: an index cannot be negative: -1 is always out of bounds
+  --> case.nyra:4:17
+  |
+4 |     print("abc"[-1])
+  |                 ^
+  = hint: Nyra has no positions counted from the end: write the length minus n, e.g. `xs[xs.len() - 1]` is the last element
+  = explain: nyra explain E0261
+
+nyra: 2 error(s)
+==== negative_slice_start
+let xs = [1, 2, 3]
+print(xs.slice(-2, 3))
+----
+error[E0261]: a slice position cannot be negative: -2 is always out of bounds
+  --> case.nyra:2:16
+  |
+2 | print(xs.slice(-2, 3))
+  |                ^
+  = hint: Nyra has no positions counted from the end: write `xs.len() - 2` (the length minus 2)
+  = fix: `print(xs.slice(xs.len() - 2, 3))`
+  = explain: nyra explain E0261
+
+nyra: 1 error(s)
+==== option_int_return
+fn find(xs: [int], x: int) -> int? {
+    ret xs.index_of(x)
+}
+print(find([1], 1))
+----
+error[E0262]: `int?` is an optional type: Nyra has no optional values and no null
+  --> case.nyra:1:34
+  |
+1 | fn find(xs: [int], x: int) -> int? {
+  |                                  ^
+  = hint: there is no Option type and no null yet: return a sentinel value that cannot be a real result (`-1` for a missing position, "" for missing text) or a `bool` that says whether the value is valid; for a map, check `m.has(k)` before `m.get(k)`
+  = explain: nyra explain E0262
+
+nyra: 1 error(s)
+==== option_struct_let
+struct P { x: int }
+fn main() {
+    let p: P? = P(x: 1)
+    print(1)
+}
+----
+error[E0262]: `P?` is an optional type: Nyra has no optional values and no null
+  --> case.nyra:3:13
+  |
+3 |     let p: P? = P(x: 1)
+  |             ^
+  = hint: there is no Option type and no null yet: return a sentinel value that cannot be a real result (`-1` for a missing position, "" for missing text) or a `bool` that says whether the value is valid; for a map, check `m.has(k)` before `m.get(k)`
+  = explain: nyra explain E0262
+
+nyra: 1 error(s)
+==== method_inside_struct
+struct Rect {
+    w: int
+    h: int
+    fn area(r: Rect) -> int = r.w * r.h
+}
+print(1)
+----
+error[E0263]: functions cannot be written inside `struct Rect`: a struct holds only fields
+  --> case.nyra:4:5
+  |
+4 |     fn area(r: Rect) -> int = r.w * r.h
+  |     ^
+  = hint: Nyra has no methods: write `fn area` after the struct and pass the struct as a parameter, `fn area(r: Rect)`; call it as `area(r)`
+  = explain: nyra explain E0263
+
+nyra: 1 error(s)
+==== impl_block
+struct Rect { w: int, h: int }
+impl Rect {
+    fn area(self) -> int {
+        ret self.w * self.h
+    }
+}
+print(1)
+----
+error[E0263]: `impl Rect`: Nyra has no `impl` blocks, functions are written outside the struct
+  --> case.nyra:2:1
+  |
+2 | impl Rect {
+  | ^
+  = hint: remove the `impl Rect { }` wrapper and write `fn area(r: Rect)` on its own, with the struct as a parameter; call it as `area(r)`
+  = explain: nyra explain E0263
+
+nyra: 1 error(s)
+==== class_with_fields
+class Rect {
+    w: int
+    h: int
+}
+print(1)
+----
+error[E0264]: `class Rect`: Nyra has no classes, only structs
+  --> case.nyra:1:1
+  |
+1 | class Rect {
+  | ^
+  = hint: write `struct Rect { field: int }` for the data, and its functions after it as plain functions that take the struct: `fn area(r: Rect)`
+  = fix: `struct Rect {`
+  = explain: nyra explain E0264
+
+nyra: 1 error(s)
+==== class_with_methods
+class Rect {
+    w: int
+    fn area(self) -> int {
+        ret self.w
+    }
+}
+print(1)
+----
+error[E0264]: `class Rect`: Nyra has no classes, only structs
+  --> case.nyra:1:1
+  |
+1 | class Rect {
+  | ^
+  = hint: write `struct Rect { field: int }` for the data, and its functions after it as plain functions that take the struct: `fn area(r: Rect)`
+  = explain: nyra explain E0264
+
+nyra: 1 error(s)
+==== dollar_brace_undefined
+print("${root}/logs")
+----
+warning[E0260]: `${root}` in a string prints a `$` and then the value of `root`
+  --> case.nyra:1:8
+  |
+1 | print("${root}/logs")
+  |        ^
+  = hint: `{root}` alone inserts the value, so drop the `$` if you did not mean to print one; to print a dollar sign before a value write `"$" + str(...)`, to print `${root}` as text double the braces: `${{root}}`
+  = explain: nyra explain E0260
+
+error[E0201]: undefined variable `root`
+  --> case.nyra:1:10
+  |
+1 | print("${root}/logs")
+  |          ^
+  = hint: `{root}` inserts the value of `root`; to keep `${root}` as text, double the braces: `${{root}}`
+  = fix: `print("${{root}}/logs")`
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== math_name_clash_is_one_error
+use math
+let math = 3
+print(1)
+----
+error[E0206]: `math` is already the name of a module (`use math` on line 1)
+  --> case.nyra:2:1
+  |
+2 | let math = 3
+  | ^
+  = hint: a variable cannot share a module's name: rename the variable, e.g. `math_value`
+  = explain: nyra explain E0206
+
+nyra: 1 error(s)
+==== option_generic_word
+fn f(x: int) -> Option<int> {
+    ret x
+}
+print(f(1))
+----
+error[E0262]: `Option<T>` is an optional type: Nyra has no optional values and no null
+  --> case.nyra:1:17
+  |
+1 | fn f(x: int) -> Option<int> {
+  |                 ^
+  = hint: there is no Option type and no null yet: return a sentinel value that cannot be a real result (`-1` for a missing position, "" for missing text) or a `bool` that says whether the value is valid; for a map, check `m.has(k)` before `m.get(k)`
+  = explain: nyra explain E0262
 
 nyra: 1 error(s)

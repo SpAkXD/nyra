@@ -633,6 +633,10 @@ fn closure_params(cs: &[char], i: usize) -> Option<(usize, Vec<String>)> {
 fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
     let before = i.checked_sub(1).map(|j| cs[j]);
     let after = cs.get(i + 1).copied();
+    if let (true, Some(ty)) = (c == '?', optional_type(cs, i)) {
+        return Diag::new("E0262", format!("`{ty}?` is an optional type: Nyra has no optional values and no null"), span)
+            .hint(hints::OPTION_HINT);
+    }
     let msg = match hints::invisible_char(c) {
         Some(name) => format!("unexpected invisible character U+{:04X} ({name})", c as u32),
         None if c == '`' => "unexpected character '`' (a backtick)".to_string(),
@@ -656,6 +660,38 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         (hints::bad_char(c), hints::char_fix(c).map(|to| Edit::replace(span, &c.to_string(), to)))
     };
     Diag::new("E0001", msg, span).hint(hint).fix_opt(fix)
+}
+
+/// The type written right before the `?` at `cs[i]` (`int` of `int?`, `[str]` of `[str]?`), if it is one:
+/// a type word of any language, a name that starts uppercase, or an array type.
+fn optional_type(cs: &[char], i: usize) -> Option<String> {
+    let word_char = |c: char| c.is_alphanumeric() || c == '_';
+    let mut start = i;
+    if cs.get(i.checked_sub(1)?) == Some(&']') {
+        // `[int]?`: back to the `[` that opens it
+        let mut depth = 0usize;
+        while start > 0 {
+            start -= 1;
+            match cs[start] {
+                ']' => depth += 1,
+                '[' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(cs[start..i].iter().collect());
+                    }
+                }
+                '\n' => return None,
+                _ => {}
+            }
+        }
+        return None;
+    }
+    while start > 0 && word_char(cs[start - 1]) {
+        start -= 1;
+    }
+    let w: String = cs[start..i].iter().collect();
+    let first = w.chars().next()?;
+    (hints::is_type_word(&w) || hints::nyra_type(&w).is_some() || first.is_uppercase()).then_some(w)
 }
 
 /// E0005 for the `;` at `cs[i]`. At the end of a line (or before a `}`) it is deleted; between two

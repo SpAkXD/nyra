@@ -263,10 +263,12 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Length is a method | `len(xs)` (E0202), `xs.length` (E0224), `xs.len` (E0236) | `xs.len()`, `s.len()` |
 | Empty arrays need a type | `var xs = []` (E0230) | `var xs: [int] = []` |
 | One type per array | `[1, 2.5]`, `[1, "a"]` (E0231) | `[1.0, 2.5]`, or an array of structs |
-| No negative indexes, no slice syntax | `xs[-1]` (runtime E0240), `xs[1..3]` (E0101) | `xs[xs.len() - 1]`, `xs.slice(1, 3)` |
+| No negative indexes, no slice syntax | `xs[-1]` (E0261), `xs[1..3]` (E0101) | `xs[xs.len() - 1]`, `xs.slice(1, 3)` |
 | Structs are built with a call | `Point { x: 1, y: 2 }` (E0101), `Point(1, 2)` (E0225) | `Point(x: 1, y: 2)` |
 | Struct names are uppercase | `struct point` (E0221) | `struct Point` |
-| No methods on structs | `p.area()` (E0227) | `fn area(p: Point) -> int`, then `area(p)` |
+| No methods on structs | `p.area()` (E0227), `fn` inside `struct` or `impl P { }` (E0263), `class` (E0264) | `fn area(p: Point) -> int`, then `area(p)` |
+| `{x}` inserts a value, `$` is text | `"cost: ${x}"` prints `cost: $3` (warning E0260) | `"cost: {x}"`; `"$" + str(x)` for a dollar sign |
+| No optional types, no null | `int?`, `Option<int>` (E0262) | return `-1` or `""`, or a `bool` flag; `m.has(k)` before `m.get(k)` |
 | No quotes inside `{ }` | `print("{f("a")}")` | `let t = f("a")`, then `print("{t}")` |
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
@@ -413,6 +415,11 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
 | E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
 | E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
+| E0260 | (warning) `${x}` in a string prints a `$` and the value | `"cost: {x}"`; the build goes on, `--json` lists it under `"warnings"` |
+| E0261 | negative constant index or slice position | `xs[xs.len() - 1]`, `xs.slice(xs.len() - 2, xs.len())` |
+| E0262 | optional type (`int?`, `Option<int>`) | there is no null: return `-1` or `""`, or a `bool` flag; `m.has(k)` before `m.get(k)` |
+| E0263 | `fn` inside a `struct`, or an `impl` block | write the function outside: `fn area(r: Rect)` |
+| E0264 | `class` | `struct Rect { w: int }` and plain functions |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 
