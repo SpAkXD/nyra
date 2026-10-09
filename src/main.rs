@@ -174,6 +174,7 @@ fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
 
 /// Lexes, parses and type-checks, without running the examples.
 fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    diag::clear_warnings();
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
         fix::validate(&mut errs, src);
@@ -273,6 +274,7 @@ fn real_main() -> ExitCode {
                     if opts.json {
                         println!("{}", diag::render_json(&diags, &opts.file));
                     } else {
+                        eprint!("{}", diag::render_warnings(&opts.file, &src));
                         eprint!("{}", diag::render_human(&diags, &opts.file, &src));
                         eprintln!("nyra: {} error(s)", diags.len());
                     }
@@ -285,6 +287,10 @@ fn real_main() -> ExitCode {
         }
     };
 
+    // warnings do not stop the build; `check --json` lists them in its JSON instead
+    if !(opts.json && opts.cmd == "check") {
+        eprint!("{}", diag::render_warnings(&opts.file, &src));
+    }
     if opts.cmd == "check" {
         if opts.json {
             let json = diag::render_json(&[], &opts.file);
@@ -331,6 +337,7 @@ fn test(opts: &Opts, src: &str) -> ExitCode {
     if opts.json {
         println!("{}", examples::json(&out, &opts.file));
     } else {
+        eprint!("{}", diag::render_warnings(&opts.file, src));
         eprint!("{}", diag::render_human(&out.errors, &opts.file, src));
         eprintln!("nyra: {} ({})", examples::summary(&out, &opts.file), ms(start.elapsed()));
     }

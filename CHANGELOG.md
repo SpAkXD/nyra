@@ -3,6 +3,18 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.6 (unreleased)
+
+- **Warnings.** A likely mistake that the language allows no longer passes silently: `"cost: ${x}"` (a
+  `$` before a `{value}`) prints `warning[E0260]` to stderr and is listed under `"warnings"` in `--json`.
+  Warnings never fail the build.
+- Compile errors for guesses from other languages: a negative constant index `xs[-1]` or `s.slice(-2, 5)`
+  (E0261), optional types `int?` and `Option<int>` (E0262), a `fn` inside a `struct` or an `impl` block
+  (E0263) and `class` (E0264); each with a hint, and `class` with a fix.
+- Fixed: the standard modules have a namespace of their own. A program with `use math` and a function
+  `sign` (or a variable `x`, `lo`, `hi`, ...) failed with E0206 at a line of the bundled library; names
+  inside a module never clash with the program's, and no diagnostic points outside the program's file.
+
 ## v0.5 (unreleased)
 
 Language

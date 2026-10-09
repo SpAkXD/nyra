@@ -31,6 +31,8 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
 | `Point` | a struct you declare |
 
+There are no optional types and no null: `int?` and `Option<int>` are E0262. Return a sentinel (`-1`, `""`) or a `bool`.
+
 ## Functions
 ```nyra
 fn add(a: int, b: int) -> int {
@@ -145,7 +147,8 @@ Parentheses group: `(a + b) * c`.
 
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
-`"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
+`"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). A `$` is ordinary text: `"cost: ${x}"` prints
+`cost: $3`, and the compiler warns (E0260) because `${x}` is another language's way to insert a value (see Errors). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
 `a + b` joins two strings. Lengths and positions count characters (code points): `"héllo".len()`
 is 5, and `s[i]` is a `char` (from 0). A char is not a `str` and not an `int`; convert explicitly:
 ```nyra
@@ -176,7 +179,7 @@ error: write `c.code()`.
 let xs = [3, 1, 2]                    // type [int]
 var names: [str] = []                 // an empty [] needs a known type
 names.push("ann")
-print(xs[0] + xs[xs.len() - 1])       // indexes start at 0; no negative indexes
+print(xs[0] + xs[xs.len() - 1])       // indexes start at 0; no negative indexes (`xs[-1]` is E0261)
 var grid = [[0].repeat(3)].repeat(2)  // [[0, 0, 0], [0, 0, 0]]
 grid[1][2] = 5
 let more = xs + [4, 5]                // a new array; xs is unchanged
@@ -252,7 +255,8 @@ q.y += 5                              // fields of a `var` can be changed
 print(Line(a: p, b: q))               // Line(a: Point(x: 1, y: 2), b: Point(x: 11, y: 7))
 ```
 Struct names start with an uppercase letter. A struct cannot contain itself (use an array:
-`kids: [Tree]`). Structs have no methods: write `fn area(r: Rect) -> int` and call `area(r)`.
+`kids: [Tree]`). Structs have no methods: write `fn area(r: Rect) -> int` and call `area(r)`. A `fn` inside the
+struct's braces or an `impl` block is E0263, and `class` is E0264: write a `struct` and the functions outside it.
 
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
@@ -310,6 +314,9 @@ print(text.fixed(math.sqrt(2.0), 3))   // 1.414
 | `math` | `pi` `e` `inf` · `sqrt floor ceil round trunc exp log log10 log2 sin cos tan asin acos atan` (float) · `pow(x, y)` · `atan2(y, x)` |
 | `text` | `fixed(x, digits)` decimals, `text.fixed(2.0 / 3.0, 2)` is "0.67" · `is_int(s)` · `is_float(s)`: would `int(s)`/`float(s)` work |
 
+A module has a namespace of its own: its functions are reached only as `math.name`, and the names inside it
+never clash with the program's (`fn sign`, `let x`, `fn lo` are all fine next to `use math`).
+
 `nyra run main.nyra -- a b` passes the arguments `a b`. Random numbers come from the operating system
 unless `random.seed(n)` was called; then they are the same sequence on every backend. `math` gives the
 same digits on every backend; `round` rounds halves away from zero. Paths are relative to the folder the
@@ -320,7 +327,12 @@ outside (input, files, arguments) must be UTF-8.
 ## Errors
 `nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0309), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
-and a fixed program; [ERRORS.md](ERRORS.md) has them all.
+and a fixed program; [ERRORS.md](ERRORS.md) has them all. Positions are always in your file.
+
+A **warning** is a likely mistake that the language allows: the build goes on and the exit code is
+unchanged. It prints to stderr as `warning[E0260]: ...` and `--json` lists it under `"warnings"` (next to
+`"errors"`, with the same fields). E0260 is the only one so far: `"${x}"` prints a `$` and then the value;
+write `"{x}"`, or `"$" + str(x)` when the dollar sign is meant.
 
 ## Runtime errors
 An operation that fails while the program runs stops it with exit code 101, after all earlier

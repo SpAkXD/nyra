@@ -289,6 +289,19 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
     for (i, f) in prog.funcs.iter_mut().enumerate() {
         if Some(i) == script_main {
             c.errs.append(&mut main_errs);
+        } else if f.name.contains('.') {
+            // a function of a bundled module (`math.exp`): an error in it is a bug of the compiler,
+            // not of the program, and has no position in the user's file
+            let before = c.errs.len();
+            c.func(f);
+            let module = f.name.split('.').next().unwrap_or_default().to_string();
+            for d in &mut c.errs[before..] {
+                d.msg = format!("internal error in the standard module `{module}`, function `{}`: {}", f.name, d.msg);
+                d.hint = Some(format!(
+                    "this is a bug in the compiler, not in your program; please report it (your program's `use {module}` line is where it shows)"
+                ));
+                d.fix.clear();
+            }
         } else {
             c.func(f);
         }
@@ -450,6 +463,18 @@ fn number_text(e: &Expr, want: Type) -> Option<String> {
     }
 }
 
+/// The value of a negative int written in the program (`-1`), if the expression is one.
+fn negative_const(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::Unary(UnOp::Neg, x) => match x.kind {
+            ExprKind::Int(n) if n > 0 => Some(-n),
+            _ => None,
+        },
+        ExprKind::Int(n) if *n < 0 => Some(*n),
+        _ => None,
+    }
+}
+
 /// Where an expression starts in the source: the span of `a + b` is the `+`, of `xs.len()` the `len`.
 /// (A parenthesized expression starts before this; edits that insert here check the text before.)
 fn start(e: &Expr) -> Span {
@@ -499,6 +524,30 @@ impl Checker {
     /// A variable of the function being checked.
     fn local(&self, name: &str) -> Option<&Var> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
+    }
+
+    /// E0261 for a position that is a negative constant: `xs[-1]`, `s.slice(-2, 5)`. Nyra counts
+    /// from 0 and never from the end, so such a position is out of bounds whatever the length is.
+    fn negative_position(&mut self, base: &Expr, pos: &Expr, slice: bool) {
+        let Some(n) = negative_const(pos) else { return };
+        let what = if slice { "a slice position" } else { "an index" };
+        // the position counted from the end is spelled with the length; the fix repeats the base,
+        // so it is only written for a plain variable
+        let var = match &base.kind {
+            ExprKind::Var(v) => Some(v.clone()),
+            _ => None,
+        };
+        let from_end = var.as_ref().map(|v| format!("{v}.len() - {}", -n));
+        let hint = match (&var, &from_end, slice) {
+            (Some(v), Some(e), false) => format!("Nyra has no positions counted from the end: write `{v}[{e}]` for the element {} from the end", -n),
+            (Some(_), Some(e), true) => format!("Nyra has no positions counted from the end: write `{e}` (the length minus {})", -n),
+            (_, _, false) => "Nyra has no positions counted from the end: write the length minus n, e.g. `xs[xs.len() - 1]` is the last element".to_string(),
+            _ => "Nyra has no positions counted from the end: write the length minus n, e.g. `xs.slice(xs.len() - 2, xs.len())` is the last two".to_string(),
+        };
+        let fix = from_end.map(|e| Edit::replace(pos.span, &format!("-{}", -n), e));
+        self.errs.push(
+            Diag::new("E0261", format!("{what} cannot be negative: {n} is always out of bounds"), pos.span).hint(hint).fix_opt(fix),
+        );
     }
 
     /// `"${root}/logs"` where `root` is undefined: text written for a template engine (shell,
@@ -575,6 +624,7 @@ impl Checker {
     fn declare(&mut self, name: &str, ty: Type, decl: Decl, span: Span) {
         // a script variable does not count: declaring the name hides it in this function
         let prev = self.local(name).map(|v| (v.decl, v.span));
+        let in_std = self.fname.contains('.');
         if let Some((pdecl, pspan)) = prev {
             let (msg, hint) = match pdecl {
                 Decl::Let => (
@@ -610,6 +660,9 @@ impl Checker {
                 hint
             };
             self.errs.push(Diag::new("E0206", msg, span).hint(hint));
+        } else if in_std {
+            // the names inside a bundled module live in the module's own namespace: they cannot
+            // clash with the program's functions, structs and modules
         } else if let Some(sig) = self.fns.get(name) {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a function (line {})", sig.span.line), span)
@@ -1518,6 +1571,9 @@ impl Checker {
                     Some((k, _)) => self.expr_with(index, Some(k)),
                     None => self.expr(index),
                 };
+                if matches!(bt, Type::Array(_) | Type::Str) {
+                    self.negative_position(base, index, false);
+                }
                 if bt.map_kv().is_none() && it != Type::Int && !it.is_unknown() {
                     let hint = match (it, show(index)) {
                         (Type::Float, Some(s)) => format!("convert it: `[int({s})]`"),
@@ -1628,7 +1684,8 @@ impl Checker {
                 }
             }
         };
-        if !self.modules.iter().any(|(x, _)| *x == m) {
+        // inside a bundled module (`math.exp` calling `math.floor`) the module is always the module
+        if !self.fname.contains('.') && !self.modules.iter().any(|(x, _)| *x == m) {
             // a function of the program that has the module's name: `fs.x` is then its own mistake
             if self.fns.contains_key(&m) || self.decls.iter().any(|(d, _)| *d == m) {
                 return None;
@@ -1992,6 +2049,11 @@ impl Checker {
         }
         if let Some(t) = self.lambda_method(recv, rt, name, args, span) {
             return t;
+        }
+        if name == "slice" && matches!(rt, Type::Array(_) | Type::Str) && args.len() == 2 {
+            for a in args.iter() {
+                self.negative_position(recv, a, true);
+            }
         }
         let Some(sig) = data::method_sig(rt, name) else {
             // (a lambda argument is not judged: the method is the mistake)

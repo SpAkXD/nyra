@@ -275,6 +275,8 @@ fn report(p: &Plan, res: Res) -> Diag {
         }
         Res::Error(e, func) => {
             let place = match &func {
+                // the standard library is not part of the program's file: it has no line to show
+                Some(f) if f.contains('.') => format!("`{f}`, a function of the standard library"),
                 Some(f) => format!("line {}:{} in `{f}`", e.span.line, e.span.col),
                 None => format!("line {}:{}", e.span.line, e.span.col),
             };
@@ -311,13 +313,14 @@ fn report(p: &Plan, res: Res) -> Diag {
 pub fn json(out: &Outcome, file: &str) -> String {
     let skipped = if out.skipped > 0 { format!(",\"skipped\":{}", out.skipped) } else { String::new() };
     format!(
-        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped},\"errors\":{}}}",
+        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped},\"errors\":{}{}}}",
         out.errors.is_empty(),
         json_str(file),
         out.total,
         out.passed,
         out.errors.len(),
-        render_json_errors(&out.errors, file)
+        render_json_errors(&out.errors, file),
+        crate::diag::warnings_json(file)
     )
 }
 

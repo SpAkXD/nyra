@@ -27,11 +27,14 @@ design may still change.
 | E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
+| E0260-E0269 | type checker, parser (since v0.6) | warnings (E0260) and mistakes taken from other languages: negative positions, optional types, methods in structs, classes |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
 | E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
+
+A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
@@ -45,7 +48,7 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ```text
 ## E0201: undefined variable
-- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error; or "planned for v0.6, not in the compiler yet")
+- **Kind:** compile error · **Since:** v0.1            (runtime error · compile error · warning; or "planned for v0.6, not in the compiler yet")
 - **What it means:** one or two precise sentences.
 - **Why Nyra has this rule:** the design reason.
 - **Common causes:**
@@ -1433,10 +1436,10 @@ fn main() {
 
 ## E0240: index out of bounds
 - **Kind:** runtime error · **Since:** v0.3
-- **What it means:** At run time an index or a range is outside the array or the string. The message gives both numbers: "index 3 is out of bounds for length 3" (reading `xs[3]` or `s[3]`, storing `xs[3] = v`, `remove(i)`, `insert(i, v)`) or "range 2..5 is out of bounds for length 3" (`slice(a, b)`). The valid indexes are 0 up to the length minus 1, and there are no negative indexes: `xs[-1]` is an error, not the last element. `insert(i, v)` also accepts `i` equal to the length, and `slice(a, b)` needs `0 <= a <= b <= len`. The program prints what it printed so far, then the error with the position of the `[` or of the method name, and exits with code 101.
+- **What it means:** At run time an index or a range is outside the array or the string. The message gives both numbers: "index 3 is out of bounds for length 3" (reading `xs[3]` or `s[3]`, storing `xs[3] = v`, `remove(i)`, `insert(i, v)`) or "range 2..5 is out of bounds for length 3" (`slice(a, b)`). The valid indexes are 0 up to the length minus 1, and there are no negative indexes: a negative position that is computed (`xs[i - 1]` with `i` at 0) is this error, not the last element, and a negative position written in the program (`xs[-1]`) is stopped earlier, by E0261. `insert(i, v)` also accepts `i` equal to the length, and `slice(a, b)` needs `0 <= a <= b <= len`. The program prints what it printed so far, then the error with the position of the `[` or of the method name, and exits with code 101.
 - **Why Nyra has this rule:** Reading past the end would be undefined behaviour in C and `undefined` in JavaScript. Nyra stops with the same error and exit code on every backend.
 - **Common causes:**
-  - `xs[-1]` for the last element, as in Python: write `xs[xs.len() - 1]`
+  - a computed position that goes below 0, such as `xs[i - 1]` when `i` is 0 (the constant `xs[-1]` is E0261)
   - an off-by-one: the last valid index is `xs.len() - 1`, so `xs[xs.len()]` and a loop to `xs.len() + 1` are out
   - an index that comes from data and was not checked against `xs.len()`
   - indexing an empty array
@@ -1444,16 +1447,18 @@ fn main() {
 ```rust
 fn main() {
     let scores = [90, 85, 77]
+    let i = 0 - 1
     print("before")
-    print(scores[-1])
+    print(scores[i])
 }
 ```
 - **Fixed:**
 ```rust
 fn main() {
     let scores = [90, 85, 77]
+    let i = scores.len() - 1
     print("before")
-    print(scores[scores.len() - 1])
+    print(scores[i])
 }
 ```
 - **Related:** E0232, E0242
@@ -1966,6 +1971,120 @@ fn main() {
 }
 ```
 - **Related:** E0255
+
+## E0260: `$` before `{value}` in a string
+- **Kind:** warning · **Since:** v0.6
+- **What it means:** A string has `${x}`: Nyra keeps the `$` as text and inserts the value of `x`, so `"cost: ${x}"` prints `cost: $3`. This is not an error (a dollar sign before a value is sometimes what you want), so the build goes on; the warning is printed to stderr and listed under `"warnings"` in `--json`.
+- **Why Nyra has this rule:** `${x}` is how JavaScript, shell and many template engines insert a value. Written in Nyra it compiles and prints a stray `$` without any sign that something is off, which an AI agent or a person coming from those languages does not see in the output. In Nyra `{x}` alone inserts a value.
+- **Common causes:**
+  - writing a JavaScript template string (`` `total: ${x}` ``) or a shell variable (`"${HOME}/logs"`) in Nyra
+  - a price or a currency (`"${price}"`) where the `$` is meant: write `"$" + str(price)` to say so (this also keeps the warning away)
+- **Wrong:**
+```rust
+fn label(x: int) -> str = "cost: ${x}"
+print(label(3))
+```
+- **Fixed:**
+```rust
+fn label(x: int) -> str = "cost: {x}"
+print(label(3))
+```
+- **Related:** E0201
+
+## E0261: negative index or slice position
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An array or string is indexed (`xs[-1]`, `s[-2]`) or sliced (`xs.slice(-3, 5)`) with a negative number written in the program. Positions start at 0 and Nyra never counts from the end, so the position is out of bounds whatever the length is; the program would stop with a runtime error (E0241) if it ran. Maps are not affected: a map key may be negative.
+- **Why Nyra has this rule:** In Python and JavaScript `xs[-1]` is the last element, so people write it by habit. Nyra has one meaning for a position (0 up to len - 1) and no negative shortcut, and the compiler reports the constant case before the program runs.
+- **Common causes:**
+  - the last element written as `xs[-1]` or `s[-1]`: write `xs[xs.len() - 1]`
+  - the last few elements as `xs.slice(-3, xs.len())`: write `xs.slice(xs.len() - 3, xs.len())`
+- **Wrong:**
+```rust
+fn last(xs: [int]) -> int = xs[-1]
+print(last([1, 2, 3]))
+```
+- **Fixed:**
+```rust
+fn last(xs: [int]) -> int = xs[xs.len() - 1]
+print(last([1, 2, 3]))
+```
+- **Related:** E0241, E0232
+
+## E0262: optional type
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A type is written with a `?` (`int?`, `Point?`, `[str]?`) to say "a value or nothing". Nyra has no optional values and no null yet, so there is no such type.
+- **Why Nyra has this rule:** Every Nyra value always exists, so a function never has to be asked whether its result is there. A missing result is an ordinary value that the function documents: a sentinel that cannot be a real answer, or a `bool` next to it.
+- **Common causes:**
+  - a search that may find nothing and was written `-> int?`: return `-1` (what `index_of` does), or `""` for text
+  - a map lookup that may miss: ask `m.has(k)` first, then `m.get(k)`
+- **Wrong:**
+```rust
+fn find(xs: [int], x: int) -> int? {
+    ret xs.index_of(x)
+}
+print(find([1, 2], 2))
+```
+- **Fixed:**
+```rust
+fn find(xs: [int], x: int) -> int {
+    ret xs.index_of(x)
+}
+print(find([1, 2], 2))
+```
+- **Related:** E0001, E0102
+
+## E0263: function inside a struct or `impl` block
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A `fn` is written inside the braces of a `struct`, or in an `impl Name { }` block. A struct holds only fields, and Nyra has no methods and no `impl`: a function is written on its own and takes the struct as a parameter.
+- **Why Nyra has this rule:** There is one way to write a function and one way to call it, `area(r)`. Methods and `impl` blocks would add a second way (`r.area()`) and a second place to look for code.
+- **Common causes:**
+  - a method written the way Rust, Swift, Kotlin or JavaScript classes do
+  - an `impl Rect { fn area(self) ... }` block copied from Rust: drop the wrapper, rename `self` to a parameter with a type
+- **Wrong:**
+```rust
+struct Rect {
+    w: int
+    h: int
+    fn area(r: Rect) -> int = r.w * r.h
+}
+print(1)
+```
+- **Fixed:**
+```rust
+struct Rect {
+    w: int
+    h: int
+}
+fn area(r: Rect) -> int = r.w * r.h
+print(area(Rect(w: 2, h: 3)))
+```
+- **Related:** E0101, E0227
+
+## E0264: `class`
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The program declares a `class`. Nyra has no classes: data is a `struct`, and the functions that work on it are written outside it.
+- **Why Nyra has this rule:** One kind of user-defined type keeps programs short and keeps every function in the same place. A struct has fields and nothing else.
+- **Common causes:**
+  - a class copied from Python, Java, Kotlin or TypeScript: write `struct`, keep the fields, and move the methods out as functions that take the struct (`fn area(r: Rect)`)
+- **Wrong:**
+```rust
+class Rect {
+    w: int
+    h: int
+}
+fn area(r: Rect) -> int = r.w * r.h
+print(area(Rect(w: 2, h: 3)))
+```
+- **Fixed:**
+```rust
+struct Rect {
+    w: int
+    h: int
+}
+fn area(r: Rect) -> int = r.w * r.h
+print(area(Rect(w: 2, h: 3)))
+```
+- **Related:** E0101, E0263
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5

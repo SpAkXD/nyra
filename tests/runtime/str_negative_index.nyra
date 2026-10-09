@@ -1,6 +1,7 @@
-// expect: E0240 at 5:12
+// expect: E0240 at 6:12
 fn main() {
     let s = "abc"
+    let i = 0 - 1
     print("before")
-    print(s[-1])
+    print(s[i])
 }

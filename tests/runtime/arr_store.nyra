@@ -1,6 +1,7 @@
-// expect: E0240 at 5:7
+// expect: E0240 at 6:7
 fn main() {
     var xs = [1, 2]
+    let i = 0 - 1
     print(xs)
-    xs[-1] = 5
+    xs[i] = 5
 }

@@ -649,7 +649,7 @@ impl<'m> Interp<'m> {
                     return Ok(text(t.to_string()));
                 }
                 if missing > 536870888 {
-                    return Err(oom(Span { line: 0, col: 0 }));
+                    return Err(oom(span));
                 }
                 self.tick(missing as u64)?;
                 let fill: String = std::iter::repeat_n(*c, missing as usize).collect();

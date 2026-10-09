@@ -1,0 +1,14 @@
+// The standard modules have a namespace of their own: the program's names (sign, x, k, lo, hi, ...)
+// never clash with the names inside them.
+use math
+fn sign(n: int) -> int = if n < 0 { -1 } else { 1 }
+fn lo(x: float) -> float = x - 1.0
+fn hi(x: float) -> float = x + 1.0
+fn s(t: float) -> float = math.sin(t) + math.cos(t)
+let x = 16.0
+var k = 2
+print(sign(-5), math.sqrt(x))
+print(lo(x), hi(x), math.pow(x, 0.5), k)
+print(math.atan2(1.0, 2.0), math.log(10.0), s(0.5))
+k += 1
+print(math.exp(1.0), k)

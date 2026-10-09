@@ -388,6 +388,9 @@ pub fn type_fix(w: &str) -> Option<&'static str> {
     nyra_type(w)
 }
 
+/// What to do when a value might be missing (`int?`, `Option<int>`): Nyra has no optional values.
+pub const OPTION_HINT: &str = "there is no Option type and no null yet: return a sentinel value that cannot be a real result (`-1` for a missing position, \"\" for missing text) or a `bool` that says whether the value is valid; for a map, check `m.has(k)` before `m.get(k)`";
+
 /// What to do about a type name that does not exist.
 pub fn type_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
@@ -404,6 +407,7 @@ pub fn type_name(name: &str) -> String {
         "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
             "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
+        "option" | "optional" | "maybe" | "nullable" => OPTION_HINT.to_string(),
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
         "tuple" | "pair" => {
             "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
@@ -542,4 +546,15 @@ pub fn bad_char(c: char) -> String {
         c if invisible_char(c).is_some() => "remove it: it is an invisible character, often pasted in by accident".into(),
         _ => "this character is not part of Nyra: remove it".into(),
     }
+}
+
+/// Warning E0260 for `${code}` in a string, with `at` the position of the `$`: Nyra keeps the `$`
+/// and inserts the value, which is rarely what a template engine's `${x}` was meant to say.
+pub fn dollar_brace(code: &str, at: crate::ast::Span) {
+    let code = code.trim();
+    crate::diag::warn(
+        crate::diag::Diag::new("E0260", format!("`${{{code}}}` in a string prints a `$` and then the value of `{code}`"), at).hint(format!(
+            "`{{{code}}}` alone inserts the value, so drop the `$` if you did not mean to print one; to print a dollar sign before a value write `\"$\" + str(...)`, to print `${{{code}}}` as text double the braces: `${{{{{code}}}}}`"
+        )),
+    );
 }
