@@ -136,6 +136,13 @@ func nyCheckNonEmpty(n, max int64, line, col int) {
 	}
 }
 
+// nyCheckSome is `opt.unwrap()` of `none`.
+func nyCheckSome(has bool, line, col int) {
+	if !has {
+		nyFail("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col)
+	}
+}
+
 func nyCheckStep(k int64, line, col int) {
 	if k == 0 {
 		nyFail("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col)

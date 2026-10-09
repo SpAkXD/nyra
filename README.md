@@ -181,15 +181,16 @@ What the numbers do not say:
 
 - **Two supported targets:** native executables through C99 (`gcc`, `clang` or `tcc`) and JavaScript (Node.js or the
   browser); readable C source too. [TypeScript, Python, Rust and Go](#targets) output is experimental.
-- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps and structs, with local
-  inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
+- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps, tuples `(int, str)`, optionals
+  `int?`, enums and structs, with local inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
 - **Real data:** structs, arrays, maps, strings and chars with methods (`split`, `replace`, `slice`,
   `sort`, `join`, ...), lambdas (`xs.map(x => x * 2)`) and comprehensions, `inout` parameters, `break`
   and `continue`. Memory is freed by reference counting, with no garbage collector, and `free`, `arena`
   and `keep` say when if you want to.
 - **Short code:** scripts without `fn main` (or with one: the statements run first), one-line functions,
-  `c ? a : b`, `+=` and friends, string interpolation,
-  `if` as a value, `print(a, b)`.
+  `c ? a : b`, `+=` and friends, string interpolation with format specifiers (`{x:>8}`, `{f:.2}`),
+  `if` as a value, `print(a, b)`, `let (a, b) = f()`, `x ?? 0`, `match` on enums,
+  `xs.sorted_by(x => (-x.n, x.name))`.
 - **Capabilities and a sandbox:** the `use` lines are the program's permissions; `--allow fs,os` and
   `--sandbox` deny what a run does not grant at compile time, and the sandboxed interpreter stops runaway
   programs with a code and an exit code (`--fuel`, `--max-memory`, `--max-output`, `--max-depth`).
@@ -199,8 +200,8 @@ What the numbers do not say:
 - **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable code.
 - **Standard library:** `use input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`, the same on every
-  backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. **Not yet:** modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
-  syntax may still change before 1.0.
+  backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. Files of your own are imported with `use ./shapes` and `pub fn` (`shapes.area(r)`).
+  Nyra is 0.x, so the syntax may still change before 1.0.
 
 ## Install
 
@@ -659,7 +660,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC); the intermediate representation, the error database and `nyra explain` | done |
 | v0.4 | `--fix` self-repair, the `nyra mcp` server, Python, TypeScript, Rust and Go backends, scripts, `print(a, b)`, the benchmark harness and its hard tier | done |
 | v0.5 | lambdas and comprehensions, `ex` examples, `nyra outline`/`show`/`edit`, the standard library (`use math`, `fs`, `json`, ...), maps, script variables, native speed and compile-time evaluation, checked ints | in progress |
-| v0.6 | capabilities (`--allow fs`, deny by default), modules of your own, packages, C FFI | planned |
+| v0.6 | capabilities and a sandbox, tuples, optionals, enums and `match`, format specifiers, modules of your own | in progress |
 | later | WASM backend and browser playground, published VS Code extension, docs site, 1.0 | planned |
 
 Nyra is pre-1.0: the syntax may still change between versions (see [CHANGELOG.md](CHANGELOG.md)).

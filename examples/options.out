@@ -1,0 +1,22 @@
+Some(3) none
+3 -1
+true true true
+Some("apple") none
+apple none found
+found apple with 5 letters
+no word, but the number 43
+APPLE true true
+Some(12) none Some(2.5) none
+15
+Some(Item(name: "ink", price: 9)) none
+3
+ink 9
+Some(4) none 4 0
+Some(9)
+[Some("a"), none, Some("c"), Some("d")] 4
+["a": Some(1), "b": none]
+Some((1, "x")) (1, "x")
+none (0, "-")
+[1, 2] 2
+Some(8) none
+value 2.5 empty

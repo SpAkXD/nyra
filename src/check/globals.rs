@@ -420,6 +420,13 @@ fn stmts_exprs<'a>(b: &'a [Stmt], f: &mut dyn FnMut(&'a Expr)) {
                 stmts_exprs(body, f);
             }
             StmtKind::Arena(body) => stmts_exprs(body, f),
+            StmtKind::Match { scrut, arms } => {
+                f(scrut);
+                for arm in arms {
+                    arm.pats.iter().for_each(&mut *f);
+                    stmts_exprs(&arm.body, f);
+                }
+            }
             StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => f(e),
             StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
         }
@@ -437,12 +444,20 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
                 }
             }
         }
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => lambda_names(x, out),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+            lambda_names(x, out)
+        }
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
             lambda_names(a, out);
             lambda_names(b, out);
         }
-        ExprKind::Call(_, args) | ExprKind::Array(args) => args.iter().for_each(|x| lambda_names(x, out)),
+        ExprKind::Some(x) => lambda_names(x, out),
+        ExprKind::None => {}
+        ExprKind::Slice(b, lo, hi) => {
+            lambda_names(b, out);
+            lo.iter().chain(hi.iter()).for_each(|x| lambda_names(x, out));
+        }
+        ExprKind::Call(_, args) | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().for_each(|x| lambda_names(x, out)),
         ExprKind::MapLit(kvs) => {
             for (k, v) in kvs {
                 lambda_names(k, out);

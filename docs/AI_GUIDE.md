@@ -246,6 +246,7 @@ let cart = [Item(name: "pen", price: 3), Item(name: "ink", price: 9)]
 print(total(cart))                        // 12
 print(cart[0])                            // Item(name: "pen", price: 3)
 
+let (quot, rem) = (17 / 5, 17 % 5)        // a tuple takes several values at once: quot is 3, rem is 2
 print("x = {x}, sum = {add(x, 2)}, gcd = {gcd(48, 18)}")
 print(float(x) / ratio)                   // 2.8: conversions are explicit, float(...) and int(...)
 print(7 / 2)                              // 3: int division truncates
@@ -253,7 +254,7 @@ print(bigger + limit())                   // 107
 shout("done")
 ```
 
-Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]` and the structs you declare.
+Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)`, optionals `T?` and the structs and enums you declare.
 Function signatures are always fully typed; local types are inferred. The builtins are `print(x)`,
 `str(x)`, `int(x)`, `float(x)`, `char(n)`, `free(x)` and `keep(x)`; everything else on strings, chars
 and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are in the spec.
@@ -286,17 +287,16 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Length is a method | `len(xs)` (E0202), `xs.length` (E0224), `xs.len` (E0236) | `xs.len()`, `s.len()` |
 | Empty arrays need a type | `var xs = []` (E0230) | `var xs: [int] = []` |
 | One type per array | `[1, 2.5]`, `[1, "a"]` (E0231) | `[1.0, 2.5]`, or an array of structs |
-| No negative indexes, no slice syntax | `xs[-1]` (E0261), `xs[1..3]` (E0101) | `xs[xs.len() - 1]`, `xs.slice(1, 3)` |
+| No negative indexes | `xs[-1]` (E0261) | `xs[xs.len() - 1]`; a part of an array or string is `xs[1..3]` |
 | Structs are built with a call | `Point { x: 1, y: 2 }` (E0101), `Point(1, 2)` (E0225) | `Point(x: 1, y: 2)` |
 | Struct names are uppercase | `struct point` (E0221) | `struct Point` |
-| No methods on structs | `p.area()` (E0227), `fn` inside `struct` or `impl P { }` (E0263), `class` (E0264) | `fn area(p: Point) -> int`, then `area(p)` |
+| No methods inside structs | `fn` inside `struct` or `impl P { }` (E0263), `class` (E0264) | `fn area(p: Point) -> int`, then `area(p)` or `p.area()` |
 | `{x}` inserts a value, `$` is text | `"cost: ${x}"` prints `cost: $3` (warning E0260) | `"cost: {x}"`; `"$" + str(x)` for a dollar sign |
-| No optional types, no null | `int?`, `Option<int>` (E0262) | return `-1` or `""`, or a `bool` flag; `m.has(k)` before `m.get(k)` |
 | No quotes inside `{ }` | `print("{f("a")}")` | `let t = f("a")`, then `print("{t}")` |
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
 | Literals | `.5`, `5.`, `1e5`, `1_000`, `0xFF` (E0001, E0101) | `0.5`, `5.0`, `100000.0`, `1000`, `255` |
-| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `a ?? b` (E0101, E0210) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `c ? a : b` |
+| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c` (E0101, E0210) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`; `c ? a : b` and `x ?? d` exist |
 
 Good to know:
 
@@ -321,6 +321,25 @@ Good to know:
 - An `if` used as a value needs an `else`, one expression per branch, and the same type in both
   branches. `else if` chains work and the branches may span lines. A one-line function's expression
   starts on the same line as its `=`.
+- Dense helpers: `xs.sorted()`, `xs.sorted_by(x => key)`, `xs.min_by(x => key)`, `xs.max_by(x => key)`,
+  `x in xs` (also `c in s`, `k in m`), `zip(a, b)` (pairs `[(A, B)]`), `xs.chunks(n)`, slices `xs[1..3]`
+  `s[..4]` `xs[2..]`, `s.trim("-_")`, `m.items()` (pairs), `fn f(var n: int)` (a copy the function may
+  change) and `r.area()` for `fn area(r: Rect)`.
+- An enum is a fixed set of named cases, `enum Dir { N, E, S, W }`; a value is written with its enum,
+  `Dir.N`, and prints as `Dir.N`. Take it apart with `match`, which must cover every case:
+  `match d { Dir.N => return 1  Dir.E, Dir.W => return 2  _ => return 3 }` (one arm per line, `_` takes the rest, an arm
+  body is one statement or a `{ }` block). `match` also works on an `int`, `str`, `char` or `bool` (an `int`
+  needs a `_` arm); it is a statement, so `ret` the value or assign it in the arms. `Dir.all()` is the array of
+  all cases.
+- A value that may be missing is an optional: `m.get(k)`, `xs.find(x => x > 3)` and `s.to_int()` give a `V?` that
+  is a value or `none`. Unwrap with `m.get(k) ?? 0`, `if let v = m.get(k) { ... } else { ... }` or
+  `.unwrap()` (stops with E0350 on `none`); test with `x != none` or `x.is_some()`. Declare one with
+  `var best: int? = none` (`none` needs the type), return one with `fn f() -> int?` and `ret none` or `ret x`.
+  `m.get(k, 0)` still gives the default directly; `index_of` still gives `-1`.
+- A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
+  `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
+  `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
+  print as `(1, "a")`. A tuple cannot be a map key or go through `json`.
 - Values are copies. `var b = a` copies an array, a string or a struct, and so does passing it to a
   function or storing it in another array; changing the copy never changes the original. Copies are
   cheap (the data is shared until one side changes). To let a function change the caller's variable,
@@ -332,6 +351,9 @@ Good to know:
   loop over such text use `for c in s`, or `let cs = s.chars()` once and index `cs[i]`.
 - `upper`, `lower` and the `is_*` tests know ASCII letters only: `'é'.is_letter()` is false and
   `"é".upper()` is `"é"`. `s.split(" ")` keeps empty parts: `"a  b".split(" ")` is `["a", "", "b"]`.
+- Format specifiers go after a colon inside the braces: `{name:<10}` left-aligns in 10 characters, `{n:>6}`
+  right-aligns, `{n:^6}` centers, `{n:08}` pads with zeros, `{x:.2}` rounds a float to 2 decimals (`.2f` also
+  works), `{n:,}` adds thousands separators, `{x:*>8}` fills with `*`. They combine: `{total:>12,.2}`.
 - Every `{` in a string starts an interpolation, so text with braces doubles them:
   `"{{[()]}}"` is `{[()]}`. With single braces the compiler reads what is between them as code and
   reports an error about that code (for `"{[]}"` it says it cannot infer the type of `[]`).
@@ -363,27 +385,30 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, tuples, enums, `Option`, `Result`, generics or type aliases. Use a map
-  `[str: bool]` or `contains` for a set, a struct for a tuple. Maps `[K: V]` exist (section 6).
+- **Types**: no sets, `Result`, generics, enums with values or type aliases. Use a map
+  `[str: bool]` or `contains` for a set. Tuples `(int, str)`, optionals `int?` (section 3) and maps `[K: V]`
+  (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
-  have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
-  anything else with `sort_by(x => key)`.
-- **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `??`, `?.`,
+  have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]`, `[char]` and arrays of tuples
+  of those, ascending; sort anything else with `sort_by(x => key)` or get a sorted copy with
+  `sorted_by(x => key)` (a tuple key such as `(-w.count, w.text)` sorts by several things).
+- **Syntax**: no negative indexes, `switch`, `?.`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
   functions, also with a `fn main`; the local variables of `fn main` are not), no closures, function values, overloading, default
-  arguments, methods on structs (`impl`, `self`) or modules of your own. One file is one program; it may
-  `use` the standard modules (section 6b). A lambda (`x => x * 2`) is only an argument of an array
+  arguments or methods on structs (`impl`, `self`). A program may `use` the standard modules (section 6b)
+  and files of its own: `use ./shapes` imports `shapes.nyra` from the same folder, whose `pub fn`s are called
+  `shapes.area(r)` (see the spec). A lambda (`x => x * 2`) is only an argument of an array
   method, and it cannot change variables.
 - **Library**: `abs`, `min` and `max` are builtins; everything else is a module function, never a
   global one: `math.sqrt(x)` after `use math`, not `sqrt(x)`.
-- **Errors**: no exceptions, `null`, `assert` or `panic`. A failing operation stops the program with a
+- **Errors**: no exceptions, `null`, `assert` or `panic` (a value that may be missing is an optional `int?`). A failing operation stops the program with a
   runtime error (section 5); `os.exit(code)` stops it on purpose. To check a function, write examples:
   `ex f(2) == 4` (section 1).
 - **Output**: `print` ends the line unless its last argument is `end:` (`print(x, end: " ")`). There is
-  no `printf` and no format specifier (`{x:.2f}` is an error): a float prints in its shortest form; for
-  a fixed number of decimals use `text.fixed(x, 2)` (section 6b). Pad text with `s.pad_left(n)`.
+  no `printf`; shape values inside the string with a format specifier, as in Python: `"{x:>8}"`, `"{n:05}"`,
+  `"{f:.2}"`, `"{n:,}"`, `"{f:>10.2}"` (see the spec). A float without `.N` prints in its shortest form.
 
 ## 5. Error codes
 
@@ -402,6 +427,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, or declared in another block |
 | E0202 | undefined function | the builtins are `print`, `str`, `int`, `float`, `char`, `abs`, `min`, `max`; `len(xs)` is `xs.len()`, `sqrt(x)` is `math.sqrt(x)` after `use math`; else define it yourself |
+| E0301 · E0303 · E0304 · E0305 | module trouble | a private function (`pub fn` to share it), files that import each other, two files with one name, a bad path (`use ./name`) |
 | E0300 · E0306 | module not found · module has no such item | the modules are `input os fs json time random math text`; `random.range(1, 7)`, not `randint` |
 | E0309 | `json.parse` needs a type | `let p: Point = json.parse(text)` |
 | E0203 | type mismatch | wrong argument, return or assigned type: `float(x)` / `int(x)`, write `2.0` not `2`; `int(c)` of a char: `c.code()` |
@@ -427,7 +453,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0225 | fields unnamed or out of order | `Point(x: 1, y: 2)`, in declaration order |
 | E0226 | named argument to a function | names are only for structs: `add(1, 2)` |
 | E0227 | unknown method | the `hint` lists the methods of the type; structs have none: `fn area(r: Rect)` |
-| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str` or `char`; `sum` needs numbers |
+| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str`, `char` or a tuple of those; `sum` needs numbers |
 | E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable, not `inout m[k]` |
 | E0230 | type of `[]` unknown | `var xs: [int] = []` |
 | E0231 | mixed array elements | one type per array; a struct for mixed data |
@@ -446,12 +472,25 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
 | E0260 | (warning) `${x}` in a string prints a `$` and the value | `"cost: {x}"`; the build goes on, `--json` lists it under `"warnings"` |
 | E0261 | negative constant index or slice position | `xs[xs.len() - 1]`, `xs.slice(xs.len() - 2, xs.len())` |
-| E0262 | optional type (`int?`, `Option<int>`) | there is no null: return `-1` or `""`, or a `bool` flag; `m.has(k)` before `m.get(k)` |
+| E0262 | `Option<int>` | an optional type is written `int?` |
 | E0263 | `fn` inside a `struct`, or an `impl` block | write the function outside: `fn area(r: Rect)` |
 | E0264 | `class` | `struct Rect { w: int }` and plain functions |
 | E0290 | capability not granted | `use fs` / `os` / `input` needs `--allow fs` / `os` / `input` (CLI) or `allow: ["fs"]` (MCP); or drop the module |
 | E0292 | malformed property example | `ex for n in 0..200: f(n) >= 0`: the range is two whole-number literals, `step` is not 0 |
 | E0293 | property example has too many inputs | at most 100,000: shorten the range or add a `step` |
+| E0275 | `in` cannot look for this value | `x in xs` needs `x` of the element type, `xs` an array, string or map |
+| E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
+| E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
+| E0278 | no such enum variant | a variant is written with its enum, `Dir.N` (also in `match` arms) |
+| E0279 | bad `match` pattern or value | patterns are constants of the matched type; match an enum, `bool`, `int`, `str` or `char` |
+| E0281 | `match` does not cover every case | add the missing arms, or a last arm `_ => ...` |
+| E0283 | `match` arm can never run | a repeated pattern, or an arm after `_` |
+| E0285 | statements in an imported file | an imported file holds only `fn`, `struct`, `enum` and `ex` |
+| E0284 | bad enum declaration | an enum needs at least one variant and no repeated names |
+| E0276 | `none` without an optional type | `var best: int? = none`; `none` cannot be a plain `int` |
+| E0277 | optional used the wrong way | `??` and `if let` need a `T?` on the left; the default must be a `T` |
+| E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |
+| E0273 | no such tuple position | a pair has `.0` and `.1` |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 
@@ -471,6 +510,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0245 | `int(x)` of NaN, infinity or a float too big for an `int` | check the value before converting |
 | E0246 | `char(n)` of an invalid code | codes go from 0 to 1114111, except 55296 to 57343 |
 | E0247 | `min()` or `max()` of an empty array | check `xs.len() > 0` first, or use `fold` with a start value |
+| E0350 | `unwrap()` of `none` | use `x ?? default` or `if let v = x { ... }`, or check `x != none` first |
 | E0249 | out of memory | `repeat` makes at most 536,870,888 bytes of text (UTF-16 units with `--js`, the same for ASCII) or 100,000,000 elements |
 | E0355 | step limit reached (interpreter, exit 120) | an endless loop or recursion; or raise `--fuel N` |
 | E0356 | memory limit reached (interpreter, exit 121) | a value that grows without end; or raise `--max-memory 1G` |

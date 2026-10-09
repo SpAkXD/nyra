@@ -261,20 +261,14 @@ fn what_the_agent_card_says_is_not_in_nyra_is_an_error() {
     let card = card();
     let not_in = card.split("## Not in Nyra\n").nth(1).and_then(|s| s.split("\n##").next()).expect("no `## Not in Nyra` section");
     let probes = [
-        ("Tuples", "let a = (1, 2)\n"),
-        ("enums", "enum Color { Red }\n"),
-        ("`Option`", "let a: Option = 1\n"),
         ("`null`", "let a = null\n"),
         ("generics", "fn id<T>(x: T) -> T = x\n"),
         ("closures", "let f = x => x + 1\n"),
-        ("methods on structs", "struct P { x: int }\nfn P.f(p: P) -> int = p.x\n"),
-        ("`match`", "let a = 1\nmatch a { 1 => print(1) }\n"),
+        ("classes and `impl`", "class P {\n    x: int\n}\n"),
         ("`elif`", "let a = 1\nif a == 1 { print(1) } elif a == 2 { print(2) }\n"),
         ("`and`/`or`/`not`", "let a = true and false\n"),
         ("`i++`", "var i = 0\ni++\n"),
-        ("`xs[a..b]`", "let xs = [1, 2, 3]\nprint(xs[0..2])\n"),
         ("`reduce`", "let xs = [1]\nprint(xs.reduce(0, (a, b) => a + b))\n"),
-        ("`find`", "let xs = [1]\nprint(xs.find(x => x > 0))\n"),
     ];
     for (word, source) in probes {
         assert!(not_in.contains(word), "the probe for {word} is not in the card's \"Not in Nyra\" list any more: update the probes");

@@ -1,0 +1,2 @@
+print("loading")
+pub fn f() -> int = 1

@@ -168,11 +168,16 @@ pub fn run(prog: &mut Program) -> Outcome {
         return Outcome { total, skipped: total, ..Outcome::default() };
     };
     let mut out = Outcome { total, ..Outcome::default() };
-    for (plan, (res, input)) in plans.iter().zip(results) {
+    for (i, (plan, (res, input))) in plans.iter().zip(results).enumerate() {
         match res {
             Res::Pass => out.passed += 1,
             Res::Skipped => out.skipped += 1,
-            res => out.errors.push(report(plan, res, input)),
+            res => {
+                // an example of an imported file is reported with that file
+                let mut d = report(plan, res, input);
+                d.file = prog.examples.get(i).and_then(|e| e.file.clone());
+                out.errors.push(d);
+            }
         }
     }
     out
@@ -182,7 +187,7 @@ pub fn run(prog: &mut Program) -> Outcome {
 fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Forall>) -> Func {
     let s = e.span;
     let params = match forall {
-        Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, span: f.span }],
+        Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, mutable: false, span: f.span }],
         None => Vec::new(),
     };
     Func { name, params, ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span }
@@ -406,11 +411,20 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
     let all = |xs: &[Expr]| xs.iter().find_map(|x| first_call(x, fns));
     match &e.kind {
         ExprKind::Call(name, args) => all(args).or_else(|| fns.contains(&name.as_str()).then(|| name.clone())),
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => first_call(x, fns),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+            first_call(x, fns)
+        }
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
+            first_call(a, fns).or_else(|| first_call(b, fns))
+        }
+        ExprKind::Some(x) => first_call(x, fns),
+        ExprKind::None => None,
+        ExprKind::Slice(b, lo, hi) => first_call(b, fns)
+            .or_else(|| lo.as_ref().and_then(|x| first_call(x, fns)))
+            .or_else(|| hi.as_ref().and_then(|x| first_call(x, fns))),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
-        ExprKind::Array(xs) => all(xs),
+        ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
         ExprKind::MapLit(kvs) => kvs.iter().find_map(|(k, v)| first_call(k, fns).or_else(|| first_call(v, fns))),
         ExprKind::Interp(parts) => parts.iter().find_map(|p| match p {
             InterpPart::Expr(x) => first_call(x, fns),
@@ -516,13 +530,23 @@ pub fn source(e: &Expr) -> String {
         ExprKind::Call(n, args) => format!("{n}({})", list(args)),
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
+        ExprKind::Tuple(xs) => format!("({})", list(xs)),
+        ExprKind::Fmt(x, spec) => format!("{}:{}", source(x), spec.text),
         ExprKind::MapLit(kvs) if kvs.is_empty() => "[:]".to_string(),
         ExprKind::MapLit(kvs) => {
             let items: Vec<String> = kvs.iter().map(|(k, v)| format!("{}: {}", source(k), source(v))).collect();
             format!("[{}]", items.join(", "))
         }
         ExprKind::Index(b, i) => format!("{}[{}]", tight(b), source(i)),
-        ExprKind::Field(b, f) => format!("{}.{f}", tight(b)),
+        ExprKind::In(a, b) => format!("{} in {}", tight(a), tight(b)),
+        ExprKind::None => "none".to_string(),
+        ExprKind::Some(x) => source(x),
+        ExprKind::Coalesce(a, b) => format!("{} ?? {}", tight(a), tight(b)),
+        ExprKind::Slice(b, lo, hi) => {
+            let bound = |x: &Option<Box<Expr>>| x.as_ref().map(|x| source(x)).unwrap_or_default();
+            format!("{}[{}..{}]", tight(b), bound(lo), bound(hi))
+        }
+        ExprKind::Field(b, f) => format!("{}.{}", tight(b), f.strip_prefix('_').filter(|n| n.parse::<usize>().is_ok()).unwrap_or(f)),
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),
         ExprKind::Inout(v) => format!("inout {}", source(v)),

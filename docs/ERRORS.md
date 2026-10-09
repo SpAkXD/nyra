@@ -27,13 +27,15 @@ design may still change.
 | E0201-E0218 | type checker | names, types, `return`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
-| E0260-E0269 | type checker, parser (since v0.6) | warnings (E0260) and mistakes taken from other languages: negative positions, optional types, methods in structs, classes |
+| E0260-E0269 | type checker, parser (since v0.6) | warnings (E0260) and mistakes taken from other languages: negative positions, `Option<T>`, methods in structs, classes |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
+| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match`, modules of your own |
 | E0290-E0293 | capabilities and properties (since v0.6) | a `use` of a module the run does not grant; a malformed or too large `ex for` property example |
-| E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
+| E0300-E0316 | standard modules (since v0.5), files of your own (v0.6); FFI (planned) | `use`, `use ./name`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
+| E0350-E0354 | run time (v0.6) | `unwrap()` of `none` (E0350) |
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 
@@ -41,7 +43,7 @@ A code marked **warning** does not stop the build: the compiler prints it to std
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0354, E0363-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -65,7 +67,7 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ## E0001: unexpected character
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : ? . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
+- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > ! ?` plus the two-character forms `-> .. ?? == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
 - **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
 - **Common causes:**
   - a `#` comment: Nyra comments start with `//`
@@ -2024,28 +2026,32 @@ print(last([1, 2, 3]))
 ```
 - **Related:** E0241, E0232
 
-## E0262: optional type
+## E0262: `Option<T>` instead of `T?`
 - **Kind:** compile error · **Since:** v0.6
-- **What it means:** A type is written with a `?` (`int?`, `Point?`, `[str]?`) to say "a value or nothing". Nyra has no optional values and no null yet, so there is no such type.
-- **Why Nyra has this rule:** Every Nyra value always exists, so a function never has to be asked whether its result is there. A missing result is an ordinary value that the function documents: a sentinel that cannot be a real answer, or a `bool` next to it.
+- **What it means:** A type is written `Option<int>` (or `Optional[int]`, `Maybe<int>`), the way Rust, Python or Haskell name an optional value. In Nyra an optional type is the type with a `?` after it: `int?`.
+- **Why Nyra has this rule:** One spelling for each thing. `int?` is short and reads like the Swift and Kotlin form that models already know; `none` is the missing value and `x ?? d` gives a default.
 - **Common causes:**
-  - a search that may find nothing and was written `-> int?`: return `-1` (what `index_of` does), or `""` for text
-  - a map lookup that may miss: ask `m.has(k)` first, then `m.get(k)`
+  - `-> Option<int>` copied from Rust: write `-> int?`
+  - `Optional[str]` from Python type hints: write `str?`
 - **Wrong:**
 ```rust
-fn find(xs: [int], x: int) -> int? {
-    ret xs.index_of(x)
+fn find(xs: [int], x: int) -> Option<int> {
+    return xs.index_of(x)
 }
 print(find([1, 2], 2))
 ```
 - **Fixed:**
 ```rust
-fn find(xs: [int], x: int) -> int {
-    ret xs.index_of(x)
+fn find(xs: [int], x: int) -> int? {
+    let i = xs.index_of(x)
+    if i < 0 {
+        return none
+    }
+    return i
 }
-print(find([1, 2], 2))
+print(find([1, 2], 2) ?? -1)
 ```
-- **Related:** E0001, E0102
+- **Related:** E0276, E0277, E0102
 
 ## E0263: function inside a struct or `impl` block
 - **Kind:** compile error · **Since:** v0.6
@@ -2099,6 +2105,350 @@ fn area(r: Rect) -> int = r.w * r.h
 print(area(Rect(w: 2, h: 3)))
 ```
 - **Related:** E0101, E0263
+
+## E0270: invalid format specifier
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The text after the colon in `{value:spec}` inside a string is not a format specifier Nyra understands. A specifier is `[[fill]align][+][0][width][,][.decimals]`, optionally ending in `f`, `d` or `s`: `{x:>8}` right-aligns in 8 characters, `{x:*^9}` centers with `*`, `{n:05}` pads with zeros, `{n:+}` shows the sign, `{n:,}` adds thousands separators, `{f:.2}` rounds to 2 decimals, and they combine: `{f:>10.2}`.
+- **Why Nyra has this rule:** Tables and money need aligned, rounded numbers, and every backend must print exactly the same text. Nyra takes the useful subset of Python's format language, and refuses the rest instead of guessing.
+- **Common causes:**
+  - a Python or C specifier Nyra does not have (`{x:e}`, `{x:x}`, `{x:%}`, `{x!r}`)
+  - a `.` without the number of decimals after it
+  - a width above 100000 or more than 100 decimals
+- **Wrong:**
+```rust
+fn main() {
+    let x = 5
+    print("{x:q}")
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let x = 5
+    print("{x:>4}")
+}
+```
+- **Related:** E0271
+
+## E0271: format specifier does not fit the value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The format specifier is valid, but not for the type of the value: decimals (`.2`) and the type letter `f` are for floats, `d` is for ints, `s` is for text, and the separator `,`, the sign `+` and the zero padding `0` are for numbers. Width, fill and alignment work for every value.
+- **Why Nyra has this rule:** Rounding text or putting separators into a name is almost always a mistake; Python raises an error for these, and so does Nyra, at compile time.
+- **Common causes:**
+  - `{name:.2}` to cut a text (use `name.slice(0, 2)`)
+  - `{count:.2f}` on an int (convert with `float(count)`)
+  - `{label:,}` on text
+- **Wrong:**
+```rust
+fn main() {
+    let name = "ann"
+    print("{name:.2}")
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let name = "ann"
+    print("{name.slice(0, 2)}")
+}
+```
+- **Related:** E0270
+
+## E0272: a pattern does not fit the value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A pattern such as `let (a, b) = value`, `(x, y) = value` or `for (k, v) in pairs` takes a tuple apart, but the value is not a tuple, or it has a different number of elements than the pattern has names.
+- **Why Nyra has this rule:** A tuple has a fixed size and each element has its own type, so taking it apart is checked like a call: a pattern with too few or too many names is almost always a mistake, and the message shows the tuple's type.
+- **Common causes:**
+  - `let (a, b) = f()` where `f` returns one value or an array
+  - a pattern with three names for a pair, or two names for a triple
+- **Wrong:**
+```rust
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b, c) = pair()
+    print(a, b, c)
+}
+```
+- **Fixed:**
+```rust
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b) = pair()
+    print(a, b)
+}
+```
+- **Related:** E0273, E0224
+
+## E0273: no such position in the tuple
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A tuple element is read with `.0`, `.1`, ... but the tuple has fewer elements than that. The message shows the tuple's type and the valid positions.
+- **Why Nyra has this rule:** The size of a tuple is part of its type, so a position past the end is known to be wrong at compile time instead of failing while the program runs.
+- **Common causes:**
+  - counting from 1 instead of 0: the first element of a tuple is `.0`
+  - reading the third element of a pair
+- **Wrong:**
+```rust
+fn main() {
+    let t = (1, "a")
+    print(t.2)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let t = (1, "a")
+    print(t.1)
+}
+```
+- **Related:** E0272, E0240
+
+## E0275: `in` cannot look for this value here
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `x in xs` asks whether `x` is an element of the array `xs`, a character or text inside the string `xs`, or a key of the map `xs`. The right side is not an array, a string or a map, or the left side has another type than its elements (a string, a char, a key).
+- **Why Nyra has this rule:** The check is the same as `xs.contains(x)`, `s.contains(t)` or `m.has(k)`, and those need matching types, like every comparison in Nyra.
+- **Common causes:**
+  - looking for a `str` in an array of ints
+  - `x in 1..10`: a range is not a value; write `x >= 1 && x < 10`
+  - `key in map.values()` when the keys were meant (or the other way round)
+- **Wrong:**
+```rust
+fn main() {
+    print("a" in [1, 2])
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    print(1 in [1, 2])
+}
+```
+- **Related:** E0203, E0210
+
+## E0276: `none` has no optional type
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `none` is the empty value of an optional type `T?`, but here nothing says which `T`, or the type that is needed is not optional. `none` takes its type from where it goes: a declared type, a parameter, a field, a `ret`, or the other side of `==`.
+- **Why Nyra has this rule:** There is no null in Nyra: only a value declared `int?` can be missing, so every `none` is checked against an optional type, like the empty array `[]` is.
+- **Common causes:**
+  - `let a = none`: there is nothing to infer the type from
+  - `let n: int = none`, or passing `none` where a plain `int` is expected
+- **Wrong:**
+```rust
+fn main() {
+    let a = none
+    print(a)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let a: int? = none
+    print(a)
+}
+```
+- **Related:** E0277, E0230
+
+## E0277: optional value used the wrong way
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An operation that needs an optional value `T?` got a plain value (`n ?? 3` or `if let v = n` with `n` an `int`), or the default of `??` has another type than the value inside the optional.
+- **Why Nyra has this rule:** `??` and `if let` exist to deal with a value that may be missing; on a value that is always there they are a mistake, and a default of the wrong type would give the result two types.
+- **Common causes:**
+  - `x ?? 0` where `x` is not optional
+  - `m.get("a") ?? "none"` for a map of ints
+- **Wrong:**
+```rust
+fn main() {
+    let n = 5
+    print(n ?? 3)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let m = ["a": 5]
+    print(m.get("a") ?? 3)
+}
+```
+- **Related:** E0276, E0203
+
+## E0278: no such enum variant
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A variant of an enum is written `Dir.N`, but the enum has no variant of that name, or a `match` arm names a variant without its enum (`N =>` instead of `Dir.N =>`). The message lists the variants.
+- **Why Nyra has this rule:** A variant is always written with its enum, so a name never means two things and a misspelled case is found at compile time, not by a `match` that silently falls through.
+- **Common causes:**
+  - a typo in the variant name
+  - a bare `N` in a `match` arm: patterns need the enum too
+- **Wrong:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.Q
+    print(d)
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    print(d)
+}
+```
+- **Related:** E0279, E0281
+
+## E0279: the pattern does not fit the matched value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The patterns of a `match` must be constants of the type of the matched value (the variants of an enum, or literal ints, strings, chars and bools), and the matched value must be an enum, a `bool`, an `int`, a `str` or a `char`.
+- **Why Nyra has this rule:** Each arm is a test `value == pattern`; a pattern of another type could never be true, and floats, arrays and structs have no short list of cases to cover. For those, use `if`.
+- **Common causes:**
+  - a string pattern for an int (`"3" =>`)
+  - `match` on a `float` or an array
+- **Wrong:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        "three" => print("three")
+        _ => print("other")
+    }
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        3 => print("three")
+        _ => print("other")
+    }
+}
+```
+- **Related:** E0281, E0278
+
+## E0281: the match does not cover every case
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A `match` must handle every possible value. For an enum that is every variant (or a last arm `_`); for a `bool` both `true` and `false`; for an int, str or char a last arm `_`. The message names what is missing.
+- **Why Nyra has this rule:** This is the point of `match` over an `if` chain: adding a variant to an enum later makes every `match` that forgot it fail to compile, instead of doing nothing at run time.
+- **Common causes:**
+  - a variant has no arm
+  - matching an `int` without a `_ =>` arm
+- **Wrong:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+    }
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+        Dir.S => print("south")
+    }
+}
+```
+- **Related:** E0283, E0279
+
+## E0283: this match arm can never run
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An arm of a `match` repeats a pattern an arm above it already has, or comes after a `_` arm, or after arms that cover every case. It would never be chosen.
+- **Why Nyra has this rule:** An unreachable arm is almost always a mistake (a copy that was not edited, `_` written first), and the first arm that matches decides.
+- **Common causes:**
+  - the same variant or literal twice
+  - `_ =>` before the specific arms
+- **Wrong:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        _ => print("any")
+        1 => print("one")
+    }
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        1 => print("one")
+        _ => print("any")
+    }
+}
+```
+- **Related:** E0281
+
+## E0284: bad enum declaration
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An `enum` has no variants, or lists the same variant twice.
+- **Why Nyra has this rule:** An enum with no variants has no values, and two variants with one name could not be told apart.
+- **Common causes:**
+  - `enum Empty {}` while the cases are still to be written
+  - a variant copied and not renamed
+- **Wrong:**
+```rust
+enum Dir { N, E, N }
+
+fn main() {
+    print("hi")
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    print("hi")
+}
+```
+- **Related:** E0278, E0221
+
+## E0285: a module holds only definitions
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A file that is imported with `use ./name` has statements at the top level (`print(...)`, `let`, ...). An imported file is a collection of `fn`, `struct`, `enum` and `ex` definitions; the statements belong to the program that imports it.
+- **Why Nyra has this rule:** Importing a file must not run anything, so a module can be imported from any file, in any order, any number of times.
+- **Common causes:**
+  - a test `print(...)` left at the top level of the helper file
+  - a script variable (`let limit = 10`): make it a function, `pub fn limit() -> int = 10`
+- **Wrong:**
+```rust
+// lib.nyra
+print("loading")
+pub fn f() -> int = 1
+
+// main.nyra
+use ./lib
+
+fn main() {
+    print(lib.f())
+}
+```
+- **Fixed:**
+```rust
+// lib.nyra
+pub fn f() -> int = 1
+
+// main.nyra
+use ./lib
+
+fn main() {
+    print(lib.f())
+}
+```
+- **Related:** E0332, E0208
 
 ## E0290: capability not granted
 - **Kind:** compile error · **Since:** v0.6
@@ -2185,7 +2535,7 @@ fn main() {
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
@@ -2210,8 +2560,8 @@ fn main() {
 - **Related:** E0302, E0305, E0306
 
 ## E0301: item is private to its module
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A function or constant of another module is used, but that module did not mark it `pub`.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A function of another file is called as `module.f(...)`, but that file did not mark it `pub`.
 - **Why Nyra has this rule:** A module decides what it exposes. Private by default means changing a helper never breaks code in other files.
 - **Common causes:**
   - the `pub` keyword is missing on the definition
@@ -2222,7 +2572,7 @@ fn main() {
 fn secret() -> int = 42
 
 // main.nyra
-use "./shapes"
+use ./shapes
 
 fn main() {
     print(shapes.secret())
@@ -2234,7 +2584,7 @@ fn main() {
 pub fn secret() -> int = 42
 
 // main.nyra
-use "./shapes"
+use ./shapes
 
 fn main() {
     print(shapes.secret())
@@ -2269,21 +2619,28 @@ fn main() {
 - **Related:** E0300, E0304
 
 ## E0303: import cycle
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Two or more files import each other, directly or through a chain: `a.nyra -> b.nyra -> a.nyra`.
-- **Why Nyra has this rule:** Modules are checked in dependency order, which needs a cycle-free graph. The message prints the chain.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** Two or more files import each other, directly or through a chain: `a.nyra -> b.nyra -> a.nyra`. The message prints the chain.
+- **Why Nyra has this rule:** Files are loaded in dependency order, which needs a cycle-free graph.
 - **Common causes:**
   - two files that call each other's functions
   - shared helpers placed in one of the two files
 - **Wrong:**
 ```rust
 // a.nyra
-use "./b"
+use ./b
 pub fn f() -> int = b.g()
 
 // b.nyra
-use "./a"
+use ./a
 pub fn g() -> int = a.f()
+
+// main.nyra
+use ./a
+
+fn main() {
+    print(a.f())
+}
 ```
 - **Fixed:**
 ```rust
@@ -2291,26 +2648,41 @@ pub fn g() -> int = a.f()
 pub fn base() -> int = 1
 
 // a.nyra
-use "./shared"
+use ./shared
 pub fn f() -> int = shared.base()
 
 // b.nyra
-use "./shared"
+use ./shared
 pub fn g() -> int = shared.base() + 1
+
+// main.nyra
+use ./a
+use ./b
+
+fn main() {
+    print(a.f() + b.g())
+}
 ```
 - **Related:** E0304, E0305
 
 ## E0304: two imports with the same name
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Two `use` lines give the same module name, for example `./a/util` and `./b/util` which are both called `util`.
-- **Why Nyra has this rule:** A module is always used by its name (`util.f(x)`), so each name must mean one module in a file. `as` renames one of them.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** Two different files are imported under one name, for example `./a/util` and `./b/util`, which are both called `util`; or a file has the name of a standard module (`./math`).
+- **Why Nyra has this rule:** A module is always called by its file's name (`util.f(x)`), so each name must mean one file in the whole program.
 - **Common causes:**
   - files with the same name in different folders
-  - importing one module twice
+  - a file called `math.nyra` or `text.nyra`, which are standard modules
 - **Wrong:**
 ```rust
-use "./a/util"
-use "./b/util"
+// a/util.nyra
+pub fn f() -> int = 1
+
+// b/util.nyra
+pub fn f() -> int = 2
+
+// main.nyra
+use ./a/util
+use ./b/util
 
 fn main() {
     print(util.f())
@@ -2318,35 +2690,45 @@ fn main() {
 ```
 - **Fixed:**
 ```rust
-use "./a/util"
-use "./b/util" as butil
+// a/util.nyra
+pub fn f() -> int = 1
+
+// b/util2.nyra
+pub fn f() -> int = 2
+
+// main.nyra
+use ./a/util
+use ./b/util2
 
 fn main() {
-    print(util.f() + butil.f())
+    print(util.f() + util2.f())
 }
 ```
 - **Related:** E0302, E0206
 
 ## E0305: import path not allowed
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** The quoted path of a `use "..."` is not valid. A path must start with `./` or `../`, use `/` as the only separator, leave out `.nyra` and stay inside the project folder.
-- **Why Nyra has this rule:** One portable path syntax that means the same on Windows and Linux, and a project cannot reach outside its own folder by accident.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The path of a `use` line is not valid. A path starts with `./` or `../`, uses `/` as the only separator and leaves out `.nyra`: `use ./shapes`, `use ../util/text`. Quotes around it are allowed (`use "./shapes"`).
+- **Why Nyra has this rule:** One portable path syntax that means the same on Windows and Linux, relative to the importing file.
 - **Common causes:**
   - `use "shapes"` without `./`
   - a Windows path with backslashes
-  - `use "./shapes.nyra"` with the extension
-  - a path that climbs out of the project (`../../x`)
+  - `use ./shapes.nyra` with the extension
 - **Wrong:**
 ```rust
 use "shapes.nyra"
 
 fn main() {
-    print(shapes.area(3))
+    print(1)
 }
 ```
 - **Fixed:**
 ```rust
-use "./shapes"
+// shapes.nyra
+pub fn area(w: int) -> int = w * w
+
+// main.nyra
+use ./shapes
 
 fn main() {
     print(shapes.area(3))
@@ -2763,21 +3145,29 @@ const LIMIT: int = 100
 - **Related:** E0332, E0205
 
 ## E0332: `pub` not allowed here
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or inside a function. It goes before `fn`, `const`, `extern` or `struct`.
-- **Why Nyra has this rule:** Only definitions can be exported. A module cannot re-export an import: write a small wrapper function instead.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or anywhere but right before a top-level `fn`, `struct` or `enum`.
+- **Why Nyra has this rule:** Only definitions can be exported. A file cannot re-export an import: write a small wrapper function instead.
 - **Common causes:**
   - `pub use` to re-export a module
-  - `pub let` for a global variable (there are none)
+  - `pub let` for a global variable (a `let` is private to its file)
 - **Wrong:**
 ```rust
 pub use math
+
+fn main() {
+    print(math.sqrt(4.0))
+}
 ```
 - **Fixed:**
 ```rust
 use math
 
 pub fn root(x: float) -> float = math.sqrt(x)
+
+fn main() {
+    print(root(4.0))
+}
 ```
 - **Related:** E0301, E0302
 
@@ -2957,6 +3347,29 @@ fn main() {
 ```
 - **Related:** E0309, E0244
 
+## E0350: unwrap of none
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** `opt.unwrap()` was called on an optional value that holds `none`. The program stops with exit code 101.
+- **Why Nyra has this rule:** `unwrap()` says "this value is there"; when it is not, continuing would invent a value. Prefer `opt ?? default` or `if let v = opt { ... }`, which handle the empty case.
+- **Common causes:**
+  - `m.get(key).unwrap()` for a key the map does not have
+  - `xs.find(x => ...).unwrap()` when no element passes
+- **Wrong:**
+```rust
+fn main() {
+    let x: int? = none
+    print(x.unwrap())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let x: int? = none
+    print(x ?? 0)
+}
+```
+- **Related:** E0248, E0247
+
 ## E0355: step limit reached
 - **Kind:** runtime error · **Since:** v0.6
 - **What it means:** A program that runs in the interpreter (`nyra run --interp`, `--sandbox`, or `nyra_run` with `sandbox: true`) ran more steps than its fuel: "step limit reached: the program ran more than 100000 steps". Every statement costs a step, and so does every element or character an operation makes. The program stops after the output it printed so far, with exit code 120, at the statement that ran when the fuel ran out.
@@ -3108,6 +3521,7 @@ fn main() {
 }
 ```
 - **Related:** E0355
+
 ## E0360: search in a growing array inside a loop
 - **Kind:** warning · **Since:** v0.6
 - **What it means:** `xs.contains(x)` or `xs.index_of(x)` runs inside a loop of 1000 rounds or more (`for i in 0..100000`, or `while i < 100000`), and `xs` is an array that the function builds with `push` or `insert`. Each search reads the array from the start, so the loop does about n times n steps. This is not an error, so the build goes on; the warning is printed to stderr and listed under `"warnings"` in `--json`. Only loops with a known large size are reported: a loop over data of unknown size (`while`, `for x in xs`) and a search in a function's parameter are not, because the array may be short.
@@ -3205,4 +3619,3 @@ fn main() {
 }
 ```
 - **Related:** E0361, E0360
-

@@ -1,0 +1,35 @@
+[1, 3, 5, 8] [5, 3, 8, 1]
+["al", "bob", "christine", "di"] ["di", "christine", "bob", "al"]
+fig:5
+kiwi:5
+apple:2
+pear:2
+["al", "di", "bob", "christine"]
+["bob", "christine", "al", "di"]
+["pear", "apple", "fig", "kiwi"]
+al christine
+kiwi apple
+-9 4
+true false true true false
+true true false false
+8 yes, 9 no
+[2, 3, 5, 7]
+[(1, "a"), (2, "b"), (3, "c")]
+[("bob", 5), ("al", 3), ("christine", 8), ("di", 1)]
+a10
+b20
+c30
+[(1, 3, 5), (2, 4, 6)] [('a', 'x'), ('b', 'y')]
+[]
+[[1, 2], [3, 4], [5]] ["abc", "def", "g"] []
+[20, 30] [10, 20] [40, 50] [10, 20, 30, 40, 50] []
+hello world hello ell!
+90
+[--hi--] [hi] [hi] [a.b]
+ann is 31
+bob is 27
+[("ann", 31), ("bob", 27)]
+3 3
+hey![1, 4] [1]
+20 16 4
+Word(text: "fig", count: 8)

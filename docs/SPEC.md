@@ -6,7 +6,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
-- A program is `fn` and `struct` definitions and `ex` examples in any order plus `fn main()`, or statements at
+- A program is `fn`, `struct` and `enum` definitions and `ex` examples in any order plus `fn main()`, or statements at
   the top level (a script: they run in order, like the body of `main`), or both: the statements run first,
   then `main()` is called. A script's top-level `let`s and `var`s are visible in every function (see Script variables).
 - Every function signature is fully typed. Local variable types are inferred.
@@ -30,7 +30,10 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
 | `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
+| `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
+| `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
+| `Dir` | an enum you declare: one of its named cases, `Dir.N` |
 
 There are no optional types and no null: `int?` and `Option<int>` are E0262. Return a sentinel (`-1`, `""`) or a `bool`.
 
@@ -48,7 +51,11 @@ fn show(n: int) {                     // no `->`: returns nothing
 ```
 `fn main()` has no parameters and no return type. A function with a return type must `return` on
 every path. Functions may call each other in any order, and recurse. Parameters cannot be changed:
-copy one into a `var`, or declare it `inout` (see Values).
+declare one `var` (the function works on its own copy: `fn count_down(var n: int)`), or `inout` to change
+the caller's variable (see Values).
+
+A function can be called like a method, with its first argument before the dot, when no built-in method has
+its name: `r.area()` is `area(r)`, and `p.move_by(2)` is `move_by(inout p, 2)` when the first parameter is `inout`.
 
 ## Examples
 ```nyra
@@ -150,8 +157,10 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 | `-x` `!x` | `-` on int/float, `!` on bool |
 | `*` `/` `%` | int,int or float,float (`%` int only; int `/` truncates toward zero) |
 | `+` `-` | int,int or float,float; `+` also joins two `str`s or two arrays of one type |
-| `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char → bool |
+| `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char · tuple,tuple of those → bool |
 | `==` `!=` | same type on both sides → bool (strings, arrays and structs compare by content) |
+| `x in xs` | `bool`: `xs` has the element `x` (`[T]`); `s` has the char or text `x` (`str`); `m` has the key `x` (`[K: V]`) |
+| `a ?? b` | `a` is `T?`, `b` is `T` (→ `T`) or `T?` (→ `T?`); between the comparisons and `+`, groups to the right |
 | `&&` `\|\|` | bool; the right side runs only when needed |
 | `c ? a : b` | `c` is a `bool`; the same as `if c { a } else { b }`: `a` and `b` have one type, and only the chosen one is evaluated |
 
@@ -169,11 +178,28 @@ Parentheses group: `(a + b) * c`. `?:` binds weaker than `||` and groups to the 
 | `float(x)` | int → float; str → float: `float("2.5")`, `float("1e3")` (other text: E0244) |
 | `char(n)` | code → char: `char(65)` is `'A'` (invalid code: E0246) |
 | `abs(x)` · `min(a, b)` · `max(a, b)` | on `int`s or on `float`s (a program may define its own instead) |
+| `zip(xs, ys)` · `zip(xs, ys, zs)` | `[(X, Y)]`: the pairs of elements, as many as the shorter array (or string, per char) has |
 
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
 `"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). A `$` is ordinary text: `"cost: ${x}"` prints
 `cost: $3`, and the compiler warns (E0260) because `${x}` is another language's way to insert a value (see Errors). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
+A format specifier after a colon shapes the text of a value, with the same result on every backend:
+```nyra
+let name = "ann"
+let n = 42
+let pi = 3.14159
+print("[{name:8}] [{name:>8}] [{name:^8}] [{n:6}] [{name:*<6}]")   // [ann     ] [     ann] [  ann   ] [    42] [ann***]
+print("{n:05} {n:+} {pi:.2} {pi:8.3} {1234567:,} {pi:>10.1}")      // 00042 +42 3.14    3.142 1,234,567        3.1
+```
+The parts, in this order: a fill character and an alignment (`<` left, `>` right, `^` centered; the default is
+left for text and right for numbers), `+` (a sign on positive numbers), `0` (zeros after the sign), the width,
+`,` (thousands separators), `.N` (N decimals of a float, rounded exactly like `text.fixed`: ties away from zero),
+and optionally `f`, `d` or `s`. `{x:.2f}` and `{n:5d}` are accepted as in Python. Width, fill and alignment work
+on any value (a tuple or an array is first written as `print` shows it); decimals, `,`, `+` and `0` need a
+number (E0271); anything else after the colon is E0270. The colon belongs to the specifier only outside
+brackets and quotes, so `{xs[0]}` and `{f("a")}` are unchanged.
+
 `a + b` joins two strings. Lengths and positions count characters (code points): `"héllo".len()`
 is 5, and `s[i]` is a `char` (from 0). A char is not a `str` and not an `int`; convert explicitly:
 ```nyra
@@ -185,13 +211,15 @@ print('7'.code() - '0'.code())    // 7: a digit's value
 ```
 | method | result |
 |---|---|
-| `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1` |
+| `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1`; also `s[a..b]`, `s[a..]`, `s[..b]` |
 | `s.contains(t)` `s.starts_with(t)` `s.ends_with(t)` | `bool` (`t` is a `str` or a `char`) |
 | `s.index_of(t)` | first position of `t` (a `str` or a `char`), or `-1` |
+| `s.to_int()` · `s.to_float()` | `int?` · `float?`: the number, or `none` when `int(s)` / `float(s)` would fail |
 | `s.pad_left(n)` `s.pad_right(n)` | spaces added until `s` has `n` characters (never shorter); `s.pad_left(n, '0')` pads with a char |
 | `s.split(sep)` | `[str]`: `"a,b,,c".split(",")` is `["a", "b", "", "c"]` |
 | `s.replace(old, new)` · `s.repeat(n)` | every `old` replaced · `n` copies |
-| `s.trim()` | without leading and trailing spaces, tabs and newlines |
+| `s.trim()` · `s.trim(chars)` | without leading and trailing spaces, tabs and newlines · without any of the characters of `chars` (a `str` or a `char`) |
+| `s.chunks(n)` | `[str]`: pieces of `n` characters, the last may be shorter (`n` below 1 is E0243) |
 | `s.upper()` `s.lower()` · `s.chars()` · `s.codes()` | ASCII case only (`"é".upper()` is `"é"`) · `[char]` · `[int]` |
 | `c.code()` · `c.upper()` `c.lower()` | `int` · `char` (ASCII) |
 | `c.is_digit()` `c.is_letter()` `c.is_upper()` `c.is_lower()` `c.is_space()` | `bool` (ASCII only) |
@@ -216,10 +244,12 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 | `xs.insert(i, v)` · `xs.remove(i)` | insert at index `i` (0 to len) · remove and return element `i` |
 | `xs.swap(i, j)` | exchange elements `i` and `j` |
 | `xs.contains(v)` · `xs.index_of(v)` | `bool` · first index or `-1` |
-| `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1` · `n` copies, one after another |
-| `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`) |
+| `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1`, also `xs[a..b]`, `xs[a..]`, `xs[..b]` (positions as for `slice`) · `n` copies, one after another |
+| `xs.chunks(n)` | `[[T]]`: pieces of `n` elements, the last may be shorter (`n` below 1 is E0243) |
+| `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`, or tuples of those) |
 | `xs.join(sep)` | `[str]` or `[char]` → one `str` |
 | `xs.reversed()` · `s.reversed()` | a reversed copy (`xs.reverse()` reverses in place) |
+| `xs.sorted()` | a sorted copy (`sort()` does it in place) |
 | `xs.sum()` · `xs.min()` · `xs.max()` | `[int]`/`[float]` sum (0 when empty) · smallest/largest of `[int] [float] [str] [char]`, like `min(a, b)` from left to right (empty: E0247) |
 
 Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse sort_by`) needs a `var`.
@@ -238,8 +268,11 @@ print([x * x for x in xs if x > 0], [i * 2 for i in 0..3])   // [9, 16] [0, 2, 4
 | `xs.map(x => e)` · `xs.filter(x => test)` | a new array of the results · of the elements that pass |
 | `xs.count(x => test)` · `xs.any(...)` · `xs.all(...)` | `int` · `bool` · `bool` (also on a `str`: each char) |
 | `xs.find_index(x => test)` | position of the first element that passes, or `-1` (also on a `str`) |
+| `xs.find(x => test)` | `T?`: the first element that passes, or `none` |
 | `xs.fold(start, (acc, x) => e)` | `acc` starts as `start` and becomes `e` for each element: the last `acc` |
-| `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key computed once per element |
+| `xs.sorted_by(x => key)` | a new sorted array, like `sort_by`: `words.sorted_by(w => (-w.count, w.text))` sorts by count descending, then text |
+| `xs.min_by(x => key)` · `xs.max_by(x => key)` | the first element with the smallest / largest key (an empty array: E0247) |
+| `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key (or a tuple of them) computed once per element |
 
 A chain of `map` and `filter` and the method that ends it run as one loop, element by element (no
 array in between); `any`, `all` and `find_index` stop at the answer. `[e for x in src if c]` (the
@@ -257,9 +290,9 @@ for name in ages { print(name) }        // the keys, in insertion order
 | method | result |
 |---|---|
 | `m.len()` · `m.has(k)` | number of entries · `bool` |
-| `m.get(k)` · `m.get(k, default)` | the value (like `m[k]`) · the value or `default` |
+| `m.get(k)` · `m.get(k, default)` | `V?`: the value or `none` · the value or `default` |
 | `m.set(k, v)` · `m.remove(k)` | like `m[k] = v` · removes `k` (nothing happens if it is missing) |
-| `m.keys()` · `m.values()` | arrays, in insertion order |
+| `m.keys()` · `m.values()` · `m.items()` | arrays, in insertion order; `items` gives the pairs `[(K, V)]`: `for (k, v) in m.items()` |
 
 Maps are values like arrays (`var b = a` copies), compare with `==` by content in any order and print
 as `["ann": 31, "bob": 27]` (`[:]` when empty). Changing a map needs a `var`. A value inside a map changes
@@ -282,8 +315,103 @@ q.y += 5                              // fields of a `var` can be changed
 print(Line(a: p, b: q))               // Line(a: Point(x: 1, y: 2), b: Point(x: 11, y: 7))
 ```
 Struct names start with an uppercase letter. A struct cannot contain itself (use an array:
-`kids: [Tree]`). Structs have no methods: write `fn area(r: Rect) -> int` and call `area(r)`. A `fn` inside the
+`kids: [Tree]`). Structs have no methods of their own: write `fn area(r: Rect) -> int` and call `area(r)` or `r.area()`. A `fn` inside the
 struct's braces or an `impl` block is E0263, and `class` is E0264: write a `struct` and the functions outside it.
+
+## Tuples
+```nyra
+fn divmod(a: int, b: int) -> (int, int) = (a / b, a % b)
+
+let t = divmod(17, 5)                    // (3, 2)
+print(t.0, t.1)                          // 3 2: positions start at 0
+let (q, r) = divmod(17, 5)               // take it apart: q is 3, r is 2
+var (x, y) = (1, 2)
+(x, y) = (y, x)                          // swap: x is 2, y is 1
+let (name, _) = ("ann", 31)              // `_` skips a part
+for (k, v) in [("a", 1), ("b", 2)] {
+    print(k, v)
+}
+print((1, "a") < (1, "b"))               // true: parts are compared one by one
+var pairs = [(3, "c"), (1, "z"), (3, "a")]
+pairs.sort()                             // [(1, "z"), (3, "a"), (3, "c")]
+print(pairs[0], pairs.len())             // (1, "z") 3
+```
+A comma makes a tuple (`(a + b) * c` is still a grouping). The parts are fixed by the type: `(int, str)` is
+not `(str, int)`, and `t.2` of a pair is E0273. A pattern must name every part (`_` skips one): a wrong
+count is E0272. Tuples are values like structs: they are copied, compare with `==` and `!=` by content, and
+`<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
+(or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
+int that stands for it) and `json` cannot read or write one (use a struct).
+
+## Enums and `match`
+```nyra
+enum Dir { N, E, S, W }                  // a fixed set of named cases; commas or new lines
+
+fn turn_right(d: Dir) -> Dir {
+    match d {                            // every case must be handled
+        Dir.N => return Dir.E
+        Dir.E => return Dir.S
+        Dir.S => return Dir.W
+        Dir.W => return Dir.N
+    }
+}
+
+fn is_vertical(d: Dir) -> bool {
+    match d {
+        Dir.N, Dir.S => return true         // several patterns, one arm
+        _ => return false                   // `_` takes everything else
+    }
+}
+
+let d = Dir.N                            // a value is written with its enum
+print(d, turn_right(d), is_vertical(d))  // Dir.N Dir.E true
+print(d == Dir.N, Dir.all())             // true [Dir.N, Dir.E, Dir.S, Dir.W]
+match 7 % 2 {
+    0 => print("even")
+    _ => print("odd")
+}
+```
+An enum value is one of its variants, always written `Enum.Variant` (a bare `N` is E0278). It prints as
+`Dir.N`, compares with `==` and `!=` by variant, is copied like any value, and can be stored in arrays and
+struct fields; it cannot be ordered, be a map key or go through `json`. `Enum.all()` is the array of all
+variants, in order.
+
+`match value { pattern => body }` picks the first arm whose pattern equals the value. A pattern is a variant
+of the matched enum, or a literal `int`, `str`, `char` or `bool` (a `-` literal cannot start a line:
+`4, -1 =>`); several patterns are separated by commas; `_` takes anything. The body is one statement after
+`=>`, or a block `{ ... }`. All cases must be covered (E0281): for an enum every variant or a `_` arm, for a
+`bool` both values, for an `int`, `str` or `char` a `_` arm. An arm that can never run is E0283, and a
+pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. `match` is a
+statement: to give a value, `ret` it or assign it in the arms.
+
+## Optional values
+```nyra
+let ages = ["ann": 31, "bob": 27]
+let a: int? = ages.get("ann")                // Some(31); a missing key gives none
+print(a, ages.get("cy"))                     // Some(31) none
+print(ages.get("cy") ?? 0)                   // 0: the value, or the default
+if let n = ages.get("bob") {                 // runs when there is a value, named n
+    print("bob is {n}")
+} else {
+    print("no bob")
+}
+var best: int? = none                        // none needs the type: `int?`
+for x in [4, 9, 2] {
+    if best == none || x > (best ?? 0) {     // compare with none, or with a plain value
+        best = x
+    }
+}
+print(best, best.is_some(), best.unwrap())   // Some(9) true 9
+let first_even = [3, 5, 8, 6].find(x => x % 2 == 0)   // Some(8)
+print("12".to_int(), "x".to_int(), "2.5".to_float())  // Some(12) none Some(2.5)
+```
+`T?` holds a `T` or `none`; a plain `T` goes where a `T?` is expected (`let a: int? = 5`, `ret x` in a function
+`-> int?`, an argument). It prints as `Some(31)` or `none`, and `==` and `!=` compare by content (also with a
+plain value: `m.get(k) == 3`). `x ?? d` is `x`'s value, or `d` (evaluated only when needed); `d` may itself be
+optional. `if let v = x { ... } else { ... }` binds `v` in the first block only. `x.is_some()`, `x.is_none()` and
+`x.unwrap()` (E0350 at run time when it holds none) are the only methods; to use a field or a method of the
+value, take it out first. `none` needs a known optional type (E0276), `??` and `if let` need an optional on the
+left (E0277). Optionals cannot be map keys or go through `json`.
 
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
@@ -316,8 +444,8 @@ when. They are checked at compile time, and a program prints the same with or wi
 `free` and `keep` take a local `let`/`var` holding a `str`, an array or a struct that contains one.
 
 ## Printing
-`print(x)`, `str(x)` and `"{x}"` show the same text. Arrays and structs print as Nyra code, with
-strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `Point(x: 1, y: 2)`. Numbers print
+`print(x)`, `str(x)` and `"{x}"` show the same text (`"{x:>8}"` adds a format specifier). Arrays, tuples and structs print as Nyra code, with
+strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `(1, "a")`, `Point(x: 1, y: 2)`. Numbers print
 like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`,
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 
@@ -400,6 +528,29 @@ not wait: it moves a virtual clock that `time.now_ms` and `time.mono_ms` include
 millisecond. The MCP tool `nyra_run` with `sandbox: true` runs a program this way (no child process) and
 takes `fuel`, `max_memory`, `max_output` (at most 16 KiB) and `timeout_ms`.
 
+## Modules of your own
+```text
+// shapes.nyra
+pub struct Rect { w: int, h: int }
+pub fn area(r: Rect) -> int = r.w * r.h
+fn helper(r: Rect) -> int = r.w + r.h     // private: only this file can call it
+ex area(Rect(w: 2, h: 5)) == 10
+
+// main.nyra
+use ./shapes                              // the file shapes.nyra next to this one
+let r = Rect(w: 3, h: 4)                  // types keep their plain names
+print(shapes.area(r))                     // 12: functions are called with the file's name
+```
+`use ./name` (or `use ../util/name`, `use ./folder/name`; `use "./name"` is the same) imports the file `name.nyra`
+from the folder of the importing file. The functions marked `pub` are called `name.f(x)`; a function
+without `pub` is private to its file (E0301), and a file's helpers call each other by their plain names. The
+`pub` structs and enums are used without a prefix (all type names share one program-wide namespace, so a
+clash is E0206). A module holds only definitions: `fn`, `struct`, `enum`, `ex`, and its own `use` lines
+(E0285 for statements); its examples run with the program's. Two files are never imported under one name
+(E0304, also for a file named like a standard module), files may not import each other (E0303), and
+`pub` goes right before `fn`, `struct` or `enum` (E0332). A mistake inside an imported file is reported
+with that file's name and line. A program given as text (`nyra mcp`) has no folder and cannot import files.
+
 ## Errors
 `nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0359), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
@@ -440,6 +591,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
 | E0255 | int overflow: `+`, `-`, `*`, negation, `abs` or `/` (only `MIN / -1`) outside -2^63 to 2^63 - 1 |
 | E0256 | `--js`/`--ts` only: an int beyond 2^53 - 1 (9007199254740991), which JavaScript would round |
+| E0350 | `opt.unwrap()` of `none` |
 | E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |

@@ -164,6 +164,12 @@ fn capped(ss: &[Stmt], consts: &HashMap<String, i64>) -> HashSet<String> {
                     on_expr(target, consts, out);
                     on_expr(value, consts, out);
                 }
+                StmtKind::Match { scrut, arms } => {
+                    on_expr(scrut, consts, out);
+                    for arm in arms {
+                        on_block(&arm.body, consts, out);
+                    }
+                }
                 StmtKind::If { cond, then, els } => {
                     on_expr(cond, consts, out);
                     on_block(then, consts, out);
@@ -212,9 +218,21 @@ fn each_child<'a>(e: &'a Expr, f: &mut dyn FnMut(&'a Expr)) {
             f(a);
             f(b);
         }
-        ExprKind::Call(_, args) | ExprKind::Array(args) => {
+        ExprKind::Call(_, args) | ExprKind::Array(args) | ExprKind::Tuple(args) => {
             for a in args {
                 f(a);
+            }
+        }
+        ExprKind::None => {}
+        ExprKind::Some(x) | ExprKind::Fmt(x, _) => f(x),
+        ExprKind::Coalesce(a, b) | ExprKind::In(a, b) => {
+            f(a);
+            f(b);
+        }
+        ExprKind::Slice(x, a, b) => {
+            f(x);
+            for e in [a, b].into_iter().flatten() {
+                f(e);
             }
         }
         ExprKind::If(c, a, b) => {
@@ -369,6 +387,12 @@ impl Pass {
                 self.expr(target);
                 self.expr(value);
                 self.assign(target, *op, value);
+            }
+            StmtKind::Match { scrut, arms } => {
+                self.expr(scrut);
+                for arm in arms {
+                    self.block(&arm.body);
+                }
             }
             StmtKind::If { cond, then, els } => {
                 self.expr(cond);

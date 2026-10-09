@@ -11,13 +11,13 @@ use crate::diag::suggest;
 pub fn word(w: &str) -> Option<String> {
     let hint = match w {
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
-        "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
+        "switch" | "case" => "Nyra has no `switch`: write `match value { 1 => ..., _ => ... }`, or chain `if` / `else if`",
         "and" => "write `&&` for logical and: `a && b`",
         "or" => "write `||` for logical or: `a || b`",
         "not" => "write `!` for logical not: `!done`",
         "then" => "Nyra has no `then`: the body of an `if` is `{ ... }` on the same line as the `if`",
         "null" | "nil" | "None" | "NULL" | "undefined" => {
-            "Nyra has no null: every variable always holds a value of its type"
+            "Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`"
         }
         "True" | "False" => "write `true` or `false` in lowercase",
         "mut" => "write `var` for a variable that changes: `var x = 0`",
@@ -53,9 +53,9 @@ pub fn top_level_word(w: &str) -> Option<String> {
                 "Nyra has no `{w}`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`"
             ))
         }
-        "enum" | "union" | "type" | "typedef" => {
+        "union" | "type" | "typedef" => {
             return Some(format!(
-                "Nyra has no `{w}` yet: the top-level items are `fn` and `struct`; for a fixed set of cases use `int` or `str` values"
+                "Nyra has no `{w}`: the top-level items are `fn`, `struct` and `enum` (`enum Dir {{ N, E, S, W }}`)"
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
@@ -387,7 +387,7 @@ pub fn type_fix(w: &str) -> Option<&'static str> {
 }
 
 /// What to do when a value might be missing (`int?`, `Option<int>`): Nyra has no optional values.
-pub const OPTION_HINT: &str = "there is no Option type and no null yet: return a sentinel value that cannot be a real result (`-1` for a missing position, \"\" for missing text) or a `bool` that says whether the value is valid; for a map, check `m.has(k)` before `m.get(k)`";
+pub const OPTION_HINT: &str = "an optional type is written with a `?` after the type, `int?`; a missing value is `none`, `x ?? d` gives a default and `if let v = x { ... }` takes the value out";
 
 /// What to do about a type name that does not exist.
 pub fn type_name(name: &str) -> String {
@@ -405,10 +405,10 @@ pub fn type_name(name: &str) -> String {
         "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
             "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
-        "option" | "optional" | "maybe" | "nullable" => OPTION_HINT.to_string(),
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
-        "tuple" | "pair" => {
-            "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
+        "tuple" | "pair" => "a tuple type is written with parentheses, e.g. `(int, str)`; a value `(1, \"a\")`".to_string(),
+        "option" | "optional" | "maybe" | "nullable" => {
+            "an optional type is written with a question mark after the type, e.g. `int?`".to_string()
         }
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()

@@ -1,0 +1,7 @@
+// expect: E0278
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.Q
+    print(d)
+}

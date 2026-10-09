@@ -1,0 +1,6 @@
+// expect: E0300
+use ./modules/nothing_here
+
+fn main() {
+    print(1)
+}

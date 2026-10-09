@@ -40,6 +40,12 @@ pub struct StructInfo {
     pub fields: Vec<(String, Ty)>,
     /// A field owns heap memory (directly or through a nested struct).
     pub managed: bool,
+    /// A tuple `(a, b)`: printed without a name and without field names.
+    pub tuple: bool,
+    /// An optional value `T?`: the fields `has` and `val`; printed `none` or `Some(v)`.
+    pub option: bool,
+    /// An enum: the names of its variants (its one field is the number of the variant); empty for a struct.
+    pub variants: Vec<String>,
 }
 
 /// The structs of a program by type id (`Ty::Struct(id)`), in an order where each struct comes
@@ -328,6 +334,8 @@ pub enum RtOp {
     CheckNonEmpty,
     /// The `step` of a range: 0 is runtime error E0243. Writes nowhere.
     CheckStep,
+    /// `opt.unwrap()`: the operand says whether the optional holds a value; if not, runtime error E0350.
+    CheckSome,
     /// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters (never shorter).
     StrPadLeft,
     StrPadRight,
@@ -403,6 +411,7 @@ impl RtOp {
             RtOp::ArrSortBy => "arr_sort_by",
             RtOp::CheckNonEmpty => "check_non_empty",
             RtOp::CheckStep => "check_step",
+            RtOp::CheckSome => "check_some",
             RtOp::StrPadLeft => "str_pad_left",
             RtOp::StrPadRight => "str_pad_right",
             RtOp::StructNew => "struct_new",
@@ -440,6 +449,7 @@ impl RtOp {
             RtOp::CharFrom => (&[Int], Some(Char)),
             RtOp::StrPadLeft | RtOp::StrPadRight => (&[Str, Int, Char], Some(Str)),
             RtOp::CheckStep => (&[Int], None),
+            RtOp::CheckSome => (&[Ty::Bool], None),
             RtOp::CheckNonEmpty => (&[Int, Int], None),
             _ => (&[], None),
         }

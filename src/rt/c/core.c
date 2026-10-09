@@ -168,6 +168,10 @@ static inline int64_t nyrt_mod(int64_t a, int64_t b, int line, int col) {
 static void nyrt_check_step(int64_t k, int line, int col) {
     if (k == 0) nyrt_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `opt.unwrap()` of `none`.
+static void nyrt_check_some(bool has, int line, int col) {
+    if (!has) nyrt_panic("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col);
+}
 // `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
 static void nyrt_check_non_empty(int64_t n, int64_t max, int line, int col) {
     if (n == 0) {

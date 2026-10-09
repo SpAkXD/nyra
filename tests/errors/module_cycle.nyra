@@ -1,0 +1,6 @@
+// expect: E0303
+use ./modules/cycle_a
+
+fn main() {
+    print(cycle_a.f())
+}

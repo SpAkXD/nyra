@@ -1,0 +1,7 @@
+// expect: E0309
+use json
+enum Dir { N, E, S }
+
+fn main() {
+    print(json.str(Dir.N))
+}

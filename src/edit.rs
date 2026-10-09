@@ -782,6 +782,13 @@ fn walk_stmts(stmts: &[Stmt], f: &mut dyn FnMut(&Expr)) {
                 walk_stmts(body, f);
             }
             StmtKind::Arena(body) => walk_stmts(body, f),
+            StmtKind::Match { scrut, arms } => {
+                walk(scrut, f);
+                for arm in arms {
+                    arm.pats.iter().for_each(|p| walk(p, f));
+                    walk_stmts(&arm.body, f);
+                }
+            }
             StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => walk(e, f),
             _ => {}
         }

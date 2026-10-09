@@ -1,6 +1,4 @@
 // expect: E0262
 struct P { x: int }
-fn main() {
-    let p: P? = P(x: 1)
-    print(1)
-}
+let p: Optional[P] = P(x: 1)
+print(p)

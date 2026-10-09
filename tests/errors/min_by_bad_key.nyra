@@ -1,0 +1,4 @@
+// expect: E0228
+fn main() {
+    print([1, 2].min_by(x => [x]))
+}

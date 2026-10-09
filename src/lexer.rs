@@ -31,6 +31,8 @@ pub enum Tok {
     Break,
     Continue,
     Arena,
+    Enum,
+    Match,
     // punctuation
     LParen,
     RParen,
@@ -64,6 +66,9 @@ pub enum Tok {
     And,
     Or,
     Not,
+    /// `?` of an optional type `int?`
+    /// `??`
+    Coalesce,
     Newline,
     Eof,
 }
@@ -103,6 +108,8 @@ impl Tok {
                 | Tok::Break
                 | Tok::Continue
                 | Tok::Arena
+                | Tok::Enum
+                | Tok::Match
         )
     }
 
@@ -124,6 +131,8 @@ impl Tok {
             Tok::Break => "break",
             Tok::Continue => "continue",
             Tok::Arena => "arena",
+            Tok::Enum => "enum",
+            Tok::Match => "match",
             Tok::LParen => "(",
             Tok::RParen => ")",
             Tok::LBrace => "{",
@@ -152,6 +161,7 @@ impl Tok {
             Tok::And => "&&",
             Tok::Or => "||",
             Tok::Not => "!",
+            Tok::Coalesce => "??",
             _ => "",
         }
     }
@@ -212,7 +222,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 i += 1;
             }
             let mut is_float = false;
-            if i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
+            // after a `.` the digits are a tuple position (`t.0.1` is `t.0` then `.1`), never a float
+            let position = matches!(toks.last().map(|t| &t.tok), Some(Tok::Dot));
+            if !position && i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
                 is_float = true;
                 i += 1;
                 while i < cs.len() && cs[i].is_ascii_digit() {
@@ -272,6 +284,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "break" => Tok::Break,
                 "continue" => Tok::Continue,
                 "arena" => Tok::Arena,
+                "enum" => Tok::Enum,
+                "match" => Tok::Match,
                 _ => Tok::Ident(text),
             };
             toks.push(Token { tok, span });
@@ -446,6 +460,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ('!', '=') => Some(Tok::Ne),
             ('<', '=') => Some(Tok::Le),
             ('>', '=') => Some(Tok::Ge),
+            ('?', '?') => Some(Tok::Coalesce),
             ('&', '&') => Some(Tok::And),
             ('|', '|') => Some(Tok::Or),
             ('+', '=') => Some(Tok::OpAssign(BinOp::Add)),
@@ -464,7 +479,11 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
         // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
         if c == '.' {
-            let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
+            // (not in `t.1.0`: after a `.` the digits are a tuple position)
+            let after_digit = i > 0
+                && cs[i - 1].is_ascii_digit()
+                && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)))
+                && !(toks.len() >= 2 && toks[toks.len() - 2].tok == Tok::Dot);
             let before_digit =
                 next.is_ascii_digit() && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
             if !after_digit && !before_digit {
@@ -610,7 +629,7 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
         }
         out.push(t.clone());
         // `print("no") ret` in a one-line block: `ret`, `break` and `continue` end a line anyway
-        if !matches!(t.tok, Tok::Newline | Tok::LBrace)
+        if !matches!(t.tok, Tok::Newline | Tok::LBrace | Tok::FatArrow)
             && matches!(toks.get(i + 1).map(|n| &n.tok), Some(Tok::Ret | Tok::Break | Tok::Continue))
             && toks.get(i + 1).is_some_and(|n| n.span.line == t.span.line)
         {

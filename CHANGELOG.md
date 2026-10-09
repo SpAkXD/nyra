@@ -5,6 +5,14 @@ version to the next; each entry says what changed. Error codes are stable: a num
 
 ## v0.6 (unreleased)
 
+Language
+- Tuples: `(1, "a")`, `t.0`, `fn f() -> (int, bool)`, `let (a, b) = f()`, `(a, b) = (b, a)`, `for (k, v) in pairs`. They compare and sort part by part and print as `(1, "a")`. New codes E0272, E0273.
+- Format specifiers in strings, Python's subset: `{x:>8}`, `{n:05}`, `{f:.2}` (rounded like `text.fixed`), `{n:,}`, `{f:>10.2}`. New codes E0270, E0271.
+- Denser helpers: `xs.sorted()`, `sorted_by`, `min_by`, `max_by` (keys may be tuples), `x in xs`, `zip`, `chunks`, slices `xs[a..b]` / `s[a..b]`, `s.trim(chars)`, `m.items()`, `fn f(var n: int)`, and `r.area()` for `fn area(r: Rect)`. New code E0275.
+- Optional values: `T?`, `none`, `x ?? default`, `if let v = x { }`, `unwrap()`; `m.get(k)` now gives a `V?` (`get(k, default)` is unchanged), plus `s.to_int()`, `s.to_float()` and `xs.find(x => test)`. New codes E0276, E0277, E0350.
+- Enums and `match`: `enum Dir { N, E, S, W }`, values `Dir.N`, `Dir.all()`, and `match` on an enum (every case must be covered, `_` takes the rest), `bool`, `int`, `str` or `char`. New codes E0278, E0279, E0281, E0283, E0284.
+- Modules of your own: `use ./name` imports `name.nyra` from the importing file's folder; its `pub fn`s are called `name.f(x)`, its `pub struct`s and `enum`s need no prefix; errors inside an imported file name that file. New codes E0285 (and E0301, E0303, E0304, E0305, E0332, planned until now, are emitted).
+
 - **Warnings.** A likely mistake that the language allows no longer passes silently: `"cost: ${x}"` (a
   `$` before a `{value}`) prints `warning[E0260]` to stderr and is listed under `"warnings"` in `--json`.
   Warnings never fail the build.

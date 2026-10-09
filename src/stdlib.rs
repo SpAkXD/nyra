@@ -306,6 +306,13 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
                     stmts(body, m, own);
                 }
                 StmtKind::Arena(body) => stmts(body, m, own),
+                StmtKind::Match { scrut, arms } => {
+                    expr(scrut, m, own);
+                    for arm in arms {
+                        arm.pats.iter_mut().for_each(|p| expr(p, m, own));
+                        stmts(&mut arm.body, m, own);
+                    }
+                }
                 StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => expr(e, m, own),
                 StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
             }
@@ -327,17 +334,25 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
                     }
                 }
             }
-            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => expr(x, m, own),
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+                expr(x, m, own)
+            }
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
                 expr(a, m, own);
                 expr(b, m, own);
+            }
+            ExprKind::Some(x) => expr(x, m, own),
+            ExprKind::None => {}
+            ExprKind::Slice(b, lo, hi) => {
+                expr(b, m, own);
+                lo.iter_mut().chain(hi.iter_mut()).for_each(|x| expr(x, m, own));
             }
             ExprKind::If(c, a, b) => {
                 expr(c, m, own);
                 expr(a, m, own);
                 expr(b, m, own);
             }
-            ExprKind::Array(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
+            ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
             ExprKind::MapLit(pairs) => {
                 for (k, v) in pairs {
                     expr(k, m, own);

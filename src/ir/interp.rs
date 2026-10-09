@@ -1050,6 +1050,18 @@ impl<'m> Interp<'m> {
                 self.tick(r.len() as u64)?;
                 text(r)
             }
+            RtOp::CheckSome => {
+                let Some(Value::Bool(has)) = args.first() else { return Err(bug("unwrap without a flag")) };
+                if !*has {
+                    return Err(fail(
+                        "E0350",
+                        "unwrap() of none".to_string(),
+                        "check `x != none` first, or give a default with `x ?? value`",
+                        span,
+                    ));
+                }
+                None
+            }
             RtOp::CheckNonEmpty => {
                 if i(0)? == 0 {
                     let msg = if i(1)? != 0 { "max() of an empty array" } else { "min() of an empty array" };
@@ -1324,6 +1336,16 @@ pub fn compare(a: &Value, b: &Value) -> Option<Ordering> {
         (Value::Float(x), Value::Float(y)) => x.partial_cmp(y),
         (Value::Char(x), Value::Char(y)) => Some(x.cmp(y)),
         (Value::Str(x), Value::Str(y)) => Some(x.as_str().cmp(y.as_str())),
+        (Value::Bool(x), Value::Bool(y)) => Some(x.cmp(y)),
+        // tuples: element by element, the first difference decides
+        (Value::Struct(_, xs), Value::Struct(_, ys)) => {
+            for (x, y) in xs.iter().zip(ys.iter()) {
+                if !equal(x, y) {
+                    return compare(x, y);
+                }
+            }
+            Some(Ordering::Equal)
+        }
         _ => None,
     }
 }
@@ -1390,14 +1412,39 @@ fn show_in(m: &Module, v: &Value, out: &mut String, depth: usize) {
                 out.push('?');
                 return;
             };
-            out.push_str(&info.name);
+            // an enum value: its variant
+            if !info.variants.is_empty() {
+                if let Value::Int(k) = &fields[0] {
+                    if let Some(v) = info.variants.get(*k as usize) {
+                        out.push_str(&format!("{}.{v}", info.name));
+                        return;
+                    }
+                }
+            }
+            // an optional: `none`, or `Some(value)`
+            if info.option {
+                match (&fields[0], &fields[1]) {
+                    (Value::Bool(true), v) => {
+                        out.push_str("Some(");
+                        show_in(m, v, out, depth + 1);
+                        out.push(')');
+                    }
+                    _ => out.push_str("none"),
+                }
+                return;
+            }
+            if !info.tuple {
+                out.push_str(&info.name);
+            }
             out.push('(');
             for (k, ((name, _), x)) in info.fields.iter().zip(fields.iter()).enumerate() {
                 if k > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(name);
-                out.push_str(": ");
+                if !info.tuple {
+                    out.push_str(name);
+                    out.push_str(": ");
+                }
                 show_in(m, x, out, depth + 1);
             }
             out.push(')');

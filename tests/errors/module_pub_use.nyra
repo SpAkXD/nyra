@@ -1,0 +1,6 @@
+// expect: E0332
+pub use math
+
+fn main() {
+    print(math.sqrt(4.0))
+}

@@ -8,6 +8,7 @@ mod examples;
 mod explain;
 mod fix;
 mod fmt;
+mod helpers;
 mod hints;
 mod ir;
 mod json;
@@ -15,6 +16,7 @@ mod lexer;
 mod limits;
 mod mcp;
 mod mem;
+mod modules;
 mod parser;
 mod sandbox;
 mod perfwarn;
@@ -312,6 +314,8 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
     diag::clear_warnings();
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
+        // a fix is a text edit of this file: one for a mistake in an imported file would edit the wrong text
+        errs.iter_mut().filter(|d| d.file.is_some()).for_each(|d| d.fix.clear());
         fix::validate(&mut errs, src);
         errs
     };
@@ -320,6 +324,11 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
         return Err(checked(errs));
     }
     let (mut prog, errs) = parser::parse(toks);
+    if !errs.is_empty() {
+        return Err(checked(errs));
+    }
+    // the files the program imports (`use ./name`)
+    let errs = modules::load(&mut prog);
     if !errs.is_empty() {
         return Err(checked(errs));
     }
@@ -378,6 +387,8 @@ fn real_main() -> ExitCode {
         Ok(s) => s,
         Err(e) => return fail(format!("cannot read `{}`: {e}", opts.file)),
     };
+    // `use ./name` lines are relative to this file
+    modules::set_main(Some(Path::new(&opts.file)));
 
     if opts.cmd == "fmt" {
         return fmt::run(&opts.file, &src, opts.out.as_deref(), opts.json);

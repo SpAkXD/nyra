@@ -1,0 +1,9 @@
+// expect: E0101
+fn f(inout var n: int) {
+    n += 1
+}
+
+fn main() {
+    var k = 1
+    f(inout k)
+}

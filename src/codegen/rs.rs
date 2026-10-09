@@ -190,10 +190,40 @@ fn structs(m: &Module, out: &mut String) {
             out.push_str("}\n\n");
         }
         let _ = writeln!(out, "impl NyShow for {n} {{\n    fn show_in(&self, out: &mut String) {{");
-        let _ = writeln!(out, "        out.push_str({});", lit(&format!("{}(", s.name)));
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "        out.push_str([{}][self.{} as usize]);", names.join(", "), name(&s.fields[0].0));
+            out.push_str("    }\n}\n\n");
+            continue;
+        }
+        if s.option {
+            // `none`, or `Some(value)`
+            let _ = writeln!(out, "        if !self.{} {{ out.push_str(\"none\"); return; }}", name(&s.fields[0].0));
+        }
+        let head = if s.tuple {
+            "(".to_string()
+        } else if s.option {
+            "Some(".to_string()
+        } else {
+            format!("{}(", s.name)
+        };
+        let _ = writeln!(out, "        out.push_str({});", lit(&head));
         for (k, (f, _)) in s.fields.iter().enumerate() {
-            let label = format!("{}{f}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            if s.option && k == 0 {
+                continue;
+            }
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple {
+                sep.to_string()
+            } else if s.option {
+                String::new()
+            } else {
+                format!("{sep}{f}: ")
+            };
+            if !label.is_empty() {
+                let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            }
             let _ = writeln!(out, "        self.{}.show_in(out);", name(f));
         }
         out.push_str("        out.push(')');\n    }\n}\n\n");
@@ -797,6 +827,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("Rc::new({}.chars().map(|c| c as i64).collect())", self.str_ref(&args[0])),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", self.str_ref(&args[0]), self.str_ref(&args[1])),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", self.str_ref(&args[0]), a[1], a[2]),

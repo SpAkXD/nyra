@@ -1,0 +1,5 @@
+// expect: E0272
+fn main() {
+    let (a, b) = 5
+    print(a, b)
+}

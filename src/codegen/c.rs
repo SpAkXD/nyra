@@ -232,11 +232,45 @@ fn structs(m: &Module, out: &mut String) {
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
         // `Point(x: 1, y: 2)`: the way the value is written in Nyra
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
-        let head = format!("{}(", s.name);
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| string_lit(&format!("{}.{v}", s.name))).collect();
+            let f = field(s, 0);
+            let _ = writeln!(
+                out,
+                "    static const char *const names[] = {{ {} }};\n    nyrt_buf_lit(o, names[v->{f}], (int64_t)strlen(names[v->{f}]));\n}}",
+                names.join(", ")
+            );
+            continue;
+        }
+        // (a tuple prints as `(1, "a")`: no name, no field names)
+        let head = if s.tuple {
+            "(".to_string()
+        } else if s.option {
+            "Some(".to_string()
+        } else {
+            format!("{}(", s.name)
+        };
+        if s.option {
+            // `none`, or `Some(value)`
+            let _ = writeln!(out, "    if (!v->{}) {{ nyrt_buf_lit(o, \"none\", 4); return; }}", field(s, 0));
+        }
         let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&head), head.len());
         for (k, (fname, t)) in s.fields.iter().enumerate() {
-            let label = format!("{}{fname}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            if s.option && k == 0 {
+                continue;
+            }
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple {
+                sep.to_string()
+            } else if s.option {
+                String::new()
+            } else {
+                format!("{sep}{fname}: ")
+            };
+            if !label.is_empty() {
+                let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            }
             let f = field(s, k);
             let line = match t {
                 Ty::Int => format!("nyrt_buf_int(o, v->{f});"),
@@ -1079,6 +1113,7 @@ impl Gen<'_> {
             RtOp::StrCodes => format!("nyrt_str_codes({})", a[0]),
             RtOp::StrSplit => format!("nyrt_str_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("nyrt_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("nyrt_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("nyrt_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("nyrt_str_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("nyrt_str_pad({}, {}, {}, false)", a[0], a[1], a[2]),

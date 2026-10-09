@@ -1,0 +1,5 @@
+// expect: E0276
+fn main() {
+    let a = none
+    print(a)
+}
