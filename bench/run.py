@@ -734,10 +734,11 @@ class Language:
 
     def reference_path(self, task_id: str) -> Path:
         path = SOLUTIONS_DIR / self.name / f"{task_id}{self.ext}"
-        if not path.is_file():  # the v2 tier keeps its references apart: bench/solutions/v2/<language>/
-            tiered = SOLUTIONS_DIR / "v2" / self.name / f"{task_id}{self.ext}"
-            if tiered.is_file():
-                return tiered
+        if not path.is_file():  # later tiers keep their references apart: bench/solutions/<tier>/<language>/
+            for tier in ("v2", "safety"):
+                tiered = SOLUTIONS_DIR / tier / self.name / f"{task_id}{self.ext}"
+                if tiered.is_file():
+                    return tiered
         return path
 
     def reference_code(self, task_id: str) -> Optional[str]:
@@ -1871,7 +1872,7 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
                  "the runs that did" if bad else ""), file=sys.stderr)
         if bad:
             outcome.exit_code = outcome.exit_code or 2
-    if provider.is_mock and not outcome.exit_code and any(r["status"] != "pass" for r in records):
+    if provider.is_mock and not outcome.exit_code and args.tier != "safety" and any(r["status"] != "pass" for r in records):
         print("error: the mock run is the pipeline self-test: every task must pass", file=sys.stderr)
         outcome.exit_code = 1
     return outcome
@@ -2040,6 +2041,10 @@ def _main(args) -> int:
         if pending:
             print(f"safety tier: {len(pending)} task(s) are pending and were not run: {safety.PENDING_REASON} "
                   "(--include-pending runs them anyway)")
+            if args.dry_run and not tasks:
+                for e in pending:
+                    print(f"  pending {e['id']}")
+                return 0
     if not tasks:
         raise UsageError("no tasks selected" if args.tier != "safety" else
                          "no safety task can run yet (see the message above); --dry-run lists them")

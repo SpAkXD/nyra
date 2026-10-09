@@ -1,0 +1,23 @@
+@replace counted
+// the scores that count towards the student's average (with 4 or more scores the lowest one is dropped)
+fn counted(student: Student) -> [Score] {
+    let scores = student.scores
+    if scores.len() < 4 { ret scores }
+    var lowest = 0
+    for i in 1..scores.len() {
+        if scores[i].points < scores[lowest].points { lowest = i }
+    }
+    var kept: [Score] = []
+    for i, score in scores {
+        if i != lowest { kept.push(score) }
+    }
+    ret kept
+}
+@replace letter
+fn letter(total: int, count: int) -> str {
+    if total >= 92 * count { ret "A" }
+    if total >= 84 * count { ret "B" }
+    if total >= 74 * count { ret "C" }
+    if total >= 62 * count { ret "D" }
+    ret "F"
+}

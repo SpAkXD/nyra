@@ -1,0 +1,5 @@
+use fs
+
+for name in fs.list(".") {
+    print(name)
+}

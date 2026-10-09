@@ -87,9 +87,10 @@ def default_probe(argv: list) -> Optional[str]:
     return text.splitlines()[0] if text else ""
 
 
-def find_python_checker(choice: str = "auto", which: Callable = shutil.which, probe: Probe = default_probe,
+def find_python_checker(choice: str = "auto", which: Optional[Callable] = None, probe: Optional[Probe] = None,
                         python: str = sys.executable) -> tuple:
     """(Checker or None, message). `choice`: auto (mypy, then pyright), mypy or pyright."""
+    which, probe = which or shutil.which, probe or default_probe
     if choice not in ("auto", "mypy", "pyright"):
         raise ValueError(f"--python-typecheck: use auto, mypy or pyright, not {choice!r}")
     if choice in ("auto", "mypy"):
@@ -107,8 +108,9 @@ def find_python_checker(choice: str = "auto", which: Callable = shutil.which, pr
                   "the Python programs are NOT type-checked in this run")
 
 
-def find_ts_checker(choice: str = "auto", which: Callable = shutil.which, probe: Probe = default_probe) -> tuple:
+def find_ts_checker(choice: str = "auto", which: Optional[Callable] = None, probe: Optional[Probe] = None) -> tuple:
     """(Checker or None, message). Looks for `tsc` on PATH (npm install -g typescript)."""
+    which, probe = which or shutil.which, probe or default_probe
     if choice not in ("auto", "tsc"):
         raise ValueError(f"--ts-typecheck: use auto or tsc, not {choice!r}")
     exe = which("tsc")

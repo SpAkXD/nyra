@@ -1,7 +1,7 @@
 {
   "id": "invoice_total",
   "title": "Invoice with tax",
-  "category": "floats",
+  "category": "money",
   "difficulty": "hard",
   "min_version": "0.5",
   "tier": "v2",

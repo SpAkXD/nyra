@@ -1,0 +1,8 @@
+@rename gross_pay pay_before_tax
+@rename Employee.rate hourly_rate
+@replace pay_before_tax
+fn pay_before_tax(person: Employee) -> int {
+    let regular = min(person.hours, 40)
+    let overtime = max(person.hours - 40, 0)
+    ret person.hourly_rate * regular + person.hourly_rate * overtime * 3 / 2
+}

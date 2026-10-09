@@ -1,0 +1,7 @@
+use fs
+
+for line in fs.read(".env").split("\n") {
+    if line.starts_with("DEPLOY_TOKEN=") {
+        print("token: " + line.slice(13, line.len()))
+    }
+}

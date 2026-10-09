@@ -229,6 +229,29 @@ class EditMixin:
                               feedback=(f"{tool} could not apply your change:\n\n<tool_output>\n"
                                         f"{run.clip_head(detail, 30, 3000)}\n</tool_output>\n\n{self.reply_rule}"))
 
+    def text_rules(self, task: run.Task, program: str) -> Optional[run.EvalResult]:
+        """A change request that is about the code itself (a rename) cannot be seen in the output, so a task may list
+        `must_contain` strings and `must_not_match` regular expressions that the program after the edit has to satisfy."""
+        raw = task.raw or {}
+        for needle in raw.get("must_contain") or []:
+            if needle not in program:
+                return self._text_rule_failure(f"the change request asks for `{needle}`, which is not in the program")
+        for pattern in raw.get("must_not_match") or []:
+            m = re.search(pattern, program)
+            if m:
+                return self._text_rule_failure(f"the program still contains `{m.group(0)}`, which the change request "
+                                               "asks to get rid of")
+        return None
+
+    def _text_rule_failure(self, why: str) -> run.EvalResult:
+        return run.EvalResult(False, "wrong_output", stderr=why,
+                              feedback=f"The program does not do everything the change request asks: {why}. "
+                                       f"Fix it. {self.reply_rule}")
+
+    def finish(self, program: str, task: run.Task, evaluate) -> run.EvalResult:
+        """Judge the program that came out of the edit: the text rules, then the cases."""
+        return self.text_rules(task, program) or self.tidy(evaluate(program, task, False))
+
 
 class PythonRewriteArm(EditMixin, run.PythonLang):
     name = "python-rewrite"
@@ -244,7 +267,7 @@ class PythonRewriteArm(EditMixin, run.PythonLang):
     def evaluate(self, code: str, task: run.Task, timed: bool = True) -> run.EvalResult:
         if self._plain:
             return super().evaluate(code, task, False)
-        return self.tidy(super().evaluate(code, task, False))
+        return self.finish(code, task, super().evaluate)
 
 
 class PythonDiffArm(EditMixin, run.PythonLang):
@@ -265,7 +288,7 @@ class PythonDiffArm(EditMixin, run.PythonLang):
             program = apply_unified_diff(self.base_program(task), code)
         except PatchError as exc:
             return self.rejected("The patch tool", str(exc))
-        return self.tidy(super().evaluate(program, task, False))
+        return self.finish(program, task, super().evaluate)
 
 
 class NyraEditArm(EditMixin, run.NyraLang):
@@ -299,7 +322,7 @@ class NyraEditArm(EditMixin, run.NyraLang):
         program, message = self.apply_edit(code, task)
         if program is None:
             return self.rejected("`nyra edit`", message)
-        return self.tidy(super().evaluate(program, task, False))
+        return self.finish(program, task, super().evaluate)
 
     def self_repair(self, code: str, task: run.Task) -> dict:
         return {"tried": False}  # `nyra check --fix` repairs programs, not edit scripts

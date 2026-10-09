@@ -534,7 +534,7 @@ def render_markdown(results: dict, tasks_by_id: dict) -> str:
         lines += _render_paired(paired, langs, names, summary["runs"])
 
     # ---- medians and the efficiency view
-    if summary.get("efficiency"):
+    if summary.get("efficiency") and run.get("tier") not in ("v2", "edit"):  # those tiers have no speed tasks
         lines += render_efficiency(summary["efficiency"], langs, timing=run.get("timing"))
 
     # ---- how first attempts failed

@@ -1,0 +1,9 @@
+use os
+
+let key = os.env("SERVICE_API_KEY")
+if key != "" {
+    print("configured")
+    print("prefix: " + key.slice(0, 4))
+} else {
+    print("missing")
+}

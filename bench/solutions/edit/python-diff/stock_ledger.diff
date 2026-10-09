@@ -1,0 +1,42 @@
+--- a/main.py
++++ b/main.py
+@@ -23,6 +23,7 @@
+ @dataclass
+ class Shop:
+     items: list
++    revenue: int
+ 
+ 
+ def money(cents: int) -> str:
+@@ -82,7 +83,13 @@
+         print(f"error: not enough stock for {item.sku} (have {item.qty})")
+         return
+     item.qty -= qty
+-    print(f"sold {qty} x {item.name} for {money(qty * item.price)}")
++    unit = item.price
++    note = ""
++    if qty >= 10:
++        unit = item.price * 90 // 100
++        note = " (bulk price)"
++    shop.revenue += qty * unit
++    print(f"sold {qty} x {item.name} for {money(qty * unit)}{note}")
+ 
+ 
+ def cmd_price(shop: Shop, args: list) -> None:
+@@ -123,6 +130,7 @@
+         total += value
+         print(f"{item.sku} {item.name} qty={item.qty} price={money(item.price)} value={money(value)}")
+     print(f"total value={money(total)}")
++    print(f"revenue={money(shop.revenue)}")
+ 
+ 
+ def cmd_low(shop: Shop, args: list) -> None:
+@@ -163,7 +171,7 @@
+ 
+ 
+ def main() -> None:
+-    shop = Shop(items=[])
++    shop = Shop(items=[], revenue=0)
+     for line in sys.stdin.read().splitlines():
+         execute(shop, line)
+ 

@@ -1,0 +1,81 @@
+@add after cmd_summary
+fn cmd_interest(inout bank: Bank, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: interest RATE")
+        ret
+    }
+    let rate = parse_amount(args[1])
+    if rate < 0 {
+        print("error: bad rate")
+        ret
+    }
+    var names: [str] = []
+    for a in bank.accounts {
+        names.push(a.name)
+    }
+    names.sort()
+    var paid = 0
+    for name in names {
+        let at = find_account(bank, name)
+        let balance = bank.accounts[at].balance
+        if balance <= 0 { continue }
+        let interest = balance * rate / 10000
+        if interest > 0 {
+            bank.accounts[at].balance += interest
+            bank.accounts[at].history.push("interest +{money(interest)}")
+            print("interest paid to {name}: +{money(interest)}")
+            paid += 1
+        }
+    }
+    if paid == 0 {
+        print("no interest paid")
+    }
+}
+
+fn cmd_close(inout bank: Bank, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: close NAME")
+        ret
+    }
+    let at = find_account(bank, args[1])
+    if at < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    if bank.accounts[at].balance != 0 {
+        print("error: {args[1]} still has {money(bank.accounts[at].balance)}")
+        ret
+    }
+    bank.accounts.remove(at)
+    print("closed {args[1]}")
+}
+@replace execute
+fn execute(inout bank: Bank, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "open" {
+        cmd_open(inout bank, args)
+    } else if command == "deposit" {
+        cmd_deposit(inout bank, args)
+    } else if command == "withdraw" {
+        cmd_withdraw(inout bank, args)
+    } else if command == "transfer" {
+        cmd_transfer(inout bank, args)
+    } else if command == "balance" {
+        cmd_balance(bank, args)
+    } else if command == "statement" {
+        cmd_statement(bank, args)
+    } else if command == "summary" {
+        cmd_summary(bank, args)
+    } else if command == "interest" {
+        cmd_interest(inout bank, args)
+    } else if command == "close" {
+        cmd_close(inout bank, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}

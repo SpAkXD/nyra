@@ -1,0 +1,47 @@
+{
+  "id": "account_book",
+  "title": "Interest and closing accounts in a small bank",
+  "category": "edit",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Add two commands to the program.\n\n1. `interest RATE`: RATE is a percentage written like an amount of money (digits with at most two decimals: `2`, `1.5`, `0.25`). Every account whose balance is above zero receives RATE percent of its balance, rounded down to whole cents (compute it with whole numbers: balance in cents times the rate in hundredths of a percent, divided by 10000, discarding the remainder). For each account that receives at least one cent, in alphabetical order of the names, print `interest paid to NAME: +$X`, add the interest to the balance and record the entry `interest +$X` in the account's statement. If no account received anything print `no interest paid`. A RATE that is not valid prints `error: bad rate`, and a wrong number of arguments prints `error: usage: interest RATE`.\n2. `close NAME`: closes an account that has a balance of exactly zero by deleting it, and prints `closed NAME`. An account with another balance prints `error: NAME still has $X` (the balance in the usual money format) and stays open. An unknown account prints `error: unknown account NAME`, and a wrong number of arguments prints `error: usage: close NAME`. A closed account can be opened again later as a new, empty account.\n\nAll the other commands must behave exactly as they do now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "open ann\nopen bob\ndeposit ann 100\ndeposit bob 0.99\ninterest 1.5\nstatement ann\nclose bob\nwithdraw bob 1\nclose bob\nclose ann\nsummary\n",
+      "expected_output": "opened ann\nopened bob\ndeposited $100.00 to ann, balance $100.00\ndeposited $0.99 to bob, balance $0.99\ninterest paid to ann: +$1.50\ninterest paid to bob: +$0.01\nann statement:\n  1. deposit +$100.00\n  2. interest +$1.50\n  balance $101.50\nerror: bob still has $1.00\nwithdrew $1.00 from bob, balance $0.00\nclosed bob\nerror: ann still has $101.50\nann $101.50\naccounts=1 total=$101.50\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "interest 5\nopen zed\ninterest 5\ndeposit zed 0.5\ninterest 1\ninterest 0\ninterest x\ninterest\ninterest 2.555\n",
+      "expected_output": "no interest paid\nopened zed\nno interest paid\ndeposited $0.50 to zed, balance $0.50\nno interest paid\nno interest paid\nerror: bad rate\nerror: usage: interest RATE\nerror: bad rate\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "open a\nopen b\nclose a\nclose a\nclose nobody\nopen a\ndeposit a 10\ntransfer a b 10\nclose a\nclose b\nsummary\nstatement b\n",
+      "expected_output": "opened a\nopened b\nclosed a\nerror: unknown account a\nerror: unknown account nobody\nopened a\ndeposited $10.00 to a, balance $10.00\ntransferred $10.00 from a to b\nclosed a\nerror: b still has $10.00\nb $10.00\naccounts=1 total=$10.00\nb statement:\n  1. transfer from a +$10.00\n  balance $10.00\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "open m\nopen k\ndeposit m 123456.78\ndeposit k 0.01\ninterest 0.01\ninterest 0.25\ninterest 100\nstatement m\nbalance k\nsummary\n",
+      "expected_output": "opened m\nopened k\ndeposited $123456.78 to m, balance $123456.78\ndeposited $0.01 to k, balance $0.01\ninterest paid to m: +$12.34\ninterest paid to m: +$308.67\ninterest paid to k: +$0.01\ninterest paid to m: +$123777.79\nm statement:\n  1. deposit +$123456.78\n  2. interest +$12.34\n  3. interest +$308.67\n  4. interest +$123777.79\n  balance $247555.58\nk: $0.02\nk $0.02\nm $247555.58\naccounts=2 total=$247555.60\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "open x\ndeposit x 1000\ninterest 3\ninterest 3\ninterest 3\nstatement x\nwithdraw x 1092.73\nclose x\nwithdraw x 0.01\nclose x extra\nclose\n",
+      "expected_output": "opened x\ndeposited $1000.00 to x, balance $1000.00\ninterest paid to x: +$30.00\ninterest paid to x: +$30.90\ninterest paid to x: +$31.82\nx statement:\n  1. deposit +$1000.00\n  2. interest +$30.00\n  3. interest +$30.90\n  4. interest +$31.82\n  balance $1092.72\nerror: insufficient funds in x (balance $1092.72)\nerror: x still has $1092.72\nwithdrew $0.01 from x, balance $1092.71\nerror: usage: close NAME\nerror: usage: close NAME\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "open ann\nopen bob\nopen ann\ndeposit ann 50.5\ndeposit bob 3\ntransfer ann bob 20.25\ntransfer bob ann 99\nwithdraw bob 24.25\nwithdraw bob 0.01\nbalance ann\nstatement ann\nstatement bob\nsummary\ninterest 5\nclose ann\nfoo\n",
+      "expected_output": "opened ann\nopened bob\nerror: ann already exists\ndeposited $50.50 to ann, balance $50.50\ndeposited $3.00 to bob, balance $3.00\ntransferred $20.25 from ann to bob\nerror: insufficient funds in bob (balance $23.25)\nerror: insufficient funds in bob (balance $23.25)\nwithdrew $0.01 from bob, balance $23.24\nann: $30.25\nann statement:\n  1. deposit +$50.50\n  2. transfer to bob -$20.25\n  balance $30.25\nbob statement:\n  1. deposit +$3.00\n  2. transfer from ann +$20.25\n  3. withdraw -$0.01\n  balance $23.24\nann $30.25\nbob $23.24\naccounts=2 total=$53.49\nerror: unknown command interest\nerror: unknown command close\nerror: unknown command foo\n"
+    },
+    {
+      "stdin": "summary\ndeposit nobody 1\nopen a\ndeposit a 1.234\ndeposit a 0\ndeposit a -5\nwithdraw a x\ntransfer a a 1\nstatement a\nbalance\n",
+      "expected_output": "no accounts\nerror: unknown account nobody\nopened a\nerror: bad amount\nerror: bad amount\nerror: bad amount\nerror: bad amount\nerror: cannot transfer to the same account\na statement:\n  (no transactions)\n  balance $0.00\nerror: usage: balance NAME\n"
+    }
+  ]
+}

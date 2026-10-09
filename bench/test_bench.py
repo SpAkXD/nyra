@@ -3431,9 +3431,14 @@ class Readme(unittest.TestCase):
         # the ids the README tells the reader to type must be ids the harness itself ships and verified
         readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
         shipped = set(modelsmod.default_model_ids())
+        for name in modelsmod.preset_names():  # the ids of the presets are checked against OpenRouter too (models.py --check)
+            shipped |= set(modelsmod.load_preset(name).get("openrouter", []))
         for mid in set(re.findall(r"\b(?:anthropic|openai|google|x-ai|deepseek)/[A-Za-z0-9._-]+", readme)):
             self.assertIn(mid, shipped, f"README mentions {mid}, which is not in bench/models.json")
 
+
+# The tests of the tiers beyond v1 (hidden inputs, edits, safety, type checks, presets, the leaderboard) live in their own file.
+from test_tiers import *  # noqa: E402,F401,F403
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
