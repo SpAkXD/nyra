@@ -91,6 +91,7 @@ Parentheses group: `(a + b) * c`.
 | call | meaning |
 |---|---|
 | `print(x)` · `print(a, b)` | print values of any type, separated by a space, then a newline |
+| `print(a, end: "")` | a last `end:` replaces the newline: `print(x, end: " ")` keeps printing on one line |
 | `str(x)` | any value → `str`, the text `print` shows |
 | `int(x)` | float → int, truncating toward zero (NaN or out of range: E0245); str → int: `int("-42")` (other text: E0244) |
 | `float(x)` | int → float; str → float: `float("2.5")`, `float("1e3")` (other text: E0244) |
@@ -200,8 +201,35 @@ strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `Point(x: 1, 
 like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`,
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 
+## Standard library
+A `use` line at the top of the file imports a standard module; its functions are called with the
+module's name. Nothing else is imported or installed.
+```nyra
+use math
+use text
+
+print(text.fixed(math.sqrt(2.0), 3))   // 1.414
+```
+| module | contents |
+|---|---|
+| `input` | `line()` the next line of standard input without its line end ("" at the end) · `lines()` all the rest as `[str]` · `all()` the rest as it is · `eof()` |
+| `os` | `args()` the program's arguments, `[str]` · `env(name)` a variable ("" when not set) · `has_env(name)` · `exit(code)` stops now |
+| `fs` | `read(path)` · `write(path, text)` · `append(path, text)` · `exists(path)` · `list(dir)` names, sorted · `remove(path)` a file or empty folder · `mkdir(path)` |
+| `json` | `str(v)` any value as JSON · `parse(text)` reads the type the value goes to: `let p: Point = json.parse(s)` |
+| `time` | `now_ms()` int, since 1970 · `mono_ms()` float, a monotonic clock for timing · `sleep_ms(ms)` |
+| `random` | `random()` a float from 0 up to 1 · `range(lo, hi)` an int from lo to hi - 1 · `seed(n)` |
+| `math` | `pi` `e` `inf` · `sqrt floor ceil round trunc exp log log10 log2 sin cos tan asin acos atan` (float) · `pow(x, y)` · `atan2(y, x)` |
+| `text` | `fixed(x, digits)` decimals, `text.fixed(2.0 / 3.0, 2)` is "0.67" · `is_int(s)` · `is_float(s)`: would `int(s)`/`float(s)` work |
+
+`nyra run main.nyra -- a b` passes the arguments `a b`. Random numbers come from the operating system
+unless `random.seed(n)` was called; then they are the same sequence on every backend. `math` gives the
+same digits on every backend; `round` rounds halves away from zero. Paths are relative to the folder the
+program runs in and use `/`. JSON objects are read into structs by field name (other keys are skipped;
+every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
+outside (input, files, arguments) must be UTF-8.
+
 ## Errors
-`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0239), a `message`,
+`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0309), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
 and a fixed program; [ERRORS.md](ERRORS.md) has them all.
 
@@ -223,6 +251,10 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0245 | `int(x)` of NaN, infinity or a float outside the int range |
 | E0246 | `char(n)` of an invalid code (valid: 0 to 1114111, except 55296 to 57343) |
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
+| E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
+| E0341 | input, an argument or a variable is not UTF-8 |
+| E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |
+| E0345 | `json.parse`: not JSON, or not the shape of the type: `expected an int at $.items[0].count` |
 
 ## Known differences between backends
 The targets are native (C), `--js`, `--py`, `--ts`, `--rs` and `--go`; everything else, runtime errors

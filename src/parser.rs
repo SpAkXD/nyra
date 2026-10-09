@@ -888,7 +888,7 @@ impl Parser {
                 format!("put `{}` on a new line: Nyra has one statement per line", t.text())
             }
             (Tok::Colon, _) if matches!(self.peek_at(1), Tok::Colon) => {
-                "`::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name".to_string()
+                "`::` paths do not exist: call a module's function with a dot, `math.sqrt(x)`, and other functions by their plain name".to_string()
             }
             (Tok::Colon, Some(f)) if matches!(self.peek_at(1), Tok::Assign) => {
                 format!("`:=` does not exist: declare a variable with `let {f} = ...` (or `var {f} = ...` to change it later)")

@@ -202,8 +202,8 @@ impl Verifier<'_> {
                 }
                 let dst_ty = dst.map(|d| self.local(d)).transpose()?;
                 let ret = match op {
-                    RtOp::Print | RtOp::Format => {
-                        if args.is_empty() && *op == RtOp::Print {
+                    RtOp::Print | RtOp::PrintNoLine | RtOp::Format => {
+                        if args.is_empty() && *op != RtOp::Format {
                             return Err("print needs parts".into());
                         }
                         for a in args {

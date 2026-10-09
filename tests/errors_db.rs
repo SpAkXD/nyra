@@ -10,12 +10,31 @@ mod common;
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 use common::{check_json, nyra, scratch, stderr, stdout, Json};
 
 fn available(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().is_ok()
+}
+
+/// The bytes `\xNN` and `\n` stand for in a `// stdin:` line.
+fn unescape(text: &str) -> Vec<u8> {
+    let (b, mut out, mut i) = (text.as_bytes(), Vec::new(), 0);
+    while i < b.len() {
+        if b[i] == b'\\' && b.get(i + 1) == Some(&b'n') {
+            out.push(b'\n');
+            i += 2;
+        } else if b[i] == b'\\' && b.get(i + 1) == Some(&b'x') && i + 4 <= b.len() {
+            out.push(u8::from_str_radix(&text[i + 2..i + 4], 16).expect("\\xNN"));
+            i += 4;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// Every `E` followed by four digits in the text.
@@ -143,7 +162,20 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
             let (ok, json) = check_json(&dir, &wrong_file);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
             if let Some(flags) = backend {
-                let out = nyra().current_dir(&dir).arg("run").arg(&wrong_file).args(flags).output().unwrap();
+                // a first line `// stdin: ...` is the program's input (`\xff`, `\n` escapes)
+                let input = wrong.lines().next().and_then(|l| l.strip_prefix("// stdin: ")).map(unescape).unwrap_or_default();
+                let mut child = nyra()
+                    .current_dir(&dir)
+                    .arg("run")
+                    .arg(&wrong_file)
+                    .args(flags)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let _ = child.stdin.take().unwrap().write_all(&input);
+                let out = child.wait_with_output().unwrap();
                 assert_eq!(out.status.code(), Some(101), "{code}: the Wrong example should stop with exit code 101\n{}", stderr(&out));
                 assert!(stderr(&out).contains(&format!("runtime error[{code}]")), "{code}: stderr was\n{}", stderr(&out));
             }
@@ -188,7 +220,7 @@ fn explain_prints_an_entry() {
         assert_eq!(stdout(&again), text, "`nyra explain {alias}`");
     }
     // a planned code says so
-    let planned = stdout(&nyra().args(["explain", "E0300"]).output().unwrap());
+    let planned = stdout(&nyra().args(["explain", "E0310"]).output().unwrap());
     assert!(planned.contains("planned for v0.6, not in the compiler yet"), "{planned}");
     // a run-time code
     let runtime = stdout(&nyra().args(["explain", "E0241"]).output().unwrap());
@@ -208,7 +240,7 @@ fn explain_prints_json() {
     assert!(e.get("related").and_then(|c| c.as_array()).is_some_and(|c| !c.is_empty()));
     assert!(e.get("wrong").and_then(|v| v.as_str()).is_some_and(|w| w.contains("half(n)")));
 
-    let planned = entry("E0300");
+    let planned = entry("E0310");
     assert_eq!(planned.get("planned").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(planned.get("since").and_then(|v| v.as_str()), Some("planned for v0.6, not in the compiler yet"));
 }

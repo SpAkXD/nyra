@@ -629,6 +629,12 @@ impl<'a> Gen<'a> {
                 self.line(&line);
                 return;
             }
+            RtOp::PrintNoLine => {
+                let (fmt, values) = self.format_parts(args);
+                let line = if values.is_empty() { format!("print!(\"{fmt}\");") } else { format!("print!(\"{fmt}\", {});", values.join(", ")) };
+                self.line(&line);
+                return;
+            }
             RtOp::Format => {
                 let (fmt, values) = self.format_parts(args);
                 if values.is_empty() {

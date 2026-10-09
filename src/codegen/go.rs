@@ -551,6 +551,11 @@ impl<'a> Gen<'a> {
                 self.line(&line);
                 return;
             }
+            RtOp::PrintNoLine => {
+                let line = format!("nyOut.WriteString({})", self.text(args, false));
+                self.line(&line);
+                return;
+            }
             RtOp::Format => self.text(args, false),
             RtOp::DivInt => format!("nyDiv({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("nyRem({}, {}, {at})", a[0], a[1]),

@@ -60,7 +60,7 @@ pub fn top_level_word(w: &str) -> Option<String> {
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
-            "Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions"
+            "a program is one file; it imports standard modules with `use name` on a line of its own, e.g. `use math`"
         }
         "pub" | "public" | "private" | "protected" | "extern" | "export" => {
             "Nyra has no visibility modifiers: start the definition with `fn` or `struct`"
@@ -88,7 +88,7 @@ pub fn receiver(w: &str) -> Option<String> {
         "console" | "fmt" | "System" | "sys" | "io" | "Console" | "std" | "process" => {
             "print with `print(x)`: it takes one value and ends the line"
         }
-        "Math" | "math" => "Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)",
+        "Math" | "math" => "the math functions are in the standard module `math`: add `use math` and call `math.sqrt(x)`",
         "Integer" | "Number" | "Float" | "Double" | "String" | "Str" | "Char" | "Character" => {
             "convert with the builtins `int(x)`, `float(x)`, `str(x)` and `char(n)`; methods belong to values, e.g. `s.len()`"
         }
@@ -96,7 +96,7 @@ pub fn receiver(w: &str) -> Option<String> {
             "arrays are written `[1, 2, 3]` and their methods are called on a value, e.g. `xs.push(4)`"
         }
         "random" | "Random" | "rand" | "time" | "Date" | "os" | "fs" | "File" => {
-            "Nyra programs are closed for now: there is no random, clock, file or system access"
+            "use the standard modules: `use random` (`random.range(1, 7)`), `use time` (`time.now_ms()`), `use fs` (`fs.read(path)`), `use os` (`os.args()`)"
         }
         _ => return None,
     };
@@ -109,14 +109,12 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "abs" => "Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`",
         "min" => "Nyra has no `min`: define it, e.g. `fn min(a: int, b: int) -> int = if a < b { a } else { b }`",
         "max" => "Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`",
-        "pow" | "power" | "powi" => {
-            "Nyra has no `pow`: write it with a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)"
-        }
+        "pow" | "power" | "powi" => "`pow` is in the standard module `math`: add `use math` and call `math.pow(x, y)`",
         "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" => {
-            "Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)"
+            "the math functions are in the standard module `math`: add `use math` and call e.g. `math.sqrt(x)`"
         }
         "floor" | "ceil" | "round" | "trunc" => {
-            "Nyra has no `floor`/`ceil`/`round`: `int(x)` truncates a float toward zero"
+            "these are in the standard module `math` (`math.floor(x)` gives a float); `int(x)` truncates a float to an int"
         }
         "return" => return word(w),
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
@@ -137,15 +135,16 @@ pub fn undefined_function(w: &str) -> Option<String> {
         }
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         "input" | "readline" | "read_line" | "scanf" | "gets" | "getline" => {
-            "Nyra has no input: put the values in the program, e.g. `let n = 12`"
+            "standard input is the module `input`: add `use input` and call `input.line()`"
         }
-        "exit" | "panic" | "assert" | "abort" | "quit" => {
-            "Nyra has no `exit`, `panic` or `assert`: the program ends when `main` ends"
+        "exit" | "quit" => "add `use os` and call `os.exit(code)`",
+        "panic" | "assert" | "abort" => {
+            "Nyra has no `panic` or `assert`: print a message and stop with `os.exit(1)` (add `use os`)"
         }
         "range" => "a range is written `a..b` in a loop: `for i in 0..10 { ... }`",
         "bool" => "Nyra has no `bool(x)`: compare instead, e.g. `x != 0`",
         "random" | "rand" | "randint" | "clock" | "sleep" => {
-            "Nyra programs are closed for now: there is no random, clock or sleep"
+            "use the standard modules: `use random` (`random.range(1, 7)`, `random.random()`), `use time` (`time.mono_ms()`, `time.sleep_ms(ms)`)"
         }
         _ => return None,
     };

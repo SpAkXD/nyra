@@ -2,7 +2,7 @@
 
 > Nyra is a small, strictly typed programming language designed to be written by AI agents. One `.nyra` file compiles to native code (through C) or to JavaScript with the `nyra` command line tool. It has no semicolons, no implicit conversions, no shadowing and no null, values are copied instead of shared, and its compiler reports every error as a stable code with an exact position and a fix hint (`nyra check file.nyra --json`).
 
-Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there is no input, no maps, no tuples and no modules yet). Read the AI guide before you write code.
+Nyra is new and is not in your training data. It looks a little like Rust, Go and TypeScript but it is none of them: do not guess syntax, and do not use anything the docs below do not describe (there are no maps, no tuples and no modules of your own yet; the standard library is imported with `use input`, `use os`, `use fs`, `use json`, `use time`, `use random`, `use math` and `use text`, and called as `math.sqrt(x)`). Read the AI guide before you write code.
 
 The ten most important rules for writing correct Nyra (v0.3):
 
@@ -15,7 +15,7 @@ The ten most important rules for writing correct Nyra (v0.3):
 7. Return with `ret`, not `return`. A function with `-> T` must end every path with `ret`. One-line form: `fn square(x: int) -> int = x * x`.
 8. `for i in 0..10 { }` counts 0 to 9 (the end is exclusive, there is no `..=`), `for x in xs { }` visits each element and `for c in s { }` each char; `while cond { }` also exists. `break` and `continue` act on the innermost loop.
 9. Text: `+` joins two strings and `"sum: {a + b}"` inserts any value (`{{` and `}}` are literal braces; nothing inside `{ }` may contain a `"`). `s.len()` counts characters and `s[i]` is a `char`, compared with single quotes: `s[0] == 'a'`. Chars convert explicitly: `str(c)`, `c.code()`, `char(65)`. Strings and arrays have methods (`split`, `replace`, `trim`, `upper`, `index_of`, `push`, `pop`, `sort`, `join`, `slice`, ...); there is no `len(x)`, `map` or `filter`.
-10. A struct is declared `struct Point { x: int, y: int }`, built with every field named in order, `Point(x: 1, y: 2)`, and has no methods: write `fn area(p: Point) -> int`. Assigning or passing an array or a struct copies it. `print(x)` takes one value of any type and prints arrays and structs as Nyra code. A failing operation (index out of bounds, integer division by zero, `int("12x")`) stops the program with a runtime error and exit code 101. Keep integers below 2^53 so `--js` prints the same as native.
+10. A struct is declared `struct Point { x: int, y: int }`, built with every field named in order, `Point(x: 1, y: 2)`, and has no methods: write `fn area(p: Point) -> int`. Assigning or passing an array or a struct copies it. `print(a, b)` prints values of any type, separated by spaces, and arrays and structs as Nyra code; a last `end: ""` replaces the newline: `print(x, end: " ")`. A failing operation (index out of bounds, integer division by zero, `int("12x")`) stops the program with a runtime error and exit code 101. Keep integers below 2^53 so `--js` prints the same as native.
 
 How to check your work: `nyra check prog.nyra --json` prints `{"ok":true,"errors":[]}` or a list of errors, each with `code`, `line`, `col`, `message` and `hint`. Fix them all and check again, then `nyra run prog.nyra` (add `--js` to use Node.js instead of a C compiler).
 

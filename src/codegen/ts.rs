@@ -512,6 +512,7 @@ impl Gen<'_> {
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let code = match op {
             RtOp::Print => self.print(args),
+            RtOp::PrintNoLine => format!("ny_write({})", self.template(args)),
             RtOp::Format => self.template(args),
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("ny_mod({}, {}, {at})", a[0], a[1]),

@@ -956,13 +956,18 @@ impl<'a> Lower<'a> {
         let span = e.span;
         match name {
             "print" => {
-                // `print(a, b)`: the values left to right, a space between them
+                // `print(a, b)`: the values left to right, a space between them; a last `end: e`
+                // is printed instead of the newline
+                let (args, end) = match args.split_last() {
+                    Some((last, rest)) if matches!(&last.kind, ast::ExprKind::Labeled(l, _) if l == "end") => (rest, Some(last)),
+                    _ => (args, None),
+                };
                 let mut parts = Vec::new();
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
                         parts.push(Expr::Str(self.strs.intern(" ")));
                     }
-                    let later = args[i + 1..].iter().any(mutates);
+                    let later = args[i + 1..].iter().chain(end).any(|x| mutates(x));
                     match &a.kind {
                         // an interpolated string: its parts directly (a later value that changes
                         // a variable gets the string built first)
@@ -976,7 +981,16 @@ impl<'a> Lower<'a> {
                         }
                     }
                 }
-                out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Print, args: parts }, span });
+                let op = match end {
+                    Some(e) => {
+                        let ast::ExprKind::Labeled(_, v) = &e.kind else { unreachable!("matched above") };
+                        let x = self.expr(v, None, out);
+                        parts.push(x);
+                        RtOp::PrintNoLine
+                    }
+                    None => RtOp::Print,
+                };
+                out.push(Stmt { kind: StmtKind::Op { dst: None, op, args: parts }, span });
                 // `print` returns nothing, so this value is never used
                 Expr::Bool(false)
             }

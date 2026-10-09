@@ -2222,6 +2222,25 @@ impl Checker {
             "str" => Type::Str,
             _ => Type::Char,
         };
+        // `print(a, b, end: "")`: the last argument may replace the line end
+        if name == "print" {
+            if let Some((last, rest)) = args.split_last_mut() {
+                if matches!(&last.kind, ExprKind::Labeled(l, _) if l == "end") {
+                    let t = self.arg_type(last, Some(Type::Str));
+                    if let ExprKind::Labeled(_, v) = &last.kind {
+                        self.expect_ty(Type::Str, t, v, Ctx::Arg { f: "print", idx: rest.len(), param: "end" });
+                    }
+                    if rest.is_empty() {
+                        self.errs.push(
+                            Diag::new("E0204", "`print` needs a value before `end:`", span)
+                                .hint("give it the value to print: `print(\"text\", end: \"\")`"),
+                        );
+                        return ret;
+                    }
+                    return self.builtin("print", rest, span);
+                }
+            }
+        }
         let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
         for a in args.iter() {
             match &a.kind {
@@ -2229,8 +2248,11 @@ impl Checker {
                     Diag::new("E0237", format!("the argument of `{name}` is not `inout`"), a.span).hint("remove `inout`"),
                 ),
                 ExprKind::Labeled(label, _) => self.errs.push(
-                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span)
-                        .hint(format!("write the value alone: `{name}(x)`")),
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span).hint(if name == "print" {
+                        "write the values alone: `print(a, b)`; the only named argument is a last `end:`, as in `print(a, end: \"\")`".to_string()
+                    } else {
+                        format!("write the value alone: `{name}(x)`")
+                    }),
                 ),
                 _ => {}
             }

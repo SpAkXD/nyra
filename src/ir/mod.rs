@@ -211,6 +211,8 @@ pub enum StmtKind {
 pub enum RtOp {
     /// Prints the parts and a newline, without building a string.
     Print,
+    /// `print(a, end: e)`: prints the parts without the newline (the last part is `e`).
+    PrintNoLine,
     /// Builds a new string from the parts (interpolation, `str(x)`). `dst: str`, owned.
     Format,
     /// int `/` whose divisor may be 0 (runtime error E0241). `dst: int`.
@@ -294,6 +296,7 @@ impl RtOp {
     pub fn name(self) -> &'static str {
         match self {
             RtOp::Print => "print",
+            RtOp::PrintNoLine => "print_no_line",
             RtOp::Format => "format",
             RtOp::DivInt => "div_int",
             RtOp::RemInt => "rem_int",
@@ -342,7 +345,7 @@ impl RtOp {
     pub fn sig(self) -> (&'static [Ty], Option<Ty>) {
         use Ty::{Char, Float, Int, Str};
         match self {
-            RtOp::Print | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
+            RtOp::Print | RtOp::PrintNoLine | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
             RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
             RtOp::FloatToInt => (&[Float], Some(Int)),
             RtOp::StrConcat => (&[Str, Str], Some(Str)),

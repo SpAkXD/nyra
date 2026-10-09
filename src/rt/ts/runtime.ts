@@ -31,6 +31,12 @@ function ny_rescue(e: unknown): Error {
     throw e;
 }
 
+// `print(x, end: "")`: text without a newline (a browser has no stdout: the console gets a line).
+function ny_write(s: string): void {
+    if (ny_process !== undefined) ny_process.stdout.write(s);
+    else console.log(s);
+}
+
 // ---- ints: `+ 0` turns -0 into 0 (an int never prints -0) ----
 function ny_div(a: number, b: number, line: number, col: number): number {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);

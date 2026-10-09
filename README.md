@@ -95,7 +95,8 @@ compiler to tell the AI exactly what to fix.
   has not changed.
 - **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
-- **Not yet:** maps, modules, a standard library, input (see the [roadmap](#roadmap)). Nyra is 0.x, so the
+- **Standard library:** `use input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`, the same on every
+  backend (`math` gives identical digits everywhere). **Not yet:** maps, modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
   syntax may still change before 1.0.
 
 ## Install
@@ -287,8 +288,9 @@ fn main() {                                    // every program starts here
 - **Strings** are UTF-8 and count characters: `s[i]` is a `char` (`'a'`), `+` joins two strings, and
   `==` and `<` compare them by content. Arrays and structs print as Nyra code.
 - **Conditions must be `bool`:** `if n != 0`, not `if n`.
-- **Builtins:** `print(x)` (one argument), `str(x)`, `int(x)`, `float(x)`, `char(n)`; everything else is
-  a method, like `s.split(",")` or `xs.len()`. No input yet.
+- **Builtins:** `print(a, b)` (a last `end: ""` replaces the newline), `str(x)`, `int(x)`, `float(x)`,
+  `char(n)`; everything else is a method, like `s.split(",")`, or a module function after `use`, like
+  `math.sqrt(x)`, `input.line()`, `fs.read(path)` or `json.parse(text)`.
 - **Operators**, high to low: calls, fields, indexes, methods · `-` `!` · `*` `/` `%` · `+` `-` ·
   `<` `<=` `>` `>=` · `==` `!=` · `&&` · `||`.
 

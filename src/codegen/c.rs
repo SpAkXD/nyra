@@ -706,6 +706,13 @@ impl Gen<'_> {
                 self.line("putchar('\\n');");
                 return;
             }
+            RtOp::PrintNoLine => {
+                for p in args {
+                    let line = self.put("nyrt_put", p);
+                    self.line(&line);
+                }
+                return;
+            }
             RtOp::Format => {
                 let d = dst.map(|d| self.local(d).to_string()).unwrap_or_default();
                 self.line("{");
