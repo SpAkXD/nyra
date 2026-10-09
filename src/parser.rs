@@ -497,7 +497,8 @@ impl Parser {
             && next.span.line == self.span().line
             && matches!(
                 next.tok,
-                Tok::Ident(_)
+                Tok::For
+                    | Tok::Ident(_)
                     | Tok::Int(_)
                     | Tok::Float(_)
                     | Tok::Str(_)
@@ -513,10 +514,12 @@ impl Parser {
     /// `ex cond, cond, ...`: one or more `bool` conditions; a line may break after a comma.
     fn examples(&mut self) -> PResult<Vec<Example>> {
         self.bump();
+        // `ex for n in 0..200: f(n) >= 0, g(n) < 10`: a property, checked for every `n`
+        let forall = if self.at(&Tok::For) { Some(self.forall()?) } else { None };
         let mut list = Vec::new();
         loop {
             let expr = self.expr()?;
-            list.push(Example { expr });
+            list.push(Example { expr, forall: forall.clone() });
             if !self.at(&Tok::Comma) {
                 break;
             }
@@ -525,6 +528,56 @@ impl Parser {
         }
         self.end_stmt_after(None, Some("separate the examples with commas: `ex sq(3) == 9, sq(-2) == 4`"))?;
         Ok(list)
+    }
+
+    /// `for n in 0..200:` (or `10..0 step -2`) after `ex`: the range of a property example. The
+    /// bounds and the step are whole-number literals.
+    fn forall(&mut self) -> PResult<Forall> {
+        const FORM: &str = "write a property as `ex for n in 0..200: f(n) >= 0`: a variable, a range of whole-number literals (an optional `step k`), a colon and the conditions";
+        let span = self.span();
+        self.bump();
+        let (var, _) = self.ident("a variable name", FORM)?;
+        self.expect(Tok::In, "`in`").map_err(|d| d.or_hint(FORM))?;
+        let lo = self.int_literal(FORM)?;
+        self.expect(Tok::DotDot, "`..`").map_err(|d| d.or_hint(FORM))?;
+        let hi = self.int_literal(FORM)?;
+        let step = if matches!(self.peek(), Tok::Ident(w) if w == "step") {
+            self.bump();
+            self.int_literal(FORM)?
+        } else {
+            1
+        };
+        self.expect(Tok::Colon, "`:` before the conditions").map_err(|d| d.or_hint(FORM))?;
+        let f = Forall { var, lo, hi, step, span };
+        if step == 0 {
+            return Err(Diag::new("E0292", "the step of a property example cannot be 0", span)
+                .hint("use a positive step to count up and a negative one to count down: `ex for n in 0..100 step 5: ...`"));
+        }
+        if f.count() > MAX_PROPERTY_INPUTS {
+            return Err(Diag::new(
+                "E0293",
+                format!("the property example `for {}` has {} inputs; at most {MAX_PROPERTY_INPUTS} are run", f.text(), f.count()),
+                span,
+            )
+            .hint("use a smaller range, or a `step`, so the property finishes while the program compiles"));
+        }
+        Ok(f)
+    }
+
+    /// A whole-number literal, with an optional `-`.
+    fn int_literal(&mut self, hint: &str) -> PResult<i64> {
+        let neg = self.at(&Tok::Minus);
+        if neg {
+            self.bump();
+        }
+        match self.peek().clone() {
+            Tok::Int(n) => {
+                self.bump();
+                Ok(if neg { n.wrapping_neg() } else { n })
+            }
+            _ => Err(Diag::new("E0292", "the range of a property example is made of whole-number literals", self.span())
+                .hint(hint.to_string())),
+        }
     }
 
     /// True if the word here starts an import line: `use name`, `import name`, `from name import ...`.

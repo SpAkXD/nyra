@@ -33,9 +33,24 @@ pub fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n")
 }
 
+/// The flags a test program asks for with a line `// flags: --sandbox --allow fs` (one of its
+/// first three lines): `nyra check`, `run` and `test` get them in front of the file.
+pub fn flags_of(src: &str) -> Vec<String> {
+    src.lines()
+        .take(3)
+        .find_map(|l| l.strip_prefix("// flags:"))
+        .map(|f| f.split_whitespace().map(String::from).collect())
+        .unwrap_or_default()
+}
+
 /// `nyra check --json <file>` run in `dir`, parsed.
 pub fn check_json(dir: &Path, file: &str) -> (bool, Json) {
-    let out = nyra().current_dir(dir).args(["check", "--json", file]).output().unwrap();
+    check_json_with(dir, file, &[])
+}
+
+/// `nyra check --json <flags> <file>` run in `dir`, parsed.
+pub fn check_json_with(dir: &Path, file: &str, flags: &[String]) -> (bool, Json) {
+    let out = nyra().current_dir(dir).args(["check", "--json"]).args(flags).arg(file).output().unwrap();
     let text = stdout(&out);
     let json = Json::parse(text.trim()).unwrap_or_else(|e| panic!("`nyra check --json {file}` printed bad JSON ({e}):\n{text}"));
     (out.status.success(), json)

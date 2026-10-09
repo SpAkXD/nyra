@@ -17,6 +17,7 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#using-nyra-with-an-ai">Use it with an AI</a> ·
+  <a href="#safe-to-run-unsupervised">Safety</a> ·
   <a href="#language-tour">Language tour</a> ·
   <a href="docs/SPEC.md">Spec</a> ·
   <a href="docs/AI_GUIDE.md">AI guide</a> ·
@@ -70,6 +71,11 @@ compiler to tell the AI exactly what to fix.
 - **Examples catch logic mistakes before anything runs.** `fn sq(x: int) -> int = x * x  ex sq(3) == 9`:
   every `ex` condition is evaluated while the program compiles and never compiled into it, so a function
   that is wrong for its own examples is a compile error that shows the value it really gave.
+  `ex for n in 0..200: f(n) >= 0` checks a property for many inputs and names the first one that fails.
+- **Safe to run unsupervised.** Capabilities are decided before a program runs: `fs`, `os` and `input`
+  must be granted (`--allow fs`), or the program does not compile (E0290). `--sandbox` runs it in an
+  interpreter with limits on steps, memory, output and recursion, each with its own error code
+  ([below](#safe-to-run-unsupervised)).
 - **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
   `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
   fix, and `--fix` applies them all: a slip costs no extra model call.
@@ -97,6 +103,9 @@ compiler to tell the AI exactly what to fix.
   and `keep` say when if you want to.
 - **Short code:** scripts without `fn main`, one-line functions, `+=` and friends, string interpolation,
   `if` as a value, `print(a, b)`.
+- **Capabilities and a sandbox:** the `use` lines are the program's permissions; `--allow fs,os` and
+  `--sandbox` deny what a run does not grant at compile time, and the sandboxed interpreter stops runaway
+  programs with a code and an exit code (`--fuel`, `--max-memory`, `--max-output`, `--max-depth`).
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
   runtime errors with the exact position, and a build cache that skips the C compiler when the program
   has not changed.
@@ -286,6 +295,68 @@ nyra: edited shop.nyra: renamed field Item.stock -> in_stock, 7 references (line
 > highlights them). Do not guess syntax. Read
 > [AI_GUIDE.md](https://raw.githubusercontent.com/SpAkXD/nyra/main/docs/AI_GUIDE.md) and
 > [llms.txt](https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt) before you write code.
+
+## Safe to run unsupervised
+
+Nyra is meant for agents that run the code they write, so a run decides what a program may touch
+*before* it starts, and a program that runs away is stopped by a limit with an error code.
+
+**Capabilities, deny by default where it matters.** The `use` lines already say which standard modules a
+program touches. `json`, `math`, `text`, `time` and `random` are always available. `fs` (files), `input`
+(standard input), `os` (arguments, environment variables, `exit`) and later `net` are *effectful*: they need
+the capability of the same name, and a `use` of one that the run does not grant is a compile error that
+names the module, the capability and the flag to add. Nothing has run yet.
+
+```
+$ nyra run scan.nyra --sandbox
+error[E0290]: module `fs` needs the capability `fs` (read, write, list and remove files and folders), which is not granted: this run grants none
+  --> scan.nyra:1:5
+  |
+1 | use fs
+  |     ^
+  = hint: grant it by running with `--allow fs` (`nyra run main.nyra --allow fs`), or remove `use fs` and the code that calls it; the capabilities are `fs`, `input`, `net` and `os`
+$ nyra run scan.nyra --sandbox --allow fs
+```
+
+| You run | It grants |
+|---|---|
+| `nyra run f.nyra` | everything, as before |
+| `nyra run f.nyra --allow fs,os` | only those (`all` and `none` work too) |
+| `nyra run f.nyra --sandbox` | nothing but what `--allow` names, in the interpreter, with the limits below |
+| MCP `nyra_run` | standard input, plus its `allow: ["fs", ...]` argument |
+
+`nyra outline --json` lists the capabilities each function needs, also through the functions it calls
+(`"effects": ["fs"]`; the top-level `"capabilities"` is the `--allow` list that runs the whole program), so an
+agent sees what a file may do before it runs it:
+
+```
+$ nyra outline scan.nyra
+scan.nyra: 18 lines
+3-3 fn read_all(path: str) -> str  [needs fs]
+4-6 fn count_lines(path: str) -> int  [needs fs]
+7-9 fn plain(x: int) -> int
+10-18 fn main()  [needs fs, os]
+```
+
+**A sandboxed interpreter.** `--sandbox` (and `--interp`, which keeps all capabilities) runs the program
+in the compiler's own interpreter of the intermediate representation: no child process, no C compiler, no
+Node.js. It runs every program, maps and the whole standard library included, and prints exactly what the
+compiled targets print (CI compares every example in both). Each limit that is reached ends the program with
+a runtime error that has a code and its own exit code, after the output printed so far:
+
+| Limit | Flag (default) | Error | Exit |
+|---|---|---|---|
+| steps run (statements, plus the elements and characters operations make) | `--fuel N` (2,000,000,000) | E0355 | 120 |
+| heap memory | `--max-memory 256M` (512M) | E0356 | 121 |
+| bytes printed | `--max-output 1M` (64M) | E0357 | 122 |
+| nested calls | `--max-depth N` (20,000) | E0358 | 123 |
+| real time | `--max-time MS` (none) | E0359 | 124 |
+
+Steps are counted rather than timed, so the same program with the same fuel stops at the same statement on
+every machine. In the sandbox file paths stay below the working folder (an absolute path or `..` is E0340),
+and `time.sleep_ms` does not wait: it moves a virtual clock and costs steps. The MCP tool `nyra_run` takes
+`sandbox: true`, `fuel`, `max_memory` and `max_output` for the same thing. A limit flag alone (`--fuel 5000`)
+selects the interpreter.
 
 ## Language tour
 

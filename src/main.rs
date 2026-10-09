@@ -1,4 +1,5 @@
 mod ast;
+mod caps;
 mod check;
 mod codegen;
 mod diag;
@@ -12,7 +13,9 @@ mod json;
 mod lexer;
 mod limits;
 mod mcp;
+mod mem;
 mod parser;
+mod sandbox;
 mod stdlib;
 
 use std::path::{Path, PathBuf};
@@ -43,6 +46,20 @@ options:
   --fix        apply the fixes the errors suggest, check again, and write the
                file back if it then compiles (then run or build it as usual)
   --time       show how long each step took
+
+safety (for programs you did not write, or agents that run unsupervised):
+  --allow LIST     grant only these capabilities: fs, input, os, net (or all). A `use` of a
+                   module whose capability is not granted is error E0290. Without --allow
+                   and --sandbox everything is granted.
+  --sandbox        run in the interpreter with no capabilities but those of --allow, file
+                   paths confined to the working folder, and the limits below
+  --interp         run in the interpreter (no C compiler or Node.js needed), with the limits
+  --fuel N         steps the program may run (default 2,000,000,000)      E0355, exit 120
+  --max-memory S   heap the program may use, e.g. 256M (default 512M)     E0356, exit 121
+  --max-output S   bytes the program may print (default 64M)              E0357, exit 122
+  --max-depth N    nested calls (default 20,000)                          E0358, exit 123
+  --max-time MS    real time (default: none)                              E0359, exit 124
+  A limit flag implies --interp. Programs that stop on a limit print the error code on stderr.
 
 `build` writes an executable natively and source code for every other target.
 `run` needs the target's tool: a C compiler (gcc, clang, cc or tcc; NYRA_CC),
@@ -108,6 +125,44 @@ struct Opts {
     fix: bool,
     /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
     prog_args: Vec<String>,
+    /// `--interp`: run in the interpreter.
+    interp: bool,
+    /// `--sandbox`: the interpreter, nothing granted but `--allow`, confined files.
+    sandbox: bool,
+    /// The values of `--allow`.
+    allow: Vec<String>,
+    fuel: Option<u64>,
+    max_memory: Option<u64>,
+    max_output: Option<u64>,
+    max_depth: Option<usize>,
+    max_time: Option<u64>,
+}
+
+impl Opts {
+    /// The capabilities this run grants: everything, unless `--sandbox` or `--allow` narrow it.
+    fn grant(&self) -> Result<caps::Grant, String> {
+        let mut g = if self.sandbox || !self.allow.is_empty() { caps::Grant::none() } else { caps::Grant::all() };
+        for a in &self.allow {
+            g.allow(a)?;
+        }
+        Ok(g)
+    }
+
+    /// True if the program runs in the interpreter: asked for, or needed by a limit.
+    fn interpreted(&self) -> bool {
+        self.interp
+            || self.sandbox
+            || self.fuel.is_some()
+            || self.max_memory.is_some()
+            || self.max_output.is_some()
+            || self.max_depth.is_some()
+            || self.max_time.is_some()
+    }
+}
+
+/// What to add to the command line to grant a capability.
+fn cli_flag(cap: &str) -> String {
+    format!("grant it by running with `--allow {cap}` (`nyra run main.nyra --allow {cap}`)")
 }
 
 fn parse_args() -> Result<Opts, String> {
@@ -122,6 +177,14 @@ fn parse_args() -> Result<Opts, String> {
         time: false,
         fix: false,
         prog_args: Vec::new(),
+        interp: false,
+        sandbox: false,
+        allow: Vec::new(),
+        fuel: None,
+        max_memory: None,
+        max_output: None,
+        max_depth: None,
+        max_time: None,
     };
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -145,6 +208,31 @@ fn parse_args() -> Result<Opts, String> {
             "--json" => opts.json = true,
             "--time" => opts.time = true,
             "--fix" => opts.fix = true,
+            "--interp" => opts.interp = true,
+            "--sandbox" => opts.sandbox = true,
+            "--allow" => opts.allow.push(args.next().ok_or("--allow needs capabilities: `--allow fs,os` (or `all`)")?),
+            _ if a.starts_with("--allow=") => opts.allow.push(a["--allow=".len()..].to_string()),
+            "--fuel" | "--max-depth" | "--max-time" => {
+                let v = args.next().ok_or_else(|| format!("{a} needs a number"))?;
+                let n: u64 = v.replace('_', "").parse().map_err(|_| format!("{a} needs a whole number, found `{v}`"))?;
+                match a.as_str() {
+                    "--fuel" => opts.fuel = Some(n),
+                    "--max-depth" if n > sandbox::MAX_DEPTH as u64 => {
+                        return Err(format!("--max-depth is at most {} (deeper calls would overflow the stack of the interpreter)", sandbox::MAX_DEPTH));
+                    }
+                    "--max-depth" => opts.max_depth = Some(n as usize),
+                    _ => opts.max_time = Some(n),
+                }
+            }
+            "--max-memory" | "--max-output" => {
+                let v = args.next().ok_or_else(|| format!("{a} needs a size such as 256M"))?;
+                let n = sandbox::parse_size(&v)?;
+                if a == "--max-memory" {
+                    opts.max_memory = Some(n);
+                } else {
+                    opts.max_output = Some(n);
+                }
+            }
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -164,7 +252,17 @@ fn parse_args() -> Result<Opts, String> {
 
 /// Lexes, parses, type-checks and runs the examples: a program that passes can be generated.
 fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    compile_granted(src, &caps::Grant::all(), &cli_flag)
+}
+
+/// `compile`, and a `use` of a module whose capability `grant` does not give is error E0290
+/// (`flag` says how to grant it). The capabilities are checked before the examples run.
+fn compile_granted(src: &str, grant: &caps::Grant, flag: &dyn Fn(&str) -> String) -> Result<ast::Program, Vec<diag::Diag>> {
     let mut prog = front(src)?;
+    let errs = caps::enforce(&prog, grant, flag);
+    if !errs.is_empty() {
+        return Err(errs);
+    }
     let errs = examples::run(&mut prog).errors;
     if !errs.is_empty() {
         return Err(errs);
@@ -244,7 +342,22 @@ fn real_main() -> ExitCode {
     };
 
     if opts.cmd == "test" {
-        return test(&opts, &src);
+        return match opts.grant() {
+            Ok(g) => test(&opts, &src, &g),
+            Err(msg) => fail(msg),
+        };
+    }
+
+    let grant = match opts.grant() {
+        Ok(g) => g,
+        Err(msg) => return fail(msg),
+    };
+    let compile = |s: &str| compile_granted(s, &grant, &cli_flag);
+    if opts.interpreted() && opts.cmd == "build" {
+        return fail("--interp, --sandbox and the limit flags are for `nyra run`: `build` makes a native executable or source code");
+    }
+    if opts.interpreted() && opts.target != Target::Native {
+        return fail("--interp and --sandbox run the program in the interpreter: do not combine them with --target, --js, --py, ...");
     }
 
     let start = Instant::now();
@@ -298,6 +411,10 @@ fn real_main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    if opts.interpreted() {
+        return run_interpreted(&opts, &prog);
+    }
+
     let code = match generate(&prog, opts.target, &opts.file) {
         Ok(code) => code,
         Err(msg) => return fail(msg),
@@ -313,8 +430,17 @@ fn real_main() -> ExitCode {
 }
 
 /// `nyra test`: runs every example and reports each one that fails; exit code 1 if any does.
-fn test(opts: &Opts, src: &str) -> ExitCode {
+fn test(opts: &Opts, src: &str, grant: &caps::Grant) -> ExitCode {
     let start = Instant::now();
+    let front = |src: &str| {
+        let prog = front(src)?;
+        let errs = caps::enforce(&prog, grant, &cli_flag);
+        if errs.is_empty() {
+            Ok(prog)
+        } else {
+            Err(errs)
+        }
+    };
     let mut prog = match front(src) {
         Ok(p) => p,
         Err(diags) => {
@@ -402,6 +528,44 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     eprintln!("nyra: built {} (nyra {}{cc_part})", out.display(), ms(nyra_time));
     ExitCode::SUCCESS
+}
+
+/// `nyra run --interp` / `--sandbox`: the program runs in the IR interpreter, in this process,
+/// under the limits of `sandbox.rs`. Its runtime errors are printed like those of a compiled program.
+fn run_interpreted(opts: &Opts, prog: &ast::Program) -> ExitCode {
+    let start = Instant::now();
+    let m = match sandbox::module(prog) {
+        Ok(m) => m,
+        Err(msg) => return fail(msg),
+    };
+    let mut cfg = sandbox::Config::new();
+    cfg.args = opts.prog_args.clone();
+    cfg.confined = opts.sandbox;
+    cfg.limits.steps = opts.fuel.unwrap_or(cfg.limits.steps);
+    cfg.limits.memory = opts.max_memory.unwrap_or(cfg.limits.memory);
+    cfg.limits.output = opts.max_output.unwrap_or(cfg.limits.output);
+    cfg.limits.depth = opts.max_depth.unwrap_or(cfg.limits.depth);
+    cfg.limits.wall_ms = opts.max_time.unwrap_or(0);
+    let nyra_time = start.elapsed();
+    let report = sandbox::run(&m, cfg);
+    if let Some(e) = &report.error {
+        let text = sandbox::render_error(e, &opts.file, opts.json);
+        eprintln!("{text}");
+    }
+    if let Some(what) = &report.internal {
+        eprintln!("nyra: internal error in the interpreter: {what}");
+        eprintln!("nyra: run the program without --interp and report this bug");
+    }
+    if opts.time {
+        eprintln!(
+            "nyra {} | interpreted {:.2} ms ({} steps, {} allocations)",
+            ms(nyra_time),
+            report.run_ms,
+            report.steps,
+            report.allocs
+        );
+    }
+    ExitCode::from(report.exit as u8)
 }
 
 fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {

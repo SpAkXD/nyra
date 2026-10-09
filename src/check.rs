@@ -294,7 +294,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         }
     }
     for ex in &mut prog.examples {
-        c.example(&mut ex.expr);
+        c.example(&mut ex.expr, ex.forall.as_ref());
     }
     prog.globals = c.finish_globals();
     c.errs
@@ -956,13 +956,17 @@ impl Checker {
     }
 
     /// An `ex` condition: it sees no variables, and it must be a `bool` (it is run by `examples.rs`).
-    fn example(&mut self, e: &mut Expr) {
+    fn example(&mut self, e: &mut Expr, forall: Option<&Forall>) {
         self.ret = Type::Void;
         self.fname = String::new();
         self.decls.clear();
         self.freed.clear();
         self.scopes = vec![HashMap::new()];
         self.g.start_example();
+        // a property example sees its variable, an `int`
+        if let Some(f) = forall {
+            self.declare(&f.var, Type::Int, Decl::Let, f.span);
+        }
         let t = self.expr_with(e, Some(Type::Bool));
         self.g.end_func("");
         if t != Type::Bool && !t.is_unknown() {

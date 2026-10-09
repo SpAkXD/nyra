@@ -1,0 +1,7 @@
+// expect: E0290
+// flags: --sandbox
+use fs
+
+fn main() {
+    print(fs.exists("a.txt"))
+}

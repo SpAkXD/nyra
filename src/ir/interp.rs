@@ -1,9 +1,13 @@
-//! An interpreter for the IR, used inside the compiler: `examples.rs` runs the `ex` examples of a
-//! program with it at compile time. It never runs a program for `nyra run`.
+//! An interpreter for the IR, used inside the compiler. `examples.rs` runs the `ex` examples of a
+//! program with it at compile time, and `nyra run --interp` / `--sandbox` (and the MCP tool
+//! `nyra_run` with `sandbox: true`) run whole programs with it: no child process, no C compiler,
+//! and hard limits on steps, memory, output, call depth and time.
 //!
 //! Interface: `Interp::new(module, limits)`, then `call(func, args)`, which gives the result or a
 //! `Stop` (a runtime error, or a limit that was reached). `display`/`show` format a value as
-//! `print` shows it and as Nyra code, `equal` compares two values like `==`.
+//! `print` shows it and as Nyra code, `equal` compares two values like `==`. A program that
+//! reads input, files or arguments needs a `Host` (`ir/host.rs`) and says where its output goes
+//! (`Out`); the standard library and JSON are in `host.rs` and `jsonrt.rs`.
 //!
 //! It follows the Rust runtime (`rt/rs/runtime.rs`) operation by operation: int overflow is E0255, floats
 //! print like JavaScript, string lengths and indexes count characters, and a runtime error has
@@ -13,11 +17,16 @@
 //! place itself: the checker allows no other way to reach that place during the call (E0237).
 //!
 //! Every statement costs a step, and so does every element or byte an operation makes, so a
-//! budget of steps also bounds the time and the memory a run can take.
+//! budget of steps also bounds the time and the memory a run can take. The memory limit is
+//! checked against the heap the interpreter's thread really uses (`crate::mem`) every few thousand
+//! steps and before an operation that makes a large value; the output cap at every write.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
+use super::host::{Host, Out};
 use super::{Arg, BinOp, Expr, Func, FuncId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
 use crate::ast::Span;
 
@@ -33,14 +42,104 @@ pub enum Value {
     Arr(Rc<Vec<Value>>),
     /// A struct: its type id (`Ty::Struct(id)`) and its fields in declaration order.
     Struct(u32, Rc<Vec<Value>>),
+    Map(Rc<MapVal>),
 }
 
+/// The key of a map entry: an int, a string, a char or a bool.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum MapKey {
+    Int(i64),
+    Str(Rc<String>),
+    Char(char),
+    Bool(bool),
+}
+
+/// A map: entries in insertion order (a removed one is a gap until the next compaction) and an
+/// index from key to position, like the maps of the runtimes.
+#[derive(Clone, Debug, Default)]
+pub struct MapVal {
+    ents: Vec<Option<(Value, Value)>>,
+    index: HashMap<MapKey, usize>,
+    live: usize,
+}
+
+impl MapVal {
+    fn key(k: &Value) -> Result<MapKey, Stop> {
+        Ok(match k {
+            Value::Int(n) => MapKey::Int(*n),
+            Value::Str(s) => MapKey::Str(s.clone()),
+            Value::Char(c) => MapKey::Char(*c),
+            Value::Bool(b) => MapKey::Bool(*b),
+            _ => return Err(bug("a map key that is not an int, str, char or bool")),
+        })
+    }
+
+    fn len(&self) -> usize {
+        self.live
+    }
+
+    fn get(&self, k: &Value) -> Result<Option<&Value>, Stop> {
+        Ok(self.index.get(&Self::key(k)?).and_then(|&i| self.ents[i].as_ref().map(|e| &e.1)))
+    }
+
+    fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
+        let key = Self::key(&k)?;
+        if let Some(&i) = self.index.get(&key) {
+            self.ents[i] = Some((k, v));
+            return Ok(());
+        }
+        self.index.insert(key, self.ents.len());
+        self.ents.push(Some((k, v)));
+        self.live += 1;
+        Ok(())
+    }
+
+    fn remove(&mut self, k: &Value) -> Result<(), Stop> {
+        let Some(i) = self.index.remove(&Self::key(k)?) else { return Ok(()) };
+        self.ents[i] = None;
+        self.live -= 1;
+        if self.ents.len() > 8 && self.live < self.ents.len() / 2 {
+            let ents: Vec<(Value, Value)> = self.ents.drain(..).flatten().collect();
+            self.index.clear();
+            self.live = 0;
+            for (k, v) in ents {
+                self.set(k, v)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
+        self.ents.iter().flatten()
+    }
+}
+
+/// The limits of a run. A limit that is reached stops the program with a runtime error
+/// (E0355 to E0359) that says which one.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     /// Statements run plus elements and bytes made.
     pub steps: u64,
     /// Calls that may be running at the same time (recursion).
     pub depth: usize,
+    /// Bytes of heap memory the run may grow by.
+    pub memory: u64,
+    /// Bytes the program may print.
+    pub output: u64,
+    /// Milliseconds of real time (0: no limit).
+    pub wall_ms: u64,
+}
+
+impl Limits {
+    /// Steps and depth only (examples): the other limits do not apply.
+    pub const fn new(steps: u64, depth: usize) -> Limits {
+        Limits { steps, depth, memory: u64::MAX, output: u64::MAX, wall_ms: 0 }
+    }
+
+    pub const fn memory(mut self, bytes: u64) -> Limits {
+        self.memory = bytes;
+        self
+    }
 }
 
 /// A runtime error, as the program would report it.
@@ -56,12 +155,22 @@ pub struct RuntimeError {
 
 #[derive(Debug)]
 pub enum Stop {
-    Error(RuntimeError),
+    /// (boxed: a `Result` that carries a `Stop` is returned for every expression evaluated)
+    Error(Box<RuntimeError>),
     /// The budget of steps ran out.
     Steps,
     /// Too many nested calls.
     Depth,
-    /// Something the IR should never contain (a bug of the compiler, not of the program).
+    /// The program grew the heap beyond its limit.
+    Memory,
+    /// The program printed more than its limit.
+    Output,
+    /// The real-time limit passed.
+    Time,
+    /// `os.exit(code)`.
+    Exit(i32),
+    /// Something the IR should never contain (a bug of the compiler, not of the program), or an
+    /// operation this host does not do (a file operation in an example).
     Bug(#[allow(dead_code)] String),
 }
 
@@ -80,8 +189,8 @@ fn overflow(a: i64, op: &str, b: i64, span: Span) -> Stop {
     )
 }
 
-fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop {
-    Stop::Error(RuntimeError { code, msg, hint, span, func: None })
+pub(super) fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop {
+    Stop::Error(Box::new(RuntimeError { code, msg, hint, span, func: None }))
 }
 
 fn oob(i: i64, n: usize, span: Span) -> Stop {
@@ -109,7 +218,7 @@ fn oom(span: Span) -> Stop {
     fail("E0249", "out of memory".into(), "the program needs more memory than the system gave it", span)
 }
 
-fn bug(what: &str) -> Stop {
+pub(super) fn bug(what: &str) -> Stop {
     Stop::Bug(what.to_string())
 }
 
@@ -131,24 +240,89 @@ pub struct Interp<'m> {
     limits: Limits,
     steps: u64,
     depth: usize,
-    /// What `print` wrote, when it is kept (`capture`).
-    out: Option<String>,
+    /// The steps at which memory and time are checked next.
+    next_check: u64,
+    /// The heap in use when the run started (`crate::mem::live`).
+    mem_base: i64,
+    started: Instant,
+    /// The statement that ran last: where a limit that stops the program is reported.
+    span: Span,
+    host: Host,
+    out: Out,
+    /// The string literals of the module, made once (a literal is a shared `Rc`).
+    strs: Vec<Rc<String>>,
 }
 
 impl<'m> Interp<'m> {
+    /// An interpreter for examples: a pure host (no files, input or clocks) and no output.
     pub fn new(m: &'m Module, limits: Limits) -> Self {
-        Interp { m, limits, steps: 0, depth: 0, out: None }
+        Interp::with_host(m, limits, Host::pure(), Out::discard())
     }
 
-    /// Keeps what `print` writes (otherwise it is dropped).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn capture(&mut self) {
-        self.out = Some(String::new());
+    pub fn with_host(m: &'m Module, limits: Limits, host: Host, mut out: Out) -> Self {
+        out.cap = limits.output;
+        Interp {
+            m,
+            limits,
+            steps: 0,
+            depth: 0,
+            next_check: 0,
+            mem_base: crate::mem::live(),
+            started: Instant::now(),
+            span: Span { line: 0, col: 0 },
+            host,
+            out,
+            strs: m.strs.iter().map(|t| Rc::new(t.clone())).collect(),
+        }
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn output(&self) -> &str {
-        self.out.as_deref().unwrap_or("")
+        self.out.kept.as_deref().unwrap_or("")
+    }
+
+    /// Writes what the program printed that is still buffered.
+    pub fn flush(&mut self) {
+        self.out.flush();
+    }
+
+    /// Steps run so far.
+    pub fn steps(&self) -> u64 {
+        self.steps
+    }
+
+    /// The runtime error a limit that stopped the program stands for (`None` for a `Stop` that is
+    /// not one: an error of the program has its own, `os.exit` is no error).
+    pub fn limit_error(&self, stop: &Stop) -> Option<RuntimeError> {
+        let (code, msg, hint): (&'static str, String, &'static str) = match stop {
+            Stop::Steps => (
+                "E0355",
+                format!("step limit reached: the program ran more than {} steps", self.limits.steps),
+                "an endless loop or recursion? Otherwise raise the limit (nyra run --sandbox --fuel N; nyra_run: fuel)",
+            ),
+            Stop::Memory => (
+                "E0356",
+                format!("memory limit reached: the program used more than {} bytes of memory", self.limits.memory),
+                "free values you no longer need, or build less at once; raise the limit with --max-memory (nyra_run: max_memory)",
+            ),
+            Stop::Output => (
+                "E0357",
+                format!("output limit reached: the program printed more than {} bytes", self.limits.output),
+                "print less, or raise the limit with --max-output (nyra_run: max_output)",
+            ),
+            Stop::Depth => (
+                "E0358",
+                format!("call depth limit reached: more than {} calls were nested", self.limits.depth),
+                "a recursive function that never reaches its base case? Otherwise raise the limit with --max-depth",
+            ),
+            Stop::Time => (
+                "E0359",
+                format!("time limit reached: the program ran longer than {} ms", self.limits.wall_ms),
+                "raise the limit with --max-time MS (nyra_run: timeout_ms), or look for an endless loop",
+            ),
+            _ => return None,
+        };
+        Some(RuntimeError { code, msg, hint, span: self.span, func: None })
     }
 
     /// Calls `f` with the values of its parameters. Returns what it returns.
@@ -160,6 +334,34 @@ impl<'m> Interp<'m> {
         self.steps = self.steps.saturating_add(n);
         if self.steps > self.limits.steps {
             return Err(Stop::Steps);
+        }
+        if self.steps >= self.next_check {
+            self.check()?;
+        }
+        Ok(())
+    }
+
+    /// The memory and the time, every few thousand steps (or after a big operation).
+    fn check(&mut self) -> Result<(), Stop> {
+        self.next_check = self.steps.saturating_add(4096);
+        if self.used() > self.limits.memory {
+            return Err(Stop::Memory);
+        }
+        if self.limits.wall_ms > 0 && self.started.elapsed() > Duration::from_millis(self.limits.wall_ms) {
+            return Err(Stop::Time);
+        }
+        Ok(())
+    }
+
+    /// Bytes of heap the run has added so far.
+    fn used(&self) -> u64 {
+        (crate::mem::live() - self.mem_base).max(0) as u64
+    }
+
+    /// Before an operation makes a value of about `bytes` bytes: it must fit under the limit.
+    fn reserve(&self, bytes: u64) -> Result<(), Stop> {
+        if self.limits.memory != u64::MAX && self.used().saturating_add(bytes) > self.limits.memory {
+            return Err(Stop::Memory);
         }
         Ok(())
     }
@@ -202,21 +404,23 @@ impl<'m> Interp<'m> {
     }
 
     fn stmt(&mut self, f: &Func, locals: &mut Vec<Value>, s: &Stmt) -> Result<Flow, Stop> {
+        self.span = s.span;
         self.tick(1)?;
         let m = self.m;
         match &s.kind {
             StmtKind::Set(l, e) => {
-                let v = eval(m, locals, e)?;
+                let v = eval(m, &self.strs, locals, e)?;
                 locals[l.0 as usize] = v;
             }
             StmtKind::Call { dst, func, args } => {
-                let mut vals = Vec::with_capacity(args.len());
+                // (the callee's locals follow its parameters in this vector: one allocation per call)
+                let mut vals = Vec::with_capacity(m.funcs.get(func.0 as usize).map_or(args.len(), |c| c.locals.len().max(args.len())));
                 let mut places = Vec::new();
                 for (k, a) in args.iter().enumerate() {
                     match a {
-                        Arg::Val(e) => vals.push(eval(m, locals, e)?),
+                        Arg::Val(e) => vals.push(eval(m, &self.strs, locals, e)?),
                         Arg::InOut(p) => {
-                            let path = resolve(m, locals, p)?;
+                            let path = resolve(m, &self.strs, locals, p)?;
                             vals.push(self.place(locals, p.root.0 as usize, &path)?.clone());
                             places.push((k, p.root.0 as usize, path));
                         }
@@ -232,29 +436,37 @@ impl<'m> Interp<'m> {
                 }
             }
             StmtKind::Op { dst, op, args } => {
-                let vals = args.iter().map(|a| eval(m, locals, a)).collect::<Result<Vec<_>, _>>()?;
                 let ty = dst.map(|d| f.local(d).ty);
-                if let Some(v) = self.op(*op, vals, ty, s.span)? {
-                    if let Some(d) = dst {
-                        locals[d.0 as usize] = v;
+                // (most operations have few operands: they go in a buffer on the stack)
+                let r = if args.len() <= 4 {
+                    let mut buf = [Value::Unset, Value::Unset, Value::Unset, Value::Unset];
+                    for (k, a) in args.iter().enumerate() {
+                        buf[k] = eval(m, &self.strs, locals, a)?;
                     }
+                    self.op(*op, &buf[..args.len()], ty, s.span)?
+                } else {
+                    let vals = args.iter().map(|a| eval(m, &self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
+                    self.op(*op, &vals, ty, s.span)?
+                };
+                if let (Some(v), Some(d)) = (r, dst) {
+                    locals[d.0 as usize] = v;
                 }
             }
             StmtKind::Store { place, value } => {
-                let v = eval(m, locals, value)?;
-                let path = resolve(m, locals, place)?;
+                let v = eval(m, &self.strs, locals, value)?;
+                let path = resolve(m, &self.strs, locals, place)?;
                 *self.place(locals, place.root.0 as usize, &path)? = v;
             }
             StmtKind::Mutate { dst, op, place, args } => {
-                let vals = args.iter().map(|a| eval(m, locals, a)).collect::<Result<Vec<_>, _>>()?;
-                let path = resolve(m, locals, place)?;
+                let vals = args.iter().map(|a| eval(m, &self.strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
+                let path = resolve(m, &self.strs, locals, place)?;
                 let r = self.mutate(locals, place.root.0 as usize, &path, *op, vals, s.span)?;
                 if let (Some(d), Some(v)) = (dst, r) {
                     locals[d.0 as usize] = v;
                 }
             }
             StmtKind::If { cond, then, els } => {
-                let branch = if truth(&eval(m, locals, cond)?)? { then } else { els };
+                let branch = if truth(&eval(m, &self.strs, locals, cond)?)? { then } else { els };
                 return self.block(f, locals, branch);
             }
             StmtKind::Loop { head, cond, body, step } => loop {
@@ -265,7 +477,7 @@ impl<'m> Interp<'m> {
                     Flow::Return(v) => return Ok(Flow::Return(v)),
                     Flow::Continue => return Err(bug("`continue` in the head of a loop")),
                 }
-                if !truth(&eval(m, locals, cond)?)? {
+                if !truth(&eval(m, &self.strs, locals, cond)?)? {
                     break;
                 }
                 match self.block(f, locals, body)? {
@@ -279,7 +491,7 @@ impl<'m> Interp<'m> {
             },
             StmtKind::ForEach { var, iter, body } => {
                 // the loop goes over the value as it was when it started
-                let items: Vec<Value> = match eval(m, locals, iter)? {
+                let items: Vec<Value> = match eval(m, &self.strs, locals, iter)? {
                     Value::Str(s) => s.chars().map(Value::Char).collect(),
                     Value::Arr(xs) => xs.iter().cloned().collect(),
                     _ => return Err(bug("`for` over a value that is not a string or an array")),
@@ -298,7 +510,7 @@ impl<'m> Interp<'m> {
             StmtKind::Continue => return Ok(Flow::Continue),
             StmtKind::Return(e) => {
                 let v = match e {
-                    Some(e) => Some(eval(m, locals, e)?),
+                    Some(e) => Some(eval(m, &self.strs, locals, e)?),
                     None => None,
                 };
                 return Ok(Flow::Return(v));
@@ -346,25 +558,30 @@ impl<'m> Interp<'m> {
         let mut arg = || args.next().ok_or_else(|| bug("an operation without its operand"));
         // (the operands are computed before the place, like the backends do)
         let (a0, a1) = match op {
-            RtOp::StrAppend | RtOp::ArrPush | RtOp::ArrRemove | RtOp::ArrAppend | RtOp::ArrSortBy => (Some(arg()?), None),
-            RtOp::ArrInsert | RtOp::ArrSwap => (Some(arg()?), Some(arg()?)),
+            RtOp::StrAppend | RtOp::ArrPush | RtOp::ArrRemove | RtOp::ArrAppend | RtOp::ArrSortBy | RtOp::MapRemove => {
+                (Some(arg()?), None)
+            }
+            RtOp::ArrInsert | RtOp::ArrSwap | RtOp::MapSet => (Some(arg()?), Some(arg()?)),
             _ => (None, None),
         };
         let size = |v: &Option<Value>| match v {
             Some(Value::Str(s)) => s.len() as u64,
             Some(Value::Arr(xs)) => xs.len() as u64,
+            Some(Value::Map(mv)) => mv.len() as u64,
             _ => 1,
         };
         self.tick(size(&a0))?;
         let shared = |v: &Value| match v {
             Value::Str(s) => Rc::strong_count(s) > 1,
             Value::Arr(xs) => Rc::strong_count(xs) > 1,
+            Value::Map(mv) => Rc::strong_count(mv) > 1,
             _ => false,
         };
         let target = self.place(locals, root, path)?;
         let copy = match &*target {
             Value::Str(s) if shared(target) => s.len() as u64,
             Value::Arr(xs) if shared(target) => xs.len() as u64,
+            Value::Map(mv) if shared(target) => mv.len() as u64,
             _ => 0,
         };
         // (the copy of a shared value is counted after the change: `self` is borrowed by `target`)
@@ -454,6 +671,15 @@ impl<'m> Interp<'m> {
                 }
                 None
             }
+            (RtOp::MapSet, Value::Map(mv)) => {
+                let (k, v) = (a0.unwrap_or(Value::Unset), a1.unwrap_or(Value::Unset));
+                Rc::make_mut(mv).set(k, v)?;
+                None
+            }
+            (RtOp::MapRemove, Value::Map(mv)) => {
+                Rc::make_mut(mv).remove(&a0.unwrap_or(Value::Unset))?;
+                None
+            }
             (RtOp::ArrReverse, Value::Arr(xs)) => {
                 Rc::make_mut(xs).reverse();
                 None
@@ -471,7 +697,7 @@ impl<'m> Interp<'m> {
     }
 
     /// An operation that makes a value (or prints). `ty` is the type of the destination.
-    fn op(&mut self, op: RtOp, args: Vec<Value>, ty: Option<Ty>, span: Span) -> Result<Option<Value>, Stop> {
+    fn op(&mut self, op: RtOp, args: &[Value], ty: Option<Ty>, span: Span) -> Result<Option<Value>, Stop> {
         let m = self.m;
         let s = |k: usize| -> Result<&str, Stop> {
             match args.get(k) {
@@ -495,19 +721,17 @@ impl<'m> Interp<'m> {
         let v = match op {
             RtOp::Print | RtOp::PrintNoLine | RtOp::Format => {
                 let mut line = String::new();
-                for a in &args {
+                for a in args {
                     line += &display(m, a);
                 }
                 self.tick(line.len() as u64)?;
                 if op == RtOp::Format {
                     return Ok(text(line));
                 }
-                if let Some(out) = &mut self.out {
-                    out.push_str(&line);
-                    if op == RtOp::Print {
-                        out.push('\n');
-                    }
+                if op == RtOp::Print {
+                    line.push('\n');
                 }
+                self.out.write(&line)?;
                 None
             }
             RtOp::DivInt | RtOp::RemInt => {
@@ -546,6 +770,7 @@ impl<'m> Interp<'m> {
             }
             RtOp::StrConcat => {
                 let (a, b) = (s(0)?, s(1)?);
+                self.reserve((a.len() + b.len()) as u64)?;
                 self.tick((a.len() + b.len()) as u64)?;
                 text(format!("{a}{b}"))
             }
@@ -588,6 +813,7 @@ impl<'m> Interp<'m> {
                 if !t.is_empty() && n > 536870888 / t.len() as i64 {
                     return Err(oom(span));
                 }
+                self.reserve(t.len() as u64 * n as u64)?;
                 self.tick(t.len() as u64 * n as u64)?;
                 text(t.repeat(n as usize))
             }
@@ -651,16 +877,17 @@ impl<'m> Interp<'m> {
                 if missing > 536870888 {
                     return Err(oom(Span { line: 0, col: 0 }));
                 }
+                self.reserve(missing as u64)?;
                 self.tick(missing as u64)?;
                 let fill: String = std::iter::repeat_n(*c, missing as usize).collect();
                 text(if op == RtOp::StrPadLeft { fill + t } else { format!("{t}{fill}") })
             }
             RtOp::ArrNew => {
                 self.tick(args.len() as u64)?;
-                Some(Value::Arr(Rc::new(args)))
+                Some(Value::Arr(Rc::new(args.to_vec())))
             }
             RtOp::StructNew => match ty {
-                Some(Ty::Struct(id)) => Some(Value::Struct(id, Rc::new(args))),
+                Some(Ty::Struct(id)) => Some(Value::Struct(id, Rc::new(args.to_vec()))),
                 _ => return Err(bug("a struct made for a destination that is not a struct")),
             },
             RtOp::ArrGet => {
@@ -684,6 +911,7 @@ impl<'m> Interp<'m> {
                 if !xs.is_empty() && n > 100000000 / xs.len() as i64 {
                     return Err(oom(span));
                 }
+                self.reserve(xs.len() as u64 * n as u64 * 16)?;
                 self.tick(xs.len() as u64 * n as u64)?;
                 let mut out = Vec::with_capacity(xs.len() * n as usize);
                 for _ in 0..n {
@@ -693,6 +921,7 @@ impl<'m> Interp<'m> {
             }
             RtOp::ArrConcat => {
                 let (a, b) = (arr(0)?, arr(1)?);
+                self.reserve((a.len() + b.len()) as u64 * 16)?;
                 self.tick((a.len() + b.len()) as u64)?;
                 Some(Value::Arr(Rc::new(a.iter().chain(b.iter()).cloned().collect())))
             }
@@ -715,6 +944,57 @@ impl<'m> Interp<'m> {
                 }
                 None
             }
+            RtOp::MapNew => {
+                self.tick(args.len() as u64 / 2)?;
+                let mut mv = MapVal::default();
+                for pair in args.chunks(2) {
+                    if let [k, v] = pair {
+                        mv.set(k.clone(), v.clone())?;
+                    }
+                }
+                Some(Value::Map(Rc::new(mv)))
+            }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let Some(Value::Map(mv)) = args.first() else { return Err(bug("an operand that should be a map")) };
+                let key = args.get(1).ok_or_else(|| bug("a map access without its key"))?;
+                match (mv.get(key)?, args.get(2)) {
+                    (Some(v), _) => Some(v.clone()),
+                    (None, Some(default)) if op == RtOp::MapGetOr => Some(default.clone()),
+                    _ => {
+                        return Err(fail(
+                            "E0248",
+                            format!("key {} is not in the map", show(m, key)),
+                            "check with `m.has(k)` first, or read it with `m.get(k, default)`",
+                            span,
+                        ))
+                    }
+                }
+            }
+            RtOp::MapKeys | RtOp::MapValues => {
+                let Some(Value::Map(mv)) = args.first() else { return Err(bug("an operand that should be a map")) };
+                self.tick(mv.len() as u64)?;
+                let items = mv.iter().map(|(k, v)| if op == RtOp::MapKeys { k.clone() } else { v.clone() }).collect();
+                Some(Value::Arr(Rc::new(items)))
+            }
+            RtOp::JsonStr => {
+                let mut out = String::new();
+                super::jsonrt::encode(m, args.first().ok_or_else(|| bug("json.str without a value"))?, &mut out);
+                self.tick(out.len() as u64)?;
+                text(out)
+            }
+            RtOp::JsonParse => {
+                let t = ty.ok_or_else(|| bug("json.parse without a destination"))?;
+                let src = s(0)?;
+                self.tick(src.len() as u64)?;
+                Some(super::jsonrt::decode(m, t, src, span)?)
+            }
+            RtOp::Std(f) => {
+                let r = self.host.call(f, args, &mut self.out, span)?;
+                if self.host.cost > 0 {
+                    self.tick(self.host.cost)?;
+                }
+                r
+            }
             other => return Err(bug(&format!("{} outside of a `Mutate`", other.name()))),
         };
         Ok(v)
@@ -736,11 +1016,11 @@ fn truth(v: &Value) -> Result<bool, Stop> {
 }
 
 /// The indexes of a place, computed (they are pure expressions).
-fn resolve(m: &Module, locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
+fn resolve(m: &Module, strs: &[Rc<String>], locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
     p.path
         .iter()
         .map(|s| match s {
-            Step::Index(e, span) => match eval(m, locals, e)? {
+            Step::Index(e, span) => match eval(m, strs, locals, e)? {
                 Value::Int(i) => Ok(At::Index(i, *span)),
                 _ => Err(bug("an index that is not an int")),
             },
@@ -750,41 +1030,41 @@ fn resolve(m: &Module, locals: &[Value], p: &Place) -> Result<Vec<At>, Stop> {
 }
 
 /// A pure expression. It cannot fail: only a malformed IR can make this an error.
-fn eval(m: &Module, locals: &[Value], e: &Expr) -> Result<Value, Stop> {
+fn eval(m: &Module, strs: &[Rc<String>], locals: &[Value], e: &Expr) -> Result<Value, Stop> {
     Ok(match e {
         Expr::Int(n) => Value::Int(*n),
         Expr::Float(x) => Value::Float(*x),
         Expr::Bool(b) => Value::Bool(*b),
         Expr::Char(c) => Value::Char(char::from_u32(*c).ok_or_else(|| bug("a char literal that is not a character"))?),
-        Expr::Str(id) => Value::Str(Rc::new(m.str(*id).to_string())),
+        Expr::Str(id) => Value::Str(strs.get(id.0 as usize).cloned().ok_or_else(|| bug("a string literal that does not exist"))?),
         Expr::Local(l) => match locals.get(l.0 as usize) {
             Some(Value::Unset) | None => return Err(bug("a local read before it has a value")),
             Some(v) => v.clone(),
         },
-        Expr::Unary(op, x) => match (op, eval(m, locals, x)?) {
+        Expr::Unary(op, x) => match (op, eval(m, strs, locals, x)?) {
             (UnOp::INeg, Value::Int(n)) => Value::Int(n.wrapping_neg()),
             (UnOp::FNeg, Value::Float(x)) => Value::Float(-x),
             (UnOp::Not, Value::Bool(b)) => Value::Bool(!b),
             _ => return Err(bug("a unary operator on the wrong type")),
         },
-        Expr::Binary(op, a, b) => binary(*op, eval(m, locals, a)?, eval(m, locals, b)?)?,
+        Expr::Binary(op, a, b) => binary(*op, eval(m, strs, locals, a)?, eval(m, strs, locals, b)?)?,
         Expr::Select(c, a, b) => {
-            if truth(&eval(m, locals, c)?)? {
-                eval(m, locals, a)?
+            if truth(&eval(m, strs, locals, c)?)? {
+                eval(m, strs, locals, a)?
             } else {
-                eval(m, locals, b)?
+                eval(m, strs, locals, b)?
             }
         }
-        Expr::IntToFloat(x) => match eval(m, locals, x)? {
+        Expr::IntToFloat(x) => match eval(m, strs, locals, x)? {
             Value::Int(n) => Value::Float(n as f64),
             _ => return Err(bug("float() of a value that is not an int")),
         },
-        Expr::Field(x, k, _) => match eval(m, locals, x)? {
+        Expr::Field(x, k, _) => match eval(m, strs, locals, x)? {
             Value::Struct(_, fields) => fields.get(*k as usize).cloned().ok_or_else(|| bug("a field that does not exist"))?,
             _ => return Err(bug("a field of a value that is not a struct")),
         },
         Expr::Pure(p, args) => {
-            let vals = args.iter().map(|a| eval(m, locals, a)).collect::<Result<Vec<_>, _>>()?;
+            let vals = args.iter().map(|a| eval(m, strs, locals, a)).collect::<Result<Vec<_>, _>>()?;
             pure(*p, &vals)?
         }
     })
@@ -838,8 +1118,14 @@ fn pure(p: PureFn, a: &[Value]) -> Result<Value, Stop> {
             let v = a.get(1).ok_or_else(|| bug("a missing operand"))?;
             Value::Int(arr(0)?.iter().position(|x| equal(x, v)).map_or(-1, |i| i as i64))
         }
-        // maps are not evaluated in examples yet: such an example is skipped
-        PureFn::MapLen | PureFn::MapHas => return Err(bug("a map in an example")),
+        PureFn::MapLen | PureFn::MapHas => {
+            let Some(Value::Map(mv)) = a.first() else { return Err(bug("an operand that should be a map")) };
+            if p == PureFn::MapLen {
+                Value::Int(mv.len() as i64)
+            } else {
+                Value::Bool(mv.get(a.get(1).ok_or_else(|| bug("a missing operand"))?)?.is_some())
+            }
+        }
     })
 }
 
@@ -877,6 +1163,10 @@ pub fn equal(a: &Value, b: &Value) -> bool {
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::Arr(x), Value::Arr(y)) => x.len() == y.len() && x.iter().zip(y.iter()).all(|(p, q)| equal(p, q)),
         (Value::Struct(s, x), Value::Struct(t, y)) => s == t && x.iter().zip(y.iter()).all(|(p, q)| equal(p, q)),
+        // by content, in any order
+        (Value::Map(x), Value::Map(y)) => {
+            x.len() == y.len() && x.iter().all(|(k, v)| matches!(y.get(k), Ok(Some(w)) if equal(v, w)))
+        }
         _ => false,
     }
 }
@@ -922,6 +1212,22 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 if i > 0 {
                     out.push_str(", ");
                 }
+                show_in(m, x, out);
+            }
+            out.push(']');
+        }
+        Value::Map(mv) => {
+            if mv.len() == 0 {
+                out.push_str("[:]");
+                return;
+            }
+            out.push('[');
+            for (i, (k, x)) in mv.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                show_in(m, k, out);
+                out.push_str(": ");
                 show_in(m, x, out);
             }
             out.push(']');
@@ -994,7 +1300,7 @@ pub fn num(x: f64) -> String {
 }
 
 /// The text of a string in an error message: control characters as escapes.
-fn shown(s: &str) -> String {
+pub(super) fn shown(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
         match c {
@@ -1064,32 +1370,47 @@ fn parse_float(s: &str, span: Span) -> Result<f64, Stop> {
 mod tests {
     use super::*;
 
-    /// Runs `main` of a program in the interpreter: its output, and the runtime error if one stops it.
-    /// None for a program that uses what the interpreter does not have yet: maps and the standard
-    /// modules (examples that use them are skipped).
-    fn run_main(src: &str) -> Option<(String, Option<RuntimeError>)> {
-        let modules = src.lines().any(|l| l.starts_with("use "));
+    /// How a program ended in `run_with`.
+    struct Ran {
+        out: String,
+        err: Option<RuntimeError>,
+        /// `os.exit(code)`
+        exit: Option<i32>,
+    }
+
+    /// Runs `main` of a program in the interpreter, with standard input `stdin` and the arguments `args`.
+    fn run_with(src: &str, stdin: &[u8], args: &[String], limits: Limits) -> Ran {
         let prog = crate::front(src).unwrap_or_else(|d| panic!("{d:?}"));
         let m = crate::ir::lower::lower(&prog).expect("lowers");
+        let types = crate::ast::type_tables();
         std::thread::scope(|s| {
             std::thread::Builder::new()
                 .stack_size(512 << 20)
                 .spawn_scoped(s, || {
-                    let mut it = Interp::new(&m, Limits { steps: 2_000_000_000, depth: 100_000 });
-                    it.capture();
-                    let r = it.call(m.main, Vec::new());
-                    let err = match r {
-                        Ok(_) => None,
-                        Err(Stop::Error(e)) => Some(e),
-                        Err(Stop::Bug(b)) if modules || b.contains("map") => return None,
-                        Err(other) => panic!("stopped: {other:?}"),
+                    crate::ast::install_type_tables(types);
+                    let mut host = Host::new().with_input(stdin.to_vec());
+                    host.args = args.to_vec();
+                    let mut it = Interp::with_host(&m, limits, host, Out::keep());
+                    let (mut err, mut exit) = (None, None);
+                    match it.call(m.main, Vec::new()) {
+                        Ok(_) => {}
+                        Err(Stop::Error(e)) => err = Some(*e),
+                        Err(Stop::Exit(code)) => exit = Some(code),
+                        Err(other) => match it.limit_error(&other) {
+                            Some(e) => err = Some(e),
+                            None => panic!("stopped: {other:?}"),
+                        },
                     };
-                    Some((it.output().to_string(), err))
+                    Ran { out: it.output().to_string(), err, exit }
                 })
                 .unwrap()
                 .join()
                 .unwrap()
         })
+    }
+
+    fn run_main(src: &str) -> Ran {
+        run_with(src, b"", &[], Limits::new(2_000_000_000, 100_000))
     }
 
     fn files(dir: &str) -> Vec<std::path::PathBuf> {
@@ -1102,6 +1423,12 @@ mod tests {
         v
     }
 
+    /// A program that touches the files of the folder the tests run in: tests/sandbox.rs runs it
+    /// in a folder of its own.
+    fn uses_files(src: &str) -> bool {
+        src.lines().any(|l| l.trim() == "use fs")
+    }
+
     /// The interpreter must compute what the backends compute: every example program prints its
     /// `.out` file, the same check `tests/examples.rs` makes for C, JavaScript, Python, ...
     #[test]
@@ -1110,33 +1437,46 @@ mod tests {
         for path in files("examples") {
             let Ok(expected) = std::fs::read_to_string(path.with_extension("out")) else { continue };
             let src = std::fs::read_to_string(&path).unwrap();
-            let Some((out, err)) = run_main(&src) else { continue };
-            assert!(err.is_none(), "{}: {err:?}", path.display());
-            assert_eq!(out, expected.replace("\r\n", "\n"), "{}", path.display());
+            if uses_files(&src) {
+                continue;
+            }
+            let stdin = std::fs::read(path.with_extension("in")).unwrap_or_default();
+            let args: Vec<String> =
+                std::fs::read_to_string(path.with_extension("args")).map(|a| a.lines().map(String::from).collect()).unwrap_or_default();
+            let want_exit = std::fs::read_to_string(path.with_extension("exit")).ok().map(|e| e.trim().parse::<i32>().unwrap());
+            let ran = run_with(&src, &stdin, &args, Limits::new(2_000_000_000, 100_000));
+            assert!(ran.err.is_none(), "{}: {:?}", path.display(), ran.err);
+            assert_eq!(ran.out, expected.replace("\r\n", "\n"), "{}", path.display());
+            assert_eq!(ran.exit, want_exit, "{}", path.display());
             checked += 1;
         }
-        assert!(checked >= 20);
+        assert!(checked >= 40, "only {checked} examples were run");
     }
 
     /// ... and every runtime error test stops with its code, at its position, after its output.
     #[test]
     fn every_runtime_error_has_its_code_and_position() {
+        let mut checked = 0;
         for path in files("tests/runtime") {
             let src = std::fs::read_to_string(&path).unwrap();
             let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).unwrap();
             let (code, at) = expect.trim().split_once(" at ").unwrap();
-            // a test limited to some targets (`// only: js ts`) runs here only if Rust is one
+            // a test limited to some targets (`// only: js ts`) runs here only if Rust is one; one
+            // for the sandbox (`// only: interp`) is run by tests/sandbox.rs, with its flags
             let only = src.lines().nth(1).and_then(|l| l.strip_prefix("// only:"));
-            if only.is_some_and(|ts| !ts.split_whitespace().any(|t| t == "rs")) {
+            if only.is_some_and(|ts| !ts.split_whitespace().any(|t| t == "rs")) || uses_files(&src) {
                 continue;
             }
-            let Some((out, err)) = run_main(&src) else { continue };
-            let err = err.unwrap_or_else(|| panic!("{}: no runtime error", path.display()));
+            let stdin = std::fs::read(path.with_extension("in")).unwrap_or_default();
+            let ran = run_with(&src, &stdin, &[], Limits::new(2_000_000_000, 100_000));
+            let err = ran.err.unwrap_or_else(|| panic!("{}: no runtime error", path.display()));
             assert_eq!(err.code, code, "{}: {}", path.display(), err.msg);
             assert_eq!(format!("{}:{}", err.span.line, err.span.col), at, "{}", path.display());
             let stdout = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default();
-            assert_eq!(out, stdout.replace("\r\n", "\n"), "{}", path.display());
+            assert_eq!(ran.out, stdout.replace("\r\n", "\n"), "{}", path.display());
+            checked += 1;
         }
+        assert!(checked >= 30, "only {checked} runtime tests were run");
     }
 
     #[test]
@@ -1154,8 +1494,71 @@ mod tests {
         let prog = crate::front(src).unwrap();
         let m = crate::ir::lower::lower(&prog).unwrap();
         let id = |name: &str| FuncId(m.funcs.iter().position(|f| f.name == name).unwrap() as u32);
-        let limits = Limits { steps: 10_000, depth: 100 };
+        let limits = Limits::new(10_000, 100);
         assert!(matches!(Interp::new(&m, limits).call(id("spin"), vec![]), Err(Stop::Steps)));
         assert!(matches!(Interp::new(&m, limits).call(id("down"), vec![Value::Int(0)]), Err(Stop::Depth)));
+    }
+
+    /// The limits of a run and the errors they stand for.
+    #[test]
+    fn every_limit_has_its_error_code() {
+        let limit = |src: &str, limits: Limits| run_with(src, b"", &[], limits).err.map(|e| e.code);
+        let spin = "fn main() {\n    var x = 0\n    while true { x += 1 }\n}\n";
+        assert_eq!(limit(spin, Limits::new(10_000, 100)), Some("E0355"));
+        let grow = "fn main() {\n    var xs: [int] = []\n    while true { xs.push(1) }\n}\n";
+        assert_eq!(limit(grow, Limits::new(u64::MAX, 100).memory(8 << 20)), Some("E0356"));
+        let big = "fn main() {\n    let s = \"ab\".repeat(100000000)\n    print(s.len())\n}\n";
+        assert_eq!(limit(big, Limits::new(u64::MAX, 100).memory(8 << 20)), Some("E0356"));
+        let chatty = "fn main() {\n    while true { print(\"hello\") }\n}\n";
+        let mut limits = Limits::new(u64::MAX, 100);
+        limits.output = 100;
+        let ran = run_with(chatty, b"", &[], limits);
+        assert_eq!(ran.err.map(|e| e.code), Some("E0357"));
+        assert_eq!(ran.out.len(), 100, "the output is cut at the cap");
+        let deep = "fn down(n: int) -> int = down(n + 1) + 1\nfn main() {\n    print(down(0))\n}\n";
+        assert_eq!(limit(deep, Limits::new(u64::MAX, 50)), Some("E0358"));
+        let mut limits = Limits::new(u64::MAX, 100);
+        limits.wall_ms = 50;
+        assert_eq!(limit(spin, limits), Some("E0359"));
+    }
+
+    #[test]
+    fn maps_run_in_insertion_order() {
+        let src = "fn main() {\n    var m = [\"b\": 1, \"a\": 2]\n    m[\"c\"] = 3\n    m.remove(\"b\")\n    m[\"b\"] = 9\n    print(m, m.len(), m.has(\"c\"), m.get(\"z\", -1), m == [\"c\": 3, \"a\": 2, \"b\": 9])\n    print(m.keys(), m.values())\n    for k in m { print(k, m[k]) }\n    let e: [int: str] = [:]\n    print(e, e.len())\n    print(m[\"nope\"])\n}\n";
+        let ran = run_main(src);
+        assert_eq!(
+            ran.out,
+            "[\"a\": 2, \"c\": 3, \"b\": 9] 3 true -1 true\n[\"a\", \"c\", \"b\"] [2, 3, 9]\na 2\nc 3\nb 9\n[:] 0\n"
+        );
+        let e = ran.err.expect("a missing key stops the program");
+        assert_eq!((e.code, e.msg.as_str()), ("E0248", "key \"nope\" is not in the map"));
+    }
+
+    #[test]
+    fn json_round_trips_structs_and_arrays() {
+        let src = "use json\nstruct P {\n    name: str\n    tags: [str]\n    x: float\n}\nfn main() {\n    let p = P(name: \"ab\", tags: [\"x\", \"y\"], x: 1.5)\n    let t = json.str(p)\n    print(t)\n    let q: P = json.parse(t)\n    print(q == p, q)\n    let bad: P = json.parse(\"{{\\\"name\\\": 1}}\")\n    print(bad)\n}\n";
+        let ran = run_main(src);
+        assert!(ran.out.starts_with("{\"name\":\"ab\",\"tags\":[\"x\",\"y\"],\"x\":1.5}\ntrue P(name: \"ab\""), "{}", ran.out);
+        let e = ran.err.expect("a wrong shape stops the program");
+        assert_eq!((e.code, e.msg.as_str()), ("E0345", "json.parse: expected a string at $.name"));
+    }
+
+    #[test]
+    fn standard_input_arguments_and_exit() {
+        let src = "use input\nuse os\nfn main() {\n    let first = input.line()\n    let rest = input.lines()\n    print(first, rest, input.eof(), os.args())\n    os.exit(7)\n}\n";
+        let ran = run_with(src, b"one\ntwo\nthree\n", &["a".to_string(), "b c".to_string()], Limits::new(1_000_000, 100));
+        assert_eq!(ran.out, "one [\"two\", \"three\"] true [\"a\", \"b c\"]\n");
+        assert_eq!(ran.exit, Some(7));
+    }
+
+    #[test]
+    fn sleeping_moves_a_virtual_clock_and_costs_steps() {
+        let src = "use time\nfn main() {\n    let t = time.mono_ms()\n    time.sleep_ms(5000)\n    print(time.mono_ms() - t >= 5000.0)\n}\n";
+        let started = std::time::Instant::now();
+        let ran = run_main(src);
+        assert_eq!(ran.out, "true\n");
+        assert!(started.elapsed().as_secs() < 4, "the sleep must not wait");
+        let spent = run_with(src, b"", &[], Limits::new(1000, 100));
+        assert_eq!(spent.err.map(|e| e.code), Some("E0355"), "5000 ms of sleep cost more than 1000 steps");
     }
 }

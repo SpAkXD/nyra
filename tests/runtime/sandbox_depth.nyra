@@ -1,0 +1,8 @@
+// expect: E0358 at 4:27
+// only: interp
+// flags: --interp --max-depth 500
+fn depth(n: int) -> int = depth(n + 1) + 1
+
+fn main() {
+    print(depth(0))
+}

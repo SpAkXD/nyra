@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use common::{check_json, nyra, scratch, stderr, stdout, Json};
+use common::{check_json_with, flags_of, nyra, scratch, stderr, stdout, Json};
 
 fn available(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().is_ok()
@@ -154,17 +154,35 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
         std::fs::write(dir.join(&wrong_file), wrong).unwrap();
         std::fs::write(dir.join(&fixed_file), fixed).unwrap();
 
+        // (a line `// flags: --sandbox --allow fs` at the top is the command-line flags the program needs)
+        let (wrong_flags, fixed_flags) = (flags_of(wrong), flags_of(fixed));
         // the fixed program compiles cleanly...
-        let (ok, json) = check_json(&dir, &fixed_file);
+        let (ok, json) = check_json_with(&dir, &fixed_file, &fixed_flags);
         assert!(ok, "{code}: the Fixed example does not compile:\n{fixed}\n{json:?}");
 
         if item.kind == "runtime error" {
             // ...and the wrong one compiles but stops at run time with that code
-            let (ok, json) = check_json(&dir, &wrong_file);
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
             // a first line `// target: js`: the error happens only on JavaScript (and TypeScript)
             let js_only = wrong.starts_with("// target: js");
-            if let Some(flags) = backend.filter(|f| !js_only || f.contains(&"--js")) {
+            // the limits of the interpreter (E0355 to E0359): the program asks for its flags, and
+            // the exit code says which limit it was
+            let own: Vec<&str> = wrong_flags.iter().map(String::as_str).collect();
+            let run_flags = if !own.is_empty() {
+                Some(own)
+            } else {
+                backend.filter(|f| !js_only || f.contains(&"--js")).map(|f| f.to_vec())
+            };
+            let want_exit = match code.as_str() {
+                "E0355" => 120,
+                "E0356" => 121,
+                "E0357" => 122,
+                "E0358" => 123,
+                "E0359" => 124,
+                _ => 101,
+            };
+            if let Some(flags) = run_flags {
                 // a first line `// stdin: ...` is the program's input (`\xff`, `\n` escapes)
                 let input = wrong.lines().next().and_then(|l| l.strip_prefix("// stdin: ")).map(unescape).unwrap_or_default();
                 let mut child = nyra()
@@ -179,12 +197,17 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
                     .unwrap();
                 let _ = child.stdin.take().unwrap().write_all(&input);
                 let out = child.wait_with_output().unwrap();
-                assert_eq!(out.status.code(), Some(101), "{code}: the Wrong example should stop with exit code 101\n{}", stderr(&out));
+                assert_eq!(
+                    out.status.code(),
+                    Some(want_exit),
+                    "{code}: the Wrong example should stop with exit code {want_exit}\n{}",
+                    stderr(&out)
+                );
                 assert!(stderr(&out).contains(&format!("runtime error[{code}]")), "{code}: stderr was\n{}", stderr(&out));
             }
         } else {
             // ...and the wrong one reports exactly this code (possibly several times)
-            let (ok, json) = check_json(&dir, &wrong_file);
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(!ok, "{code}: the Wrong example compiles:\n{wrong}");
             let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
             assert!(!errors.is_empty(), "{code}: no errors reported");
@@ -320,7 +343,8 @@ fn every_error_program_in_the_tests_has_a_hint_and_a_documented_code() {
         if path.extension().is_none_or(|e| e != "nyra") {
             continue;
         }
-        let (ok, json) = check_json(Path::new("."), path.to_str().unwrap());
+        let flags = flags_of(&std::fs::read_to_string(&path).unwrap());
+        let (ok, json) = check_json_with(Path::new("."), path.to_str().unwrap(), &flags);
         assert!(!ok, "{} should not compile", path.display());
         for err in json.get("errors").and_then(|e| e.as_array()).unwrap() {
             let code = err.get("code").and_then(|c| c.as_str()).unwrap();
