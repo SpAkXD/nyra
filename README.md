@@ -163,10 +163,11 @@ The token counts of the card and the spec are measured with Anthropic's `count_t
 others are estimates, about 3.7 characters per token); the spec alone is enough to write programs, and
 the guide pays off when a model writes a lot of Nyra.
 
-**Putting Nyra into your own prompts or agents: use the card, and cache it.** The spec is most of the
-cost of every request that writes Nyra, so send the **card** ([`docs/AGENT_CARD.md`](docs/AGENT_CARD.md),
-about 1,400 tokens) as a system block of its own, the same bytes in every request (the task goes in the
-user message), and mark that block for prompt caching. With the Anthropic API:
+**Putting Nyra into your own prompts or agents: send the card (or the spec) as a cached system block.**
+The spec is most of the input of every request that writes Nyra, so put the **card**
+([`docs/AGENT_CARD.md`](docs/AGENT_CARD.md), about 1,400 tokens) in a system block of its own, the same
+bytes in every request (the task goes in the user message), and mark that block for prompt caching.
+With the Anthropic API:
 
 ```python
 system = [{"type": "text", "text": card, "cache_control": {"type": "ephemeral"}}]
@@ -177,8 +178,11 @@ A cache read costs 0.05x to 0.1x of the input price, a write 1.25x, and an entry
 the request that wrote it has started to answer: send one request first when you run many in parallel.
 The minimum cacheable prefix is 512 tokens on Opus 5.5 and Sonnet 5.5 but 4,096 on Haiku 4.5, so the
 card is not cached there (it is cheap enough uncached). [`bench/`](bench/README.md) does exactly this
-(`--spec card`); [`research/AB-card.md`](research/AB-card.md) measures what the card costs in accuracy.
-The MCP server's `nyra_spec` returns the card by default and the complete spec with `full: true`.
+(`--spec card`). Measured on 38 tasks ([`research/AB-card.md`](research/AB-card.md)): on Sonnet 5.5 the card
+wrote as many correct programs as the full spec (30 of 38 each) from 23% of the input; on Haiku 4.5 it was
+worse (10 against 14), so a small model is better served by the **full spec, cached**, which cut the cost of
+a run by 41% (Haiku) to 52% (Sonnet). The MCP server's `nyra_spec` returns the card by default and the
+complete spec with `full: true`.
 
 An agent that can run commands follows one loop: **write, check, fix, run**.
 
