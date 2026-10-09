@@ -1,0 +1,15 @@
+// recursion: fib(n) for n = 0 to 35, summed
+fn fib(n: int) -> int {
+    if n < 2 {
+        ret n
+    }
+    ret fib(n - 1) + fib(n - 2)
+}
+
+fn main() {
+    var total = 0
+    for n in 0..36 {
+        total += fib(n)
+    }
+    print(total)
+}

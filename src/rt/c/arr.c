@@ -12,6 +12,8 @@ typedef struct nyrt_type {
     void (*keep)(void *elem);                       // `keep`: NULL for plain data
 } nyrt_type;
 typedef struct nyrt_arr { int64_t rc, len, cap; const nyrt_type *ty; char *data; } nyrt_arr;
+// The elements of an array as a C array of `T`: they always follow the header (`data` points there).
+#define NYRT_ELEMS(T, a) ((T *)((a) + 1))
 // The longest array `repeat` makes; the JavaScript runtime stops at the same length.
 #define NYRT_MAX_ARR 100000000
 
@@ -22,7 +24,7 @@ static nyrt_arr *nyrt_arr_new_at(const nyrt_type *ty, int64_t cap, int line, int
     return a;
 }
 static nyrt_arr *nyrt_arr_new(const nyrt_type *ty, int64_t cap) { return nyrt_arr_new_at(ty, cap, 0, 0); }
-static void nyrt_arr_retain(nyrt_arr *a) {
+static inline void nyrt_arr_retain(nyrt_arr *a) {
     if (!a || !a->rc) return;
     if (a->rc < 0) nyrt_bug("a freed array was used again");
     a->rc++;
@@ -32,7 +34,8 @@ static void nyrt_arr_release(nyrt_arr *a) {
     if (a->rc < 0) nyrt_bug("an array was freed twice");
     if (--a->rc > 0) return;
     if (a->ty->release) for (int64_t i = 0; i < a->len; i++) a->ty->release(a->data + i * a->ty->size);
-    if (nyrt_checking) { a->rc = -1; nyrt_live--; }   // tombstone
+    // a tombstone has no elements, so every later index check takes the slow path that reports it
+    if (nyrt_checking) { a->rc = -1; a->len = 0; nyrt_live--; }
     else nyrt_free(a);
 }
 // `keep(xs)`: the array and everything in it is never freed (reference count 0), not a leak.
@@ -47,7 +50,7 @@ static void nyrt_arr_retain_all(nyrt_arr *a) {
     if (a->ty->retain) for (int64_t i = 0; i < a->len; i++) a->ty->retain(a->data + i * a->ty->size);
 }
 // Makes `*p` the only owner of its array: a shared array is copied first.
-static void nyrt_arr_unique(nyrt_arr **p) {
+static NYRT_COLD void nyrt_arr_unique(nyrt_arr **p) {
     nyrt_arr *a = *p;
     NYRT_LIVE(a);
     if (a->rc == 1) return;
@@ -70,7 +73,7 @@ static void nyrt_arr_grow(nyrt_arr **p, int64_t need) {
     a->cap = cap;
     *p = a;
 }
-static void nyrt_oob(int64_t i, int64_t n, int line, int col) {
+static NYRT_NORETURN void nyrt_oob(int64_t i, int64_t n, int line, int col) {
     char msg[96];
     snprintf(msg, sizeof msg, "index %lld is out of bounds for length %lld", (long long)i, (long long)n);
     nyrt_panic("E0240", msg, "valid indexes are 0 to len - 1; compare with `.len()` first", line, col);
@@ -80,6 +83,28 @@ static void *nyrt_arr_at(const nyrt_arr *a, int64_t i, int line, int col) {
     NYRT_LIVE(a);
     if (i < 0 || i >= a->len) nyrt_oob(i, a->len, line, col);
     return a->data + i * a->ty->size;
+}
+static NYRT_NORETURN void nyrt_arr_bad_index(const nyrt_arr *a, int64_t i, int line, int col) {
+    NYRT_LIVE(a);
+    nyrt_oob(i, a->len, line, col);
+}
+// The generated code reads and writes elements as `NYRT_ELEMS(T, a)[nyrt_ix(a, i, line, col)]`:
+// `i` checked against the length (E0240), with the error path out of line.
+static inline int64_t nyrt_ix(const nyrt_arr *a, int64_t i, int line, int col) {
+    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)a->len)) nyrt_arr_bad_index(a, i, line, col);
+    return i;
+}
+// The same with the length read before a loop that cannot change it (`n`).
+static inline int64_t nyrt_ixn(const nyrt_arr *a, int64_t i, int64_t n, int line, int col) {
+    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)n)) nyrt_arr_bad_index(a, i, line, col);
+    return i;
+}
+// Before a write: makes `*p` the only owner (the copy, like the memory check, is the slow path).
+static inline void nyrt_arr_mut(nyrt_arr **p) {
+    if (NYRT_UNLIKELY((*p)->rc != 1)) nyrt_arr_unique(p);
+}
+static NYRT_NORETURN void nyrt_pop_empty(int line, int col) {
+    nyrt_panic("E0242", "pop() on an empty array", "check `xs.len() > 0` first", line, col);
 }
 
 // ---- changing an array (the caller made it unique first) ---------------------------------
@@ -94,7 +119,7 @@ static void nyrt_arr_push(nyrt_arr **p, const void *elem) {
 // The last element moves out into `out` (it keeps its owner count).
 static void nyrt_arr_pop(nyrt_arr **p, void *out, int line, int col) {
     nyrt_arr *a = *p;
-    if (a->len == 0) nyrt_panic("E0242", "pop() on an empty array", "check `xs.len() > 0` first", line, col);
+    if (a->len == 0) nyrt_pop_empty(line, col);
     a->len--;
     memcpy(out, a->data + a->len * a->ty->size, (size_t)a->ty->size);
 }
@@ -195,9 +220,14 @@ static nyrt_arr *nyrt_arr_repeat(const nyrt_arr *a, int64_t n, int line, int col
         nyrt_panic("E0243", msg, "repeat(n) needs n >= 0", line, col);
     }
     if (a->len > 0 && n > NYRT_MAX_ARR / a->len) nyrt_oom(line, col);
-    int64_t sz = a->ty->size, block = a->len * sz;
+    int64_t sz = a->ty->size, block = a->len * sz, total = block * n;
     nyrt_arr *r = nyrt_arr_new_at(a->ty, a->len * n, line, col);
-    for (int64_t k = 0; k < n; k++) memcpy(r->data + k * block, a->data, (size_t)block);
+    // one copy, then the copied part doubles: a few big copies instead of n small ones
+    if (total > 0) {
+        memcpy(r->data, a->data, (size_t)block);
+        for (int64_t done = block; done < total; done *= 2)
+            memcpy(r->data + done, r->data, (size_t)(done < total - done ? done : total - done));
+    }
     r->len = a->len * n;
     nyrt_arr_retain_all(r);
     return r;
@@ -343,6 +373,24 @@ static nyrt_arr *nyrt_str_split(const nyrt_str *s, const nyrt_str *sep, int line
 }
 static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
     NYRT_LIVE(a);
+    if (a->ty == &nyrt_T_str) {
+        // the size first, then one allocation
+        nyrt_str **xs = NYRT_ELEMS(nyrt_str *, a);
+        int64_t len = 0, nchars = 0;
+        for (int64_t i = 0; i < a->len; i++) { NYRT_LIVE(xs[i]); len += xs[i]->len; nchars += xs[i]->nchars; }
+        if (a->len > 1) { len += sep->len * (a->len - 1); nchars += sep->nchars * (a->len - 1); }
+        nyrt_str *r = nyrt_str_alloc(len);
+        char *o = r->data;
+        for (int64_t i = 0; i < a->len; i++) {
+            if (i) { memcpy(o, sep->data, (size_t)sep->len); o += sep->len; }
+            memcpy(o, xs[i]->data, (size_t)xs[i]->len);
+            o += xs[i]->len;
+        }
+        *o = '\0';
+        r->len = len;
+        r->nchars = nchars;
+        return r;
+    }
     nyrt_buf b = nyrt_buf_new();
     for (int64_t i = 0; i < a->len; i++) {
         if (i) nyrt_buf_str(&b, sep);
@@ -353,16 +401,36 @@ static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
 }
 
 // ---- sorting (after the element types it dispatches on) ----------------------------------------
-// The same merge sort for the sortable element types, without a call per comparison.
+// A stable merge sort for the sortable element types, without a call per comparison: insertion
+// sort for short runs, no merge when the halves are already in order, and only the left half
+// copied out. Every stable sort gives the same result (the orders are strict weak orders, NaN
+// last), so the output matches the plain merge sort of the other backends.
 #define NYRT_MSORT(name, T, LT) \
     static void name(T *a, T *tmp, int64_t lo, int64_t hi) { \
-        if (hi - lo < 2) return; \
+        if (hi - lo <= 16) { \
+            for (int64_t i = lo + 1; i < hi; i++) { \
+                T x = a[i]; \
+                int64_t j = i; \
+                while (j > lo && LT(x, a[j - 1])) { a[j] = a[j - 1]; j--; } \
+                a[j] = x; \
+            } \
+            return; \
+        } \
         int64_t mid = lo + (hi - lo) / 2; \
         name(a, tmp, lo, mid); \
         name(a, tmp, mid, hi); \
-        int64_t i = lo, j = mid; \
-        for (int64_t k = lo; k < hi; k++) tmp[k] = (j < hi && (i >= mid || LT(a[j], a[i]))) ? a[j++] : a[i++]; \
-        memcpy(a + lo, tmp + lo, (size_t)(hi - lo) * sizeof(T)); \
+        if (!LT(a[mid], a[mid - 1])) return; \
+        memcpy(tmp + lo, a + lo, (size_t)(mid - lo) * sizeof(T)); \
+        int64_t i = lo, j = mid, k = lo; \
+        while (i < mid && j < hi) { /* no branch: the comparison picks the side */ \
+            T l = tmp[i]; \
+            T r = a[j]; \
+            int right = LT(r, l); \
+            a[k++] = right ? r : l; \
+            j += right; \
+            i += !right; \
+        } \
+        while (i < mid) a[k++] = tmp[i++]; \
     }
 #define NYRT_LT(x, y) ((x) < (y))
 #define NYRT_LT_STR(x, y) (nyrt_str_cmp((x), (y)) < 0)

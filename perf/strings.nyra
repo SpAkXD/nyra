@@ -1,0 +1,30 @@
+// string building: appends, interpolation, split, join, char scans
+fn main() {
+    var s = ""
+    for i in 0..2000000 {
+        s += str(i)
+        s += ","
+    }
+    print(s.len())
+    var sevens = 0
+    for c in s {
+        if c == '7' {
+            sevens += 1
+        }
+    }
+    print(sevens)
+    let parts = s.split(",")
+    var total = 0
+    for p in parts {
+        if p.len() > 0 {
+            total += int(p)
+        }
+    }
+    print(total)
+    var lines: [str] = []
+    for i in 0..500000 {
+        lines.push("item {i}: {i * 3} of {i % 7}")
+    }
+    let text = lines.join("\n")
+    print(text.len())
+}

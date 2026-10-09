@@ -5,13 +5,13 @@
 static int64_t nyrt_live = 0;
 static bool nyrt_checking = false;
 static void nyrt_init(void) { nyrt_checking = getenv("NYRA_LEAKCHECK") != NULL; }
-static void nyrt_bug(const char *what) {
+static NYRT_NORETURN void nyrt_bug(const char *what) {
     fflush(stdout);
     fprintf(stderr, "nyra: memory check failed: %s (this is a nyra bug)\n", what);
     exit(102);
 }
 // Out of memory. The position is the operation that asked for the memory, when it is known.
-static void nyrt_oom(int line, int col) {
+static NYRT_NORETURN void nyrt_oom(int line, int col) {
     nyrt_panic("E0249", "out of memory", "the program needs more memory than the system gave it", line, col);
 }
 static void *nyrt_alloc_at(size_t n, int line, int col) {
@@ -59,7 +59,7 @@ static nyrt_str *nyrt_str_alloc(int64_t cap) {
     s->data[0] = '\0';
     return s;
 }
-static void nyrt_str_retain(nyrt_str *s) {
+static inline void nyrt_str_retain(nyrt_str *s) {
     if (!s || !s->rc) return;
     if (s->rc < 0) nyrt_bug("a freed string was used again");
     s->rc++;
@@ -68,7 +68,7 @@ static void nyrt_str_retain(nyrt_str *s) {
 // indexes walks the string once instead of once per index. Dropped when its string changes or dies.
 static const nyrt_str *nyrt_pos_s = NULL;
 static int64_t nyrt_pos_ci = 0, nyrt_pos_bi = 0;
-static void nyrt_str_release(nyrt_str *s) {
+static inline void nyrt_str_release(nyrt_str *s) {
     if (!s || !s->rc) return;
     if (s->rc < 0) nyrt_bug("a string was freed twice");
     if (--s->rc > 0) return;
@@ -148,7 +148,8 @@ static int nyrt_utf8_encode(nyrt_char c, char *out) {
 // ---- building strings: interpolation, str(x), +, join, ... -------------------------
 typedef struct nyrt_buf { nyrt_str *s; } nyrt_buf;
 static nyrt_buf nyrt_buf_new(void) { nyrt_buf b = { nyrt_str_alloc(16) }; return b; }
-static void nyrt_buf_add(nyrt_buf *b, const char *p, int64_t n) {
+// Appends `n` bytes that hold `nchars` characters.
+static void nyrt_buf_add_n(nyrt_buf *b, const char *p, int64_t n, int64_t nchars) {
     nyrt_str *s = b->s;
     if (s == nyrt_pos_s) nyrt_pos_s = NULL;   // it changes (and may move)
     if (s->len + n > s->cap) {
@@ -162,11 +163,23 @@ static void nyrt_buf_add(nyrt_buf *b, const char *p, int64_t n) {
     memcpy(s->data + s->len, p, (size_t)n);
     s->len += n;
     s->data[s->len] = '\0';
-    s->nchars += nyrt_utf8_count(p, n);
+    s->nchars += nchars;
 }
-static void nyrt_buf_str(nyrt_buf *b, const nyrt_str *s) { NYRT_LIVE(s); nyrt_buf_add(b, s->data, s->len); }
+static void nyrt_buf_add(nyrt_buf *b, const char *p, int64_t n) { nyrt_buf_add_n(b, p, n, nyrt_utf8_count(p, n)); }
+static void nyrt_buf_str(nyrt_buf *b, const nyrt_str *s) { NYRT_LIVE(s); nyrt_buf_add_n(b, s->data, s->len, s->nchars); }
 static void nyrt_buf_cstr(nyrt_buf *b, const char *p) { nyrt_buf_add(b, p, (int64_t)strlen(p)); }
-static void nyrt_buf_int(nyrt_buf *b, int64_t x) { char t[24]; nyrt_buf_add(b, t, snprintf(t, sizeof t, "%lld", (long long)x)); }
+// The decimal digits of `x` at the end of `t[24]`; returns where they start.
+static char *nyrt_int_text(char t[24], int64_t x) {
+    char *p = t + 24;
+    uint64_t u = x < 0 ? 0 - (uint64_t)x : (uint64_t)x;
+    do { *--p = (char)('0' + u % 10); u /= 10; } while (u);
+    if (x < 0) *--p = '-';
+    return p;
+}
+static void nyrt_buf_int(nyrt_buf *b, int64_t x) {
+    char t[24], *p = nyrt_int_text(t, x);
+    nyrt_buf_add_n(b, p, t + 24 - p, t + 24 - p);
+}
 static void nyrt_buf_float(nyrt_buf *b, double x) { char t[32]; nyrt_buf_cstr(b, nyrt_float_fmt(t, x)); }
 static void nyrt_buf_bool(nyrt_buf *b, bool x) { nyrt_buf_cstr(b, x ? "true" : "false"); }
 static void nyrt_buf_char(nyrt_buf *b, nyrt_char c) { char t[4]; nyrt_buf_add(b, t, nyrt_utf8_encode(c, t)); }
@@ -176,7 +189,7 @@ static nyrt_str *nyrt_buf_done(nyrt_buf *b) { return b->s; }
 // ---- printing: each part of a print goes straight to stdout --------------------------
 static void nyrt_put_lit(const char *p, int64_t n) { fwrite(p, 1, (size_t)n, stdout); }
 static void nyrt_put_str(const nyrt_str *s) { NYRT_LIVE(s); fwrite(s->data, 1, (size_t)s->len, stdout); }
-static void nyrt_put_int(int64_t x) { printf("%lld", (long long)x); }
+static void nyrt_put_int(int64_t x) { char t[24], *p = nyrt_int_text(t, x); fwrite(p, 1, (size_t)(t + 24 - p), stdout); }
 static void nyrt_put_float(double x) { char t[32]; fputs(nyrt_float_fmt(t, x), stdout); }
 static void nyrt_put_bool(bool x) { fputs(x ? "true" : "false", stdout); }
 static void nyrt_put_char(nyrt_char c) { char t[4]; fwrite(t, 1, (size_t)nyrt_utf8_encode(c, t), stdout); }
@@ -214,9 +227,26 @@ static void nyrt_str_append(nyrt_str **a, const nyrt_str *b) {
         return;
     }
     nyrt_buf buf = { s };
-    nyrt_buf_add(&buf, b->data, b->len);
+    nyrt_buf_add_n(&buf, b->data, b->len, b->nchars);
     *a = buf.s;
 }
+// `s += "{x}"`: a buffer that appends to `*p` in place (to a copy first when it has other
+// owners); `nyrt_buf_back` puts the result in `*p`.
+static nyrt_buf nyrt_buf_on(nyrt_str **p) {
+    nyrt_str *s = *p;
+    NYRT_LIVE(s);
+    if (s->rc != 1) {
+        nyrt_str *c = nyrt_str_alloc(s->len + 16);
+        memcpy(c->data, s->data, (size_t)s->len + 1);
+        c->len = s->len;
+        c->nchars = s->nchars;
+        nyrt_str_release(s);
+        s = c;
+    }
+    nyrt_buf b = { s };
+    return b;
+}
+static void nyrt_buf_back(nyrt_buf *b, nyrt_str **p) { *p = b->s; }
 static nyrt_char nyrt_str_at(const nyrt_str *s, int64_t i, int line, int col) {
     if (i < 0 || i >= s->nchars) {
         char msg[96];
@@ -323,17 +353,38 @@ static nyrt_str *nyrt_str_pad(const nyrt_str *s, int64_t n, nyrt_char c, bool le
     if (left) nyrt_buf_str(&b, s);
     return nyrt_buf_done(&b);
 }
-// str(c): never allocates for ASCII (immortal one-character strings).
+// A string that is never freed (reference count 0, like a literal or `keep`): made once, on
+// first use, then shared by every `str(c)` / `str(n)` of the same value.
+static nyrt_str *nyrt_immortal(const char *p, int64_t n) {
+    nyrt_str *s = nyrt_str_from(p, n);
+    s->rc = 0;
+    nyrt_live--;
+    return s;
+}
+// str(c): allocates only the first time for an ASCII character.
 static nyrt_str *nyrt_char_str(nyrt_char c) {
-    static nyrt_str ascii[128];
-    static char bytes[128][2];
-    if (c < 128) {
-        nyrt_str *s = &ascii[c];
-        if (!s->data) { bytes[c][0] = (char)c; s->data = bytes[c]; s->len = s->cap = s->nchars = 1; }
-        return s;
-    }
+    static nyrt_str *ascii[128];
     char t[4];
+    if (c < 128) {
+        if (!ascii[c]) { t[0] = (char)c; ascii[c] = nyrt_immortal(t, 1); }
+        return ascii[c];
+    }
     return nyrt_str_from(t, nyrt_utf8_encode(c, t));
+}
+// str(n): allocates only the first time for 0 to 255.
+static nyrt_str *nyrt_int_str(int64_t x) {
+    static nyrt_str *small[256];
+    char t[24], *p = nyrt_int_text(t, x);
+    int64_t n = t + 24 - p;
+    if (x >= 0 && x < 256) {
+        if (!small[x]) small[x] = nyrt_immortal(p, n);
+        return small[x];
+    }
+    nyrt_str *s = nyrt_str_alloc(n);
+    memcpy(s->data, p, (size_t)n);
+    s->data[n] = '\0';
+    s->len = s->nchars = n;
+    return s;
 }
 static nyrt_char nyrt_char_from(int64_t n, int line, int col) {
     if (n < 0 || n > 1114111 || (n >= 55296 && n <= 57343)) {

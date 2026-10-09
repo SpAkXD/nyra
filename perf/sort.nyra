@@ -1,0 +1,42 @@
+// sorting 1,000,000 ints: a hand-written quicksort and the built-in sort
+fn quicksort(inout xs: [int], lo: int, hi: int) {
+    if lo >= hi {
+        ret
+    }
+    let pivot = xs[(lo + hi) / 2]
+    var i = lo
+    var j = hi
+    while i <= j {
+        while xs[i] < pivot {
+            i += 1
+        }
+        while xs[j] > pivot {
+            j -= 1
+        }
+        if i <= j {
+            xs.swap(i, j)
+            i += 1
+            j -= 1
+        }
+    }
+    quicksort(inout xs, lo, j)
+    quicksort(inout xs, i, hi)
+}
+
+fn main() {
+    var seed = 7
+    var xs: [int] = []
+    for k in 0..1000000 {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        xs.push((seed / 64) % 1000000)
+    }
+    var ys = xs
+    quicksort(inout xs, 0, xs.len() - 1)
+    ys.sort()
+    print(xs == ys)
+    var check = 0
+    for i in 0..xs.len() {
+        check = (check * 31 + xs[i]) % 1000000007
+    }
+    print(check)
+}
