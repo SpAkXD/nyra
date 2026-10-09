@@ -16,6 +16,8 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 - A `fn` written (indented) inside a function body is an ordinary function; it cannot see the locals around it.
 - Everything is evaluated left to right: arguments, operands and the parts of a string.
 - Names use letters, digits and `_` (`row_count`, `x2`, `_`). Comments: `// to end of line`.
+- Code nests at most 256 levels deep: each parenthesis, call, `[ ]`, unary operator, block and `else if`
+  link counts, and so does each operator, `.method()` or `[index]` of a chain. Deeper code is E0103.
 
 ## Types
 | type | values |

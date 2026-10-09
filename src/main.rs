@@ -199,7 +199,20 @@ fn fail(msg: impl std::fmt::Display) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// The stack of the threads that compile. The parser limits nesting (E0103), so the stages that
+/// recurse over a program (parser, checker, lowering, backends) stay far below this; the size is a
+/// second safety net. Only address space is reserved: memory is used as the stack grows.
+pub const STACK: usize = 256 << 20;
+
 fn main() -> ExitCode {
+    // everything runs on a thread with a big stack (see `STACK`)
+    match std::thread::Builder::new().name("nyra".into()).stack_size(STACK).spawn(real_main) {
+        Ok(t) => t.join().unwrap_or(ExitCode::from(101)),
+        Err(_) => real_main(),
+    }
+}
+
+fn real_main() -> ExitCode {
     // `nyra explain [CODE] [--json]` needs no source file
     if std::env::args().nth(1).as_deref() == Some("explain") {
         return explain::run(std::env::args().skip(2).collect());

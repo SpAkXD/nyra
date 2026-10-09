@@ -21,10 +21,33 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
             _ => None,
         })
         .collect();
-    let mut p = Parser { toks, structs, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0, loop_depth: 0, nested: Vec::new() };
+    let mut p = Parser {
+        toks,
+        structs,
+        pos: 0,
+        errs: Vec::new(),
+        in_string: false,
+        cut_blocks: 0,
+        loop_depth: 0,
+        nested: Vec::new(),
+        depth: 0,
+        too_deep: None,
+    };
     let prog = p.program();
-    (prog, p.errs)
+    let mut errs = p.errs;
+    // code nested too deeply: parsing stopped there, so what follows says nothing new
+    if let Some(at) = p.too_deep {
+        errs.retain(|d| d.code == "E0103" || (d.span.line, d.span.col) < (at.line, at.col));
+        let mut seen = false;
+        errs.retain(|d| d.code != "E0103" || !std::mem::replace(&mut seen, true));
+    }
+    (prog, errs)
 }
+
+/// The deepest nesting of expressions and blocks: parentheses, calls, unary operators, `[ ]`, blocks,
+/// `else if` links, and each operator of a chain (`a + b + c` is two levels, `s.trim().upper()` too).
+/// Deeper code is E0103, so neither the parser nor any later stage can run out of stack.
+pub const MAX_NESTING: usize = 256;
 
 struct Parser {
     toks: Vec<Token>,
@@ -41,9 +64,37 @@ struct Parser {
     loop_depth: usize,
     /// Functions defined inside a function body: they are ordinary top-level functions.
     nested: Vec<Func>,
+    /// How deeply the code being parsed is nested (see `MAX_NESTING`).
+    depth: usize,
+    /// Where the code got nested too deeply (parsing stopped there).
+    too_deep: Option<Span>,
 }
 
 impl Parser {
+    /// One level deeper; past `MAX_NESTING` an error, and the parser stops (it skips to the end).
+    fn deeper(&mut self) -> PResult<()> {
+        self.depth += 1;
+        if self.depth <= MAX_NESTING {
+            return Ok(());
+        }
+        let span = self.span();
+        if self.too_deep.is_none() {
+            self.too_deep = Some(span);
+        }
+        self.pos = self.toks.len() - 1;
+        Err(Diag::new("E0103", format!("the code is nested more than {MAX_NESTING} levels deep"), span).hint(
+            "split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own",
+        ))
+    }
+
+    /// Runs `f`, then goes back to the nesting depth from before it.
+    fn same_depth<T>(&mut self, f: impl FnOnce(&mut Self) -> PResult<T>) -> PResult<T> {
+        let d = self.depth;
+        let r = f(self);
+        self.depth = d;
+        r
+    }
+
     fn peek(&self) -> &Tok {
         &self.toks[self.pos].tok
     }
@@ -696,8 +747,13 @@ impl Parser {
     }
 
     fn ty(&mut self, hint: &str) -> PResult<Type> {
+        self.same_depth(|p| p.ty_inner(hint))
+    }
+
+    fn ty_inner(&mut self, hint: &str) -> PResult<Type> {
         let span = self.span();
         if self.at(&Tok::LBracket) {
+            self.deeper()?;
             self.bump();
             let elem = self.ty("an array type names the type of its elements: `[int]`")?;
             if self.at(&Tok::Colon) {
@@ -824,6 +880,13 @@ impl Parser {
     }
 
     fn block(&mut self, what: &str) -> PResult<Vec<Stmt>> {
+        self.same_depth(|p| {
+            p.deeper()?;
+            p.block_body(what)
+        })
+    }
+
+    fn block_body(&mut self, what: &str) -> PResult<Vec<Stmt>> {
         let open = self.open_brace(what)?;
         let mut stmts = Vec::new();
         loop {
@@ -847,6 +910,7 @@ impl Parser {
                     }
                     self.loop_depth = depth;
                 }
+                Tok::Eof if self.too_deep.is_some() => return Ok(stmts),
                 Tok::Eof | Tok::Fn | Tok::Struct => return Err(self.unclosed_block(open, what)),
                 _ => match self.stmt() {
                     Ok(s) => stmts.push(s),
@@ -1171,6 +1235,11 @@ impl Parser {
     }
 
     fn if_stmt(&mut self) -> PResult<Stmt> {
+        self.same_depth(|p| p.if_chain())
+    }
+
+    /// `if`, and each `else if` one level deeper (the rest of the chain is inside the `else`).
+    fn if_chain(&mut self) -> PResult<Stmt> {
         let span = self.expect(Tok::If, "`if`")?;
         let cond = self.expr()?;
         let then = self.block("if")?;
@@ -1180,7 +1249,8 @@ impl Parser {
         let els = if self.at(&Tok::Else) {
             self.bump();
             if self.at(&Tok::If) {
-                Some(vec![self.if_stmt()?])
+                self.deeper()?;
+                Some(vec![self.if_chain()?])
             } else {
                 Some(self.block("else")?)
             }
@@ -1217,20 +1287,31 @@ impl Parser {
     }
 
     fn binary(&mut self, min_prec: u8) -> PResult<Expr> {
-        let mut lhs = self.unary()?;
-        while let Some((op, prec)) = Self::binop(self.peek()) {
-            if prec < min_prec {
-                break;
+        // each operator of a chain nests the expression one level deeper
+        self.same_depth(|p| {
+            let mut lhs = p.unary()?;
+            while let Some((op, prec)) = Self::binop(p.peek()) {
+                if prec < min_prec {
+                    break;
+                }
+                p.deeper()?;
+                let span = p.bump().span;
+                p.skip_newlines();
+                let rhs = p.binary(prec + 1)?;
+                lhs = Expr::new(ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)), span);
             }
-            let span = self.bump().span;
-            self.skip_newlines();
-            let rhs = self.binary(prec + 1)?;
-            lhs = Expr::new(ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)), span);
-        }
-        Ok(lhs)
+            Ok(lhs)
+        })
     }
 
     fn unary(&mut self) -> PResult<Expr> {
+        self.same_depth(|p| {
+            p.deeper()?;
+            p.unary_inner()
+        })
+    }
+
+    fn unary_inner(&mut self) -> PResult<Expr> {
         let span = self.span();
         let op = match self.peek() {
             Tok::Minus => UnOp::Neg,
@@ -1244,6 +1325,10 @@ impl Parser {
 
     /// `if c { a } else if d { b } else { c }` used as a value.
     fn if_expr(&mut self) -> PResult<Expr> {
+        self.same_depth(|p| p.if_expr_chain())
+    }
+
+    fn if_expr_chain(&mut self) -> PResult<Expr> {
         let span = self.expect(Tok::If, "`if`")?;
         let cond = self.expr()?;
         let then = self.branch_expr()?;
@@ -1259,7 +1344,12 @@ impl Parser {
             .hint("add the other branch: `let x = if cond { 1 } else { 0 }`"));
         }
         self.bump();
-        let els = if self.at(&Tok::If) { self.if_expr()? } else { self.branch_expr()? };
+        let els = if self.at(&Tok::If) {
+            self.deeper()?;
+            self.if_expr_chain()?
+        } else {
+            self.branch_expr()?
+        };
         Ok(Expr::new(ExprKind::If(Box::new(cond), Box::new(then), Box::new(els)), span))
     }
 
@@ -1348,9 +1438,25 @@ impl Parser {
         for t in &mut toks {
             t.span = shift(t.span);
         }
-        let mut sub = Parser { toks, structs: Vec::new(), pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0, loop_depth: 0, nested: Vec::new() };
+        let mut sub = Parser {
+            toks,
+            structs: Vec::new(),
+            pos: 0,
+            errs: Vec::new(),
+            in_string: true,
+            cut_blocks: 0,
+            loop_depth: 0,
+            nested: Vec::new(),
+            depth: self.depth,
+            too_deep: None,
+        };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);
+        if let Some(at) = sub.too_deep {
+            // the code in the string was nested too deeply: stop here too
+            self.too_deep.get_or_insert(at);
+            self.pos = self.toks.len() - 1;
+        }
         let e = e?;
         if !matches!(sub.peek(), Tok::Newline | Tok::Eof) {
             let d = sub.unexpected("`}` after the expression");
@@ -1649,8 +1755,16 @@ impl Parser {
     }
 
     /// Field reads `.name`, method calls `.name(args)` and indexing `[i]` after a value.
-    fn postfix(&mut self, mut e: Expr) -> PResult<Expr> {
+    fn postfix(&mut self, e: Expr) -> PResult<Expr> {
+        self.same_depth(|p| p.postfix_chain(e))
+    }
+
+    /// `.field`, `.method(..)` and `[index]` after a value, each one level deeper.
+    fn postfix_chain(&mut self, mut e: Expr) -> PResult<Expr> {
         loop {
+            if matches!(self.peek(), Tok::Dot | Tok::LBracket) {
+                self.deeper()?;
+            }
             match self.peek() {
                 Tok::Dot => {
                     self.bump();

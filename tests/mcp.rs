@@ -287,3 +287,30 @@ fn stdout_carries_only_protocol_messages() {
     let replies = session(&[]);
     assert!(replies.is_empty());
 }
+
+#[test]
+fn deeply_nested_code_gets_an_error_and_the_server_keeps_going() {
+    let init = request(1, "initialize", r#"{"protocolVersion":"2025-06-18","capabilities":{}}"#);
+    let parens = format!("fn main() {{\n    print({}1{})\n}}\n", "(".repeat(6000), ")".repeat(6000));
+    let chain = format!("fn main() {{\n    print({})\n}}\n", vec!["1"; 10000].join(" + "));
+    let calls = format!("fn main() {{\n    print({}1{})\n}}\n", "abs(".repeat(5000), ")".repeat(5000));
+    let methods = format!("fn main() {{\n    print(\"a\"{})\n}}\n", ".trim()".repeat(5000));
+    let arrays = format!("fn main() {{\n    print({}1{})\n}}\n", "[".repeat(5000), "]".repeat(5000));
+    let unary = format!("fn main() {{\n    print({}1)\n    print({}true)\n}}\n", "-".repeat(5000), "!".repeat(5000));
+    let blocks = format!("fn main() {{\n{}print(1)\n{}}}\n", "if true {\n".repeat(3000), "}\n".repeat(3000));
+    let deep = [&parens, &chain, &calls, &methods, &arrays, &unary, &blocks];
+    let mut requests = vec![init, call(2, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(HELLO)))];
+    for (k, code) in deep.iter().enumerate() {
+        requests.push(call(10 + k as u64, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(code))));
+    }
+    requests.push(call(3, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(HELLO))));
+    let replies = session(&requests);
+    assert_eq!(tool_json(&replies, 2).1.get("ok").and_then(Json::as_bool), Some(true));
+    for k in 0..deep.len() as u64 {
+        let (_, json) = tool_json(&replies, 10 + k);
+        let errors = json.get("errors").and_then(Json::as_array).unwrap_or_else(|| panic!("request {}: {json:?}", 10 + k));
+        assert_eq!(errors.len(), 1, "request {}: {json:?}", 10 + k);
+        assert_eq!(errors[0].get("code").and_then(Json::as_str), Some("E0103"), "request {}: {json:?}", 10 + k);
+    }
+    assert_eq!(tool_json(&replies, 3).1.get("ok").and_then(Json::as_bool), Some(true));
+}

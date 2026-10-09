@@ -22,7 +22,7 @@ design may still change.
 |---|---|---|
 | E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
-| E0101-E0102 | parser | grammar and type names |
+| E0101-E0103 | parser | grammar, type names, nesting depth |
 | E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
@@ -278,6 +278,32 @@ fn main() {
 }
 ```
 - **Related:** E0101, E0203
+
+## E0103: code nested too deeply
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An expression or a block is nested more than 256 levels deep. Every pair of parentheses, call, `[ ]`, unary `-` or `!`, block, `else if` link, and every operator, `.method()`, `.field` or `[index]` of a chain adds a level, so `1 + 1 + ... + 1` with 260 terms is too deep as well. The parser stops at the first such place and reports only this error.
+- **Why Nyra has this rule:** The compiler works on programs as trees, and every stage walks them recursively. A fixed limit, far above what a person or a model writes, means no input can make the compiler (or `nyra mcp`, which serves many requests) run out of stack: it gets a normal error instead.
+- **Common causes:**
+  - generated code: a long sum or string concatenation built term by term, or thousands of nested parentheses
+  - a long `else if` chain (more than 250 branches): use a map or an array lookup instead
+  - deeply nested `if` blocks: return early, or move the inner part into a function
+- **Wrong:**
+```rust
+fn main() {
+    print(1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var total = 0
+    for i in 0..260 {
+        total += 1
+    }
+    print(total)
+}
+```
+- **Related:** E0101
 
 ## E0201: undefined variable
 - **Kind:** compile error · **Since:** v0.1

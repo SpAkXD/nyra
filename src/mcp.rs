@@ -243,16 +243,18 @@ impl Server {
                     Some(a @ Json::Obj(_)) => a,
                     Some(_) => return Err(rpc_err(INVALID_PARAMS, "Invalid params: arguments must be an object")),
                 };
-                let out = match name {
+                if !TOOL_NAMES.contains(&name) {
+                    return Err(rpc_err(INVALID_PARAMS, format!("Unknown tool: {name}")));
+                }
+                let out = self.isolated(|server| match name {
                     "nyra_spec" => spec(args),
                     "nyra_check" => check(args),
                     "nyra_test" => test(args),
-                    "nyra_run" => self.run_tool(args),
+                    "nyra_run" => server.run_tool(args),
                     "nyra_explain" => explain_tool(args),
                     "nyra_build" => build(args),
-                    "nyra_outline" | "nyra_show" | "nyra_edit" => crate::edit::tool(name, args),
-                    _ => return Err(rpc_err(INVALID_PARAMS, format!("Unknown tool: {name}"))),
-                };
+                    _ => crate::edit::tool(name, args),
+                });
                 let (text, is_error) = match out {
                     Ok(text) => (text, false),
                     Err(text) => (text, true),
@@ -288,6 +290,26 @@ impl Server {
             }
             _ => Err(rpc_err(METHOD_NOT_FOUND, format!("Method not found: {method}"))),
         }
+    }
+
+    /// Runs one tool call on a worker thread with a big stack (see `crate::STACK`). A panic (a bug
+    /// in nyra, or input that finds one) becomes the call's error: one bad request never stops the
+    /// server.
+    fn isolated(&mut self, call: impl FnOnce(&mut Server) -> Result<String, String> + Send) -> Result<String, String> {
+        std::thread::scope(|s| {
+            let worker = std::thread::Builder::new().name("nyra-tool".into()).stack_size(crate::STACK).spawn_scoped(s, || call(self));
+            match worker {
+                Ok(h) => h.join().unwrap_or_else(|panic| {
+                    let what = panic
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| panic.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    Err(tool_error(format!("internal error in nyra ({what}); the server is still running: please report this input")))
+                }),
+                Err(e) => Err(tool_error(format!("cannot start a worker thread: {e}"))),
+            }
+        })
     }
 
     // ---- nyra_run ---------------------------------------------------------------------------------
@@ -381,6 +403,9 @@ impl Server {
         Ok(Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string())
     }
 }
+
+/// The names of the tools (as in `TOOLS`).
+const TOOL_NAMES: &[&str] = &["nyra_spec", "nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"];
 
 fn tools() -> Json {
     let mut tools = Json::parse(TOOLS).expect("TOOLS is valid JSON");
