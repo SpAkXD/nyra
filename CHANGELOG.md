@@ -48,6 +48,21 @@ Tools
 - An error with exactly one certain fix is repaired in memory by `check`, `run`, `build` and `test`, and
   reported as a warning (`warnings` in `--json`); `--fix` writes the file, `--strict` keeps errors as errors.
 - `nyra fmt file.nyra`: canonical form (fixes applied, `return`, four-space indentation).
+Speed
+- `nyra run` compiles the generated C with `-O1` (about a third less compile time on big programs, the
+  program runs as fast as at `-O2`); `nyra build` and `nyra run --release` keep `-O2`.
+- `s = s + x` and `xs = xs + ys` append in place, like `s += x`, while nothing else holds the string or
+  array: a loop that builds a string this way was quadratic (4.4 s for a look-and-say of 40 steps written
+  with `out = out + ...`, now 0.1 s). The pass is on the IR, so every backend gets it.
+- The overflow check of `int` costs less: its error path takes three arguments instead of five, so the C
+  compiler optimizes around it again (a recursive `fib` that took 2.65 times as long as C now takes a
+  fraction of it); the index check got the same change. What the checks still cost in loops is at most
+  about 15% (`perf/README.md`).
+- Performance warnings E0360-E0362 (never errors): a search (`contains`, `index_of`) in a long loop over
+  an array that is built with `push`, text put in front of a string in a loop, and appending to a string
+  in a long loop on the Go target. They are in the `"warnings"` list of `--json`.
+- `perf/` also times Go, Node.js and Python versions of each program; `perf/first_output.py` measures the
+  time to the first output of `nyra run`.
 
 ## v0.5 (unreleased)
 

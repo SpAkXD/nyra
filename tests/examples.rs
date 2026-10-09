@@ -108,7 +108,9 @@ fn examples_produce_expected_output_on_every_backend() {
         missing("no Node.js for the JavaScript backend");
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
+        // (`run` compiles the C with -O1; `--release` is the -O2 of `build`: both must agree)
         targets.push(("native", &[], "1"));
+        targets.push(("native, --release", &["--release"], "1"));
         targets.push(("native, no optimizations", &[], "0"));
     } else {
         missing("no C compiler for the native backend");
@@ -142,6 +144,7 @@ fn runtime_errors_report_code_position_and_exit_101() {
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         backends.push(&[]);
+        backends.push(&["--release"]);
     } else {
         missing("no C compiler for the native backend");
     }

@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{check_json, nyra, scratch, stderr, stdout};
+use common::{check_json, check_json_with, nyra, scratch, stderr, stdout};
 
 /// Every program in `tests/warnings` compiles and gives the warning named in its first line.
 #[test]
@@ -15,8 +15,13 @@ fn the_warning_programs_warn() {
             continue;
         }
         let src = std::fs::read_to_string(&path).unwrap();
-        let code = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).expect("a `// expect:` line").trim().to_string();
-        let (ok, json) = check_json(std::path::Path::new("."), path.to_str().unwrap());
+        // `// expect: E0362 at 6:9`: the code (tests/perf_warnings.rs also checks the position)
+        let first = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).expect("a `// expect:` line");
+        let code = first.split_whitespace().next().unwrap_or_default().to_string();
+        // `// target: go`: the warning is only given for that target
+        let flags: Vec<String> =
+            if src.lines().take(3).any(|l| l.trim() == "// target: go") { vec!["--go".to_string()] } else { Vec::new() };
+        let (ok, json) = check_json_with(std::path::Path::new("."), path.to_str().unwrap(), &flags);
         assert!(ok, "{}: a warning program must compile", path.display());
         let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap_or(&[]);
         assert!(

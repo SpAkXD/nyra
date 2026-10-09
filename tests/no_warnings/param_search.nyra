@@ -1,0 +1,13 @@
+fn count_in(xs: [int], n: int) -> int {
+    var hits = 0
+    for i in 0..n {
+        if xs.contains(i) {
+            hits += 1
+        }
+    }
+    ret hits
+}
+
+fn main() {
+    print(count_in([1, 5, 9], 100000))
+}

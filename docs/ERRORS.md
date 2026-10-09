@@ -35,12 +35,13 @@ design may still change.
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
+| E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0354, E0360-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0354, E0363-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -3107,3 +3108,101 @@ fn main() {
 }
 ```
 - **Related:** E0355
+## E0360: search in a growing array inside a loop
+- **Kind:** warning · **Since:** v0.6
+- **What it means:** `xs.contains(x)` or `xs.index_of(x)` runs inside a loop of 1000 rounds or more (`for i in 0..100000`, or `while i < 100000`), and `xs` is an array that the function builds with `push` or `insert`. Each search reads the array from the start, so the loop does about n times n steps. This is not an error, so the build goes on; the warning is printed to stderr and listed under `"warnings"` in `--json`. Only loops with a known large size are reported: a loop over data of unknown size (`while`, `for x in xs`) and a search in a function's parameter are not, because the array may be short.
+- **Why Nyra has this rule:** A list used as a set is the most common way a correct program becomes slow: with 100,000 values it takes seconds where a map takes milliseconds, and nothing in the output shows it. The warning names the pattern while the program is still small.
+- **Common causes:**
+  - removing duplicates with `if !seen.contains(v) { seen.push(v) }`
+  - a visited list in a search over a graph or a grid
+  - `index_of` to find the position of an item that is looked up again and again
+- **Wrong:**
+```rust
+fn main() {
+    var seen: [int] = []
+    for i in 0..5000 {
+        let v = (i * 7) % 1000
+        if !seen.contains(v) {
+            seen.push(v)
+        }
+    }
+    print(seen.len())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var seen: [int: bool] = [:]
+    for i in 0..5000 {
+        let v = (i * 7) % 1000
+        if !seen.has(v) {
+            seen[v] = true
+        }
+    }
+    print(seen.len())
+}
+```
+- **Related:** E0361, E0362
+
+## E0361: text put in front of a string inside a loop
+- **Kind:** warning · **Since:** v0.6
+- **What it means:** `s = part + s` runs inside a loop. Putting text in front of a string makes a new string with all of the old one copied behind it, in every round, so the loop is quadratic on every backend. Appending (`s += part`, or `s = s + part`) is not: it adds to the string in place while nothing else holds it. This is not an error, so the build goes on; the warning is printed to stderr and listed under `"warnings"` in `--json`. Counted loops of fewer than 100 rounds are never reported.
+- **Why Nyra has this rule:** Building a string from its end (reversing, right-aligned numbers, prefix by prefix) is natural to write and slow to run, and the program prints the right answer, only late.
+- **Common causes:**
+  - reversing a string or the digits of a number with `out = str(d) + out`
+  - building a path or an indentation from the innermost part outwards
+- **Wrong:**
+```rust
+fn main() {
+    var s = ""
+    for i in 0..2000 {
+        s = str(i % 10) + s
+    }
+    print(s.len())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var parts: [str] = []
+    for i in 0..2000 {
+        parts.push(str(i % 10))
+    }
+    parts.reverse()
+    let s = parts.join("")
+    print(s.len())
+}
+```
+- **Related:** E0362, E0360
+
+## E0362: appending to a string inside a loop, on the Go target
+- **Kind:** warning · **Since:** v0.6
+- **What it means:** `s += part` (or `s = s + part`) runs inside a loop of 1000 rounds or more (`for i in 0..100000`, or `while i < 100000`) and the target is Go (`--go`). Go strings are immutable, so every append copies the string, and a loop that builds a long string this way is quadratic. The native, JavaScript, Python, TypeScript and Rust targets append in place and are not affected, so they do not give this warning. This is not an error, so the build goes on; the warning is printed to stderr and listed under `"warnings"` in `--json`.
+- **Why Nyra has this rule:** One program should be fast on every target; where a target cannot be made to append in place, the warning tells the author what to write instead.
+- **Common causes:**
+  - building the output text of a program line by line with `out += line`
+  - compiling to Go a program that was written and tried on the native target
+- **Wrong:**
+```rust
+// target: go
+fn main() {
+    var s = ""
+    for i in 0..2000 {
+        s += str(i)
+    }
+    print(s.len())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var parts: [str] = []
+    for i in 0..2000 {
+        parts.push(str(i))
+    }
+    let s = parts.join("")
+    print(s.len())
+}
+```
+- **Related:** E0361, E0360
+

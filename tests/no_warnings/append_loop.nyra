@@ -1,0 +1,8 @@
+fn main() {
+    var s = ""
+    for i in 0..5000 {
+        s += str(i)
+        s = s + ","
+    }
+    print(s.len())
+}

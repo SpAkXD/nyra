@@ -1,0 +1,8 @@
+// expect: E0361 at 5:25
+fn main() {
+    var s = ""
+    for i in 0..2000 {
+        s = str(i % 10) + s
+    }
+    print(s.len())
+}

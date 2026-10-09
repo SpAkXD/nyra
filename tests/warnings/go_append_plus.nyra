@@ -1,0 +1,11 @@
+// expect: E0362
+// target: go
+fn main() {
+    var s = ""
+    var i = 0
+    while i < 5000 {
+        s = s + "x" + str(i)
+        i += 1
+    }
+    print(s)
+}

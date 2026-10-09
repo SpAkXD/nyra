@@ -364,7 +364,8 @@ impl Server {
             let compiler = self.cc.get_or_insert_with(crate::find_cc).clone().ok_or_else(|| {
                 tool_error("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use backend \"js\"")
             })?;
-            let (exe, t) = crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
+            let (exe, t) =
+                crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?;
             cc_ms = Some(t);
             Command::new(exe)
         };

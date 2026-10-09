@@ -162,6 +162,11 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
 
         if item.kind == "warning" {
             // a warning does not stop the build: the Wrong program compiles and lists exactly this warning
+            // (a first line `// target: go`: the warning is only given for that target)
+            let mut wrong_flags = wrong_flags.clone();
+            if wrong.starts_with("// target: go") {
+                wrong_flags.push("--go".to_string());
+            }
             let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(ok, "{code}: a warning example must compile:\n{wrong}\n{json:?}");
             let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap_or(&[]);

@@ -1,0 +1,8 @@
+// target: go
+fn main() {
+    var out = ""
+    for w in ["a", "b", "c"] {
+        out += w
+    }
+    print(out)
+}

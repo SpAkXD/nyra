@@ -1,0 +1,10 @@
+// expect: E0361
+fn main() {
+    var out = ">"
+    var n = 12345
+    while n > 0 {
+        out = "{n % 10}," + out
+        n = n / 10
+    }
+    print(out)
+}

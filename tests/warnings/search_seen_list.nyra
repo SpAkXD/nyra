@@ -1,0 +1,11 @@
+// expect: E0360 at 6:18
+fn main() {
+    var seen: [int] = []
+    for i in 0..5000 {
+        let v = (i * 7) % 1000
+        if !seen.contains(v) {
+            seen.push(v)
+        }
+    }
+    print(seen.len())
+}

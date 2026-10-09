@@ -348,6 +348,11 @@ Good to know:
 - Newlines inside `( )` are ignored and trailing commas are fine; an array literal may also break
   after `[` and after each `,`. You may break a line after a binary operator, never before it, and a
   line cannot start with `.`.
+- Speed: appending (`s += x`, `s = s + x`, `xs.push(v)`) is cheap. Putting text in front of a string
+  (`s = x + s`) and searching an array again and again in a long loop (`seen.contains(v)` while the loop
+  does `seen.push(v)`) are not: use a map (`seen[v] = true`, `seen.has(v)`) for lookups. The compiler
+  warns about both (E0360, E0361), and the warning never stops the build. `nyra run` compiles quickly;
+  `nyra run --release` and `nyra build` optimize more.
 - Style: 4 spaces, `snake_case` for functions and variables, `CamelCase` for structs, short functions,
   `//` comments that say why.
 

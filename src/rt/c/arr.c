@@ -84,19 +84,21 @@ static void *nyrt_arr_at(const nyrt_arr *a, int64_t i, int line, int col) {
     if (i < 0 || i >= a->len) nyrt_oob(i, a->len, line, col);
     return a->data + i * a->ty->size;
 }
-static NYRT_NORETURN void nyrt_arr_bad_index(const nyrt_arr *a, int64_t i, int line, int col) {
+// (the position is packed into one argument, see NYRT_AT: a call with fewer arguments is smaller
+// at every index check, and the C compiler inlines and unrolls more around them)
+static NYRT_NORETURN void nyrt_arr_bad_index(const nyrt_arr *a, int64_t i, int64_t at) {
     NYRT_LIVE(a);
-    nyrt_oob(i, a->len, line, col);
+    nyrt_oob(i, a->len, (int)(at >> 32), (int)((at >> 8) & 0xffffff));
 }
 // The generated code reads and writes elements as `NYRT_ELEMS(T, a)[nyrt_ix(a, i, line, col)]`:
 // `i` checked against the length (E0240), with the error path out of line.
 static inline int64_t nyrt_ix(const nyrt_arr *a, int64_t i, int line, int col) {
-    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)a->len)) nyrt_arr_bad_index(a, i, line, col);
+    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)a->len)) nyrt_arr_bad_index(a, i, NYRT_AT(line, col, 0));
     return i;
 }
 // The same with the length read before a loop that cannot change it (`n`).
 static inline int64_t nyrt_ixn(const nyrt_arr *a, int64_t i, int64_t n, int line, int col) {
-    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)n)) nyrt_arr_bad_index(a, i, line, col);
+    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)n)) nyrt_arr_bad_index(a, i, NYRT_AT(line, col, 0));
     return i;
 }
 // Before a write: makes `*p` the only owner (the copy, like the memory check, is the slow path).
