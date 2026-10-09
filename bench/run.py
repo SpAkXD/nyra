@@ -411,6 +411,27 @@ def extract_code(reply: str) -> Optional[str]:
     return code if code.strip() else None
 
 
+_FENCE_TAGGED_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*(?P<info>[^\n]*)\n(?P<body>.*?)^[ \t]*(?P=fence)[ \t]*$",
+                              re.S | re.M)
+
+
+def extract_code_tagged(reply: str, tags: tuple) -> Optional[str]:
+    """The program of a reply, for the tiers after v1: the LAST fenced block whose language tag is one of `tags`
+    (```python, ```nyra, ...); if no block has such a tag, the last block. A model that thinks aloud often quotes the
+    example's output in a plain block before it gives the program (the example is in the prompt of these tiers), and
+    the program comes last. The same rule for every language; v1 keeps "the first block" (extract_code)."""
+    blocks = []
+    for m in _FENCE_TAGGED_RE.finditer(reply.replace("\r\n", "\n")):
+        body = m.group("body").rstrip("\n")
+        if body.strip():
+            tag = (m.group("info").split() or [""])[0].lower().strip("{}.")
+            blocks.append((tag, body))
+    if not blocks:
+        return None
+    tagged = [body for tag, body in blocks if tag in tags]
+    return (tagged or [body for _, body in blocks])[-1]
+
+
 def normalize_output(text: str) -> str:
     """CRLF -> LF, trailing whitespace stripped from every line, trailing blank lines dropped.
     Leading whitespace and leading blank lines are significant (patterns depend on them)."""
@@ -758,6 +779,13 @@ class Language:
         """The user message that gives the model the task (the prompt, plus the example of a stdin task)."""
         return task_prompt(task)
 
+    fence_tags: tuple = ()  # the language tags of the fenced block that holds this language's program
+
+    def extract(self, reply: str, task: Task) -> Optional[str]:
+        """The program in a reply: the first fenced block for the original tasks, the last block tagged with this language
+        for the later tiers (extract_code_tagged)."""
+        return extract_code(reply) if task.tier == "v1" else extract_code_tagged(reply, self.fence_tags)
+
     def no_code_feedback(self) -> str:
         return fb_no_code()
 
@@ -902,6 +930,7 @@ class PythonLang(Language):
     name = "python"
     display = "Python"
     ext = ".py"
+    fence_tags = ("python", "py", "python3", "python-rewrite")
     hello_world = "print(42)\n"
 
     def __init__(self, timeout: float = 10.0, time_runs: int = 0, checker: Optional[typecheck.Checker] = None):
@@ -930,6 +959,7 @@ class NyraLang(Language):
     name = "nyra"
     display = "Nyra"
     ext = ".nyra"
+    fence_tags = ("nyra", "ny", "nyra-edit")
     hello_world = "fn main() {\n    print(42)\n}\n"
 
     def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0,
@@ -1057,6 +1087,7 @@ class TypeScriptLang(Language):
     name = "typescript"
     display = "TypeScript"
     ext = ".ts"
+    fence_tags = ("typescript", "ts")
     hello_world = "const answer: number = 42;\nconsole.log(answer);\n"
 
     def __init__(self, node: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0,
@@ -1166,6 +1197,7 @@ class RustLang(Language):
     name = "rust"
     display = "Rust"
     ext = ".rs"
+    fence_tags = ("rust", "rs")
     hello_world = 'fn main() {\n    println!("42");\n}\n'
 
     def __init__(self, rustc: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0):
@@ -1374,7 +1406,7 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
             break
         if ctx.over_budget is not None and ctx.over_budget():
             ctx.abort.set()  # the money is spent: finish this reply, start nothing new
-        code = extract_code(reply.text)
+        code = lang.extract(reply.text, task)
         attempt = {"n": n, "reply": reply.text, "stop_reason": reply.stop_reason, "usage": reply.usage.to_dict(),
                    "latency_s": round(reply.latency_s, 3), "request_id": reply.request_id,
                    "served_model": reply.model, "served_by": reply.upstream, "code": code, "chars": None,
@@ -1812,6 +1844,8 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
             "tokens_are_estimates": provider.tokens_are_estimates,
             "langs": plan.lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
             "tier": args.tier, "preset": args.preset, "typecheck": plan.typechecks, "hidden_dir": plan.hidden,
+            "extraction": ("the first fenced block of the reply" if args.tier == "v1" else
+                           "the last fenced block tagged with the language (else the last block)"),
             "self_repair": None if nyra is None or args.tier == "edit" else not args.no_self_repair,
             "backend": nyra.backend if nyra else None, "jobs": args.jobs,
             "max_version": None if plan.max_version is None else f"{plan.max_version[0]}.{plan.max_version[1]}",

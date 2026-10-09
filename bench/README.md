@@ -273,7 +273,11 @@ other number means what it meant before. The other languages have no comparable 
    there is no such limit and all tasks run).
 2. **Prompt.** The system prompt is the language's text (above) ending with the same rule: reply with exactly one
    fenced code block and nothing else. The user message is the task's prompt, verbatim.
-3. **Extract** the first fenced code block of the reply. No block, or an empty one, is a failed attempt (`no_code`).
+3. **Extract** the program of the reply. v1: the first fenced code block. The other tiers: the **last** block tagged with
+   the language (` ```python `, ` ```nyra `, ...), or the last block when none is tagged, because a model that thinks
+   aloud quotes the example's output in a plain block before it gives the program (a real run of the v2 tier lost 2 of
+   22 attempts to the first-block rule that way; `result.extraction` says which rule was used). No block, or an empty
+   one, is a failed attempt (`no_code`).
 4. **Check and run** as in the table above.
 5. **Verdict.** Exit code 0 **and** stdout equal to `expected_output` after normalizing CRLF, stripping trailing
    whitespace from every line and dropping trailing blank lines. Leading whitespace matters.
@@ -507,8 +511,9 @@ is near a tie and the reference asserts it, so no test depends on that differenc
 | `money` | 1 | `invoice_total`: exact decimal amounts in whole cents, tax rounded half up |
 | `aoc-style` | 5 | `calorie_groups`, `rps_tournament`, `rucksack_items`, `cleanup_ranges`, `crate_stacks`: the shapes of an advent calendar, with error handling added |
 
-Every task has a Python and a Nyra reference (`bench/solutions/v2/<language>/`), verified; TypeScript and Rust references
-exist for none or one (see Limitations). They run on 64-bit integers below 2^53, so that the JavaScript backend agrees.
+Every task has a Python, a Nyra and a TypeScript reference (`bench/solutions/v2/<language>/`), all verified against the same
+expected outputs (Nyra on both backends); there are no Rust references for this tier. The tasks keep to 64-bit integers
+below 2^53, so that the JavaScript backend and TypeScript agree.
 
 ### edit: change an existing program (`--tier edit`)
 
@@ -533,10 +538,11 @@ and the first reply's code tokens in the "Edits" section of the report (`bench/t
 language spec (about 5,500 tokens of input per call), which the Python arms do not; that cost is shown as input tokens, and
 output tokens are what the headline compares.
 
-Five tasks (`bench/tasks/edit/`): `stock_ledger` (bulk discounts and a revenue field: a struct field and three
+Six tasks (`bench/tasks/edit/`): `stock_ledger` (bulk discounts and a revenue field: a struct field and three
 functions), `account_book` (two new commands: a new function and the dispatch), `grade_book` (two small rules in two
 small functions: a short diff is hard to beat), `payroll` (two renames across the program plus a rule: a rename is where a
-symbol-level edit shines), `library_desk` (two rules in three functions). They were chosen to give each arm a kind of change it
+symbol-level edit shines), `library_desk` (two rules in three functions), `todo_board` (an optional due day: a field, four functions, a new command and
+the dispatch). They were chosen to give each arm a kind of change it
 is good at, and the results will say which wins where; a rewrite always costs the length of the program.
 `python bench/verify.py --tier edit --write` checks everything: the base programs agree, the base fails the example, and
 the reference edit of each arm passes on every case (Nyra on both backends).
@@ -663,7 +669,7 @@ identical. `RustLang` and `TypeScriptLang` are the examples.
 - TypeScript is not type-checked unless `--ts-typecheck` finds `tsc` (it is not installed on the machine this was written
   on, so that path is tested with a fake checker only), and Python is not type-checked unless `--python-typecheck` finds
   `mypy` or `pyright` (same). A run says in its result file and in its published summary which of them ran.
-- The v2 and edit tiers have Python and Nyra reference solutions only (TypeScript for one task); `--langs ts,rs` works for a
-  real run (no reference is needed to ask a model) but the mock provider cannot replay what does not exist.
+- The v2 tier has no Rust references and the edit tier only Python and Nyra ones; `--langs rust` works for a real run of v2 (no
+  reference is needed to ask a model) but the mock provider cannot replay what does not exist.
 - The hidden inputs of the v2 tier are in the repository, so a model that was trained on it could know them. A real
   holdout is a folder of private cases (`--hidden-dir`); the result file stores only how many files it had and their hash.

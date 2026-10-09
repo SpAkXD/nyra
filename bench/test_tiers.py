@@ -146,6 +146,54 @@ class CaseFormat(unittest.TestCase):
             self.assertTrue(all(t.tier == tier for t in tasks))
 
 
+class ReplyExtraction(unittest.TestCase):
+    TAGS = ("python", "py")
+
+    def test_the_last_tagged_block_is_the_program(self):
+        reply = ("Trace:\n```\nline 2: invalid\nsum=47 count=3\n```\nHere is the program:\n```python\nprint(1)\n```\n"
+                 "and an example run:\n```text\n1\n```")
+        self.assertEqual(run.extract_code_tagged(reply, self.TAGS), "print(1)")
+        self.assertEqual(run.extract_code(reply), "line 2: invalid\nsum=47 count=3")  # the rule of v1: the first block
+
+    def test_a_draft_and_a_final_answer_give_the_final_one(self):
+        reply = "```python\nprint(1)\n```\nOn second thought:\n```py\nprint(2)\n```"
+        self.assertEqual(run.extract_code_tagged(reply, self.TAGS), "print(2)")
+
+    def test_without_a_tag_the_last_block_wins_and_empty_blocks_do_not_count(self):
+        self.assertEqual(run.extract_code_tagged("```\nfirst\n```\n```\nsecond\n```\n```\n\n```", self.TAGS), "second")
+        self.assertIsNone(run.extract_code_tagged("no code here", self.TAGS))
+        self.assertIsNone(run.extract_code_tagged("```python\n```", self.TAGS))
+        self.assertIsNone(run.extract_code_tagged("```python\nprint(1)\n", self.TAGS))  # never closed
+
+    def test_tags_are_case_insensitive_and_longer_fences_may_contain_shorter_ones(self):
+        self.assertEqual(run.extract_code_tagged("```Python\nx = 1\n```", self.TAGS), "x = 1")
+        self.assertEqual(run.extract_code_tagged("````python\nprint('```')\n````", self.TAGS), "print('```')")
+        self.assertEqual(run.extract_code_tagged("~~~python\nx = 2\n~~~", self.TAGS), "x = 2")
+        self.assertEqual(run.extract_code_tagged("```python title=x\nx = 3\n```", self.TAGS), "x = 3")
+
+    def test_every_language_object_knows_its_tags_and_v1_keeps_the_first_block(self):
+        reply = "```\nA\n```\n```python\nB\n```"
+        py = run.PythonLang()
+        v1 = run.Task("t", "", "p", "1\n", "0.1", "", "", Path("."))
+        self.assertEqual(py.extract(reply, v1), "A")
+        self.assertEqual(py.extract(reply, cases_task(SUM_CASES)), "B")
+        for lang, tag in ((py, "python"), (run.NyraLang.__new__(run.NyraLang), "nyra"), (edit_arms.PythonDiffArm(), "diff"),
+                          (edit_arms.PythonRewriteArm(), "python"), (edit_arms.NyraEditArm.__new__(edit_arms.NyraEditArm), "nyra-edit")):
+            self.assertIn(tag, lang.fence_tags, lang.name)
+        self.assertIn("ts", run.TypeScriptLang.fence_tags)
+        self.assertIn("rs", run.RustLang.fence_tags)
+
+    def test_the_mock_provider_fences_with_the_language_name_and_every_arm_accepts_it(self):
+        for name, cls in edit_arms.ARM_CLASSES.items():
+            self.assertIn(name, cls.fence_tags)
+        mock = providers.make_provider("mock", "mock", reference=lambda lang, tid: "REF")
+        for name in ("python", "nyra", "typescript", "rust", "nyra-edit", "python-diff", "python-rewrite"):
+            text = mock.complete("s", [], {"task_id": "t", "lang": name, "attempt": 1, "sample": 0}).text
+            lang_cls = {"python": run.PythonLang, "nyra": run.NyraLang, "typescript": run.TypeScriptLang, "rust": run.RustLang,
+                        **edit_arms.ARM_CLASSES}[name]
+            self.assertEqual(run.extract_code_tagged(text, lang_cls.fence_tags), "REF", name)
+
+
 class HiddenCaseFeedback(unittest.TestCase):
     def result(self, kind, stdout="", stderr="", code=1):
         return run.EvalResult(False, kind, stdout=stdout, stderr=stderr, exit_code=code)
@@ -278,10 +326,11 @@ class V2TaskSet(unittest.TestCase):
             self.assertGreaterEqual(len(t.hidden_cases), 3, t.id)
             self.assertEqual(t.min_version, "0.5", t.id)
 
-    def test_every_task_has_python_and_nyra_references(self):
+    def test_every_task_has_python_nyra_and_typescript_references(self):
         for t in self.tasks:
             self.assertTrue(run.PythonLang().reference_path(t.id).is_file(), t.id)
             self.assertTrue((run.SOLUTIONS_DIR / "v2" / "nyra" / f"{t.id}.nyra").is_file(), t.id)
+            self.assertTrue((run.SOLUTIONS_DIR / "v2" / "typescript" / f"{t.id}.ts").is_file(), t.id)
         for lang in ("python", "nyra", "typescript", "rust"):
             for path in (run.SOLUTIONS_DIR / "v2" / lang).glob("*.*"):
                 self.assertIn(path.stem, {t.id for t in self.tasks}, f"{path} has no task")

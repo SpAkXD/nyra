@@ -257,6 +257,7 @@ class PythonRewriteArm(EditMixin, run.PythonLang):
     name = "python-rewrite"
     display = "Python (rewrite)"
     ext = ".py"
+    fence_tags = ("python", "py", "python3", "python-rewrite")
     base_ext = ".py"
     reply_rule = _REPLY_REWRITE
 
@@ -274,6 +275,7 @@ class PythonDiffArm(EditMixin, run.PythonLang):
     name = "python-diff"
     display = "Python (diff)"
     ext = ".diff"
+    fence_tags = ("diff", "patch", "python-diff")
     base_ext = ".py"
     reply_rule = _REPLY_DIFF
 
@@ -295,6 +297,7 @@ class NyraEditArm(EditMixin, run.NyraLang):
     name = "nyra-edit"
     display = "Nyra (edit)"
     ext = ".edit"
+    fence_tags = ("nyra-edit", "nyra", "edit", "ny")
     base_ext = ".nyra"
     reply_rule = _REPLY_EDIT
 
