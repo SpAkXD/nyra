@@ -153,13 +153,32 @@ docs, and the compiler corrects what is left. **Paste this repo's URL into any A
 | The AI reads | What it gets | Size |
 |---|---|---|
 | [`llms.txt`](llms.txt) | what Nyra is, the ten most important rules, links ([llmstxt.org](https://llmstxt.org) convention) | 10 KB, about 2,500 tokens |
-| [`docs/SPEC.md`](docs/SPEC.md) | the complete language spec | 20 KB, about 5,500 tokens |
+| [`docs/AGENT_CARD.md`](docs/AGENT_CARD.md) | the **agent card**: one dense example program, the rules that differ from other languages, what is not in Nyra, every method and module name. It has a hard budget (the header says how many tokens it has) | 3 KB, 1,400 tokens or less on Claude's tokenizer |
+| [`docs/SPEC.md`](docs/SPEC.md) | the complete language spec | 20 KB, about 8,200 tokens on Claude's tokenizer |
 | [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) | workflow, do/don't rules, what does not exist, error codes with fixes, complete programs | 40 KB, about 10,000 tokens |
 | [`docs/ERRORS.md`](docs/ERRORS.md) | the error database: every code, what it means, why, the usual causes, a wrong and a fixed program | 114 KB: look codes up one at a time with `nyra explain` |
 | [`examples/`](examples) | runnable programs, each with its expected output in a `.out` file | |
 
-The token counts are estimates (about 3.7 characters per token); the spec alone is enough to write
-programs, and the guide pays off when a model writes a lot of Nyra.
+The token counts of the card and the spec are measured with Anthropic's `count_tokens` endpoint (the
+others are estimates, about 3.7 characters per token); the spec alone is enough to write programs, and
+the guide pays off when a model writes a lot of Nyra.
+
+**Putting Nyra into your own prompts or agents: use the card, and cache it.** The spec is most of the
+cost of every request that writes Nyra, so send the **card** ([`docs/AGENT_CARD.md`](docs/AGENT_CARD.md),
+about 1,400 tokens) as a system block of its own, the same bytes in every request (the task goes in the
+user message), and mark that block for prompt caching. With the Anthropic API:
+
+```python
+system = [{"type": "text", "text": card, "cache_control": {"type": "ephemeral"}}]
+client.messages.create(model=..., system=system, messages=[{"role": "user", "content": task}], ...)
+```
+
+A cache read costs 0.05x to 0.1x of the input price, a write 1.25x, and an entry is readable only once
+the request that wrote it has started to answer: send one request first when you run many in parallel.
+The minimum cacheable prefix is 512 tokens on Opus 5.5 and Sonnet 5.5 but 4,096 on Haiku 4.5, so the
+card is not cached there (it is cheap enough uncached). [`bench/`](bench/README.md) does exactly this
+(`--spec card`); [`research/AB-card.md`](research/AB-card.md) measures what the card costs in accuracy.
+The MCP server's `nyra_spec` returns the card by default and the complete spec with `full: true`.
 
 An agent that can run commands follows one loop: **write, check, fix, run**.
 
@@ -207,7 +226,7 @@ both backends and the error database as tools, and needs no files or shell acces
 
 | Tool | What it does |
 |---|---|
-| `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
+| `nyra_spec` | the agent card, about 1,400 tokens (`full: true`: the complete spec; `part: "guide"`: the AI guide), so the agent learns Nyra in one call |
 | `nyra_check` | `{code}` → the same JSON as `nyra check --json` |
 | `nyra_test` | `{code}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
@@ -217,7 +236,7 @@ both backends and the error database as tools, and needs no files or shell acces
 | `nyra_show` | `{path or code, name: "find Item.tags"}` → the source of those symbols |
 | `nyra_edit` | `{path or code, edits, force?, fix?}` → change symbols by name ([below](#editing-by-symbol)); a path is written in place and only a summary returns |
 
-Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
+Resources: `nyra://card`, `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
 
 **Limits and safety.** Each tool call runs on its own thread, so input that crashes the compiler gets
 an error reply and the server keeps going. A program started by `nyra_run` is stopped after its

@@ -98,7 +98,7 @@ Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example n
 same loop needs no files: `nyra_check {code}` returns the JSON above (failed examples included),
 `nyra_test {code}` the result of every example, `nyra_run {code, backend}` returns
 `stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
-the language spec. `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
+the agent card (`full: true`: the complete language spec). `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
 symbol, as described next.
 
 **Changing a program that already exists: edit by symbol, do not resend the file.** Rewriting a whole

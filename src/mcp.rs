@@ -24,6 +24,16 @@ use crate::{diag, examples, explain, Target};
 const FILE: &str = "main.nyra";
 const SPEC: &str = include_str!("../docs/SPEC.md");
 const GUIDE: &str = include_str!("../docs/AI_GUIDE.md");
+const CARD_FILE: &str = include_str!("../docs/AGENT_CARD.md");
+
+/// The agent card (docs/AGENT_CARD.md): the compact spec `nyra_spec` returns by default. The file starts with a metadata
+/// comment (token count and budget) that a model has no use for, so it is cut off.
+pub fn card() -> &'static str {
+    match CARD_FILE.strip_prefix("<!--").and_then(|rest| rest.split_once("-->")) {
+        Some((_, body)) => body.trim_start_matches(['\r', '\n']),
+        None => CARD_FILE,
+    }
+}
 
 /// Newest first; a client asking for another version gets the newest.
 const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -34,12 +44,12 @@ const TIMEOUT_MS: u64 = 10_000;
 const MAX_TIMEOUT_MS: u64 = 60_000;
 
 const INSTRUCTIONS: &str = "Nyra is a small, strictly typed language that is not in your training data. \
-Before writing Nyra, call nyra_spec once (part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
+Before writing Nyra, call nyra_spec once: it returns the compact agent card (full: true returns the complete spec, part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
 Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code. After each non-trivial function write 1-2 examples (`ex f(3) == 9`): nyra_check runs them and reports a false one as E0250 with the actual value. To change an existing program, do not resend it: nyra_outline it, nyra_show the symbols you need, and nyra_edit them by name.";
 
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
-{"name":"nyra_spec","title":"Nyra language spec","description":"The complete Nyra language spec (Markdown). Nyra is not in your training data: read it once before writing Nyra. part \"guide\" returns the AI guide instead: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"part":{"type":"string","enum":["spec","guide"],"description":"default spec"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_spec","title":"Nyra language spec","description":"The Nyra agent card (Markdown, about 1,400 tokens): one example program, the rules that differ from other languages, what is not in Nyra, every method and module name. Nyra is not in your training data: read it once before writing Nyra. full: true returns the complete language spec instead (about 8,000 tokens). part \"guide\" returns the AI guide: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"full":{"type":"boolean","description":"return the complete spec instead of the card (default false)"},"part":{"type":"string","enum":["spec","guide"],"description":"default spec (the card, or the complete spec with full: true)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
@@ -56,7 +66,7 @@ agents can check, run and learn Nyra. Add it to Claude Code with:
   claude mcp add nyra -- nyra mcp
 
 Tools: nyra_spec, nyra_check, nyra_test, nyra_run, nyra_explain, nyra_build, nyra_outline, nyra_show, nyra_edit.
-Resources: nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
+Resources: nyra://card, nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
 ";
 
 pub fn run(args: Vec<String>) -> ExitCode {
@@ -446,6 +456,14 @@ fn resources() -> Json {
     };
     vec![
         res(
+            "nyra://card",
+            "card",
+            "Nyra agent card",
+            "The compact spec for agents (about 1,400 tokens): an example program, the rules that differ from other languages, what is not in Nyra, every method and module name",
+            "text/markdown",
+            Some(card().len()),
+        ),
+        res(
             "nyra://spec",
             "spec",
             "Nyra language spec",
@@ -475,6 +493,7 @@ fn resources() -> Json {
 
 fn read_resource(uri: &str) -> Option<(&'static str, String)> {
     match uri {
+        "nyra://card" => Some(("text/markdown", card().to_string())),
         "nyra://spec" => Some(("text/markdown", SPEC.to_string())),
         "nyra://guide" => Some(("text/markdown", GUIDE.to_string())),
         "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?, false))),
@@ -508,8 +527,14 @@ fn required_str<'a>(args: &'a Json, key: &str) -> Result<&'a str, String> {
 }
 
 fn spec(args: &Json) -> Result<String, String> {
+    let full = match args.get("full") {
+        None | Some(Json::Null) => false,
+        Some(Json::Bool(b)) => *b,
+        Some(_) => return Err(tool_error("argument `full` must be a boolean")),
+    };
     match optional_str(args, "part")? {
-        None | Some("spec") => Ok(SPEC.to_string()),
+        None | Some("spec") if full => Ok(SPEC.to_string()),
+        None | Some("spec") => Ok(card().to_string()),
         Some("guide") => Ok(GUIDE.to_string()),
         Some(other) => Err(tool_error(format!("part must be \"spec\" or \"guide\", found {other:?}"))),
     }
@@ -743,7 +768,7 @@ mod tests {
 
     #[test]
     fn resources_resolve() {
-        for uri in ["nyra://spec", "nyra://guide", "nyra://errors", "nyra://errors/E0201", "nyra://errors/e201"] {
+        for uri in ["nyra://card", "nyra://spec", "nyra://guide", "nyra://errors", "nyra://errors/E0201", "nyra://errors/e201"] {
             assert!(read_resource(uri).is_some(), "{uri}");
         }
         // (tests/errors_db.rs counts every code written in src/, so no made-up code here)
