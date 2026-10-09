@@ -481,7 +481,9 @@ impl Lower<'_> {
         let v = self.expr(recv, None, out);
         if name == "sorted_by" {
             let len = Expr::Pure(super::PureFn::ArrLen, vec![v.clone()]);
-            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else { unreachable!() };
+            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else {
+                unreachable!()
+            };
             let ks = self.keys_of(Expr::Local(copy), recv.ty, lambda, span, out);
             self.sort_with_keys(Place::local(copy), recv.ty, key, ks, span, out);
             return Expr::Local(copy);
@@ -522,7 +524,14 @@ impl Lower<'_> {
     fn sort_with_keys(&mut self, place: Place, arr: Ty, key: Ty, ks: LocalId, span: Span, out: &mut Vec<Stmt>) {
         if key.is_tuple() {
             self.forget(place.root);
-            self.call_helper(super::H::SortKeyed(arr, key), vec![super::Arg::InOut(place), super::Arg::Val(Expr::Local(ks))], Ty::Void, None, span, out);
+            self.call_helper(
+                super::H::SortKeyed(arr, key),
+                vec![super::Arg::InOut(place), super::Arg::Val(Expr::Local(ks))],
+                Ty::Void,
+                None,
+                span,
+                out,
+            );
         } else {
             out.push(st(StmtKind::Mutate { dst: None, op: RtOp::ArrSortBy, place, args: vec![Expr::Local(ks)] }, span));
         }

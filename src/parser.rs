@@ -13,7 +13,8 @@ use crate::lexer::{self, StrPart, Tok, Token};
 
 type PResult<T> = Result<T, Diag>;
 
-const FORMAT_SPEC_HINT: &str = "a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`";
+const FORMAT_SPEC_HINT: &str =
+    "a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`";
 
 pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
     // every `struct Name` of the file, so a type can name a struct that is declared further down
@@ -612,15 +613,24 @@ impl Parser {
         let span = self.span();
         let Tok::Ident(word) = self.bump().tok else { unreachable!("starts_use checked it") };
         // `use ./shapes` (also written `use "./shapes"`): a file of the project
-        if matches!(self.peek(), Tok::Dot | Tok::DotDot) || (word == "use" && matches!(self.peek(), Tok::Str(p) if p.starts_with("./") || p.starts_with("../"))) {
+        if matches!(self.peek(), Tok::Dot | Tok::DotDot)
+            || (word == "use" && matches!(self.peek(), Tok::Str(p) if p.starts_with("./") || p.starts_with("../")))
+        {
             return self.use_path(span);
         }
         if let Tok::Str(path) = self.peek().clone() {
-            return Err(Diag::new("E0305", format!("`{word} \"{path}\"`: {} is not a path Nyra imports", if word == "use" { "this" } else { "an import like this" }), self.span())
-                .hint(format!(
-                    "to import a file write its path from this file's folder: `use ./shapes`; the standard modules are {}: `use math`",
-                    crate::stdlib::module_list()
-                )));
+            return Err(Diag::new(
+                "E0305",
+                format!(
+                    "`{word} \"{path}\"`: {} is not a path Nyra imports",
+                    if word == "use" { "this" } else { "an import like this" }
+                ),
+                self.span(),
+            )
+            .hint(format!(
+                "to import a file write its path from this file's folder: `use ./shapes`; the standard modules are {}: `use math`",
+                crate::stdlib::module_list()
+            )));
         }
         let (module, mspan) = self.ident("a module name", "write the module after `use`: `use math`")?;
         if word == "from" {
@@ -773,11 +783,12 @@ impl Parser {
                 }
                 _ => {}
             }
-            let (vname, vspan) = self.ident("a variant name", "variants are plain names, separated by commas or new lines: `enum Dir { N, E }`")?;
+            let (vname, vspan) =
+                self.ident("a variant name", "variants are plain names, separated by commas or new lines: `enum Dir { N, E }`")?;
             if self.at(&Tok::LParen) {
-                return Err(self.unexpected("`,`, a new line or `}` after a variant").hint(
-                    "a variant carries no values yet: for data, use a struct next to the enum",
-                ));
+                return Err(self
+                    .unexpected("`,`, a new line or `}` after a variant")
+                    .hint("a variant carries no values yet: for data, use a struct next to the enum"));
             }
             variants.push((vname, vspan));
             match self.peek() {
@@ -851,9 +862,9 @@ impl Parser {
             }
             // `var n: int`: a copy the function may change
             if inout && self.at(&Tok::Var) {
-                return Err(self.unexpected("a parameter name").hint(
-                    "`inout` changes the caller's variable and `var` is a copy the function may change: use one of them",
-                ));
+                return Err(self
+                    .unexpected("a parameter name")
+                    .hint("`inout` changes the caller's variable and `var` is a copy the function may change: use one of them"));
             }
             let mutable = !inout && self.at(&Tok::Var);
             if mutable {
@@ -1480,8 +1491,9 @@ impl Parser {
     /// `match value { pattern, pattern => body  _ => body }` after the word `match`.
     fn match_stmt(&mut self, span: Span) -> PResult<Stmt> {
         let scrut = self.expr()?;
-        self.expect(Tok::LBrace, "`{` to start the arms of this `match`")
-            .map_err(|d| d.or_hint("a match looks like `match d { Dir.N => print(\"north\") _ => print(\"other\") }`, one arm per line"))?;
+        self.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| {
+            d.or_hint("a match looks like `match d { Dir.N => print(\"north\") _ => print(\"other\") }`, one arm per line")
+        })?;
         let open = self.pos - 1;
         let mut arms = Vec::new();
         loop {
@@ -2310,7 +2322,8 @@ impl Parser {
                         self.skip_newlines();
                         let hi = if self.at(&Tok::RBracket) { None } else { Some(Box::new(self.expr()?)) };
                         self.skip_newlines();
-                        self.expect(Tok::RBracket, "`]` to close the slice").map_err(|d| d.or_hint("a slice is written `xs[a..b]`"))?;
+                        self.expect(Tok::RBracket, "`]` to close the slice")
+                            .map_err(|d| d.or_hint("a slice is written `xs[a..b]`"))?;
                         e = Expr::new(ExprKind::Slice(Box::new(e), lo.map(Box::new), hi), span);
                         continue;
                     }
@@ -2462,11 +2475,20 @@ fn split_spec(code: &str) -> Option<usize> {
 /// The format specifier `[[fill]align][+][0][width][,][.precision][type]` (Python's, without the
 /// parts Nyra has no use for).
 fn parse_spec(text: &str, at: Span) -> PResult<FmtSpec> {
-    let bad = |why: String| {
-        Diag::new("E0270", format!("invalid format specifier `{text}` in a string: {why}"), at).hint(FORMAT_SPEC_HINT)
-    };
+    let bad =
+        |why: String| Diag::new("E0270", format!("invalid format specifier `{text}` in a string: {why}"), at).hint(FORMAT_SPEC_HINT);
     let cs: Vec<char> = text.chars().collect();
-    let mut spec = FmtSpec { text: text.to_string(), fill: None, align: None, plus: false, zero: false, width: 0, comma: false, prec: None, ty: None };
+    let mut spec = FmtSpec {
+        text: text.to_string(),
+        fill: None,
+        align: None,
+        plus: false,
+        zero: false,
+        width: 0,
+        comma: false,
+        prec: None,
+        ty: None,
+    };
     let mut i = 0;
     let is_align = |c: char| matches!(c, '<' | '>' | '^');
     if cs.len() >= 2 && is_align(cs[1]) {

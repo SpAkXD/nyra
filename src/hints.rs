@@ -406,7 +406,9 @@ pub fn type_name(name: &str) -> String {
         }
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
         "tuple" | "pair" => "a tuple type is written with parentheses, e.g. `(int, str)`; a value `(1, \"a\")`".to_string(),
-        "option" | "optional" | "maybe" | "nullable" => "an optional type is written with a question mark after the type, e.g. `int?`".to_string(),
+        "option" | "optional" | "maybe" | "nullable" => {
+            "an optional type is written with a question mark after the type, e.g. `int?`".to_string()
+        }
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()
         }

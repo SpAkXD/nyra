@@ -83,7 +83,9 @@ pub fn load(prog: &mut Program) -> Vec<Diag> {
     for u in &wanted {
         if let Some(name) = l.import(u, &main, None) {
             if imports.contains(&name) {
-                l.errs.push(Diag::new("E0304", format!("`{name}` is imported twice"), u.span).hint("one `use` line per module is enough"));
+                l.errs.push(
+                    Diag::new("E0304", format!("`{name}` is imported twice"), u.span).hint("one `use` line per module is enough"),
+                );
             } else {
                 imports.push(name);
             }
@@ -122,12 +124,16 @@ impl Loader {
     fn import(&mut self, u: &Use, from: &Path, shown: Option<&str>) -> Option<String> {
         let path = u.path.as_deref()?;
         let name = u.module.clone();
-        let ok = (path.starts_with("./") || path.starts_with("../")) && !path.contains('\\') && !path.ends_with(".nyra") && !path.contains("//");
+        let ok = (path.starts_with("./") || path.starts_with("../"))
+            && !path.contains('\\')
+            && !path.ends_with(".nyra")
+            && !path.contains("//");
         if !ok {
             self.err(
                 "E0305",
                 format!("`{path}` is not a path Nyra imports"),
-                "write the path from the importing file's folder, with `/` and without `.nyra`: `use ./shapes`, `use ../util/text`".to_string(),
+                "write the path from the importing file's folder, with `/` and without `.nyra`: `use ./shapes`, `use ../util/text`"
+                    .to_string(),
                 u,
                 shown,
             );
@@ -183,7 +189,13 @@ impl Loader {
         let text = match std::fs::read_to_string(&canon) {
             Ok(t) => t,
             Err(e) => {
-                self.err("E0300", format!("cannot read `{shown_file}`: {e}"), "check that the file is readable text".to_string(), u, shown);
+                self.err(
+                    "E0300",
+                    format!("cannot read `{shown_file}`: {e}"),
+                    "check that the file is readable text".to_string(),
+                    u,
+                    shown,
+                );
                 return None;
             }
         };
@@ -206,8 +218,9 @@ impl Loader {
         if sub.script {
             // the statements of a script became its `main`
             let at = sub.funcs.iter().find(|f| f.name == "main").map(|f| f.span).unwrap_or(u.span);
-            let mut d = Diag::new("E0285", format!("module `{name}` has statements at the top level"), at)
-                .hint("a module holds only definitions (`fn`, `struct`, `enum`, `ex`); the program that imports it has the statements");
+            let mut d = Diag::new("E0285", format!("module `{name}` has statements at the top level"), at).hint(
+                "a module holds only definitions (`fn`, `struct`, `enum`, `ex`); the program that imports it has the statements",
+            );
             d.file = Some(shown_file);
             self.errs.push(d);
             return None;
@@ -301,7 +314,10 @@ fn fix_expr(e: &mut Expr, scope: &Scope, loaded: &HashMap<String, Loaded>, errs:
                     None => {
                         let mut sorted = names.clone();
                         sorted.sort_unstable();
-                        format!("the public functions of `{m}` are {}", sorted.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", "))
+                        format!(
+                            "the public functions of `{m}` are {}",
+                            sorted.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")
+                        )
                     }
                 };
                 err("E0306", format!("module `{m}` has no `{f}`"), hint);
@@ -319,7 +335,11 @@ fn fix_expr(e: &mut Expr, scope: &Scope, loaded: &HashMap<String, Loaded>, errs:
         ExprKind::Field(recv, f) => {
             let ExprKind::Var(m) = &recv.kind else { return };
             if scope.imports.contains(m) && loaded.contains_key(m.as_str()) {
-                err("E0307", format!("`{m}.{f}` is not a value"), format!("call a function of the module: `{m}.{f}(...)`; types are used by their plain names"));
+                err(
+                    "E0307",
+                    format!("`{m}.{f}` is not a value"),
+                    format!("call a function of the module: `{m}.{f}(...)`; types are used by their plain names"),
+                );
             }
         }
         _ => {}

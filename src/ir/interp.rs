@@ -707,7 +707,12 @@ impl<'m> Interp<'m> {
             RtOp::CheckSome => {
                 let Some(Value::Bool(has)) = args.first() else { return Err(bug("unwrap without a flag")) };
                 if !*has {
-                    return Err(fail("E0350", "unwrap() of none".to_string(), "check `x != none` first, or give a default with `x ?? value`", span));
+                    return Err(fail(
+                        "E0350",
+                        "unwrap() of none".to_string(),
+                        "check `x != none` first, or give a default with `x ?? value`",
+                        span,
+                    ));
                 }
                 None
             }

@@ -74,8 +74,23 @@ pub const STR_METHODS: &[&str] = &[
 ];
 /// The methods that take a lambda, plus `sum`, `min` and `max`, which run the same kind of loop
 /// (checked in `check/lambda.rs`, lowered to loops in `ir/lower.rs`).
-pub const LAMBDA_METHODS: &[&str] =
-    &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max", "sorted_by", "min_by", "max_by", "find"];
+pub const LAMBDA_METHODS: &[&str] = &[
+    "map",
+    "filter",
+    "count",
+    "any",
+    "all",
+    "find_index",
+    "sort_by",
+    "fold",
+    "sum",
+    "min",
+    "max",
+    "sorted_by",
+    "min_by",
+    "max_by",
+    "find",
+];
 /// The lambda methods of a string: each character is tested.
 pub const STR_LAMBDA_METHODS: &[&str] = &["count", "any", "all", "find_index"];
 pub const MAP_METHODS: &[&str] = &["len", "has", "get", "set", "remove", "keys", "values", "items"];

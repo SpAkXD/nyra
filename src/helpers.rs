@@ -162,9 +162,9 @@ fn cmp_source(op: &str, t: Type) -> String {
     let es = t.tuple_elems().unwrap_or_default();
     let tn = t.name();
     let mut s = format!("fn __h(a: {tn}, b: {tn}) -> bool {{\n");
-    for i in 0..es.len() {
+    for (i, e) in es.iter().enumerate() {
         let (x, y) = (format!("a.{i}"), format!("b.{i}"));
-        let decided = if es[i] == Type::Bool {
+        let decided = if *e == Type::Bool {
             // false < true
             match op {
                 "<" | "<=" => format!("!{x} && {y}"),
@@ -183,7 +183,8 @@ fn cmp_source(op: &str, t: Type) -> String {
 fn sort_keyed_source(arr: Type, key: Type) -> String {
     let mut ls = Vec::new();
     leaves(key, "", &mut ls);
-    let mut s = format!("fn __h(inout xs: {}, ks: {}) {{\n    var idx = [i for i in 0..xs.len()]\n", arr.name(), Type::array(key).name());
+    let mut s =
+        format!("fn __h(inout xs: {}, ks: {}) {{\n    var idx = [i for i in 0..xs.len()]\n", arr.name(), Type::array(key).name());
     // the last part of the key first: every sort is stable, so the first part decides in the end
     for (path, lt) in ls.iter().rev() {
         let k = if *lt == Type::Bool { format!("if ks[j]{path} {{ 1 }} else {{ 0 }}") } else { format!("ks[j]{path}") };

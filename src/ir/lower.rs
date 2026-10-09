@@ -1984,13 +1984,18 @@ impl<'a> Lower<'a> {
         if name == "sorted" {
             let v = self.expr(recv, None, out);
             let len = Expr::Pure(PureFn::ArrLen, vec![v.clone()]);
-            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else { unreachable!() };
+            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else {
+                unreachable!()
+            };
             let elem = recv.ty.elem().expect("an array");
             if elem.is_tuple() {
                 let keys = self.extra_owner(Expr::Local(copy), recv.ty, span, out);
                 self.sort_by_keys(Place::local(copy), recv.ty, elem, keys, span, out);
             } else {
-                out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::ArrSort, place: Place::local(copy), args: Vec::new() }, span });
+                out.push(Stmt {
+                    kind: StmtKind::Mutate { dst: None, op: RtOp::ArrSort, place: Place::local(copy), args: Vec::new() },
+                    span,
+                });
             }
             return Expr::Local(copy);
         }
@@ -2115,7 +2120,8 @@ impl<'a> Lower<'a> {
                 Stmt { kind: StmtKind::Op { dst: Some(n), op: parse, args: vec![all[0].clone()] }, span },
                 Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(true), Expr::Local(n)] }, span },
             ];
-            let els = vec![Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(false), zero] }, span }];
+            let els =
+                vec![Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::StructNew, args: vec![Expr::Bool(false), zero] }, span }];
             out.push(Stmt { kind: StmtKind::If { cond: Expr::Local(ok), then, els }, span });
             return Expr::Local(d);
         }

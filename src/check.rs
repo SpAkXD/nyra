@@ -903,7 +903,9 @@ impl Checker {
         }
         let hint = match k {
             Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
-            _ if k.is_tuple() => "a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `\"{x},{y}\"`".to_string(),
+            _ if k.is_tuple() => {
+                "a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `\"{x},{y}\"`".to_string()
+            }
             _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
         };
         self.errs.push(
@@ -1234,7 +1236,9 @@ impl Checker {
     fn stmt(&mut self, s: &mut Stmt) {
         let span = s.span;
         if matches!(s.kind, StmtKind::Match { .. }) {
-            let StmtKind::Match { scrut, arms } = std::mem::replace(&mut s.kind, StmtKind::Break) else { unreachable!("matched above") };
+            let StmtKind::Match { scrut, arms } = std::mem::replace(&mut s.kind, StmtKind::Break) else {
+                unreachable!("matched above")
+            };
             s.kind = self.match_stmt(scrut, arms, span);
             return;
         }
@@ -1579,7 +1583,9 @@ impl Checker {
         // `Dir.N` is a variant of the enum `Dir`, `Dir.all()` are all of them
         let variant = match &e.kind {
             ExprKind::Field(b, v) => match &b.kind {
-                ExprKind::Var(en) if self.enums.contains_key(en.as_str()) && self.lookup(en).is_none() => Some((en.clone(), Some(v.clone()))),
+                ExprKind::Var(en) if self.enums.contains_key(en.as_str()) && self.lookup(en).is_none() => {
+                    Some((en.clone(), Some(v.clone())))
+                }
                 _ => None,
             },
             ExprKind::Method(b, m, args) if m == "all" && args.is_empty() => match &b.kind {
@@ -1611,7 +1617,8 @@ impl Checker {
                             Some((h, f)) => (h, f.map(|f| Edit::replace(span, &name, f))),
                             None => (format!("the variants of `{en}` are {}", list.join(", ")), None),
                         };
-                        self.errs.push(Diag::new("E0278", format!("enum `{en}` has no variant `{name}`"), span).hint(hint).fix_opt(fix));
+                        self.errs
+                            .push(Diag::new("E0278", format!("enum `{en}` has no variant `{name}`"), span).hint(hint).fix_opt(fix));
                         e.ty = Type::Unknown;
                         Type::Unknown
                     }
@@ -1625,7 +1632,9 @@ impl Checker {
         }
         // `r.area()` is `area(r)` when no built-in method is called `area`
         if matches!(&e.kind, ExprKind::Method(_, n, _) if !data::is_method_name(n) && self.fns.contains_key(n.as_str())) {
-            let ExprKind::Method(recv, name, mut args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("matched above") };
+            let ExprKind::Method(recv, name, mut args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else {
+                unreachable!("matched above")
+            };
             let recv = *recv;
             // a function that changes its first parameter (`inout`) takes the receiver the same way
             let first = if self.fns[name.as_str()].inout.first().copied().unwrap_or(false) {
@@ -2246,7 +2255,11 @@ impl Checker {
             return Type::Bool;
         };
         if it == Type::Void {
-            self.errs.push(Diag::new("E0203", format!("{} returns nothing, so it cannot be searched for", call_text(item)), item.span));
+            self.errs.push(Diag::new(
+                "E0203",
+                format!("{} returns nothing, so it cannot be searched for", call_text(item)),
+                item.span,
+            ));
         } else if it != want {
             let what = match ct {
                 Type::Map(_) => "a key",
@@ -2256,7 +2269,13 @@ impl Checker {
             self.errs.push(
                 Diag::new(
                     "E0275",
-                    format!("cannot look for {} in `{}`: it holds `{}` values, and the left side is {}", article(it), ct.name(), want.name(), article(it)),
+                    format!(
+                        "cannot look for {} in `{}`: it holds `{}` values, and the left side is {}",
+                        article(it),
+                        ct.name(),
+                        want.name(),
+                        article(it)
+                    ),
                     span,
                 )
                 .hint(format!("`{shown} in {boxed}` needs {what} of type `{}` on the left", want.name())),
@@ -2280,10 +2299,9 @@ impl Checker {
             3
         } else {
             let shown = show(&scrut).unwrap_or_else(|| "the value".into());
-            self.errs.push(
-                Diag::new("E0279", format!("cannot `match` a value of type `{}`", st.name()), scrut.span)
-                    .hint(format!("`match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if {shown} == ...`")),
-            );
+            self.errs.push(Diag::new("E0279", format!("cannot `match` a value of type `{}`", st.name()), scrut.span).hint(format!(
+                "`match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if {shown} == ...`"
+            )));
             0
         };
         let variants: Vec<String> = enum_name.as_ref().map(|n| self.enums[n].variants.clone()).unwrap_or_default();
@@ -2305,7 +2323,10 @@ impl Checker {
                         let hint = if variants.contains(n) {
                             format!("a variant is written with its enum: `{en}.{n}`")
                         } else {
-                            format!("the variants of `{en}` are {}", variants.iter().map(|v| format!("`{en}.{v}`")).collect::<Vec<_>>().join(", "))
+                            format!(
+                                "the variants of `{en}` are {}",
+                                variants.iter().map(|v| format!("`{en}.{v}`")).collect::<Vec<_>>().join(", ")
+                            )
                         };
                         self.errs.push(Diag::new("E0278", format!("`{n}` is not a variant pattern of `{en}`"), pat.span).hint(hint));
                         continue;
@@ -2317,8 +2338,12 @@ impl Checker {
                 }
                 if pt != st {
                     self.errs.push(
-                        Diag::new("E0279", format!("this pattern is {} but the value matched is {}", article(pt), article(st)), pat.span)
-                            .hint(format!("the patterns of this `match` must be `{}` values", st.name())),
+                        Diag::new(
+                            "E0279",
+                            format!("this pattern is {} but the value matched is {}", article(pt), article(st)),
+                            pat.span,
+                        )
+                        .hint(format!("the patterns of this `match` must be `{}` values", st.name())),
                     );
                     continue;
                 }
@@ -2337,13 +2362,17 @@ impl Checker {
                     None if kind == 0 => {}
                     None => {
                         let hint = match &enum_name {
-                            Some(en) => format!("a pattern of `{en}` is one of its variants, e.g. `{en}.{}`", variants.first().cloned().unwrap_or_default()),
+                            Some(en) => format!(
+                                "a pattern of `{en}` is one of its variants, e.g. `{en}.{}`",
+                                variants.first().cloned().unwrap_or_default()
+                            ),
                             None => "a pattern is a literal value (`1`, `\"a\"`, `'c'`, `true`) or `_`".to_string(),
                         };
                         self.errs.push(Diag::new("E0279", "this pattern is not a constant of the matched type", pat.span).hint(hint));
                     }
                     Some(k) if covered.contains(&k) => self.errs.push(
-                        Diag::new("E0283", "this pattern is already covered by an arm above", pat.span).hint("remove it: it can never be reached"),
+                        Diag::new("E0283", "this pattern is already covered by an arm above", pat.span)
+                            .hint("remove it: it can never be reached"),
                     ),
                     Some(k) => covered.push(k),
                 }
@@ -2446,8 +2475,12 @@ impl Checker {
         }
         let shown = show(b).unwrap_or_else(|| "the default".into());
         self.errs.push(
-            Diag::new("E0277", format!("the default of `??` must be {} or `{}`, found {}", article(inner), at.name(), article(bt)), b.span)
-                .hint(format!("`{shown}` does not fit: write a default of type `{}`", inner.name())),
+            Diag::new(
+                "E0277",
+                format!("the default of `??` must be {} or `{}`, found {}", article(inner), at.name(), article(bt)),
+                b.span,
+            )
+            .hint(format!("`{shown}` does not fit: write a default of type `{}`", inner.name())),
         );
         inner
     }
@@ -2467,7 +2500,9 @@ impl Checker {
         let number = matches!(t, Type::Int | Type::Float);
         let shown = &spec.text;
         let mut bad = |why: String, hint: String| {
-            self.errs.push(Diag::new("E0271", format!("the format specifier `{shown}` does not fit {}: {why}", article(t)), span).hint(hint));
+            self.errs.push(
+                Diag::new("E0271", format!("the format specifier `{shown}` does not fit {}: {why}", article(t)), span).hint(hint),
+            );
         };
         if spec.prec.is_some() && t != Type::Float {
             let hint = if t == Type::Int {
@@ -2477,8 +2512,17 @@ impl Checker {
             };
             bad("`.N` rounds a float to N decimals".to_string(), hint);
         } else if (spec.comma || spec.plus || spec.zero) && !number {
-            let what = if spec.comma { "`,`" } else if spec.plus { "`+`" } else { "`0`" };
-            bad(format!("{what} is for numbers"), "an `int` or a `float` can have separators, a sign and zeros; align a text with `<`, `>` or `^`".to_string());
+            let what = if spec.comma {
+                "`,`"
+            } else if spec.plus {
+                "`+`"
+            } else {
+                "`0`"
+            };
+            bad(
+                format!("{what} is for numbers"),
+                "an `int` or a `float` can have separators, a sign and zeros; align a text with `<`, `>` or `^`".to_string(),
+            );
         } else {
             match (spec.ty, t) {
                 (Some('f'), Type::Float) | (Some('d'), Type::Int) | (Some('s'), Type::Str) | (None, _) => {}
@@ -2549,10 +2593,18 @@ impl Checker {
                 self.errs.push(
                     Diag::new(
                         "E0272",
-                        format!("the pattern has {} but the tuple `{}` has {}", count(n, "name"), bt.name(), count(elems.len(), "element")),
+                        format!(
+                            "the pattern has {} but the tuple `{}` has {}",
+                            count(n, "name"),
+                            bt.name(),
+                            count(elems.len(), "element")
+                        ),
                         span,
                     )
-                    .hint(format!("write one name for each element, `_` for one you do not need: `({})`", vec!["_"; elems.len()].join(", "))),
+                    .hint(format!(
+                        "write one name for each element, `_` for one you do not need: `({})`",
+                        vec!["_"; elems.len()].join(", ")
+                    )),
                 );
                 return Type::Unknown;
             }
@@ -2564,8 +2616,12 @@ impl Checker {
             }
             Ok(i) => {
                 self.errs.push(
-                    Diag::new("E0273", format!("the tuple `{}` has {}, so `.{i}` does not exist", bt.name(), count(elems.len(), "element")), span)
-                        .hint(format!("the positions are `.0` to `.{}`", elems.len() - 1)),
+                    Diag::new(
+                        "E0273",
+                        format!("the tuple `{}` has {}, so `.{i}` does not exist", bt.name(), count(elems.len(), "element")),
+                        span,
+                    )
+                    .hint(format!("the positions are `.0` to `.{}`", elems.len() - 1)),
                 );
                 Type::Unknown
             }
@@ -2984,7 +3040,9 @@ impl Checker {
         let needs = match op {
             BinOp::Add => "two `int`s, two `float`s, two `str`s or two arrays of one type",
             BinOp::Sub | BinOp::Mul | BinOp::Div => "two `int`s or two `float`s",
-            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => "two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those",
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+                "two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those"
+            }
             BinOp::Mod => "two `int`s",
             BinOp::Eq | BinOp::Ne => "two values of the same type",
             BinOp::And | BinOp::Or => "two `bool`s",

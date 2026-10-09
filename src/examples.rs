@@ -346,7 +346,9 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
     let all = |xs: &[Expr]| xs.iter().find_map(|x| first_call(x, fns));
     match &e.kind {
         ExprKind::Call(name, args) => all(args).or_else(|| fns.contains(&name.as_str()).then(|| name.clone())),
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => first_call(x, fns),
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+            first_call(x, fns)
+        }
         ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
             first_call(a, fns).or_else(|| first_call(b, fns))
         }

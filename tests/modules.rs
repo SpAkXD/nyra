@@ -118,7 +118,10 @@ fn errors(dir: &Path, file: &str) -> (Vec<String>, String, u64) {
 fn a_private_function_cannot_be_called_from_another_file() {
     let dir = project(
         "private",
-        &[("main.nyra", "use ./lib\nprint(lib.secret())\n"), ("lib.nyra", "fn secret() -> int = 42\npub fn open() -> int = secret()\n")],
+        &[
+            ("main.nyra", "use ./lib\nprint(lib.secret())\n"),
+            ("lib.nyra", "fn secret() -> int = 42\npub fn open() -> int = secret()\n"),
+        ],
     );
     let (codes, file, line) = errors(&dir, "main.nyra");
     assert_eq!(codes, ["E0301"]);
