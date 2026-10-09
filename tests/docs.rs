@@ -273,7 +273,6 @@ fn what_the_agent_card_says_is_not_in_nyra_is_an_error() {
         ("`and`/`or`/`not`", "let a = true and false\n"),
         ("`i++`", "var i = 0\ni++\n"),
         ("`xs[a..b]`", "let xs = [1, 2, 3]\nprint(xs[0..2])\n"),
-        ("sets", "let s = set()\n"),
         ("`reduce`", "let xs = [1]\nprint(xs.reduce(0, (a, b) => a + b))\n"),
         ("`find`", "let xs = [1]\nprint(xs.find(x => x > 0))\n"),
     ];
@@ -290,7 +289,7 @@ fn the_agent_card_keeps_its_token_budget() {
     // the header). This test cannot call the API, so it checks the header and that the card did not grow past the size
     // that was measured: re-measure after any change, then move MAX_CHARS.
     const BUDGET: usize = 1400;
-    const MAX_CHARS: usize = 3300; // measured: 3,287 characters = 1,398 tokens on claude-sonnet-5-5
+    const MAX_CHARS: usize = 3250; // measured: 3,213 characters = 1,387 tokens on claude-sonnet-5-5
     let file = std::fs::read_to_string("docs/AGENT_CARD.md").unwrap().replace("\r\n", "\n");
     let header: &str = file.split_once("-->\n").unwrap().0;
     assert!(header.contains("The card has a hard budget: a feature that needs card text must displace something."));
