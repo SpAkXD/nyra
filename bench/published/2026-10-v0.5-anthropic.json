@@ -1,0 +1,2367 @@
+{
+  "schema": 2,
+  "name": "2026-10-v0.5-anthropic",
+  "generated": "2026-10-09",
+  "mock": false,
+  "complete": true,
+  "notes": [],
+  "run": {
+    "dates": [
+      "2026-10-09"
+    ],
+    "started_at": "2026-10-09T09:02:01+00:00",
+    "finished_at": "2026-10-09T09:15:11+00:00",
+    "langs": [
+      "nyra",
+      "python",
+      "typescript",
+      "rust"
+    ],
+    "tasks": [
+      83
+    ],
+    "tasks_sha256": "b9838ec7abfecdc2f7b5ed1b9fba01a6694d5860e4823fac851321021575d59a",
+    "samples": 1,
+    "repairs": 3,
+    "timeout_s": 10.0,
+    "nyra": {
+      "path": "target/release/nyra.exe",
+      "version": "nyra 0.4.0"
+    },
+    "spec_sha256": "860a251e9ae770be5c6cb60782eff875933c3636a1bbbce446cbf943cee73f8e",
+    "backend": "native",
+    "node": {
+      "version": "v25.2.1",
+      "flags": "--experimental-transform-types --disable-warning=ExperimentalWarning"
+    },
+    "rust": {
+      "command": "rustc +stable-x86_64-pc-windows-gnu",
+      "version": "rustc 1.99.0 (b940084d7 2026-09-28)",
+      "flags": "-O --edition 2021 -A warnings --color never"
+    },
+    "python": "3.14.2",
+    "timing": {
+      "runs": 3,
+      "statistic": "median",
+      "jobs": 6,
+      "startup_ms": {
+        "nyra": 13.66,
+        "python": 48.98,
+        "typescript": 171.25,
+        "rust": 14.86
+      }
+    },
+    "harness_commits": [
+      "c3bb279"
+    ],
+    "uncommitted_changes": true
+  },
+  "sources": [
+    {
+      "file": "2026-10-09-anthropic-claude-opus-5-5.json",
+      "sha256": "00c676307b76ebad117d9e5a6a28bcb390c7caa3bb5bf7ee049575b1e26d58ff"
+    },
+    {
+      "file": "2026-10-09-anthropic-claude-sonnet-5-5.json",
+      "sha256": "bf86e475b11b4719dc0aa22d8c0305519c2e534c72e2017f1d3549957096417d"
+    },
+    {
+      "file": "2026-10-09-anthropic-claude-haiku-4-5-20251001.json",
+      "sha256": "36c02dbaf9726035818a03c785d12a821d1e588b6bd9510d8a42c498e5ebc611"
+    }
+  ],
+  "models": {
+    "claude-opus-5-5": {
+      "served_models": [
+        "claude-opus-5-5"
+      ],
+      "served_by": [],
+      "complete": true,
+      "spent_usd": 9.067894999999998,
+      "runs": 83,
+      "excluded_runs": 0,
+      "langs": {
+        "nyra": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 81,
+          "pass_at_1_rate": 0.9759036144578314,
+          "pass_at_1_ci": [
+            0.9163352895899236,
+            0.9933669729202098
+          ],
+          "pass_at_1_self_repair": 81,
+          "pass_at_1_self_repair_rate": 0.9759036144578314,
+          "pass_at_1_self_repair_ci": [
+            0.9163352895899236,
+            0.9933669729202098
+          ],
+          "self_repair_tried": 1,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0240963855421688,
+          "avg_output_tokens_per_attempt": 697.0235294117647,
+          "avg_output_tokens_first_attempt": 691.0240963855422,
+          "avg_output_tokens_per_run": 713.8192771084338,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 8695.117647058823,
+          "avg_input_tokens_first_attempt": 8660.963855421687,
+          "avg_code_tokens_first_attempt": 475.32530120481925,
+          "median_code_tokens_first_attempt": 169,
+          "median_output_tokens_first_attempt": 189,
+          "median_runtime_ms_speed": 5.4350000000000005,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1046.7590361445782,
+          "avg_lines_first_attempt": 39.602409638554214,
+          "total_input_tokens": 739085,
+          "total_output_tokens": 59247,
+          "total_cost_usd": 5.1766,
+          "avg_cost_per_run_usd": 0.06236867469879517,
+          "attempts_total": 85,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "compile_error": 1,
+            "wrong_output": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {
+            "E0101": 6
+          },
+          "toolchain_errors": 0
+        },
+        "python": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 83,
+          "pass_at_1_rate": 1.0,
+          "pass_at_1_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0,
+          "avg_output_tokens_per_attempt": 433.30120481927713,
+          "avg_output_tokens_first_attempt": 433.30120481927713,
+          "avg_output_tokens_per_run": 433.30120481927713,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 440.96385542168673,
+          "avg_input_tokens_first_attempt": 440.96385542168673,
+          "avg_code_tokens_first_attempt": 375.49397590361446,
+          "median_code_tokens_first_attempt": 163,
+          "median_output_tokens_first_attempt": 173,
+          "median_runtime_ms_speed": 271.65,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 821.9879518072289,
+          "avg_lines_first_attempt": 27.02409638554217,
+          "total_input_tokens": 36600,
+          "total_output_tokens": 35964,
+          "total_cost_usd": 1.0821,
+          "avg_cost_per_run_usd": 0.013037349397590362,
+          "attempts_total": 83,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {},
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "typescript": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 83,
+          "pass_at_1_rate": 1.0,
+          "pass_at_1_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0,
+          "avg_output_tokens_per_attempt": 556.0963855421687,
+          "avg_output_tokens_first_attempt": 556.0963855421687,
+          "avg_output_tokens_per_run": 556.0963855421687,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 483.96385542168673,
+          "avg_input_tokens_first_attempt": 483.96385542168673,
+          "avg_code_tokens_first_attempt": 492.32530120481925,
+          "median_code_tokens_first_attempt": 200,
+          "median_output_tokens_first_attempt": 230,
+          "median_runtime_ms_speed": 63.19,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 995.8915662650602,
+          "avg_lines_first_attempt": 31.373493975903614,
+          "total_input_tokens": 40169,
+          "total_output_tokens": 46156,
+          "total_cost_usd": 1.354745,
+          "avg_cost_per_run_usd": 0.01632222891566265,
+          "attempts_total": 83,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {},
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "rust": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 83,
+          "pass_at_1_rate": 1.0,
+          "pass_at_1_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0,
+          "avg_output_tokens_per_attempt": 604.7469879518072,
+          "avg_output_tokens_first_attempt": 604.7469879518072,
+          "avg_output_tokens_per_run": 604.7469879518072,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 480.96385542168673,
+          "avg_input_tokens_first_attempt": 480.96385542168673,
+          "avg_code_tokens_first_attempt": 522.8072289156627,
+          "median_code_tokens_first_attempt": 191,
+          "median_output_tokens_first_attempt": 261,
+          "median_runtime_ms_speed": 2.885,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1256.012048192771,
+          "avg_lines_first_attempt": 40.75903614457831,
+          "total_input_tokens": 39920,
+          "total_output_tokens": 50194,
+          "total_cost_usd": 1.45445,
+          "avg_cost_per_run_usd": 0.017523493975903616,
+          "attempts_total": 83,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {},
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        }
+      },
+      "paired": {
+        "baseline": "nyra",
+        "n": 81,
+        "langs": {
+          "nyra": {
+            "avg_output_tokens": 670.925925925926,
+            "avg_code_tokens": 467.5061728395062,
+            "avg_chars": 1031.962962962963,
+            "avg_lines": 39.19753086419753
+          },
+          "python": {
+            "avg_output_tokens": 417.30864197530866,
+            "avg_code_tokens": 365.320987654321,
+            "avg_chars": 800.9506172839506,
+            "avg_lines": 26.45679012345679
+          },
+          "typescript": {
+            "avg_output_tokens": 543.6172839506173,
+            "avg_code_tokens": 484.38271604938274,
+            "avg_chars": 982.604938271605,
+            "avg_lines": 31.037037037037038
+          },
+          "rust": {
+            "avg_output_tokens": 582.1234567901234,
+            "avg_code_tokens": 508.65432098765433,
+            "avg_chars": 1225.567901234568,
+            "avg_lines": 39.666666666666664
+          }
+        },
+        "pairs": {
+          "python": {
+            "a": "nyra",
+            "b": "python",
+            "n": 81,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 670.925925925926,
+                "avg_code_tokens": 467.5061728395062,
+                "avg_chars": 1031.962962962963,
+                "avg_lines": 39.19753086419753
+              },
+              "python": {
+                "avg_output_tokens": 417.30864197530866,
+                "avg_code_tokens": 365.320987654321,
+                "avg_chars": 800.9506172839506,
+                "avg_lines": 26.45679012345679
+              }
+            },
+            "first_try": {
+              "both": 81,
+              "only_a": 0,
+              "only_b": 2,
+              "neither": 0,
+              "sign_test_p": 0.5
+            }
+          },
+          "typescript": {
+            "a": "nyra",
+            "b": "typescript",
+            "n": 81,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 670.925925925926,
+                "avg_code_tokens": 467.5061728395062,
+                "avg_chars": 1031.962962962963,
+                "avg_lines": 39.19753086419753
+              },
+              "typescript": {
+                "avg_output_tokens": 543.6172839506173,
+                "avg_code_tokens": 484.38271604938274,
+                "avg_chars": 982.604938271605,
+                "avg_lines": 31.037037037037038
+              }
+            },
+            "first_try": {
+              "both": 81,
+              "only_a": 0,
+              "only_b": 2,
+              "neither": 0,
+              "sign_test_p": 0.5
+            }
+          },
+          "rust": {
+            "a": "nyra",
+            "b": "rust",
+            "n": 81,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 670.925925925926,
+                "avg_code_tokens": 467.5061728395062,
+                "avg_chars": 1031.962962962963,
+                "avg_lines": 39.19753086419753
+              },
+              "rust": {
+                "avg_output_tokens": 582.1234567901234,
+                "avg_code_tokens": 508.65432098765433,
+                "avg_chars": 1225.567901234568,
+                "avg_lines": 39.666666666666664
+              }
+            },
+            "first_try": {
+              "both": 81,
+              "only_a": 0,
+              "only_b": 2,
+              "neither": 0,
+              "sign_test_p": 0.5
+            }
+          }
+        }
+      },
+      "by_category": {
+        "arrays": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "hard": {
+          "nyra": {
+            "n": 28,
+            "pass_at_1": 27,
+            "pass_within_repairs": 28
+          },
+          "python": {
+            "n": 28,
+            "pass_at_1": 28,
+            "pass_within_repairs": 28
+          },
+          "typescript": {
+            "n": 28,
+            "pass_at_1": 28,
+            "pass_within_repairs": 28
+          },
+          "rust": {
+            "n": 28,
+            "pass_at_1": 28,
+            "pass_within_repairs": 28
+          }
+        },
+        "math": {
+          "nyra": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "python": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "typescript": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "rust": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          }
+        },
+        "number-theory": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "patterns": {
+          "nyra": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "python": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "typescript": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "rust": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          }
+        },
+        "recursion": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "rules": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "simulation": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "speed": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "strings": {
+          "nyra": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "python": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "typescript": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "rust": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          }
+        },
+        "structs": {
+          "nyra": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "python": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "typescript": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "rust": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          }
+        }
+      },
+      "efficiency": {
+        "reference": "python",
+        "runs": 81,
+        "speed_runs": 5,
+        "langs": {
+          "nyra": {
+            "median_code_tokens": 166,
+            "median_output_tokens": 186,
+            "median_runtime_ms": 7.98,
+            "runtime_runs": 5,
+            "tokens_factor": 1.0246913580246915,
+            "runtime_factor": 0.029026625927542557,
+            "efficiency": 0.029743332740568302
+          },
+          "python": {
+            "median_code_tokens": 162,
+            "median_output_tokens": 170,
+            "median_runtime_ms": 274.92,
+            "runtime_runs": 5,
+            "tokens_factor": 1.0,
+            "runtime_factor": 1.0,
+            "efficiency": 1.0
+          },
+          "typescript": {
+            "median_code_tokens": 191,
+            "median_output_tokens": 209,
+            "median_runtime_ms": 37.97,
+            "runtime_runs": 5,
+            "tokens_factor": 1.1790123456790123,
+            "runtime_factor": 0.13811290557253017,
+            "efficiency": 0.16283682076761272
+          },
+          "rust": {
+            "median_code_tokens": 186,
+            "median_output_tokens": 235,
+            "median_runtime_ms": 3.9,
+            "runtime_runs": 5,
+            "tokens_factor": 1.1481481481481481,
+            "runtime_factor": 0.014185945002182452,
+            "efficiency": 0.01628756648398726
+          }
+        }
+      },
+      "notable_failures": []
+    },
+    "claude-sonnet-5-5": {
+      "served_models": [
+        "claude-sonnet-5-5"
+      ],
+      "served_by": [],
+      "complete": true,
+      "spent_usd": 5.687346000000001,
+      "runs": 83,
+      "excluded_runs": 0,
+      "langs": {
+        "nyra": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 80,
+          "pass_at_1_rate": 0.963855421686747,
+          "pass_at_1_ci": [
+            0.8990394046094535,
+            0.9876324208751069
+          ],
+          "pass_at_1_self_repair": 83,
+          "pass_at_1_self_repair_rate": 1.0,
+          "pass_at_1_self_repair_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "self_repair_tried": 3,
+          "self_repair_changed": 3,
+          "self_repair_passed": 3,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.036144578313253,
+          "avg_output_tokens_per_attempt": 663.6976744186046,
+          "avg_output_tokens_first_attempt": 661.4698795180723,
+          "avg_output_tokens_per_run": 687.6867469879518,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 8716.39534883721,
+          "avg_input_tokens_first_attempt": 8660.963855421687,
+          "avg_code_tokens_first_attempt": 407.6024096385542,
+          "median_code_tokens_first_attempt": 167,
+          "median_output_tokens_first_attempt": 245,
+          "median_runtime_ms_speed": 6.41,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 876.4819277108434,
+          "avg_lines_first_attempt": 34.325301204819276,
+          "total_input_tokens": 749610,
+          "total_output_tokens": 57078,
+          "total_cost_usd": 3.105,
+          "avg_cost_per_run_usd": 0.03740963855421687,
+          "attempts_total": 86,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "compile_error": 3
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {
+            "E0201": 1,
+            "E0207": 2
+          },
+          "toolchain_errors": 0
+        },
+        "python": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 82,
+          "pass_at_1_rate": 0.9879518072289156,
+          "pass_at_1_ci": [
+            0.9348626221234112,
+            0.9978700774122952
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0120481927710843,
+          "avg_output_tokens_per_attempt": 463.6666666666667,
+          "avg_output_tokens_first_attempt": 461.48192771084337,
+          "avg_output_tokens_per_run": 469.2530120481928,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 453.14285714285717,
+          "avg_input_tokens_first_attempt": 440.96385542168673,
+          "avg_code_tokens_first_attempt": 338.2317073170732,
+          "median_code_tokens_first_attempt": 141.0,
+          "median_output_tokens_first_attempt": 198,
+          "median_runtime_ms_speed": 372.915,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 728.6585365853658,
+          "avg_lines_first_attempt": 24.804878048780488,
+          "total_input_tokens": 38064,
+          "total_output_tokens": 38948,
+          "total_cost_usd": 0.698412,
+          "avg_cost_per_run_usd": 0.008414602409638554,
+          "attempts_total": 84,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "no_code": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "typescript": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 81,
+          "pass_at_1_rate": 0.9759036144578314,
+          "pass_at_1_ci": [
+            0.9163352895899236,
+            0.9933669729202098
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0240963855421688,
+          "avg_output_tokens_per_attempt": 572.0588235294117,
+          "avg_output_tokens_first_attempt": 558.2168674698795,
+          "avg_output_tokens_per_run": 585.843373493976,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 520.1764705882352,
+          "avg_input_tokens_first_attempt": 483.96385542168673,
+          "avg_code_tokens_first_attempt": 439.26506024096386,
+          "median_code_tokens_first_attempt": 191,
+          "median_output_tokens_first_attempt": 262,
+          "median_runtime_ms_speed": 68.88499999999999,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 869.2650602409639,
+          "avg_lines_first_attempt": 26.843373493975903,
+          "total_input_tokens": 44215,
+          "total_output_tokens": 48625,
+          "total_cost_usd": 0.86202,
+          "avg_cost_per_run_usd": 0.010385783132530121,
+          "attempts_total": 85,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "wrong_output": 2
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "rust": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 82,
+          "pass_at_1_rate": 0.9879518072289156,
+          "pass_at_1_ci": [
+            0.9348626221234112,
+            0.9978700774122952
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 83,
+          "pass_within_repairs_rate": 1.0,
+          "pass_within_repairs_ci": [
+            0.9557631365612795,
+            1.0
+          ],
+          "avg_attempts": 1.0120481927710843,
+          "avg_output_tokens_per_attempt": 710.0833333333334,
+          "avg_output_tokens_first_attempt": 703.2289156626506,
+          "avg_output_tokens_per_run": 718.6385542168674,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 504.79761904761904,
+          "avg_input_tokens_first_attempt": 480.96385542168673,
+          "avg_code_tokens_first_attempt": 523.3493975903615,
+          "median_code_tokens_first_attempt": 241,
+          "median_output_tokens_first_attempt": 322,
+          "median_runtime_ms_speed": 4.99,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1255.0361445783133,
+          "avg_lines_first_attempt": 41.63855421686747,
+          "total_input_tokens": 42403,
+          "total_output_tokens": 59647,
+          "total_cost_usd": 1.021914,
+          "avg_cost_per_run_usd": 0.01231221686746988,
+          "attempts_total": 84,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "wrong_output": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        }
+      },
+      "paired": {
+        "baseline": "nyra",
+        "n": 78,
+        "langs": {
+          "nyra": {
+            "avg_output_tokens": 624.5769230769231,
+            "avg_code_tokens": 390.88461538461536,
+            "avg_chars": 835.1538461538462,
+            "avg_lines": 32.96153846153846
+          },
+          "python": {
+            "avg_output_tokens": 431.61538461538464,
+            "avg_code_tokens": 322.8974358974359,
+            "avg_chars": 691.0512820512821,
+            "avg_lines": 23.397435897435898
+          },
+          "typescript": {
+            "avg_output_tokens": 529.0641025641025,
+            "avg_code_tokens": 412.5897435897436,
+            "avg_chars": 819.9102564102565,
+            "avg_lines": 25.397435897435898
+          },
+          "rust": {
+            "avg_output_tokens": 667.8333333333334,
+            "avg_code_tokens": 494.88461538461536,
+            "avg_chars": 1178.4102564102564,
+            "avg_lines": 39.38461538461539
+          }
+        },
+        "pairs": {
+          "python": {
+            "a": "nyra",
+            "b": "python",
+            "n": 79,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 640.3291139240506,
+                "avg_code_tokens": 398.0,
+                "avg_chars": 850.8860759493671,
+                "avg_lines": 33.48101265822785
+              },
+              "python": {
+                "avg_output_tokens": 438.9493670886076,
+                "avg_code_tokens": 327.24050632911394,
+                "avg_chars": 700.9493670886076,
+                "avg_lines": 23.70886075949367
+              }
+            },
+            "first_try": {
+              "both": 79,
+              "only_a": 1,
+              "only_b": 3,
+              "neither": 0,
+              "sign_test_p": 0.625
+            }
+          },
+          "typescript": {
+            "a": "nyra",
+            "b": "typescript",
+            "n": 78,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 624.5769230769231,
+                "avg_code_tokens": 390.88461538461536,
+                "avg_chars": 835.1538461538462,
+                "avg_lines": 32.96153846153846
+              },
+              "typescript": {
+                "avg_output_tokens": 529.0641025641025,
+                "avg_code_tokens": 412.5897435897436,
+                "avg_chars": 819.9102564102565,
+                "avg_lines": 25.397435897435898
+              }
+            },
+            "first_try": {
+              "both": 78,
+              "only_a": 2,
+              "only_b": 3,
+              "neither": 0,
+              "sign_test_p": 1.0
+            }
+          },
+          "rust": {
+            "a": "nyra",
+            "b": "rust",
+            "n": 79,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 630.746835443038,
+                "avg_code_tokens": 395.24050632911394,
+                "avg_chars": 846.0379746835443,
+                "avg_lines": 33.31645569620253
+              },
+              "rust": {
+                "avg_output_tokens": 670.6835443037975,
+                "avg_code_tokens": 499.82278481012656,
+                "avg_chars": 1194.139240506329,
+                "avg_lines": 39.924050632911396
+              }
+            },
+            "first_try": {
+              "both": 79,
+              "only_a": 1,
+              "only_b": 3,
+              "neither": 0,
+              "sign_test_p": 0.625
+            }
+          }
+        }
+      },
+      "by_category": {
+        "arrays": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "hard": {
+          "nyra": {
+            "n": 28,
+            "pass_at_1": 26,
+            "pass_within_repairs": 28
+          },
+          "python": {
+            "n": 28,
+            "pass_at_1": 27,
+            "pass_within_repairs": 28
+          },
+          "typescript": {
+            "n": 28,
+            "pass_at_1": 26,
+            "pass_within_repairs": 28
+          },
+          "rust": {
+            "n": 28,
+            "pass_at_1": 27,
+            "pass_within_repairs": 28
+          }
+        },
+        "math": {
+          "nyra": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "python": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "typescript": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "rust": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          }
+        },
+        "number-theory": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "patterns": {
+          "nyra": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "python": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "typescript": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "rust": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          }
+        },
+        "recursion": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "rules": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "simulation": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "speed": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "strings": {
+          "nyra": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "python": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "typescript": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "rust": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          }
+        },
+        "structs": {
+          "nyra": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "python": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "typescript": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "rust": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          }
+        }
+      },
+      "efficiency": {
+        "reference": "python",
+        "runs": 78,
+        "speed_runs": 5,
+        "langs": {
+          "nyra": {
+            "median_code_tokens": 140.0,
+            "median_output_tokens": 233.5,
+            "median_runtime_ms": 7.19,
+            "runtime_runs": 5,
+            "tokens_factor": 1.1336032388663968,
+            "runtime_factor": 0.017191908564870163,
+            "efficiency": 0.019488803231431765
+          },
+          "python": {
+            "median_code_tokens": 123.5,
+            "median_output_tokens": 187.5,
+            "median_runtime_ms": 418.22,
+            "runtime_runs": 5,
+            "tokens_factor": 1.0,
+            "runtime_factor": 1.0,
+            "efficiency": 1.0
+          },
+          "typescript": {
+            "median_code_tokens": 178.5,
+            "median_output_tokens": 246.5,
+            "median_runtime_ms": 66.03,
+            "runtime_runs": 5,
+            "tokens_factor": 1.4453441295546559,
+            "runtime_factor": 0.157883410645115,
+            "efficiency": 0.22819586072998402
+          },
+          "rust": {
+            "median_code_tokens": 184.5,
+            "median_output_tokens": 274.0,
+            "median_runtime_ms": 7.55,
+            "runtime_runs": 5,
+            "tokens_factor": 1.4939271255060729,
+            "runtime_factor": 0.01805269953612931,
+            "efficiency": 0.026969417525634476
+          }
+        }
+      },
+      "notable_failures": []
+    },
+    "claude-haiku-4-5-20251001": {
+      "served_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "served_by": [],
+      "complete": true,
+      "spent_usd": 4.476515999999999,
+      "runs": 83,
+      "excluded_runs": 0,
+      "langs": {
+        "nyra": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 55,
+          "pass_at_1_rate": 0.6626506024096386,
+          "pass_at_1_ci": [
+            0.5557524399753323,
+            0.7551584598699032
+          ],
+          "pass_at_1_self_repair": 56,
+          "pass_at_1_self_repair_rate": 0.6746987951807228,
+          "pass_at_1_self_repair_ci": [
+            0.5681331989652646,
+            0.7658081379055438
+          ],
+          "self_repair_tried": 20,
+          "self_repair_changed": 2,
+          "self_repair_passed": 1,
+          "pass_within_repairs": 68,
+          "pass_within_repairs_rate": 0.8192771084337349,
+          "pass_within_repairs_ci": [
+            0.7229992501000523,
+            0.8873073310776322
+          ],
+          "avg_attempts": 1.8072289156626506,
+          "avg_output_tokens_per_attempt": 1165.12,
+          "avg_output_tokens_first_attempt": 861.8674698795181,
+          "avg_output_tokens_per_run": 2105.6385542168673,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 9015.866666666667,
+          "avg_input_tokens_first_attempt": 7292.831325301205,
+          "avg_code_tokens_first_attempt": 637.9397590361446,
+          "median_code_tokens_first_attempt": 213,
+          "median_output_tokens_first_attempt": 393,
+          "median_runtime_ms_speed": 32.2,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1785.867469879518,
+          "avg_lines_first_attempt": 60.28915662650602,
+          "total_input_tokens": 1352380,
+          "total_output_tokens": 174768,
+          "total_cost_usd": 2.22622,
+          "avg_cost_per_run_usd": 0.026821927710843376,
+          "attempts_total": 150,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "compile_error": 20,
+            "wrong_output": 7,
+            "runtime_error": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {
+            "E0101": 58,
+            "E0229": 5,
+            "E0201": 28,
+            "E0206": 9,
+            "E0207": 2,
+            "E0205": 3,
+            "E0227": 1,
+            "E0001": 2
+          },
+          "toolchain_errors": 0
+        },
+        "python": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 65,
+          "pass_at_1_rate": 0.7831325301204819,
+          "pass_at_1_ci": [
+            0.6830297632703793,
+            0.858185506830586
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 77,
+          "pass_within_repairs_rate": 0.927710843373494,
+          "pass_within_repairs_ci": [
+            0.8511303528251295,
+            0.9664501615827119
+          ],
+          "avg_attempts": 1.3734939759036144,
+          "avg_output_tokens_per_attempt": 761.1754385964912,
+          "avg_output_tokens_first_attempt": 569.0,
+          "avg_output_tokens_per_run": 1045.4698795180723,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 1140.4035087719299,
+          "avg_input_tokens_first_attempt": 352.8313253012048,
+          "avg_code_tokens_first_attempt": 518.8915662650602,
+          "median_code_tokens_first_attempt": 209,
+          "median_output_tokens_first_attempt": 278,
+          "median_runtime_ms_speed": 573.0699999999999,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1536.3975903614457,
+          "avg_lines_first_attempt": 44.74698795180723,
+          "total_input_tokens": 130006,
+          "total_output_tokens": 86774,
+          "total_cost_usd": 0.563876,
+          "avg_cost_per_run_usd": 0.0067936867469879526,
+          "attempts_total": 114,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "wrong_output": 14,
+            "compile_error": 1,
+            "runtime_error": 2,
+            "timeout": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "typescript": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 71,
+          "pass_at_1_rate": 0.8554216867469879,
+          "pass_at_1_ci": [
+            0.7640800500700162,
+            0.9153178421843873
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 74,
+          "pass_within_repairs_rate": 0.891566265060241,
+          "pass_within_repairs_ci": [
+            0.8065934609334693,
+            0.9418957423976531
+          ],
+          "avg_attempts": 1.3855421686746987,
+          "avg_output_tokens_per_attempt": 1055.104347826087,
+          "avg_output_tokens_first_attempt": 646.3253012048193,
+          "avg_output_tokens_per_run": 1461.8915662650602,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 1653.4434782608696,
+          "avg_input_tokens_first_attempt": 381.8313253012048,
+          "avg_code_tokens_first_attempt": 638.3253012048193,
+          "median_code_tokens_first_attempt": 236,
+          "median_output_tokens_first_attempt": 244,
+          "median_runtime_ms_speed": 72.84,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 1689.867469879518,
+          "avg_lines_first_attempt": 57.6144578313253,
+          "total_input_tokens": 190146,
+          "total_output_tokens": 121337,
+          "total_cost_usd": 0.796831,
+          "avg_cost_per_run_usd": 0.009600373493975902,
+          "attempts_total": 115,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "wrong_output": 11,
+            "timeout": 1
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        },
+        "rust": {
+          "n": 83,
+          "tasks": 83,
+          "pass_at_1": 63,
+          "pass_at_1_rate": 0.7590361445783133,
+          "pass_at_1_ci": [
+            0.6569006190219979,
+            0.8382537770278216
+          ],
+          "pass_at_1_self_repair": null,
+          "pass_at_1_self_repair_rate": null,
+          "pass_at_1_self_repair_ci": null,
+          "self_repair_tried": 0,
+          "self_repair_changed": 0,
+          "self_repair_passed": 0,
+          "pass_within_repairs": 77,
+          "pass_within_repairs_rate": 0.927710843373494,
+          "pass_within_repairs_ci": [
+            0.8511303528251295,
+            0.9664501615827119
+          ],
+          "avg_attempts": 1.5060240963855422,
+          "avg_output_tokens_per_attempt": 1091.496,
+          "avg_output_tokens_first_attempt": 702.5783132530121,
+          "avg_output_tokens_per_run": 1643.8192771084337,
+          "avg_reasoning_tokens_first_attempt": null,
+          "avg_reply_tokens_first_attempt": null,
+          "avg_input_tokens_per_attempt": 1659.232,
+          "avg_input_tokens_first_attempt": 386.8313253012048,
+          "avg_code_tokens_first_attempt": 665.4819277108434,
+          "median_code_tokens_first_attempt": 242,
+          "median_output_tokens_first_attempt": 349,
+          "median_runtime_ms_speed": 10.035,
+          "runtime_runs_speed": 6,
+          "avg_chars_first_attempt": 2019.710843373494,
+          "avg_lines_first_attempt": 58.506024096385545,
+          "total_input_tokens": 207404,
+          "total_output_tokens": 136437,
+          "total_cost_usd": 0.889589,
+          "avg_cost_per_run_usd": 0.010717939759036144,
+          "attempts_total": 125,
+          "odd_stop_reasons": {},
+          "first_attempt_failures": {
+            "wrong_output": 16,
+            "compile_error": 4
+          },
+          "no_code_max_tokens_first_attempt": 0,
+          "no_code_max_tokens_attempts": 0,
+          "first_attempt_error_codes": {},
+          "toolchain_errors": 0
+        }
+      },
+      "paired": {
+        "baseline": "nyra",
+        "n": 50,
+        "langs": {
+          "nyra": {
+            "avg_output_tokens": 271.6,
+            "avg_code_tokens": 191.08,
+            "avg_chars": 515.44,
+            "avg_lines": 20.56
+          },
+          "python": {
+            "avg_output_tokens": 212.4,
+            "avg_code_tokens": 164.52,
+            "avg_chars": 453.84,
+            "avg_lines": 15.08
+          },
+          "typescript": {
+            "avg_output_tokens": 215.18,
+            "avg_code_tokens": 207.18,
+            "avg_chars": 533.38,
+            "avg_lines": 20.14
+          },
+          "rust": {
+            "avg_output_tokens": 232.58,
+            "avg_code_tokens": 204.06,
+            "avg_chars": 565.94,
+            "avg_lines": 20.58
+          }
+        },
+        "pairs": {
+          "python": {
+            "a": "nyra",
+            "b": "python",
+            "n": 53,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 296.0943396226415,
+                "avg_code_tokens": 216.96226415094338,
+                "avg_chars": 586.811320754717,
+                "avg_lines": 22.9811320754717
+              },
+              "python": {
+                "avg_output_tokens": 227.66037735849056,
+                "avg_code_tokens": 182.03773584905662,
+                "avg_chars": 512.8679245283018,
+                "avg_lines": 16.60377358490566
+              }
+            },
+            "first_try": {
+              "both": 53,
+              "only_a": 2,
+              "only_b": 12,
+              "neither": 16,
+              "sign_test_p": 0.012939453125
+            }
+          },
+          "typescript": {
+            "a": "nyra",
+            "b": "typescript",
+            "n": 54,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 330.5,
+                "avg_code_tokens": 238.2962962962963,
+                "avg_chars": 636.925925925926,
+                "avg_lines": 24.333333333333332
+              },
+              "typescript": {
+                "avg_output_tokens": 256.6111111111111,
+                "avg_code_tokens": 248.61111111111111,
+                "avg_chars": 636.2222222222222,
+                "avg_lines": 23.796296296296298
+              }
+            },
+            "first_try": {
+              "both": 54,
+              "only_a": 1,
+              "only_b": 17,
+              "neither": 11,
+              "sign_test_p": 0.00014495849609375
+            }
+          },
+          "rust": {
+            "a": "nyra",
+            "b": "rust",
+            "n": 52,
+            "langs": {
+              "nyra": {
+                "avg_output_tokens": 301.7307692307692,
+                "avg_code_tokens": 209.03846153846155,
+                "avg_chars": 565.5,
+                "avg_lines": 22.326923076923077
+              },
+              "rust": {
+                "avg_output_tokens": 265.0769230769231,
+                "avg_code_tokens": 219.8653846153846,
+                "avg_chars": 606.4423076923077,
+                "avg_lines": 21.73076923076923
+              }
+            },
+            "first_try": {
+              "both": 52,
+              "only_a": 3,
+              "only_b": 11,
+              "neither": 17,
+              "sign_test_p": 0.057373046875
+            }
+          }
+        }
+      },
+      "by_category": {
+        "arrays": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "hard": {
+          "nyra": {
+            "n": 28,
+            "pass_at_1": 4,
+            "pass_within_repairs": 14
+          },
+          "python": {
+            "n": 28,
+            "pass_at_1": 13,
+            "pass_within_repairs": 22
+          },
+          "typescript": {
+            "n": 28,
+            "pass_at_1": 16,
+            "pass_within_repairs": 19
+          },
+          "rust": {
+            "n": 28,
+            "pass_at_1": 11,
+            "pass_within_repairs": 23
+          }
+        },
+        "math": {
+          "nyra": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "python": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "typescript": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          },
+          "rust": {
+            "n": 9,
+            "pass_at_1": 9,
+            "pass_within_repairs": 9
+          }
+        },
+        "number-theory": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          }
+        },
+        "patterns": {
+          "nyra": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "python": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "typescript": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          },
+          "rust": {
+            "n": 7,
+            "pass_at_1": 7,
+            "pass_within_repairs": 7
+          }
+        },
+        "recursion": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "rules": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 3,
+            "pass_within_repairs": 5
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 4,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 5
+          }
+        },
+        "simulation": {
+          "nyra": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "python": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "typescript": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          },
+          "rust": {
+            "n": 4,
+            "pass_at_1": 4,
+            "pass_within_repairs": 4
+          }
+        },
+        "speed": {
+          "nyra": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 6
+          },
+          "python": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 6
+          },
+          "typescript": {
+            "n": 6,
+            "pass_at_1": 6,
+            "pass_within_repairs": 6
+          },
+          "rust": {
+            "n": 6,
+            "pass_at_1": 5,
+            "pass_within_repairs": 6
+          }
+        },
+        "strings": {
+          "nyra": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "python": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "typescript": {
+            "n": 8,
+            "pass_at_1": 8,
+            "pass_within_repairs": 8
+          },
+          "rust": {
+            "n": 8,
+            "pass_at_1": 7,
+            "pass_within_repairs": 8
+          }
+        },
+        "structs": {
+          "nyra": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "python": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "typescript": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          },
+          "rust": {
+            "n": 1,
+            "pass_at_1": 1,
+            "pass_within_repairs": 1
+          }
+        }
+      },
+      "efficiency": {
+        "reference": "python",
+        "runs": 50,
+        "speed_runs": 3,
+        "langs": {
+          "nyra": {
+            "median_code_tokens": 124.5,
+            "median_output_tokens": 169.5,
+            "median_runtime_ms": 66.34,
+            "runtime_runs": 3,
+            "tokens_factor": 1.180094786729858,
+            "runtime_factor": 0.10487542683697991,
+            "efficiency": 0.12376294446638862
+          },
+          "python": {
+            "median_code_tokens": 105.5,
+            "median_output_tokens": 124.0,
+            "median_runtime_ms": 632.56,
+            "runtime_runs": 3,
+            "tokens_factor": 1.0,
+            "runtime_factor": 1.0,
+            "efficiency": 1.0
+          },
+          "typescript": {
+            "median_code_tokens": 139.5,
+            "median_output_tokens": 147.5,
+            "median_runtime_ms": 112.32,
+            "runtime_runs": 3,
+            "tokens_factor": 1.3222748815165877,
+            "runtime_factor": 0.177564183634754,
+            "efficiency": 0.234788659877234
+          },
+          "rust": {
+            "median_code_tokens": 143.5,
+            "median_output_tokens": 153.5,
+            "median_runtime_ms": 18.18,
+            "runtime_runs": 3,
+            "tokens_factor": 1.3601895734597156,
+            "runtime_factor": 0.028740356646009865,
+            "efficiency": 0.039092333447416264
+          }
+        }
+      },
+      "notable_failures": [
+        {
+          "lang": "nyra",
+          "task": "calendar_month",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "wrong_output",
+            "wrong_output",
+            "wrong_output",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0101"
+          ],
+          "message": "E0101: expected end of line, found `Tu`"
+        },
+        {
+          "lang": "nyra",
+          "task": "config_parser",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "compile_error",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0201",
+            "E0229"
+          ],
+          "message": "E0201: undefined variable `paths`"
+        },
+        {
+          "lang": "nyra",
+          "task": "expr_eval",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "compile_error",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0101",
+            "E0201",
+            "E0206",
+            "E0207"
+          ],
+          "message": "E0101: expected a type, found keyword `inout`"
+        },
+        {
+          "lang": "nyra",
+          "task": "indent_check",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "wrong_output",
+            "wrong_output"
+          ],
+          "error_codes": [
+            "E0101",
+            "E0231"
+          ],
+          "message": "the program ran but printed the wrong output"
+        },
+        {
+          "lang": "nyra",
+          "task": "league_table",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "compile_error",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0101"
+          ],
+          "message": "E0101: expected a type, found keyword `inout`"
+        },
+        {
+          "lang": "nyra",
+          "task": "line_diff",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "runtime_error",
+            "runtime_error",
+            "runtime_error",
+            "runtime_error"
+          ],
+          "error_codes": [],
+          "message": "= explain: nyra explain E0240"
+        },
+        {
+          "lang": "nyra",
+          "task": "matrix_report",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "wrong_output",
+            "wrong_output",
+            "compile_error",
+            "wrong_output"
+          ],
+          "error_codes": [
+            "E0001"
+          ],
+          "message": "the program ran but printed the wrong output"
+        },
+        {
+          "lang": "nyra",
+          "task": "maze_keys",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "wrong_output",
+            "wrong_output",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0001",
+            "E0101"
+          ],
+          "message": "E0001: unexpected character `#`"
+        },
+        {
+          "lang": "nyra",
+          "task": "round_robin",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "wrong_output",
+            "wrong_output",
+            "wrong_output"
+          ],
+          "error_codes": [
+            "E0001"
+          ],
+          "message": "the program ran but printed the wrong output"
+        },
+        {
+          "lang": "nyra",
+          "task": "savings_interest",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "wrong_output",
+            "wrong_output"
+          ],
+          "error_codes": [
+            "E0101"
+          ],
+          "message": "the program ran but printed the wrong output"
+        },
+        {
+          "lang": "nyra",
+          "task": "seat_booking",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "wrong_output",
+            "wrong_output",
+            "wrong_output",
+            "wrong_output"
+          ],
+          "error_codes": [],
+          "message": "the program ran but printed the wrong output"
+        },
+        {
+          "lang": "nyra",
+          "task": "sparse_ledger",
+          "sample": 0,
+          "outcome": "never passed",
+          "attempts": 4,
+          "failure_kinds": [
+            "compile_error",
+            "compile_error",
+            "compile_error",
+            "compile_error"
+          ],
+          "error_codes": [
+            "E0101",
+            "E0203",
+            "E0229"
+          ],
+          "message": "E0203: type mismatch in argument 1 (`x`) of `text.fixed`: expected `float`, found `int`"
+        }
+      ]
+    }
+  },
+  "hardest_tasks": [
+    {
+      "task": "config_parser",
+      "category": "hard",
+      "rates": {
+        "nyra": [
+          1,
+          3
+        ],
+        "python": [
+          2,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "task": "fraction_total",
+      "category": "hard",
+      "rates": {
+        "nyra": [
+          1,
+          3
+        ],
+        "python": [
+          2,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "task": "int_nbody",
+      "category": "speed",
+      "rates": {
+        "nyra": [
+          1,
+          3
+        ],
+        "python": [
+          3,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "task": "maze_keys",
+      "category": "hard",
+      "rates": {
+        "nyra": [
+          1,
+          3
+        ],
+        "python": [
+          2,
+          3
+        ],
+        "typescript": [
+          2,
+          3
+        ],
+        "rust": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "task": "bank_ledger",
+      "category": "rules",
+      "rates": {
+        "nyra": [
+          2,
+          3
+        ],
+        "python": [
+          3,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "task": "bank_tellers",
+      "category": "hard",
+      "rates": {
+        "nyra": [
+          2,
+          3
+        ],
+        "python": [
+          2,
+          3
+        ],
+        "typescript": [
+          1,
+          3
+        ],
+        "rust": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "task": "calendar_month",
+      "category": "rules",
+      "rates": {
+        "nyra": [
+          2,
+          3
+        ],
+        "python": [
+          2,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "task": "expr_eval",
+      "category": "hard",
+      "rates": {
+        "nyra": [
+          2,
+          3
+        ],
+        "python": [
+          3,
+          3
+        ],
+        "typescript": [
+          3,
+          3
+        ],
+        "rust": [
+          3,
+          3
+        ]
+      }
+    }
+  ],
+  "nyra_compiler_errors": [
+    {
+      "code": "E0101",
+      "count": 64,
+      "message": "expected end of line, found `vx`",
+      "task": "int_nbody"
+    },
+    {
+      "code": "E0201",
+      "count": 29,
+      "message": "undefined variable `root`",
+      "task": "config_parser"
+    },
+    {
+      "code": "E0206",
+      "count": 9,
+      "message": "function `tokenize` is defined twice (the first one is on line 5)",
+      "task": "expr_eval"
+    },
+    {
+      "code": "E0229",
+      "count": 5,
+      "message": "cannot assign to `settings_map[current_section][key]`: a value inside a map cannot change in place",
+      "task": "config_parser"
+    },
+    {
+      "code": "E0207",
+      "count": 4,
+      "message": "function `gcd` is declared `-> int` but not every path ends with `ret`",
+      "task": "fraction_total"
+    },
+    {
+      "code": "E0205",
+      "count": 3,
+      "message": "cannot assign to `rem`: it was declared with `let` on line 38",
+      "task": "fraction_total"
+    },
+    {
+      "code": "E0001",
+      "count": 2,
+      "message": "unexpected character `?`",
+      "task": "round_robin"
+    },
+    {
+      "code": "E0227",
+      "count": 1,
+      "message": "`int` has no method `str`",
+      "task": "library_loans"
+    }
+  ]
+}
