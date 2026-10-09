@@ -1,0 +1,6 @@
+// expect: E0256 at 5:11
+// only: js ts
+fn main() {
+    print(int("-9007199254740991"))
+    print(int("12345678901234567"))
+}

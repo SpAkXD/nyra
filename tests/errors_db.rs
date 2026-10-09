@@ -161,7 +161,9 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
             // ...and the wrong one compiles but stops at run time with that code
             let (ok, json) = check_json(&dir, &wrong_file);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
-            if let Some(flags) = backend {
+            // a first line `// target: js`: the error happens only on JavaScript (and TypeScript)
+            let js_only = wrong.starts_with("// target: js");
+            if let Some(flags) = backend.filter(|f| !js_only || f.contains(&"--js")) {
                 // a first line `// stdin: ...` is the program's input (`\xff`, `\n` escapes)
                 let input = wrong.lines().next().and_then(|l| l.strip_prefix("// stdin: ")).map(unescape).unwrap_or_default();
                 let mut child = nyra()

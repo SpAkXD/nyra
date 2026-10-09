@@ -5,7 +5,7 @@
 //! `Stop` (a runtime error, or a limit that was reached). `display`/`show` format a value as
 //! `print` shows it and as Nyra code, `equal` compares two values like `==`.
 //!
-//! It follows the Rust runtime (`rt/rs/runtime.rs`) operation by operation: ints wrap, floats
+//! It follows the Rust runtime (`rt/rs/runtime.rs`) operation by operation: int overflow is E0255, floats
 //! print like JavaScript, string lengths and indexes count characters, and a runtime error has
 //! the same code, message, hint and position. Reference counting (`Dup`, `Drop`, `Keep`) does
 //! nothing here: values are shared (`Rc`) and a change copies a shared value first. An `inout`
@@ -63,6 +63,17 @@ pub enum Stop {
     Depth,
     /// Something the IR should never contain (a bug of the compiler, not of the program).
     Bug(#[allow(dead_code)] String),
+}
+
+/// int + - * / and negation outside the 64-bit range (E0255), worded like the runtimes.
+fn overflow(a: i64, op: &str, b: i64, span: Span) -> Stop {
+    let msg = if op == "~" { format!("int overflow: -({a}) does not fit in 64 bits") } else { format!("int overflow: {a} {op} {b} does not fit in 64 bits") };
+    fail(
+        "E0255",
+        msg,
+        "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)",
+        span,
+    )
 }
 
 fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop {
@@ -490,8 +501,16 @@ impl<'m> Interp<'m> {
                 if b == 0 {
                     return Err(fail("E0241", "division by zero".into(), "check the divisor first", span));
                 }
-                Some(Value::Int(if op == RtOp::DivInt { a.wrapping_div(b) } else { a.wrapping_rem(b) }))
+                if op == RtOp::DivInt {
+                    Some(Value::Int(a.checked_div(b).ok_or_else(|| overflow(a, "/", b, span))?))
+                } else {
+                    Some(Value::Int(a.wrapping_rem(b)))
+                }
             }
+            RtOp::AddInt => Some(Value::Int(i(0)?.checked_add(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "+", i(1).unwrap_or(0), span))?)),
+            RtOp::SubInt => Some(Value::Int(i(0)?.checked_sub(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "-", i(1).unwrap_or(0), span))?)),
+            RtOp::MulInt => Some(Value::Int(i(0)?.checked_mul(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "*", i(1).unwrap_or(0), span))?)),
+            RtOp::NegInt => Some(Value::Int(i(0)?.checked_neg().ok_or_else(|| overflow(i(0).unwrap_or(0), "~", 0, span))?)),
             RtOp::FloatToInt => {
                 let Some(Value::Float(x)) = args.first() else { return Err(bug("int() of a value that is not a float")) };
                 let x = *x;
@@ -1076,6 +1095,11 @@ mod tests {
             let src = std::fs::read_to_string(&path).unwrap();
             let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).unwrap();
             let (code, at) = expect.trim().split_once(" at ").unwrap();
+            // a test limited to some targets (`// only: js ts`) runs here only if Rust is one
+            let only = src.lines().nth(1).and_then(|l| l.strip_prefix("// only:"));
+            if only.is_some_and(|ts| !ts.split_whitespace().any(|t| t == "rs")) {
+                continue;
+            }
             let Some((out, err)) = run_main(&src) else { continue };
             let err = err.unwrap_or_else(|| panic!("{}: no runtime error", path.display()));
             assert_eq!(err.code, code, "{}: {}", path.display(), err.msg);

@@ -14,7 +14,7 @@ fn main() {
     let first = dice(12)
     print(first)
     print(random.random(), random.random())
-    print(random.range(-1000000000000, 1000000000000), random.range(0, 9007199254740992))
+    print(random.range(-1000000000000, 1000000000000), random.range(0, 9007199254740991))
     random.seed(42)
     print("the same again: {dice(12) == first}")
     random.seed(-7)

@@ -52,11 +52,38 @@ fn ny_oom(line: u32, col: u32) -> ! {
 // ---- ints ----
 
 /// int `/`: division by zero is an error; `i64::MIN / -1` wraps.
+/// int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255).
+#[cold]
+fn ny_overflow(a: i64, op: &str, b: i64, line: u32, col: u32) -> ! {
+    let msg = if op == "~" { format!("int overflow: -({a}) does not fit in 64 bits") } else { format!("int overflow: {a} {op} {b} does not fit in 64 bits") };
+    ny_fail("E0255", &msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+}
+
+#[inline]
+fn ny_add(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_add(b).unwrap_or_else(|| ny_overflow(a, "+", b, line, col))
+}
+
+#[inline]
+fn ny_sub(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_sub(b).unwrap_or_else(|| ny_overflow(a, "-", b, line, col))
+}
+
+#[inline]
+fn ny_mul(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_mul(b).unwrap_or_else(|| ny_overflow(a, "*", b, line, col))
+}
+
+#[inline]
+fn ny_neg(a: i64, line: u32, col: u32) -> i64 {
+    a.checked_neg().unwrap_or_else(|| ny_overflow(a, "~", 0, line, col))
+}
+
 fn ny_div(a: i64, b: i64, line: u32, col: u32) -> i64 {
     if b == 0 {
         ny_fail("E0241", "division by zero", "check the divisor first", line, col);
     }
-    a.wrapping_div(b)
+    a.checked_div(b).unwrap_or_else(|| ny_overflow(a, "/", b, line, col))
 }
 
 fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {

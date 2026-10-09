@@ -1,6 +1,8 @@
 //! Runs every `examples/*.nyra` on every available backend and compares stdout
 //! with `examples/*.out`. Also checks that `tests/errors/*.nyra` report the
-//! error code named in their first line (`// expect: E0203`).
+//! error code named in their first line (`// expect: E0203`). A runtime error test
+//! whose second line is `// only: js ts` runs only on those targets (`native`, `js`,
+//! `ts`, `py`, `rs`, `go`): E0256 exists only where ints are JavaScript numbers.
 //!
 //! An example may come with more files next to it:
 //! - `X.in`: its standard input (without one, the input is empty);
@@ -53,6 +55,33 @@ fn run_example(path: &PathBuf, flags: &[&str], env: &[(&str, &str)]) -> (Output,
     let _ = std::fs::remove_dir_all(&dir);
     let exit = side("exit").map_or(0, |e| e.trim().parse().expect("an .exit file holds a number"));
     (out, exit)
+}
+
+/// The targets a test is limited to by a second line `// only: js ts` (`None`: every target).
+fn only(src: &str) -> Option<Vec<String>> {
+    let line = src.lines().nth(1)?.strip_prefix("// only:")?;
+    Some(line.split_whitespace().map(String::from).collect())
+}
+
+/// The target that `flags` select.
+fn target_of(flags: &[&str]) -> &'static str {
+    match flags {
+        ["--js", ..] => "js",
+        ["--target", t, ..] => match *t {
+            "ts" => "ts",
+            "py" => "py",
+            "rs" => "rs",
+            "go" => "go",
+            "js" => "js",
+            _ => "native",
+        },
+        _ => "native",
+    }
+}
+
+/// True if the test `src` runs on the target of `flags`.
+fn runs_on(src: &str, flags: &[&str]) -> bool {
+    only(src).is_none_or(|ts| ts.iter().any(|t| t == target_of(flags)))
 }
 
 fn files(dir: &str) -> Vec<PathBuf> {
@@ -115,6 +144,9 @@ fn runtime_errors_report_code_position_and_exit_101() {
         let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
         let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default();
         for flags in &backends {
+            if !runs_on(&src, flags) {
+                continue;
+            }
             let (out, _) = run_example(&path, flags, &[]);
             let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
             let label = format!("{} {:?}", path.display(), flags);
@@ -175,6 +207,9 @@ fn node_runs_typescript() -> bool {
 fn check_on(path: &PathBuf, flags: &[&str]) -> Option<String> {
     let label = format!("{} {flags:?}", path.display());
     let src = std::fs::read_to_string(path).unwrap();
+    if !runs_on(&src, flags) {
+        return None;
+    }
     let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: "));
     let Some(expect) = expect else {
         let expected = std::fs::read_to_string(path.with_extension("out")).ok()?.replace("\r\n", "\n");

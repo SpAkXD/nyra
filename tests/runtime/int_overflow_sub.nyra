@@ -1,0 +1,7 @@
+// expect: E0255 at 3:37
+// only: native py rs go
+fn below(x: int, k: int) -> int = x - k
+fn main() {
+    print(below(-9223372036854775807, 1))
+    print(below(-9223372036854775807, 2))
+}

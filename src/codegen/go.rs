@@ -576,6 +576,10 @@ impl<'a> Gen<'a> {
             }
             RtOp::Format => self.text(args, false),
             RtOp::DivInt => format!("nyDiv({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("nyAdd({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("nySub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("nyMul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("nyNeg({}, {at})", a[0]),
             RtOp::RemInt => format!("nyRem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyF2I({}, {at})", a[0]),
             RtOp::CheckStep => format!("nyCheckStep({}, {at})", a[0]),

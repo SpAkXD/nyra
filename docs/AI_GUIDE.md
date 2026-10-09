@@ -285,8 +285,9 @@ Good to know:
   `['x']`, `Item(name: "pen", price: 3)`. `str(x)` gives the same text as a `str`.
 - Float math shows its rounding noise: multiplying 1000.0 by 1.05 four times prints
   `1215.5062500000001`. When you state the expected output of float math, call it approximate.
-- Ints are 64-bit and wrap on overflow natively; with `--js` they are exact only up to 2^53
-  (9007199254740991). Stay below that and both backends print the same.
+- Ints are 64-bit and never wrap: an overflow stops the program with E0255. With `--js` and `--ts` an
+  int beyond 2^53 - 1 (9007199254740991) stops it with E0256. For a hash or a random number generator,
+  keep the value small with `%` at every step: `h = (h * 31 + c.code()) % 1000000007`.
 - A name declared inside `{ }` is gone after the closing brace (you may reuse it then). Functions and
   structs can be defined in any order and functions can call each other. `ret` with no value leaves a
   function that returns nothing.

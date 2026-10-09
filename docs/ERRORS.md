@@ -25,7 +25,7 @@ design may still change.
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
-| E0240-E0249 | run time | the program stops with exit code 101 |
+| E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
 | E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
@@ -33,7 +33,7 @@ design may still change.
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
-brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0255-E0259,
+brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
 E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -1864,6 +1864,81 @@ fn cost(n: int, r: int) -> int = n * r   ex cost(2, 3) == 6
 print(cost(5, rate))
 ```
 - **Related:** E0250, E0217
+
+## E0255: int overflow
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** An int `+`, `-`, `*`, `/` (only `-9223372036854775808 / -1`) or negation (including `abs`) gave a result outside the 64-bit range, -9223372036854775808 to 9223372036854775807. The program flushes what it printed so far, reports the operation with its operands (`int overflow: 7696581397574 * 1099511628211 does not fit in 64 bits`) and its position, and exits with code 101. This happens on every backend, at the same operation.
+- **Why Nyra has this rule:** Up to v0.4 an int overflow wrapped around silently natively and lost precision in JavaScript: a wrong number that looks right, and a different one on each backend. Stopping makes the bug visible where it happens. Additions, subtractions and multiplications that the compiler can prove stay in range (constants, `for` counters, array indexes, lengths) are compiled without the check.
+- **Common causes:**
+  - a hash or a random number generator that multiplies without `%` and relied on wrapping (`h = h * 1099511628211`): keep it in range with `%`, e.g. `h = (h * 31 + c.code()) % 1000000007`
+  - a factorial, a power or a product that grows past 2^63 (20! is the largest factorial that fits)
+  - the negation or `abs` of the smallest int
+- **Wrong:**
+```rust
+fn hash(s: str) -> int {
+    var h = 7
+    for c in s {
+        h = h * 1099511628211 + c.code()
+    }
+    ret h
+}
+
+fn main() {
+    print(hash("a"))
+    print(hash("ab"))
+}
+```
+- **Fixed:**
+```rust
+fn hash(s: str) -> int {
+    var h = 7
+    for c in s {
+        h = (h * 31 + c.code()) % 1000000007
+    }
+    ret h
+}
+
+fn main() {
+    print(hash("a"))
+    print(hash("ab"))
+}
+```
+- **Related:** E0256, E0245, E0241
+
+## E0256: int too large for JavaScript
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** Only on the JavaScript and TypeScript targets: an int operation gave a result beyond ±9007199254740991 (2^53 - 1), or the program used such an int (a literal, `int(s)`, `int(x)` of a float, a number read by `json.parse`). JavaScript numbers hold ints exactly only up to there, so the program stops instead of going on with a rounded value. The native (C), Rust, Go and Python targets have 64-bit ints and run the same program without this error (they stop with E0255 only beyond 64 bits).
+- **Why Nyra has this rule:** Nyra promises the same output on every backend. A rounded int would be a silent difference (`1116302080` instead of `1116302264`); an error says exactly where the JavaScript target cannot follow, and which targets can.
+- **Common causes:**
+  - a random number generator like `seed = (seed * 1103515245 + 12345) % 2147483648`: the product is about 2^61 before the `%`; use a smaller multiplier, e.g. `seed = seed * 48271 % 2147483647`, or a native target
+  - a hash that keeps its value below a large modulus, but multiplies it by a large number first
+  - a factorial or product above 9007199254740991, or an int literal with 16 or more digits
+- **Wrong:**
+```rust
+// target: js
+fn next(seed: int) -> int = (seed * 1103515245 + 12345) % 2147483648
+
+fn main() {
+    var s = 42
+    for i in 0..3 {
+        s = next(s)
+        print(s)
+    }
+}
+```
+- **Fixed:**
+```rust
+fn next(seed: int) -> int = seed * 48271 % 2147483647
+
+fn main() {
+    var s = 42
+    for i in 0..3 {
+        s = next(s)
+        print(s)
+    }
+}
+```
+- **Related:** E0255
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5

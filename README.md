@@ -80,6 +80,10 @@ compiler to tell the AI exactly what to fix.
   write), so nothing changes behind your back; a function changes a caller's variable only through an
   `inout` parameter that the call names too.
 - **Same output everywhere.** Every example runs on every backend in CI and must match byte for byte.
+  The one exception is ints beyond 2^53: JavaScript and TypeScript cannot hold them exactly, so there a
+  program stops with a runtime error (E0255 for a 64-bit overflow, which every backend reports;
+  E0256 only on JavaScript) instead of printing a rounded number. Use the native, Rust, Go or Python
+  target for such programs.
 
 ## Features
 
@@ -363,12 +367,13 @@ nyra run --go scores.nyra                 # builds with `go build` (cached) and 
 
 The generated code reads like code a person would write in that language: typed signatures, variables
 declared where they are first needed, counted loops as `for` loops, structs as classes or structs, and a
-small runtime at the end of the file for what the language does differently (64-bit wrapping ints in
-Python, character-based string indexes, JavaScript's number format, checked indexes). Values keep Nyra's
+small runtime at the end of the file for what the language does differently (checked 64-bit ints,
+character-based string indexes, JavaScript's number format, checked indexes). Values keep Nyra's
 semantics: arrays and structs are copied on write (a shared mark in Python, TypeScript and Go,
 `Rc::make_mut` in Rust), and an `inout` parameter becomes a returned value in Python
 (`x, y = swap(x, y)`), a `{ v }` box in TypeScript, `&mut T` in Rust and a pointer in Go. Build the Rust
-file with overflow checks off (`rustc -O -C overflow-checks=off`, as `nyra run` does): Nyra ints wrap.
+file with overflow checks off (`rustc -O -C overflow-checks=off`, as `nyra run` does): the generated code
+checks the int operations that can overflow itself, with Nyra's error (E0255).
 See [known differences](docs/SPEC.md#known-differences-between-backends) for the few edge cases.
 
 ## CLI

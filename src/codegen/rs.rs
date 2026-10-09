@@ -671,6 +671,10 @@ impl<'a> Gen<'a> {
                 }
             }
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("ny_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("ny_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("ny_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("ny_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("ny_rem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("ny_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("Rc::new(format!(\"{{}}{{}}\", {}, {}))", a[0], a[1]),

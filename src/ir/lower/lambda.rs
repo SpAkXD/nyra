@@ -222,8 +222,8 @@ impl Lower<'_> {
         match &c.src {
             ast::CompSrc::Range(a, b, k) => {
                 let i = self.new_local(Some(c.var[0].0.clone()), Ty::Int);
-                let (cond, k) = self.range(i, a, b, k.as_ref(), span, out);
-                range = Some((i, cond, k));
+                let (cond, next) = self.range(i, a, b, k.as_ref(), span, out);
+                range = Some((i, cond, next));
             }
             ast::CompSrc::Each(src) => {
                 let v = self.expr(src, None, out);
@@ -246,9 +246,9 @@ impl Lower<'_> {
         let saved = std::mem::take(&mut self.pending);
         let live = std::mem::take(&mut self.chain_live);
         let mut body = Vec::new();
-        if let Some((i, cond, k)) = range {
+        if let Some((i, cond, next)) = range {
             self.steps(&steps, Expr::Local(i), Ty::Int, &sink, span, &mut body);
-            let next = st(StmtKind::Set(i, Expr::Binary(BinOp::IAdd, local(i), Box::new(k))), span);
+            let next = st(StmtKind::Set(i, next), span);
             out.push(st(StmtKind::Loop { head: Vec::new(), cond, body, step: vec![next] }, span));
         } else if let Some((it, elem)) = each {
             let x = self.new_local(Some(c.var[0].0.clone()), elem);
@@ -345,7 +345,11 @@ impl Lower<'_> {
             Sink::Collect { acc } => {
                 out.push(st(StmtKind::Mutate { dst: None, op: RtOp::ArrPush, place: Place::local(acc), args: vec![cur] }, span));
             }
-            Sink::Sum { acc, float } => out.push(st(add(acc, cur, if float { BinOp::FAdd } else { BinOp::IAdd }), span)),
+            Sink::Sum { acc, float: true } => out.push(st(add(acc, cur, BinOp::FAdd), span)),
+            // an int sum may overflow: the checked operation
+            Sink::Sum { acc, float: false } => {
+                out.push(st(StmtKind::Op { dst: Some(acc), op: RtOp::AddInt, args: vec![Expr::Local(acc), cur] }, span));
+            }
             Sink::Count { acc } => out.push(st(add(acc, Expr::Int(1), BinOp::IAdd), span)),
             Sink::Stop { acc, value } => {
                 out.push(st(StmtKind::Set(acc, Expr::Bool(value)), span));

@@ -20,7 +20,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 ## Types
 | type | values |
 |---|---|
-| `int` | 64-bit signed: `42`, `-7` |
+| `int` | 64-bit signed: `42`, `-7`; overflow stops the program (E0255), it never wraps |
 | `float` | 64-bit: `2.5`, `3.0` (always a dot with digits on both sides) |
 | `bool` | `true`, `false` |
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \0 \\ \"` |
@@ -339,6 +339,8 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0247 | `min()` or `max()` of an empty array |
 | E0248 | `m[k]` of a key the map does not have |
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
+| E0255 | int overflow: `+`, `-`, `*`, negation, `abs` or `/` (only `MIN / -1`) outside -2^63 to 2^63 - 1 |
+| E0256 | `--js`/`--ts` only: an int beyond 2^53 - 1 (9007199254740991), which JavaScript would round |
 | E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |
@@ -347,8 +349,12 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 ## Known differences between backends
 The targets are native (C), `--js`, `--py`, `--ts`, `--rs` and `--go`; everything else, runtime errors
 included, is the same on each.
-- `int` overflow wraps natively and with `--py`, `--rs` and `--go`; with `--js` and `--ts`, ints are exact
-  only up to 2^53 (9007199254740991).
+- Ints: an overflow of the 64-bit range is E0255 on every target. With `--js` and `--ts` an int is a
+  JavaScript number, exact only up to 2^53 - 1 (9007199254740991): a program that goes beyond (an
+  operation, a literal, `int(s)`, `int(x)`, `json.parse`) stops with E0256 there, where the other
+  targets go on. Programs that stay below print the same everywhere. (Operations the compiler proves
+  in range, such as constants, `for` counters, indexes and lengths, and a `var` that only changes by
+  `+= 1` or `-= 1` from a small start, are not checked: such a counter would need months to get there.)
 - Deep recursion crashes without a Nyra error: `--js`/`--ts` throw `RangeError` after thousands of
   calls, `--py` raises `RecursionError` after 100,000, a native or `--rs` program dies when its stack
   ends and may lose output it has not written yet; `--go` grows its stack to 1 GB.
