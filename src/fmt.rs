@@ -41,7 +41,9 @@ pub fn run(file: &str, src: &str, out: Option<&str>, json: bool) -> ExitCode {
     }
     let formatted = format(&text);
     if let Err(why) = verify(&text, &formatted) {
-        eprintln!("nyra: internal error: formatting would change the program ({why}); the file was not touched. Please report this bug");
+        eprintln!(
+            "nyra: internal error: formatting would change the program ({why}); the file was not touched. Please report this bug"
+        );
         return ExitCode::from(2);
     }
     match out {
@@ -65,7 +67,12 @@ pub fn run(file: &str, src: &str, out: Option<&str>, json: bool) -> ExitCode {
         }
     }
     if json {
-        println!("{{\"ok\":true,\"changed\":{},\"fixed\":{},\"warnings\":{}}}", formatted != src, applied.len(), diag::render_json_warnings(&applied, file));
+        println!(
+            "{{\"ok\":true,\"changed\":{},\"fixed\":{},\"warnings\":{}}}",
+            formatted != src,
+            applied.len(),
+            diag::render_json_warnings(&applied, file)
+        );
     }
     ExitCode::SUCCESS
 }
@@ -101,7 +108,8 @@ pub fn format(src: &str) -> String {
             let open = stack.len() - usize::from(closes && !stack.is_empty());
             // a line that goes on with the line before it: no line break between them (an
             // operator or a `.` at the end or start), directly in a block or at the top level
-            let goes_on = !broke && prev.is_some() && matches!(stack.last(), None | Some(Tok::LBrace));
+            let goes_on =
+                (!broke || matches!(prev, Some(Tok::Comma))) && prev.is_some() && matches!(stack.last(), None | Some(Tok::LBrace));
             if let Some(slot) = level.get_mut(t.span.line) {
                 *slot = Some(open + usize::from(goes_on));
                 closing[t.span.line] = closes;
@@ -138,7 +146,9 @@ pub fn format(src: &str) -> String {
         // `ret` becomes `return`, from the right so the columns before stay valid
         for &(l, c) in rets.iter().rev().filter(|(l, _)| *l == no) {
             let _ = l;
-            if line.get(c - 1..c + 2).is_some_and(|w| w == ['r', 'e', 't']) && !line.get(c + 2).is_some_and(|x| x.is_alphanumeric() || *x == '_') {
+            if line.get(c - 1..c + 2).is_some_and(|w| w == ['r', 'e', 't'])
+                && !line.get(c + 2).is_some_and(|x| x.is_alphanumeric() || *x == '_')
+            {
                 line.splice(c + 2..c + 2, ['u', 'r', 'n']);
             }
         }

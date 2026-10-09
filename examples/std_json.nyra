@@ -20,7 +20,7 @@ fn total(o: Order) -> float {
     for it in o.items {
         sum += it.price * float(it.count)
     }
-    ret sum
+    return sum
 }
 
 fn main() {

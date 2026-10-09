@@ -1,9 +1,9 @@
 // chars: one code point each, with explicit codes
 fn caesar(c: char, k: int) -> char {
     if !c.is_lower() {
-        ret c
+        return c
     }
-    ret char('a'.code() + (c.code() - 'a'.code() + k) % 26)
+    return char('a'.code() + (c.code() - 'a'.code() + k) % 26)
 }
 
 fn main() {

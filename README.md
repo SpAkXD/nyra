@@ -407,6 +407,7 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `nyra build <file>` | compile to a native executable |
 | `nyra check <file>` | type-check only (and evaluate the `ex` examples); exit code 0 means no errors |
 | `nyra test <file>` | run the `ex` examples and report each one that fails; exit code 0 means all passed |
+| `nyra fmt <file>` | rewrite the file in canonical form: the fixes errors carry applied, `return` for `ret`, four-space indentation; the program does the same afterwards (`-o -` prints instead) |
 | `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list the codes it reports (`--planned` adds those of future designs) |
 | `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
 | `nyra outline <file>` | the functions and structs with signatures, fields and line ranges (`--json` too) |
@@ -421,6 +422,7 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
 | `--fix` | with `check`, `run` and `build`: apply the fixes that errors carry, check again, and write the file back if it then compiles |
+| `--strict` | errors stay errors: without it `check`, `run`, `build` and `test` repair, in memory, an error that has exactly one certain fix and report it as a warning |
 | `--time` | show how long each step took |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example

@@ -1,6 +1,6 @@
 // strings: joining, comparing, searching, slicing, converting
 fn shout(s: str) -> str {
-    ret s.upper() + "!"
+    return s.upper() + "!"
 }
 
 fn initials(first: str, last: str) -> str = str(first[0]) + str(last[0])

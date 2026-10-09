@@ -642,7 +642,13 @@ impl<'a> Gen<'a> {
                     let (kt, vt) = t.map_kv().expect("verified: a map");
                     t = vt;
                     let r = self.fresh("p");
-                    self.line(&format!("{r} = ny_unique_key({lv}, {}, \"{}\", {}, {})", self.arg(key), tdesc(kt), span.line, span.col));
+                    self.line(&format!(
+                        "{r} = ny_unique_key({lv}, {}, \"{}\", {}, {})",
+                        self.arg(key),
+                        tdesc(kt),
+                        span.line,
+                        span.col
+                    ));
                     lv = r;
                 }
                 Step::Index(i, span) => {

@@ -46,7 +46,7 @@
         },
         "keyword": {
             "patterns": [
-                { "name": "keyword.control.nyra", "match": "\\b(if|else|while|for|in|ret|break|continue)\\b" },
+                { "name": "keyword.control.nyra", "match": "\\b(if|else|while|for|in|return|ret|break|continue)\\b" },
                 { "name": "keyword.other.memory.nyra", "match": "\\b(arena)\\b" },
                 { "name": "keyword.other.example.nyra", "match": "^\\s*ex\\b(?=\\s+[\\w'\"!-])|\\bex\\b(?=\\s+\\w+\\()" },
                 { "name": "storage.type.nyra", "match": "\\b(fn|let|var|struct)\\b" },

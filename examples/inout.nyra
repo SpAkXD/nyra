@@ -39,12 +39,12 @@ fn take_last(inout xs: [str]) -> str = xs.pop()
 
 fn grow(inout xs: [int], old: [int]) -> int {
     xs.push(9)
-    ret old.len()
+    return old.len()
 }
 
 fn next(inout n: int) -> int {
     n += 10
-    ret n * 2
+    return n * 2
 }
 
 fn main() {

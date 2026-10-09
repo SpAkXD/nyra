@@ -19,7 +19,7 @@ fn total(t: Tree) -> int {
     for k in t.kids {
         sum += total(k)
     }
-    ret sum
+    return sum
 }
 
 fn main() {

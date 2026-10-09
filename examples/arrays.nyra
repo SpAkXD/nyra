@@ -4,7 +4,7 @@ fn sum(xs: [int]) -> int {
     for x in xs {
         total += x
     }
-    ret total
+    return total
 }
 
 fn squares(n: int) -> [int] {
@@ -12,7 +12,7 @@ fn squares(n: int) -> [int] {
     for i in 0..n {
         out.push(i * i)
     }
-    ret out
+    return out
 }
 
 fn main() {

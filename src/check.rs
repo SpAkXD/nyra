@@ -1145,8 +1145,16 @@ impl Checker {
                 None => {
                     if self.ret != Type::Void {
                         self.errs.push(
-                            Diag::new("E0207", format!("`return` needs a value: `{}` returns `{}`", self.fname, self.ret.name()), span)
-                                .hint(format!("write `return {}` (or any other `{}` value)", sample(self.ret), self.ret.name())),
+                            Diag::new(
+                                "E0207",
+                                format!("`return` needs a value: `{}` returns `{}`", self.fname, self.ret.name()),
+                                span,
+                            )
+                            .hint(format!(
+                                "write `return {}` (or any other `{}` value)",
+                                sample(self.ret),
+                                self.ret.name()
+                            )),
                         );
                     }
                 }
@@ -1511,7 +1519,11 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0212",
-                            format!("the branches of this conditional value (`if` or `? :`) have different types: `{}` and `{}`", ta.name(), tb.name()),
+                            format!(
+                                "the branches of this conditional value (`if` or `? :`) have different types: `{}` and `{}`",
+                                ta.name(),
+                                tb.name()
+                            ),
                             span,
                         )
                         .hint(hint)

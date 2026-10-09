@@ -466,24 +466,24 @@ impl Parser {
                 }
             }
         }
+        funcs.append(&mut self.nested);
         let mut script = false;
         if let Some(first) = top.first() {
             let span = first.span;
             // `fn main` next to top-level statements: the statements run first, in order, then `main`.
-            // The user's `main` is renamed, so the script gets the name `main` (a bare `main()` line
-            // among the statements calls it where it stands, and then it is not called again).
+            // The user's `main` is renamed, so the script gets the name `main`; every call of `main()`
+            // (a bare one among the statements calls it where it stands, and then it is not called again)
+            // goes to the user's.
             if let Some(user) = funcs.iter_mut().find(|f| f.name == "main") {
                 user.name = USER_MAIN.to_string();
                 let at = user.span;
-                let mut called = false;
-                for s in &mut top {
-                    if let StmtKind::Expr(Expr { kind: ExprKind::Call(f, args), .. }) = &mut s.kind {
-                        if f == "main" && args.is_empty() {
-                            *f = USER_MAIN.to_string();
-                            called = true;
-                        }
-                    }
+                let called = top.iter().any(|s| {
+                    matches!(&s.kind, StmtKind::Expr(Expr { kind: ExprKind::Call(f, args), .. }) if f == "main" && args.is_empty())
+                });
+                for f in &mut funcs {
+                    rename_main_calls(&mut f.body);
                 }
+                rename_main_calls(&mut top);
                 if !called {
                     let call = Expr::new(ExprKind::Call(USER_MAIN.to_string(), Vec::new()), at);
                     top.push(Stmt { kind: StmtKind::Expr(call), span: at });
@@ -492,7 +492,6 @@ impl Parser {
             funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
             script = true;
         }
-        funcs.append(&mut self.nested);
         Program { funcs, structs, examples, uses, script, globals: Default::default() }
     }
 
@@ -762,7 +761,9 @@ impl Parser {
         }
         match self.peek() {
             Tok::Newline => d.hint("the expression must start on the same line as `=`: `fn f() -> int = 1`"),
-            Tok::Ret => d.hint("a one-line function returns its expression itself, so there is no `return`: `fn f(x: int) -> int = x`"),
+            Tok::Ret => {
+                d.hint("a one-line function returns its expression itself, so there is no `return`: `fn f(x: int) -> int = x`")
+            }
             Tok::LBrace => d.hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`"),
             _ => d,
         }
@@ -1455,7 +1456,8 @@ impl Parser {
     /// Parses the expression inside `{ }` of an interpolated string.
     fn sub_expr(&mut self, code: &str, base: Span) -> PResult<Expr> {
         let shift = |s: Span| Span { line: base.line, col: base.col + s.col - 1 };
-        let spec = code.contains(':');
+        // (a `:` after a `?` belongs to a conditional value, not to a format specifier)
+        let spec = code.contains(':') && !code.contains('?');
         let (mut toks, errs) = lexer::lex(code);
         if let Some((first, rest)) = errs.split_first() {
             for d in rest {
@@ -1932,6 +1934,103 @@ impl Parser {
                 _ => d.or_hint(generic),
             },
             _ => d.or_hint(generic),
+        }
+    }
+}
+
+/// The calls `main()` in the statements become calls of `USER_MAIN` (see `Parser::program`).
+fn rename_main_calls(stmts: &mut [Stmt]) {
+    for s in stmts {
+        match &mut s.kind {
+            StmtKind::Let { value, .. } => rename_in(value),
+            StmtKind::Assign { target, value, .. } => {
+                rename_in(target);
+                rename_in(value);
+            }
+            StmtKind::If { cond, then, els } => {
+                rename_in(cond);
+                rename_main_calls(then);
+                if let Some(e) = els {
+                    rename_main_calls(e);
+                }
+            }
+            StmtKind::While { cond, body } => {
+                rename_in(cond);
+                rename_main_calls(body);
+            }
+            StmtKind::For { start, end, step, body, .. } => {
+                rename_in(start);
+                rename_in(end);
+                if let Some(k) = step {
+                    rename_in(k);
+                }
+                rename_main_calls(body);
+            }
+            StmtKind::ForEach { iter, body, .. } => {
+                rename_in(iter);
+                rename_main_calls(body);
+            }
+            StmtKind::Arena(body) => rename_main_calls(body),
+            StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => rename_in(e),
+            StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
+        }
+    }
+}
+
+fn rename_in(e: &mut Expr) {
+    match &mut e.kind {
+        ExprKind::Call(f, args) => {
+            if f == "main" && args.is_empty() {
+                *f = USER_MAIN.to_string();
+            }
+            args.iter_mut().for_each(rename_in);
+        }
+        ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::Var(_) => {}
+        ExprKind::Interp(parts) => {
+            for p in parts {
+                if let InterpPart::Expr(x) = p {
+                    rename_in(x);
+                }
+            }
+        }
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Lambda(_, x) => {
+            rename_in(x)
+        }
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+            rename_in(a);
+            rename_in(b);
+        }
+        ExprKind::If(c, a, b) => {
+            rename_in(c);
+            rename_in(a);
+            rename_in(b);
+        }
+        ExprKind::Array(xs) => xs.iter_mut().for_each(rename_in),
+        ExprKind::MapLit(kvs) => {
+            for (k, v) in kvs {
+                rename_in(k);
+                rename_in(v);
+            }
+        }
+        ExprKind::Method(r, _, args) => {
+            rename_in(r);
+            args.iter_mut().for_each(rename_in);
+        }
+        ExprKind::Comprehension(c) => {
+            rename_in(&mut c.elem);
+            match &mut c.src {
+                CompSrc::Each(x) => rename_in(x),
+                CompSrc::Range(a, b, k) => {
+                    rename_in(a);
+                    rename_in(b);
+                    if let Some(k) = k {
+                        rename_in(k);
+                    }
+                }
+            }
+            if let Some(x) = &mut c.cond {
+                rename_in(x);
+            }
         }
     }
 }

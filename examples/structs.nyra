@@ -19,7 +19,7 @@ fn moved(p: Point, dx: int) -> Point = Point(x: p.x + dx, y: p.y)
 fn length2(l: Line) -> int {
     let dx = l.b.x - l.a.x
     let dy = l.b.y - l.a.y
-    ret dx * dx + dy * dy
+    return dx * dx + dy * dy
 }
 
 fn older(u: User) -> User = User(name: u.name, age: u.age + 1, tags: u.tags + ["older"])

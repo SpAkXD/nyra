@@ -6,7 +6,7 @@ fn digit_sum(n: int) -> int {
         total = total + x % 10
         x = x / 10
     }
-    ret total
+    return total
 }
 
 fn reverse(n: int) -> int {
@@ -16,11 +16,11 @@ fn reverse(n: int) -> int {
         r = r * 10 + x % 10
         x = x / 10
     }
-    ret r
+    return r
 }
 
 fn is_palindrome(n: int) -> bool {
-    ret n == reverse(n)
+    return n == reverse(n)
 }
 
 fn main() {

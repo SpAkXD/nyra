@@ -2,7 +2,7 @@
 fn add_row(grid: [[int]], row: [int]) -> [[int]] {
     var g = grid
     g.push(row)
-    ret g
+    return g
 }
 
 fn words(text: str) -> [str] = text.split(" ")
@@ -14,7 +14,7 @@ fn longest(ws: [str]) -> str {
             best = w
         }
     }
-    ret best
+    return best
 }
 
 fn main() {

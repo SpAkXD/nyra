@@ -601,8 +601,8 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
     for (i, t) in toks.iter().enumerate() {
         if t.tok == Tok::Newline && i > 0 {
             // (a line may also start with the `:` of a ternary)
-            let starts = op(toks.get(i + 1), toks.get(i + 2))
-                || toks.get(i + 1).is_some_and(|n| matches!(n.tok, Tok::Dot | Tok::Colon));
+            let starts =
+                op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| matches!(n.tok, Tok::Dot | Tok::Colon));
             let ends = op(toks.get(i - 1), i.checked_sub(2).map(|k| &toks[k]));
             if starts || ends {
                 continue;

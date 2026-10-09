@@ -13,7 +13,7 @@ fn longest_word(text: str) -> str {
                 best = w
             }
         }
-        ret best
+        return best
     }
 }
 

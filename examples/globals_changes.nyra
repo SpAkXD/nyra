@@ -10,21 +10,21 @@ fn mark(i: int, j: int) {
     p.tags.push("m{i}{j}")
 }
 fn fill(n: int) {
-    if n == 0 { ret }
+    if n == 0 { return }
     count += 1
     fill(n - 1)
 }
 fn grow() -> [str] {
     words.push("w" + str(words.len()))
-    ret words
+    return words
 }
 fn next() -> int {
     count += 10
-    ret count
+    return count
 }
 fn same(xs: [str]) -> int {
     words.push("z")
-    ret xs.len()
+    return xs.len()
 }
 mark(0, 1)
 mark(1, 2)
