@@ -1160,10 +1160,12 @@ class EvaluateTypeScript(unittest.TestCase):
     def test_timeout_and_output_limit(self):
         lang = run.TypeScriptLang(timeout=5)
         self.assertEqual(lang.evaluate("while (true) {}\n", _task()).kind, "timeout")
-        # a generous timeout and megabyte lines: on a slow CI runner the TypeScript start-up alone can take
-        # seconds, so with a short timeout the cap would race the clock
+        # Node writes to a pipe asynchronously on Linux: a `while (true)` loop never lets it flush, so the
+        # output stays in memory and the program times out. Yielding between lines lets the output reach
+        # the cap; the generous timeout covers a slow CI runner's TypeScript start-up.
         slow_ok = run.TypeScriptLang(timeout=60)
-        r = slow_ok.evaluate('const s = "x".repeat(1000000);\nwhile (true) console.log(s);\n', _task())
+        program = 'const s = "x".repeat(100000);\nfunction w(): void { console.log(s); setImmediate(w); }\nw();\n'
+        r = slow_ok.evaluate(program, _task())
         self.assertEqual(r.kind, "output_limit")
 
     def test_secrets_are_not_visible_to_the_program(self):
