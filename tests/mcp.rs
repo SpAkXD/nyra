@@ -83,7 +83,11 @@ fn tool_json(replies: &[Json], id: u64) -> (bool, Json) {
 }
 
 fn node_available() -> bool {
-    Command::new("node").arg("--version").output().is_ok()
+    let ok = Command::new("node").arg("--version").output().is_ok();
+    if !ok {
+        common::missing("no Node.js for the JavaScript backend");
+    }
+    ok
 }
 
 const HELLO: &str = "fn main() {\n    for i in 0..3 {\n        print(\"hi {i}\")\n    }\n}\n";

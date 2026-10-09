@@ -1,4 +1,4 @@
-//! v0.3 additions to the type checker: structs, arrays, strings and chars as values with
+//! The type checker's knowledge of data: structs, arrays, maps, strings and chars as values with
 //! methods, places (what an assignment or a mutating method may change), `inout` arguments,
 //! `free`/`keep`/`arena`, and the freed-variable analysis.
 

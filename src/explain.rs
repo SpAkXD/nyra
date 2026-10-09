@@ -119,7 +119,9 @@ pub fn parse(db: &str) -> Result<Vec<Entry>, String> {
 
 fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) -> Result<Entry, String> {
     // fields: `- **Label:** text`, then continuation lines until the next field
-    let mut fields: Vec<(usize, &str, String, Vec<(usize, &str)>)> = Vec::new();
+    // (line, label, text, the lines of a code block)
+    type Field<'a> = (usize, &'a str, String, Vec<(usize, &'a str)>);
+    let mut fields: Vec<Field> = Vec::new();
     let mut in_fence = false;
     for &(no, line) in body {
         let starts_field = !in_fence && line.starts_with("- **") && line.contains(":**");
@@ -342,7 +344,8 @@ fn render_entry(e: &Entry, all: &[Entry]) -> String {
 fn render_list(all: &[Entry], planned: bool) -> String {
     let mut out = String::from("Nyra error codes. `nyra explain CODE` shows an entry; add --json for JSON.\n\n");
     let width = all.iter().map(|e| e.title.chars().count()).max().unwrap_or(0).min(56);
-    let sections: [(&str, fn(&Entry) -> bool); 3] = [
+    type Section = (&'static str, fn(&Entry) -> bool);
+    let sections: [Section; 3] = [
         ("compile errors", |e| !e.planned && e.kind == "compile error"),
         ("run-time errors (the program stops with exit code 101)", |e| !e.planned && e.kind == "runtime error"),
         ("planned, not in the compiler yet", |e| e.planned),

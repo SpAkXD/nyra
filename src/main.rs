@@ -1,6 +1,5 @@
 mod ast;
 mod check;
-mod check_v03;
 mod codegen;
 mod diag;
 mod edit;

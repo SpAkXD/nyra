@@ -430,7 +430,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 |---|---|
 | `src/lexer.rs` | text to tokens |
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
-| `src/check.rs`, `src/check_v03.rs` | type checking, collects every error in one pass |
+| `src/check.rs`, `src/check/` | type checking, collects every error in one pass |
 | `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
 | `src/codegen/` | the backends: `c.rs`, `js.rs`, `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
 | `src/rt/*/` | the runtimes they embed: strings, arrays, printing, runtime errors |

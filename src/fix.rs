@@ -234,7 +234,7 @@ mod tests {
     fn edits_apply_only_where_they_find_their_text() {
         let src = "fn main() {\n    return 1\n}\n";
         let ok = Edit::replace(at(2, 5), "return", "ret");
-        assert_eq!(apply(src, &[ok.clone()]).as_deref(), Some("fn main() {\n    ret 1\n}\n"));
+        assert_eq!(apply(src, std::slice::from_ref(&ok)).as_deref(), Some("fn main() {\n    ret 1\n}\n"));
         // one column off: the text there is not `return`, so nothing happens
         assert_eq!(apply(src, &[Edit::replace(at(2, 4), "return", "ret")]), None);
         // out of range
@@ -248,7 +248,7 @@ mod tests {
     fn a_range_may_hold_whitespace_around_the_expected_text() {
         let src = "fn main()\n{\n}\n";
         let join = Edit::range(at(1, 9), at(2, 1), ")", ") ");
-        assert_eq!(apply(src, &[join.clone()]).as_deref(), Some("fn main() {\n}\n"));
+        assert_eq!(apply(src, std::slice::from_ref(&join)).as_deref(), Some("fn main() {\n}\n"));
         assert_eq!(preview(src, &[join]).as_deref(), Some("`fn main() {`"));
         // a comment in the range is not whitespace
         assert_eq!(apply("fn main() // c\n{\n}\n", &[Edit::range(at(1, 9), at(2, 1), ")", ") ")]), None);

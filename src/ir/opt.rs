@@ -450,14 +450,14 @@ fn exprs_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
                     }
                 }
             }
-            StmtKind::Op { args, .. } => args.iter_mut().for_each(|a| f(a)),
+            StmtKind::Op { args, .. } => args.iter_mut().for_each(&mut *f),
             StmtKind::Store { place: p, value } => {
                 place(p, f);
                 f(value);
             }
             StmtKind::Mutate { place: p, args, .. } => {
                 place(p, f);
-                args.iter_mut().for_each(|a| f(a));
+                args.iter_mut().for_each(&mut *f);
             }
             StmtKind::If { cond, then, els } => {
                 f(cond);

@@ -137,6 +137,7 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
     } else if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         Some(&[])
     } else {
+        common::missing("no Node.js and no C compiler to run the examples of the error database");
         None
     };
     let dir = scratch("errors-db");

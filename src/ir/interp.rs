@@ -622,7 +622,7 @@ impl<'m> Interp<'m> {
                     return Err(oom(Span { line: 0, col: 0 }));
                 }
                 self.tick(missing as u64)?;
-                let fill: String = std::iter::repeat(*c).take(missing as usize).collect();
+                let fill: String = std::iter::repeat_n(*c, missing as usize).collect();
                 text(if op == RtOp::StrPadLeft { fill + t } else { format!("{t}{fill}") })
             }
             RtOp::ArrNew => {

@@ -176,7 +176,7 @@ fn apply_json(src: &str, edits: &[Json]) -> String {
         .map(|e| (at(e, "line", "col"), at(e, "end_line", "end_col"), e.get("text").and_then(|t| t.as_str()).unwrap().to_string()))
         .collect();
     // from the last edit to the first, so the earlier positions stay valid
-    ranges.sort_by(|a, b| b.0.cmp(&a.0));
+    ranges.sort_by_key(|a| std::cmp::Reverse(a.0));
     let mut out = chars;
     for (a, b, text) in ranges {
         out.splice(a..b, text.chars());

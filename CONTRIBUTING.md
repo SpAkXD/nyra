@@ -13,7 +13,12 @@ git clone https://github.com/SpAkXD/nyra
 cd nyra
 cargo build --release     # the binary is target/release/nyra
 cargo test                # must pass before every commit
+cargo fmt                 # the style of rustfmt.toml (CI runs `cargo fmt --check`)
+cargo clippy --all-targets -- -D warnings
 ```
+
+A toolchain that is missing (Python, Rust, Go, Node.js, a C compiler) skips the tests of its target;
+with `NYRA_REQUIRE_ALL_TARGETS=1` (set in CI on Linux) a missing one fails them instead.
 
 Run a program while you work: `cargo run -- run examples/hello.nyra` (add `--js` for JavaScript).
 
@@ -27,7 +32,7 @@ hand to check one program the same way.
 | Path | What |
 |---|---|
 | `src/lexer.rs`, `src/parser.rs`, `src/ast.rs` | text to tokens to syntax tree |
-| `src/check.rs`, `src/check_v03.rs` | type checker, and most error codes |
+| `src/check.rs`, `src/check/` | type checker, and most error codes |
 | `src/ir/` | the intermediate representation: lowering (evaluation order, reference counting), checks, optimizations |
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
 | `src/rt/c/`, `src/rt/js/` | the runtime code each backend embeds (strings, arrays, printing, runtime errors) |

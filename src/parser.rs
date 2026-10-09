@@ -3,6 +3,9 @@
 //! run reports as many errors as possible. Every error says what was expected,
 //! what was found and (through `hints`) what to write instead.
 
+// a parse error is a whole `Diag`: big, but errors are rare, and boxing each one would only add noise
+#![allow(clippy::result_large_err)]
+
 use crate::ast::*;
 use crate::diag::{after, suggest_fix, Diag, Edit};
 use crate::hints;

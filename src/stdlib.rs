@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn every_function_has_a_unique_name() {
         for (i, f) in StdFn::ALL.iter().enumerate() {
-            assert_eq!(StdFn::from_name(&f.full_name()), Some(*f));
+            assert_eq!(StdFn::from_name(f.full_name()), Some(*f));
             assert!(StdFn::ALL[..i].iter().all(|g| g.full_name() != f.full_name()));
             assert!(is_module(f.path().0));
         }

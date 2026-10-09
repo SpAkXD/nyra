@@ -6,7 +6,7 @@
 
 use super::{count, show, start, was_were, Checker, Decl};
 use crate::ast::*;
-use crate::check_v03 as v3;
+use super::data;
 use crate::diag::Diag;
 
 /// E0213: a lambda where a value is needed.
@@ -44,8 +44,8 @@ impl Checker {
     /// `recv.name(args)` for the methods of this module; `None` for every other method.
     pub(super) fn lambda_method(&mut self, recv: &mut Expr, rt: Type, name: &str, args: &mut [Expr], span: Span) -> Option<Type> {
         let elem = match rt {
-            Type::Array(_) if v3::LAMBDA_METHODS.contains(&name) => rt.elem()?,
-            Type::Str if v3::STR_LAMBDA_METHODS.contains(&name) => Type::Char,
+            Type::Array(_) if data::LAMBDA_METHODS.contains(&name) => rt.elem()?,
+            Type::Str if data::STR_LAMBDA_METHODS.contains(&name) => Type::Char,
             _ => return None,
         };
         let r = show(recv).unwrap_or_else(|| if rt == Type::Str { "s".into() } else { "xs".into() });
@@ -144,7 +144,7 @@ impl Checker {
                     "any" | "all" => Type::Bool,
                     _ => {
                         // `sort_by` sorts its receiver in place, like `sort`
-                        if v3::place_root(recv).is_some() {
+                        if data::place_root(recv).is_some() {
                             self.check_place(recv, "call `.sort_by()` on", span);
                         } else {
                             self.errs.push(

@@ -219,7 +219,7 @@ fn assigned(stmts: &[ast::Stmt], exprs: &[&ast::Expr], names: &mut HashSet<Strin
     let scan = |e: &ast::Expr, names: &mut HashSet<String>| {
         each_expr(e, &mut |x| {
             if let ast::ExprKind::Inout(p) = &x.kind {
-                if let Some(root) = crate::check_v03::place_root(p) {
+                if let Some(root) = crate::check::data::place_root(p) {
                     names.insert(root.to_string());
                 }
             }
@@ -232,7 +232,7 @@ fn assigned(stmts: &[ast::Stmt], exprs: &[&ast::Expr], names: &mut HashSet<Strin
         match &s.kind {
             ast::StmtKind::Let { value, .. } => scan(value, names),
             ast::StmtKind::Assign { target, value, .. } => {
-                if let Some(root) = crate::check_v03::place_root(target) {
+                if let Some(root) = crate::check::data::place_root(target) {
                     names.insert(root.to_string());
                 }
                 scan(target, names);
@@ -280,7 +280,7 @@ fn counters(body: &[ast::Stmt], exclude: &HashSet<String>) -> HashSet<String> {
                             bad.insert(x.clone());
                         }
                         _ => {
-                            if let Some(root) = crate::check_v03::place_root(target) {
+                            if let Some(root) = crate::check::data::place_root(target) {
                                 bad.insert(root.to_string());
                             }
                         }
@@ -315,7 +315,7 @@ fn counters(body: &[ast::Stmt], exclude: &HashSet<String>) -> HashSet<String> {
             for e in exprs {
                 each_expr(e, &mut |x| {
                     if let ast::ExprKind::Inout(p) = &x.kind {
-                        if let Some(root) = crate::check_v03::place_root(p) {
+                        if let Some(root) = crate::check::data::place_root(p) {
                             bad.insert(root.to_string());
                         }
                     }
@@ -1266,7 +1266,7 @@ impl<'a> Lower<'a> {
         let mut changed: Vec<LocalId> = hidden.iter().filter(|(_, io)| *io).map(|(l, _)| *l).collect();
         for a in args {
             if let ast::ExprKind::Inout(p) = &a.kind {
-                if let Some(root) = crate::check_v03::place_root(p) {
+                if let Some(root) = crate::check::data::place_root(p) {
                     changed.push(self.lookup(root));
                 }
             }
@@ -1586,7 +1586,7 @@ impl<'a> Lower<'a> {
                     if i > 0 {
                         parts.push(Expr::Str(self.strs.intern(" ")));
                     }
-                    let later = args[i + 1..].iter().chain(end).any(|x| mutates(x));
+                    let later = args[i + 1..].iter().chain(end).any(mutates);
                     match &a.kind {
                         // an interpolated string: its parts directly (a later value that changes
                         // a variable gets the string built first)
@@ -1839,14 +1839,14 @@ impl<'a> Lower<'a> {
 
 /// True if the statement that wrote `t` (the last one that did) made a new value.
 fn produced_owned(out: &[Stmt], t: LocalId) -> bool {
-    match out.iter().rev().find_map(|s| match &s.kind {
-        StmtKind::Op { dst: Some(d), op, .. } | StmtKind::Mutate { dst: Some(d), op, .. } if *d == t => Some(op.owned_result()),
-        StmtKind::Call { dst: Some(d), .. } if *d == t => Some(true),
-        _ => None,
-    }) {
-        Some(owned) => owned,
-        None => false,
-    }
+    out.iter()
+        .rev()
+        .find_map(|s| match &s.kind {
+            StmtKind::Op { dst: Some(d), op, .. } | StmtKind::Mutate { dst: Some(d), op, .. } if *d == t => Some(op.owned_result()),
+            StmtKind::Call { dst: Some(d), .. } if *d == t => Some(true),
+            _ => None,
+        })
+        .unwrap_or(false)
 }
 
 /// Removes temporaries that ended up unused (results written straight into variables) and

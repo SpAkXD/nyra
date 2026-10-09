@@ -14,13 +14,13 @@
 //! so the loop can run where the call is, in the statement's left-to-right order.
 
 use super::{ast, BinOp, Expr, LocalId, Lower, Place, RtOp, Scope, Span, Stmt, StmtKind, Ty, Type, UnOp};
-use crate::check_v03 as v3;
+use crate::check::data;
 
 /// True if `recv.name(..)` is lowered here.
 pub(super) fn is_chain_method(recv: Ty, name: &str) -> bool {
     match recv {
-        Ty::Array(_) => v3::LAMBDA_METHODS.contains(&name),
-        Ty::Str => v3::STR_LAMBDA_METHODS.contains(&name),
+        Ty::Array(_) => data::LAMBDA_METHODS.contains(&name),
+        Ty::Str => data::STR_LAMBDA_METHODS.contains(&name),
         _ => false,
     }
 }

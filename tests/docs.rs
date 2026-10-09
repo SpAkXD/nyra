@@ -10,6 +10,8 @@
 //! order and whose top-level variables the functions can use. A block of definitions alone gets an
 //! empty `fn main()`.
 
+mod common;
+
 use std::process::{Command, Stdio};
 
 /// The contents of every fenced block marked `lang` in a markdown file.
@@ -83,6 +85,7 @@ fn nyra_code_blocks_in_the_docs_compile() {
     } else if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| works(c)) {
         Some(&[])
     } else {
+        common::missing("no Node.js and no C compiler to run the code blocks");
         None
     };
 

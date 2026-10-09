@@ -11,6 +11,9 @@
 //!
 //! Each run starts in an empty folder of its own, so an example may create files.
 
+mod common;
+
+use common::missing;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -102,10 +105,14 @@ fn examples_produce_expected_output_on_every_backend() {
     if available("node") {
         targets.push(("js", &["--js"], "1"));
         targets.push(("js, no optimizations", &["--js"], "0"));
+    } else {
+        missing("no Node.js for the JavaScript backend");
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         targets.push(("native", &[], "1"));
         targets.push(("native, no optimizations", &[], "0"));
+    } else {
+        missing("no C compiler for the native backend");
     }
 
     for path in files("examples") {
@@ -131,9 +138,13 @@ fn runtime_errors_report_code_position_and_exit_101() {
     let mut backends: Vec<&[&str]> = Vec::new();
     if available("node") {
         backends.push(&["--js"]);
+    } else {
+        missing("no Node.js for the JavaScript backend");
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         backends.push(&[]);
+    } else {
+        missing("no C compiler for the native backend");
     }
     for path in files("tests/runtime") {
         let src = std::fs::read_to_string(&path).unwrap();
@@ -266,7 +277,7 @@ fn check_target(flags: &[&str]) {
 fn every_example_on_python() {
     let py = std::env::var("NYRA_PYTHON").ok().or_else(|| ["python3", "python"].into_iter().find(|p| works(p, &["--version"])).map(String::from));
     if py.is_none() {
-        eprintln!("skipped: no Python (python3, python or NYRA_PYTHON)");
+        missing("no Python (python3, python or NYRA_PYTHON)");
         return;
     }
     check_target(&["--target", "py"]);
@@ -275,7 +286,7 @@ fn every_example_on_python() {
 #[test]
 fn every_example_on_typescript() {
     if !node_runs_typescript() {
-        eprintln!("skipped: TypeScript needs Node.js 22.6 or later");
+        missing("TypeScript needs Node.js 22.6 or later");
         return;
     }
     check_target(&["--target", "ts"]);
@@ -285,7 +296,7 @@ fn every_example_on_typescript() {
 fn every_example_on_rust() {
     let rustc = std::env::var("NYRA_RUSTC").unwrap_or_else(|_| "rustc".into());
     if !works(&rustc, &["--version"]) {
-        eprintln!("skipped: no rustc (or NYRA_RUSTC)");
+        missing("no rustc (or NYRA_RUSTC)");
         return;
     }
     check_target(&["--target", "rs"]);
@@ -295,7 +306,7 @@ fn every_example_on_rust() {
 fn every_example_on_go() {
     let go = std::env::var("NYRA_GO").unwrap_or_else(|_| "go".into());
     if !works(&go, &["version"]) {
-        eprintln!("skipped: no go (or NYRA_GO)");
+        missing("no go (or NYRA_GO)");
         return;
     }
     check_target(&["--target", "go"]);

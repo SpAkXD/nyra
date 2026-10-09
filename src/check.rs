@@ -6,11 +6,12 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::check_v03::{self as v3, StructInfo};
+use data::StructInfo;
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
 use crate::stdlib;
 
+pub mod data;
 mod globals;
 mod lambda;
 
@@ -187,7 +188,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         for f in &sd.fields {
             c.check_type(f.ty, f.span);
         }
-        if c.structs.contains_key(&sd.name) && v3::contains_itself(&sd.name, &c.structs) {
+        if c.structs.contains_key(&sd.name) && data::contains_itself(&sd.name, &c.structs) {
             c.errs.push(
                 Diag::new("E0222", format!("struct `{}` contains itself, so its size would be infinite", sd.name), sd.span)
                     .hint(format!(
@@ -344,7 +345,7 @@ fn show(e: &Expr) -> Option<String> {
             t
         }
         ExprKind::Bool(b) => b.to_string(),
-        ExprKind::Char(c) => v3::show_char(*c),
+        ExprKind::Char(c) => data::show_char(*c),
         ExprKind::Str(s) if s.len() <= 16 && !s.contains(['"', '\\', '\n', '\t', '\r']) => format!("\"{s}\""),
         ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::Comprehension(_) | ExprKind::MapLit(_) => return None,
         ExprKind::Var(n) => n.clone(),
@@ -655,7 +656,7 @@ impl Checker {
     }
 
     fn managed(&self, t: Type) -> bool {
-        v3::managed(t, &self.structs)
+        data::managed(t, &self.structs)
     }
 
     /// True if a value of `t` holds a map (`json` does not handle maps yet).
@@ -777,7 +778,7 @@ impl Checker {
                 if let ExprKind::Str(text) = &e.kind {
                     if text.chars().count() == 1 {
                         let c = text.chars().next().unwrap_or(' ') as u32;
-                        return format!("a character is written in single quotes: `{}`", v3::show_char(c));
+                        return format!("a character is written in single quotes: `{}`", data::show_char(c));
                     }
                 }
                 return "a `char` is one character: take one from a string with `s[i]`".to_string();
@@ -973,7 +974,7 @@ impl Checker {
     fn loop_body(&mut self, body: &mut [Stmt], vars: &[(&str, Type, Span)]) {
         let before = self.freed.clone();
         let (mut frees, mut assigned) = (Vec::new(), Vec::new());
-        v3::frees_in(body, &mut frees, &mut assigned);
+        data::frees_in(body, &mut frees, &mut assigned);
         for (name, at) in frees {
             if !assigned.contains(&name) && self.lookup(&name).is_some() {
                 self.freed.entry(name).or_insert(Freed { line: at.line, maybe: true });
@@ -1255,7 +1256,7 @@ impl Checker {
                 return;
             }
         }
-        let Some(root) = v3::place_root(e) else {
+        let Some(root) = data::place_root(e) else {
             if !e.ty.is_unknown() {
                 self.errs.push(
                     Diag::new("E0229", format!("cannot {what} this expression: only a variable, a field or an element can change"), span)
@@ -1876,7 +1877,7 @@ impl Checker {
             self.errs.push(Diag::new("E0224", format!("`{sname}` has no field `{name}`"), span).hint(hint).fix_opt(fix));
             return Type::Unknown;
         }
-        if let Some(sig) = v3::method_sig(bt, name) {
+        if let Some(sig) = data::method_sig(bt, name) {
             // `xs.len`: with no arguments to pass, the call is certain
             let fix = sig.params.is_empty().then(|| Edit::replace(span, name, format!("{name}()")));
             self.errs.push(
@@ -1892,7 +1893,7 @@ impl Checker {
             _ => "c".into(),
         });
         // `xs.length`: what other languages write as a field is a method here
-        let renamed = hints::method_rename(bt, name).filter(|m| v3::method_sig(bt, m).is_some_and(|s| s.params.is_empty()));
+        let renamed = hints::method_rename(bt, name).filter(|m| data::method_sig(bt, m).is_some_and(|s| s.params.is_empty()));
         let hint = match hints::method(bt, name, &r) {
             Some(h) => {
                 let fix = renamed.map(|m| Edit::replace(span, name, format!("{m}()")));
@@ -1903,7 +1904,7 @@ impl Checker {
                 Type::Array(_) | Type::Str | Type::Char => format!(
                     "`{}` has methods, not fields: {}",
                     bt.name(),
-                    v3::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
+                    data::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
                 ),
                 _ => "only structs have fields: `p.x`".to_string(),
             },
@@ -1942,12 +1943,12 @@ impl Checker {
         if let Some(t) = self.lambda_method(recv, rt, name, args, span) {
             return t;
         }
-        let Some(sig) = v3::method_sig(rt, name) else {
+        let Some(sig) = data::method_sig(rt, name) else {
             // (a lambda argument is not judged: the method is the mistake)
             for a in args.iter_mut().filter(|a| !matches!(a.kind, ExprKind::Lambda(..))) {
                 self.expr(a);
             }
-            let methods = v3::methods_of(rt);
+            let methods = data::methods_of(rt);
             let shown = show(recv).unwrap_or_else(|| match rt {
                 Type::Array(_) => "xs".into(),
                 Type::Str => "s".into(),
@@ -1955,9 +1956,9 @@ impl Checker {
                 _ => "x".into(),
             });
             // a method of another language that is the same operation under another name
-            let arity = |m: &str| v3::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
+            let arity = |m: &str| data::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
             let mut fix = None;
-            let hint = if rt == Type::Str && v3::CHAR_METHODS.contains(&name) {
+            let hint = if rt == Type::Str && data::CHAR_METHODS.contains(&name) {
                 format!("`{name}()` is a `char` method: use a character, `'A'.{name}()` or `s[0].{name}()`; all codes of a string: `s.codes()`")
             } else if let Some(h) = hints::method(rt, name, &shown) {
                 fix = hints::method_rename(rt, name).filter(|m| arity(m)).map(|m| vec![Edit::replace(span, name, m)]);
@@ -2039,7 +2040,7 @@ impl Checker {
             }
         }
         if sig.mutates {
-            if v3::place_root(recv).is_some() {
+            if data::place_root(recv).is_some() {
                 self.check_place(recv, &format!("call `.{name}()` on"), span);
             } else {
                 self.errs.push(
@@ -2051,6 +2052,7 @@ impl Checker {
         sig.ret
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn binary(&mut self, op: BinOp, l: Type, r: Type, span: Span, le: &Expr, re: &Expr, compound: bool) -> Type {
         use Type::{Bool, Char, Float, Int, Str, Void};
         if l.is_unknown() || r.is_unknown() {
@@ -2353,7 +2355,7 @@ impl Checker {
                 (ExprKind::Inout(place), true) => {
                     let place: &mut Expr = place;
                     self.expect_ty(want, tys[i], place, Ctx::Arg { f: name, idx: i, param: &names[i] });
-                    if v3::place_root(place).is_none() {
+                    if data::place_root(place).is_none() {
                         self.errs.push(
                             Diag::new("E0229", format!("`inout` needs a variable, a field or an element, but argument {} is a computed value", i + 1), a.span)
                                 .hint("store the value in a `var` first, then pass `inout` that variable"),
@@ -2361,7 +2363,7 @@ impl Checker {
                         continue;
                     }
                     self.check_place(place, "pass `inout`", a.span);
-                    let root = v3::place_root(place).unwrap_or_default().to_string();
+                    let root = data::place_root(place).unwrap_or_default().to_string();
                     if let Some((_, first)) = roots.iter().find(|(r, _)| *r == root) {
                         self.errs.push(
                             Diag::new(
