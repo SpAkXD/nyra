@@ -1,0 +1,9 @@
+{
+ "python": 10100,
+ "Y": 10530,
+ "Y+kw": 10476,
+ "Y+kw+print_noparen": 10448,
+ "Y+kw+no_colon": 10328,
+ "Y+kw+print_noparen+no_colon": 10300,
+ "Y+kw+short_names": 10414
+}

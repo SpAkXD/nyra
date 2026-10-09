@@ -1,0 +1,85 @@
+var seats: [[str]] = [[""].repeat(10)].repeat(6)
+let letters = "ABCDEF"
+
+fn book(name: str, k: int) {
+    let order = [2, 3, 1, 4, 0, 5]
+    for r in order {
+        var best = -1
+        var bestd = 0
+        for s in 0..10 - k + 1 {
+            var ok = true
+            for j in s..s + k {
+                if seats[r][j] != "" {
+                    ok = false
+                    break
+                }
+            }
+            if ok {
+                let d = abs(2 * (s + 1) + k - 1 - 11)
+                if best == -1 || d < bestd {
+                    best = s
+                    bestd = d
+                }
+            }
+        }
+        if best != -1 {
+            for j in best..best + k {
+                seats[r][j] = name
+            }
+            let l = letters[r]
+            if k == 1 {
+                print("{name}: {l}{best + 1}")
+            } else {
+                print("{name}: {l}{best + 1}-{l}{best + k}")
+            }
+            ret
+        }
+    }
+    print("{name}: no room")
+}
+
+fn cancel(name: str) {
+    var n = 0
+    for r in 0..6 {
+        for j in 0..10 {
+            if seats[r][j] == name {
+                seats[r][j] = ""
+                n += 1
+            }
+        }
+    }
+    if n == 0 {
+        print("{name} has no booking")
+    } else {
+        print("{name} cancelled ({n} seats)")
+    }
+}
+
+seats[2][4] = "X"
+seats[2][5] = "X"
+seats[4][0] = "X"
+
+let reqs = ["ann 4", "bob 4", "cat 2", "dan 10", "eve 1", "fay 6", "cancel bob", "gus 5", "hal 3", "cancel zed", "ivy 9", "jo 2", "kai 8", "lea 3"]
+for q in reqs {
+    let parts = q.split(" ")
+    if parts[0] == "cancel" {
+        cancel(parts[1])
+    } else {
+        book(parts[0], int(parts[1]))
+    }
+}
+
+for r in 0..6 {
+    var line = str(letters[r]) + " "
+    for j in 0..10 {
+        let v = seats[r][j]
+        if v == "X" {
+            line += "x"
+        } else if v == "" {
+            line += "."
+        } else {
+            line += "#"
+        }
+    }
+    print(line)
+}

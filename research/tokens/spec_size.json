@@ -1,0 +1,29 @@
+{
+ "claude-opus-5-5": {
+  "nyra_request_input_tokens": 8471,
+  "python_request_input_tokens": 251,
+  "task_only": 147,
+  "SPEC.md": 8174,
+  "AI_GUIDE.md": 16373,
+  "llms.txt": 4008,
+  "ERRORS.md": 42154
+ },
+ "claude-sonnet-5-5": {
+  "nyra_request_input_tokens": 8471,
+  "python_request_input_tokens": 251,
+  "task_only": 147,
+  "SPEC.md": 8174,
+  "AI_GUIDE.md": 16373,
+  "llms.txt": 4008,
+  "ERRORS.md": 42154
+ },
+ "claude-haiku-4-5-20251001": {
+  "nyra_request_input_tokens": 7162,
+  "python_request_input_tokens": 222,
+  "task_only": 140,
+  "SPEC.md": 6903,
+  "AI_GUIDE.md": 13550,
+  "llms.txt": 3070,
+  "ERRORS.md": 33927
+ }
+}

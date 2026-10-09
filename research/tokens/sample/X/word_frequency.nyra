@@ -1,0 +1,19 @@
+let text = "The rabbit's hole was deep; the rabbit didn't stop. 'Down, down, down!' said Alice -- and down-hill she went, past rabbit-holes, shelves, maps and jars. Was it 3 o'clock? It wasn't: the clock said half-past 4. ''Curious,'' thought Alice, ''curiouser'' -- and the rabbit's watch said nothing at all. DOWN went the jars, down went the maps; Alice didn't mind, didn't care, didn't stop. The rabbit's ears twitched; the rabbit whispered."
+let stops = ["the", "and", "for", "are", "but", "not", "you", "all", "any", "can", "had", "her", "was", "one", "our", "out", "his", "has"]
+var counts = [:]
+var cur = ""
+for c in text.lower() + " ":
+    if (c >= 'a' && c <= 'z') || c == '\'':
+        cur += str(c)
+    else:
+        if cur.len() > 0:
+            let w = cur.trim("'")
+            if w.len() >= 3 && w not in stops:
+                counts[w] = counts.get(w, 0) + 1
+        cur = ""
+let ranked = counts.keys().sorted_by(w => (-counts[w], w))
+for w in ranked.slice(0, 8):
+    let cs = str(counts[w])
+    print(w + ".".repeat(24 - w.len() - cs.len()) + cs)
+print("distinct: {counts.len()}")
+print("longest: {counts.keys().sorted_by(w => (-w.len(), w))[0]}")

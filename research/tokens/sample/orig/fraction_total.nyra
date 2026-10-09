@@ -1,0 +1,75 @@
+struct Frac { n: int, d: int }
+
+fn gcd(a: int, b: int) -> int {
+    var x = abs(a)
+    var y = abs(b)
+    while y != 0 {
+        let t = x % y
+        x = y
+        y = t
+    }
+    ret x
+}
+
+fn mk(n: int, d: int) -> Frac {
+    var nn = n
+    var dd = d
+    if dd < 0 {
+        nn = -nn
+        dd = -dd
+    }
+    let g = gcd(nn, dd)
+    ret Frac(n: nn / g, d: dd / g)
+}
+
+fn fmt(f: Frac) -> str {
+    if f.d == 1 { ret str(f.n) }
+    if abs(f.n) < f.d { ret "{f.n}/{f.d}" }
+    let sign = if f.n < 0 { "-" } else { "" }
+    let a = abs(f.n)
+    let w = a / f.d
+    let r = a % f.d
+    ret "{sign}{w} {r}/{f.d}"
+}
+
+fn greater(a: Frac, b: Frac) -> bool = a.n * b.d > b.n * a.d
+
+let ops = ["add 1/2", "sub 3/4", "mul -2/3", "div 5/6", "add 7/3", "div 0/5", "mul 4/-6", "add 10/4", "sub -1/12", "mul 0/7", "add -9/4", "div -3/2", "sub 5/3", "add 2/3", "div 1/-4"]
+
+var total = Frac(n: 0, d: 1)
+var has_best = false
+var best = Frac(n: 0, d: 1)
+var best_k = 0
+
+for i, op in ops {
+    let parts = op.split(" ")
+    let word = parts[0]
+    let fp = parts[1].split("/")
+    let f = mk(int(fp[0]), int(fp[1]))
+    var rejected = false
+    if word == "add" {
+        total = mk(total.n * f.d + f.n * total.d, total.d * f.d)
+    } else if word == "sub" {
+        total = mk(total.n * f.d - f.n * total.d, total.d * f.d)
+    } else if word == "mul" {
+        total = mk(total.n * f.n, total.d * f.d)
+    } else {
+        if f.n == 0 {
+            rejected = true
+        } else {
+            total = mk(total.n * f.d, total.d * f.n)
+        }
+    }
+    if rejected {
+        print("{op}: cannot divide by zero, total {fmt(total)}")
+    } else {
+        print("{op}: total {fmt(total)}")
+        if !has_best || greater(total, best) {
+            has_best = true
+            best = total
+            best_k = i + 1
+        }
+    }
+}
+
+print("largest total {fmt(best)} after operation {best_k}")

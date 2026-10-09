@@ -1,0 +1,32 @@
+fn next(n: int) -> int {
+    var s = 0
+    var m = n
+    while m > 0 {
+        let d = m % 10
+        s += d * d
+        m = m / 10
+    }
+    ret s
+}
+
+fn happy(n: int) -> bool {
+    var x = n
+    var seen: [int: bool] = [:]
+    while x != 1 && !seen.has(x) {
+        seen[x] = true
+        x = next(x)
+    }
+    ret x == 1
+}
+
+fn main() {
+    var count = 0
+    var n = 1
+    while count < 10 {
+        if happy(n) {
+            print(n)
+            count += 1
+        }
+        n += 1
+    }
+}

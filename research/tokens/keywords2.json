@@ -1,0 +1,878 @@
+[
+ {
+  "group": "statement-start keyword",
+  "alt": "let",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "var",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "const",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "val",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "mut",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "my",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "statement-start keyword",
+  "alt": "set",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "fn",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "def",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "func",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "fun",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "function",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "proc",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "function keyword",
+  "alt": "sub",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "return keyword",
+  "alt": "ret",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "return keyword",
+  "alt": "return",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "return keyword",
+  "alt": "yield",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "return keyword",
+  "alt": "out",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "return keyword",
+  "alt": "give",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "struct keyword",
+  "alt": "struct",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "struct keyword",
+  "alt": "class",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "struct keyword",
+  "alt": "type",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "struct keyword",
+  "alt": "record",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "struct keyword",
+  "alt": "data",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "else-if",
+  "alt": "else if",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "else-if",
+  "alt": "elif",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "else-if",
+  "alt": "elsif",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "else-if",
+  "alt": "elseif",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "logical and",
+  "alt": "&&",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical and",
+  "alt": "and",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical and",
+  "alt": "&",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical or",
+  "alt": "||",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical or",
+  "alt": "or",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical or",
+  "alt": "|",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "logical not",
+  "alt": "!",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "logical not",
+  "alt": "not ",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "logical not",
+  "alt": "~",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "lambda arrow",
+  "alt": "=>",
+  "per_line": 13.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "lambda arrow",
+  "alt": "->",
+  "per_line": 14.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "lambda arrow",
+  "alt": ":",
+  "per_line": 13.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "range",
+  "alt": "..",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "range",
+  "alt": "...",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "range",
+  "alt": ":",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "range",
+  "alt": " to ",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "inout",
+  "alt": "inout",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "inout",
+  "alt": "ref",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "inout",
+  "alt": "&mut",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "inout",
+  "alt": "&",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "inout",
+  "alt": "mut",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "not-equal",
+  "alt": "!=",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "not-equal",
+  "alt": "<>",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "not-equal",
+  "alt": "~=",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "loop keyword",
+  "alt": "for",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "loop keyword",
+  "alt": "foreach",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "loop keyword",
+  "alt": "each",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "block-open",
+  "alt": "{{",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "block-open",
+  "alt": ":",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "block-open",
+  "alt": " then",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "block-open",
+  "alt": " do",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "example kw",
+  "alt": "ex",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "example kw",
+  "alt": "assert",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "example kw",
+  "alt": "test",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "example kw",
+  "alt": "example",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "example kw",
+  "alt": "check",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "import kw",
+  "alt": "use",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "import kw",
+  "alt": "import",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "import kw",
+  "alt": "include",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "import kw",
+  "alt": "require",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "import kw",
+  "alt": "from",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "true",
+  "alt": "true",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "true",
+  "alt": "True",
+  "per_line": 4.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "true",
+  "alt": "yes",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "true",
+  "alt": "1",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "none-loop",
+  "alt": "break",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "none-loop",
+  "alt": "continue",
+  "per_line": 3.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "none-loop",
+  "alt": "next",
+  "per_line": 2.9,
+  "delta_vs_placeholder": 0.0
+ },
+ {
+  "group": "none-loop",
+  "alt": "skip",
+  "per_line": 3.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "none-loop",
+  "alt": "stop",
+  "per_line": 3.9,
+  "delta_vs_placeholder": 1.0
+ },
+ {
+  "group": "len call",
+  "alt": "xs.len()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "len call",
+  "alt": "len(xs)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "len call",
+  "alt": "xs.length",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "len call",
+  "alt": "xs.size()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "len call",
+  "alt": "xs.count",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "len call",
+  "alt": "#xs",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "len call",
+  "alt": "xs.n",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "append",
+  "alt": "xs.push(v)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "append",
+  "alt": "xs.append(v)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "append",
+  "alt": "xs.add(v)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "append",
+  "alt": "xs += [v]",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "append",
+  "alt": "xs << v",
+  "per_line": 5.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "append",
+  "alt": "xs.push_back(v)",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "pad",
+  "alt": "s.pad_left(5)",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "pad",
+  "alt": "s.rjust(5)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "pad",
+  "alt": "s.lpad(5)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "pad",
+  "alt": "s.padl(5)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "pad",
+  "alt": "f\"{{s:>5}}\"",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 10.0
+ },
+ {
+  "group": "to string",
+  "alt": "str(n)",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "to string",
+  "alt": "n.str()",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "to string",
+  "alt": "n.to_string()",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "to string",
+  "alt": "string(n)",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "to string",
+  "alt": "n.toString()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "to string",
+  "alt": "String(n)",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "char code",
+  "alt": "c.code()",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "char code",
+  "alt": "ord(c)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "char code",
+  "alt": "c.ord()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "char code",
+  "alt": "int(c)",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "char code",
+  "alt": "c.charCodeAt(0)",
+  "per_line": 14.9,
+  "delta_vs_placeholder": 10.0
+ },
+ {
+  "group": "min/max",
+  "alt": "min(a, b)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "min/max",
+  "alt": "a.min(b)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "min/max",
+  "alt": "xs.min()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "min/max",
+  "alt": "min(xs)",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "char literal",
+  "alt": "'a'",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "char literal",
+  "alt": "\"a\"",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "split",
+  "alt": "s.split(\" \")",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "split",
+  "alt": "s.split()",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "split",
+  "alt": "s.words()",
+  "per_line": 7.9,
+  "delta_vs_placeholder": 3.0
+ },
+ {
+  "group": "split",
+  "alt": "s.split(\",\")",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "trim",
+  "alt": "s.trim()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "trim",
+  "alt": "s.strip()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "upper",
+  "alt": "s.upper()",
+  "per_line": 8.9,
+  "delta_vs_placeholder": 4.0
+ },
+ {
+  "group": "upper",
+  "alt": "s.to_upper()",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "upper",
+  "alt": "s.toUpperCase()",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "upper",
+  "alt": "s.uppercase()",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "starts",
+  "alt": "s.starts_with(p)",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "starts",
+  "alt": "s.startswith(p)",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "starts",
+  "alt": "s.startsWith(p)",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "starts",
+  "alt": "s.has_prefix(p)",
+  "per_line": 13.9,
+  "delta_vs_placeholder": 9.0
+ },
+ {
+  "group": "index_of",
+  "alt": "s.index_of(p)",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "index_of",
+  "alt": "s.find(p)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "index_of",
+  "alt": "s.indexOf(p)",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "index_of",
+  "alt": "s.index(p)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "is_digit",
+  "alt": "c.is_digit()",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "is_digit",
+  "alt": "c.isdigit()",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "is_digit",
+  "alt": "c.isDigit()",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ },
+ {
+  "group": "is_digit",
+  "alt": "c.is_numeric()",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "sort_by",
+  "alt": "xs.sort_by(x => x.k)",
+  "per_line": 15.9,
+  "delta_vs_placeholder": 13.0
+ },
+ {
+  "group": "sort_by",
+  "alt": "xs.sort(key=lambda x: x.k)",
+  "per_line": 18.9,
+  "delta_vs_placeholder": 16.0
+ },
+ {
+  "group": "sort_by",
+  "alt": "xs.sort_by_key(|x| x.k)",
+  "per_line": 18.9,
+  "delta_vs_placeholder": 16.0
+ },
+ {
+  "group": "sort_by",
+  "alt": "xs.sortBy(x => x.k)",
+  "per_line": 15.9,
+  "delta_vs_placeholder": 13.0
+ },
+ {
+  "group": "sort_by",
+  "alt": "xs.sort(x => x.k)",
+  "per_line": 13.9,
+  "delta_vs_placeholder": 11.0
+ },
+ {
+  "group": "repeat",
+  "alt": "s.repeat(n)",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "repeat",
+  "alt": "s * n",
+  "per_line": 6.9,
+  "delta_vs_placeholder": 2.0
+ },
+ {
+  "group": "repeat",
+  "alt": "s.times(n)",
+  "per_line": 9.9,
+  "delta_vs_placeholder": 5.0
+ },
+ {
+  "group": "join",
+  "alt": "xs.join(\", \")",
+  "per_line": 11.9,
+  "delta_vs_placeholder": 7.0
+ },
+ {
+  "group": "join",
+  "alt": "\", \".join(xs)",
+  "per_line": 12.9,
+  "delta_vs_placeholder": 8.0
+ },
+ {
+  "group": "join",
+  "alt": "xs.join(\",\")",
+  "per_line": 10.9,
+  "delta_vs_placeholder": 6.0
+ }
+]

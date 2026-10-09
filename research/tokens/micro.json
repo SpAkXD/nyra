@@ -1,0 +1,371 @@
+[
+ {
+  "id": "indent_if",
+  "label": "if/else block: braces -> indentation",
+  "before": 44,
+  "after": 38,
+  "saved": 6,
+  "before_text": "if x > 0 {\n    print(\"pos\")\n} else if x < 0 {\n    print(\"neg\")\n} else {\n    print(\"zero\")\n}",
+  "after_text": "if x > 0:\n    print(\"pos\")\nelif x < 0:\n    print(\"neg\")\nelse:\n    print(\"zero\")"
+ },
+ {
+  "id": "indent_while",
+  "label": "while block: braces -> indentation",
+  "before": 18,
+  "after": 16,
+  "saved": 2,
+  "before_text": "while i < n {\n    s += i\n    i += 1\n}",
+  "after_text": "while i < n:\n    s += i\n    i += 1"
+ },
+ {
+  "id": "indent_fn",
+  "label": "fn body: braces -> indentation (signature kept)",
+  "before": 50,
+  "after": 45,
+  "saved": 5,
+  "before_text": "fn total(xs: [int], k: int) -> int {\n    var s = 0\n    for x in xs {\n        s += x * k\n    }\n    ret s\n}",
+  "after_text": "fn total(xs: [int], k: int) -> int:\n    var s = 0\n    for x in xs:\n        s += x * k\n    ret s"
+ },
+ {
+  "id": "oneline_if",
+  "label": "one-line `if c { ret x }` -> `if c: ret x`",
+  "before": 11,
+  "after": 9,
+  "saved": 2,
+  "before_text": "if n < 2 { ret n }",
+  "after_text": "if n < 2: ret n"
+ },
+ {
+  "id": "main_wrapper",
+  "label": "fn main() wrapper around 6 statements",
+  "before": 37,
+  "after": 25,
+  "saved": 12,
+  "before_text": "fn main() {\n    let a = 1\n    let b = 2\n    print(a + b)\n    print(a * b)\n}",
+  "after_text": "let a = 1\nlet b = 2\nprint(a + b)\nprint(a * b)"
+ },
+ {
+  "id": "ret_type",
+  "label": "return type `-> int` (inferred)",
+  "before": 16,
+  "after": 13,
+  "saved": 3,
+  "before_text": "fn sq(x: int) -> int = x * x",
+  "after_text": "fn sq(x: int) = x * x"
+ },
+ {
+  "id": "ret_type_block",
+  "label": "return type `-> [int]` on a block fn",
+  "before": 41,
+  "after": 36,
+  "saved": 5,
+  "before_text": "fn evens(xs: [int]) -> [int] {\n    ret xs.filter(x => x % 2 == 0)\n}",
+  "after_text": "fn evens(xs: [int]) {\n    ret xs.filter(x => x % 2 == 0)\n}"
+ },
+ {
+  "id": "param_types",
+  "label": "parameter types `a: int, b: int` (inferred)",
+  "before": 19,
+  "after": 12,
+  "saved": 7,
+  "before_text": "fn add(a: int, b: int) -> int = a + b",
+  "after_text": "fn add(a, b) = a + b"
+ },
+ {
+  "id": "param_types_arr",
+  "label": "parameter type `xs: [int]` + `s: str`",
+  "before": 34,
+  "after": 26,
+  "saved": 8,
+  "before_text": "fn count(xs: [int], s: str) -> int {\n    ret xs.len() + s.len()\n}",
+  "after_text": "fn count(xs, s) {\n    ret xs.len() + s.len()\n}"
+ },
+ {
+  "id": "let_kw",
+  "label": "`let x = 5` -> `x = 5` (first assignment declares)",
+  "before": 19,
+  "after": 16,
+  "saved": 3,
+  "before_text": "let n = 5\nlet name = \"ann\"\nvar total = 0",
+  "after_text": "n = 5\nname = \"ann\"\ntotal = 0"
+ },
+ {
+  "id": "local_ann_arr",
+  "label": "`var xs: [int] = []` -> `var xs = []`",
+  "before": 9,
+  "after": 5,
+  "saved": 4,
+  "before_text": "var xs: [int] = []",
+  "after_text": "var xs = []"
+ },
+ {
+  "id": "local_ann_map",
+  "label": "`var m: [str: int] = [:]` -> `var m = [:]`",
+  "before": 12,
+  "after": 6,
+  "saved": 6,
+  "before_text": "var m: [str: int] = [:]",
+  "after_text": "var m = [:]"
+ },
+ {
+  "id": "implicit_ret",
+  "label": "last `ret x` -> `x`",
+  "before": 31,
+  "after": 29,
+  "saved": 2,
+  "before_text": "fn f(x: int) -> int {\n    let y = x * 2\n    ret y + 1\n}",
+  "after_text": "fn f(x: int) -> int {\n    let y = x * 2\n    y + 1\n}"
+ },
+ {
+  "id": "positional_struct",
+  "label": "Item(name: n, price: p, qty: q) -> Item(n, p, q)",
+  "before": 24,
+  "after": 16,
+  "saved": 8,
+  "before_text": "items.push(Item(name: \"pen\", price: 125, qty: 3))",
+  "after_text": "items.push(Item(\"pen\", 125, 3))"
+ },
+ {
+  "id": "var_param",
+  "label": "copy a parameter into a var -> `var` parameter",
+  "before": 37,
+  "after": 27,
+  "saved": 10,
+  "before_text": "fn gcd(a: int, b: int) -> int {\n    var x = a\n    var y = b\n    ret x\n}",
+  "after_text": "fn gcd(var a: int, var b: int) -> int {\n    ret a\n}"
+ },
+ {
+  "id": "swap_tuple",
+  "label": "swap through a temp -> `a, b = b, a % b`",
+  "before": 14,
+  "after": 9,
+  "saved": 5,
+  "before_text": "let t = x % y\nx = y\ny = t",
+  "after_text": "x, y = y, x % y"
+ },
+ {
+  "id": "multi_decl",
+  "label": "`var lo = 0` + `var hi = n - 1` -> `var lo, hi = 0, n - 1`",
+  "before": 19,
+  "after": 18,
+  "saved": 1,
+  "before_text": "var lo = 0\nvar hi = xs.len() - 1",
+  "after_text": "var lo, hi = 0, xs.len() - 1"
+ },
+ {
+  "id": "destructure_split",
+  "label": "`let p = s.split(\" \")` + 2 index lets -> `let a, b = s.split(\" \")`",
+  "before": 26,
+  "after": 12,
+  "saved": 14,
+  "before_text": "let p = line.split(\" \")\nlet op = p[0]\nlet name = p[1]",
+  "after_text": "let op, name = line.split(\" \")"
+ },
+ {
+  "id": "tuple_table",
+  "label": "parallel arrays + index loop -> list of tuples",
+  "before": 87,
+  "after": 57,
+  "saved": 30,
+  "before_text": "let vals = [1000, 900, 500, 400]\nlet syms = [\"M\", \"CM\", \"D\", \"CD\"]\nfor i in 0..vals.len() {\n    while n >= vals[i] {\n        out += syms[i]\n        n -= vals[i]\n    }\n}",
+  "after_text": "for v, s in [(1000, \"M\"), (900, \"CM\"), (500, \"D\"), (400, \"CD\")]:\n    while n >= v:\n        out += s\n        n -= v"
+ },
+ {
+  "id": "tuple_return",
+  "label": "struct Res{ok,text} for 2 values -> tuple",
+  "before": 72,
+  "after": 52,
+  "saved": 20,
+  "before_text": "struct Res { ok: bool, text: str }\nfn dec(s: str) -> Res {\n    ret Res(ok: false, text: \"\")\n}\nlet r = dec(c)\nif !r.ok { print(r.text) }",
+  "after_text": "fn dec(s: str) -> (bool, str) {\n    ret (false, \"\")\n}\nlet ok, text = dec(c)\nif !ok { print(text) }"
+ },
+ {
+  "id": "in_op",
+  "label": "`xs.contains(x)` -> `x in xs`",
+  "before": 16,
+  "after": 12,
+  "saved": 4,
+  "before_text": "if !names.contains(w) { n += 1 }",
+  "after_text": "if w not in names { n += 1 }"
+ },
+ {
+  "id": "in_map",
+  "label": "`m.has(k)` -> `k in m`",
+  "before": 16,
+  "after": 13,
+  "saved": 3,
+  "before_text": "if !seen.has(x) { n += 1 }",
+  "after_text": "if x not in seen { n += 1 }"
+ },
+ {
+  "id": "neg_index",
+  "label": "`xs[xs.len() - 1]` -> `xs[-1]`",
+  "before": 13,
+  "after": 8,
+  "saved": 5,
+  "before_text": "let last = items[items.len() - 1]",
+  "after_text": "let last = items[-1]"
+ },
+ {
+  "id": "ternary",
+  "label": "`if c { a } else { b }` -> `a if c else b`",
+  "before": 20,
+  "after": 16,
+  "saved": 4,
+  "before_text": "let sign = if n < 0 { \"-\" } else { \"\" }",
+  "after_text": "let sign = \"-\" if n < 0 else \"\""
+ },
+ {
+  "id": "fmt_pad",
+  "label": "`str(x).pad_left(3)` chain -> `{x:>3}`",
+  "before": 41,
+  "after": 21,
+  "saved": 20,
+  "before_text": "print(str(i).pad_left(3) + \" \" + name.pad_right(6) + \" \" + str(score).pad_left(4))",
+  "after_text": "print(\"{i:>3} {name:<6} {score:>4}\")"
+ },
+ {
+  "id": "fmt_zero",
+  "label": "`str(r).pad_left(2, '0')` -> `{r:02}`",
+  "before": 22,
+  "after": 13,
+  "saved": 9,
+  "before_text": "ret \"{d}.\" + str(r).pad_left(2, '0')",
+  "after_text": "ret \"{d}.{r:02}\""
+ },
+ {
+  "id": "fmt_float",
+  "label": "text.fixed(x, 2) -> `{x:.2f}`",
+  "before": 21,
+  "after": 13,
+  "saved": 8,
+  "before_text": "use text\nprint(\"avg \" + text.fixed(avg, 2))",
+  "after_text": "print(\"avg {avg:.2f}\")"
+ },
+ {
+  "id": "fmt_thousands",
+  "label": "manual digit grouping fn -> `{n:,}`",
+  "before": 93,
+  "after": 8,
+  "saved": 85,
+  "before_text": "fn group(n: int) -> str {\n    let s = str(n)\n    var out = \"\"\n    for i, c in s {\n        if i > 0 && (s.len() - i) % 3 == 0 { out += \",\" }\n        out += str(c)\n    }\n    ret out\n}\nprint(group(total))",
+  "after_text": "print(\"{total:,}\")"
+ },
+ {
+  "id": "interp_vs_plus",
+  "label": "\"a\" + str(x) + \"b\" -> \"a{x}b\"",
+  "before": 20,
+  "after": 11,
+  "saved": 9,
+  "before_text": "print(\"n=\" + str(n) + \" s=\" + str(s))",
+  "after_text": "print(\"n={n} s={s}\")"
+ },
+ {
+  "id": "compr_push",
+  "label": "push loop -> comprehension",
+  "before": 41,
+  "after": 19,
+  "saved": 22,
+  "before_text": "var sq: [int] = []\nfor x in xs {\n    if x > 0 {\n        sq.push(x * x)\n    }\n}",
+  "after_text": "let sq = [x * x for x in xs if x > 0]"
+ },
+ {
+  "id": "sorted_by_tuple",
+  "label": "in-place sort + comparator helper -> sorted_by(tuple key)",
+  "before": 125,
+  "after": 21,
+  "saved": 104,
+  "before_text": "fn before(a: Team, b: Team) -> bool {\n    if a.pts != b.pts { ret a.pts > b.pts }\n    ret a.name < b.name\n}\nfor i in 1..n {\n    var j = i\n    while j > 0 && before(ts[j], ts[j - 1]) {\n        ts.swap(j, j - 1)\n        j -= 1\n    }\n}",
+  "after_text": "ts.sort_by(t => (-t.pts, t.name))"
+ },
+ {
+  "id": "nested_mut",
+  "label": "map of maps: get/modify/set -> in-place `m[a][b] += n`",
+  "before": 34,
+  "after": 9,
+  "saved": 25,
+  "before_text": "var row = acc.get(name, [0].repeat(13))\nrow[m] += n\nacc[name] = row",
+  "after_text": "acc[name][m] += n"
+ },
+ {
+  "id": "trim_chars",
+  "label": "`.trim(\"'\")` instead of two while loops",
+  "before": 91,
+  "after": 11,
+  "saved": 80,
+  "before_text": "var w = cur\nwhile w.len() > 0 && w[0] == '\\'' {\n    w = w.slice(1, w.len())\n}\nwhile w.len() > 0 && w[w.len() - 1] == '\\'' {\n    w = w.slice(0, w.len() - 1)\n}",
+  "after_text": "let w = cur.trim(\"'\")"
+ },
+ {
+  "id": "for_enum",
+  "label": "`for i in 0..xs.len() { xs[i] }` -> `for i, x in xs`",
+  "before": 25,
+  "after": 18,
+  "saved": 7,
+  "before_text": "for i in 0..xs.len() {\n    print(i, xs[i])\n}",
+  "after_text": "for i, x in xs {\n    print(i, x)\n}"
+ },
+ {
+  "id": "bare_lambda",
+  "label": "`.map(x => int(x))` -> `.map(int)`",
+  "before": 15,
+  "after": 11,
+  "saved": 4,
+  "before_text": "let ns = parts.map(x => int(x))",
+  "after_text": "let ns = parts.map(int)"
+ },
+ {
+  "id": "print_noparen",
+  "label": "print(x) -> print x (not proposed; for scale)",
+  "before": 15,
+  "after": 9,
+  "saved": 6,
+  "before_text": "print(total)\nprint(avg)\nprint(name)",
+  "after_text": "print total\nprint avg\nprint name"
+ },
+ {
+  "id": "tab_indent",
+  "label": "4 spaces -> 1 tab (formatter-enforced)",
+  "before": 44,
+  "after": 44,
+  "saved": 0,
+  "before_text": "for i in 0..n {\n    if i % 2 == 0 {\n        if i > 4 {\n            print(i)\n        }\n    }\n}",
+  "after_text": "for i in 0..n {\n\tif i % 2 == 0 {\n\t\tif i > 4 {\n\t\t\tprint(i)\n\t\t}\n\t}\n}"
+ },
+ {
+  "id": "slice_syntax",
+  "label": "`s.slice(0, 9)` -> `s[:9]`",
+  "before": 13,
+  "after": 8,
+  "saved": 5,
+  "before_text": "let head = s.slice(0, 9)",
+  "after_text": "let head = s[:9]"
+ },
+ {
+  "id": "is_digit_int",
+  "label": "digit value: `c.code() - '0'.code()` -> `int(c)`",
+  "before": 20,
+  "after": 12,
+  "saved": 8,
+  "before_text": "n = n * 10 + (c.code() - '0'.code())",
+  "after_text": "n = n * 10 + int(c)"
+ },
+ {
+  "id": "count_get",
+  "label": "`m[k] = m.get(k, 0) + 1` -> `m[k] += 1`",
+  "before": 19,
+  "after": 8,
+  "saved": 11,
+  "before_text": "counts[w] = counts.get(w, 0) + 1",
+  "after_text": "counts[w] += 1"
+ },
+ {
+  "id": "fn_def_kw",
+  "label": "fn -> def (same token count)",
+  "before": 13,
+  "after": 12,
+  "saved": 1,
+  "before_text": "fn add(a: int) -> int = a",
+  "after_text": "def add(a: int) -> int = a"
+ }
+]

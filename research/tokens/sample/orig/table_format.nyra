@@ -1,0 +1,78 @@
+fn group(n: int) -> str {
+    let s = str(n)
+    var out = ""
+    let l = s.len()
+    for i, c in s {
+        if i > 0 && (l - i) % 3 == 0 { out += "," }
+        out += str(c)
+    }
+    ret out
+}
+
+fn money(c: int) -> str = group(c / 100) + "." + str(c % 100).pad_left(2, '0')
+
+fn cut(s: str) -> str {
+    if s.len() > 10 { ret s.slice(0, 9) + "~" }
+    ret s
+}
+
+fn cell(s: str, w: int, a: int) -> str {
+    let pad = w - s.len()
+    if a == 0 { ret s + " ".repeat(pad) }
+    if a == 1 { ret " ".repeat(pad) + s }
+    let left = pad / 2
+    ret " ".repeat(left) + s + " ".repeat(pad - left)
+}
+
+fn border(ws: [int], ch: str) -> str {
+    var line = "+"
+    for w in ws {
+        line += ch.repeat(w + 2) + "+"
+    }
+    ret line
+}
+
+fn rowline(r: [str], ws: [int], al: [int]) -> str {
+    var parts: [str] = []
+    for i, c in r {
+        parts.push(cell(c, ws[i], al[i]))
+    }
+    ret "| " + parts.join(" | ") + " |"
+}
+
+fn main() {
+    let names = ["bolts", "hex nuts", "washers", "anchor", "rivets", "brackets"]
+    let qtys = [12000, 350, 7, 1, 1500, 24]
+    let prices = [5, 12, 123456, 99, 3, 1050]
+    let notes = ["bulk", "galvanized", "special order", "", "aluminium", "left-hand only"]
+    let header = ["item", "qty", "price", "amount", "note"]
+    let al = [0, 1, 1, 1, 2]
+    var rows: [[str]] = []
+    var tq = 0
+    var ta = 0
+    for i in 0..names.len() {
+        let amt = qtys[i] * prices[i]
+        tq += qtys[i]
+        ta += amt
+        rows.push([names[i], group(qtys[i]), money(prices[i]), money(amt), cut(notes[i])])
+    }
+    let total = ["TOTAL", group(tq), "", money(ta), ""]
+    var ws: [int] = []
+    for j in 0..5 {
+        var w = header[j].len()
+        for r in rows {
+            w = max(w, r[j].len())
+        }
+        w = max(w, total[j].len())
+        ws.push(w)
+    }
+    print(border(ws, "-"))
+    print(rowline(header, ws, al))
+    print(border(ws, "="))
+    for r in rows {
+        print(rowline(r, ws, al))
+    }
+    print(border(ws, "-"))
+    print(rowline(total, ws, al))
+    print(border(ws, "-"))
+}

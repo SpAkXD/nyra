@@ -1,0 +1,4862 @@
+[
+ {
+  "corpus": "ref",
+  "task": "ackermann",
+  "nyra": 149,
+  "python": 115,
+  "variants": {
+   "unwrap_main": 136,
+   "drop_close_braces": 145,
+   "indent_blocks": 139,
+   "drop_let_var": 149,
+   "drop_let_only": 149,
+   "drop_param_types": 145,
+   "drop_ret_types": 146,
+   "drop_local_ann": 149,
+   "implicit_ret": 147,
+   "positional_struct": 149,
+   "all_syntax_braces": 125,
+   "all_syntax_indent": 119
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "aging_life",
+  "nyra": 667,
+  "python": 416,
+  "variants": {
+   "unwrap_main": 651,
+   "drop_close_braces": 620,
+   "indent_blocks": 604,
+   "drop_let_var": 654,
+   "drop_let_only": 661,
+   "drop_param_types": 658,
+   "drop_ret_types": 664,
+   "drop_local_ann": 657,
+   "implicit_ret": 663,
+   "positional_struct": 667,
+   "all_syntax_braces": 570,
+   "all_syntax_indent": 554
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "bank_ledger",
+  "nyra": 814,
+  "python": 687,
+  "variants": {
+   "unwrap_main": 802,
+   "drop_close_braces": 769,
+   "indent_blocks": 753,
+   "drop_let_var": 804,
+   "drop_let_only": 805,
+   "drop_param_types": 808,
+   "drop_ret_types": 811,
+   "drop_local_ann": 809,
+   "implicit_ret": 812,
+   "positional_struct": 809,
+   "all_syntax_braces": 729,
+   "all_syntax_indent": 713
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "bank_tellers",
+  "nyra": 774,
+  "python": 766,
+  "variants": {
+   "unwrap_main": 745,
+   "drop_close_braces": 745,
+   "indent_blocks": 734,
+   "drop_let_var": 760,
+   "drop_let_only": 769,
+   "drop_param_types": 770,
+   "drop_ret_types": 770,
+   "drop_local_ann": 764,
+   "implicit_ret": 774,
+   "positional_struct": 763,
+   "all_syntax_braces": 678,
+   "all_syntax_indent": 668
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "big_sieve",
+  "nyra": 259,
+  "python": 228,
+  "variants": {
+   "unwrap_main": 234,
+   "drop_close_braces": 239,
+   "indent_blocks": 238,
+   "drop_let_var": 252,
+   "drop_let_only": 258,
+   "drop_param_types": 259,
+   "drop_ret_types": 259,
+   "drop_local_ann": 259,
+   "implicit_ret": 259,
+   "positional_struct": 259,
+   "all_syntax_braces": 211,
+   "all_syntax_indent": 211
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "binary_search",
+  "nyra": 210,
+  "python": 159,
+  "variants": {
+   "unwrap_main": 199,
+   "drop_close_braces": 193,
+   "indent_blocks": 192,
+   "drop_let_var": 206,
+   "drop_let_only": 208,
+   "drop_param_types": 205,
+   "drop_ret_types": 207,
+   "drop_local_ann": 210,
+   "implicit_ret": 208,
+   "positional_struct": 210,
+   "all_syntax_braces": 171,
+   "all_syntax_indent": 170
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "binary_strings",
+  "nyra": 112,
+  "python": 78,
+  "variants": {
+   "unwrap_main": 100,
+   "drop_close_braces": 105,
+   "indent_blocks": 103,
+   "drop_let_var": 110,
+   "drop_let_only": 112,
+   "drop_param_types": 110,
+   "drop_ret_types": 109,
+   "drop_local_ann": 112,
+   "implicit_ret": 110,
+   "positional_struct": 112,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 84
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "bubble_sort",
+  "nyra": 152,
+  "python": 124,
+  "variants": {
+   "unwrap_main": 138,
+   "drop_close_braces": 138,
+   "indent_blocks": 137,
+   "drop_let_var": 149,
+   "drop_let_only": 150,
+   "drop_param_types": 152,
+   "drop_ret_types": 152,
+   "drop_local_ann": 152,
+   "implicit_ret": 152,
+   "positional_struct": 152,
+   "all_syntax_braces": 125,
+   "all_syntax_indent": 125
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "caesar_cipher",
+  "nyra": 120,
+  "python": 83,
+  "variants": {
+   "unwrap_main": 108,
+   "drop_close_braces": 110,
+   "indent_blocks": 107,
+   "drop_let_var": 119,
+   "drop_let_only": 120,
+   "drop_param_types": 116,
+   "drop_ret_types": 117,
+   "drop_local_ann": 120,
+   "implicit_ret": 118,
+   "positional_struct": 120,
+   "all_syntax_braces": 91,
+   "all_syntax_indent": 88
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "calendar_month",
+  "nyra": 209,
+  "python": 106,
+  "variants": {
+   "unwrap_main": 195,
+   "drop_close_braces": 193,
+   "indent_blocks": 191,
+   "drop_let_var": 205,
+   "drop_let_only": 207,
+   "drop_param_types": 205,
+   "drop_ret_types": 206,
+   "drop_local_ann": 209,
+   "implicit_ret": 207,
+   "positional_struct": 209,
+   "all_syntax_braces": 169,
+   "all_syntax_indent": 165
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "centered_pyramid",
+  "nyra": 138,
+  "python": 46,
+  "variants": {
+   "unwrap_main": 125,
+   "drop_close_braces": 128,
+   "indent_blocks": 126,
+   "drop_let_var": 134,
+   "drop_let_only": 135,
+   "drop_param_types": 134,
+   "drop_ret_types": 135,
+   "drop_local_ann": 138,
+   "implicit_ret": 136,
+   "positional_struct": 138,
+   "all_syntax_braces": 105,
+   "all_syntax_indent": 103
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "checkerboard",
+  "nyra": 91,
+  "python": 41,
+  "variants": {
+   "unwrap_main": 81,
+   "drop_close_braces": 83,
+   "indent_blocks": 80,
+   "drop_let_var": 89,
+   "drop_let_only": 90,
+   "drop_param_types": 91,
+   "drop_ret_types": 91,
+   "drop_local_ann": 91,
+   "implicit_ret": 91,
+   "positional_struct": 91,
+   "all_syntax_braces": 74,
+   "all_syntax_indent": 72
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "collatz_trace",
+  "nyra": 89,
+  "python": 73,
+  "variants": {
+   "unwrap_main": 76,
+   "drop_close_braces": 84,
+   "indent_blocks": 82,
+   "drop_let_var": 87,
+   "drop_let_only": 89,
+   "drop_param_types": 89,
+   "drop_ret_types": 89,
+   "drop_local_ann": 89,
+   "implicit_ret": 89,
+   "positional_struct": 89,
+   "all_syntax_braces": 72,
+   "all_syntax_indent": 71
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "config_parser",
+  "nyra": 1577,
+  "python": 882,
+  "variants": {
+   "unwrap_main": 1556,
+   "drop_close_braces": 1502,
+   "indent_blocks": 1486,
+   "drop_let_var": 1550,
+   "drop_let_only": 1560,
+   "drop_param_types": 1551,
+   "drop_ret_types": 1564,
+   "drop_local_ann": 1571,
+   "implicit_ret": 1571,
+   "positional_struct": 1560,
+   "all_syntax_braces": 1391,
+   "all_syntax_indent": 1373
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "count_change",
+  "nyra": 176,
+  "python": 87,
+  "variants": {
+   "unwrap_main": 163,
+   "drop_close_braces": 165,
+   "indent_blocks": 161,
+   "drop_let_var": 171,
+   "drop_let_only": 172,
+   "drop_param_types": 176,
+   "drop_ret_types": 176,
+   "drop_local_ann": 176,
+   "implicit_ret": 176,
+   "positional_struct": 176,
+   "all_syntax_braces": 150,
+   "all_syntax_indent": 147
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "count_pairs",
+  "nyra": 75,
+  "python": 57,
+  "variants": {
+   "unwrap_main": 63,
+   "drop_close_braces": 67,
+   "indent_blocks": 61,
+   "drop_let_var": 74,
+   "drop_let_only": 75,
+   "drop_param_types": 75,
+   "drop_ret_types": 75,
+   "drop_local_ann": 75,
+   "implicit_ret": 75,
+   "positional_struct": 75,
+   "all_syntax_braces": 57,
+   "all_syntax_indent": 52
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "digit_sums",
+  "nyra": 132,
+  "python": 75,
+  "variants": {
+   "unwrap_main": 120,
+   "drop_close_braces": 125,
+   "indent_blocks": 123,
+   "drop_let_var": 130,
+   "drop_let_only": 132,
+   "drop_param_types": 130,
+   "drop_ret_types": 129,
+   "drop_local_ann": 132,
+   "implicit_ret": 130,
+   "positional_struct": 132,
+   "all_syntax_braces": 106,
+   "all_syntax_indent": 104
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "expr_eval",
+  "nyra": 1499,
+  "python": 1029,
+  "variants": {
+   "unwrap_main": 1486,
+   "drop_close_braces": 1457,
+   "indent_blocks": 1434,
+   "drop_let_var": 1481,
+   "drop_let_only": 1487,
+   "drop_param_types": 1464,
+   "drop_ret_types": 1476,
+   "drop_local_ann": 1499,
+   "implicit_ret": 1487,
+   "positional_struct": 1458,
+   "all_syntax_braces": 1318,
+   "all_syntax_indent": 1290
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "fib_labelled",
+  "nyra": 68,
+  "python": 45,
+  "variants": {
+   "unwrap_main": 56,
+   "drop_close_braces": 63,
+   "indent_blocks": 61,
+   "drop_let_var": 65,
+   "drop_let_only": 67,
+   "drop_param_types": 68,
+   "drop_ret_types": 68,
+   "drop_local_ann": 68,
+   "implicit_ret": 68,
+   "positional_struct": 68,
+   "all_syntax_braces": 51,
+   "all_syntax_indent": 50
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "fib_recursive",
+  "nyra": 87,
+  "python": 62,
+  "variants": {
+   "unwrap_main": 76,
+   "drop_close_braces": 83,
+   "indent_blocks": 79,
+   "drop_let_var": 87,
+   "drop_let_only": 87,
+   "drop_param_types": 85,
+   "drop_ret_types": 84,
+   "drop_local_ann": 87,
+   "implicit_ret": 85,
+   "positional_struct": 87,
+   "all_syntax_braces": 67,
+   "all_syntax_indent": 63
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "fizzbuzz",
+  "nyra": 98,
+  "python": 88,
+  "variants": {
+   "unwrap_main": 88,
+   "drop_close_braces": 93,
+   "indent_blocks": 89,
+   "drop_let_var": 98,
+   "drop_let_only": 98,
+   "drop_param_types": 98,
+   "drop_ret_types": 98,
+   "drop_local_ann": 98,
+   "implicit_ret": 98,
+   "positional_struct": 98,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 83
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "four_in_row",
+  "nyra": 926,
+  "python": 655,
+  "variants": {
+   "unwrap_main": 913,
+   "drop_close_braces": 891,
+   "indent_blocks": 875,
+   "drop_let_var": 912,
+   "drop_let_only": 919,
+   "drop_param_types": 898,
+   "drop_ret_types": 913,
+   "drop_local_ann": 926,
+   "implicit_ret": 922,
+   "positional_struct": 926,
+   "all_syntax_braces": 822,
+   "all_syntax_indent": 805
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "fraction_total",
+  "nyra": 931,
+  "python": 622,
+  "variants": {
+   "unwrap_main": 915,
+   "drop_close_braces": 901,
+   "indent_blocks": 888,
+   "drop_let_var": 918,
+   "drop_let_only": 924,
+   "drop_param_types": 891,
+   "drop_ret_types": 898,
+   "drop_local_ann": 931,
+   "implicit_ret": 923,
+   "positional_struct": 927,
+   "all_syntax_braces": 790,
+   "all_syntax_indent": 774
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "gcd_pairs",
+  "nyra": 144,
+  "python": 86,
+  "variants": {
+   "unwrap_main": 131,
+   "drop_close_braces": 137,
+   "indent_blocks": 135,
+   "drop_let_var": 141,
+   "drop_let_only": 143,
+   "drop_param_types": 140,
+   "drop_ret_types": 141,
+   "drop_local_ann": 144,
+   "implicit_ret": 142,
+   "positional_struct": 144,
+   "all_syntax_braces": 114,
+   "all_syntax_indent": 112
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "grade_letters",
+  "nyra": 157,
+  "python": 106,
+  "variants": {
+   "unwrap_main": 142,
+   "drop_close_braces": 153,
+   "indent_blocks": 144,
+   "drop_let_var": 157,
+   "drop_let_only": 157,
+   "drop_param_types": 155,
+   "drop_ret_types": 154,
+   "drop_local_ann": 157,
+   "implicit_ret": 155,
+   "positional_struct": 157,
+   "all_syntax_braces": 133,
+   "all_syntax_indent": 124
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "hanoi_moves",
+  "nyra": 120,
+  "python": 100,
+  "variants": {
+   "unwrap_main": 111,
+   "drop_close_braces": 113,
+   "indent_blocks": 110,
+   "drop_let_var": 120,
+   "drop_let_only": 120,
+   "drop_param_types": 112,
+   "drop_ret_types": 120,
+   "drop_local_ann": 120,
+   "implicit_ret": 120,
+   "positional_struct": 120,
+   "all_syntax_braces": 98,
+   "all_syntax_indent": 96
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "happy_numbers",
+  "nyra": 230,
+  "python": 133,
+  "variants": {
+   "unwrap_main": 218,
+   "drop_close_braces": 212,
+   "indent_blocks": 208,
+   "drop_let_var": 223,
+   "drop_let_only": 229,
+   "drop_param_types": 226,
+   "drop_ret_types": 223,
+   "drop_local_ann": 230,
+   "implicit_ret": 226,
+   "positional_struct": 230,
+   "all_syntax_braces": 181,
+   "all_syntax_indent": 176
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "indent_check",
+  "nyra": 1161,
+  "python": 814,
+  "variants": {
+   "unwrap_main": 1148,
+   "drop_close_braces": 1120,
+   "indent_blocks": 1103,
+   "drop_let_var": 1144,
+   "drop_let_only": 1149,
+   "drop_param_types": 1151,
+   "drop_ret_types": 1147,
+   "drop_local_ann": 1148,
+   "implicit_ret": 1157,
+   "positional_struct": 1155,
+   "all_syntax_braces": 1046,
+   "all_syntax_indent": 1028
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "int_nbody",
+  "nyra": 534,
+  "python": 441,
+  "variants": {
+   "unwrap_main": 517,
+   "drop_close_braces": 498,
+   "indent_blocks": 488,
+   "drop_let_var": 529,
+   "drop_let_only": 532,
+   "drop_param_types": 523,
+   "drop_ret_types": 531,
+   "drop_local_ann": 534,
+   "implicit_ret": 532,
+   "positional_struct": 534,
+   "all_syntax_braces": 465,
+   "all_syntax_indent": 455
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "inventory_ledger",
+  "nyra": 1199,
+  "python": 884,
+  "variants": {
+   "unwrap_main": 1179,
+   "drop_close_braces": 1138,
+   "indent_blocks": 1125,
+   "drop_let_var": 1187,
+   "drop_let_only": 1191,
+   "drop_param_types": 1188,
+   "drop_ret_types": 1190,
+   "drop_local_ann": 1190,
+   "implicit_ret": 1195,
+   "positional_struct": 1188,
+   "all_syntax_braces": 1067,
+   "all_syntax_indent": 1053
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "josephus",
+  "nyra": 158,
+  "python": 112,
+  "variants": {
+   "unwrap_main": 147,
+   "drop_close_braces": 148,
+   "indent_blocks": 145,
+   "drop_let_var": 156,
+   "drop_let_only": 158,
+   "drop_param_types": 154,
+   "drop_ret_types": 155,
+   "drop_local_ann": 154,
+   "implicit_ret": 156,
+   "positional_struct": 158,
+   "all_syntax_braces": 124,
+   "all_syntax_indent": 121
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "lcg_sequence",
+  "nyra": 52,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 41,
+   "drop_close_braces": 47,
+   "indent_blocks": 45,
+   "drop_let_var": 51,
+   "drop_let_only": 52,
+   "drop_param_types": 52,
+   "drop_ret_types": 52,
+   "drop_local_ann": 52,
+   "implicit_ret": 52,
+   "positional_struct": 52,
+   "all_syntax_braces": 38,
+   "all_syntax_indent": 37
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "lcm_1_to_16",
+  "nyra": 118,
+  "python": 69,
+  "variants": {
+   "unwrap_main": 106,
+   "drop_close_braces": 108,
+   "indent_blocks": 105,
+   "drop_let_var": 114,
+   "drop_let_only": 117,
+   "drop_param_types": 114,
+   "drop_ret_types": 115,
+   "drop_local_ann": 118,
+   "implicit_ret": 116,
+   "positional_struct": 118,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 83
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "lcs_table",
+  "nyra": 336,
+  "python": 274,
+  "variants": {
+   "unwrap_main": 322,
+   "drop_close_braces": 315,
+   "indent_blocks": 311,
+   "drop_let_var": 328,
+   "drop_let_only": 332,
+   "drop_param_types": 332,
+   "drop_ret_types": 331,
+   "drop_local_ann": 332,
+   "implicit_ret": 334,
+   "positional_struct": 336,
+   "all_syntax_braces": 281,
+   "all_syntax_indent": 277
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "league_table",
+  "nyra": 1622,
+  "python": 951,
+  "variants": {
+   "unwrap_main": 1602,
+   "drop_close_braces": 1574,
+   "indent_blocks": 1549,
+   "drop_let_var": 1606,
+   "drop_let_only": 1610,
+   "drop_param_types": 1569,
+   "drop_ret_types": 1593,
+   "drop_local_ann": 1612,
+   "implicit_ret": 1613,
+   "positional_struct": 1589,
+   "all_syntax_braces": 1410,
+   "all_syntax_indent": 1382
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "leap_years",
+  "nyra": 138,
+  "python": 88,
+  "variants": {
+   "unwrap_main": 124,
+   "drop_close_braces": 132,
+   "indent_blocks": 133,
+   "drop_let_var": 138,
+   "drop_let_only": 138,
+   "drop_param_types": 134,
+   "drop_ret_types": 134,
+   "drop_local_ann": 138,
+   "implicit_ret": 136,
+   "positional_struct": 138,
+   "all_syntax_braces": 110,
+   "all_syntax_indent": 111
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "library_loans",
+  "nyra": 1720,
+  "python": 1271,
+  "variants": {
+   "unwrap_main": 1692,
+   "drop_close_braces": 1649,
+   "indent_blocks": 1630,
+   "drop_let_var": 1700,
+   "drop_let_only": 1704,
+   "drop_param_types": 1700,
+   "drop_ret_types": 1706,
+   "drop_local_ann": 1706,
+   "implicit_ret": 1712,
+   "positional_struct": 1702,
+   "all_syntax_braces": 1533,
+   "all_syntax_indent": 1511
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "line_diff",
+  "nyra": 808,
+  "python": 760,
+  "variants": {
+   "unwrap_main": 794,
+   "drop_close_braces": 779,
+   "indent_blocks": 771,
+   "drop_let_var": 797,
+   "drop_let_only": 806,
+   "drop_param_types": 797,
+   "drop_ret_types": 808,
+   "drop_local_ann": 804,
+   "implicit_ret": 808,
+   "positional_struct": 808,
+   "all_syntax_braces": 741,
+   "all_syntax_indent": 734
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "longest_collatz",
+  "nyra": 179,
+  "python": 127,
+  "variants": {
+   "unwrap_main": 165,
+   "drop_close_braces": 166,
+   "indent_blocks": 164,
+   "drop_let_var": 174,
+   "drop_let_only": 178,
+   "drop_param_types": 177,
+   "drop_ret_types": 176,
+   "drop_local_ann": 179,
+   "implicit_ret": 177,
+   "positional_struct": 179,
+   "all_syntax_braces": 143,
+   "all_syntax_indent": 141
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "look_and_say",
+  "nyra": 278,
+  "python": 162,
+  "variants": {
+   "unwrap_main": 261,
+   "drop_close_braces": 261,
+   "indent_blocks": 255,
+   "drop_let_var": 268,
+   "drop_let_only": 275,
+   "drop_param_types": 278,
+   "drop_ret_types": 278,
+   "drop_local_ann": 274,
+   "implicit_ret": 278,
+   "positional_struct": 278,
+   "all_syntax_braces": 234,
+   "all_syntax_indent": 229
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "matrix_mult",
+  "nyra": 336,
+  "python": 247,
+  "variants": {
+   "unwrap_main": 312,
+   "drop_close_braces": 313,
+   "indent_blocks": 312,
+   "drop_let_var": 329,
+   "drop_let_only": 335,
+   "drop_param_types": 336,
+   "drop_ret_types": 336,
+   "drop_local_ann": 336,
+   "implicit_ret": 336,
+   "positional_struct": 336,
+   "all_syntax_braces": 287,
+   "all_syntax_indent": 287
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "matrix_report",
+  "nyra": 1083,
+  "python": 613,
+  "variants": {
+   "unwrap_main": 1060,
+   "drop_close_braces": 1030,
+   "indent_blocks": 1003,
+   "drop_let_var": 1064,
+   "drop_let_only": 1076,
+   "drop_param_types": 1043,
+   "drop_ret_types": 1052,
+   "drop_local_ann": 1059,
+   "implicit_ret": 1073,
+   "positional_struct": 1083,
+   "all_syntax_braces": 886,
+   "all_syntax_indent": 855
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "maze_keys",
+  "nyra": 1682,
+  "python": 706,
+  "variants": {
+   "unwrap_main": 1669,
+   "drop_close_braces": 1618,
+   "indent_blocks": 1579,
+   "drop_let_var": 1652,
+   "drop_let_only": 1665,
+   "drop_param_types": 1638,
+   "drop_ret_types": 1647,
+   "drop_local_ann": 1672,
+   "implicit_ret": 1674,
+   "positional_struct": 1676,
+   "all_syntax_braces": 1475,
+   "all_syntax_indent": 1434
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "meeting_slots",
+  "nyra": 1194,
+  "python": 776,
+  "variants": {
+   "unwrap_main": 1178,
+   "drop_close_braces": 1144,
+   "indent_blocks": 1123,
+   "drop_let_var": 1177,
+   "drop_let_only": 1185,
+   "drop_param_types": 1167,
+   "drop_ret_types": 1163,
+   "drop_local_ann": 1180,
+   "implicit_ret": 1184,
+   "positional_struct": 1154,
+   "all_syntax_braces": 993,
+   "all_syntax_indent": 968
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "mod_pow",
+  "nyra": 48,
+  "python": 32,
+  "variants": {
+   "unwrap_main": 36,
+   "drop_close_braces": 43,
+   "indent_blocks": 41,
+   "drop_let_var": 47,
+   "drop_let_only": 48,
+   "drop_param_types": 48,
+   "drop_ret_types": 48,
+   "drop_local_ann": 48,
+   "implicit_ret": 48,
+   "positional_struct": 48,
+   "all_syntax_braces": 33,
+   "all_syntax_indent": 32
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "multiples_4_7",
+  "nyra": 64,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 52,
+   "drop_close_braces": 59,
+   "indent_blocks": 55,
+   "drop_let_var": 63,
+   "drop_let_only": 64,
+   "drop_param_types": 64,
+   "drop_ret_types": 64,
+   "drop_local_ann": 64,
+   "implicit_ret": 64,
+   "positional_struct": 64,
+   "all_syntax_braces": 49,
+   "all_syntax_indent": 46
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "multiplication_table",
+  "nyra": 39,
+  "python": 30,
+  "variants": {
+   "unwrap_main": 29,
+   "drop_close_braces": 34,
+   "indent_blocks": 32,
+   "drop_let_var": 39,
+   "drop_let_only": 39,
+   "drop_param_types": 39,
+   "drop_ret_types": 39,
+   "drop_local_ann": 39,
+   "implicit_ret": 39,
+   "positional_struct": 39,
+   "all_syntax_braces": 27,
+   "all_syntax_indent": 26
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "number_rows",
+  "nyra": 64,
+  "python": 36,
+  "variants": {
+   "unwrap_main": 54,
+   "drop_close_braces": 56,
+   "indent_blocks": 53,
+   "drop_let_var": 63,
+   "drop_let_only": 64,
+   "drop_param_types": 64,
+   "drop_ret_types": 64,
+   "drop_local_ann": 64,
+   "implicit_ret": 64,
+   "positional_struct": 64,
+   "all_syntax_braces": 48,
+   "all_syntax_indent": 46
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "orbit_calendar",
+  "nyra": 1363,
+  "python": 989,
+  "variants": {
+   "unwrap_main": 1352,
+   "drop_close_braces": 1322,
+   "indent_blocks": 1300,
+   "drop_let_var": 1344,
+   "drop_let_only": 1349,
+   "drop_param_types": 1337,
+   "drop_ret_types": 1324,
+   "drop_local_ann": 1363,
+   "implicit_ret": 1346,
+   "positional_struct": 1345,
+   "all_syntax_braces": 1195,
+   "all_syntax_indent": 1166
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "palindromes",
+  "nyra": 156,
+  "python": 117,
+  "variants": {
+   "unwrap_main": 146,
+   "drop_close_braces": 143,
+   "indent_blocks": 142,
+   "drop_let_var": 154,
+   "drop_let_only": 156,
+   "drop_param_types": 154,
+   "drop_ret_types": 152,
+   "drop_local_ann": 156,
+   "implicit_ret": 154,
+   "positional_struct": 156,
+   "all_syntax_braces": 126,
+   "all_syntax_indent": 125
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "pascal_binomials",
+  "nyra": 110,
+  "python": 90,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 106,
+   "indent_blocks": 103,
+   "drop_let_var": 110,
+   "drop_let_only": 110,
+   "drop_param_types": 106,
+   "drop_ret_types": 107,
+   "drop_local_ann": 110,
+   "implicit_ret": 108,
+   "positional_struct": 110,
+   "all_syntax_braces": 88,
+   "all_syntax_indent": 85
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "polynomial_ops",
+  "nyra": 1599,
+  "python": 1139,
+  "variants": {
+   "unwrap_main": 1574,
+   "drop_close_braces": 1540,
+   "indent_blocks": 1517,
+   "drop_let_var": 1571,
+   "drop_let_only": 1586,
+   "drop_param_types": 1531,
+   "drop_ret_types": 1550,
+   "drop_local_ann": 1583,
+   "implicit_ret": 1581,
+   "positional_struct": 1599,
+   "all_syntax_braces": 1338,
+   "all_syntax_indent": 1310
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "population_growth",
+  "nyra": 57,
+  "python": 39,
+  "variants": {
+   "unwrap_main": 46,
+   "drop_close_braces": 52,
+   "indent_blocks": 50,
+   "drop_let_var": 56,
+   "drop_let_only": 57,
+   "drop_param_types": 57,
+   "drop_ret_types": 57,
+   "drop_local_ann": 57,
+   "implicit_ret": 57,
+   "positional_struct": 57,
+   "all_syntax_braces": 43,
+   "all_syntax_indent": 42
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "primality_flags",
+  "nyra": 177,
+  "python": 110,
+  "variants": {
+   "unwrap_main": 160,
+   "drop_close_braces": 168,
+   "indent_blocks": 165,
+   "drop_let_var": 176,
+   "drop_let_only": 177,
+   "drop_param_types": 173,
+   "drop_ret_types": 173,
+   "drop_local_ann": 177,
+   "implicit_ret": 175,
+   "positional_struct": 177,
+   "all_syntax_braces": 142,
+   "all_syntax_indent": 139
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "prime_factorization",
+  "nyra": 276,
+  "python": 200,
+  "variants": {
+   "unwrap_main": 263,
+   "drop_close_braces": 260,
+   "indent_blocks": 256,
+   "drop_let_var": 270,
+   "drop_let_only": 275,
+   "drop_param_types": 274,
+   "drop_ret_types": 273,
+   "drop_local_ann": 276,
+   "implicit_ret": 274,
+   "positional_struct": 276,
+   "all_syntax_braces": 236,
+   "all_syntax_indent": 232
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "primes_to_100",
+  "nyra": 117,
+  "python": 87,
+  "variants": {
+   "unwrap_main": 107,
+   "drop_close_braces": 107,
+   "indent_blocks": 99,
+   "drop_let_var": 116,
+   "drop_let_only": 117,
+   "drop_param_types": 115,
+   "drop_ret_types": 113,
+   "drop_local_ann": 117,
+   "implicit_ret": 115,
+   "positional_struct": 117,
+   "all_syntax_braces": 91,
+   "all_syntax_indent": 83
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "pythagorean_triples",
+  "nyra": 82,
+  "python": 60,
+  "variants": {
+   "unwrap_main": 71,
+   "drop_close_braces": 68,
+   "indent_blocks": 66,
+   "drop_let_var": 82,
+   "drop_let_only": 82,
+   "drop_param_types": 82,
+   "drop_ret_types": 82,
+   "drop_local_ann": 82,
+   "implicit_ret": 82,
+   "positional_struct": 82,
+   "all_syntax_braces": 60,
+   "all_syntax_indent": 59
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "receipt",
+  "nyra": 389,
+  "python": 213,
+  "variants": {
+   "unwrap_main": 371,
+   "drop_close_braces": 378,
+   "indent_blocks": 376,
+   "drop_let_var": 382,
+   "drop_let_only": 383,
+   "drop_param_types": 383,
+   "drop_ret_types": 386,
+   "drop_local_ann": 389,
+   "implicit_ret": 387,
+   "positional_struct": 353,
+   "all_syntax_braces": 309,
+   "all_syntax_indent": 307
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "reverse_digits",
+  "nyra": 124,
+  "python": 75,
+  "variants": {
+   "unwrap_main": 112,
+   "drop_close_braces": 117,
+   "indent_blocks": 115,
+   "drop_let_var": 122,
+   "drop_let_only": 124,
+   "drop_param_types": 122,
+   "drop_ret_types": 121,
+   "drop_local_ann": 124,
+   "implicit_ret": 122,
+   "positional_struct": 124,
+   "all_syntax_braces": 98,
+   "all_syntax_indent": 96
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "reverse_string",
+  "nyra": 44,
+  "python": 32,
+  "variants": {
+   "unwrap_main": 32,
+   "drop_close_braces": 39,
+   "indent_blocks": 37,
+   "drop_let_var": 43,
+   "drop_let_only": 44,
+   "drop_param_types": 44,
+   "drop_ret_types": 44,
+   "drop_local_ann": 44,
+   "implicit_ret": 44,
+   "positional_struct": 44,
+   "all_syntax_braces": 29,
+   "all_syntax_indent": 28
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "rle_codec",
+  "nyra": 855,
+  "python": 638,
+  "variants": {
+   "unwrap_main": 841,
+   "drop_close_braces": 819,
+   "indent_blocks": 805,
+   "drop_let_var": 841,
+   "drop_let_only": 847,
+   "drop_param_types": 849,
+   "drop_ret_types": 842,
+   "drop_local_ann": 855,
+   "implicit_ret": 851,
+   "positional_struct": 835,
+   "all_syntax_braces": 752,
+   "all_syntax_indent": 737
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "roman_numerals",
+  "nyra": 585,
+  "python": 207,
+  "variants": {
+   "unwrap_main": 569,
+   "drop_close_braces": 574,
+   "indent_blocks": 512,
+   "drop_let_var": 582,
+   "drop_let_only": 584,
+   "drop_param_types": 581,
+   "drop_ret_types": 579,
+   "drop_local_ann": 585,
+   "implicit_ret": 578,
+   "positional_struct": 585,
+   "all_syntax_braces": 540,
+   "all_syntax_indent": 477
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "round_robin",
+  "nyra": 806,
+  "python": 497,
+  "variants": {
+   "unwrap_main": 786,
+   "drop_close_braces": 774,
+   "indent_blocks": 765,
+   "drop_let_var": 797,
+   "drop_let_only": 804,
+   "drop_param_types": 806,
+   "drop_ret_types": 803,
+   "drop_local_ann": 802,
+   "implicit_ret": 806,
+   "positional_struct": 704,
+   "all_syntax_braces": 640,
+   "all_syntax_indent": 632
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "savings_interest",
+  "nyra": 853,
+  "python": 687,
+  "variants": {
+   "unwrap_main": 836,
+   "drop_close_braces": 829,
+   "indent_blocks": 820,
+   "drop_let_var": 835,
+   "drop_let_only": 840,
+   "drop_param_types": 835,
+   "drop_ret_types": 835,
+   "drop_local_ann": 853,
+   "implicit_ret": 845,
+   "positional_struct": 853,
+   "all_syntax_braces": 753,
+   "all_syntax_indent": 741
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "seat_booking",
+  "nyra": 878,
+  "python": 660,
+  "variants": {
+   "unwrap_main": 850,
+   "drop_close_braces": 824,
+   "indent_blocks": 812,
+   "drop_let_var": 860,
+   "drop_let_only": 867,
+   "drop_param_types": 874,
+   "drop_ret_types": 869,
+   "drop_local_ann": 878,
+   "implicit_ret": 878,
+   "positional_struct": 878,
+   "all_syntax_braces": 771,
+   "all_syntax_indent": 760
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "sieve_primes",
+  "nyra": 152,
+  "python": 114,
+  "variants": {
+   "unwrap_main": 136,
+   "drop_close_braces": 135,
+   "indent_blocks": 134,
+   "drop_let_var": 149,
+   "drop_let_only": 151,
+   "drop_param_types": 152,
+   "drop_ret_types": 152,
+   "drop_local_ann": 152,
+   "implicit_ret": 152,
+   "positional_struct": 152,
+   "all_syntax_braces": 120,
+   "all_syntax_indent": 120
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "snake_game",
+  "nyra": 1020,
+  "python": 666,
+  "variants": {
+   "unwrap_main": 985,
+   "drop_close_braces": 980,
+   "indent_blocks": 966,
+   "drop_let_var": 1002,
+   "drop_let_only": 1010,
+   "drop_param_types": 1014,
+   "drop_ret_types": 1005,
+   "drop_local_ann": 1020,
+   "implicit_ret": 1016,
+   "positional_struct": 952,
+   "all_syntax_braces": 841,
+   "all_syntax_indent": 826
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "sort_numbers",
+  "nyra": 172,
+  "python": 139,
+  "variants": {
+   "unwrap_main": 150,
+   "drop_close_braces": 164,
+   "indent_blocks": 163,
+   "drop_let_var": 167,
+   "drop_let_only": 170,
+   "drop_param_types": 172,
+   "drop_ret_types": 172,
+   "drop_local_ann": 168,
+   "implicit_ret": 172,
+   "positional_struct": 172,
+   "all_syntax_braces": 137,
+   "all_syntax_indent": 137
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "sparse_ledger",
+  "nyra": 1594,
+  "python": 891,
+  "variants": {
+   "unwrap_main": 1557,
+   "drop_close_braces": 1527,
+   "indent_blocks": 1505,
+   "drop_let_var": 1570,
+   "drop_let_only": 1582,
+   "drop_param_types": 1559,
+   "drop_ret_types": 1579,
+   "drop_local_ann": 1570,
+   "implicit_ret": 1584,
+   "positional_struct": 1588,
+   "all_syntax_braces": 1383,
+   "all_syntax_indent": 1358
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "spreadsheet_eval",
+  "nyra": 2915,
+  "python": 1937,
+  "variants": {
+   "unwrap_main": 2892,
+   "drop_close_braces": 2806,
+   "indent_blocks": 2752,
+   "drop_let_var": 2870,
+   "drop_let_only": 2891,
+   "drop_param_types": 2837,
+   "drop_ret_types": 2858,
+   "drop_local_ann": 2905,
+   "implicit_ret": 2899,
+   "positional_struct": 2881,
+   "all_syntax_braces": 2549,
+   "all_syntax_indent": 2488
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "stack_vm",
+  "nyra": 1388,
+  "python": 1153,
+  "variants": {
+   "unwrap_main": 1375,
+   "drop_close_braces": 1333,
+   "indent_blocks": 1300,
+   "drop_let_var": 1374,
+   "drop_let_only": 1379,
+   "drop_param_types": 1377,
+   "drop_ret_types": 1382,
+   "drop_local_ann": 1376,
+   "implicit_ret": 1385,
+   "positional_struct": 1388,
+   "all_syntax_braces": 1277,
+   "all_syntax_indent": 1244
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "struct_rectangles",
+  "nyra": 160,
+  "python": 131,
+  "variants": {
+   "unwrap_main": 149,
+   "drop_close_braces": 153,
+   "indent_blocks": 152,
+   "drop_let_var": 159,
+   "drop_let_only": 159,
+   "drop_param_types": 152,
+   "drop_ret_types": 154,
+   "drop_local_ann": 160,
+   "implicit_ret": 160,
+   "positional_struct": 145,
+   "all_syntax_braces": 115,
+   "all_syntax_indent": 115
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "table_format",
+  "nyra": 1166,
+  "python": 691,
+  "variants": {
+   "unwrap_main": 1136,
+   "drop_close_braces": 1126,
+   "indent_blocks": 1114,
+   "drop_let_var": 1149,
+   "drop_let_only": 1156,
+   "drop_param_types": 1139,
+   "drop_ret_types": 1148,
+   "drop_local_ann": 1156,
+   "implicit_ret": 1154,
+   "positional_struct": 1106,
+   "all_syntax_braces": 957,
+   "all_syntax_indent": 940
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "temperature_table",
+  "nyra": 55,
+  "python": 40,
+  "variants": {
+   "unwrap_main": 45,
+   "drop_close_braces": 50,
+   "indent_blocks": 48,
+   "drop_let_var": 54,
+   "drop_let_only": 54,
+   "drop_param_types": 55,
+   "drop_ret_types": 55,
+   "drop_local_ann": 55,
+   "implicit_ret": 55,
+   "positional_struct": 55,
+   "all_syntax_braces": 42,
+   "all_syntax_indent": 41
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "text_adventure",
+  "nyra": 1818,
+  "python": 1109,
+  "variants": {
+   "unwrap_main": 1795,
+   "drop_close_braces": 1752,
+   "indent_blocks": 1716,
+   "drop_let_var": 1794,
+   "drop_let_only": 1801,
+   "drop_param_types": 1791,
+   "drop_ret_types": 1802,
+   "drop_local_ann": 1806,
+   "implicit_ret": 1810,
+   "positional_struct": 1715,
+   "all_syntax_braces": 1542,
+   "all_syntax_indent": 1503
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "traffic_light",
+  "nyra": 73,
+  "python": 59,
+  "variants": {
+   "unwrap_main": 63,
+   "drop_close_braces": 68,
+   "indent_blocks": 64,
+   "drop_let_var": 72,
+   "drop_let_only": 72,
+   "drop_param_types": 73,
+   "drop_ret_types": 73,
+   "drop_local_ann": 73,
+   "implicit_ret": 73,
+   "positional_struct": 73,
+   "all_syntax_braces": 60,
+   "all_syntax_indent": 57
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "triangle_stars",
+  "nyra": 44,
+  "python": 19,
+  "variants": {
+   "unwrap_main": 33,
+   "drop_close_braces": 39,
+   "indent_blocks": 37,
+   "drop_let_var": 43,
+   "drop_let_only": 44,
+   "drop_param_types": 44,
+   "drop_ret_types": 44,
+   "drop_local_ann": 44,
+   "implicit_ret": 44,
+   "positional_struct": 44,
+   "all_syntax_braces": 30,
+   "all_syntax_indent": 29
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "twisted_fizzbuzz",
+  "nyra": 187,
+  "python": 111,
+  "variants": {
+   "unwrap_main": 177,
+   "drop_close_braces": 177,
+   "indent_blocks": 170,
+   "drop_let_var": 186,
+   "drop_let_only": 187,
+   "drop_param_types": 185,
+   "drop_ret_types": 183,
+   "drop_local_ann": 187,
+   "implicit_ret": 185,
+   "positional_struct": 187,
+   "all_syntax_braces": 161,
+   "all_syntax_indent": 154
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "two_sum",
+  "nyra": 111,
+  "python": 97,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 100,
+   "indent_blocks": 97,
+   "drop_let_var": 109,
+   "drop_let_only": 109,
+   "drop_param_types": 111,
+   "drop_ret_types": 111,
+   "drop_local_ann": 111,
+   "implicit_ret": 111,
+   "positional_struct": 111,
+   "all_syntax_braces": 89,
+   "all_syntax_indent": 87
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "vending_machine",
+  "nyra": 1291,
+  "python": 827,
+  "variants": {
+   "unwrap_main": 1267,
+   "drop_close_braces": 1246,
+   "indent_blocks": 1227,
+   "drop_let_var": 1271,
+   "drop_let_only": 1280,
+   "drop_param_types": 1269,
+   "drop_ret_types": 1280,
+   "drop_local_ann": 1287,
+   "implicit_ret": 1285,
+   "positional_struct": 1259,
+   "all_syntax_braces": 1130,
+   "all_syntax_indent": 1112
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "vowel_count",
+  "nyra": 97,
+  "python": 56,
+  "variants": {
+   "unwrap_main": 84,
+   "drop_close_braces": 89,
+   "indent_blocks": 86,
+   "drop_let_var": 95,
+   "drop_let_only": 96,
+   "drop_param_types": 97,
+   "drop_ret_types": 97,
+   "drop_local_ann": 97,
+   "implicit_ret": 97,
+   "positional_struct": 97,
+   "all_syntax_braces": 77,
+   "all_syntax_indent": 75
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "word_frequency",
+  "nyra": 965,
+  "python": 486,
+  "variants": {
+   "unwrap_main": 938,
+   "drop_close_braces": 921,
+   "indent_blocks": 903,
+   "drop_let_var": 952,
+   "drop_let_only": 960,
+   "drop_param_types": 951,
+   "drop_ret_types": 953,
+   "drop_local_ann": 956,
+   "implicit_ret": 961,
+   "positional_struct": 961,
+   "all_syntax_braces": 845,
+   "all_syntax_indent": 826
+  }
+ },
+ {
+  "corpus": "ref",
+  "task": "word_wrap",
+  "nyra": 198,
+  "python": 154,
+  "variants": {
+   "unwrap_main": 179,
+   "drop_close_braces": 182,
+   "indent_blocks": 178,
+   "drop_let_var": 194,
+   "drop_let_only": 196,
+   "drop_param_types": 198,
+   "drop_ret_types": 198,
+   "drop_local_ann": 194,
+   "implicit_ret": 198,
+   "positional_struct": 198,
+   "all_syntax_braces": 160,
+   "all_syntax_indent": 157
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "ackermann",
+  "nyra": 136,
+  "python": 131,
+  "variants": {
+   "unwrap_main": 136,
+   "drop_close_braces": 134,
+   "indent_blocks": 129,
+   "drop_let_var": 136,
+   "drop_let_only": 136,
+   "drop_param_types": 132,
+   "drop_ret_types": 133,
+   "drop_local_ann": 136,
+   "implicit_ret": 134,
+   "positional_struct": 136,
+   "all_syntax_braces": 125,
+   "all_syntax_indent": 119
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "count_change",
+  "nyra": 101,
+  "python": 90,
+  "variants": {
+   "unwrap_main": 87,
+   "drop_close_braces": 93,
+   "indent_blocks": 91,
+   "drop_let_var": 99,
+   "drop_let_only": 100,
+   "drop_param_types": 101,
+   "drop_ret_types": 101,
+   "drop_local_ann": 101,
+   "implicit_ret": 101,
+   "positional_struct": 101,
+   "all_syntax_braces": 80,
+   "all_syntax_indent": 79
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "count_pairs",
+  "nyra": 61,
+  "python": 57,
+  "variants": {
+   "unwrap_main": 61,
+   "drop_close_braces": 56,
+   "indent_blocks": 51,
+   "drop_let_var": 60,
+   "drop_let_only": 61,
+   "drop_param_types": 61,
+   "drop_ret_types": 61,
+   "drop_local_ann": 61,
+   "implicit_ret": 61,
+   "positional_struct": 61,
+   "all_syntax_braces": 55,
+   "all_syntax_indent": 50
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "digit_sums",
+  "nyra": 100,
+  "python": 40,
+  "variants": {
+   "unwrap_main": 100,
+   "drop_close_braces": 93,
+   "indent_blocks": 92,
+   "drop_let_var": 98,
+   "drop_let_only": 100,
+   "drop_param_types": 98,
+   "drop_ret_types": 97,
+   "drop_local_ann": 100,
+   "implicit_ret": 98,
+   "positional_struct": 100,
+   "all_syntax_braces": 84,
+   "all_syntax_indent": 82
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "fib_recursive",
+  "nyra": 87,
+  "python": 64,
+  "variants": {
+   "unwrap_main": 76,
+   "drop_close_braces": 83,
+   "indent_blocks": 79,
+   "drop_let_var": 87,
+   "drop_let_only": 87,
+   "drop_param_types": 85,
+   "drop_ret_types": 84,
+   "drop_local_ann": 87,
+   "implicit_ret": 85,
+   "positional_struct": 87,
+   "all_syntax_braces": 67,
+   "all_syntax_indent": 63
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "fizzbuzz",
+  "nyra": 98,
+  "python": 88,
+  "variants": {
+   "unwrap_main": 98,
+   "drop_close_braces": 90,
+   "indent_blocks": 86,
+   "drop_let_var": 98,
+   "drop_let_only": 98,
+   "drop_param_types": 98,
+   "drop_ret_types": 98,
+   "drop_local_ann": 98,
+   "implicit_ret": 98,
+   "positional_struct": 98,
+   "all_syntax_braces": 90,
+   "all_syntax_indent": 86
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "gcd_pairs",
+  "nyra": 144,
+  "python": 92,
+  "variants": {
+   "unwrap_main": 131,
+   "drop_close_braces": 137,
+   "indent_blocks": 135,
+   "drop_let_var": 141,
+   "drop_let_only": 143,
+   "drop_param_types": 140,
+   "drop_ret_types": 141,
+   "drop_local_ann": 144,
+   "implicit_ret": 142,
+   "positional_struct": 144,
+   "all_syntax_braces": 114,
+   "all_syntax_indent": 112
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "grade_letters",
+  "nyra": 141,
+  "python": 107,
+  "variants": {
+   "unwrap_main": 130,
+   "drop_close_braces": 134,
+   "indent_blocks": 125,
+   "drop_let_var": 140,
+   "drop_let_only": 140,
+   "drop_param_types": 139,
+   "drop_ret_types": 138,
+   "drop_local_ann": 141,
+   "implicit_ret": 139,
+   "positional_struct": 141,
+   "all_syntax_braces": 118,
+   "all_syntax_indent": 109
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "happy_numbers",
+  "nyra": 217,
+  "python": 114,
+  "variants": {
+   "unwrap_main": 205,
+   "drop_close_braces": 199,
+   "indent_blocks": 194,
+   "drop_let_var": 210,
+   "drop_let_only": 216,
+   "drop_param_types": 213,
+   "drop_ret_types": 210,
+   "drop_local_ann": 210,
+   "implicit_ret": 213,
+   "positional_struct": 217,
+   "all_syntax_braces": 161,
+   "all_syntax_indent": 155
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "lcg_sequence",
+  "nyra": 41,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 41,
+   "drop_close_braces": 39,
+   "indent_blocks": 38,
+   "drop_let_var": 40,
+   "drop_let_only": 41,
+   "drop_param_types": 41,
+   "drop_ret_types": 41,
+   "drop_local_ann": 41,
+   "implicit_ret": 41,
+   "positional_struct": 41,
+   "all_syntax_braces": 38,
+   "all_syntax_indent": 37
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "lcm_1_to_16",
+  "nyra": 106,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 106,
+   "drop_close_braces": 99,
+   "indent_blocks": 97,
+   "drop_let_var": 102,
+   "drop_let_only": 105,
+   "drop_param_types": 102,
+   "drop_ret_types": 103,
+   "drop_local_ann": 106,
+   "implicit_ret": 104,
+   "positional_struct": 106,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 83
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "leap_years",
+  "nyra": 112,
+  "python": 89,
+  "variants": {
+   "unwrap_main": 101,
+   "drop_close_braces": 107,
+   "indent_blocks": 109,
+   "drop_let_var": 111,
+   "drop_let_only": 111,
+   "drop_param_types": 110,
+   "drop_ret_types": 108,
+   "drop_local_ann": 112,
+   "implicit_ret": 112,
+   "positional_struct": 112,
+   "all_syntax_braces": 92,
+   "all_syntax_indent": 95
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "longest_collatz",
+  "nyra": 183,
+  "python": 175,
+  "variants": {
+   "unwrap_main": 169,
+   "drop_close_braces": 166,
+   "indent_blocks": 162,
+   "drop_let_var": 178,
+   "drop_let_only": 182,
+   "drop_param_types": 181,
+   "drop_ret_types": 180,
+   "drop_local_ann": 183,
+   "implicit_ret": 181,
+   "positional_struct": 183,
+   "all_syntax_braces": 143,
+   "all_syntax_indent": 139
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "mod_pow",
+  "nyra": 37,
+  "python": 41,
+  "variants": {
+   "unwrap_main": 37,
+   "drop_close_braces": 35,
+   "indent_blocks": 34,
+   "drop_let_var": 36,
+   "drop_let_only": 37,
+   "drop_param_types": 37,
+   "drop_ret_types": 37,
+   "drop_local_ann": 37,
+   "implicit_ret": 37,
+   "positional_struct": 37,
+   "all_syntax_braces": 34,
+   "all_syntax_indent": 33
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "multiples_4_7",
+  "nyra": 54,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 54,
+   "drop_close_braces": 49,
+   "indent_blocks": 47,
+   "drop_let_var": 53,
+   "drop_let_only": 54,
+   "drop_param_types": 54,
+   "drop_ret_types": 54,
+   "drop_local_ann": 54,
+   "implicit_ret": 54,
+   "positional_struct": 54,
+   "all_syntax_braces": 48,
+   "all_syntax_indent": 46
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "pascal_binomials",
+  "nyra": 99,
+  "python": 111,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 97,
+   "indent_blocks": 95,
+   "drop_let_var": 99,
+   "drop_let_only": 99,
+   "drop_param_types": 95,
+   "drop_ret_types": 96,
+   "drop_local_ann": 99,
+   "implicit_ret": 97,
+   "positional_struct": 99,
+   "all_syntax_braces": 88,
+   "all_syntax_indent": 85
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "population_growth",
+  "nyra": 42,
+  "python": 42,
+  "variants": {
+   "unwrap_main": 42,
+   "drop_close_braces": 40,
+   "indent_blocks": 39,
+   "drop_let_var": 41,
+   "drop_let_only": 42,
+   "drop_param_types": 42,
+   "drop_ret_types": 42,
+   "drop_local_ann": 42,
+   "implicit_ret": 42,
+   "positional_struct": 42,
+   "all_syntax_braces": 39,
+   "all_syntax_indent": 38
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "primality_flags",
+  "nyra": 141,
+  "python": 111,
+  "variants": {
+   "unwrap_main": 130,
+   "drop_close_braces": 131,
+   "indent_blocks": 126,
+   "drop_let_var": 139,
+   "drop_let_only": 140,
+   "drop_param_types": 139,
+   "drop_ret_types": 137,
+   "drop_local_ann": 141,
+   "implicit_ret": 139,
+   "positional_struct": 141,
+   "all_syntax_braces": 113,
+   "all_syntax_indent": 108
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "primes_to_100",
+  "nyra": 105,
+  "python": 87,
+  "variants": {
+   "unwrap_main": 105,
+   "drop_close_braces": 98,
+   "indent_blocks": 91,
+   "drop_let_var": 104,
+   "drop_let_only": 105,
+   "drop_param_types": 103,
+   "drop_ret_types": 101,
+   "drop_local_ann": 105,
+   "implicit_ret": 103,
+   "positional_struct": 105,
+   "all_syntax_braces": 89,
+   "all_syntax_indent": 81
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "reverse_digits",
+  "nyra": 98,
+  "python": 35,
+  "variants": {
+   "unwrap_main": 98,
+   "drop_close_braces": 91,
+   "indent_blocks": 90,
+   "drop_let_var": 96,
+   "drop_let_only": 98,
+   "drop_param_types": 96,
+   "drop_ret_types": 95,
+   "drop_local_ann": 98,
+   "implicit_ret": 96,
+   "positional_struct": 98,
+   "all_syntax_braces": 82,
+   "all_syntax_indent": 80
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "traffic_light",
+  "nyra": 68,
+  "python": 56,
+  "variants": {
+   "unwrap_main": 68,
+   "drop_close_braces": 61,
+   "indent_blocks": 58,
+   "drop_let_var": 67,
+   "drop_let_only": 67,
+   "drop_param_types": 68,
+   "drop_ret_types": 68,
+   "drop_local_ann": 68,
+   "implicit_ret": 68,
+   "positional_struct": 68,
+   "all_syntax_braces": 60,
+   "all_syntax_indent": 57
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "twisted_fizzbuzz",
+  "nyra": 114,
+  "python": 101,
+  "variants": {
+   "unwrap_main": 114,
+   "drop_close_braces": 105,
+   "indent_blocks": 101,
+   "drop_let_var": 114,
+   "drop_let_only": 114,
+   "drop_param_types": 114,
+   "drop_ret_types": 114,
+   "drop_local_ann": 114,
+   "implicit_ret": 114,
+   "positional_struct": 114,
+   "all_syntax_braces": 105,
+   "all_syntax_indent": 101
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "binary_strings",
+  "nyra": 120,
+  "python": 100,
+  "variants": {
+   "unwrap_main": 110,
+   "drop_close_braces": 110,
+   "indent_blocks": 106,
+   "drop_let_var": 118,
+   "drop_let_only": 120,
+   "drop_param_types": 118,
+   "drop_ret_types": 117,
+   "drop_local_ann": 120,
+   "implicit_ret": 118,
+   "positional_struct": 120,
+   "all_syntax_braces": 94,
+   "all_syntax_indent": 90
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "calendar_month",
+  "nyra": 166,
+  "python": 134,
+  "variants": {
+   "unwrap_main": 166,
+   "drop_close_braces": 159,
+   "indent_blocks": 151,
+   "drop_let_var": 163,
+   "drop_let_only": 165,
+   "drop_param_types": 166,
+   "drop_ret_types": 166,
+   "drop_local_ann": 166,
+   "implicit_ret": 166,
+   "positional_struct": 166,
+   "all_syntax_braces": 156,
+   "all_syntax_indent": 148
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "centered_pyramid",
+  "nyra": 43,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 43,
+   "drop_close_braces": 41,
+   "indent_blocks": 40,
+   "drop_let_var": 43,
+   "drop_let_only": 43,
+   "drop_param_types": 43,
+   "drop_ret_types": 43,
+   "drop_local_ann": 43,
+   "implicit_ret": 43,
+   "positional_struct": 43,
+   "all_syntax_braces": 41,
+   "all_syntax_indent": 40
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "checkerboard",
+  "nyra": 68,
+  "python": 41,
+  "variants": {
+   "unwrap_main": 68,
+   "drop_close_braces": 63,
+   "indent_blocks": 64,
+   "drop_let_var": 67,
+   "drop_let_only": 68,
+   "drop_param_types": 68,
+   "drop_ret_types": 68,
+   "drop_local_ann": 68,
+   "implicit_ret": 68,
+   "positional_struct": 68,
+   "all_syntax_braces": 62,
+   "all_syntax_indent": 63
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "collatz_trace",
+  "nyra": 95,
+  "python": 82,
+  "variants": {
+   "unwrap_main": 95,
+   "drop_close_braces": 89,
+   "indent_blocks": 87,
+   "drop_let_var": 93,
+   "drop_let_only": 95,
+   "drop_param_types": 95,
+   "drop_ret_types": 95,
+   "drop_local_ann": 91,
+   "implicit_ret": 95,
+   "positional_struct": 95,
+   "all_syntax_braces": 83,
+   "all_syntax_indent": 81
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "fib_labelled",
+  "nyra": 56,
+  "python": 45,
+  "variants": {
+   "unwrap_main": 56,
+   "drop_close_braces": 54,
+   "indent_blocks": 53,
+   "drop_let_var": 53,
+   "drop_let_only": 55,
+   "drop_param_types": 56,
+   "drop_ret_types": 56,
+   "drop_local_ann": 56,
+   "implicit_ret": 56,
+   "positional_struct": 56,
+   "all_syntax_braces": 51,
+   "all_syntax_indent": 50
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "hanoi_moves",
+  "nyra": 120,
+  "python": 131,
+  "variants": {
+   "unwrap_main": 111,
+   "drop_close_braces": 116,
+   "indent_blocks": 112,
+   "drop_let_var": 120,
+   "drop_let_only": 120,
+   "drop_param_types": 112,
+   "drop_ret_types": 120,
+   "drop_local_ann": 120,
+   "implicit_ret": 120,
+   "positional_struct": 120,
+   "all_syntax_braces": 101,
+   "all_syntax_indent": 98
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "multiplication_table",
+  "nyra": 29,
+  "python": 30,
+  "variants": {
+   "unwrap_main": 29,
+   "drop_close_braces": 27,
+   "indent_blocks": 26,
+   "drop_let_var": 29,
+   "drop_let_only": 29,
+   "drop_param_types": 29,
+   "drop_ret_types": 29,
+   "drop_local_ann": 29,
+   "implicit_ret": 29,
+   "positional_struct": 29,
+   "all_syntax_braces": 27,
+   "all_syntax_indent": 26
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "number_rows",
+  "nyra": 45,
+  "python": 36,
+  "variants": {
+   "unwrap_main": 45,
+   "drop_close_braces": 43,
+   "indent_blocks": 42,
+   "drop_let_var": 44,
+   "drop_let_only": 44,
+   "drop_param_types": 45,
+   "drop_ret_types": 45,
+   "drop_local_ann": 45,
+   "implicit_ret": 45,
+   "positional_struct": 45,
+   "all_syntax_braces": 42,
+   "all_syntax_indent": 41
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "prime_factorization",
+  "nyra": 237,
+  "python": 207,
+  "variants": {
+   "unwrap_main": 227,
+   "drop_close_braces": 214,
+   "indent_blocks": 209,
+   "drop_let_var": 233,
+   "drop_let_only": 237,
+   "drop_param_types": 235,
+   "drop_ret_types": 234,
+   "drop_local_ann": 233,
+   "implicit_ret": 235,
+   "positional_struct": 237,
+   "all_syntax_braces": 192,
+   "all_syntax_indent": 187
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "pythagorean_triples",
+  "nyra": 67,
+  "python": 60,
+  "variants": {
+   "unwrap_main": 67,
+   "drop_close_braces": 56,
+   "indent_blocks": 55,
+   "drop_let_var": 67,
+   "drop_let_only": 67,
+   "drop_param_types": 67,
+   "drop_ret_types": 67,
+   "drop_local_ann": 67,
+   "implicit_ret": 67,
+   "positional_struct": 67,
+   "all_syntax_braces": 56,
+   "all_syntax_indent": 55
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "roman_numerals",
+  "nyra": 237,
+  "python": 197,
+  "variants": {
+   "unwrap_main": 227,
+   "drop_close_braces": 224,
+   "indent_blocks": 222,
+   "drop_let_var": 233,
+   "drop_let_only": 235,
+   "drop_param_types": 235,
+   "drop_ret_types": 234,
+   "drop_local_ann": 237,
+   "implicit_ret": 235,
+   "positional_struct": 237,
+   "all_syntax_braces": 206,
+   "all_syntax_indent": 204
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "temperature_table",
+  "nyra": 46,
+  "python": 45,
+  "variants": {
+   "unwrap_main": 46,
+   "drop_close_braces": 44,
+   "indent_blocks": 43,
+   "drop_let_var": 45,
+   "drop_let_only": 45,
+   "drop_param_types": 46,
+   "drop_ret_types": 46,
+   "drop_local_ann": 46,
+   "implicit_ret": 46,
+   "positional_struct": 46,
+   "all_syntax_braces": 43,
+   "all_syntax_indent": 42
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "triangle_stars",
+  "nyra": 23,
+  "python": 19,
+  "variants": {
+   "unwrap_main": 23,
+   "drop_close_braces": 21,
+   "indent_blocks": 20,
+   "drop_let_var": 23,
+   "drop_let_only": 23,
+   "drop_param_types": 23,
+   "drop_ret_types": 23,
+   "drop_local_ann": 23,
+   "implicit_ret": 23,
+   "positional_struct": 23,
+   "all_syntax_braces": 21,
+   "all_syntax_indent": 20
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "aging_life",
+  "nyra": 594,
+  "python": 403,
+  "variants": {
+   "unwrap_main": 594,
+   "drop_close_braces": 557,
+   "indent_blocks": 540,
+   "drop_let_var": 582,
+   "drop_let_only": 588,
+   "drop_param_types": 594,
+   "drop_ret_types": 594,
+   "drop_local_ann": 594,
+   "implicit_ret": 594,
+   "positional_struct": 594,
+   "all_syntax_braces": 545,
+   "all_syntax_indent": 528
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "bank_ledger",
+  "nyra": 716,
+  "python": 663,
+  "variants": {
+   "unwrap_main": 716,
+   "drop_close_braces": 683,
+   "indent_blocks": 670,
+   "drop_let_var": 708,
+   "drop_let_only": 709,
+   "drop_param_types": 716,
+   "drop_ret_types": 716,
+   "drop_local_ann": 710,
+   "implicit_ret": 716,
+   "positional_struct": 716,
+   "all_syntax_braces": 669,
+   "all_syntax_indent": 656
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "bank_tellers",
+  "nyra": 983,
+  "python": 726,
+  "variants": {
+   "unwrap_main": 953,
+   "drop_close_braces": 949,
+   "indent_blocks": 939,
+   "drop_let_var": 966,
+   "drop_let_only": 978,
+   "drop_param_types": 983,
+   "drop_ret_types": 983,
+   "drop_local_ann": 979,
+   "implicit_ret": 983,
+   "positional_struct": 815,
+   "all_syntax_braces": 734,
+   "all_syntax_indent": 725
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "big_sieve",
+  "nyra": 249,
+  "python": 232,
+  "variants": {
+   "unwrap_main": 224,
+   "drop_close_braces": 229,
+   "indent_blocks": 228,
+   "drop_let_var": 242,
+   "drop_let_only": 248,
+   "drop_param_types": 249,
+   "drop_ret_types": 249,
+   "drop_local_ann": 249,
+   "implicit_ret": 249,
+   "positional_struct": 249,
+   "all_syntax_braces": 201,
+   "all_syntax_indent": 201
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "binary_search",
+  "nyra": 225,
+  "python": 185,
+  "variants": {
+   "unwrap_main": 214,
+   "drop_close_braces": 210,
+   "indent_blocks": 209,
+   "drop_let_var": 221,
+   "drop_let_only": 223,
+   "drop_param_types": 220,
+   "drop_ret_types": 222,
+   "drop_local_ann": 225,
+   "implicit_ret": 223,
+   "positional_struct": 225,
+   "all_syntax_braces": 188,
+   "all_syntax_indent": 187
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "bubble_sort",
+  "nyra": 129,
+  "python": 163,
+  "variants": {
+   "unwrap_main": 115,
+   "drop_close_braces": 115,
+   "indent_blocks": 114,
+   "drop_let_var": 127,
+   "drop_let_only": 128,
+   "drop_param_types": 129,
+   "drop_ret_types": 129,
+   "drop_local_ann": 129,
+   "implicit_ret": 129,
+   "positional_struct": 129,
+   "all_syntax_braces": 103,
+   "all_syntax_indent": 103
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "caesar_cipher",
+  "nyra": 122,
+  "python": 113,
+  "variants": {
+   "unwrap_main": 109,
+   "drop_close_braces": 112,
+   "indent_blocks": 110,
+   "drop_let_var": 120,
+   "drop_let_only": 121,
+   "drop_param_types": 120,
+   "drop_ret_types": 119,
+   "drop_local_ann": 122,
+   "implicit_ret": 120,
+   "positional_struct": 122,
+   "all_syntax_braces": 93,
+   "all_syntax_indent": 91
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "config_parser",
+  "nyra": 1396,
+  "python": 937,
+  "variants": {
+   "unwrap_main": 1396,
+   "drop_close_braces": 1340,
+   "indent_blocks": 1322,
+   "drop_let_var": 1372,
+   "drop_let_only": 1386,
+   "drop_param_types": 1382,
+   "drop_ret_types": 1388,
+   "drop_local_ann": 1380,
+   "implicit_ret": 1392,
+   "positional_struct": 1386,
+   "all_syntax_braces": 1264,
+   "all_syntax_indent": 1244
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "expr_eval",
+  "nyra": 1088,
+  "python": 830,
+  "variants": {
+   "unwrap_main": 1088,
+   "drop_close_braces": 1021,
+   "indent_blocks": 1007,
+   "drop_let_var": 1071,
+   "drop_let_only": 1079,
+   "drop_param_types": 1088,
+   "drop_ret_types": 1070,
+   "drop_local_ann": 1084,
+   "implicit_ret": 1076,
+   "positional_struct": 1088,
+   "all_syntax_braces": 970,
+   "all_syntax_indent": 950
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "four_in_row",
+  "nyra": 924,
+  "python": 661,
+  "variants": {
+   "unwrap_main": 910,
+   "drop_close_braces": 872,
+   "indent_blocks": 866,
+   "drop_let_var": 911,
+   "drop_let_only": 919,
+   "drop_param_types": 898,
+   "drop_ret_types": 917,
+   "drop_local_ann": 924,
+   "implicit_ret": 920,
+   "positional_struct": 924,
+   "all_syntax_braces": 811,
+   "all_syntax_indent": 804
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "fraction_total",
+  "nyra": 929,
+  "python": 540,
+  "variants": {
+   "unwrap_main": 929,
+   "drop_close_braces": 898,
+   "indent_blocks": 888,
+   "drop_let_var": 909,
+   "drop_let_only": 918,
+   "drop_param_types": 909,
+   "drop_ret_types": 914,
+   "drop_local_ann": 929,
+   "implicit_ret": 923,
+   "positional_struct": 915,
+   "all_syntax_braces": 823,
+   "all_syntax_indent": 810
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "indent_check",
+  "nyra": 1036,
+  "python": 822,
+  "variants": {
+   "unwrap_main": 1036,
+   "drop_close_braces": 1001,
+   "indent_blocks": 993,
+   "drop_let_var": 1022,
+   "drop_let_only": 1029,
+   "drop_param_types": 1026,
+   "drop_ret_types": 1022,
+   "drop_local_ann": 1024,
+   "implicit_ret": 1034,
+   "positional_struct": 1036,
+   "all_syntax_braces": 949,
+   "all_syntax_indent": 940
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "inventory_ledger",
+  "nyra": 986,
+  "python": 815,
+  "variants": {
+   "unwrap_main": 986,
+   "drop_close_braces": 950,
+   "indent_blocks": 939,
+   "drop_let_var": 968,
+   "drop_let_only": 972,
+   "drop_param_types": 986,
+   "drop_ret_types": 986,
+   "drop_local_ann": 974,
+   "implicit_ret": 986,
+   "positional_struct": 986,
+   "all_syntax_braces": 920,
+   "all_syntax_indent": 909
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "josephus",
+  "nyra": 99,
+  "python": 86,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 94,
+   "indent_blocks": 93,
+   "drop_let_var": 98,
+   "drop_let_only": 99,
+   "drop_param_types": 95,
+   "drop_ret_types": 96,
+   "drop_local_ann": 99,
+   "implicit_ret": 97,
+   "positional_struct": 99,
+   "all_syntax_braces": 84,
+   "all_syntax_indent": 82
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "lcs_table",
+  "nyra": 342,
+  "python": 263,
+  "variants": {
+   "unwrap_main": 327,
+   "drop_close_braces": 322,
+   "indent_blocks": 317,
+   "drop_let_var": 331,
+   "drop_let_only": 335,
+   "drop_param_types": 340,
+   "drop_ret_types": 337,
+   "drop_local_ann": 338,
+   "implicit_ret": 340,
+   "positional_struct": 342,
+   "all_syntax_braces": 286,
+   "all_syntax_indent": 281
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "league_table",
+  "nyra": 1734,
+  "python": 1115,
+  "variants": {
+   "unwrap_main": 1699,
+   "drop_close_braces": 1681,
+   "indent_blocks": 1662,
+   "drop_let_var": 1713,
+   "drop_let_only": 1722,
+   "drop_param_types": 1710,
+   "drop_ret_types": 1720,
+   "drop_local_ann": 1709,
+   "implicit_ret": 1732,
+   "positional_struct": 1705,
+   "all_syntax_braces": 1538,
+   "all_syntax_indent": 1519
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "library_loans",
+  "nyra": 1529,
+  "python": 1331,
+  "variants": {
+   "unwrap_main": 1529,
+   "drop_close_braces": 1481,
+   "indent_blocks": 1468,
+   "drop_let_var": 1510,
+   "drop_let_only": 1517,
+   "drop_param_types": 1505,
+   "drop_ret_types": 1523,
+   "drop_local_ann": 1521,
+   "implicit_ret": 1529,
+   "positional_struct": 1529,
+   "all_syntax_braces": 1424,
+   "all_syntax_indent": 1411
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "line_diff",
+  "nyra": 707,
+  "python": 821,
+  "variants": {
+   "unwrap_main": 707,
+   "drop_close_braces": 678,
+   "indent_blocks": 671,
+   "drop_let_var": 698,
+   "drop_let_only": 705,
+   "drop_param_types": 696,
+   "drop_ret_types": 707,
+   "drop_local_ann": 703,
+   "implicit_ret": 707,
+   "positional_struct": 707,
+   "all_syntax_braces": 654,
+   "all_syntax_indent": 647
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "look_and_say",
+  "nyra": 274,
+  "python": 179,
+  "variants": {
+   "unwrap_main": 274,
+   "drop_close_braces": 256,
+   "indent_blocks": 252,
+   "drop_let_var": 267,
+   "drop_let_only": 271,
+   "drop_param_types": 274,
+   "drop_ret_types": 274,
+   "drop_local_ann": 270,
+   "implicit_ret": 274,
+   "positional_struct": 274,
+   "all_syntax_braces": 245,
+   "all_syntax_indent": 241
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "matrix_mult",
+  "nyra": 348,
+  "python": 214,
+  "variants": {
+   "unwrap_main": 324,
+   "drop_close_braces": 328,
+   "indent_blocks": 327,
+   "drop_let_var": 338,
+   "drop_let_only": 344,
+   "drop_param_types": 348,
+   "drop_ret_types": 348,
+   "drop_local_ann": 348,
+   "implicit_ret": 348,
+   "positional_struct": 348,
+   "all_syntax_braces": 299,
+   "all_syntax_indent": 299
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "matrix_report",
+  "nyra": 978,
+  "python": 708,
+  "variants": {
+   "unwrap_main": 978,
+   "drop_close_braces": 927,
+   "indent_blocks": 917,
+   "drop_let_var": 954,
+   "drop_let_only": 965,
+   "drop_param_types": 947,
+   "drop_ret_types": 961,
+   "drop_local_ann": 954,
+   "implicit_ret": 972,
+   "positional_struct": 978,
+   "all_syntax_braces": 825,
+   "all_syntax_indent": 812
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "meeting_slots",
+  "nyra": 918,
+  "python": 870,
+  "variants": {
+   "unwrap_main": 918,
+   "drop_close_braces": 871,
+   "indent_blocks": 861,
+   "drop_let_var": 903,
+   "drop_let_only": 911,
+   "drop_param_types": 910,
+   "drop_ret_types": 911,
+   "drop_local_ann": 906,
+   "implicit_ret": 914,
+   "positional_struct": 869,
+   "all_syntax_braces": 776,
+   "all_syntax_indent": 764
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "orbit_calendar",
+  "nyra": 1440,
+  "python": 1080,
+  "variants": {
+   "unwrap_main": 1440,
+   "drop_close_braces": 1392,
+   "indent_blocks": 1373,
+   "drop_let_var": 1419,
+   "drop_let_only": 1424,
+   "drop_param_types": 1406,
+   "drop_ret_types": 1406,
+   "drop_local_ann": 1440,
+   "implicit_ret": 1423,
+   "positional_struct": 1440,
+   "all_syntax_braces": 1286,
+   "all_syntax_indent": 1259
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "palindromes",
+  "nyra": 85,
+  "python": 53,
+  "variants": {
+   "unwrap_main": 85,
+   "drop_close_braces": 83,
+   "indent_blocks": 86,
+   "drop_let_var": 84,
+   "drop_let_only": 84,
+   "drop_param_types": 83,
+   "drop_ret_types": 81,
+   "drop_local_ann": 85,
+   "implicit_ret": 85,
+   "positional_struct": 85,
+   "all_syntax_braces": 76,
+   "all_syntax_indent": 79
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "polynomial_ops",
+  "nyra": 1532,
+  "python": 1262,
+  "variants": {
+   "unwrap_main": 1532,
+   "drop_close_braces": 1472,
+   "indent_blocks": 1447,
+   "drop_let_var": 1507,
+   "drop_let_only": 1521,
+   "drop_param_types": 1481,
+   "drop_ret_types": 1486,
+   "drop_local_ann": 1520,
+   "implicit_ret": 1516,
+   "positional_struct": 1532,
+   "all_syntax_braces": 1322,
+   "all_syntax_indent": 1289
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "receipt",
+  "nyra": 311,
+  "python": 247,
+  "variants": {
+   "unwrap_main": 311,
+   "drop_close_braces": 305,
+   "indent_blocks": 304,
+   "drop_let_var": 305,
+   "drop_let_only": 306,
+   "drop_param_types": 305,
+   "drop_ret_types": 308,
+   "drop_local_ann": 311,
+   "implicit_ret": 309,
+   "positional_struct": 279,
+   "all_syntax_braces": 256,
+   "all_syntax_indent": 254
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "reverse_string",
+  "nyra": 37,
+  "python": 32,
+  "variants": {
+   "unwrap_main": 37,
+   "drop_close_braces": 35,
+   "indent_blocks": 35,
+   "drop_let_var": 35,
+   "drop_let_only": 36,
+   "drop_param_types": 37,
+   "drop_ret_types": 37,
+   "drop_local_ann": 37,
+   "implicit_ret": 37,
+   "positional_struct": 37,
+   "all_syntax_braces": 33,
+   "all_syntax_indent": 33
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "rle_codec",
+  "nyra": 792,
+  "python": 705,
+  "variants": {
+   "unwrap_main": 792,
+   "drop_close_braces": 761,
+   "indent_blocks": 749,
+   "drop_let_var": 776,
+   "drop_let_only": 782,
+   "drop_param_types": 788,
+   "drop_ret_types": 785,
+   "drop_local_ann": 792,
+   "implicit_ret": 788,
+   "positional_struct": 782,
+   "all_syntax_braces": 720,
+   "all_syntax_indent": 706
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "round_robin",
+  "nyra": 591,
+  "python": 533,
+  "variants": {
+   "unwrap_main": 565,
+   "drop_close_braces": 554,
+   "indent_blocks": 548,
+   "drop_let_var": 575,
+   "drop_let_only": 584,
+   "drop_param_types": 591,
+   "drop_ret_types": 591,
+   "drop_local_ann": 587,
+   "implicit_ret": 591,
+   "positional_struct": 591,
+   "all_syntax_braces": 513,
+   "all_syntax_indent": 508
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "savings_interest",
+  "nyra": 812,
+  "python": 705,
+  "variants": {
+   "unwrap_main": 812,
+   "drop_close_braces": 780,
+   "indent_blocks": 771,
+   "drop_let_var": 794,
+   "drop_let_only": 803,
+   "drop_param_types": 806,
+   "drop_ret_types": 803,
+   "drop_local_ann": 812,
+   "implicit_ret": 806,
+   "positional_struct": 812,
+   "all_syntax_braces": 741,
+   "all_syntax_indent": 729
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "seat_booking",
+  "nyra": 809,
+  "python": 680,
+  "variants": {
+   "unwrap_main": 809,
+   "drop_close_braces": 748,
+   "indent_blocks": 734,
+   "drop_let_var": 796,
+   "drop_let_only": 802,
+   "drop_param_types": 803,
+   "drop_ret_types": 809,
+   "drop_local_ann": 803,
+   "implicit_ret": 809,
+   "positional_struct": 809,
+   "all_syntax_braces": 723,
+   "all_syntax_indent": 709
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "sieve_primes",
+  "nyra": 159,
+  "python": 117,
+  "variants": {
+   "unwrap_main": 142,
+   "drop_close_braces": 142,
+   "indent_blocks": 141,
+   "drop_let_var": 155,
+   "drop_let_only": 158,
+   "drop_param_types": 159,
+   "drop_ret_types": 159,
+   "drop_local_ann": 159,
+   "implicit_ret": 159,
+   "positional_struct": 159,
+   "all_syntax_braces": 125,
+   "all_syntax_indent": 125
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "snake_game",
+  "nyra": 898,
+  "python": 693,
+  "variants": {
+   "unwrap_main": 863,
+   "drop_close_braces": 844,
+   "indent_blocks": 836,
+   "drop_let_var": 877,
+   "drop_let_only": 892,
+   "drop_param_types": 898,
+   "drop_ret_types": 898,
+   "drop_local_ann": 898,
+   "implicit_ret": 898,
+   "positional_struct": 898,
+   "all_syntax_braces": 795,
+   "all_syntax_indent": 786
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "sort_numbers",
+  "nyra": 169,
+  "python": 166,
+  "variants": {
+   "unwrap_main": 148,
+   "drop_close_braces": 161,
+   "indent_blocks": 159,
+   "drop_let_var": 165,
+   "drop_let_only": 168,
+   "drop_param_types": 169,
+   "drop_ret_types": 169,
+   "drop_local_ann": 165,
+   "implicit_ret": 169,
+   "positional_struct": 169,
+   "all_syntax_braces": 136,
+   "all_syntax_indent": 135
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "sparse_ledger",
+  "nyra": 1292,
+  "python": 926,
+  "variants": {
+   "unwrap_main": 1251,
+   "drop_close_braces": 1241,
+   "indent_blocks": 1233,
+   "drop_let_var": 1259,
+   "drop_let_only": 1275,
+   "drop_param_types": 1292,
+   "drop_ret_types": 1292,
+   "drop_local_ann": 1266,
+   "implicit_ret": 1292,
+   "positional_struct": 1292,
+   "all_syntax_braces": 1150,
+   "all_syntax_indent": 1143
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "spreadsheet_eval",
+  "nyra": 2732,
+  "python": 1964,
+  "variants": {
+   "unwrap_main": 2732,
+   "drop_close_braces": 2632,
+   "indent_blocks": 2567,
+   "drop_let_var": 2678,
+   "drop_let_only": 2700,
+   "drop_param_types": 2698,
+   "drop_ret_types": 2673,
+   "drop_local_ann": 2665,
+   "implicit_ret": 2710,
+   "positional_struct": 2723,
+   "all_syntax_braces": 2387,
+   "all_syntax_indent": 2311
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "stack_vm",
+  "nyra": 1415,
+  "python": 1208,
+  "variants": {
+   "unwrap_main": 1415,
+   "drop_close_braces": 1357,
+   "indent_blocks": 1327,
+   "drop_let_var": 1403,
+   "drop_let_only": 1408,
+   "drop_param_types": 1407,
+   "drop_ret_types": 1412,
+   "drop_local_ann": 1401,
+   "implicit_ret": 1412,
+   "positional_struct": 1415,
+   "all_syntax_braces": 1317,
+   "all_syntax_indent": 1286
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "struct_rectangles",
+  "nyra": 144,
+  "python": 174,
+  "variants": {
+   "unwrap_main": 144,
+   "drop_close_braces": 140,
+   "indent_blocks": 140,
+   "drop_let_var": 143,
+   "drop_let_only": 143,
+   "drop_param_types": 136,
+   "drop_ret_types": 138,
+   "drop_local_ann": 144,
+   "implicit_ret": 144,
+   "positional_struct": 129,
+   "all_syntax_braces": 110,
+   "all_syntax_indent": 110
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "table_format",
+  "nyra": 990,
+  "python": 637,
+  "variants": {
+   "unwrap_main": 959,
+   "drop_close_braces": 957,
+   "indent_blocks": 946,
+   "drop_let_var": 970,
+   "drop_let_only": 978,
+   "drop_param_types": 963,
+   "drop_ret_types": 972,
+   "drop_local_ann": 976,
+   "implicit_ret": 980,
+   "positional_struct": 990,
+   "all_syntax_braces": 842,
+   "all_syntax_indent": 827
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "text_adventure",
+  "nyra": 1503,
+  "python": 1094,
+  "variants": {
+   "unwrap_main": 1503,
+   "drop_close_braces": 1443,
+   "indent_blocks": 1415,
+   "drop_let_var": 1483,
+   "drop_let_only": 1492,
+   "drop_param_types": 1491,
+   "drop_ret_types": 1490,
+   "drop_local_ann": 1469,
+   "implicit_ret": 1497,
+   "positional_struct": 1503,
+   "all_syntax_braces": 1358,
+   "all_syntax_indent": 1327
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "two_sum",
+  "nyra": 96,
+  "python": 87,
+  "variants": {
+   "unwrap_main": 96,
+   "drop_close_braces": 88,
+   "indent_blocks": 86,
+   "drop_let_var": 94,
+   "drop_let_only": 94,
+   "drop_param_types": 96,
+   "drop_ret_types": 96,
+   "drop_local_ann": 96,
+   "implicit_ret": 96,
+   "positional_struct": 96,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 84
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "vending_machine",
+  "nyra": 1192,
+  "python": 901,
+  "variants": {
+   "unwrap_main": 1192,
+   "drop_close_braces": 1155,
+   "indent_blocks": 1136,
+   "drop_let_var": 1168,
+   "drop_let_only": 1176,
+   "drop_param_types": 1178,
+   "drop_ret_types": 1181,
+   "drop_local_ann": 1184,
+   "implicit_ret": 1186,
+   "positional_struct": 1192,
+   "all_syntax_braces": 1092,
+   "all_syntax_indent": 1070
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "vowel_count",
+  "nyra": 43,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 43,
+   "drop_close_braces": 43,
+   "indent_blocks": 43,
+   "drop_let_var": 42,
+   "drop_let_only": 42,
+   "drop_param_types": 43,
+   "drop_ret_types": 43,
+   "drop_local_ann": 43,
+   "implicit_ret": 43,
+   "positional_struct": 43,
+   "all_syntax_braces": 42,
+   "all_syntax_indent": 42
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "word_frequency",
+  "nyra": 703,
+  "python": 450,
+  "variants": {
+   "unwrap_main": 703,
+   "drop_close_braces": 678,
+   "indent_blocks": 672,
+   "drop_let_var": 691,
+   "drop_let_only": 697,
+   "drop_param_types": 703,
+   "drop_ret_types": 703,
+   "drop_local_ann": 697,
+   "implicit_ret": 703,
+   "positional_struct": 703,
+   "all_syntax_braces": 660,
+   "all_syntax_indent": 654
+  }
+ },
+ {
+  "corpus": "opus",
+  "task": "word_wrap",
+  "nyra": 180,
+  "python": 162,
+  "variants": {
+   "unwrap_main": 180,
+   "drop_close_braces": 173,
+   "indent_blocks": 168,
+   "drop_let_var": 177,
+   "drop_let_only": 179,
+   "drop_param_types": 180,
+   "drop_ret_types": 180,
+   "drop_local_ann": 176,
+   "implicit_ret": 180,
+   "positional_struct": 180,
+   "all_syntax_braces": 166,
+   "all_syntax_indent": 161
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "ackermann",
+  "nyra": 136,
+  "python": 132,
+  "variants": {
+   "unwrap_main": 136,
+   "drop_close_braces": 134,
+   "indent_blocks": 129,
+   "drop_let_var": 136,
+   "drop_let_only": 136,
+   "drop_param_types": 132,
+   "drop_ret_types": 133,
+   "drop_local_ann": 136,
+   "implicit_ret": 134,
+   "positional_struct": 136,
+   "all_syntax_braces": 125,
+   "all_syntax_indent": 119
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "count_change",
+  "nyra": 105,
+  "python": 103,
+  "variants": {
+   "unwrap_main": 91,
+   "drop_close_braces": 97,
+   "indent_blocks": 95,
+   "drop_let_var": 103,
+   "drop_let_only": 104,
+   "drop_param_types": 105,
+   "drop_ret_types": 105,
+   "drop_local_ann": 101,
+   "implicit_ret": 105,
+   "positional_struct": 105,
+   "all_syntax_braces": 80,
+   "all_syntax_indent": 79
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "count_pairs",
+  "nyra": 61,
+  "python": 38,
+  "variants": {
+   "unwrap_main": 61,
+   "drop_close_braces": 56,
+   "indent_blocks": 51,
+   "drop_let_var": 60,
+   "drop_let_only": 61,
+   "drop_param_types": 61,
+   "drop_ret_types": 61,
+   "drop_local_ann": 61,
+   "implicit_ret": 61,
+   "positional_struct": 61,
+   "all_syntax_braces": 55,
+   "all_syntax_indent": 50
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "digit_sums",
+  "nyra": 113,
+  "python": 39,
+  "variants": {
+   "unwrap_main": 113,
+   "drop_close_braces": 108,
+   "indent_blocks": 107,
+   "drop_let_var": 111,
+   "drop_let_only": 113,
+   "drop_param_types": 111,
+   "drop_ret_types": 110,
+   "drop_local_ann": 113,
+   "implicit_ret": 111,
+   "positional_struct": 113,
+   "all_syntax_braces": 99,
+   "all_syntax_indent": 97
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "fib_recursive",
+  "nyra": 76,
+  "python": 62,
+  "variants": {
+   "unwrap_main": 76,
+   "drop_close_braces": 74,
+   "indent_blocks": 71,
+   "drop_let_var": 76,
+   "drop_let_only": 76,
+   "drop_param_types": 74,
+   "drop_ret_types": 73,
+   "drop_local_ann": 76,
+   "implicit_ret": 74,
+   "positional_struct": 76,
+   "all_syntax_braces": 67,
+   "all_syntax_indent": 63
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "fizzbuzz",
+  "nyra": 108,
+  "python": 88,
+  "variants": {
+   "unwrap_main": 98,
+   "drop_close_braces": 97,
+   "indent_blocks": 92,
+   "drop_let_var": 108,
+   "drop_let_only": 108,
+   "drop_param_types": 108,
+   "drop_ret_types": 108,
+   "drop_local_ann": 108,
+   "implicit_ret": 108,
+   "positional_struct": 108,
+   "all_syntax_braces": 90,
+   "all_syntax_indent": 86
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "gcd_pairs",
+  "nyra": 131,
+  "python": 92,
+  "variants": {
+   "unwrap_main": 131,
+   "drop_close_braces": 126,
+   "indent_blocks": 125,
+   "drop_let_var": 128,
+   "drop_let_only": 130,
+   "drop_param_types": 127,
+   "drop_ret_types": 128,
+   "drop_local_ann": 131,
+   "implicit_ret": 129,
+   "positional_struct": 131,
+   "all_syntax_braces": 114,
+   "all_syntax_indent": 112
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "grade_letters",
+  "nyra": 133,
+  "python": 107,
+  "variants": {
+   "unwrap_main": 123,
+   "drop_close_braces": 126,
+   "indent_blocks": 117,
+   "drop_let_var": 133,
+   "drop_let_only": 133,
+   "drop_param_types": 131,
+   "drop_ret_types": 130,
+   "drop_local_ann": 133,
+   "implicit_ret": 131,
+   "positional_struct": 133,
+   "all_syntax_braces": 112,
+   "all_syntax_indent": 103
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "happy_numbers",
+  "nyra": 177,
+  "python": 114,
+  "variants": {
+   "unwrap_main": 177,
+   "drop_close_braces": 162,
+   "indent_blocks": 158,
+   "drop_let_var": 171,
+   "drop_let_only": 176,
+   "drop_param_types": 175,
+   "drop_ret_types": 173,
+   "drop_local_ann": 177,
+   "implicit_ret": 173,
+   "positional_struct": 177,
+   "all_syntax_braces": 146,
+   "all_syntax_indent": 141
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "lcg_sequence",
+  "nyra": 41,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 41,
+   "drop_close_braces": 39,
+   "indent_blocks": 38,
+   "drop_let_var": 40,
+   "drop_let_only": 41,
+   "drop_param_types": 41,
+   "drop_ret_types": 41,
+   "drop_local_ann": 41,
+   "implicit_ret": 41,
+   "positional_struct": 41,
+   "all_syntax_braces": 38,
+   "all_syntax_indent": 37
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "lcm_1_to_16",
+  "nyra": 106,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 106,
+   "drop_close_braces": 99,
+   "indent_blocks": 97,
+   "drop_let_var": 102,
+   "drop_let_only": 105,
+   "drop_param_types": 102,
+   "drop_ret_types": 103,
+   "drop_local_ann": 106,
+   "implicit_ret": 104,
+   "positional_struct": 106,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 83
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "leap_years",
+  "nyra": 115,
+  "python": 70,
+  "variants": {
+   "unwrap_main": 115,
+   "drop_close_braces": 111,
+   "indent_blocks": 110,
+   "drop_let_var": 115,
+   "drop_let_only": 115,
+   "drop_param_types": 113,
+   "drop_ret_types": 111,
+   "drop_local_ann": 115,
+   "implicit_ret": 113,
+   "positional_struct": 115,
+   "all_syntax_braces": 103,
+   "all_syntax_indent": 101
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "longest_collatz",
+  "nyra": 173,
+  "python": 181,
+  "variants": {
+   "unwrap_main": 159,
+   "drop_close_braces": 160,
+   "indent_blocks": 158,
+   "drop_let_var": 168,
+   "drop_let_only": 172,
+   "drop_param_types": 171,
+   "drop_ret_types": 170,
+   "drop_local_ann": 173,
+   "implicit_ret": 171,
+   "positional_struct": 173,
+   "all_syntax_braces": 137,
+   "all_syntax_indent": 135
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "mod_pow",
+  "nyra": 36,
+  "python": 41,
+  "variants": {
+   "unwrap_main": 36,
+   "drop_close_braces": 34,
+   "indent_blocks": 33,
+   "drop_let_var": 35,
+   "drop_let_only": 36,
+   "drop_param_types": 36,
+   "drop_ret_types": 36,
+   "drop_local_ann": 36,
+   "implicit_ret": 36,
+   "positional_struct": 36,
+   "all_syntax_braces": 33,
+   "all_syntax_indent": 32
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "multiples_4_7",
+  "nyra": 54,
+  "python": 37,
+  "variants": {
+   "unwrap_main": 54,
+   "drop_close_braces": 49,
+   "indent_blocks": 47,
+   "drop_let_var": 53,
+   "drop_let_only": 54,
+   "drop_param_types": 54,
+   "drop_ret_types": 54,
+   "drop_local_ann": 54,
+   "implicit_ret": 54,
+   "positional_struct": 54,
+   "all_syntax_braces": 48,
+   "all_syntax_indent": 46
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "pascal_binomials",
+  "nyra": 99,
+  "python": 111,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 97,
+   "indent_blocks": 95,
+   "drop_let_var": 99,
+   "drop_let_only": 99,
+   "drop_param_types": 95,
+   "drop_ret_types": 96,
+   "drop_local_ann": 99,
+   "implicit_ret": 97,
+   "positional_struct": 99,
+   "all_syntax_braces": 88,
+   "all_syntax_indent": 85
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "population_growth",
+  "nyra": 51,
+  "python": 40,
+  "variants": {
+   "unwrap_main": 51,
+   "drop_close_braces": 49,
+   "indent_blocks": 48,
+   "drop_let_var": 50,
+   "drop_let_only": 51,
+   "drop_param_types": 51,
+   "drop_ret_types": 51,
+   "drop_local_ann": 51,
+   "implicit_ret": 51,
+   "positional_struct": 51,
+   "all_syntax_braces": 48,
+   "all_syntax_indent": 47
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "primality_flags",
+  "nyra": 123,
+  "python": 111,
+  "variants": {
+   "unwrap_main": 123,
+   "drop_close_braces": 116,
+   "indent_blocks": 112,
+   "drop_let_var": 122,
+   "drop_let_only": 123,
+   "drop_param_types": 121,
+   "drop_ret_types": 119,
+   "drop_local_ann": 123,
+   "implicit_ret": 121,
+   "positional_struct": 123,
+   "all_syntax_braces": 107,
+   "all_syntax_indent": 102
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "primes_to_100",
+  "nyra": 105,
+  "python": 87,
+  "variants": {
+   "unwrap_main": 105,
+   "drop_close_braces": 98,
+   "indent_blocks": 91,
+   "drop_let_var": 104,
+   "drop_let_only": 105,
+   "drop_param_types": 103,
+   "drop_ret_types": 101,
+   "drop_local_ann": 105,
+   "implicit_ret": 103,
+   "positional_struct": 105,
+   "all_syntax_braces": 89,
+   "all_syntax_indent": 81
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "reverse_digits",
+  "nyra": 102,
+  "python": 34,
+  "variants": {
+   "unwrap_main": 102,
+   "drop_close_braces": 97,
+   "indent_blocks": 96,
+   "drop_let_var": 100,
+   "drop_let_only": 102,
+   "drop_param_types": 100,
+   "drop_ret_types": 99,
+   "drop_local_ann": 102,
+   "implicit_ret": 100,
+   "positional_struct": 102,
+   "all_syntax_braces": 88,
+   "all_syntax_indent": 86
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "traffic_light",
+  "nyra": 68,
+  "python": 56,
+  "variants": {
+   "unwrap_main": 68,
+   "drop_close_braces": 61,
+   "indent_blocks": 58,
+   "drop_let_var": 67,
+   "drop_let_only": 67,
+   "drop_param_types": 68,
+   "drop_ret_types": 68,
+   "drop_local_ann": 68,
+   "implicit_ret": 68,
+   "positional_struct": 68,
+   "all_syntax_braces": 60,
+   "all_syntax_indent": 57
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "twisted_fizzbuzz",
+  "nyra": 124,
+  "python": 101,
+  "variants": {
+   "unwrap_main": 114,
+   "drop_close_braces": 112,
+   "indent_blocks": 107,
+   "drop_let_var": 124,
+   "drop_let_only": 124,
+   "drop_param_types": 124,
+   "drop_ret_types": 124,
+   "drop_local_ann": 124,
+   "implicit_ret": 124,
+   "positional_struct": 124,
+   "all_syntax_braces": 105,
+   "all_syntax_indent": 101
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "binary_strings",
+  "nyra": 124,
+  "python": 99,
+  "variants": {
+   "unwrap_main": 124,
+   "drop_close_braces": 119,
+   "indent_blocks": 116,
+   "drop_let_var": 122,
+   "drop_let_only": 124,
+   "drop_param_types": 122,
+   "drop_ret_types": 121,
+   "drop_local_ann": 124,
+   "implicit_ret": 122,
+   "positional_struct": 124,
+   "all_syntax_braces": 110,
+   "all_syntax_indent": 106
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "calendar_month",
+  "nyra": 153,
+  "python": 95,
+  "variants": {
+   "unwrap_main": 153,
+   "drop_close_braces": 147,
+   "indent_blocks": 143,
+   "drop_let_var": 150,
+   "drop_let_only": 153,
+   "drop_param_types": 153,
+   "drop_ret_types": 153,
+   "drop_local_ann": 149,
+   "implicit_ret": 153,
+   "positional_struct": 153,
+   "all_syntax_braces": 140,
+   "all_syntax_indent": 136
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "centered_pyramid",
+  "nyra": 43,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 43,
+   "drop_close_braces": 41,
+   "indent_blocks": 40,
+   "drop_let_var": 43,
+   "drop_let_only": 43,
+   "drop_param_types": 43,
+   "drop_ret_types": 43,
+   "drop_local_ann": 43,
+   "implicit_ret": 43,
+   "positional_struct": 43,
+   "all_syntax_braces": 41,
+   "all_syntax_indent": 40
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "checkerboard",
+  "nyra": 76,
+  "python": 41,
+  "variants": {
+   "unwrap_main": 76,
+   "drop_close_braces": 67,
+   "indent_blocks": 64,
+   "drop_let_var": 75,
+   "drop_let_only": 76,
+   "drop_param_types": 76,
+   "drop_ret_types": 76,
+   "drop_local_ann": 76,
+   "implicit_ret": 76,
+   "positional_struct": 76,
+   "all_syntax_braces": 66,
+   "all_syntax_indent": 63
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "collatz_trace",
+  "nyra": 95,
+  "python": 80,
+  "variants": {
+   "unwrap_main": 95,
+   "drop_close_braces": 89,
+   "indent_blocks": 87,
+   "drop_let_var": 93,
+   "drop_let_only": 95,
+   "drop_param_types": 95,
+   "drop_ret_types": 95,
+   "drop_local_ann": 91,
+   "implicit_ret": 95,
+   "positional_struct": 95,
+   "all_syntax_braces": 83,
+   "all_syntax_indent": 81
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "fib_labelled",
+  "nyra": 125,
+  "python": 45,
+  "variants": {
+   "unwrap_main": 125,
+   "drop_close_braces": 118,
+   "indent_blocks": 117,
+   "drop_let_var": 122,
+   "drop_let_only": 124,
+   "drop_param_types": 123,
+   "drop_ret_types": 122,
+   "drop_local_ann": 125,
+   "implicit_ret": 123,
+   "positional_struct": 125,
+   "all_syntax_braces": 108,
+   "all_syntax_indent": 106
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "hanoi_moves",
+  "nyra": 120,
+  "python": 100,
+  "variants": {
+   "unwrap_main": 111,
+   "drop_close_braces": 116,
+   "indent_blocks": 112,
+   "drop_let_var": 120,
+   "drop_let_only": 120,
+   "drop_param_types": 112,
+   "drop_ret_types": 120,
+   "drop_local_ann": 120,
+   "implicit_ret": 120,
+   "positional_struct": 120,
+   "all_syntax_braces": 101,
+   "all_syntax_indent": 98
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "multiplication_table",
+  "nyra": 29,
+  "python": 30,
+  "variants": {
+   "unwrap_main": 29,
+   "drop_close_braces": 27,
+   "indent_blocks": 26,
+   "drop_let_var": 29,
+   "drop_let_only": 29,
+   "drop_param_types": 29,
+   "drop_ret_types": 29,
+   "drop_local_ann": 29,
+   "implicit_ret": 29,
+   "positional_struct": 29,
+   "all_syntax_braces": 27,
+   "all_syntax_indent": 26
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "number_rows",
+  "nyra": 45,
+  "python": 36,
+  "variants": {
+   "unwrap_main": 45,
+   "drop_close_braces": 43,
+   "indent_blocks": 42,
+   "drop_let_var": 44,
+   "drop_let_only": 44,
+   "drop_param_types": 45,
+   "drop_ret_types": 45,
+   "drop_local_ann": 45,
+   "implicit_ret": 45,
+   "positional_struct": 45,
+   "all_syntax_braces": 42,
+   "all_syntax_indent": 41
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "prime_factorization",
+  "nyra": 227,
+  "python": 191,
+  "variants": {
+   "unwrap_main": 227,
+   "drop_close_braces": 207,
+   "indent_blocks": 203,
+   "drop_let_var": 223,
+   "drop_let_only": 227,
+   "drop_param_types": 225,
+   "drop_ret_types": 224,
+   "drop_local_ann": 223,
+   "implicit_ret": 225,
+   "positional_struct": 227,
+   "all_syntax_braces": 192,
+   "all_syntax_indent": 187
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "pythagorean_triples",
+  "nyra": 67,
+  "python": 92,
+  "variants": {
+   "unwrap_main": 67,
+   "drop_close_braces": 56,
+   "indent_blocks": 55,
+   "drop_let_var": 67,
+   "drop_let_only": 67,
+   "drop_param_types": 67,
+   "drop_ret_types": 67,
+   "drop_local_ann": 67,
+   "implicit_ret": 67,
+   "positional_struct": 67,
+   "all_syntax_braces": 56,
+   "all_syntax_indent": 55
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "roman_numerals",
+  "nyra": 227,
+  "python": 204,
+  "variants": {
+   "unwrap_main": 227,
+   "drop_close_braces": 217,
+   "indent_blocks": 216,
+   "drop_let_var": 223,
+   "drop_let_only": 225,
+   "drop_param_types": 225,
+   "drop_ret_types": 224,
+   "drop_local_ann": 227,
+   "implicit_ret": 225,
+   "positional_struct": 227,
+   "all_syntax_braces": 206,
+   "all_syntax_indent": 204
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "temperature_table",
+  "nyra": 46,
+  "python": 45,
+  "variants": {
+   "unwrap_main": 46,
+   "drop_close_braces": 44,
+   "indent_blocks": 43,
+   "drop_let_var": 45,
+   "drop_let_only": 45,
+   "drop_param_types": 46,
+   "drop_ret_types": 46,
+   "drop_local_ann": 46,
+   "implicit_ret": 46,
+   "positional_struct": 46,
+   "all_syntax_braces": 43,
+   "all_syntax_indent": 42
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "triangle_stars",
+  "nyra": 23,
+  "python": 19,
+  "variants": {
+   "unwrap_main": 23,
+   "drop_close_braces": 21,
+   "indent_blocks": 20,
+   "drop_let_var": 23,
+   "drop_let_only": 23,
+   "drop_param_types": 23,
+   "drop_ret_types": 23,
+   "drop_local_ann": 23,
+   "implicit_ret": 23,
+   "positional_struct": 23,
+   "all_syntax_braces": 21,
+   "all_syntax_indent": 20
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "aging_life",
+  "nyra": 591,
+  "python": 366,
+  "variants": {
+   "unwrap_main": 567,
+   "drop_close_braces": 550,
+   "indent_blocks": 537,
+   "drop_let_var": 576,
+   "drop_let_only": 585,
+   "drop_param_types": 591,
+   "drop_ret_types": 591,
+   "drop_local_ann": 571,
+   "implicit_ret": 591,
+   "positional_struct": 591,
+   "all_syntax_braces": 497,
+   "all_syntax_indent": 485
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "bank_ledger",
+  "nyra": 692,
+  "python": 624,
+  "variants": {
+   "unwrap_main": 692,
+   "drop_close_braces": 659,
+   "indent_blocks": 648,
+   "drop_let_var": 684,
+   "drop_let_only": 685,
+   "drop_param_types": 692,
+   "drop_ret_types": 692,
+   "drop_local_ann": 686,
+   "implicit_ret": 692,
+   "positional_struct": 692,
+   "all_syntax_braces": 645,
+   "all_syntax_indent": 634
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "big_sieve",
+  "nyra": 238,
+  "python": 188,
+  "variants": {
+   "unwrap_main": 214,
+   "drop_close_braces": 221,
+   "indent_blocks": 217,
+   "drop_let_var": 229,
+   "drop_let_only": 237,
+   "drop_param_types": 238,
+   "drop_ret_types": 238,
+   "drop_local_ann": 238,
+   "implicit_ret": 238,
+   "positional_struct": 238,
+   "all_syntax_braces": 192,
+   "all_syntax_indent": 189
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "binary_search",
+  "nyra": 212,
+  "python": 181,
+  "variants": {
+   "unwrap_main": 212,
+   "drop_close_braces": 201,
+   "indent_blocks": 200,
+   "drop_let_var": 208,
+   "drop_let_only": 210,
+   "drop_param_types": 207,
+   "drop_ret_types": 209,
+   "drop_local_ann": 212,
+   "implicit_ret": 210,
+   "positional_struct": 212,
+   "all_syntax_braces": 187,
+   "all_syntax_indent": 185
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "bubble_sort",
+  "nyra": 129,
+  "python": 168,
+  "variants": {
+   "unwrap_main": 115,
+   "drop_close_braces": 115,
+   "indent_blocks": 114,
+   "drop_let_var": 127,
+   "drop_let_only": 128,
+   "drop_param_types": 129,
+   "drop_ret_types": 129,
+   "drop_local_ann": 129,
+   "implicit_ret": 129,
+   "positional_struct": 129,
+   "all_syntax_braces": 103,
+   "all_syntax_indent": 103
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "caesar_cipher",
+  "nyra": 111,
+  "python": 92,
+  "variants": {
+   "unwrap_main": 111,
+   "drop_close_braces": 107,
+   "indent_blocks": 106,
+   "drop_let_var": 108,
+   "drop_let_only": 109,
+   "drop_param_types": 109,
+   "drop_ret_types": 108,
+   "drop_local_ann": 111,
+   "implicit_ret": 109,
+   "positional_struct": 111,
+   "all_syntax_braces": 97,
+   "all_syntax_indent": 95
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "expr_eval",
+  "nyra": 1111,
+  "python": 842,
+  "variants": {
+   "unwrap_main": 1111,
+   "drop_close_braces": 1066,
+   "indent_blocks": 1057,
+   "drop_let_var": 1090,
+   "drop_let_only": 1098,
+   "drop_param_types": 1107,
+   "drop_ret_types": 1090,
+   "drop_local_ann": 1107,
+   "implicit_ret": 1099,
+   "positional_struct": 1111,
+   "all_syntax_braces": 1004,
+   "all_syntax_indent": 989
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "four_in_row",
+  "nyra": 908,
+  "python": 625,
+  "variants": {
+   "unwrap_main": 908,
+   "drop_close_braces": 867,
+   "indent_blocks": 854,
+   "drop_let_var": 892,
+   "drop_let_only": 901,
+   "drop_param_types": 882,
+   "drop_ret_types": 901,
+   "drop_local_ann": 908,
+   "implicit_ret": 904,
+   "positional_struct": 908,
+   "all_syntax_braces": 814,
+   "all_syntax_indent": 799
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "indent_check",
+  "nyra": 195,
+  "python": 849,
+  "variants": {
+   "unwrap_main": 195,
+   "drop_close_braces": 195,
+   "indent_blocks": 195,
+   "drop_let_var": 195,
+   "drop_let_only": 195,
+   "drop_param_types": 195,
+   "drop_ret_types": 195,
+   "drop_local_ann": 195,
+   "implicit_ret": 195,
+   "positional_struct": 195,
+   "all_syntax_braces": 195,
+   "all_syntax_indent": 195
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "inventory_ledger",
+  "nyra": 1029,
+  "python": 906,
+  "variants": {
+   "unwrap_main": 1029,
+   "drop_close_braces": 986,
+   "indent_blocks": 975,
+   "drop_let_var": 1021,
+   "drop_let_only": 1025,
+   "drop_param_types": 1017,
+   "drop_ret_types": 1026,
+   "drop_local_ann": 1017,
+   "implicit_ret": 1029,
+   "positional_struct": 1029,
+   "all_syntax_braces": 951,
+   "all_syntax_indent": 940
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "josephus",
+  "nyra": 99,
+  "python": 82,
+  "variants": {
+   "unwrap_main": 99,
+   "drop_close_braces": 94,
+   "indent_blocks": 93,
+   "drop_let_var": 98,
+   "drop_let_only": 99,
+   "drop_param_types": 95,
+   "drop_ret_types": 96,
+   "drop_local_ann": 99,
+   "implicit_ret": 97,
+   "positional_struct": 99,
+   "all_syntax_braces": 84,
+   "all_syntax_indent": 82
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "lcs_table",
+  "nyra": 301,
+  "python": 253,
+  "variants": {
+   "unwrap_main": 301,
+   "drop_close_braces": 286,
+   "indent_blocks": 280,
+   "drop_let_var": 294,
+   "drop_let_only": 298,
+   "drop_param_types": 299,
+   "drop_ret_types": 296,
+   "drop_local_ann": 297,
+   "implicit_ret": 299,
+   "positional_struct": 301,
+   "all_syntax_braces": 266,
+   "all_syntax_indent": 259
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "league_table",
+  "nyra": 1475,
+  "python": 993,
+  "variants": {
+   "unwrap_main": 1475,
+   "drop_close_braces": 1449,
+   "indent_blocks": 1434,
+   "drop_let_var": 1445,
+   "drop_let_only": 1459,
+   "drop_param_types": 1463,
+   "drop_ret_types": 1459,
+   "drop_local_ann": 1460,
+   "implicit_ret": 1469,
+   "positional_struct": 1475,
+   "all_syntax_braces": 1370,
+   "all_syntax_indent": 1352
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "library_loans",
+  "nyra": 1502,
+  "python": 1309,
+  "variants": {
+   "unwrap_main": 1502,
+   "drop_close_braces": 1453,
+   "indent_blocks": 1435,
+   "drop_let_var": 1479,
+   "drop_let_only": 1488,
+   "drop_param_types": 1496,
+   "drop_ret_types": 1496,
+   "drop_local_ann": 1492,
+   "implicit_ret": 1500,
+   "positional_struct": 1502,
+   "all_syntax_braces": 1406,
+   "all_syntax_indent": 1387
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "line_diff",
+  "nyra": 845,
+  "python": 774,
+  "variants": {
+   "unwrap_main": 845,
+   "drop_close_braces": 808,
+   "indent_blocks": 800,
+   "drop_let_var": 830,
+   "drop_let_only": 842,
+   "drop_param_types": 838,
+   "drop_ret_types": 845,
+   "drop_local_ann": 837,
+   "implicit_ret": 845,
+   "positional_struct": 845,
+   "all_syntax_braces": 778,
+   "all_syntax_indent": 770
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "look_and_say",
+  "nyra": 267,
+  "python": 148,
+  "variants": {
+   "unwrap_main": 267,
+   "drop_close_braces": 260,
+   "indent_blocks": 251,
+   "drop_let_var": 259,
+   "drop_let_only": 266,
+   "drop_param_types": 267,
+   "drop_ret_types": 267,
+   "drop_local_ann": 259,
+   "implicit_ret": 267,
+   "positional_struct": 267,
+   "all_syntax_braces": 244,
+   "all_syntax_indent": 235
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "matrix_mult",
+  "nyra": 331,
+  "python": 183,
+  "variants": {
+   "unwrap_main": 331,
+   "drop_close_braces": 318,
+   "indent_blocks": 308,
+   "drop_let_var": 320,
+   "drop_let_only": 329,
+   "drop_param_types": 331,
+   "drop_ret_types": 331,
+   "drop_local_ann": 311,
+   "implicit_ret": 331,
+   "positional_struct": 331,
+   "all_syntax_braces": 287,
+   "all_syntax_indent": 277
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "matrix_report",
+  "nyra": 1139,
+  "python": 574,
+  "variants": {
+   "unwrap_main": 1139,
+   "drop_close_braces": 1071,
+   "indent_blocks": 1052,
+   "drop_let_var": 1115,
+   "drop_let_only": 1131,
+   "drop_param_types": 1099,
+   "drop_ret_types": 1108,
+   "drop_local_ann": 1081,
+   "implicit_ret": 1129,
+   "positional_struct": 1139,
+   "all_syntax_braces": 908,
+   "all_syntax_indent": 884
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "maze_keys",
+  "nyra": 953,
+  "python": 666,
+  "variants": {
+   "unwrap_main": 953,
+   "drop_close_braces": 922,
+   "indent_blocks": 902,
+   "drop_let_var": 931,
+   "drop_let_only": 939,
+   "drop_param_types": 947,
+   "drop_ret_types": 947,
+   "drop_local_ann": 930,
+   "implicit_ret": 949,
+   "positional_struct": 953,
+   "all_syntax_braces": 861,
+   "all_syntax_indent": 839
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "meeting_slots",
+  "nyra": 792,
+  "python": 606,
+  "variants": {
+   "unwrap_main": 792,
+   "drop_close_braces": 754,
+   "indent_blocks": 741,
+   "drop_let_var": 780,
+   "drop_let_only": 788,
+   "drop_param_types": 780,
+   "drop_ret_types": 785,
+   "drop_local_ann": 778,
+   "implicit_ret": 790,
+   "positional_struct": 792,
+   "all_syntax_braces": 707,
+   "all_syntax_indent": 693
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "orbit_calendar",
+  "nyra": 1277,
+  "python": 912,
+  "variants": {
+   "unwrap_main": 1277,
+   "drop_close_braces": 1238,
+   "indent_blocks": 1217,
+   "drop_let_var": 1261,
+   "drop_let_only": 1266,
+   "drop_param_types": 1239,
+   "drop_ret_types": 1249,
+   "drop_local_ann": 1277,
+   "implicit_ret": 1263,
+   "positional_struct": 1277,
+   "all_syntax_braces": 1142,
+   "all_syntax_indent": 1115
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "palindromes",
+  "nyra": 103,
+  "python": 49,
+  "variants": {
+   "unwrap_main": 103,
+   "drop_close_braces": 101,
+   "indent_blocks": 104,
+   "drop_let_var": 103,
+   "drop_let_only": 103,
+   "drop_param_types": 101,
+   "drop_ret_types": 99,
+   "drop_local_ann": 103,
+   "implicit_ret": 103,
+   "positional_struct": 103,
+   "all_syntax_braces": 95,
+   "all_syntax_indent": 98
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "polynomial_ops",
+  "nyra": 1419,
+  "python": 1134,
+  "variants": {
+   "unwrap_main": 1419,
+   "drop_close_braces": 1365,
+   "indent_blocks": 1343,
+   "drop_let_var": 1393,
+   "drop_let_only": 1407,
+   "drop_param_types": 1382,
+   "drop_ret_types": 1388,
+   "drop_local_ann": 1419,
+   "implicit_ret": 1405,
+   "positional_struct": 1419,
+   "all_syntax_braces": 1257,
+   "all_syntax_indent": 1228
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "receipt",
+  "nyra": 244,
+  "python": 207,
+  "variants": {
+   "unwrap_main": 244,
+   "drop_close_braces": 242,
+   "indent_blocks": 241,
+   "drop_let_var": 238,
+   "drop_let_only": 239,
+   "drop_param_types": 238,
+   "drop_ret_types": 241,
+   "drop_local_ann": 244,
+   "implicit_ret": 244,
+   "positional_struct": 244,
+   "all_syntax_braces": 227,
+   "all_syntax_indent": 226
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "reverse_string",
+  "nyra": 37,
+  "python": 32,
+  "variants": {
+   "unwrap_main": 37,
+   "drop_close_braces": 35,
+   "indent_blocks": 35,
+   "drop_let_var": 35,
+   "drop_let_only": 36,
+   "drop_param_types": 37,
+   "drop_ret_types": 37,
+   "drop_local_ann": 37,
+   "implicit_ret": 37,
+   "positional_struct": 37,
+   "all_syntax_braces": 33,
+   "all_syntax_indent": 33
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "rle_codec",
+  "nyra": 847,
+  "python": 654,
+  "variants": {
+   "unwrap_main": 847,
+   "drop_close_braces": 811,
+   "indent_blocks": 797,
+   "drop_let_var": 833,
+   "drop_let_only": 840,
+   "drop_param_types": 843,
+   "drop_ret_types": 840,
+   "drop_local_ann": 847,
+   "implicit_ret": 843,
+   "positional_struct": 817,
+   "all_syntax_braces": 752,
+   "all_syntax_indent": 736
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "round_robin",
+  "nyra": 497,
+  "python": 489,
+  "variants": {
+   "unwrap_main": 497,
+   "drop_close_braces": 474,
+   "indent_blocks": 470,
+   "drop_let_var": 481,
+   "drop_let_only": 490,
+   "drop_param_types": 497,
+   "drop_ret_types": 497,
+   "drop_local_ann": 493,
+   "implicit_ret": 497,
+   "positional_struct": 497,
+   "all_syntax_braces": 454,
+   "all_syntax_indent": 450
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "savings_interest",
+  "nyra": 870,
+  "python": 638,
+  "variants": {
+   "unwrap_main": 870,
+   "drop_close_braces": 853,
+   "indent_blocks": 846,
+   "drop_let_var": 857,
+   "drop_let_only": 863,
+   "drop_param_types": 866,
+   "drop_ret_types": 864,
+   "drop_local_ann": 870,
+   "implicit_ret": 868,
+   "positional_struct": 762,
+   "all_syntax_braces": 720,
+   "all_syntax_indent": 712
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "seat_booking",
+  "nyra": 819,
+  "python": 614,
+  "variants": {
+   "unwrap_main": 819,
+   "drop_close_braces": 758,
+   "indent_blocks": 745,
+   "drop_let_var": 807,
+   "drop_let_only": 813,
+   "drop_param_types": 813,
+   "drop_ret_types": 813,
+   "drop_local_ann": 813,
+   "implicit_ret": 815,
+   "positional_struct": 819,
+   "all_syntax_braces": 724,
+   "all_syntax_indent": 709
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "sieve_primes",
+  "nyra": 131,
+  "python": 115,
+  "variants": {
+   "unwrap_main": 115,
+   "drop_close_braces": 117,
+   "indent_blocks": 115,
+   "drop_let_var": 128,
+   "drop_let_only": 130,
+   "drop_param_types": 131,
+   "drop_ret_types": 131,
+   "drop_local_ann": 131,
+   "implicit_ret": 131,
+   "positional_struct": 131,
+   "all_syntax_braces": 102,
+   "all_syntax_indent": 101
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "snake_game",
+  "nyra": 1003,
+  "python": 617,
+  "variants": {
+   "unwrap_main": 971,
+   "drop_close_braces": 956,
+   "indent_blocks": 923,
+   "drop_let_var": 984,
+   "drop_let_only": 997,
+   "drop_param_types": 993,
+   "drop_ret_types": 999,
+   "drop_local_ann": 1003,
+   "implicit_ret": 1001,
+   "positional_struct": 1003,
+   "all_syntax_braces": 895,
+   "all_syntax_indent": 861
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "sort_numbers",
+  "nyra": 167,
+  "python": 144,
+  "variants": {
+   "unwrap_main": 147,
+   "drop_close_braces": 159,
+   "indent_blocks": 156,
+   "drop_let_var": 164,
+   "drop_let_only": 167,
+   "drop_param_types": 167,
+   "drop_ret_types": 167,
+   "drop_local_ann": 163,
+   "implicit_ret": 167,
+   "positional_struct": 167,
+   "all_syntax_braces": 136,
+   "all_syntax_indent": 134
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "sparse_ledger",
+  "nyra": 1210,
+  "python": 878,
+  "variants": {
+   "unwrap_main": 1210,
+   "drop_close_braces": 1173,
+   "indent_blocks": 1161,
+   "drop_let_var": 1187,
+   "drop_let_only": 1198,
+   "drop_param_types": 1210,
+   "drop_ret_types": 1210,
+   "drop_local_ann": 1178,
+   "implicit_ret": 1210,
+   "positional_struct": 1210,
+   "all_syntax_braces": 1118,
+   "all_syntax_indent": 1106
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "spreadsheet_eval",
+  "nyra": 248,
+  "python": 1494,
+  "variants": {
+   "unwrap_main": 221,
+   "drop_close_braces": 246,
+   "indent_blocks": 245,
+   "drop_let_var": 248,
+   "drop_let_only": 248,
+   "drop_param_types": 248,
+   "drop_ret_types": 248,
+   "drop_local_ann": 248,
+   "implicit_ret": 248,
+   "positional_struct": 248,
+   "all_syntax_braces": 221,
+   "all_syntax_indent": 221
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "stack_vm",
+  "nyra": 1248,
+  "python": 1139,
+  "variants": {
+   "unwrap_main": 1248,
+   "drop_close_braces": 1190,
+   "indent_blocks": 1166,
+   "drop_let_var": 1233,
+   "drop_let_only": 1240,
+   "drop_param_types": 1242,
+   "drop_ret_types": 1248,
+   "drop_local_ann": 1234,
+   "implicit_ret": 1248,
+   "positional_struct": 1248,
+   "all_syntax_braces": 1155,
+   "all_syntax_indent": 1131
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "struct_rectangles",
+  "nyra": 144,
+  "python": 138,
+  "variants": {
+   "unwrap_main": 144,
+   "drop_close_braces": 140,
+   "indent_blocks": 140,
+   "drop_let_var": 143,
+   "drop_let_only": 143,
+   "drop_param_types": 136,
+   "drop_ret_types": 138,
+   "drop_local_ann": 144,
+   "implicit_ret": 144,
+   "positional_struct": 129,
+   "all_syntax_braces": 110,
+   "all_syntax_indent": 110
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "table_format",
+  "nyra": 995,
+  "python": 590,
+  "variants": {
+   "unwrap_main": 995,
+   "drop_close_braces": 965,
+   "indent_blocks": 951,
+   "drop_let_var": 975,
+   "drop_let_only": 983,
+   "drop_param_types": 971,
+   "drop_ret_types": 977,
+   "drop_local_ann": 981,
+   "implicit_ret": 983,
+   "positional_struct": 995,
+   "all_syntax_braces": 877,
+   "all_syntax_indent": 857
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "text_adventure",
+  "nyra": 1515,
+  "python": 1125,
+  "variants": {
+   "unwrap_main": 1515,
+   "drop_close_braces": 1454,
+   "indent_blocks": 1391,
+   "drop_let_var": 1497,
+   "drop_let_only": 1505,
+   "drop_param_types": 1503,
+   "drop_ret_types": 1502,
+   "drop_local_ann": 1494,
+   "implicit_ret": 1507,
+   "positional_struct": 1515,
+   "all_syntax_braces": 1382,
+   "all_syntax_indent": 1315
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "two_sum",
+  "nyra": 96,
+  "python": 82,
+  "variants": {
+   "unwrap_main": 96,
+   "drop_close_braces": 88,
+   "indent_blocks": 86,
+   "drop_let_var": 94,
+   "drop_let_only": 94,
+   "drop_param_types": 96,
+   "drop_ret_types": 96,
+   "drop_local_ann": 96,
+   "implicit_ret": 96,
+   "positional_struct": 96,
+   "all_syntax_braces": 86,
+   "all_syntax_indent": 84
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "vending_machine",
+  "nyra": 1053,
+  "python": 865,
+  "variants": {
+   "unwrap_main": 1053,
+   "drop_close_braces": 1013,
+   "indent_blocks": 996,
+   "drop_let_var": 1039,
+   "drop_let_only": 1046,
+   "drop_param_types": 1039,
+   "drop_ret_types": 1045,
+   "drop_local_ann": 1045,
+   "implicit_ret": 1049,
+   "positional_struct": 1047,
+   "all_syntax_braces": 959,
+   "all_syntax_indent": 940
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "vowel_count",
+  "nyra": 62,
+  "python": 43,
+  "variants": {
+   "unwrap_main": 62,
+   "drop_close_braces": 60,
+   "indent_blocks": 57,
+   "drop_let_var": 60,
+   "drop_let_only": 61,
+   "drop_param_types": 62,
+   "drop_ret_types": 62,
+   "drop_local_ann": 62,
+   "implicit_ret": 62,
+   "positional_struct": 62,
+   "all_syntax_braces": 58,
+   "all_syntax_indent": 55
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "word_frequency",
+  "nyra": 705,
+  "python": 434,
+  "variants": {
+   "unwrap_main": 705,
+   "drop_close_braces": 687,
+   "indent_blocks": 676,
+   "drop_let_var": 692,
+   "drop_let_only": 699,
+   "drop_param_types": 703,
+   "drop_ret_types": 702,
+   "drop_local_ann": 699,
+   "implicit_ret": 703,
+   "positional_struct": 705,
+   "all_syntax_braces": 661,
+   "all_syntax_indent": 649
+  }
+ },
+ {
+  "corpus": "sonnet",
+  "task": "word_wrap",
+  "nyra": 195,
+  "python": 165,
+  "variants": {
+   "unwrap_main": 195,
+   "drop_close_braces": 184,
+   "indent_blocks": 180,
+   "drop_let_var": 192,
+   "drop_let_only": 194,
+   "drop_param_types": 195,
+   "drop_ret_types": 195,
+   "drop_local_ann": 191,
+   "implicit_ret": 195,
+   "positional_struct": 195,
+   "all_syntax_braces": 177,
+   "all_syntax_indent": 173
+  }
+ }
+]

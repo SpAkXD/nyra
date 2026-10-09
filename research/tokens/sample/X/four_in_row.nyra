@@ -1,0 +1,52 @@
+fn run(g: [[char]], r: int, c: int, dr: int, dc: int, p: char):
+    var cnt = 0
+    var rr, cc = r + dr, c + dc
+    while rr >= 0 && rr < 5 && cc >= 0 && cc < 6 && g[rr][cc] == p:
+        cnt += 1
+        rr += dr
+        cc += dc
+    cnt
+
+fn wins(g: [[char]], r: int, c: int, p: char):
+    for dr, dc in [(0, 1), (1, 0), (1, 1), (1, -1)]:
+        if 1 + run(g, r, c, dr, dc, p) + run(g, r, c, -dr, -dc, p) >= 4:
+            ret true
+    false
+
+let games = [
+    [3, 4, 3, 4, 3, 4, 3],
+    [1, 2, 2, 3, 3, 4, 3, 4, 4, 6, 4],
+    [6, 6, 6, 6, 6, 6],
+    [2, 3, 4, 5, 1, 2, 3, 4, 7],
+    [1, 1, 2, 2, 4, 4, 3, 5, 5],
+    [4, 3, 3, 2, 2, 1, 2, 1, 1, 5, 1],
+    [1, 2, 3, 4, 5, 6, 6, 5]
+]
+for gi, moves in games:
+    var grid = [['.'].repeat(6)].repeat(5)
+    var result = ""
+    var done = false
+    for i, m in moves:
+        if done:
+            break
+        let p = 'X' if i % 2 == 0 else 'O'
+        let n = i + 1
+        if m < 1 || m > 6 || grid[0][m - 1] != '.':
+            result = "illegal move {n} by {p}"
+            done = true
+            break
+        var r = 4
+        while grid[r][m - 1] != '.':
+            r -= 1
+        grid[r][m - 1] = p
+        if wins(grid, r, m - 1, p):
+            result = "{p} wins at move {n}"
+            done = true
+    if !done:
+        if grid.all(row => '.' not in row):
+            result = "draw"
+        else:
+            result = "no winner after {moves.len()} moves"
+    print("game {gi + 1}: {result}")
+    for row in grid:
+        print(row.join(""))

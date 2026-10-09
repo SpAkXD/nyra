@@ -1,0 +1,218 @@
+[
+ {
+  "task": "bank_ledger",
+  "orig": 716,
+  "py": 663,
+  "X": 645,
+  "Y": 639,
+  "mechH": 643,
+  "mechF": 651
+ },
+ {
+  "task": "binary_search",
+  "orig": 225,
+  "py": 185,
+  "X": 194,
+  "Y": 186,
+  "mechH": 187,
+  "mechF": 196
+ },
+ {
+  "task": "config_parser",
+  "orig": 1396,
+  "py": 937,
+  "X": 1147,
+  "Y": 1120,
+  "mechH": 1241,
+  "mechF": 1289
+ },
+ {
+  "task": "digit_sums",
+  "orig": 100,
+  "py": 40,
+  "X": 80,
+  "Y": 77,
+  "mechH": 82,
+  "mechF": 86
+ },
+ {
+  "task": "fib_labelled",
+  "orig": 56,
+  "py": 45,
+  "X": 45,
+  "Y": 44,
+  "mechH": 50,
+  "mechF": 53
+ },
+ {
+  "task": "four_in_row",
+  "orig": 924,
+  "py": 661,
+  "X": 776,
+  "Y": 741,
+  "mechH": 798,
+  "mechF": 837
+ },
+ {
+  "task": "fraction_total",
+  "orig": 929,
+  "py": 540,
+  "X": 769,
+  "Y": 725,
+  "mechH": 806,
+  "mechF": 860
+ },
+ {
+  "task": "gcd_pairs",
+  "orig": 144,
+  "py": 92,
+  "X": 93,
+  "Y": 89,
+  "mechH": 112,
+  "mechF": 119
+ },
+ {
+  "task": "happy_numbers",
+  "orig": 217,
+  "py": 114,
+  "X": 154,
+  "Y": 146,
+  "mechH": 153,
+  "mechF": 164
+ },
+ {
+  "task": "lcs_table",
+  "orig": 342,
+  "py": 263,
+  "X": 290,
+  "Y": 277,
+  "mechH": 277,
+  "mechF": 290
+ },
+ {
+  "task": "league_table",
+  "orig": 1734,
+  "py": 1115,
+  "X": 1337,
+  "Y": 1276,
+  "mechH": 1355,
+  "mechF": 1429
+ },
+ {
+  "task": "line_diff",
+  "orig": 707,
+  "py": 821,
+  "X": 659,
+  "Y": 643,
+  "mechH": 647,
+  "mechF": 667
+ },
+ {
+  "task": "look_and_say",
+  "orig": 274,
+  "py": 179,
+  "X": 248,
+  "Y": 241,
+  "mechH": 241,
+  "mechF": 248
+ },
+ {
+  "task": "matrix_mult",
+  "orig": 348,
+  "py": 214,
+  "X": 188,
+  "Y": 184,
+  "mechH": 299,
+  "mechF": 309
+ },
+ {
+  "task": "palindromes",
+  "orig": 85,
+  "py": 53,
+  "X": 69,
+  "Y": 67,
+  "mechH": 79,
+  "mechF": 82
+ },
+ {
+  "task": "receipt",
+  "orig": 311,
+  "py": 247,
+  "X": 221,
+  "Y": 214,
+  "mechH": 245,
+  "mechF": 289
+ },
+ {
+  "task": "rle_codec",
+  "orig": 792,
+  "py": 705,
+  "X": 679,
+  "Y": 662,
+  "mechH": 704,
+  "mechF": 734
+ },
+ {
+  "task": "roman_numerals",
+  "orig": 237,
+  "py": 197,
+  "X": 186,
+  "Y": 183,
+  "mechH": 204,
+  "mechF": 210
+ },
+ {
+  "task": "seat_booking",
+  "orig": 809,
+  "py": 680,
+  "X": 694,
+  "Y": 678,
+  "mechH": 707,
+  "mechF": 726
+ },
+ {
+  "task": "sparse_ledger",
+  "orig": 1292,
+  "py": 926,
+  "X": 913,
+  "Y": 900,
+  "mechH": 1133,
+  "mechF": 1166
+ },
+ {
+  "task": "struct_rectangles",
+  "orig": 144,
+  "py": 174,
+  "X": 127,
+  "Y": 104,
+  "mechH": 110,
+  "mechF": 134
+ },
+ {
+  "task": "table_format",
+  "orig": 990,
+  "py": 637,
+  "X": 685,
+  "Y": 651,
+  "mechH": 810,
+  "mechF": 857
+ },
+ {
+  "task": "word_frequency",
+  "orig": 703,
+  "py": 450,
+  "X": 532,
+  "Y": 525,
+  "mechH": 646,
+  "mechF": 658
+ },
+ {
+  "task": "word_wrap",
+  "orig": 180,
+  "py": 162,
+  "X": 161,
+  "Y": 158,
+  "mechH": 163,
+  "mechF": 166
+ }
+]

@@ -1,0 +1,21 @@
+fn next(var n):
+    s = 0
+    while n > 0:
+        s += (n % 10) * (n % 10)
+        n /= 10
+    s
+
+fn happy(var n):
+    seen = [:]
+    while n != 1 && n not in seen:
+        seen[n] = true
+        n = next(n)
+    n == 1
+
+count = 0
+n = 1
+while count < 10:
+    if happy(n):
+        print(n)
+        count += 1
+    n += 1

@@ -1,0 +1,102 @@
+struct Team { name: str, p: int, w: int, d: int, l: int, gf: int, ga: int, pts: int }
+struct M { h: str, a: str, hg: int, ag: int }
+
+fn rec(inout t: Team, f: int, a: int) {
+    t.p += 1
+    t.gf += f
+    t.ga += a
+    if f > a {
+        t.w += 1
+        t.pts += 3
+    } else if f == a {
+        t.d += 1
+        t.pts += 1
+    } else {
+        t.l += 1
+    }
+}
+
+fn gd(t: Team) -> int = t.gf - t.ga
+
+fn better(a: Team, b: Team) -> bool {
+    if a.pts != b.pts { ret a.pts > b.pts }
+    if gd(a) != gd(b) { ret gd(a) > gd(b) }
+    if a.gf != b.gf { ret a.gf > b.gf }
+    ret a.name < b.name
+}
+
+fn same(a: Team, b: Team) -> bool = a.pts == b.pts && gd(a) == gd(b) && a.gf == b.gf
+
+fn sign(n: int) -> str = if n > 0 { "+" + str(n) } else { str(n) }
+
+fn main() {
+    let res = "Ash 2-1 Bay; Cove 2-0 Ash; Dale 2-2 Ash; Ash 0-2 Elm; Fir 0-0 Ash; Bay 3-2 Cove; Dale 0-2 Bay; Elm 1-2 Bay; Bay 2-2 Fir; Cove 1-3 Dale; Cove 2-0 Elm; Fir 1-0 Cove; Elm 0-0 Dale; Dale 2-2 Fir; Elm 3-2 Fir"
+    var ms: [M] = []
+    var idx: [str: int] = [:]
+    var ts: [Team] = []
+    for part in res.split("; ") {
+        let w = part.trim().split(" ")
+        let sc = w[1].split("-")
+        let m = M(h: w[0], a: w[2], hg: int(sc[0]), ag: int(sc[1]))
+        ms.push(m)
+        for nm in [m.h, m.a] {
+            if !idx.has(nm) {
+                idx[nm] = ts.len()
+                ts.push(Team(name: nm, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0))
+            }
+        }
+        let hi = idx[m.h]
+        let ai = idx[m.a]
+        rec(inout ts[hi], m.hg, m.ag)
+        rec(inout ts[ai], m.ag, m.hg)
+    }
+    let n = ts.len()
+    for i in 1..n {
+        var j = i
+        while j > 0 && better(ts[j], ts[j - 1]) {
+            ts.swap(j, j - 1)
+            j -= 1
+        }
+    }
+    var i = 0
+    while i < n {
+        var j = i
+        while j + 1 < n && same(ts[j + 1], ts[i]) { j += 1 }
+        if j > i {
+            var names: [str] = []
+            for k in i..j + 1 { names.push(ts[k].name) }
+            var h: [str: int] = [:]
+            for nm in names { h[nm] = 0 }
+            for m in ms {
+                if names.contains(m.h) && names.contains(m.a) {
+                    if m.hg > m.ag {
+                        h[m.h] += 3
+                    } else if m.hg == m.ag {
+                        h[m.h] += 1
+                        h[m.a] += 1
+                    } else {
+                        h[m.a] += 3
+                    }
+                }
+            }
+            for k in i + 1..j + 1 {
+                var q = k
+                while q > i {
+                    let a = ts[q]
+                    let b = ts[q - 1]
+                    let ha = h[a.name]
+                    let hb = h[b.name]
+                    let bt = if ha != hb { ha > hb } else { a.name < b.name }
+                    if !bt { break }
+                    ts.swap(q, q - 1)
+                    q -= 1
+                }
+            }
+        }
+        i = j + 1
+    }
+    print("Pos".pad_left(3) + " " + "Team".pad_right(6) + " " + "P".pad_left(2) + " " + "W".pad_left(2) + " " + "D".pad_left(2) + " " + "L".pad_left(2) + " " + "GF".pad_left(3) + " " + "GA".pad_left(3) + " " + "GD".pad_left(3) + " " + "Pts".pad_left(3))
+    for k, t in ts {
+        print(str(k + 1).pad_left(3) + " " + t.name.pad_right(6) + " " + str(t.p).pad_left(2) + " " + str(t.w).pad_left(2) + " " + str(t.d).pad_left(2) + " " + str(t.l).pad_left(2) + " " + str(t.gf).pad_left(3) + " " + str(t.ga).pad_left(3) + " " + sign(gd(t)).pad_left(3) + " " + str(t.pts).pad_left(3))
+    }
+}

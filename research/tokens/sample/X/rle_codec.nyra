@@ -1,0 +1,52 @@
+fn encode(s: str):
+    var out = ""
+    var i = 0
+    let n = s.len()
+    while i < n:
+        let c = s[i]
+        var j = i
+        while j < n && s[j] == c: j += 1
+        let k = j - i
+        if c == '~':
+            out += "~{k}~"
+        elif k >= 4:
+            out += "~{k}{c}"
+        else:
+            out += str(c).repeat(k)
+        i = j
+    out
+
+fn decode(s: str):
+    var out = ""
+    var i = 0
+    let n = s.len()
+    while i < n:
+        let c = s[i]
+        if c == '~':
+            i += 1
+            if i >= n || !s[i].is_digit() || s[i] == '0': ret (false, "")
+            var count = 0
+            while i < n && s[i].is_digit():
+                count = count * 10 + (s[i].code() - '0'.code())
+                i += 1
+            if i >= n: ret (false, "")
+            let c2 = s[i]
+            if !(c2.is_lower() || c2 == '.' || c2 == '~'): ret (false, "")
+            out += str(c2).repeat(count)
+            i += 1
+        else:
+            if !(c.is_lower() || c == '.'): ret (false, "")
+            out += str(c)
+            i += 1
+    (true, out)
+
+for t in ["aaaabbbcccccd", "~~x", ".......", "abc", "zzzzzzzzzzzzzz~", "a~~~~b"]:
+    print("encode {t} -> {encode(t)}")
+for c in ["~4a~3~b", "~04a", "~2ab", "a~b", "~12z", "~5", "ab~3~~", "x~1~y", "q7", "~10.~4~", "~1~~1~", "a~3B"]:
+    let ok, text = decode(c)
+    if !ok:
+        print("decode {c} -> invalid")
+    elif encode(text) == c:
+        print("decode {c} -> {text}")
+    else:
+        print("decode {c} -> {text} (non-canonical)")

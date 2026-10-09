@@ -1,0 +1,56 @@
+var bank: [str: int] = [:]
+let cmds = "open A 100; open B 50; open A 10; deposit C 5; withdraw B 70; transfer A B 60; transfer B A 112; transfer B A 109; transfer A A 5; withdraw A 25; close B; transfer A B 1; deposit A 7; withdraw A 15; close A; open B 0; close B".split("; ")
+for c in cmds {
+    let p = c.split(" ")
+    let op = p[0]
+    let x = p[1]
+    if op == "open" {
+        if bank.has(x) {
+            print("{x} exists")
+        } else {
+            bank[x] = int(p[2])
+            print("opened {x}")
+        }
+    } else if op == "deposit" {
+        if !bank.has(x) {
+            print("{x} unknown")
+        } else {
+            bank[x] += int(p[2])
+            print("{x} balance {bank[x]}")
+        }
+    } else if op == "withdraw" {
+        let n = int(p[2])
+        if !bank.has(x) {
+            print("{x} unknown")
+        } else if bank[x] - n < 0 {
+            print("{x} insufficient")
+        } else {
+            bank[x] -= n
+            print("{x} balance {bank[x]}")
+        }
+    } else if op == "transfer" {
+        let y = p[2]
+        let amt = int(p[3])
+        if !bank.has(x) || !bank.has(y) {
+            print("unknown account")
+        } else if bank[x] < amt + 1 {
+            print("{x} insufficient")
+        } else if x == y {
+            bank[x] -= 1
+            print("{x} balance {bank[x]} {y} balance {bank[y]}")
+        } else {
+            bank[x] -= amt + 1
+            bank[y] += amt
+            print("{x} balance {bank[x]} {y} balance {bank[y]}")
+        }
+    } else if op == "close" {
+        if !bank.has(x) {
+            print("{x} unknown")
+        } else if bank[x] != 0 {
+            print("{x} not empty")
+        } else {
+            bank.remove(x)
+            print("closed {x}")
+        }
+    }
+}

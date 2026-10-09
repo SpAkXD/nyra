@@ -1,0 +1,362 @@
+[
+ {
+  "code": "E0201",
+  "msg": "undefined variable `_`",
+  "n": 89,
+  "example": "undefined variable `root`"
+ },
+ {
+  "code": "E0203",
+  "msg": "type mismatch in argument 1 (`_`) of `_`: expected `_`, found `_`",
+  "n": 20,
+  "example": "type mismatch in argument 1 (`x`) of `text.fixed`: expected `float`, found `int`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected an expression, found `_`",
+  "n": 16,
+  "example": "expected an expression, found `]`"
+ },
+ {
+  "code": "E0001",
+  "msg": "unexpected character `_`",
+  "n": 16,
+  "example": "unexpected character `^`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected a type, found `_`",
+  "n": 15,
+  "example": "expected a type, found `(`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected a type, found keyword `_`",
+  "n": 14,
+  "example": "expected a type, found keyword `inout`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected a field or method name after `_`, found number `_`",
+  "n": 13,
+  "example": "expected a field or method name after `.`, found number `0`"
+ },
+ {
+  "code": "E0231",
+  "msg": "array elements must all have one type: the first is `_`, this one is `_`",
+  "n": 11,
+  "example": "array elements must all have one type: the first is `int`, this one is `str`"
+ },
+ {
+  "code": "E0207",
+  "msg": "function `_` is declared `_` but not every path ends with `_`",
+  "n": 8,
+  "example": "function `gcd` is declared `-> int` but not every path ends with `ret`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected end of line, found `_`",
+  "n": 7,
+  "example": "expected end of line, found `vx`"
+ },
+ {
+  "code": "E0229",
+  "msg": "cannot assign to `_`: a value inside a map cannot change in place",
+  "n": 7,
+  "example": "cannot assign to `settings_map[current_section][key]`: a value inside a map cannot change in place"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected a variable name, found `_`",
+  "n": 6,
+  "example": "expected a variable name, found `(`"
+ },
+ {
+  "code": "E0227",
+  "msg": "`_` has no method `_`",
+  "n": 4,
+  "example": "`int` has no method `str`"
+ },
+ {
+  "code": "E0210",
+  "msg": "cannot use `_` on `_` and `_`: `_` needs two `_`s, two `_`s, two `_`s or two arrays of one",
+  "n": 4,
+  "example": "cannot use `+` on `str` and `char`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 9:9, found `_`",
+  "n": 3,
+  "example": "expected `)` to close the `(` opened at 9:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 10:9, found `_`",
+  "n": 3,
+  "example": "expected `)` to close the `(` opened at 10:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 11:9, found `_`",
+  "n": 3,
+  "example": "expected `)` to close the `(` opened at 11:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 156:35, found `_`",
+  "n": 3,
+  "example": "expected `)` to close the `(` opened at 156:35, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "statements at the top level and a `_` in the same program",
+  "n": 2,
+  "example": "statements at the top level and a `fn main` in the same program"
+ },
+ {
+  "code": "E0205",
+  "msg": "cannot assign to `_`: it was declared with `_` on line 38",
+  "n": 2,
+  "example": "cannot assign to `rem`: it was declared with `let` on line 38"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 12:9, found `_`",
+  "n": 2,
+  "example": "expected `)` to close the `(` opened at 12:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected a parameter name, found keyword `_`",
+  "n": 2,
+  "example": "expected a parameter name, found keyword `var`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected an expression, found keyword `_`",
+  "n": 2,
+  "example": "expected an expression, found keyword `var`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` or `_`, found `_`",
+  "n": 2,
+  "example": "expected `fn` or `struct`, found `}`"
+ },
+ {
+  "code": "E0229",
+  "msg": "cannot call `_` on `_`: a value inside a map cannot change in place",
+  "n": 2,
+  "example": "cannot call `.remove()` on `items[current]`: a value inside a map cannot change in place"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` or `_`, found number `_`",
+  "n": 1,
+  "example": "expected `fn` or `struct`, found number `1`"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 5)",
+  "n": 1,
+  "example": "function `tokenize` is defined twice (the first one is on line 5)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 27)",
+  "n": 1,
+  "example": "function `peek` is defined twice (the first one is on line 27)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 31)",
+  "n": 1,
+  "example": "function `consume` is defined twice (the first one is on line 31)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 37)",
+  "n": 1,
+  "example": "function `parse_atom` is defined twice (the first one is on line 37)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 49)",
+  "n": 1,
+  "example": "function `parse_power` is defined twice (the first one is on line 49)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 66)",
+  "n": 1,
+  "example": "function `parse_unary` is defined twice (the first one is on line 66)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 74)",
+  "n": 1,
+  "example": "function `parse_product` is defined twice (the first one is on line 74)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 92)",
+  "n": 1,
+  "example": "function `parse_sum` is defined twice (the first one is on line 92)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 29)",
+  "n": 1,
+  "example": "function `peek` is defined twice (the first one is on line 29)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 33)",
+  "n": 1,
+  "example": "function `consume` is defined twice (the first one is on line 33)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 39)",
+  "n": 1,
+  "example": "function `parse_atom` is defined twice (the first one is on line 39)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 51)",
+  "n": 1,
+  "example": "function `parse_power` is defined twice (the first one is on line 51)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 68)",
+  "n": 1,
+  "example": "function `parse_unary` is defined twice (the first one is on line 68)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 76)",
+  "n": 1,
+  "example": "function `parse_product` is defined twice (the first one is on line 76)"
+ },
+ {
+  "code": "E0206",
+  "msg": "function `_` is defined twice (the first one is on line 94)",
+  "n": 1,
+  "example": "function `parse_sum` is defined twice (the first one is on line 94)"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 3:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 3:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 4:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 4:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 5:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 5:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 6:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 6:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 7:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 7:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 8:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 8:9, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 13:9, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 13:9, found `,`"
+ },
+ {
+  "code": "E0205",
+  "msg": "cannot call `_` on `_`: `_` was declared with `_` on line 143",
+  "n": 1,
+  "example": "cannot call `.sort()` on `names`: `names` was declared with `let` on line 143"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 157:34, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 157:34, found `,`"
+ },
+ {
+  "code": "E0206",
+  "msg": "`_` is already a parameter of `_` (Nyra has no shadowing)",
+  "n": 1,
+  "example": "`s` is already a parameter of `parse_poly` (Nyra has no shadowing)"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_`, found `_`",
+  "n": 1,
+  "example": "expected `in`, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 10:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 10:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 11:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 11:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 12:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 12:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 15:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 15:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 16:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 16:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 19:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 19:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 20:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 20:13, found `,`"
+ },
+ {
+  "code": "E0101",
+  "msg": "expected `_` to close the `_` opened at 23:13, found `_`",
+  "n": 1,
+  "example": "expected `)` to close the `(` opened at 23:13, found `,`"
+ }
+]

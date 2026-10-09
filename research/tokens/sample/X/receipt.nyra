@@ -1,0 +1,16 @@
+let items = [("apple", 125, 3), ("bread", 399, 1), ("milk", 89, 12), ("cheese", 1450, 2)]
+
+fn money(c: int) = "{c / 100}.{c % 100:02}"
+
+var lines = []
+var sub = 0
+for name, price, qty in items:
+    let t = price * qty
+    sub += t
+    lines.push((name, t))
+let tax = (sub * 825 + 5000) / 10000
+lines.push(("subtotal", sub))
+lines.push(("tax", tax))
+lines.push(("total", sub + tax))
+for name, amt in lines:
+    print("{name:<8}{money(amt):>8}")
