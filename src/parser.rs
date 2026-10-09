@@ -424,6 +424,7 @@ impl Parser {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
         let mut enums = Vec::new();
+        let mut public: Vec<String> = Vec::new();
         let mut examples = Vec::new();
         let mut uses = Vec::new();
         let mut top: Vec<Stmt> = Vec::new();
@@ -447,6 +448,48 @@ impl Parser {
                         self.sync_stmt();
                     }
                 },
+                // `pub fn`, `pub struct`, `pub enum`: usable from the files that import this one
+                Tok::Ident(w) if w == "pub" && matches!(self.peek_at(1), Tok::Fn | Tok::Struct | Tok::Enum) => {
+                    self.bump();
+                    match self.peek() {
+                        Tok::Fn => match self.func() {
+                            Ok(f) => {
+                                public.push(f.name.clone());
+                                funcs.push(f);
+                            }
+                            Err(d) => {
+                                self.errs.push(d);
+                                self.sync_top();
+                            }
+                        },
+                        Tok::Struct => match self.struct_def() {
+                            Ok(sd) => {
+                                public.push(sd.name.clone());
+                                structs.push(sd);
+                            }
+                            Err(d) => {
+                                self.errs.push(d);
+                                self.sync_top();
+                            }
+                        },
+                        _ => match self.enum_def() {
+                            Ok(ed) => {
+                                public.push(ed.name.clone());
+                                enums.push(ed);
+                            }
+                            Err(d) => {
+                                self.errs.push(d);
+                                self.sync_top();
+                            }
+                        },
+                    }
+                }
+                Tok::Ident(w) if w == "pub" => {
+                    let d = Diag::new("E0332", "`pub` goes right before `fn`, `struct` or `enum`", self.span())
+                        .hint("only definitions can be exported: `pub fn area(r: Rect) -> int = ...`; an import cannot be re-exported, write a small wrapper function");
+                    self.errs.push(d);
+                    self.sync_top();
+                }
                 Tok::Fn => match self.func() {
                     Ok(f) => funcs.push(f),
                     Err(d) => {
@@ -514,7 +557,7 @@ impl Parser {
             }
         }
         funcs.append(&mut self.nested);
-        Program { funcs, structs, enums, examples, uses, script, globals: Default::default() }
+        Program { funcs, structs, enums, examples, uses, script, globals: Default::default(), public, files: Default::default() }
     }
 
     /// True at `ex` followed by the start of a condition on the same line: a line of examples.
@@ -545,7 +588,7 @@ impl Parser {
         let mut list = Vec::new();
         loop {
             let expr = self.expr()?;
-            list.push(Example { expr });
+            list.push(Example { expr, file: None });
             if !self.at(&Tok::Comma) {
                 break;
             }
@@ -559,6 +602,8 @@ impl Parser {
     /// True if the word here starts an import line: `use name`, `import name`, `from name import ...`.
     fn starts_use(&self, w: &str) -> bool {
         matches!(w, "use" | "import" | "from") && matches!(self.peek_at(1), Tok::Ident(_) | Tok::Str(_))
+            // `use ./shapes`, `use ../util/text`
+            || (w == "use" && matches!(self.peek_at(1), Tok::Dot | Tok::DotDot) && matches!(self.peek_at(2), Tok::Slash))
     }
 
     /// `use name`: one standard module per line. Other languages' forms are reported with the Nyra
@@ -566,10 +611,14 @@ impl Parser {
     fn use_line(&mut self) -> PResult<Use> {
         let span = self.span();
         let Tok::Ident(word) = self.bump().tok else { unreachable!("starts_use checked it") };
+        // `use ./shapes` (also written `use "./shapes"`): a file of the project
+        if matches!(self.peek(), Tok::Dot | Tok::DotDot) || (word == "use" && matches!(self.peek(), Tok::Str(p) if p.starts_with("./") || p.starts_with("../"))) {
+            return self.use_path(span);
+        }
         if let Tok::Str(path) = self.peek().clone() {
-            return Err(Diag::new("E0302", format!("`{word} \"{path}\"`: only the standard modules can be imported"), self.span())
+            return Err(Diag::new("E0305", format!("`{word} \"{path}\"`: {} is not a path Nyra imports", if word == "use" { "this" } else { "an import like this" }), self.span())
                 .hint(format!(
-                    "a program is one file for now; the standard modules are {}: write e.g. `use math`",
+                    "to import a file write its path from this file's folder: `use ./shapes`; the standard modules are {}: `use math`",
                     crate::stdlib::module_list()
                 )));
         }
@@ -600,7 +649,40 @@ impl Parser {
             // the line is otherwise fine: the program is still read as if it said `use`
             self.errs.push(d);
         }
-        Ok(Use { module, span: mspan })
+        Ok(Use { module, span: mspan, path: None })
+    }
+
+    /// `use ./shapes`, `use ../util/text` or `use "./shapes"` after the word `use`: a file of the project.
+    fn use_path(&mut self, span: Span) -> PResult<Use> {
+        let mut path = String::new();
+        if let Tok::Str(p) = self.peek().clone() {
+            self.bump();
+            path = p;
+        } else {
+            loop {
+                match self.peek().clone() {
+                    Tok::Dot => path.push('.'),
+                    Tok::DotDot => path.push_str(".."),
+                    Tok::Slash => path.push('/'),
+                    Tok::Ident(n) => path.push_str(&n),
+                    _ => break,
+                }
+                self.bump();
+            }
+        }
+        let name = path.rsplit('/').next().unwrap_or("").to_string();
+        let valid = name.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && (path.starts_with("./") || path.starts_with("../"));
+        if !valid {
+            return Err(Diag::new("E0305", format!("`{path}` is not a path Nyra imports"), span)
+                .hint("write the path from this file's folder, with `/` and without `.nyra`: `use ./shapes`, `use ../util/text`"));
+        }
+        if !matches!(self.peek(), Tok::Newline | Tok::Eof) {
+            return Err(Diag::new("E0302", format!("unexpected {} after `use {path}`", self.found()), self.span())
+                .hint(format!("a `use` line names one module: `use {path}`; call its functions as `{name}.f(...)`")));
+        }
+        Ok(Use { module: name, span, path: Some(path) })
     }
 
     /// True if the token here starts a statement that may stand at the top level of a script.

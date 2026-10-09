@@ -1,0 +1,6 @@
+// expect: E0305
+use "shapes.nyra"
+
+fn main() {
+    print(1)
+}

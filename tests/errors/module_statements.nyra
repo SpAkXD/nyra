@@ -1,0 +1,6 @@
+// expect: E0285
+use ./modules/with_statements
+
+fn main() {
+    print(with_statements.f())
+}

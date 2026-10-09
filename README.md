@@ -104,8 +104,8 @@ compiler to tell the AI exactly what to fix.
 - **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable code.
 - **Standard library:** `use input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`, the same on every
-  backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. **Not yet:** modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
-  syntax may still change before 1.0.
+  backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. Files of your own are imported with `use ./shapes` and `pub fn` (`shapes.area(r)`).
+  Nyra is 0.x, so the syntax may still change before 1.0.
 
 ## Install
 
@@ -448,7 +448,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC); the intermediate representation, the error database and `nyra explain` | done |
 | v0.4 | `--fix` self-repair, the `nyra mcp` server, Python, TypeScript, Rust and Go backends, scripts, `print(a, b)`, the benchmark harness and its hard tier | done |
 | v0.5 | lambdas and comprehensions, `ex` examples, `nyra outline`/`show`/`edit`, the standard library (`use math`, `fs`, `json`, ...), maps, script variables, native speed and compile-time evaluation, checked ints | in progress |
-| v0.6 | modules of your own, packages, C FFI | planned |
+| v0.6 | modules of your own (done), packages, C FFI | in progress |
 | later | WASM backend and browser playground, published VS Code extension, docs site, 1.0 | planned |
 
 Nyra is pre-1.0: the syntax may still change between versions (see [CHANGELOG.md](CHANGELOG.md)).

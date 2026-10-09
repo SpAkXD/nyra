@@ -26,10 +26,10 @@ design may still change.
 | E0101-E0103 | parser | grammar, type names, nesting depth |
 | E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
-| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match` |
+| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match`, modules of your own |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
-| E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
+| E0300-E0316 | standard modules (since v0.5), files of your own (v0.6); FFI (planned) | `use`, `use ./name`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
@@ -2278,9 +2278,43 @@ fn main() {
 ```
 - **Related:** E0278, E0221
 
+## E0285: a module holds only definitions
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A file that is imported with `use ./name` has statements at the top level (`print(...)`, `let`, ...). An imported file is a collection of `fn`, `struct`, `enum` and `ex` definitions; the statements belong to the program that imports it.
+- **Why Nyra has this rule:** Importing a file must not run anything, so a module can be imported from any file, in any order, any number of times.
+- **Common causes:**
+  - a test `print(...)` left at the top level of the helper file
+  - a script variable (`let limit = 10`): make it a function, `pub fn limit() -> int = 10`
+- **Wrong:**
+```rust
+// lib.nyra
+print("loading")
+pub fn f() -> int = 1
+
+// main.nyra
+use ./lib
+
+fn main() {
+    print(lib.f())
+}
+```
+- **Fixed:**
+```rust
+// lib.nyra
+pub fn f() -> int = 1
+
+// main.nyra
+use ./lib
+
+fn main() {
+    print(lib.f())
+}
+```
+- **Related:** E0332, E0208
+
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
@@ -2305,8 +2339,8 @@ fn main() {
 - **Related:** E0302, E0305, E0306
 
 ## E0301: item is private to its module
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A function or constant of another module is used, but that module did not mark it `pub`.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A function of another file is called as `module.f(...)`, but that file did not mark it `pub`.
 - **Why Nyra has this rule:** A module decides what it exposes. Private by default means changing a helper never breaks code in other files.
 - **Common causes:**
   - the `pub` keyword is missing on the definition
@@ -2317,7 +2351,7 @@ fn main() {
 fn secret() -> int = 42
 
 // main.nyra
-use "./shapes"
+use ./shapes
 
 fn main() {
     print(shapes.secret())
@@ -2329,7 +2363,7 @@ fn main() {
 pub fn secret() -> int = 42
 
 // main.nyra
-use "./shapes"
+use ./shapes
 
 fn main() {
     print(shapes.secret())
@@ -2364,21 +2398,28 @@ fn main() {
 - **Related:** E0300, E0304
 
 ## E0303: import cycle
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Two or more files import each other, directly or through a chain: `a.nyra -> b.nyra -> a.nyra`.
-- **Why Nyra has this rule:** Modules are checked in dependency order, which needs a cycle-free graph. The message prints the chain.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** Two or more files import each other, directly or through a chain: `a.nyra -> b.nyra -> a.nyra`. The message prints the chain.
+- **Why Nyra has this rule:** Files are loaded in dependency order, which needs a cycle-free graph.
 - **Common causes:**
   - two files that call each other's functions
   - shared helpers placed in one of the two files
 - **Wrong:**
 ```rust
 // a.nyra
-use "./b"
+use ./b
 pub fn f() -> int = b.g()
 
 // b.nyra
-use "./a"
+use ./a
 pub fn g() -> int = a.f()
+
+// main.nyra
+use ./a
+
+fn main() {
+    print(a.f())
+}
 ```
 - **Fixed:**
 ```rust
@@ -2386,26 +2427,41 @@ pub fn g() -> int = a.f()
 pub fn base() -> int = 1
 
 // a.nyra
-use "./shared"
+use ./shared
 pub fn f() -> int = shared.base()
 
 // b.nyra
-use "./shared"
+use ./shared
 pub fn g() -> int = shared.base() + 1
+
+// main.nyra
+use ./a
+use ./b
+
+fn main() {
+    print(a.f() + b.g())
+}
 ```
 - **Related:** E0304, E0305
 
 ## E0304: two imports with the same name
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Two `use` lines give the same module name, for example `./a/util` and `./b/util` which are both called `util`.
-- **Why Nyra has this rule:** A module is always used by its name (`util.f(x)`), so each name must mean one module in a file. `as` renames one of them.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** Two different files are imported under one name, for example `./a/util` and `./b/util`, which are both called `util`; or a file has the name of a standard module (`./math`).
+- **Why Nyra has this rule:** A module is always called by its file's name (`util.f(x)`), so each name must mean one file in the whole program.
 - **Common causes:**
   - files with the same name in different folders
-  - importing one module twice
+  - a file called `math.nyra` or `text.nyra`, which are standard modules
 - **Wrong:**
 ```rust
-use "./a/util"
-use "./b/util"
+// a/util.nyra
+pub fn f() -> int = 1
+
+// b/util.nyra
+pub fn f() -> int = 2
+
+// main.nyra
+use ./a/util
+use ./b/util
 
 fn main() {
     print(util.f())
@@ -2413,35 +2469,45 @@ fn main() {
 ```
 - **Fixed:**
 ```rust
-use "./a/util"
-use "./b/util" as butil
+// a/util.nyra
+pub fn f() -> int = 1
+
+// b/util2.nyra
+pub fn f() -> int = 2
+
+// main.nyra
+use ./a/util
+use ./b/util2
 
 fn main() {
-    print(util.f() + butil.f())
+    print(util.f() + util2.f())
 }
 ```
 - **Related:** E0302, E0206
 
 ## E0305: import path not allowed
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** The quoted path of a `use "..."` is not valid. A path must start with `./` or `../`, use `/` as the only separator, leave out `.nyra` and stay inside the project folder.
-- **Why Nyra has this rule:** One portable path syntax that means the same on Windows and Linux, and a project cannot reach outside its own folder by accident.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The path of a `use` line is not valid. A path starts with `./` or `../`, uses `/` as the only separator and leaves out `.nyra`: `use ./shapes`, `use ../util/text`. Quotes around it are allowed (`use "./shapes"`).
+- **Why Nyra has this rule:** One portable path syntax that means the same on Windows and Linux, relative to the importing file.
 - **Common causes:**
   - `use "shapes"` without `./`
   - a Windows path with backslashes
-  - `use "./shapes.nyra"` with the extension
-  - a path that climbs out of the project (`../../x`)
+  - `use ./shapes.nyra` with the extension
 - **Wrong:**
 ```rust
 use "shapes.nyra"
 
 fn main() {
-    print(shapes.area(3))
+    print(1)
 }
 ```
 - **Fixed:**
 ```rust
-use "./shapes"
+// shapes.nyra
+pub fn area(w: int) -> int = w * w
+
+// main.nyra
+use ./shapes
 
 fn main() {
     print(shapes.area(3))
@@ -2858,21 +2924,29 @@ const LIMIT: int = 100
 - **Related:** E0332, E0205
 
 ## E0332: `pub` not allowed here
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or inside a function. It goes before `fn`, `const`, `extern` or `struct`.
-- **Why Nyra has this rule:** Only definitions can be exported. A module cannot re-export an import: write a small wrapper function instead.
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `pub` is written where it has no meaning: before `use`, before `let`, or anywhere but right before a top-level `fn`, `struct` or `enum`.
+- **Why Nyra has this rule:** Only definitions can be exported. A file cannot re-export an import: write a small wrapper function instead.
 - **Common causes:**
   - `pub use` to re-export a module
-  - `pub let` for a global variable (there are none)
+  - `pub let` for a global variable (a `let` is private to its file)
 - **Wrong:**
 ```rust
 pub use math
+
+fn main() {
+    print(math.sqrt(4.0))
+}
 ```
 - **Fixed:**
 ```rust
 use math
 
 pub fn root(x: float) -> float = math.sqrt(x)
+
+fn main() {
+    print(root(4.0))
+}
 ```
 - **Related:** E0301, E0302
 

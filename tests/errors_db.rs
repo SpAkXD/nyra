@@ -96,6 +96,40 @@ fn entry(code: &str) -> Json {
     Json::parse(stdout(&out).trim()).unwrap_or_else(|e| panic!("`nyra explain {code} --json`: {e}"))
 }
 
+/// Writes an example of the error database and gives the file to compile (relative to `dir`).
+fn write_example(dir: &Path, name: &str, text: &str) -> String {
+    let header = |l: &str| {
+        let name = l.strip_prefix("// ")?;
+        (name.ends_with(".nyra") && !name.contains(' ')).then(|| name.to_string())
+    };
+    if !text.lines().any(|l| header(l).is_some()) {
+        let file = format!("{name}.nyra");
+        std::fs::write(dir.join(&file), text).unwrap();
+        return file;
+    }
+    let folder = dir.join(name);
+    let _ = std::fs::remove_dir_all(&folder);
+    let mut current: Option<(String, String)> = None;
+    let mut files = Vec::new();
+    for line in text.lines() {
+        if let Some(n) = header(line) {
+            files.extend(current.take());
+            current = Some((n, String::new()));
+        } else if let Some((_, body)) = current.as_mut() {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    files.extend(current);
+    for (file, body) in &files {
+        let path = folder.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+    assert!(files.iter().any(|(f, _)| f == "main.nyra"), "{name}: a multi-file example needs a main.nyra");
+    format!("{name}/main.nyra")
+}
+
 #[test]
 fn every_emitted_code_has_an_entry_and_every_entry_is_emitted() {
     let mut files = Vec::new();
@@ -149,10 +183,10 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
         let fixed = e.get("fixed").and_then(|v| v.as_str()).unwrap();
         assert!(wrong.contains("fn ") && fixed.contains("fn "), "{code}: the examples must be whole programs");
 
-        let wrong_file = format!("{code}_wrong.nyra");
-        let fixed_file = format!("{code}_fixed.nyra");
-        std::fs::write(dir.join(&wrong_file), wrong).unwrap();
-        std::fs::write(dir.join(&fixed_file), fixed).unwrap();
+        // an example of several files has a header line `// name.nyra` before each: they go into a
+        // folder of their own and `main.nyra` is the program
+        let wrong_file = write_example(&dir, &format!("{code}_wrong"), wrong);
+        let fixed_file = write_example(&dir, &format!("{code}_fixed"), fixed);
 
         // the fixed program compiles cleanly...
         let (ok, json) = check_json(&dir, &fixed_file);

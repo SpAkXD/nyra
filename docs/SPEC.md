@@ -445,6 +445,29 @@ program runs in and use `/`. JSON objects are read into structs by field name (o
 every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
 outside (input, files, arguments) must be UTF-8.
 
+## Modules of your own
+```text
+// shapes.nyra
+pub struct Rect { w: int, h: int }
+pub fn area(r: Rect) -> int = r.w * r.h
+fn helper(r: Rect) -> int = r.w + r.h     // private: only this file can call it
+ex area(Rect(w: 2, h: 5)) == 10
+
+// main.nyra
+use ./shapes                              // the file shapes.nyra next to this one
+let r = Rect(w: 3, h: 4)                  // types keep their plain names
+print(shapes.area(r))                     // 12: functions are called with the file's name
+```
+`use ./name` (or `use ../util/name`, `use ./folder/name`; `use "./name"` is the same) imports the file `name.nyra`
+from the folder of the importing file. The functions marked `pub` are called `name.f(x)`; a function
+without `pub` is private to its file (E0301), and a file's helpers call each other by their plain names. The
+`pub` structs and enums are used without a prefix (all type names share one program-wide namespace, so a
+clash is E0206). A module holds only definitions: `fn`, `struct`, `enum`, `ex`, and its own `use` lines
+(E0285 for statements); its examples run with the program's. Two files are never imported under one name
+(E0304, also for a file named like a standard module), files may not import each other (E0303), and
+`pub` goes right before `fn`, `struct` or `enum` (E0332). A mistake inside an imported file is reported
+with that file's name and line. A program given as text (`nyra mcp`) has no folder and cannot import files.
+
 ## Errors
 `nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0309), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong

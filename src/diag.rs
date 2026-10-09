@@ -19,6 +19,8 @@ pub struct Diag {
     /// For a failed example (E0250): the value it got and the one it expected, as Nyra code.
     pub actual: Option<String>,
     pub expected: Option<String>,
+    /// The imported file the mistake is in (`None`: the file being compiled).
+    pub file: Option<String>,
 }
 
 /// One edit of a fix: the text from `start` up to (not including) `end` becomes `text`.
@@ -67,7 +69,7 @@ pub fn after(s: Span, text: &str) -> Span {
 
 impl Diag {
     pub fn new(code: &'static str, msg: impl Into<String>, span: Span) -> Self {
-        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new(), actual: None, expected: None }
+        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new(), actual: None, expected: None, file: None }
     }
 
     /// The value an example got and the one it expected (shown as `actual` and `expected` in JSON).
@@ -119,9 +121,13 @@ impl Diag {
 }
 
 pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
-    let lines: Vec<&str> = src.lines().collect();
     let mut out = String::new();
     for d in diags {
+        // a mistake in an imported file shows that file's line
+        let other = d.file.as_ref().and_then(|f| std::fs::read_to_string(f).ok());
+        let text = other.as_deref().unwrap_or(src);
+        let lines: Vec<&str> = text.lines().collect();
+        let file = d.file.as_deref().unwrap_or(file);
         out += &format!("error[{}]: {}\n", d.code, d.msg);
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
         if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
@@ -135,7 +141,7 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
         if let Some(h) = &d.hint {
             out += &format!("  = hint: {h}\n");
         }
-        if let Some(f) = crate::fix::preview(src, &d.fix) {
+        if let Some(f) = crate::fix::preview(text, &d.fix) {
             out += &format!("  = fix: {f}\n");
         }
         out += &format!("  = explain: nyra explain {}\n", d.code);
@@ -161,7 +167,7 @@ pub fn render_json_errors(diags: &[Diag], file: &str) -> String {
                 "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}{}{values}}}",
                 d.code,
                 json_str(&d.msg),
-                json_str(file),
+                json_str(d.file.as_deref().unwrap_or(file)),
                 d.span.line,
                 d.span.col,
                 d.hint.as_deref().map(json_str).unwrap_or_else(|| "null".into()),

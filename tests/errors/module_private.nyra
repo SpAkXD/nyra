@@ -1,0 +1,6 @@
+// expect: E0301
+use ./modules/private_helper
+
+fn main() {
+    print(private_helper.secret())
+}

@@ -150,11 +150,16 @@ pub fn run(prog: &mut Program) -> Outcome {
         return Outcome { total, skipped: total, ..Outcome::default() };
     };
     let mut out = Outcome { total, ..Outcome::default() };
-    for (plan, res) in plans.iter().zip(results) {
+    for (i, (plan, res)) in plans.iter().zip(results).enumerate() {
         match res {
             Res::Pass => out.passed += 1,
             Res::Skipped => out.skipped += 1,
-            res => out.errors.push(report(plan, res)),
+            res => {
+                // an example of an imported file is reported with that file
+                let mut d = report(plan, res);
+                d.file = prog.examples.get(i).and_then(|e| e.file.clone());
+                out.errors.push(d);
+            }
         }
     }
     out

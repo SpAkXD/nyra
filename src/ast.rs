@@ -251,6 +251,10 @@ pub struct Program {
     pub script: bool,
     /// The script's top-level variables and the functions that use them (filled by the checker).
     pub globals: Globals,
+    /// The names of the functions, structs and enums marked `pub`.
+    pub public: Vec<String>,
+    /// The file of the functions that come from another file (the loader fills it), by function name.
+    pub files: HashMap<String, String>,
 }
 
 /// A `let` or `var` at the top level of a script: every function may read it (and change it,
@@ -288,13 +292,18 @@ pub struct Globals {
 #[derive(Debug)]
 pub struct Example {
     pub expr: Expr,
+    /// The imported file the example is from (`None`: the program's own file).
+    pub file: Option<String>,
 }
 
 /// `use math`: the module's functions are then called as `math.sqrt(x)`.
 #[derive(Debug, Clone)]
 pub struct Use {
+    /// the module's name: a standard module, or the file name of one of your own (`shapes`)
     pub module: String,
     pub span: Span,
+    /// `./shapes` or `../util/text` for `use ./shapes`: a file of the project; `None`: a standard module
+    pub path: Option<String>,
 }
 
 #[derive(Debug)]

@@ -367,8 +367,9 @@ that works (section 6 has the usual replacements).
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
   functions; in a program with `fn main` nothing is), no closures, function values, overloading, default
-  arguments, methods on structs (`impl`, `self`) or modules of your own. One file is one program; it may
-  `use` the standard modules (section 6b). A lambda (`x => x * 2`) is only an argument of an array
+  arguments or methods on structs (`impl`, `self`). A program may `use` the standard modules (section 6b)
+  and files of its own: `use ./shapes` imports `shapes.nyra` from the same folder, whose `pub fn`s are called
+  `shapes.area(r)` (see the spec). A lambda (`x => x * 2`) is only an argument of an array
   method, and it cannot change variables.
 - **Library**: `abs`, `min` and `max` are builtins; everything else is a module function, never a
   global one: `math.sqrt(x)` after `use math`, not `sqrt(x)`.
@@ -396,6 +397,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, or declared in another block |
 | E0202 | undefined function | the builtins are `print`, `str`, `int`, `float`, `char`, `abs`, `min`, `max`; `len(xs)` is `xs.len()`, `sqrt(x)` is `math.sqrt(x)` after `use math`; else define it yourself |
+| E0301 · E0303 · E0304 · E0305 | module trouble | a private function (`pub fn` to share it), files that import each other, two files with one name, a bad path (`use ./name`) |
 | E0300 · E0306 | module not found · module has no such item | the modules are `input os fs json time random math text`; `random.range(1, 7)`, not `randint` |
 | E0309 | `json.parse` needs a type | `let p: Point = json.parse(text)` |
 | E0203 | type mismatch | wrong argument, return or assigned type: `float(x)` / `int(x)`, write `2.0` not `2`; `int(c)` of a char: `c.code()` |
@@ -445,6 +447,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0279 | bad `match` pattern or value | patterns are constants of the matched type; match an enum, `bool`, `int`, `str` or `char` |
 | E0281 | `match` does not cover every case | add the missing arms, or a last arm `_ => ...` |
 | E0283 | `match` arm can never run | a repeated pattern, or an arm after `_` |
+| E0285 | statements in an imported file | an imported file holds only `fn`, `struct`, `enum` and `ex` |
 | E0284 | bad enum declaration | an enum needs at least one variant and no repeated names |
 | E0276 | `none` without an optional type | `var best: int? = none`; `none` cannot be a plain `int` |
 | E0277 | optional used the wrong way | `??` and `if let` need a `T?` on the left; the default must be a `T` |

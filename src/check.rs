@@ -128,6 +128,8 @@ struct Checker {
     enums: HashMap<String, EnumInfo>,
     /// How many `match` statements were turned into `if` chains (each has a hidden variable).
     matches: usize,
+    /// The imported file of the functions that come from one, by function name.
+    files: HashMap<String, String>,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -148,6 +150,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         generated: Vec::new(),
         enums: HashMap::new(),
         matches: 0,
+        files: prog.files.clone(),
     };
 
     // the imported modules: their intrinsics are functions named `module.name`
@@ -1093,6 +1096,17 @@ impl Checker {
     }
 
     fn func(&mut self, f: &mut Func) {
+        let before = self.errs.len();
+        self.func_body(f);
+        // a mistake in a function of an imported file is reported with that file
+        if let Some(file) = self.files.get(&f.name) {
+            for d in &mut self.errs[before..] {
+                d.file.get_or_insert_with(|| file.clone());
+            }
+        }
+    }
+
+    fn func_body(&mut self, f: &mut Func) {
         self.ret = if self.defined(f.ret) { f.ret } else { Type::Unknown };
         self.fname = f.name.clone();
         self.decls.clear();

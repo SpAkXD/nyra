@@ -1,0 +1,7 @@
+// expect: E0307
+use ./modules/private_helper
+
+fn main() {
+    let f = private_helper.open
+    print(1)
+}
