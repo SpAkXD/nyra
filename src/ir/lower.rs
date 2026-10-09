@@ -150,6 +150,8 @@ fn mutates(e: &ast::Expr) -> bool {
             WRITERS.with(|w| w.borrow().contains(name)) || args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a))
         }
         K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) | K::Fmt(x, _) => mutates(x),
+        K::In(a, b) => mutates(a) || mutates(b),
+        K::Slice(b, lo, hi) => mutates(b) || lo.as_ref().is_some_and(|x| mutates(x)) || hi.as_ref().is_some_and(|x| mutates(x)),
         K::Comprehension(c) => {
             let src = match &c.src {
                 ast::CompSrc::Each(x) => mutates(x),
@@ -172,9 +174,13 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
     f(e);
     match &e.kind {
         K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) | K::Fmt(x, _) => each_expr(x, f),
-        K::Binary(_, a, b) | K::Index(a, b) => {
+        K::Binary(_, a, b) | K::Index(a, b) | K::In(a, b) => {
             each_expr(a, f);
             each_expr(b, f);
+        }
+        K::Slice(b, lo, hi) => {
+            each_expr(b, f);
+            lo.iter().chain(hi.iter()).for_each(|x| each_expr(x, f));
         }
         K::If(c, a, b) => {
             each_expr(c, f);
@@ -585,7 +591,26 @@ impl<'a> Lower<'a> {
             }
         }
         let mut body = Vec::new();
+        // `var n: int`: the body works on its own copy of the argument
+        let copies = f.params.iter().any(|p| p.mutable);
+        if copies {
+            self.scopes.push(Scope::default());
+            for p in f.params.iter().filter(|p| p.mutable) {
+                let src = self.scopes[0].names[&p.name];
+                let copy = self.declare(&p.name, p.ty);
+                self.init(copy, Expr::Local(src), p.span, &mut body);
+            }
+        }
         self.block(&f.body, &mut body, false);
+        if copies {
+            let scope = self.scopes.pop().expect("pushed above");
+            if !body.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_))) {
+                let span = f.span;
+                for l in scope.owned.into_iter().rev() {
+                    body.push(Stmt { kind: StmtKind::Drop(l), span });
+                }
+            }
+        }
         let ret = if f.ret == Type::Void { None } else { Some(f.ret) };
         Func {
             name: f.name.clone(),
@@ -1465,6 +1490,30 @@ impl<'a> Lower<'a> {
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
             }
+            ast::ExprKind::In(item, container) => {
+                let v = self.operands(&[item.as_ref(), container.as_ref()], out);
+                let [x, c]: [Expr; 2] = v.try_into().expect("two operands");
+                match container.ty {
+                    // a character searched for in text is the one-character string
+                    Type::Str => {
+                        let needle = if item.ty == Type::Char { self.op(RtOp::Format, vec![x], Ty::Str, None, span, out) } else { x };
+                        Expr::Pure(PureFn::StrContains, vec![c, needle])
+                    }
+                    Type::Map(_) => Expr::Pure(PureFn::MapHas, vec![c, x]),
+                    _ => Expr::Pure(PureFn::ArrContains, vec![c, x]),
+                }
+            }
+            ast::ExprKind::Slice(base, lo, hi) => {
+                let mut refs: Vec<&ast::Expr> = vec![base.as_ref()];
+                refs.extend(lo.iter().map(|x| x.as_ref()));
+                refs.extend(hi.iter().map(|x| x.as_ref()));
+                let mut vals = self.operands(&refs, out).into_iter();
+                let v = vals.next().expect("the base");
+                let a = if lo.is_some() { vals.next().expect("the start") } else { Expr::Int(0) };
+                let (op, len) = if base.ty == Type::Str { (RtOp::StrSlice, PureFn::StrLen) } else { (RtOp::ArrSlice, PureFn::ArrLen) };
+                let b = if hi.is_some() { vals.next().expect("the end") } else { Expr::Pure(len, vec![v.clone()]) };
+                self.op(op, vec![v, a, b], e.ty, dst, span, out)
+            }
             ast::ExprKind::Fmt(x, spec) => {
                 let v = self.expr(x, None, out);
                 // the text of the value: a float with decimals is rounded exactly like `text.fixed`
@@ -1699,6 +1748,12 @@ impl<'a> Lower<'a> {
                 }
             }
             "free" | "keep" => Expr::Bool(false),
+            // `zip(a, b)` (unless the program defines its own): a generated helper function
+            "zip" if !self.ids.contains_key(name) => {
+                let vals = self.operands(&args.iter().collect::<Vec<_>>(), out);
+                let h = H::Zip(args.iter().map(|a| a.ty).collect());
+                self.call_helper(h, vals.into_iter().map(Arg::Val).collect(), e.ty, dst, span, out)
+            }
             // the builtins `abs`, `min` and `max` (unless the program defines its own): pure choices
             "abs" | "min" | "max" if !self.ids.contains_key(name) => {
                 let v = self.operands(&args.iter().collect::<Vec<_>>(), out);
@@ -1755,6 +1810,22 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// A second owner of the array `v` in a temporary of this statement: a helper that replaces the
+    /// array it changes (`inout`) can still read the old one through it.
+    fn extra_owner(&mut self, v: Expr, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let k = self.temp(t);
+        out.push(Stmt { kind: StmtKind::Set(k, v), span });
+        out.push(Stmt { kind: StmtKind::Dup(k), span });
+        self.pending.push(k);
+        Expr::Local(k)
+    }
+
+    /// Sorts the array in `place` by the tuples `keys` (one per element), with a generated helper.
+    fn sort_by_keys(&mut self, place: Place, arr: Ty, key: Ty, keys: Expr, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        self.forget(place.root);
+        self.call_helper(H::SortKeyed(arr, key), vec![Arg::InOut(place), Arg::Val(keys)], Ty::Void, None, span, out)
+    }
+
     /// A call of a generated helper function (see `helpers.rs`).
     fn call_helper(&mut self, h: H, args: Vec<Arg>, ret: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
         let func = *self.ids.get(&h.name()).unwrap_or_else(|| panic!("the helper {} was not generated", h.name()));
@@ -1791,10 +1862,42 @@ impl<'a> Lower<'a> {
         if name == "sort" && recv.ty.elem().is_some_and(Ty::is_tuple) {
             let place = self.place(recv, false, out);
             let cur = self.read(&place, recv.ty, out);
-            let keys = self.snapshot(cur, recv.ty, span, out);
-            self.forget(place.root);
-            let h = H::SortKeyed(recv.ty, recv.ty.elem().expect("an array"));
-            return self.call_helper(h, vec![Arg::InOut(place), Arg::Val(keys)], Ty::Void, None, span, out);
+            let keys = self.extra_owner(cur, recv.ty, span, out);
+            return self.sort_by_keys(place, recv.ty, recv.ty.elem().expect("an array"), keys, span, out);
+        }
+        // `xs.sorted()`: a sorted copy
+        if name == "sorted" {
+            let v = self.expr(recv, None, out);
+            let len = Expr::Pure(PureFn::ArrLen, vec![v.clone()]);
+            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else { unreachable!() };
+            let elem = recv.ty.elem().expect("an array");
+            if elem.is_tuple() {
+                let keys = self.extra_owner(Expr::Local(copy), recv.ty, span, out);
+                self.sort_by_keys(Place::local(copy), recv.ty, elem, keys, span, out);
+            } else {
+                out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::ArrSort, place: Place::local(copy), args: Vec::new() }, span });
+            }
+            return Expr::Local(copy);
+        }
+        // `xs.chunks(n)`, `m.items()`, `s.trim(chars)`: generated helper functions
+        if matches!(name, "chunks" | "items") || (name == "trim" && !args.is_empty()) {
+            let mut refs: Vec<&ast::Expr> = vec![recv];
+            refs.extend(args.iter());
+            let mut vals = self.operands(&refs, out);
+            let h = match name {
+                "chunks" => H::Chunks(recv.ty),
+                "items" => H::Items(recv.ty),
+                _ => {
+                    // a character to cut is the one-character string
+                    if args[0].ty == Type::Char {
+                        let c = vals.pop().expect("one argument");
+                        let s = self.op(RtOp::Format, vec![c], Ty::Str, None, span, out);
+                        vals.push(s);
+                    }
+                    H::TrimChars
+                }
+            };
+            return self.call_helper(h, vals.into_iter().map(Arg::Val).collect(), e.ty, dst, span, out);
         }
         if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse") {
             // changes the receiver: a place, fixed before the arguments run

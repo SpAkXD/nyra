@@ -8,6 +8,7 @@ version to the next; each entry says what changed. Error codes are stable: a num
 Language
 - Tuples: `(1, "a")`, `t.0`, `fn f() -> (int, bool)`, `let (a, b) = f()`, `(a, b) = (b, a)`, `for (k, v) in pairs`. They compare and sort part by part and print as `(1, "a")`. New codes E0272, E0273.
 - Format specifiers in strings, Python's subset: `{x:>8}`, `{n:05}`, `{f:.2}` (rounded like `text.fixed`), `{n:,}`, `{f:>10.2}`. New codes E0270, E0271.
+- Denser helpers: `xs.sorted()`, `sorted_by`, `min_by`, `max_by` (keys may be tuples), `x in xs`, `zip`, `chunks`, slices `xs[a..b]` / `s[a..b]`, `s.trim(chars)`, `m.items()`, `fn f(var n: int)`, and `r.area()` for `fn area(r: Rect)`. New code E0275.
 
 ## v0.5 (unreleased)
 

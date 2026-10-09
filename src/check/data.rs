@@ -39,6 +39,11 @@ pub const ARRAY_METHODS: &[&str] = &[
     "sum",
     "min",
     "max",
+    "sorted",
+    "sorted_by",
+    "min_by",
+    "max_by",
+    "chunks",
 ];
 pub const STR_METHODS: &[&str] = &[
     "len",
@@ -58,6 +63,7 @@ pub const STR_METHODS: &[&str] = &[
     "pad_left",
     "pad_right",
     "reversed",
+    "chunks",
     "count",
     "any",
     "all",
@@ -65,10 +71,11 @@ pub const STR_METHODS: &[&str] = &[
 ];
 /// The methods that take a lambda, plus `sum`, `min` and `max`, which run the same kind of loop
 /// (checked in `check/lambda.rs`, lowered to loops in `ir/lower.rs`).
-pub const LAMBDA_METHODS: &[&str] = &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max"];
+pub const LAMBDA_METHODS: &[&str] =
+    &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max", "sorted_by", "min_by", "max_by"];
 /// The lambda methods of a string: each character is tested.
 pub const STR_LAMBDA_METHODS: &[&str] = &["count", "any", "all", "find_index"];
-pub const MAP_METHODS: &[&str] = &["len", "has", "get", "set", "remove", "keys", "values"];
+pub const MAP_METHODS: &[&str] = &["len", "has", "get", "set", "remove", "keys", "values", "items"];
 pub const CHAR_METHODS: &[&str] = &["code", "upper", "lower", "is_digit", "is_letter", "is_upper", "is_lower", "is_space"];
 
 /// The method `name` of type `t`, if it has one.
@@ -91,10 +98,11 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "repeat" => m(vec![Int], t, false),
                 "sort" | "reverse" => m(vec![], Void, true),
                 "join" => m(vec![Str], Str, false),
-                "reversed" => m(vec![], t, false),
+                "reversed" | "sorted" => m(vec![], t, false),
+                "chunks" => m(vec![Int], Type::array(t), false),
                 // the types depend on the lambda: see `check/lambda.rs`
                 "sum" | "min" | "max" => m(vec![], e, false),
-                "map" | "filter" | "sort_by" | "count" | "any" | "all" | "find_index" => {
+                "map" | "filter" | "sort_by" | "sorted_by" | "min_by" | "max_by" | "count" | "any" | "all" | "find_index" => {
                     m(vec![Type::Unknown], Type::Unknown, name == "sort_by")
                 }
                 "fold" => m(vec![Type::Unknown, Type::Unknown], Type::Unknown, false),
@@ -114,6 +122,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             "repeat" => m(vec![Int], Str, false),
             "pad_left" | "pad_right" => m(vec![Int], Str, false),
             "reversed" => m(vec![], Str, false),
+            "chunks" => m(vec![Int], Type::array(Str), false),
             "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, false),
             _ => None,
         },
@@ -127,6 +136,7 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "remove" => m(vec![k], Void, true),
                 "keys" => m(vec![], Type::array(k), false),
                 "values" => m(vec![], Type::array(v), false),
+                "items" => m(vec![], Type::array(Type::tuple(&[k, v])), false),
                 _ => None,
             }
         }
@@ -138,6 +148,12 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
         },
         _ => None,
     }
+}
+
+/// True if some built-in type has a method of this name (then `x.name()` is that method, never a
+/// call of the program's own function `name(x)`).
+pub fn is_method_name(name: &str) -> bool {
+    ARRAY_METHODS.contains(&name) || STR_METHODS.contains(&name) || MAP_METHODS.contains(&name) || CHAR_METHODS.contains(&name)
 }
 
 /// True for the element types `sort` and `sort_by` keys can have: `int`, `float`, `str`, `char`,

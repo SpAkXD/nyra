@@ -342,7 +342,10 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
     match &e.kind {
         ExprKind::Call(name, args) => all(args).or_else(|| fns.contains(&name.as_str()).then(|| name.clone())),
         ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => first_call(x, fns),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
+        ExprKind::Slice(b, lo, hi) => first_call(b, fns)
+            .or_else(|| lo.as_ref().and_then(|x| first_call(x, fns)))
+            .or_else(|| hi.as_ref().and_then(|x| first_call(x, fns))),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
         ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
@@ -459,6 +462,11 @@ pub fn source(e: &Expr) -> String {
             format!("[{}]", items.join(", "))
         }
         ExprKind::Index(b, i) => format!("{}[{}]", tight(b), source(i)),
+        ExprKind::In(a, b) => format!("{} in {}", tight(a), tight(b)),
+        ExprKind::Slice(b, lo, hi) => {
+            let bound = |x: &Option<Box<Expr>>| x.as_ref().map(|x| source(x)).unwrap_or_default();
+            format!("{}[{}..{}]", tight(b), bound(lo), bound(hi))
+        }
         ExprKind::Field(b, f) => format!("{}.{}", tight(b), f.strip_prefix('_').filter(|n| n.parse::<usize>().is_ok()).unwrap_or(f)),
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),

@@ -4901,7 +4901,7 @@ fn main() {
     xs.sort_by(x => x > 1)
 }
 ----
-error[E0228]: `sort_by` needs a key of type `int`, `float`, `str` or `char`, found `bool`
+error[E0228]: `sort_by` needs a key of type `int`, `float`, `str`, `char` or a tuple of those, found `bool`
   --> case.nyra:3:21
   |
 3 |     xs.sort_by(x => x > 1)
@@ -5413,6 +5413,111 @@ error[E0271]: the format specifier `.2f` does not fit an `int`: `.N` rounds a fl
   |             ^
   = hint: decimals are for floats: convert with `float(x)`, as in `{float(x):.2}`
   = explain: nyra explain E0271
+
+nyra: 1 error(s)
+==== in_wrong_type
+fn main() {
+    print("a" in [1, 2])
+}
+----
+error[E0275]: cannot look for a `str` in `[int]`: it holds `int` values, and the left side is a `str`
+  --> case.nyra:2:15
+  |
+2 |     print("a" in [1, 2])
+  |               ^
+  = hint: `"a" in [1, 2]` needs an element of type `int` on the left
+  = explain: nyra explain E0275
+
+nyra: 1 error(s)
+==== in_not_container
+fn main() {
+    let n = 5
+    print(3 in n)
+}
+----
+error[E0275]: `in` needs an array, a string or a map on its right, found `int`
+  --> case.nyra:3:13
+  |
+3 |     print(3 in n)
+  |             ^
+  = hint: to test a number against a range write `x >= a && x < b`
+  = explain: nyra explain E0275
+
+nyra: 1 error(s)
+==== slice_not_sliceable
+fn main() {
+    let n = 12345
+    print(n[1..3])
+}
+----
+error[E0233]: cannot slice a value of type `int`
+  --> case.nyra:3:12
+  |
+3 |     print(n[1..3])
+  |            ^
+  = hint: only arrays (`xs[1..3]`) and strings (`s[1..3]`) can be sliced
+  = explain: nyra explain E0233
+
+nyra: 1 error(s)
+==== zip_not_arrays
+fn main() {
+    print(zip(1, 2))
+}
+----
+error[E0203]: `zip` needs arrays or strings, found `int`
+  --> case.nyra:2:15
+  |
+2 |     print(zip(1, 2))
+  |               ^
+  = hint: `zip(xs, ys)` pairs the elements of two arrays (or the characters of strings)
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== zip_one_array
+fn main() {
+    print(zip([1, 2]))
+}
+----
+error[E0204]: `zip` takes 2 or 3 arguments but 1 was given
+  --> case.nyra:2:11
+  |
+2 |     print(zip([1, 2]))
+  |           ^
+  = hint: call it as `zip(xs, ys)`: it gives an array of pairs `[(x, y)]`
+  = explain: nyra explain E0204
+
+nyra: 1 error(s)
+==== sorted_unorderable
+fn main() {
+    print([[1], [0]].sorted())
+}
+----
+error[E0228]: `sorted` needs `[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those, found `[[int]]`
+  --> case.nyra:2:22
+  |
+2 |     print([[1], [0]].sorted())
+  |                      ^
+  = hint: sort by a key yourself: e.g. loop and insert each element at its place
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== var_param_inout
+fn f(inout var n: int) {
+    n += 1
+}
+
+fn main() {
+    var k = 1
+    f(inout k)
+}
+----
+error[E0101]: expected a parameter name, found keyword `var`
+  --> case.nyra:1:12
+  |
+1 | fn f(inout var n: int) {
+  |            ^
+  = hint: `inout` changes the caller's variable and `var` is a copy the function may change: use one of them
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== for_pattern_not_tuple

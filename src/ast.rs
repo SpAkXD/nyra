@@ -290,6 +290,8 @@ pub struct Param {
     pub ty: Type,
     /// `inout name: T`: the function changes the caller's variable.
     pub inout: bool,
+    /// `var name: T`: a copy the function may change (the caller's variable is not touched).
+    pub mutable: bool,
     pub span: Span,
 }
 
@@ -412,9 +414,18 @@ impl Expr {
             | ExprKind::Inout(x)
             | ExprKind::Lambda(_, x)
             | ExprKind::Fmt(x, _) => x.each_mut(f),
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) => {
                 a.each_mut(f);
                 b.each_mut(f);
+            }
+            ExprKind::Slice(b, lo, hi) => {
+                b.each_mut(f);
+                if let Some(x) = lo {
+                    x.each_mut(f);
+                }
+                if let Some(x) = hi {
+                    x.each_mut(f);
+                }
             }
             ExprKind::If(c, a, b) => {
                 c.each_mut(f);
@@ -526,6 +537,10 @@ pub enum ExprKind {
     Tuple(Vec<Expr>),
     /// `value:spec` inside `{ }` of a string: the value as text, aligned, padded or rounded
     Fmt(Box<Expr>, FmtSpec),
+    /// `x in xs`: is the element, character or key there
+    In(Box<Expr>, Box<Expr>),
+    /// `xs[a..b]`, `xs[a..]`, `xs[..b]`, and the same for a string
+    Slice(Box<Expr>, Option<Box<Expr>>, Option<Box<Expr>>),
     /// `["a": 1, "b": 2]`, `[:]`
     MapLit(Vec<(Expr, Expr)>),
     /// `base[index]`

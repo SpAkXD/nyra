@@ -712,13 +712,23 @@ impl Parser {
             if inout {
                 self.bump();
             }
+            // `var n: int`: a copy the function may change
+            if inout && self.at(&Tok::Var) {
+                return Err(self.unexpected("a parameter name").hint(
+                    "`inout` changes the caller's variable and `var` is a copy the function may change: use one of them",
+                ));
+            }
+            let mutable = !inout && self.at(&Tok::Var);
+            if mutable {
+                self.bump();
+            }
             let (pname, pspan) = self.ident("a parameter name", "parameters look like `a: int, b: float`")?;
             if !self.at(&Tok::Colon) {
                 return Err(self.missing_param_type(&pname, pspan));
             }
             self.bump();
             let ty = self.ty(&format!("every parameter needs a type: `{pname}: int`"))?;
-            params.push(Param { name: pname, ty, inout, span: pspan });
+            params.push(Param { name: pname, ty, inout, mutable, span: pspan });
             if !self.at(&Tok::RParen) {
                 let hint = if matches!(self.peek(), Tok::LBrace | Tok::Arrow | Tok::Assign | Tok::Eof | Tok::Newline) {
                     "close the parameter list with `)`"
@@ -1469,11 +1479,11 @@ impl Parser {
             Tok::Le => (BinOp::Le, 4),
             Tok::Gt => (BinOp::Gt, 4),
             Tok::Ge => (BinOp::Ge, 4),
-            Tok::Plus => (BinOp::Add, 5),
-            Tok::Minus => (BinOp::Sub, 5),
-            Tok::Star => (BinOp::Mul, 6),
-            Tok::Slash => (BinOp::Div, 6),
-            Tok::Percent => (BinOp::Mod, 6),
+            Tok::Plus => (BinOp::Add, 6),
+            Tok::Minus => (BinOp::Sub, 6),
+            Tok::Star => (BinOp::Mul, 7),
+            Tok::Slash => (BinOp::Div, 7),
+            Tok::Percent => (BinOp::Mod, 7),
             _ => return None,
         })
     }
@@ -1482,7 +1492,17 @@ impl Parser {
         // each operator of a chain nests the expression one level deeper
         self.same_depth(|p| {
             let mut lhs = p.unary()?;
-            while let Some((op, prec)) = Self::binop(p.peek()) {
+            loop {
+                // `x in xs` ranks with the comparisons
+                if p.at(&Tok::In) && 4 >= min_prec {
+                    p.deeper()?;
+                    let span = p.bump().span;
+                    p.skip_newlines();
+                    let rhs = p.binary(5)?;
+                    lhs = Expr::new(ExprKind::In(Box::new(lhs), Box::new(rhs)), span);
+                    continue;
+                }
+                let Some((op, prec)) = Self::binop(p.peek()) else { break };
                 if prec < min_prec {
                     break;
                 }
@@ -2006,8 +2026,20 @@ impl Parser {
                 Tok::LBracket => {
                     let span = self.bump().span;
                     self.skip_newlines();
-                    let index = self.expr()?;
+                    // `xs[..b]`
+                    let lo = if self.at(&Tok::DotDot) { None } else { Some(self.expr()?) };
                     self.skip_newlines();
+                    // `xs[a..b]`, `xs[a..]`, `xs[..b]`
+                    if self.at(&Tok::DotDot) {
+                        self.bump();
+                        self.skip_newlines();
+                        let hi = if self.at(&Tok::RBracket) { None } else { Some(Box::new(self.expr()?)) };
+                        self.skip_newlines();
+                        self.expect(Tok::RBracket, "`]` to close the slice").map_err(|d| d.or_hint("a slice is written `xs[a..b]`"))?;
+                        e = Expr::new(ExprKind::Slice(Box::new(e), lo.map(Box::new), hi), span);
+                        continue;
+                    }
+                    let index = lo.expect("an index starts here");
                     self.expect(Tok::RBracket, "`]` to close the index").map_err(|d| d.or_hint("an index is written `xs[i]`"))?;
                     e = Expr::new(ExprKind::Index(Box::new(e), Box::new(index)), span);
                 }

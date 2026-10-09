@@ -8,6 +8,7 @@ use super::data;
 use super::{count, show, start, was_were, Checker, Decl};
 use crate::ast::*;
 use crate::diag::Diag;
+use crate::helpers::H;
 
 /// E0213: a lambda where a value is needed.
 pub(super) fn misplaced(span: Span) -> Diag {
@@ -53,7 +54,7 @@ impl Checker {
             "sum" | "min" | "max" => format!("{r}.{name}()"),
             "fold" => format!("{r}.fold(0, (acc, {p}) => acc + {p})"),
             "map" => format!("{r}.map({p} => {p} * 2)"),
-            "sort_by" => format!("{r}.sort_by({p} => {p})"),
+            "sort_by" | "sorted_by" | "min_by" | "max_by" => format!("{r}.{name}({p} => {p})"),
             _ if rt == Type::Str => format!("{r}.{name}({p} => {p}.is_digit())"),
             _ => format!("{r}.{name}({p} => {p} > 0)"),
         };
@@ -79,7 +80,7 @@ impl Checker {
             );
             return Some(Type::Unknown);
         }
-        let sortable = |t: Type| matches!(t, Type::Int | Type::Float | Type::Str | Type::Char);
+        let sortable = data::sortable;
         let t = match name {
             "sum" | "min" | "max" => {
                 let ok = if name == "sum" { matches!(elem, Type::Int | Type::Float) } else { sortable(elem) };
@@ -129,7 +130,7 @@ impl Checker {
             _ => {
                 let kind = match name {
                     "map" => Kind::Value,
-                    "sort_by" => Kind::Key,
+                    "sort_by" | "sorted_by" | "min_by" | "max_by" => Kind::Key,
                     _ => Kind::Test,
                 };
                 let body = self.lambda_arg(&mut args[0], &[elem], name, &example, kind);
@@ -141,7 +142,22 @@ impl Checker {
                     "filter" => rt,
                     "count" | "find_index" => Type::Int,
                     "any" | "all" => Type::Bool,
+                    "sorted_by" | "min_by" | "max_by" => {
+                        self.register_in(body);
+                        if name == "sorted_by" {
+                            if body.is_tuple() {
+                                self.need(H::SortKeyed(rt, body), span);
+                            }
+                            rt
+                        } else {
+                            self.need(H::Best(name == "max_by", rt, body), span);
+                            elem
+                        }
+                    }
                     _ => {
+                        if body.is_tuple() {
+                            self.need(H::SortKeyed(rt, body), span);
+                        }
                         // `sort_by` sorts its receiver in place, like `sort`
                         if data::place_root(recv).is_some() {
                             self.check_place(recv, "call `.sort_by()` on", span);
@@ -288,11 +304,11 @@ impl Checker {
                 );
                 Type::Unknown
             }
-            Kind::Key if !matches!(t, Type::Int | Type::Float | Type::Str | Type::Char) => {
+            Kind::Key if !data::sortable(t) => {
                 self.errs.push(
                     Diag::new(
                         "E0228",
-                        format!("`sort_by` needs a key of type `int`, `float`, `str` or `char`, found `{}`", t.name()),
+                        format!("`{m}` needs a key of type `int`, `float`, `str`, `char` or a tuple of those, found `{}`", t.name()),
                         bspan,
                     )
                     .hint("sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`"),

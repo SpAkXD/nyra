@@ -1,0 +1,4 @@
+// expect: E0275
+fn main() {
+    print("a" in [1, 2])
+}

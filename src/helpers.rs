@@ -18,6 +18,16 @@ pub enum H {
     SortKeyed(Type, Type),
     /// the sign, thousands separators and padding of a format specifier
     Fmt,
+    /// `min_by` / `max_by`: (is max, array type, key type); `best(xs, ks)` is the element with the smallest/largest key
+    Best(bool, Type, Type),
+    /// `zip(a, b)`: the types of the arguments (arrays or strings)
+    Zip(Vec<Type>),
+    /// `xs.chunks(n)` of an array or a string
+    Chunks(Type),
+    /// `m.items()` of a map
+    Items(Type),
+    /// `s.trim(chars)`
+    TrimChars,
 }
 
 impl H {
@@ -35,6 +45,11 @@ impl H {
             }
             H::SortKeyed(t, k) => format!("core.sort_{}_{}", t.mangle(), k.mangle()),
             H::Fmt => "core.fmt".to_string(),
+            H::Best(max, arr, key) => format!("core.{}_by_{}_{}", if *max { "max" } else { "min" }, arr.mangle(), key.mangle()),
+            H::Zip(ts) => format!("core.zip_{}", ts.iter().map(|t| t.mangle()).collect::<Vec<_>>().join("_")),
+            H::Chunks(t) => format!("core.chunks_{}", t.mangle()),
+            H::Items(t) => format!("core.items_{}", t.mangle()),
+            H::TrimChars => "core.trim".to_string(),
         }
     }
 
@@ -44,6 +59,42 @@ impl H {
             H::Cmp(op, t) => cmp_source(op, *t),
             H::SortKeyed(arr, key) => sort_keyed_source(*arr, *key),
             H::Fmt => FMT.to_string(),
+            H::Best(max, arr, key) => {
+                let e = arr.elem().unwrap_or(Type::Unknown);
+                let (call, test) = if *max { ("max", "ks[best] < ks[i]") } else { ("min", "ks[i] < ks[best]") };
+                format!(
+                    "fn __h(xs: {}, ks: {}) -> {} {{\n    if xs.len() == 0 {{\n        var none: [int] = []\n        none.{call}()\n    }}\n    var best = 0\n    for i in 1..xs.len() {{\n        if {test} {{ best = i }}\n    }}\n    ret xs[best]\n}}\n",
+                    arr.name(),
+                    Type::array(*key).name(),
+                    e.name()
+                )
+            }
+            H::Zip(ts) => {
+                let names = ["a", "b", "c"];
+                let elems: Vec<Type> = ts.iter().map(|t| t.elem().unwrap_or(Type::Char)).collect();
+                let tuple = Type::tuple(&elems).name();
+                let params: Vec<String> = ts.iter().enumerate().map(|(i, t)| format!("{}: {}", names[i], t.name())).collect();
+                let mut s = format!("fn __h({}) -> [{tuple}] {{\n    var n = a.len()\n", params.join(", "));
+                for n in &names[1..ts.len()] {
+                    s += &format!("    if {n}.len() < n {{ n = {n}.len() }}\n");
+                }
+                let items: Vec<String> = names[..ts.len()].iter().map(|n| format!("{n}[i]")).collect();
+                s += &format!("    var out: [{tuple}] = []\n    for i in 0..n {{ out.push(({})) }}\n    ret out\n}}\n", items.join(", "));
+                s
+            }
+            H::Chunks(t) => format!(
+                "fn __h(xs: {0}, n: int) -> [{0}] {{\n    if n < 1 {{ let bad = \"\".repeat(-1) }}\n    var out: [{0}] = []\n    var i = 0\n    while i < xs.len() {{\n        var j = xs.len()\n        if n < j - i {{ j = i + n }}\n        out.push(xs.slice(i, j))\n        i = j\n    }}\n    ret out\n}}\n",
+                t.name()
+            ),
+            H::Items(t) => {
+                let (k, v) = t.map_kv().unwrap_or((Type::Unknown, Type::Unknown));
+                let pair = Type::tuple(&[k, v]).name();
+                format!(
+                    "fn __h(m: {}) -> [{pair}] {{\n    var out: [{pair}] = []\n    for k in m {{ out.push((k, m[k])) }}\n    ret out\n}}\n",
+                    t.name()
+                )
+            }
+            H::TrimChars => TRIM.to_string(),
         }
     }
 }
@@ -64,6 +115,15 @@ pub fn orderable(t: Type) -> bool {
         None => matches!(t, Type::Int | Type::Float | Type::Str | Type::Char | Type::Bool),
     }
 }
+
+const TRIM: &str = r#"fn __h(s: str, cs: str) -> str {
+    var a = 0
+    var b = s.len()
+    while a < b && cs.contains(s[a]) { a += 1 }
+    while b > a && cs.contains(s[b - 1]) { b -= 1 }
+    ret s.slice(a, b)
+}
+"#;
 
 const FMT: &str = r#"fn __h(s: str, plus: bool, comma: bool, width: int, align: char, fill: char, zero: bool) -> str {
     var t = s

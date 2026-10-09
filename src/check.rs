@@ -386,7 +386,7 @@ fn show(e: &Expr) -> Option<String> {
             let a: Option<Vec<String>> = items.iter().map(show).collect();
             format!("({})", a?.join(", "))
         }
-        ExprKind::Fmt(..) => return None,
+        ExprKind::Fmt(..) | ExprKind::In(..) | ExprKind::Slice(..) => return None,
         ExprKind::Index(b, i) => format!("{}[{}]", operand(b)?, show(i)?),
         ExprKind::Field(b, f) => format!("{}.{f}", operand(b)?),
         ExprKind::Method(r, m, args) => {
@@ -719,6 +719,29 @@ impl Checker {
         self.structs.insert(name, StructInfo { fields, span: at });
     }
 
+    /// Makes the structs of the tuple types inside `t` known.
+    fn register_in(&mut self, t: Type) {
+        match t {
+            Type::Array(_) => {
+                if let Some(e) = t.elem() {
+                    self.register_in(e)
+                }
+            }
+            Type::Map(_) => {
+                if let Some((k, v)) = t.map_kv() {
+                    self.register_in(k);
+                    self.register_in(v);
+                }
+            }
+            _ => {
+                for e in t.tuple_elems().unwrap_or_default() {
+                    self.register_in(e);
+                }
+                self.register_tuple(t);
+            }
+        }
+    }
+
     /// The program needs the helper function `h` (see `helpers.rs`): it is added once, and checked
     /// with the other functions. `at` is where the program asked for it.
     fn need(&mut self, h: H, at: Span) {
@@ -971,7 +994,14 @@ impl Checker {
         self.scopes = vec![HashMap::new()];
         for p in &f.params {
             let ty = if self.defined(p.ty) { p.ty } else { Type::Unknown };
-            self.declare(&p.name, ty, if p.inout { Decl::Inout } else { Decl::Param }, p.span);
+            let decl = if p.inout {
+                Decl::Inout
+            } else if p.mutable {
+                Decl::Var
+            } else {
+                Decl::Param
+            };
+            self.declare(&p.name, ty, decl, p.span);
         }
         if self.g.in_main {
             // a script: each top-level statement is numbered, so a call can be compared with the
@@ -1412,6 +1442,20 @@ impl Checker {
             e.ty = t;
             return t;
         }
+        // `r.area()` is `area(r)` when no built-in method is called `area`
+        if matches!(&e.kind, ExprKind::Method(_, n, _) if !data::is_method_name(n) && self.fns.contains_key(n.as_str())) {
+            let ExprKind::Method(recv, name, mut args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("matched above") };
+            let recv = *recv;
+            // a function that changes its first parameter (`inout`) takes the receiver the same way
+            let first = if self.fns[name.as_str()].inout.first().copied().unwrap_or(false) {
+                let at = recv.span;
+                Expr::new(ExprKind::Inout(Box::new(recv)), at)
+            } else {
+                recv
+            };
+            args.insert(0, first);
+            e.kind = ExprKind::Call(name, args);
+        }
         let t = match &mut e.kind {
             ExprKind::Int(_) => Type::Int,
             ExprKind::Float(_) => Type::Float,
@@ -1580,6 +1624,30 @@ impl Checker {
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
             ExprKind::Tuple(items) => self.tuple_lit(items, want),
+            ExprKind::In(item, container) => self.membership(item, container, span),
+            ExprKind::Slice(base, lo, hi) => {
+                let bt = self.expr(base);
+                for bound in [lo, hi].into_iter().flatten() {
+                    let it = self.expr(bound);
+                    if it != Type::Int && !it.is_unknown() {
+                        self.errs.push(
+                            Diag::new("E0232", format!("a slice bound must be an `int`, found `{}`", it.name()), bound.span)
+                                .hint("a slice is `xs[a..b]` with positions: 0 is the first element, `b` is not included"),
+                        );
+                    }
+                }
+                match bt {
+                    t if t.is_unknown() => Type::Unknown,
+                    Type::Str | Type::Array(_) => bt,
+                    t => {
+                        self.errs.push(
+                            Diag::new("E0233", format!("cannot slice a value of type `{}`", t.name()), span)
+                                .hint("only arrays (`xs[1..3]`) and strings (`s[1..3]`) can be sliced"),
+                        );
+                        Type::Unknown
+                    }
+                }
+            }
             ExprKind::Fmt(inner, spec) => {
                 let t = self.expr(inner);
                 self.check_spec(t, inner, spec, span);
@@ -1895,6 +1963,48 @@ impl Checker {
             }
             _ => Type::Unknown,
         }
+    }
+
+    /// `x in xs`: the element of an array, the characters of a string, the key of a map.
+    fn membership(&mut self, item: &mut Expr, container: &mut Expr, span: Span) -> Type {
+        let ct = self.expr(container);
+        let it = self.expr_with(item, ct.elem());
+        if ct.is_unknown() || it.is_unknown() {
+            return Type::Bool;
+        }
+        let shown = show(item).unwrap_or_else(|| "x".into());
+        let boxed = show(container).unwrap_or_else(|| "xs".into());
+        let want = match ct {
+            Type::Array(_) => ct.elem(),
+            Type::Map(_) => ct.map_kv().map(|(k, _)| k),
+            Type::Str => Some(it).filter(|t| matches!(t, Type::Str | Type::Char)).or(Some(Type::Char)),
+            _ => None,
+        };
+        let Some(want) = want else {
+            self.errs.push(
+                Diag::new("E0275", format!("`in` needs an array, a string or a map on its right, found `{}`", ct.name()), span)
+                    .hint("to test a number against a range write `x >= a && x < b`"),
+            );
+            return Type::Bool;
+        };
+        if it == Type::Void {
+            self.errs.push(Diag::new("E0203", format!("{} returns nothing, so it cannot be searched for", call_text(item)), item.span));
+        } else if it != want {
+            let what = match ct {
+                Type::Map(_) => "a key",
+                Type::Str => "a character or a text",
+                _ => "an element",
+            };
+            self.errs.push(
+                Diag::new(
+                    "E0275",
+                    format!("cannot look for {} in `{}`: it holds `{}` values, and the left side is {}", article(it), ct.name(), want.name(), article(it)),
+                    span,
+                )
+                .hint(format!("`{shown} in {boxed}` needs {what} of type `{}` on the left", want.name())),
+            );
+        }
+        Type::Bool
     }
 
     /// `{x:spec}`: the specifier must make sense for the type of `x`.
@@ -2253,7 +2363,9 @@ impl Checker {
         // element types that some methods need
         if let Some(e) = rt.elem() {
             let bad = match name {
-                "sort" => (!data::sortable(e)).then_some("`[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those"),
+                "sort" | "sorted" => {
+                    (!data::sortable(e)).then_some("`[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those")
+                }
                 "join" => (!matches!(e, Type::Str | Type::Char)).then_some("`[str]` or `[char]`"),
                 _ => None,
             };
@@ -2268,16 +2380,26 @@ impl Checker {
                 self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
             }
         }
-        // sorting tuples: a helper function sorts by their parts
-        if name == "sort" && rt.elem().is_some_and(Type::is_tuple) {
-            if let Some(e) = rt.elem().filter(|e| helpers::orderable(*e)) {
-                self.need(H::SortKeyed(rt, e), span);
+        // methods that a generated helper function runs (see `helpers.rs`)
+        match name {
+            "chunks" => self.need(H::Chunks(rt), span),
+            "items" if rt.map_kv().is_some() => self.need(H::Items(rt), span),
+            "trim" if args.len() == 1 && rt == Type::Str => self.need(H::TrimChars, span),
+            "sort" | "sorted" => {
+                if let Some(e) = rt.elem().filter(|e| e.is_tuple() && helpers::orderable(*e)) {
+                    self.need(H::SortKeyed(rt, e), span);
+                }
             }
+            _ => {}
         }
         // `s.pad_left(n)` fills with spaces; `s.pad_left(n, '0')` with a character
         let mut sig = sig;
         if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
             sig.params.push(Type::Char);
+        }
+        // `s.trim("-_")` cuts the characters of the text from both ends
+        if rt == Type::Str && name == "trim" && args.len() == 1 {
+            sig.params.push(Type::Str);
         }
         // `m.get(k, default)`
         if let (Some((_, v)), "get", 2) = (rt.map_kv(), name, args.len()) {
@@ -2303,7 +2425,7 @@ impl Checker {
             );
         } else {
             // the text searches also take a character: `"aeiou".contains(c)`
-            let search = rt == Type::Str && matches!(name, "contains" | "starts_with" | "ends_with" | "index_of");
+            let search = rt == Type::Str && (matches!(name, "contains" | "starts_with" | "ends_with" | "index_of") || name == "trim");
             for (i, (a, p)) in args.iter_mut().zip(&sig.params).enumerate() {
                 let t = self.expr_with(a, Some(*p));
                 if search && t == Type::Char {
@@ -2312,6 +2434,7 @@ impl Checker {
                 self.expect_ty(*p, t, a, Ctx::MethodArg { m: name, idx: i });
             }
         }
+        self.register_in(sig.ret);
         if sig.mutates {
             if data::place_root(recv).is_some() {
                 self.check_place(recv, &format!("call `.{name}()` on"), span);
@@ -2525,6 +2648,39 @@ impl Checker {
         t
     }
 
+    /// `zip(a, b)`: the pairs of elements, as many as the shorter one has.
+    fn zip(&mut self, args: &mut [Expr], span: Span) -> Type {
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
+        if !(2..=3).contains(&tys.len()) {
+            self.errs.push(
+                Diag::new("E0204", format!("`zip` takes 2 or 3 arguments but {} {} given", tys.len(), was_were(tys.len())), span)
+                    .hint("call it as `zip(xs, ys)`: it gives an array of pairs `[(x, y)]`"),
+            );
+            return Type::Unknown;
+        }
+        if tys.iter().any(|t| t.is_unknown()) {
+            return Type::Unknown;
+        }
+        let mut elems = Vec::new();
+        for (a, t) in args.iter().zip(&tys) {
+            match t {
+                Type::Array(_) => elems.push(t.elem().unwrap_or(Type::Unknown)),
+                Type::Str => elems.push(Type::Char),
+                _ => {
+                    self.errs.push(
+                        Diag::new("E0203", format!("`zip` needs arrays or strings, found `{}`", t.name()), a.span)
+                            .hint("`zip(xs, ys)` pairs the elements of two arrays (or the characters of strings)"),
+                    );
+                    return Type::Unknown;
+                }
+            }
+        }
+        let pair = Type::tuple(&elems);
+        self.register_tuple(pair);
+        self.need(H::Zip(tys), span);
+        Type::array(pair)
+    }
+
     /// `abs(x)`, `min(a, b)`, `max(a, b)` on two `int`s or two `float`s.
     fn math(&mut self, name: &str, args: &mut [Expr], span: Span) -> Type {
         let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
@@ -2572,6 +2728,9 @@ impl Checker {
         // `abs`, `min` and `max` are builtins unless the program defines its own
         if MATH.contains(&name) && !self.fns.contains_key(name) {
             return self.math(name, args, span);
+        }
+        if name == "zip" && !self.fns.contains_key(name) {
+            return self.zip(args, span);
         }
 
         let Some(sig) = self.fns.get(name) else {

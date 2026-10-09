@@ -46,7 +46,11 @@ fn show(n: int) {                     // no `->`: returns nothing
 ```
 `fn main()` has no parameters and no return type. A function with a return type must `ret` on
 every path. Functions may call each other in any order, and recurse. Parameters cannot be changed:
-copy one into a `var`, or declare it `inout` (see Values).
+declare one `var` (the function works on its own copy: `fn count_down(var n: int)`), or `inout` to change
+the caller's variable (see Values).
+
+A function can be called like a method, with its first argument before the dot, when no built-in method has
+its name: `r.area()` is `area(r)`, and `p.move_by(2)` is `move_by(inout p, 2)` when the first parameter is `inout`.
 
 ## Examples
 ```nyra
@@ -129,6 +133,7 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 | `+` `-` | int,int or float,float; `+` also joins two `str`s or two arrays of one type |
 | `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char · tuple,tuple of those → bool |
 | `==` `!=` | same type on both sides → bool (strings, arrays and structs compare by content) |
+| `x in xs` | `bool`: `xs` has the element `x` (`[T]`); `s` has the char or text `x` (`str`); `m` has the key `x` (`[K: V]`) |
 | `&&` `\|\|` | bool; the right side runs only when needed |
 
 Parentheses group: `(a + b) * c`.
@@ -143,6 +148,7 @@ Parentheses group: `(a + b) * c`.
 | `float(x)` | int → float; str → float: `float("2.5")`, `float("1e3")` (other text: E0244) |
 | `char(n)` | code → char: `char(65)` is `'A'` (invalid code: E0246) |
 | `abs(x)` · `min(a, b)` · `max(a, b)` | on `int`s or on `float`s (a program may define its own instead) |
+| `zip(xs, ys)` · `zip(xs, ys, zs)` | `[(X, Y)]`: the pairs of elements, as many as the shorter array (or string, per char) has |
 
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
@@ -174,13 +180,14 @@ print('7'.code() - '0'.code())    // 7: a digit's value
 ```
 | method | result |
 |---|---|
-| `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1` |
+| `s.len()` · `s.slice(a, b)` | number of characters · characters `a` to `b - 1`; also `s[a..b]`, `s[a..]`, `s[..b]` |
 | `s.contains(t)` `s.starts_with(t)` `s.ends_with(t)` | `bool` (`t` is a `str` or a `char`) |
 | `s.index_of(t)` | first position of `t` (a `str` or a `char`), or `-1` |
 | `s.pad_left(n)` `s.pad_right(n)` | spaces added until `s` has `n` characters (never shorter); `s.pad_left(n, '0')` pads with a char |
 | `s.split(sep)` | `[str]`: `"a,b,,c".split(",")` is `["a", "b", "", "c"]` |
 | `s.replace(old, new)` · `s.repeat(n)` | every `old` replaced · `n` copies |
-| `s.trim()` | without leading and trailing spaces, tabs and newlines |
+| `s.trim()` · `s.trim(chars)` | without leading and trailing spaces, tabs and newlines · without any of the characters of `chars` (a `str` or a `char`) |
+| `s.chunks(n)` | `[str]`: pieces of `n` characters, the last may be shorter (`n` below 1 is E0243) |
 | `s.upper()` `s.lower()` · `s.chars()` · `s.codes()` | ASCII case only (`"é".upper()` is `"é"`) · `[char]` · `[int]` |
 | `c.code()` · `c.upper()` `c.lower()` | `int` · `char` (ASCII) |
 | `c.is_digit()` `c.is_letter()` `c.is_upper()` `c.is_lower()` `c.is_space()` | `bool` (ASCII only) |
@@ -205,10 +212,12 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 | `xs.insert(i, v)` · `xs.remove(i)` | insert at index `i` (0 to len) · remove and return element `i` |
 | `xs.swap(i, j)` | exchange elements `i` and `j` |
 | `xs.contains(v)` · `xs.index_of(v)` | `bool` · first index or `-1` |
-| `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1` · `n` copies, one after another |
+| `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1`, also `xs[a..b]`, `xs[a..]`, `xs[..b]` (positions as for `slice`) · `n` copies, one after another |
+| `xs.chunks(n)` | `[[T]]`: pieces of `n` elements, the last may be shorter (`n` below 1 is E0243) |
 | `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`, or tuples of those) |
 | `xs.join(sep)` | `[str]` or `[char]` → one `str` |
 | `xs.reversed()` · `s.reversed()` | a reversed copy (`xs.reverse()` reverses in place) |
+| `xs.sorted()` | a sorted copy (`sort()` does it in place) |
 | `xs.sum()` · `xs.min()` · `xs.max()` | `[int]`/`[float]` sum (0 when empty) · smallest/largest of `[int] [float] [str] [char]`, like `min(a, b)` from left to right (empty: E0247) |
 
 Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse sort_by`) needs a `var`.
@@ -228,6 +237,8 @@ print([x * x for x in xs if x > 0], [i * 2 for i in 0..3])   // [9, 16] [0, 2, 4
 | `xs.count(x => test)` · `xs.any(...)` · `xs.all(...)` | `int` · `bool` · `bool` (also on a `str`: each char) |
 | `xs.find_index(x => test)` | position of the first element that passes, or `-1` (also on a `str`) |
 | `xs.fold(start, (acc, x) => e)` | `acc` starts as `start` and becomes `e` for each element: the last `acc` |
+| `xs.sorted_by(x => key)` | a new sorted array, like `sort_by`: `words.sorted_by(w => (-w.count, w.text))` sorts by count descending, then text |
+| `xs.min_by(x => key)` · `xs.max_by(x => key)` | the first element with the smallest / largest key (an empty array: E0247) |
 | `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key (or a tuple of them) computed once per element |
 
 A chain of `map` and `filter` and the method that ends it run as one loop, element by element (no
@@ -248,7 +259,7 @@ for name in ages { print(name) }        // the keys, in insertion order
 | `m.len()` · `m.has(k)` | number of entries · `bool` |
 | `m.get(k)` · `m.get(k, default)` | the value (like `m[k]`) · the value or `default` |
 | `m.set(k, v)` · `m.remove(k)` | like `m[k] = v` · removes `k` (nothing happens if it is missing) |
-| `m.keys()` · `m.values()` | arrays, in insertion order |
+| `m.keys()` · `m.values()` · `m.items()` | arrays, in insertion order; `items` gives the pairs `[(K, V)]`: `for (k, v) in m.items()` |
 
 Maps are values like arrays (`var b = a` copies), compare with `==` by content in any order and print
 as `["ann": 31, "bob": 27]` (`[:]` when empty). Changing a map needs a `var`; a value inside a map does
@@ -269,7 +280,7 @@ q.y += 5                              // fields of a `var` can be changed
 print(Line(a: p, b: q))               // Line(a: Point(x: 1, y: 2), b: Point(x: 11, y: 7))
 ```
 Struct names start with an uppercase letter. A struct cannot contain itself (use an array:
-`kids: [Tree]`). Structs have no methods: write `fn area(r: Rect) -> int` and call `area(r)`.
+`kids: [Tree]`). Structs have no methods of their own: write `fn area(r: Rect) -> int` and call `area(r)` or `r.area()`.
 
 ## Tuples
 ```nyra

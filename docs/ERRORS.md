@@ -2066,6 +2066,28 @@ fn main() {
 ```
 - **Related:** E0272, E0240
 
+## E0275: `in` cannot look for this value here
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** `x in xs` asks whether `x` is an element of the array `xs`, a character or text inside the string `xs`, or a key of the map `xs`. The right side is not an array, a string or a map, or the left side has another type than its elements (a string, a char, a key).
+- **Why Nyra has this rule:** The check is the same as `xs.contains(x)`, `s.contains(t)` or `m.has(k)`, and those need matching types, like every comparison in Nyra.
+- **Common causes:**
+  - looking for a `str` in an array of ints
+  - `x in 1..10`: a range is not a value; write `x >= 1 && x < 10`
+  - `key in map.values()` when the keys were meant (or the other way round)
+- **Wrong:**
+```rust
+fn main() {
+    print("a" in [1, 2])
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    print(1 in [1, 2])
+}
+```
+- **Related:** E0203, E0210
+
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
 - **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)

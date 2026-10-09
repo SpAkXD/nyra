@@ -264,10 +264,10 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Length is a method | `len(xs)` (E0202), `xs.length` (E0224), `xs.len` (E0236) | `xs.len()`, `s.len()` |
 | Empty arrays need a type | `var xs = []` (E0230) | `var xs: [int] = []` |
 | One type per array | `[1, 2.5]`, `[1, "a"]` (E0231) | `[1.0, 2.5]`, or an array of structs |
-| No negative indexes, no slice syntax | `xs[-1]` (runtime E0240), `xs[1..3]` (E0101) | `xs[xs.len() - 1]`, `xs.slice(1, 3)` |
+| No negative indexes | `xs[-1]` (runtime E0240) | `xs[xs.len() - 1]` |
 | Structs are built with a call | `Point { x: 1, y: 2 }` (E0101), `Point(1, 2)` (E0225) | `Point(x: 1, y: 2)` |
 | Struct names are uppercase | `struct point` (E0221) | `struct Point` |
-| No methods on structs | `p.area()` (E0227) | `fn area(p: Point) -> int`, then `area(p)` |
+| No methods on structs | `impl`, `self` | `fn area(p: Point) -> int`, then `area(p)` or `p.area()` |
 | No quotes inside `{ }` | `print("{f("a")}")` | `let t = f("a")`, then `print("{t}")` |
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
@@ -296,6 +296,10 @@ Good to know:
 - An `if` used as a value needs an `else`, one expression per branch, and the same type in both
   branches. `else if` chains work and the branches may span lines. A one-line function's expression
   starts on the same line as its `=`.
+- Dense helpers: `xs.sorted()`, `xs.sorted_by(x => key)`, `xs.min_by(x => key)`, `xs.max_by(x => key)`,
+  `x in xs` (also `c in s`, `k in m`), `zip(a, b)` (pairs `[(A, B)]`), `xs.chunks(n)`, slices `xs[1..3]`
+  `s[..4]` `xs[2..]`, `s.trim("-_")`, `m.items()` (pairs), `fn f(var n: int)` (a copy the function may
+  change) and `r.area()` for `fn area(r: Rect)`.
 - A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
   `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
   `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
@@ -344,9 +348,10 @@ that works (section 6 has the usual replacements).
   `[str: bool]` or `contains` for a set. Tuples `(int, str)` (section 2) and maps `[K: V]` (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
-  have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
-  anything else with `sort_by(x => key)`.
-- **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `?:`,
+  have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]`, `[char]` and arrays of tuples
+  of those, ascending; sort anything else with `sort_by(x => key)` or get a sorted copy with
+  `sorted_by(x => key)` (a tuple key such as `(-w.count, w.text)` sorts by several things).
+- **Syntax**: no negative indexes, no `match`, `switch`, `?:`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
   functions; in a program with `fn main` nothing is), no closures, function values, overloading, default
@@ -421,6 +426,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
 | E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
 | E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
+| E0275 | `in` cannot look for this value | `x in xs` needs `x` of the element type, `xs` an array, string or map |
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
 | E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
 | E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |
