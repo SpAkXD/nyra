@@ -1579,9 +1579,9 @@ def _main(args) -> int:
         raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python,typescript,rust")
     if args.repairs < 0 or args.samples < 1 or args.jobs < 1 or args.time_runs < 0:
         raise UsageError("--repairs must be >= 0, --samples >= 1, --jobs >= 1, --time-runs >= 0")
-    if args.budget is not None and (args.provider != "openrouter" or args.budget <= 0):
-        raise UsageError("--budget takes a positive number of dollars and needs --provider openrouter (the only "
-                         "provider that reports what each call cost)")
+    if args.budget is not None and (args.provider not in ("openrouter", "anthropic") or args.budget <= 0):
+        raise UsageError("--budget takes a positive number of dollars and needs --provider openrouter or anthropic "
+                         "(the providers that know what each call cost)")
     if args.provider == "anthropic" and args.effort in ("none", "minimal"):
         raise UsageError("--effort none and minimal are OpenRouter reasoning levels; the anthropic provider takes "
                          "low, medium, high, xhigh or max")
