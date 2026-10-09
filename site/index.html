@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nyra · A programming language for AI agents</title>
-<meta name="description" content="Nyra is a small, strict programming language designed to be written by AI agents. Compiler errors an agent can read and fix by itself. One source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go.">
+<title>Nyra · The language agents can run unsupervised</title>
+<meta name="description" content="The language agents can run unsupervised: nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare (capabilities arrive in v0.6). A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, Python, TypeScript, Rust and Go.">
 <meta name="theme-color" content="#000714">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Nyra: a programming language for AI agents">
-<meta property="og:description" content="A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, with identical output.">
+<meta property="og:title" content="Nyra: the language agents can run unsupervised">
+<meta property="og:description" content="Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. A small, strict language designed to be written by AI agents.">
 <meta property="og:image" content="social-preview.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
 <meta property="og:image:alt" content="The Nyra logo and the line: A small, strict language designed to be written by AI agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Nyra: a programming language for AI agents">
-<meta name="twitter:description" content="A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, with identical output.">
+<meta name="twitter:title" content="Nyra: the language agents can run unsupervised">
+<meta name="twitter:description" content="Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. A small, strict language designed to be written by AI agents.">
 <meta name="twitter:image" content="social-preview.png">
 <script>document.documentElement.classList.add("js")</script>
-<link rel="stylesheet" href="styles.css?v=a82547e">
-<script src="main.js?v=a82547e" defer></script>
+<link rel="stylesheet" href="styles.css?v=positioning1">
+<script src="main.js?v=positioning1" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -87,8 +87,8 @@
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="wrap hero-in" id="heroIn">
     <a class="announce rv" href="#roadmap"><span class="ping" aria-hidden="true"></span><b>v0.5</b><span>Standard library, lambdas, near-C speed</span><span class="arr" aria-hidden="true">→</span></a>
-    <h1 class="split rv" style="--d:1">A programming language built for <em>AI agents to write.</em></h1>
-    <p class="sub rv" style="--d:2">Small and strict, with errors that tell an agent exactly what to write. One source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go, and prints the same thing on every one.</p>
+    <h1 class="split rv" style="--d:1">The language agents can run <em>unsupervised.</em></h1>
+    <p class="sub rv" style="--d:2">Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. Designed to be written by AI agents; one source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go. Capabilities arrive in v0.6.</p>
     <div class="cta rv" style="--d:3">
       <a class="btn btn-teal mag" href="#install"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Get started</a>
       <a class="btn btn-ghost" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
@@ -167,6 +167,32 @@ fib(5) = 5</pre></div>
 
 <!-- ================= DESIGN (paper) ================= -->
 <div class="sheet paper">
+<section class="sec" id="why">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Why Nyra</p>
+      <h2 class="split rv">Built for code nobody is watching.</h2>
+      <p class="lead rv">Agents write code and now run it too. Either you trust generated code with your machine, or you start a VM for every call. Nyra is a language for that step: small enough for a prompt, fast enough to run natively, and strict about what a program may touch.</p>
+    </div>
+    <div class="trio">
+      <article class="card tilt rv"><span class="num" aria-hidden="true">01</span><h3>Safe to run <span class="tag soon">v0.6</span></h3><p>A program can use only what it declares. Files and the like are capabilities, denied by default and checked by the compiler: <code class="i">--allow fs</code>. No VM per call. Not built yet; until it ships, run code you don't trust in a container.</p></article>
+      <article class="card tilt rv" style="--d:1"><span class="num" aria-hidden="true">02</span><h3>Fast <span class="tag ok">measured</span></h3><p>Native code through C: about 5 to 6 ms against about 300 ms for Python on the speed tasks, and within about 1.2&times; of hand-written C.</p></article>
+      <article class="card tilt rv" style="--d:2"><span class="num" aria-hidden="true">03</span><h3>Near Python in cost <span class="tag ok">measured</span></h3><p>About 1.2 to 1.3&times; Python's code tokens, and fewer than Rust's. Not cheaper than Python: the spec in the prompt and the extra thinking cost more.</p></article>
+    </div>
+    <h3 class="why-h rv">Who it is for</h3>
+    <div class="trio">
+      <article class="card rv"><p class="kicker">Agent harnesses</p><p>A code-execution tool without a VM per call.</p></article>
+      <article class="card rv" style="--d:1"><p class="kicker">Cheap models at volume</p><p>One way to do each thing, strict types and errors that carry their own fix.</p></article>
+      <article class="card rv" style="--d:2"><p class="kicker">Evaluation builders</p><p>Deterministic, replayable programs: the same output on every backend.</p></article>
+    </div>
+    <h3 class="why-h rv">What sets it apart</h3>
+    <div class="trio">
+      <article class="card rv"><p class="kicker">Compile-time</p><h3>Capabilities as compile errors</h3><p>Using a power you didn't declare is an ordinary error with a code, a position and a hint. Coming in v0.6.</p></article>
+      <article class="card rv" style="--d:1"><p class="kicker">Published numbers</p><h3>A compiler that repairs</h3><p><code class="i">nyra check --fix</code> applies every fix that is certain, with no model call. Sonnet 96% to 100%; the numbers that did not move are published too.</p></article>
+      <article class="card rv" style="--d:2"><p class="kicker">Part of the type check</p><h3>Examples that run while compiling</h3><p><code class="i">ex sq(3) == 9</code> is evaluated at compile time, so a function that is wrong for its own example is a compile error.</p></article>
+    </div>
+  </div>
+</section>
 <section class="sec" id="ideas">
   <div class="wrap">
     <div class="sec-h">
@@ -656,7 +682,7 @@ nyra run hello.nyra --js</pre></div></li>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.3</p><div><h3>Real data <span class="tag">done</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></div></div></li>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.4</p><div><h3>Self-repair <span class="tag">done</span></h3><p>Scripts without <code class="i">fn main</code>, <code class="i">nyra check --fix</code>, an MCP server for agents, Python, TypeScript, Rust and Go backends, and a harder benchmark tier.</p></div></div></li>
       <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>Libraries and speed <span class="tag">now</span></h3><p>Lambdas and comprehensions, <code class="i">ex</code> examples checked while compiling, a standard library (input, files, JSON, math, time, random), maps, script variables in functions, native code near C speed, and the first benchmark results.</p></div></div></li>
-      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Stricter and in the browser <span class="tag">next</span></h3><p>Checked integer overflow, a WebAssembly backend and a browser playground, modules of your own and a C foreign function interface.</p></div></div></li>
+      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Capabilities and modules <span class="tag">next</span></h3><p>Capabilities that deny a program everything it did not declare (<code class="i">--allow fs</code>), modules of your own, a WebAssembly backend and a browser playground, and a C foreign function interface.</p></div></div></li>
       <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v1.0</p><div><h3>Ecosystem <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></div></div></li>
     </ol>
   </div>
