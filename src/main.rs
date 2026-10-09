@@ -7,6 +7,7 @@ mod edit;
 mod examples;
 mod explain;
 mod fix;
+mod fmt;
 mod hints;
 mod ir;
 mod json;
@@ -29,6 +30,7 @@ usage:
   nyra run   <file.nyra> [-- args]   compile and run (args after `--` go to the program)
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
+  nyra fmt   <file.nyra>    rewrite the file in canonical form (fixes applied, `return`, 4 spaces)
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
   nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
@@ -45,6 +47,8 @@ options:
   --json       print errors as JSON (compile and runtime), for AI agents
   --fix        apply the fixes the errors suggest, check again, and write the
                file back if it then compiles (then run or build it as usual)
+  --strict     errors stay errors: without it, an error that has exactly one certain
+               fix is repaired in memory (the file is not written) and reported as a warning
   --time       show how long each step took
 
 safety (for programs you did not write, or agents that run unsupervised):
@@ -124,6 +128,8 @@ struct Opts {
     json: bool,
     time: bool,
     fix: bool,
+    /// Do not repair errors in memory (see `--strict`).
+    strict: bool,
     /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
     prog_args: Vec<String>,
     /// `--interp`: run in the interpreter.
@@ -177,6 +183,7 @@ fn parse_args() -> Result<Opts, String> {
         json: false,
         time: false,
         fix: false,
+        strict: false,
         prog_args: Vec::new(),
         interp: false,
         sandbox: false,
@@ -237,6 +244,7 @@ fn parse_args() -> Result<Opts, String> {
                     opts.max_output = Some(n);
                 }
             }
+            "--strict" => opts.strict = true,
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -245,7 +253,7 @@ fn parse_args() -> Result<Opts, String> {
         positional.insert(0, "run".into());
     }
     match positional.as_slice() {
-        [cmd, file] if ["run", "build", "check", "test"].contains(&cmd.as_str()) => {
+        [cmd, file] if ["run", "build", "check", "test", "fmt"].contains(&cmd.as_str()) => {
             opts.cmd = cmd.clone();
             opts.file = file.clone();
             Ok(opts)
@@ -341,16 +349,13 @@ fn real_main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let src = match std::fs::read_to_string(&opts.file) {
+    let mut src = match std::fs::read_to_string(&opts.file) {
         Ok(s) => s,
         Err(e) => return fail(format!("cannot read `{}`: {e}", opts.file)),
     };
 
-    if opts.cmd == "test" {
-        return match opts.grant() {
-            Ok(g) => test(&opts, &src, &g),
-            Err(msg) => fail(msg),
-        };
+    if opts.cmd == "fmt" {
+        return fmt::run(&opts.file, &src, opts.out.as_deref(), opts.json);
     }
 
     let grant = match opts.grant() {
@@ -358,6 +363,16 @@ fn real_main() -> ExitCode {
         Err(msg) => return fail(msg),
     };
     let compile = |s: &str| compile_granted(s, &grant, &cli_flag);
+    // `test` checks the program and its capabilities; the examples are what it runs
+    let check_only = |s: &str| {
+        let prog = front(s)?;
+        let errs = caps::enforce(&prog, &grant, &cli_flag);
+        if errs.is_empty() {
+            Ok(prog)
+        } else {
+            Err(errs)
+        }
+    };
     if opts.interpreted() && opts.cmd == "build" {
         return fail("--interp, --sandbox and the limit flags are for `nyra run`: `build` makes a native executable or source code");
     }
@@ -367,13 +382,16 @@ fn real_main() -> ExitCode {
 
     let start = Instant::now();
     let mut fixed = 0;
-    let prog = match compile(&src) {
+    let mut warnings: Vec<fix::Applied> = Vec::new();
+    let builder: &dyn Fn(&str) -> Result<ast::Program, Vec<diag::Diag>> = if opts.cmd == "test" { &check_only } else { &compile };
+    let prog = match builder(&src) {
         Ok(p) => p,
         Err(diags) => {
-            // --fix: apply the fixes and check again; the file changes only if it then compiles
-            let repaired = if opts.fix { fix::repair(&src, diags.clone(), compile) } else { None };
+            // --fix: apply the fixes and check again; the file changes only if it then compiles.
+            // Without --strict the same happens in memory, and each fix is reported as a warning.
+            let repaired = if opts.fix || !opts.strict { fix::repair(&src, diags.clone(), builder) } else { None };
             match repaired {
-                Some(r) => {
+                Some(r) if opts.fix => {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {
                         return fail(format!("cannot write `{}`: {e}", opts.file));
                     }
@@ -385,6 +403,12 @@ fn real_main() -> ExitCode {
                         fix::diff(&src, &r.text)
                     );
                     fixed = r.fixed;
+                    src = r.text;
+                    r.value
+                }
+                Some(r) => {
+                    warnings = r.applied;
+                    src = r.text;
                     r.value
                 }
                 None => {
@@ -403,6 +427,18 @@ fn real_main() -> ExitCode {
             }
         }
     };
+    if !warnings.is_empty() {
+        if opts.json && opts.cmd != "check" {
+            eprintln!("{{\"warnings\":{}}}", diag::render_json_warnings(&warnings, &opts.file));
+        } else if !opts.json {
+            eprint!("{}", diag::render_warnings_human(&warnings, &opts.file));
+            eprintln!("nyra: {} fix(es) applied in memory; run with --fix to write them to {}", warnings.len(), opts.file);
+        }
+    }
+
+    if opts.cmd == "test" {
+        return test(&opts, &src, prog);
+    }
 
     // warnings do not stop the build; `check --json` lists them in its JSON instead
     if !(opts.json && opts.cmd == "check") {
@@ -410,11 +446,12 @@ fn real_main() -> ExitCode {
     }
     if opts.cmd == "check" {
         if opts.json {
-            let json = diag::render_json(&[], &opts.file);
-            match fixed {
-                0 => println!("{json}"),
-                n => println!("{},\"fixed\":{n}}}", &json[..json.len() - 1]),
+            let mut json = diag::render_json(&[], &opts.file);
+            if fixed > 0 {
+                json = format!("{},\"fixed\":{fixed}}}", &json[..json.len() - 1]);
             }
+            json = with_applied(json, &warnings, &opts.file);
+            println!("{json}");
         } else {
             eprintln!("nyra: no errors ({})", ms(start.elapsed()));
         }
@@ -440,29 +477,8 @@ fn real_main() -> ExitCode {
 }
 
 /// `nyra test`: runs every example and reports each one that fails; exit code 1 if any does.
-fn test(opts: &Opts, src: &str, grant: &caps::Grant) -> ExitCode {
+fn test(opts: &Opts, src: &str, mut prog: ast::Program) -> ExitCode {
     let start = Instant::now();
-    let front = |src: &str| {
-        let prog = front(src)?;
-        let errs = caps::enforce(&prog, grant, cli_flag);
-        if errs.is_empty() {
-            Ok(prog)
-        } else {
-            Err(errs)
-        }
-    };
-    let mut prog = match front(src) {
-        Ok(p) => p,
-        Err(diags) => {
-            if opts.json {
-                println!("{}", diag::render_json(&diags, &opts.file));
-            } else {
-                eprint!("{}", diag::render_human(&diags, &opts.file, src));
-                eprintln!("nyra: {} error(s)", diags.len());
-            }
-            return ExitCode::from(1);
-        }
-    };
     let out = examples::run(&mut prog);
     if opts.json {
         println!("{}", examples::json(&out, &opts.file));
@@ -860,4 +876,21 @@ fn find_cc() -> Option<String> {
         }
     }
     ["gcc", "clang", "cc", "tcc"].into_iter().find(|cc| Command::new(cc).arg("--version").output().is_ok()).map(String::from)
+}
+
+/// `check --json` has one `warnings` array: the compiler's warnings and the fixes applied in memory.
+fn with_applied(json: String, applied: &[fix::Applied], file: &str) -> String {
+    if applied.is_empty() {
+        return json;
+    }
+    let list = diag::render_json_warnings(applied, file);
+    let items = &list[1..list.len() - 1];
+    match json.find("\"warnings\":[") {
+        Some(i) => {
+            let at = i + "\"warnings\":[".len();
+            let sep = if json[at..].starts_with(']') { "" } else { "," };
+            format!("{}{items}{sep}{}", &json[..at], &json[at..])
+        }
+        None => format!("{},\"warnings\":{list}}}", &json[..json.len() - 1]),
+    }
 }

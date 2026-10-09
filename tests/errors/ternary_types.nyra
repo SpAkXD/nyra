@@ -1,0 +1,6 @@
+// expect: E0212
+fn main() {
+    let n = 3
+    let x = n > 2 ? 1 : "no"
+    print(x)
+}

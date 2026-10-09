@@ -1,0 +1,14 @@
+// main() may be called from any function; if no bare main() line stands among the top-level statements, main also runs after them
+var depth = 0
+fn main() {
+    depth += 1
+    print("main", depth)
+    if depth < 3 { main() }
+}
+fn again() {
+    if depth < 5 { main() }
+}
+for i in 0..2 {
+    print("top", i)
+}
+again()

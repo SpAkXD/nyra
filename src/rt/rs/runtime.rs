@@ -507,6 +507,15 @@ fn ny_mget<'a, K: Clone + Eq + std::hash::Hash + NyShow, V: Clone>(m: &'a NyMap<
     }
 }
 
+/// `m[k]` to change: the map is copied first when it is shared; E0248 when the key is missing.
+fn ny_mat_mut<'a, K: Clone + Eq + std::hash::Hash + NyShow, V: Clone>(m: &'a mut Rc<NyMap<K, V>>, k: &K, line: u32, col: u32) -> &'a mut V {
+    let i = match m.index.get(k) {
+        Some(&i) => i,
+        None => ny_fail("E0248", &format!("key {} is not in the map", ny_show(k)), "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col),
+    };
+    &mut Rc::make_mut(m).ents[i].as_mut().expect("an entry the index names").1
+}
+
 fn ny_mget_or<'a, K: Clone + Eq + std::hash::Hash, V: Clone>(m: &'a NyMap<K, V>, k: &K, d: &'a V) -> &'a V {
     match m.index.get(k) {
         Some(&i) => &m.ents[i].as_ref().expect("an entry the index names").1,

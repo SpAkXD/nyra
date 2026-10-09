@@ -570,7 +570,7 @@ impl Gen<'_> {
         self.f.local(*t).name.is_none()
             && place.root != *t
             && matches!(b.kind, StmtKind::Drop(d) if d == *t)
-            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) if mentions(i, *t)))
+            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) | Step::Key(i, _) if mentions(i, *t)))
     }
 
     /// `NYRT_ELEMS(T, xs)[nyrt_ix(xs, i, line, col)]`: element `i` of the array `xs` (an
@@ -834,6 +834,22 @@ impl Gen<'_> {
                     lv = self.elem_slot(&lv, root, elem, i, *span);
                     t = elem;
                 }
+                Step::Key(key, span) => {
+                    // the map is about to change below this point; a missing key is E0248
+                    let (kt, vt) = t.map_kv().expect("verified: a map");
+                    self.line(&format!("nyrt_map_unique(&{lv});"));
+                    let p = self.fresh("p");
+                    let line = format!(
+                        "{ct} *{p} = ({ct} *)nyrt_map_at({lv}, {}, {}, {});",
+                        self.addr(key, kt),
+                        span.line,
+                        span.col,
+                        ct = ctype(vt)
+                    );
+                    self.line(&line);
+                    lv = format!("(*{p})");
+                    t = vt;
+                }
                 Step::Field(k) => {
                     let info = self.m.structs.get(t).expect("verified: a struct");
                     lv = format!("{lv}.{}", field(info, *k as usize));
@@ -862,6 +878,7 @@ impl Gen<'_> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
@@ -1322,7 +1339,7 @@ fn expr_ok(e: &Expr, x: LocalId, u: &mut ArrUse) -> bool {
 
 fn place_ok(p: &Place, x: LocalId, u: &mut ArrUse) -> bool {
     p.path.iter().all(|s| match s {
-        Step::Index(i, _) => expr_ok(i, x, u),
+        Step::Index(i, _) | Step::Key(i, _) => expr_ok(i, x, u),
         Step::Field(_) => true,
     })
 }

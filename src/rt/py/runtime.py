@@ -385,6 +385,14 @@ def ny_unique_item(xs, i):
     return v
 
 
+def ny_unique_key(m, k, kt, line, col):
+    """`m[k]` made unique for a write (E0248 when the key is missing)."""
+    v = ny_mget(m, k, kt, line, col)
+    if v.ny_shared:
+        v = m[k] = ny_copy(v)
+    return v
+
+
 def ny_unique_attr(obj, name):
     """The field `name` of `obj` made unique for a write."""
     v = getattr(obj, name)

@@ -585,12 +585,29 @@ impl<'a> Gen<'a> {
         let n = p.path.len();
         if t.elem().is_some() && (n > 0 || unique) {
             self.line(&format!("{lv} = nyUnique({lv})"));
-        } else if t.map_kv().is_some() && n == 0 && unique {
+        } else if t.map_kv().is_some() && (n > 0 || unique) {
             self.line(&format!("{lv} = nyMUnique({lv})"));
         }
         for (k, step) in p.path.iter().enumerate() {
             let last = k + 1 == n;
             match step {
+                Step::Key(key, span) => {
+                    // `m[k]`: a pointer to the value under the key (E0248 when it is missing)
+                    t = t.map_kv().expect("verified: a map").1;
+                    let array = t.elem().is_some();
+                    let map = t.map_kv().is_some();
+                    let ptr = self.fresh("p");
+                    self.line(&format!("{ptr} := nyMSlot({lv}, {}, {}, {})", self.arg(key), span.line, span.col));
+                    if last && !(unique && (array || map)) {
+                        return format!("(*{ptr})");
+                    }
+                    if array {
+                        self.line(&format!("*{ptr} = nyUnique(*{ptr})"));
+                    } else if map {
+                        self.line(&format!("*{ptr} = nyMUnique(*{ptr})"));
+                    }
+                    lv = format!("(*{ptr})");
+                }
                 Step::Index(i, span) => {
                     t = t.elem().expect("verified: an array");
                     let elem = format!("{lv}.items[nyCheck({lv}, {}, {}, {})]", self.arg(i), span.line, span.col);
@@ -629,6 +646,7 @@ impl<'a> Gen<'a> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }

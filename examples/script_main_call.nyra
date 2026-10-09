@@ -1,0 +1,8 @@
+// a bare `main()` line runs main right there (and it is not run again at the end)
+fn main() {
+    print("in main")
+}
+
+print("before")
+main()
+print("after")

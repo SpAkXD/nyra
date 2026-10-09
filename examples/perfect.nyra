@@ -9,11 +9,11 @@ fn divisor_sum(n: int) -> int {
         }
         d = d + 1
     }
-    ret sum
+    return sum
 }
 
 fn is_perfect(n: int) -> bool {
-    ret n > 1 && divisor_sum(n) == n
+    return n > 1 && divisor_sum(n) == n
 }
 
 for n in 1..10000 {

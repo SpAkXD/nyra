@@ -1,0 +1,43 @@
+// `c ? a : b` is the same as `if c { a } else { b }`: lower than `||`, right-associative
+fn abs_of(x: int) -> int = x < 0 ? -x : x
+
+fn grade(score: int) -> str = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "F"
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    print(abs_of(-5), abs_of(7))
+    print(grade(95), grade(85), grade(72), grade(10))
+    let a = 3
+    let b = 4
+    print(a > b || a == 3 ? "yes" : "no")
+    print(a < b && b < 10 ? a + b : a - b)
+    // the branches are evaluated only when chosen
+    let xs = [1, 2, 3]
+    let i = 5
+    let v = i < xs.len() ? xs[i] : -1
+    print(v)
+    let p = Point(x: a > 1 ? 10 : 20, y: b > 9 ? 30 : 40)
+    print(p)
+    let m = ["k": a == 3 ? "three" : "other"]
+    print(m, [a > 1 ? 1 : 2, 3])
+    print("a is {a % 2 == 0 ? "even" : "odd"}")
+    let long = a == 3
+        ? "line one"
+        : "line two"
+    print(long)
+    let words = ["x", "yy", "zzz"].map(w => w.len() > 1 ? w.upper() : w)
+    print(words)
+    let nested = a > 0 ? b > 5 ? 1 : 2 : 3
+    print(nested)
+    for k in 0..4 {
+        print(k % 2 == 0 ? "even" : "odd", end: " ")
+    }
+    print("")
+    let f = 1.5
+    let g = f > 1.0 ? f * 2.0 : f
+    print(g)
+}

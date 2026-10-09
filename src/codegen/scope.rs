@@ -241,7 +241,7 @@ fn writes(ss: &[Stmt], info: &mut Info) {
 fn place_locals(p: &Place, f: &mut dyn FnMut(LocalId)) {
     f(p.root);
     for s in &p.path {
-        if let Step::Index(i, _) = s {
+        if let Step::Index(i, _) | Step::Key(i, _) = s {
             each_local(i, f);
         }
     }

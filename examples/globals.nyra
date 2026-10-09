@@ -14,18 +14,18 @@ fn tokenize(src: str) -> [Token] {
         let kind = if w[0].is_digit() { "num" } else { "op" }
         out.push(Token(kind: kind, value: w))
     }
-    ret out
+    return out
 }
 
 fn peek() -> str {
-    if pos < tokens.len() { ret tokens[pos].value }
-    ret ""
+    if pos < tokens.len() { return tokens[pos].value }
+    return ""
 }
 
 fn advance() -> str {
     let v = peek()
     pos += 1
-    ret v
+    return v
 }
 
 // recursive descent over the script's tokens
@@ -36,7 +36,7 @@ fn expr() -> int {
         let rhs = int(advance())
         total = if op == "+" { total + rhs } else { total - rhs }
     }
-    ret total
+    return total
 }
 
 // a function that declares its own `pos` cannot see the script's, but still calls one that does
@@ -48,7 +48,7 @@ fn count_ops() -> int {
         advance()
         pos += 1
     }
-    ret n
+    return n
 }
 
 // a parameter with the name of a script variable: the function uses the parameter

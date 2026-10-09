@@ -20,7 +20,7 @@ fn total(o: Order) -> float {
     for it in o.items {
         sum += it.price * float(it.count)
     }
-    ret sum
+    return sum
 }
 
 let pen = Item(name: "pen \"blue\"", tags: ["office", "ü"], price: 1.5, count: 3)

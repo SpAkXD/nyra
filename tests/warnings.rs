@@ -103,10 +103,15 @@ fn dollar_brace_does_not_hide_an_error() {
     let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap();
     assert_eq!(warnings[0].get("code").and_then(|c| c.as_str()), Some("E0260"));
 
-    let out = nyra().current_dir(&dir).args(["check", "a.nyra"]).output().unwrap();
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "a.nyra"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
     assert!(err.contains("warning[E0260]") && err.contains("error[E0201]"), "{err}");
+
+    // without --strict the one possible fix (`${{root}}`) is applied in memory and reported
+    let out = nyra().current_dir(&dir).args(["check", "a.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stderr(&out).contains("E0201"), "{}", stderr(&out));
 }
 
 #[test]

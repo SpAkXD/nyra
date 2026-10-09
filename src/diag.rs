@@ -181,6 +181,46 @@ fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
     out
 }
 
+/// The fixes that were applied automatically, for people: one warning each.
+pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> String {
+    let mut out = String::new();
+    for a in applied {
+        let d = &a.diag;
+        out += &format!("warning[{}]: fixed automatically: {}\n", d.code, d.msg);
+        out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
+        let num = d.span.line.to_string();
+        let pad = " ".repeat(num.len());
+        out += &format!("{pad} |\n{num} | {}\n", a.line);
+        if let Some(p) = &a.preview {
+            out += &format!("{pad} = applied: {p}\n");
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// The `warnings` array: one object per applied fix, with the `code`, `message`, position, the
+/// `applied` text (what the changed lines look like now) and the `fix` edits.
+pub fn render_json_warnings(applied: &[crate::fix::Applied], file: &str) -> String {
+    let items: Vec<String> = applied
+        .iter()
+        .map(|a| {
+            let d = &a.diag;
+            format!(
+                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"applied\":{}{}}}",
+                d.code,
+                json_str(&d.msg),
+                json_str(file),
+                d.span.line,
+                d.span.col,
+                a.preview.as_deref().map(json_str).unwrap_or_else(|| "null".into()),
+                fix_json(&d.fix)
+            )
+        })
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
 pub fn render_json(diags: &[Diag], file: &str) -> String {
     format!("{{\"ok\":{},\"errors\":{}{}}}", diags.is_empty(), render_json_errors(diags, file), warnings_json(file))
 }

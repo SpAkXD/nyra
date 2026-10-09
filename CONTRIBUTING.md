@@ -70,7 +70,7 @@ hand to check one program the same way.
   wrong with the names and types involved (what was expected, what was found); the hint says how to fix
   it, with corrected code where possible. Every error needs a hint: agents rely on it.
 - If the mistake has exactly one possible repair, add it after the hint: `.hint(h).fix(vec![Edit::replace(span,
-  "return", "ret")])` (`src/diag.rs`). An edit names the text it replaces, so a wrong position drops the fix
+  "elif", "else if")])` (`src/diag.rs`). An edit names the text it replaces, so a wrong position drops the fix
   instead of damaging code. Never guess: with alternatives, give a hint and no fix. Add a pair to
   `tests/fix.rs`.
 - Add `tests/errors/<name>.nyra` whose first line is `// expect: E0xxx`. A program that needs command-line

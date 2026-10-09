@@ -1,7 +1,7 @@
 // Arguments, operands and string parts are evaluated left to right on every backend.
 fn note(label: str, value: int) -> int {
     print("eval {label}")
-    ret value
+    return value
 }
 
 fn add(a: int, b: int) -> int = a + b

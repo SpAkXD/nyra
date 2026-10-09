@@ -161,6 +161,11 @@ impl Verifier<'_> {
                     self.expect(i, Ty::Int, "index")?;
                     t.elem().ok_or_else(|| format!("index into {}", t.name()))?
                 }
+                Step::Key(k, _) => {
+                    let (kt, vt) = t.map_kv().ok_or_else(|| format!("key of {}", t.name()))?;
+                    self.expect(k, kt, "key")?;
+                    vt
+                }
                 Step::Field(k) => {
                     let info = self.m.structs.get(t).ok_or_else(|| format!("field of {}", t.name()))?;
                     info.fields.get(*k as usize).map(|f| f.1).ok_or("field out of range")?

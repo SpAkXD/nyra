@@ -150,6 +150,13 @@ impl MapVal {
         self.live
     }
 
+    fn get_mut(&mut self, k: &Value) -> Result<Option<&mut Value>, Stop> {
+        Ok(match self.index.get(&Self::key(k)?) {
+            Some(&i) => self.ents[i].as_mut().map(|e| &mut e.1),
+            None => None,
+        })
+    }
+
     fn get(&self, k: &Value) -> Result<Option<&Value>, Stop> {
         Ok(self.index.get(&Self::key(k)?).and_then(|&i| self.ents[i].as_ref().map(|e| &e.1)))
     }
@@ -305,6 +312,8 @@ enum Flow {
 enum At {
     Index(i64, Span),
     Field(usize),
+    /// `m[k]` changed in place (E0248 at the `[` when the key is missing)
+    Key(Value, Span),
 }
 
 pub struct Interp<'m> {
@@ -630,6 +639,20 @@ impl<'m> Interp<'m> {
                 }
                 (At::Field(k), Value::Struct(_, fields)) => {
                     Rc::make_mut(fields).get_mut(*k).ok_or_else(|| bug("a field that does not exist"))?
+                }
+                (At::Key(k, span), Value::Map(mv)) => {
+                    if mv.get(k)?.is_none() {
+                        return Err(fail(
+                            "E0248",
+                            format!("key {} is not in the map", show(self.m, k)),
+                            "check with `m.has(k)` first, or read it with `m.get(k, default)`",
+                            *span,
+                        ));
+                    }
+                    if Rc::strong_count(mv) > 1 {
+                        self.tick(mv.len() as u64)?;
+                    }
+                    Rc::make_mut(mv).get_mut(k)?.ok_or_else(|| bug("a map entry that vanished"))?
                 }
                 _ => return Err(bug("a place that does not match its value")),
             };
@@ -1120,6 +1143,7 @@ fn resolve(strs: &[Rc<String>], locals: &[Value], p: &Place) -> Result<Vec<At>, 
                 _ => Err(bug("an index that is not an int")),
             },
             Step::Field(k) => Ok(At::Field(*k as usize)),
+            Step::Key(e, span) => Ok(At::Key(eval(strs, locals, e)?, *span)),
         })
         .collect()
 }

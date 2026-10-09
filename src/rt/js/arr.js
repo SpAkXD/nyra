@@ -107,6 +107,15 @@ function ny_mget(m, k, kt, line, col) {
     return m.get(k);
 }
 function ny_mgetor(m, k, d) { return m.has(k) ? m.get(k) : d; }
+// `m[k]`, made unique for a change in place (copied and stored back when it was shared).
+function ny_mu(m, k, kt, line, col) {
+    let v = ny_mget(m, k, kt, line, col);
+    if (v !== null && typeof v === "object" && v.ny_s) {
+        v = ny_cp(v);
+        m.set(k, v);
+    }
+    return v;
+}
 function ny_aindex(a, v) {
     for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
     return -1;

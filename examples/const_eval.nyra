@@ -1,9 +1,9 @@
 // compile-time evaluation: pure calls with constant arguments fold; the output never changes
 fn fib(n: int) -> int {
     if n < 2 {
-        ret n
+        return n
     }
-    ret fib(n - 1) + fib(n - 2)
+    return fib(n - 1) + fib(n - 2)
 }
 
 fn greet(name: str, n: int) -> str {
@@ -11,14 +11,14 @@ fn greet(name: str, n: int) -> str {
     for i in 0..n {
         s += "{name}{i},"
     }
-    ret s.upper()
+    return s.upper()
 }
 
 fn half(x: float) -> float = x / 2.0
 
 fn noisy(n: int) -> int {
     print("side effect {n}")
-    ret n
+    return n
 }
 
 fn spin(n: int) -> int {
@@ -28,7 +28,7 @@ fn spin(n: int) -> int {
         acc = (acc * 31 + i) % 1000003
         i += 1
     }
-    ret acc
+    return acc
 }
 
 let m = 7

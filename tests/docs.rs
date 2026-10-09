@@ -116,7 +116,7 @@ fn nyra_code_blocks_in_the_docs_compile() {
             let path = dir.join(format!("{}-{}.nyra", file.replace(['/', '.'], "_"), i + 1));
             std::fs::write(&path, &source).unwrap();
 
-            let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--json"]).arg(&path).output().unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--strict", "--json"]).arg(&path).output().unwrap();
             assert!(
                 out.status.success(),
                 "{file}: code block {} does not compile\n{source}\n{}",
@@ -159,13 +159,14 @@ fn card() -> String {
     body.to_string()
 }
 
-/// `nyra check --json` of a program: (passed, the whole JSON text).
+/// `nyra check --strict --json` of a program: (passed, the whole JSON text). Strict, so a mistake
+/// the compiler would repair in memory (`and` for `&&`) still counts as not compiling.
 fn check_source(name: &str, source: &str) -> (bool, String) {
     let dir = std::env::temp_dir().join("nyra-card-test");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(format!("{name}.nyra"));
     std::fs::write(&path, source).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--json"]).arg(&path).output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--strict", "--json"]).arg(&path).output().unwrap();
     (out.status.success(), String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
@@ -268,7 +269,6 @@ fn what_the_agent_card_says_is_not_in_nyra_is_an_error() {
         ("closures", "let f = x => x + 1\n"),
         ("methods on structs", "struct P { x: int }\nfn P.f(p: P) -> int = p.x\n"),
         ("`match`", "let a = 1\nmatch a { 1 => print(1) }\n"),
-        ("`?:`", "let a = true ? 1 : 2\n"),
         ("`elif`", "let a = 1\nif a == 1 { print(1) } elif a == 2 { print(2) }\n"),
         ("`and`/`or`/`not`", "let a = true and false\n"),
         ("`i++`", "var i = 0\ni++\n"),

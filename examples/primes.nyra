@@ -1,11 +1,11 @@
 fn is_prime(n: int) -> bool {
-    if n < 2 { ret false }
+    if n < 2 { return false }
     var d = 2
     while d * d <= n {
-        if n % d == 0 { ret false }
+        if n % d == 0 { return false }
         d = d + 1
     }
-    ret true
+    return true
 }
 
 var count = 0

@@ -40,6 +40,8 @@ pub enum Tok {
     RBracket,
     Comma,
     Colon,
+    /// `?` of a ternary: `c ? a : b`
+    Question,
     Dot,
     Arrow,
     /// `=>` of a lambda: `x => x * 2`
@@ -114,7 +116,7 @@ impl Tok {
             Tok::While => "while",
             Tok::For => "for",
             Tok::In => "in",
-            Tok::Ret => "ret",
+            Tok::Ret => "return",
             Tok::True => "true",
             Tok::False => "false",
             Tok::Struct => "struct",
@@ -130,6 +132,7 @@ impl Tok {
             Tok::RBracket => "]",
             Tok::Comma => ",",
             Tok::Colon => ":",
+            Tok::Question => "?",
             Tok::Dot => ".",
             Tok::Arrow => "->",
             Tok::FatArrow => "=>",
@@ -261,7 +264,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "while" => Tok::While,
                 "for" => Tok::For,
                 "in" => Tok::In,
-                "ret" => Tok::Ret,
+                "return" | "ret" => Tok::Ret,
                 "true" => Tok::True,
                 "false" => Tok::False,
                 "struct" => Tok::Struct,
@@ -481,6 +484,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ']' => Some(Tok::RBracket),
             ',' => Some(Tok::Comma),
             ':' => Some(Tok::Colon),
+            '?' => Some(Tok::Question),
             '+' => Some(Tok::Plus),
             '-' => Some(Tok::Minus),
             '*' => Some(Tok::Star),
@@ -585,6 +589,7 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
                 | Tok::Ge
                 | Tok::And
                 | Tok::Or
+                | Tok::Question
         )
     };
     // `-` too: a statement cannot start with a negation. Not `++` or `--` (`i--`, `--i`), which
@@ -595,7 +600,9 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
     let mut out: Vec<Token> = Vec::with_capacity(toks.len());
     for (i, t) in toks.iter().enumerate() {
         if t.tok == Tok::Newline && i > 0 {
-            let starts = op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| n.tok == Tok::Dot);
+            // (a line may also start with the `:` of a ternary)
+            let starts =
+                op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| matches!(n.tok, Tok::Dot | Tok::Colon));
             let ends = op(toks.get(i - 1), i.checked_sub(2).map(|k| &toks[k]));
             if starts || ends {
                 continue;

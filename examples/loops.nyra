@@ -7,7 +7,7 @@ fn first_square_above(n: int) -> int {
         }
         i += 1
     }
-    ret i
+    return i
 }
 
 // continue skips the rest of the body; a for loop still steps

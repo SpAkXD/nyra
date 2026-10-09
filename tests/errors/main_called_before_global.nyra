@@ -1,0 +1,6 @@
+// expect: E0217
+fn main() {
+    print(total)
+}
+main()
+var total = 1

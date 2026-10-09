@@ -245,7 +245,9 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         }
     }
 
-    match prog.funcs.iter().find(|f| f.name == "main") {
+    // a program with statements and its own `fn main` has it under another name (`USER_MAIN`)
+    let entry = prog.funcs.iter().find(|f| f.name == USER_MAIN).or_else(|| prog.funcs.iter().find(|f| f.name == "main"));
+    match entry {
         None => c.errs.push(
             Diag::new(
                 "E0208",
@@ -269,7 +271,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                     format!("`main` must take no parameters and return nothing, but it {}", problems.join(" and ")),
                     f.span,
                 )
-                .hint("write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`"),
+                .hint("write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`"),
             );
         }
         _ => {}
@@ -310,6 +312,16 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         c.example(&mut ex.expr, ex.forall.as_ref());
     }
     prog.globals = c.finish_globals();
+    // the user's `main` is named `USER_MAIN` inside; messages call it `main`
+    let hidden = format!("`{USER_MAIN}`");
+    for d in &mut c.errs {
+        if d.msg.contains(&hidden) {
+            d.msg = d.msg.replace(&hidden, "`main`");
+        }
+        if let Some(h) = d.hint.as_mut().filter(|h| h.contains(&hidden)) {
+            *h = h.replace(&hidden, "`main`");
+        }
+    }
     c.errs
 }
 
@@ -604,7 +616,6 @@ impl Checker {
         }
         if let Some(h) = hints::undefined_variable(name) {
             let to = match name {
-                "return" => Some("ret"),
                 "True" => Some("true"),
                 "False" => Some("false"),
                 _ => None,
@@ -806,7 +817,7 @@ impl Checker {
     fn no_value_hint(&self, e: &Expr) -> String {
         match &e.kind {
             ExprKind::Call(n, _) if self.fns.contains_key(n.as_str()) => format!(
-                "`{n}` has no return type, so it returns nothing: call it on its own line, or declare `fn {n}(...) -> int` and `ret` a value"
+                "`{n}` has no return type, so it returns nothing: call it on its own line, or declare `fn {n}(...) -> int` and `return` a value"
             ),
             ExprKind::Call(n, _) => format!("`{n}` only has an effect and returns nothing: use it as a statement on its own line"),
             ExprKind::Method(_, m, _) => {
@@ -973,33 +984,33 @@ impl Checker {
         self.g.end_func(&f.name);
         if f.ret != Type::Void && !returns(&f.body) {
             let value = sample(f.ret);
-            // the last line computes the value: it only lacks the `ret`
+            // the last line computes the value: it only lacks the `return`
             let fix = match f.body.last() {
-                Some(Stmt { kind: StmtKind::Expr(e), span }) if e.ty == f.ret => Some(Edit::insert(*span, "ret ")),
+                Some(Stmt { kind: StmtKind::Expr(e), span }) if e.ty == f.ret => Some(Edit::insert(*span, "return ")),
                 _ => None,
             };
             let hint = match f.body.last().map(|s| &s.kind) {
                 Some(StmtKind::Expr(e)) if e.ty == f.ret => match show(e) {
                     Some(s) => format!(
-                        "the last line computes a value, but Nyra does not return it by itself: write `ret {s}` (or make this a one-line function: `fn {}(...) -> {} = {s}`)",
+                        "the last line computes a value, but Nyra does not return it by itself: write `return {s}` (or make this a one-line function: `fn {}(...) -> {} = {s}`)",
                         f.name,
                         f.ret.name()
                     ),
-                    None => "the last line computes a value, but Nyra does not return it by itself: start it with `ret`".to_string(),
+                    None => "the last line computes a value, but Nyra does not return it by itself: start it with `return`".to_string(),
                 },
                 Some(StmtKind::If { els: None, .. }) => {
-                    format!("the last `if` has no `else`: add `ret {value}` after it, or an `else {{ ret {value} }}` branch")
+                    format!("the last `if` has no `else`: add `return {value}` after it, or an `else {{ return {value} }}` branch")
                 }
-                Some(StmtKind::If { .. }) => "every branch of the last `if`/`else` must end with `ret`".to_string(),
+                Some(StmtKind::If { .. }) => "every branch of the last `if`/`else` must end with `return`".to_string(),
                 Some(StmtKind::While { .. } | StmtKind::For { .. } | StmtKind::ForEach { .. }) => {
-                    format!("a loop may run zero times: add `ret {value}` after the loop")
+                    format!("a loop may run zero times: add `return {value}` after the loop")
                 }
-                _ => format!("end the function with `ret`, e.g. `ret {value}`"),
+                _ => format!("end the function with `return`, e.g. `return {value}`"),
             };
             self.errs.push(
                 Diag::new(
                     "E0207",
-                    format!("function `{}` is declared `-> {}` but not every path ends with `ret`", f.name, f.ret.name()),
+                    format!("function `{}` is declared `-> {}` but not every path ends with `return`", f.name, f.ret.name()),
                     f.span,
                 )
                 .hint(hint)
@@ -1175,11 +1186,11 @@ impl Checker {
                         self.errs.push(
                             Diag::new(
                                 "E0207",
-                                format!("`ret` returns a value, but `{}` has no return type (it returns nothing)", self.fname),
+                                format!("`return` returns a value, but `{}` has no return type (it returns nothing)", self.fname),
                                 e.span,
                             )
                             .hint(format!(
-                                "add the return type to the signature: `fn {}(...) -> {shown}`, or write `ret` without a value",
+                                "add the return type to the signature: `fn {}(...) -> {shown}`, or write `return` without a value",
                                 self.fname
                             )),
                         );
@@ -1191,8 +1202,16 @@ impl Checker {
                 None => {
                     if self.ret != Type::Void {
                         self.errs.push(
-                            Diag::new("E0207", format!("`ret` needs a value: `{}` returns `{}`", self.fname, self.ret.name()), span)
-                                .hint(format!("write `ret {}` (or any other `{}` value)", sample(self.ret), self.ret.name())),
+                            Diag::new(
+                                "E0207",
+                                format!("`return` needs a value: `{}` returns `{}`", self.fname, self.ret.name()),
+                                span,
+                            )
+                            .hint(format!(
+                                "write `return {}` (or any other `{}` value)",
+                                sample(self.ret),
+                                self.ret.name()
+                            )),
                         );
                     }
                 }
@@ -1303,7 +1322,7 @@ impl Checker {
             span,
         )
         .hint(format!(
-            "values created in an `arena` are freed at its `}}`: change `{name}` after the block, or return the result from a function whose body is the `arena` (`ret` copies it out)"
+            "values created in an `arena` are freed at its `}}`: change `{name}` after the block, or return the result from a function whose body is the `arena` (`return` copies it out)"
         ))
     }
 
@@ -1314,12 +1333,13 @@ impl Checker {
             self.errs.push(lambda::changes(e, what, span));
             return;
         }
-        // `m[k] = v` replaces a map's value; a value inside one cannot change in place
-        if map_step(e, what == "assign to") {
+        // a value inside a map can change in place (`m[k].push(x)`, `m[k].n += 1`), but not be passed
+        // `inout`: the callee would hold a reference into the map
+        if what == "pass `inout`" && map_step(e) {
             let shown = show(e).unwrap_or_else(|| "m[k]".into());
             self.errs.push(
-                Diag::new("E0229", format!("cannot {what} `{shown}`: a value inside a map cannot change in place"), span)
-                    .hint("change a copy and store it back: `var v = m[k]`, change `v`, then `m[k] = v`"),
+                Diag::new("E0229", format!("cannot {what} `{shown}`: a value inside a map cannot be passed `inout`"), span)
+                    .hint("change a copy and store it back: `var v = m[k]`, `f(inout v)`, then `m[k] = v`"),
             );
             return;
         }
@@ -1514,7 +1534,7 @@ impl Checker {
             ExprKind::Call(name, args) => self.call(name, args, span, want),
             ExprKind::If(cond, a, b) => {
                 let c = self.expr(cond);
-                self.cond(c, cond, "an `if` value");
+                self.cond(c, cond, "a conditional value (`if` or `? :`)");
                 let ta = self.expr_with(a, want);
                 let tb = self.expr_with(b, if ta.is_unknown() { want } else { Some(ta) });
                 if ta == Type::Void || tb == Type::Void {
@@ -1522,7 +1542,7 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0212",
-                            format!("the {which} branch of this `if` value produces no value: {} returns nothing", call_text(branch)),
+                            format!("the {which} branch of this conditional value (`if` or `? :`) produces no value: {} returns nothing", call_text(branch)),
                             span,
                         )
                         .hint("each branch must be an expression with a value, e.g. `if c { 1 } else { 2 }`; use an `if` statement for actions"),
@@ -1556,7 +1576,11 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0212",
-                            format!("the branches of this `if` value have different types: `{}` and `{}`", ta.name(), tb.name()),
+                            format!(
+                                "the branches of this conditional value (`if` or `? :`) have different types: `{}` and `{}`",
+                                ta.name(),
+                                tb.name()
+                            ),
                             span,
                         )
                         .hint(hint)
@@ -2429,7 +2453,6 @@ impl Checker {
                 let plain = matches!(args, [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
                 match (name, &*args) {
                     ("println" | "puts" | "writeln", _) if plain => fix.push(Edit::replace(span, name, "print")),
-                    ("return", _) => fix.push(Edit::replace(span, name, "ret")),
                     // `len(xs)` is `xs.len()`
                     ("len" | "length" | "size", [a]) if matches!(tys[0], Type::Array(_) | Type::Str) => {
                         if let ExprKind::Var(v) = &a.kind {
@@ -2913,12 +2936,11 @@ fn flatten_add<'a>(e: &'a Expr, parts: &mut Vec<&'a Expr>, nodes: &mut Vec<Span>
     }
 }
 
-/// True if the place `e` reaches into a value inside a map: `m[k].x`, `m[k][0]`. With `top_ok`,
-/// `e` itself may be `m[k]` (an assignment replaces the value).
-fn map_step(e: &Expr, top_ok: bool) -> bool {
+/// True if the place `e` is, or reaches into, a value inside a map: `m[k]`, `m[k].x`, `m[k][0]`.
+fn map_step(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::Index(b, _) if b.ty.map_kv().is_some() => !top_ok || map_step(b, false),
-        ExprKind::Index(b, _) | ExprKind::Field(b, _) => map_step(b, false),
+        ExprKind::Index(b, _) if b.ty.map_kv().is_some() => true,
+        ExprKind::Index(b, _) | ExprKind::Field(b, _) => map_step(b),
         _ => false,
     }
 }

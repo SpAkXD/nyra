@@ -6,7 +6,7 @@ struct Player {
 
 fn loud(x: int) -> int {
     print("  visit", x)
-    ret x
+    return x
 }
 
 let xs = [3, -1, 4, -1, 5, 9, -2, 6]

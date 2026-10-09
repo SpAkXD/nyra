@@ -6,13 +6,14 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
-- A program is `fn` and `struct` definitions and `ex` examples in any order plus either `fn main()` or statements at
-  the top level (a script: they run in order, like the body of `main`). A script's top-level `let`s
-  and `var`s are visible in every function (see Script variables).
+- A program is `fn` and `struct` definitions and `ex` examples in any order plus `fn main()`, or statements at
+  the top level (a script: they run in order, like the body of `main`), or both: the statements run first,
+  then `main()` is called. A script's top-level `let`s and `var`s are visible in every function (see Script variables).
 - Every function signature is fully typed. Local variable types are inferred.
 - One statement per line. There are no semicolons. A line may break inside `( )`, between the
   elements of `[ ]`, after a binary operator, and before a binary operator or a `.` (the next line
-  starts with it). `ret`, `break` and `continue` may follow a statement on its line: `{ print("no") ret }`.
+  starts with it). `return`, `break` and `continue` may follow a statement on its line: `{ print("no") return }`.
+- `return` is written in full; `ret` is accepted as the same keyword, so older programs still work.
 - A `fn` written (indented) inside a function body is an ordinary function; it cannot see the locals around it.
 - Everything is evaluated left to right: arguments, operands and the parts of a string.
 - Names use letters, digits and `_` (`row_count`, `x2`, `_`). Comments: `// to end of line`.
@@ -36,16 +37,16 @@ There are no optional types and no null: `int?` and `Option<int>` are E0262. Ret
 ## Functions
 ```nyra
 fn add(a: int, b: int) -> int {
-    ret a + b
+    return a + b
 }
 fn square(x: int) -> int = x * x      // one-line function: the expression is returned
 fn greet(name: str) = print("hi {name}")
 fn show(n: int) {                     // no `->`: returns nothing
-    if n < 0 { ret }                  // a bare `ret` leaves early
+    if n < 0 { return }               // a bare `return` leaves early
     print(n)
 }
 ```
-`fn main()` has no parameters and no return type. A function with a return type must `ret` on
+`fn main()` has no parameters and no return type. A function with a return type must `return` on
 every path. Functions may call each other in any order, and recurse. Parameters cannot be changed:
 copy one into a `var`, or declare it `inout` (see Values).
 
@@ -53,8 +54,8 @@ copy one into a `var`, or declare it `inout` (see Values).
 ```nyra
 fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
 fn dist(a: int, b: int) -> int {
-    if a > b { ret a - b }
-    ret b - a
+    if a > b { return a - b }
+    return b - a
 }
 ex dist(7, 2) == 5, dist(2, 7) == 5
 ```
@@ -107,6 +108,18 @@ call (E0217). Examples cannot call a function that uses script variables (E0254)
 passed `inout` to a function that uses it is E0237; a lambda cannot call a function that changes one
 (E0214).
 
+With a `fn main` too, the top-level statements run first, in order, and then `main()` is called (a bare
+`main()` line among the statements calls it there instead, and it is not called again). The variables
+declared inside `main` stay `main`'s; the script variables are visible in it like in any function.
+```nyra
+var visits = 0
+fn main() {
+    visits += 1                 // a script variable
+    print("main", visits)       // main 2
+}
+visits = 1
+```
+
 ## Control flow
 ```nyra
 let x = 3
@@ -127,7 +140,8 @@ Conditions must be `bool` (write `x != 0`, not `x`). `{` stays on the line of it
 immutable and may go unused. `for v in xs` loops over `xs` as it was when the loop started.
 
 `if` can also be a value. It needs an `else`, and each branch is one expression of the same type:
-`let max = if a > b { a } else { b }`.
+`let max = if a > b { a } else { b }`. The conditional operator is the same thing: `let max = a > b ? a : b`
+(see Operators).
 
 ## Operators (high to low precedence)
 | ops | types |
@@ -139,8 +153,11 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 | `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char → bool |
 | `==` `!=` | same type on both sides → bool (strings, arrays and structs compare by content) |
 | `&&` `\|\|` | bool; the right side runs only when needed |
+| `c ? a : b` | `c` is a `bool`; the same as `if c { a } else { b }`: `a` and `b` have one type, and only the chosen one is evaluated |
 
-Parentheses group: `(a + b) * c`.
+Parentheses group: `(a + b) * c`. `?:` binds weaker than `||` and groups to the right: `a ? b : c ? d : e` is
+`a ? b : (c ? d : e)`, and `x > 0 || y > 0 ? 1 : 2` tests `x > 0 || y > 0`. A line may break before or after the
+`?` and the `:`.
 
 ## Builtins
 | call | meaning |
@@ -245,8 +262,10 @@ for name in ages { print(name) }        // the keys, in insertion order
 | `m.keys()` · `m.values()` | arrays, in insertion order |
 
 Maps are values like arrays (`var b = a` copies), compare with `==` by content in any order and print
-as `["ann": 31, "bob": 27]` (`[:]` when empty). Changing a map needs a `var`; a value inside a map does
-not change in place (`m[k].x = 1` is an error: copy, change, `m[k] = v`).
+as `["ann": 31, "bob": 27]` (`[:]` when empty). Changing a map needs a `var`. A value inside a map changes
+in place, the same way an element of an array does: `m[k].push(x)`, `m[k].count += 1`, `m[k][i] = v`,
+`m[k] += 1`, `m[k].sort()` (the key must exist, else E0248; `inout m[k]` is E0229). A copy of the map never
+sees the change.
 
 ## Structs
 ```nyra
@@ -291,7 +310,7 @@ when. They are checked at compile time, and a program prints the same with or wi
 | write | effect |
 |---|---|
 | `free(x)` | frees `x`'s value now; later uses of `x` are error E0239 (a `var` may get a new value) |
-| `arena { ... }` | its values are freed at `}`; outer strings, arrays and structs holding them are read-only inside, so a result leaves only through `ret` (copied out) |
+| `arena { ... }` | its values are freed at `}`; outer strings, arrays and structs holding them are read-only inside, so a result leaves only through `return` (copied out) |
 | `keep(x)` | `x`'s value is never freed |
 
 `free` and `keep` take a local `let`/`var` holding a `str`, an array or a struct that contains one.
@@ -390,6 +409,14 @@ A **warning** is a likely mistake that the language allows: the build goes on an
 unchanged. It prints to stderr as `warning[E0260]: ...` and `--json` lists it under `"warnings"` (next to
 `"errors"`, with the same fields). E0260 is the only one so far: `"${x}"` prints a `$` and then the value;
 write `"{x}"`, or `"$" + str(x)` when the dollar sign is meant.
+
+An error that has exactly one certain repair (it carries a `fix`) is repaired by `nyra check`, `run`,
+`build` and `test` in memory: the program goes on, each repair is a warning on stderr (in `--json`
+a `warnings` array with `code`, `line`, `col`, `message`, `applied` and `fix` for each), and the file is
+not written. `--fix` writes the repaired file back, `--strict` keeps every error an error. Runtime error
+positions refer to the repaired text. `nyra fmt file.nyra` rewrites a program into canonical form: it
+applies those repairs, writes `return` (for `ret`) and indents by four spaces; it never changes what the
+program does.
 
 ## Runtime errors
 An operation that fails while the program runs stops it with exit code 101, after all earlier

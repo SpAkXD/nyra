@@ -10,10 +10,10 @@ fn make(name: str) -> User = User(name: name, tags: [name + "!"])
 fn first_long(ws: [str]) -> str {
     for w in ws {
         if w.len() > 3 {
-            ret w
+            return w
         }
     }
-    ret "none"
+    return "none"
 }
 
 fn find_pair(grid: [[str]], want: str) -> [int] {
@@ -21,16 +21,16 @@ fn find_pair(grid: [[str]], want: str) -> [int] {
         let row = grid[r]
         for c in 0..row.len() {
             if row[c] == want {
-                ret [r, c]
+                return [r, c]
             }
         }
     }
-    ret []
+    return []
 }
 
 fn quicksort(xs: [int]) -> [int] {
     if xs.len() < 2 {
-        ret xs
+        return xs
     }
     let pivot = xs[0]
     var less: [int] = []
@@ -42,7 +42,7 @@ fn quicksort(xs: [int]) -> [int] {
             more.push(x)
         }
     }
-    ret quicksort(less) + [pivot] + quicksort(more)
+    return quicksort(less) + [pivot] + quicksort(more)
 }
 
 print(first_long(["a", "bb", "cccc", "ddddd"]))

@@ -36,6 +36,19 @@ Safety (so that agents can run Nyra unsupervised)
   E0293 are the errors of a malformed or too large range.
 - Examples now also run functions that use the standard library's pure functions (`math`, `text`, `json`).
 
+Language
+- `return` is the keyword (`ret` is still accepted, so old programs run); the docs write `return`.
+- The conditional value `c ? a : b`: the same as `if c { a } else { b }`, lower than `||`, right-associative.
+- `fn main` next to top-level statements is valid (E0101 no longer): the statements run first, in order,
+  then `main()` is called; a bare `main()` line among them calls it there.
+- A value inside a map changes in place on every backend: `m[k].push(x)`, `m[k].field = v`, `m[k][i] = v`,
+  `m[k].sort()` (E0229 now only forbids `inout m[k]`); a missing key is E0248, as for `m[k]`.
+
+Tools
+- An error with exactly one certain fix is repaired in memory by `check`, `run`, `build` and `test`, and
+  reported as a warning (`warnings` in `--json`); `--fix` writes the file, `--strict` keeps errors as errors.
+- `nyra fmt file.nyra`: canonical form (fixes applied, `return`, four-space indentation).
+
 ## v0.5 (unreleased)
 
 Language

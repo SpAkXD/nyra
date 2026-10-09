@@ -757,7 +757,8 @@ class NyraLang(Language):
         write_source(wd / "main.nyra", code)
         started = time.perf_counter()
         # The file name is relative so diagnostics read `"file":"main.nyra"` (no temp paths in the prompt).
-        chk = run_limited([self.bin, "check", "main.nyra", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
+        # --strict: errors stay errors (without it nyra repairs the unambiguous ones in memory, which would hide them)
+        chk = run_limited([self.bin, "check", "main.nyra", "--strict", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
         if chk.spawn_error:
             raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {chk.spawn_error}")
         out = chk.stdout.decode("utf-8", "replace").strip()

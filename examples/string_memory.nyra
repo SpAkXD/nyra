@@ -1,10 +1,10 @@
 // strings are reference counted: every path here must free each string exactly once
 fn label(n: int) -> str {
     if n == 0 {
-        ret "zero"
+        return "zero"
     }
     let s = "n" + str(n)
-    ret s
+    return s
 }
 
 fn longest(a: str, b: str) -> str = if a.len() >= b.len() { a } else { b }
@@ -13,10 +13,10 @@ fn find_first_long(limit: int) -> str {
     for i in 0..limit {
         let s = "x".repeat(i)
         if s.len() > 3 {
-            ret s
+            return s
         }
     }
-    ret ""
+    return ""
 }
 
 fn count_until_stop(text: str) -> int {
@@ -31,7 +31,7 @@ fn count_until_stop(text: str) -> int {
         }
         n += 1
     }
-    ret n
+    return n
 }
 
 print(label(0))

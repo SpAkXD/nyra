@@ -162,7 +162,7 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
 
         if item.kind == "warning" {
             // a warning does not stop the build: the Wrong program compiles and lists exactly this warning
-            let (ok, json) = check_json(&dir, &wrong_file);
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(ok, "{code}: a warning example must compile:\n{wrong}\n{json:?}");
             let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap_or(&[]);
             assert!(!warnings.is_empty(), "{code}: the Wrong example gives no warning");
@@ -174,7 +174,7 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
                 );
                 assert!(w.get("hint").and_then(|h| h.as_str()).is_some_and(|h| !h.is_empty()), "{code}: the warning has no hint");
             }
-            let (_, fixed_json) = check_json(&dir, &fixed_file);
+            let (_, fixed_json) = check_json_with(&dir, &fixed_file, &fixed_flags);
             assert!(fixed_json.get("warnings").is_none(), "{code}: the Fixed example still warns:\n{fixed}");
         } else if item.kind == "runtime error" {
             // ...and the wrong one compiles but stops at run time with that code
@@ -341,7 +341,7 @@ fn explain_suggests_a_code_for_an_unknown_one() {
 fn compile_errors_point_to_explain() {
     let dir = scratch("errors-db-explain");
     std::fs::write(dir.join("a.nyra"), "fn main() {\n    let count = 1\n    print(cout)\n}\n").unwrap();
-    let out = nyra().current_dir(&dir).args(["check", "a.nyra"]).output().unwrap();
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "a.nyra"]).output().unwrap();
     let err = stderr(&out);
     assert!(err.contains("error[E0201]: undefined variable `cout`"), "{err}");
     assert!(err.contains("  = hint: did you mean `count`?\n  = explain: nyra explain E0201\n"), "{err}");

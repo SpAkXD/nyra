@@ -6,7 +6,7 @@ fn dice(n: int) -> [int] {
     for i in 0..n {
         rolls.push(random.range(1, 7))
     }
-    ret rolls
+    return rolls
 }
 
 random.seed(42)

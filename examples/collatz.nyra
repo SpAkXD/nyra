@@ -6,7 +6,7 @@ fn steps(n: int) -> int {
         if x % 2 == 0 { x = x / 2 } else { x = 3 * x + 1 }
         count = count + 1
     }
-    ret count
+    return count
 }
 
 print(steps(27))
