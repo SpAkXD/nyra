@@ -1,16 +1,7 @@
-// choose how many 50, 25 and 10 cent coins; any number of 5 cent coins then fits, and 1 cent coins fill the rest
-fn main() {
-    let amount = 175
-    var count = 0
-    for halves in 0..amount / 50 + 1 {
-        let after_halves = amount - 50 * halves
-        for quarters in 0..after_halves / 25 + 1 {
-            let after_quarters = after_halves - 25 * quarters
-            for dimes in 0..after_quarters / 10 + 1 {
-                let rest = after_quarters - 10 * dimes
-                count = count + rest / 5 + 1
-            }
-        }
-    }
-    print(count)
+let amount = 175
+// ways[a]: the number of ways to make a cents with the coins considered so far
+var ways = [1] + [0].repeat(amount)
+for coin in [1, 5, 10, 25, 50] {
+    for a in coin..amount + 1 { ways[a] += ways[a - coin] }
 }
+print(ways[amount])

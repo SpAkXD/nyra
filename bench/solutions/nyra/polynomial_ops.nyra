@@ -1,7 +1,5 @@
 // a polynomial is its coefficients by degree: [c0, c1, c2, ...], without trailing zeros
 
-fn abs(x: int) -> int = if x < 0 { -x } else { x }
-
 fn trimmed(p: [int]) -> [int] {
     var q = p
     while q.len() > 0 && q[q.len() - 1] == 0 { q.pop() }
@@ -30,45 +28,31 @@ fn parse_term(inout p: [int], term: str, sign: int) {
 fn parse(text: str) -> [int] {
     var p: [int] = []
     let parts = text.split(" ")
-    var first = parts[0]
-    var sign = 1
-    if first.starts_with("-") {
-        sign = -1
-        first = first.slice(1, first.len())
-    }
-    parse_term(inout p, first, sign)
-    var i = 1
-    while i < parts.len() {
-        let s = if parts[i] == "-" { -1 } else { 1 }
-        parse_term(inout p, parts[i + 1], s)
-        i += 2
+    let negative = parts[0].starts_with("-")
+    parse_term(inout p, if negative { parts[0].slice(1, parts[0].len()) } else { parts[0] }, if negative { -1 } else { 1 })
+    for i in 1..parts.len() step 2 {
+        parse_term(inout p, parts[i + 1], if parts[i] == "-" { -1 } else { 1 })
     }
     ret trimmed(p)
 }
+ex parse("2x + 3 - x") == [3, 1], parse("-x^2 + x^2") == [], parse("x^3 - 4") == [-4, 0, 0, 1]
 
 fn add(a: [int], b: [int]) -> [int] {
     var r = a
-    for e in 0..b.len() { add_term(inout r, b[e], e) }
+    for e, c in b { add_term(inout r, c, e) }
     ret trimmed(r)
 }
 
-fn scaled(a: [int], k: int) -> [int] {
-    var r = a
-    for e in 0..r.len() { r[e] *= k }
-    ret trimmed(r)
-}
-
-fn sub(a: [int], b: [int]) -> [int] = add(a, scaled(b, -1))
+fn sub(a: [int], b: [int]) -> [int] = add(a, b.map(c => -c))
 
 fn mul(a: [int], b: [int]) -> [int] {
     var r: [int] = []
-    for i in 0..a.len() {
-        for j in 0..b.len() {
-            add_term(inout r, a[i] * b[j], i + j)
-        }
+    for i, x in a {
+        for j, y in b { add_term(inout r, x * y, i + j) }
     }
     ret trimmed(r)
 }
+ex mul([1, 1], [1, 1]) == [1, 2, 1], mul([], [1]) == []
 
 fn derivative(a: [int]) -> [int] {
     var r: [int] = []
@@ -79,64 +63,49 @@ fn derivative(a: [int]) -> [int] {
 // a with b substituted for x (Horner)
 fn compose(a: [int], b: [int]) -> [int] {
     var r: [int] = []
-    var e = a.len() - 1
-    while e >= 0 {
-        r = add(mul(r, b), [a[e]])
-        e -= 1
-    }
+    for e in a.len() - 1..-1 step -1 { r = add(mul(r, b), [a[e]]) }
     ret r
 }
 
-fn value_at(a: [int], x: int) -> int {
-    var r = 0
-    var e = a.len() - 1
-    while e >= 0 {
-        r = r * x + a[e]
-        e -= 1
-    }
-    ret r
-}
+fn value_at(a: [int], x: int) -> int = a.reversed().fold(0, (r, c) => r * x + c)
+ex value_at([1, 2, 3], 2) == 17, value_at([], 5) == 0
 
 fn show(a: [int]) -> str {
     var out = ""
-    var e = a.len() - 1
-    while e >= 0 {
+    for e in a.len() - 1..-1 step -1 {
         let c = a[e]
-        if c != 0 {
-            if out == "" {
-                if c < 0 { out += "-" }
-            } else {
-                out += if c < 0 { " - " } else { " + " }
-            }
-            let m = abs(c)
-            if e == 0 {
-                out += str(m)
-            } else {
-                if m != 1 { out += str(m) }
-                out += if e == 1 { "x" } else { "x^{e}" }
-            }
+        if c == 0 { continue }
+        if out == "" {
+            if c < 0 { out += "-" }
+        } else {
+            out += if c < 0 { " - " } else { " + " }
         }
-        e -= 1
+        let m = abs(c)
+        if e == 0 {
+            out += str(m)
+        } else {
+            if m != 1 { out += str(m) }
+            out += if e == 1 { "x" } else { "x^{e}" }
+        }
     }
     ret if out == "" { "0" } else { out }
 }
+ex show([-1, 0, 3]) == "3x^2 - 1", show([0, 1]) == "x", show([]) == "0"
 
-fn main() {
-    let p = parse("2x + 3 - x + x^2 - 4")
-    let q = parse("-x^3 + 2x - 1 + x^3 + x^2 + x^10 - x^10")
-    let r = parse("5 - 3x^2")
-    let pq = mul(p, q)
-    let qr = compose(q, r)
-    print("P = {show(p)}")
-    print("Q = {show(q)}")
-    print("R = {show(r)}")
-    print("P + Q = {show(add(p, q))}")
-    print("P - R = {show(sub(p, r))}")
-    print("P * Q = {show(pq)}")
-    print("(P * Q)' = {show(derivative(pq))}")
-    print("Q(R) = {show(qr)}")
-    print("R(P) - R = {show(sub(compose(r, p), r))}")
-    print("P - P = {show(sub(p, p))}")
-    print("P(-3) = {value_at(p, -3)}")
-    print("Q(R)(2) = {value_at(qr, 2)}")
-}
+let p = parse("2x + 3 - x + x^2 - 4")
+let q = parse("-x^3 + 2x - 1 + x^3 + x^2 + x^10 - x^10")
+let r = parse("5 - 3x^2")
+let pq = mul(p, q)
+let qr = compose(q, r)
+print("P = {show(p)}")
+print("Q = {show(q)}")
+print("R = {show(r)}")
+print("P + Q = {show(add(p, q))}")
+print("P - R = {show(sub(p, r))}")
+print("P * Q = {show(pq)}")
+print("(P * Q)' = {show(derivative(pq))}")
+print("Q(R) = {show(qr)}")
+print("R(P) - R = {show(sub(compose(r, p), r))}")
+print("P - P = {show(sub(p, p))}")
+print("P(-3) = {value_at(p, -3)}")
+print("Q(R)(2) = {value_at(qr, 2)}")

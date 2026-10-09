@@ -1,13 +1,4 @@
-fn next(n: int) -> int {
-    var x = n
-    var sum = 0
-    while x > 0 {
-        let d = x % 10
-        sum = sum + d * d
-        x = x / 10
-    }
-    ret sum
-}
+fn next(n: int) -> int = str(n).chars().map(c => int(str(c))).map(d => d * d).sum()
 
 // a slow and a fast walker: they meet on a cycle, unless the fast one reaches 1 first
 fn is_happy(n: int) -> bool {
@@ -19,15 +10,14 @@ fn is_happy(n: int) -> bool {
     }
     ret fast == 1
 }
+ex is_happy(19), is_happy(7), !is_happy(4)
 
-fn main() {
-    var found = 0
-    var n = 1
-    while found < 10 {
-        if is_happy(n) {
-            print(n)
-            found = found + 1
-        }
-        n = n + 1
+var found = 0
+var n = 1
+while found < 10 {
+    if is_happy(n) {
+        print(n)
+        found += 1
     }
+    n += 1
 }

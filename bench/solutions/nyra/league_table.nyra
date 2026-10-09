@@ -10,107 +10,65 @@ struct Team {
     h2h: int
 }
 
-struct Match {
-    home: str
-    away: str
-    hg: int
-    ag: int
-}
+struct Match { home: str, away: str, hg: int, ag: int }
 
-fn find(teams: [Team], name: str) -> int {
-    for i in 0..teams.len() {
-        if teams[i].name == name { ret i }
-    }
-    ret -1
-}
-
-fn record(inout t: Team, scored: int, conceded: int) {
-    t.p += 1
-    t.gf += scored
-    t.ga += conceded
-    if scored > conceded {
-        t.w += 1
-        t.pts += 3
-    } else if scored == conceded {
-        t.d += 1
-        t.pts += 1
-    } else {
-        t.l += 1
-    }
-}
+var teams: [Team] = []
 
 fn gd(t: Team) -> int = t.gf - t.ga
-
 fn tied(a: Team, b: Team) -> bool = a.pts == b.pts && gd(a) == gd(b) && a.gf == b.gf
-
-fn points_for(scored: int, conceded: int) -> int {
-    if scored > conceded { ret 3 }
-    if scored == conceded { ret 1 }
-    ret 0
-}
-
-// a ranks above b
-fn before(a: Team, b: Team) -> bool {
-    if a.pts != b.pts { ret a.pts > b.pts }
-    if gd(a) != gd(b) { ret gd(a) > gd(b) }
-    if a.gf != b.gf { ret a.gf > b.gf }
-    if a.h2h != b.h2h { ret a.h2h > b.h2h }
-    ret a.name < b.name
-}
-
-fn right(s: str, w: int) -> str = " ".repeat(w - s.len()) + s
-fn left(s: str, w: int) -> str = s + " ".repeat(w - s.len())
-
+fn points_for(scored: int, conceded: int) -> int = if scored > conceded { 3 } else if scored == conceded { 1 } else { 0 }
 fn signed(n: int) -> str = if n > 0 { "+{n}" } else { "{n}" }
+fn index_of(name: str) -> int = teams.find_index(t => t.name == name)
+
+fn record(i: int, scored: int, conceded: int) {
+    teams[i].p += 1
+    teams[i].gf += scored
+    teams[i].ga += conceded
+    teams[i].pts += points_for(scored, conceded)
+    if scored > conceded {
+        teams[i].w += 1
+    } else if scored == conceded {
+        teams[i].d += 1
+    } else {
+        teams[i].l += 1
+    }
+}
 
 fn line(pos: str, team: str, cols2: [str], cols3: [str]) -> str {
-    var parts = [right(pos, 3), left(team, 6)]
-    for c in cols2 { parts.push(right(c, 2)) }
-    for c in cols3 { parts.push(right(c, 3)) }
-    ret parts.join(" ")
+    ret ([pos.pad_left(3), team.pad_right(6)] + cols2.map(c => c.pad_left(2)) + cols3.map(c => c.pad_left(3))).join(" ")
 }
 
-fn main() {
-    let results = "Ash 2-1 Bay; Cove 2-0 Ash; Dale 2-2 Ash; Ash 0-2 Elm; Fir 0-0 Ash; Bay 3-2 Cove; Dale 0-2 Bay; Elm 1-2 Bay; Bay 2-2 Fir; Cove 1-3 Dale; Cove 2-0 Elm; Fir 1-0 Cove; Elm 0-0 Dale; Dale 2-2 Fir; Elm 3-2 Fir"
-    var matches: [Match] = []
-    var teams: [Team] = []
-    for text in results.split("; ") {
-        let w = text.split(" ")
-        let score = w[1].split("-")
-        let m = Match(home: w[0], away: w[2], hg: int(score[0]), ag: int(score[1]))
-        matches.push(m)
-        for name in [m.home, m.away] {
-            if find(teams, name) < 0 {
-                teams.push(Team(name: name, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, h2h: 0))
-            }
-        }
-        let h = find(teams, m.home)
-        let a = find(teams, m.away)
-        record(inout teams[h], m.hg, m.ag)
-        record(inout teams[a], m.ag, m.hg)
-    }
-    for m in matches {
-        let h = find(teams, m.home)
-        let a = find(teams, m.away)
-        if tied(teams[h], teams[a]) {
-            teams[h].h2h += points_for(m.hg, m.ag)
-            teams[a].h2h += points_for(m.ag, m.hg)
+let results = "Ash 2-1 Bay; Cove 2-0 Ash; Dale 2-2 Ash; Ash 0-2 Elm; Fir 0-0 Ash; Bay 3-2 Cove; Dale 0-2 Bay; Elm 1-2 Bay; Bay 2-2 Fir; Cove 1-3 Dale; Cove 2-0 Elm; Fir 1-0 Cove; Elm 0-0 Dale; Dale 2-2 Fir; Elm 3-2 Fir"
+var matches: [Match] = []
+for text in results.split("; ") {
+    let w = text.split(" ")
+    let score = w[1].split("-")
+    let m = Match(home: w[0], away: w[2], hg: int(score[0]), ag: int(score[1]))
+    matches.push(m)
+    for name in [m.home, m.away] {
+        if index_of(name) < 0 {
+            teams.push(Team(name: name, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, h2h: 0))
         }
     }
-    for i in 1..teams.len() {
-        let t = teams[i]
-        var j = i
-        while j > 0 && before(t, teams[j - 1]) {
-            teams[j] = teams[j - 1]
-            j -= 1
-        }
-        teams[j] = t
+    record(index_of(m.home), m.hg, m.ag)
+    record(index_of(m.away), m.ag, m.hg)
+}
+// head-to-head points, from the matches between teams that are level on everything else
+for m in matches {
+    let h = index_of(m.home)
+    let a = index_of(m.away)
+    if tied(teams[h], teams[a]) {
+        teams[h].h2h += points_for(m.hg, m.ag)
+        teams[a].h2h += points_for(m.ag, m.hg)
     }
-    print(line("Pos", "Team", ["P", "W", "D", "L"], ["GF", "GA", "GD", "Pts"]))
-    for i in 0..teams.len() {
-        let t = teams[i]
-        let c2 = ["{t.p}", "{t.w}", "{t.d}", "{t.l}"]
-        let c3 = ["{t.gf}", "{t.ga}", signed(gd(t)), "{t.pts}"]
-        print(line("{i + 1}", t.name, c2, c3))
-    }
+}
+// sort_by is stable: sort by the least important key first
+teams.sort_by(t => t.name)
+teams.sort_by(t => -t.h2h)
+teams.sort_by(t => -t.gf)
+teams.sort_by(t => -gd(t))
+teams.sort_by(t => -t.pts)
+print(line("Pos", "Team", ["P", "W", "D", "L"], ["GF", "GA", "GD", "Pts"]))
+for i, t in teams {
+    print(line("{i + 1}", t.name, ["{t.p}", "{t.w}", "{t.d}", "{t.l}"], ["{t.gf}", "{t.ga}", signed(gd(t)), "{t.pts}"]))
 }

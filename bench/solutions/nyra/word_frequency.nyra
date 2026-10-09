@@ -1,9 +1,4 @@
-struct Count {
-    word: str
-    n: int
-}
-
-fn stop_words() -> [str] = "the and for are but not you all any can had her was one our out his has".split(" ")
+let stops = "the and for are but not you all any can had her was one our out his has".split(" ")
 
 fn strip_quotes(s: str) -> str {
     var a = 0
@@ -12,64 +7,26 @@ fn strip_quotes(s: str) -> str {
     while b > a && s[b - 1] == '\'' { b -= 1 }
     ret s.slice(a, b)
 }
+ex strip_quotes("''hi''") == "hi", strip_quotes("rabbit's") == "rabbit's", strip_quotes("''") == ""
 
-fn add_word(inout counts: [Count], word: str) {
-    for i in 0..counts.len() {
-        if counts[i].word == word {
-            counts[i].n += 1
-            ret
-        }
-    }
-    counts.push(Count(word: word, n: 1))
+let text = "The rabbit's hole was deep; the rabbit didn't stop. 'Down, down, down!' said Alice -- and down-hill she went, past rabbit-holes, shelves, maps and jars. Was it 3 o'clock? It wasn't: the clock said half-past 4. ''Curious,'' thought Alice, ''curiouser'' -- and the rabbit's watch said nothing at all. DOWN went the jars, down went the maps; Alice didn't mind, didn't care, didn't stop. The rabbit's ears twitched; the rabbit whispered."
+// words are runs of letters and apostrophes; anything else separates them
+let cleaned = [if (c >= 'a' && c <= 'z') || c == '\'' { c } else { ' ' } for c in text.lower()].join("")
+var counts: [str: int] = [:]
+for candidate in cleaned.split(" ") {
+    let w = strip_quotes(candidate)
+    if w.len() >= 3 && !stops.contains(w) { counts[w] = counts.get(w, 0) + 1 }
 }
-
-fn before(a: Count, b: Count) -> bool {
-    if a.n != b.n { ret a.n > b.n }
-    ret a.word < b.word
+var words = counts.keys()
+words.sort()
+var longest = words[0]
+for w in words {
+    if w.len() > longest.len() { longest = w }
 }
-
-fn main() {
-    let text = "The rabbit's hole was deep; the rabbit didn't stop. 'Down, down, down!' said Alice -- and down-hill she went, past rabbit-holes, shelves, maps and jars. Was it 3 o'clock? It wasn't: the clock said half-past 4. ''Curious,'' thought Alice, ''curiouser'' -- and the rabbit's watch said nothing at all. DOWN went the jars, down went the maps; Alice didn't mind, didn't care, didn't stop. The rabbit's ears twitched; the rabbit whispered."
-    let stops = stop_words()
-    var candidates: [str] = []
-    var current = ""
-    for c in text.lower() + " " {
-        if (c >= 'a' && c <= 'z') || c == '\'' {
-            current += str(c)
-        } else if current != "" {
-            candidates.push(current)
-            current = ""
-        }
-    }
-    var counts: [Count] = []
-    for cand in candidates {
-        let w = strip_quotes(cand)
-        if w.len() >= 3 && !stops.contains(w) {
-            add_word(inout counts, w)
-        }
-    }
-    for i in 1..counts.len() {
-        let c = counts[i]
-        var j = i
-        while j > 0 && before(c, counts[j - 1]) {
-            counts[j] = counts[j - 1]
-            j -= 1
-        }
-        counts[j] = c
-    }
-    var shown = 0
-    for c in counts {
-        if shown == 8 { break }
-        let num = "{c.n}"
-        print(c.word + ".".repeat(24 - c.word.len() - num.len()) + num)
-        shown += 1
-    }
-    print("distinct: {counts.len()}")
-    var longest = counts[0].word
-    for c in counts {
-        if c.word.len() > longest.len() || (c.word.len() == longest.len() && c.word < longest) {
-            longest = c.word
-        }
-    }
-    print("longest: {longest}")
+words.sort_by(w => -counts[w])   // stable: equal counts stay in alphabetical order
+for w in words.slice(0, 8) {
+    let num = str(counts[w])
+    print(w + ".".repeat(24 - w.len() - num.len()) + num)
 }
+print("distinct: {counts.len()}")
+print("longest: {longest}")

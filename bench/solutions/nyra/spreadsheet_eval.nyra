@@ -1,19 +1,5 @@
-struct Val {
-    err: str
-    v: int
-}
-
-struct Sheet {
-    formulas: [str]
-    cycle: [bool]
-    vals: [Val]
-    done: [bool]
-}
-
-struct Ref {
-    col: int
-    row: int
-}
+struct Val { err: str, v: int }
+struct Ref { col: int, row: int }
 
 fn ok(v: int) -> Val = Val(err: "", v: v)
 fn bad(e: str) -> Val = Val(err: e, v: 0)
@@ -21,39 +7,51 @@ fn bad(e: str) -> Val = Val(err: e, v: 0)
 fn valid(r: Ref) -> bool = r.col >= 0 && r.col < 4 && r.row >= 1 && r.row <= 5
 fn index_of_ref(r: Ref) -> int = (r.row - 1) * 4 + r.col
 fn cell_name(i: int) -> str = str("ABCD"[i % 4]) + "{i / 4 + 1}"
+ex index_of_ref(Ref(col: 1, row: 2)) == 5, cell_name(5) == "B2", valid(Ref(col: 4, row: 1)) == false
 
-fn peek(cs: [char], pos: int) -> char = if pos < cs.len() { cs[pos] } else { ' ' }
+var cs: [char] = []      // the formula being read, and the position in it
+var pos = 0
+var formulas = [""].repeat(20)
+var cycle = [false].repeat(20)   // is the cell on a cycle, or does it depend on one
+var vals = [ok(0)].repeat(20)
+var done = [false].repeat(20)
+var edges: [[int]] = []          // the cells each cell refers to
 
-// reads a cell name such as `B3` at pos
-fn read_ref(cs: [char], inout pos: int) -> Ref {
-    let col = cs[pos].code() - 'A'.code()
-    pos += 1
-    var row = 0
-    while peek(cs, pos).is_digit() {
-        row = row * 10 + cs[pos].code() - '0'.code()
+// the character `k` places after the position, or ' ' past the end
+fn peek(k: int) -> char = if pos + k < cs.len() { cs[pos + k] } else { ' ' }
+
+fn read_int() -> int {
+    var n = 0
+    while peek(0).is_digit() {
+        n = n * 10 + cs[pos].code() - '0'.code()
         pos += 1
     }
-    ret Ref(col: col, row: row)
+    ret n
+}
+
+// reads a cell name such as `B3`
+fn read_ref() -> Ref {
+    let col = cs[pos].code() - 'A'.code()
+    pos += 1
+    ret Ref(col: col, row: read_int())
 }
 
 // the cells a formula refers to (valid references only)
 fn references(formula: str) -> [int] {
-    let cs = formula.chars()
+    cs = formula.chars()
+    pos = 0
     var out: [int] = []
-    var pos = 0
     while pos < cs.len() {
-        if cs[pos].is_upper() && peek(cs, pos + 1).is_upper() {
-            while peek(cs, pos).is_upper() { pos += 1 }
+        if cs[pos].is_upper() && peek(1).is_upper() {
+            while peek(0).is_upper() { pos += 1 }
         } else if cs[pos].is_upper() {
-            let a = read_ref(cs, inout pos)
-            if peek(cs, pos) == ':' {
+            let a = read_ref()
+            if peek(0) == ':' {
                 pos += 1
-                let b = read_ref(cs, inout pos)
+                let b = read_ref()
                 if valid(a) && valid(b) {
                     for r in a.row..b.row + 1 {
-                        for c in a.col..b.col + 1 {
-                            out.push(index_of_ref(Ref(col: c, row: r)))
-                        }
+                        for c in a.col..b.col + 1 { out.push(index_of_ref(Ref(col: c, row: r))) }
                     }
                 }
             } else if valid(a) {
@@ -66,21 +64,40 @@ fn references(formula: str) -> [int] {
     ret out
 }
 
-fn cell_value(inout sheet: Sheet, i: int) -> Val {
-    if sheet.done[i] { ret sheet.vals[i] }
-    let f = sheet.formulas[i]
+// cells reachable from `from` in one or more steps
+fn reachable(from: int) -> [bool] {
+    var seen = [false].repeat(20)
+    var todo = edges[from]
+    while todo.len() > 0 {
+        let n = todo.pop()
+        if !seen[n] {
+            seen[n] = true
+            todo += edges[n]
+        }
+    }
+    ret seen
+}
+
+fn cell_value(i: int) -> Val {
+    if done[i] { ret vals[i] }
+    let f = formulas[i]
     var result = ok(0)
-    if sheet.cycle[i] {
+    if cycle[i] {
         result = bad("#CYCLE")
     } else if f.starts_with("=") {
-        let cs = f.slice(1, f.len()).chars()
-        var pos = 0
-        result = expr(inout sheet, cs, inout pos)
+        // evaluating a cell can start inside another formula: keep its place
+        let saved = cs
+        let saved_pos = pos
+        cs = f.slice(1, f.len()).chars()
+        pos = 0
+        result = expr()
+        cs = saved
+        pos = saved_pos
     } else if f != "" {
         result = ok(int(f))
     }
-    sheet.vals[i] = result
-    sheet.done[i] = true
+    vals[i] = result
+    done[i] = true
     ret result
 }
 
@@ -93,60 +110,51 @@ fn combine(op: char, a: Val, b: Val) -> Val {
     if b.v == 0 { ret bad("#DIV0") }
     ret ok(a.v / b.v)
 }
+ex combine('+', ok(2), ok(3)) == ok(5), combine('/', ok(1), ok(0)) == bad("#DIV0"), combine('*', bad("#REF"), ok(1)) == bad("#REF")
 
-fn expr(inout sheet: Sheet, cs: [char], inout pos: int) -> Val {
-    var acc = term(inout sheet, cs, inout pos)
-    while peek(cs, pos) == '+' || peek(cs, pos) == '-' {
+fn expr() -> Val {
+    var acc = term()
+    while peek(0) == '+' || peek(0) == '-' {
         let op = cs[pos]
         pos += 1
-        let rhs = term(inout sheet, cs, inout pos)
-        acc = combine(op, acc, rhs)
+        acc = combine(op, acc, term())
     }
     ret acc
 }
 
-fn term(inout sheet: Sheet, cs: [char], inout pos: int) -> Val {
-    var acc = factor(inout sheet, cs, inout pos)
-    while peek(cs, pos) == '*' || peek(cs, pos) == '/' {
+fn term() -> Val {
+    var acc = factor()
+    while peek(0) == '*' || peek(0) == '/' {
         let op = cs[pos]
         pos += 1
-        let rhs = factor(inout sheet, cs, inout pos)
-        acc = combine(op, acc, rhs)
+        acc = combine(op, acc, factor())
     }
     ret acc
 }
 
-fn factor(inout sheet: Sheet, cs: [char], inout pos: int) -> Val {
+fn factor() -> Val {
     let c = cs[pos]
     if c == '-' {
         pos += 1
-        let inner = factor(inout sheet, cs, inout pos)
-        ret combine('-', ok(0), inner)
+        ret combine('-', ok(0), factor())
     }
     if c == '(' {
         pos += 1
-        let inner = expr(inout sheet, cs, inout pos)
+        let inner = expr()
         pos += 1 // ')'
         ret inner
     }
-    if c.is_digit() {
-        var n = 0
-        while peek(cs, pos).is_digit() {
-            n = n * 10 + cs[pos].code() - '0'.code()
-            pos += 1
-        }
-        ret ok(n)
-    }
-    if peek(cs, pos + 1).is_upper() {
+    if c.is_digit() { ret ok(read_int()) }
+    if peek(1).is_upper() {
         var name = ""
-        while peek(cs, pos).is_upper() {
+        while peek(0).is_upper() {
             name += str(cs[pos])
             pos += 1
         }
         pos += 1 // '('
-        let a = read_ref(cs, inout pos)
+        let a = read_ref()
         pos += 1 // ':'
-        let b = read_ref(cs, inout pos)
+        let b = read_ref()
         pos += 1 // ')'
         if !valid(a) || !valid(b) { ret bad("#REF") }
         var total = 0
@@ -154,64 +162,37 @@ fn factor(inout sheet: Sheet, cs: [char], inout pos: int) -> Val {
         var first = true
         for r in a.row..b.row + 1 {
             for col in a.col..b.col + 1 {
-                let v = cell_value(inout sheet, index_of_ref(Ref(col: col, row: r)))
+                let v = cell_value(index_of_ref(Ref(col: col, row: r)))
                 if v.err != "" { ret v }
                 total += v.v
                 if first || v.v > best { best = v.v }
                 first = false
             }
         }
-        ret if name == "SUM" { ok(total) } else { ok(best) }
+        ret ok(if name == "SUM" { total } else { best })
     }
-    let r = read_ref(cs, inout pos)
+    let r = read_ref()
     if !valid(r) { ret bad("#REF") }
-    ret cell_value(inout sheet, index_of_ref(r))
+    ret cell_value(index_of_ref(r))
 }
 
-// cells reachable from `from` in one or more steps
-fn reachable(edges: [[int]], from: int) -> [bool] {
-    var seen = [false].repeat(edges.len())
-    var todo = edges[from]
-    while todo.len() > 0 {
-        let n = todo.pop()
-        if !seen[n] {
-            seen[n] = true
-            todo = todo + edges[n]
-        }
-    }
-    ret seen
+let filled = "A1 10; B1 =A1*2; C1 =B1+A2; D1 =SUM(A1:C1); A2 3; B2 =A2-B1/4; D2 =MAX(A1:C2)*(C2+2); A3 =B3+1; B3 =C3; C3 =A3*0; D3 =-C3; A4 =10/(A2-3); B4 =A4+1; C4 =MAX(A1:B2)+D4; D4 =E1+1; A5 =SUM(A1:D2)-(A1+B1)*-2; B5 =B1/0+D4; C5 =SUM(C4:C5); D5 =D4*0+B4"
+for entry in filled.split("; ") {
+    let parts = entry.split(" ")
+    cs = parts[0].chars()
+    pos = 0
+    formulas[index_of_ref(read_ref())] = parts[1]
 }
-
-fn main() {
-    let filled = "A1 10; B1 =A1*2; C1 =B1+A2; D1 =SUM(A1:C1); A2 3; B2 =A2-B1/4; D2 =MAX(A1:C2)*(C2+2); A3 =B3+1; B3 =C3; C3 =A3*0; D3 =-C3; A4 =10/(A2-3); B4 =A4+1; C4 =MAX(A1:B2)+D4; D4 =E1+1; A5 =SUM(A1:D2)-(A1+B1)*-2; B5 =B1/0+D4; C5 =SUM(C4:C5); D5 =D4*0+B4"
-    var formulas = [""].repeat(20)
-    for entry in filled.split("; ") {
-        let parts = entry.split(" ")
-        var p = 0
-        let r = read_ref(parts[0].chars(), inout p)
-        formulas[index_of_ref(r)] = parts[1]
-    }
-    var edges: [[int]] = []
-    for f in formulas { edges.push(references(f)) }
-    var on_cycle = [false].repeat(20)
-    for i in 0..20 {
-        on_cycle[i] = reachable(edges, i)[i]
-    }
-    var cycle = [false].repeat(20)
-    for i in 0..20 {
-        let seen = reachable(edges, i)
-        var hit = on_cycle[i]
-        for j in 0..20 {
-            if seen[j] && on_cycle[j] { hit = true }
-        }
-        cycle[i] = hit
-    }
-    var sheet = Sheet(formulas: formulas, cycle: cycle, vals: [ok(0)].repeat(20), done: [false].repeat(20))
-    for i in 0..20 {
-        if formulas[i] != "" {
-            let v = cell_value(inout sheet, i)
-            let shown = if v.err != "" { v.err } else { "{v.v}" }
-            print("{cell_name(i)} = {shown}")
-        }
-    }
+for f in formulas { edges.push(references(f)) }
+var on_cycle = [false].repeat(20)
+for i in 0..20 { on_cycle[i] = reachable(i)[i] }
+for i in 0..20 {
+    let seen = reachable(i)
+    cycle[i] = [j for j in 0..20 if seen[j] && on_cycle[j]].len() > 0
+}
+for i, f in formulas {
+    if f == "" { continue }
+    let v = cell_value(i)
+    let shown = if v.err != "" { v.err } else { "{v.v}" }
+    print("{cell_name(i)} = {shown}")
 }

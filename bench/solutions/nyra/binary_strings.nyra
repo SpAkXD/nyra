@@ -8,9 +8,4 @@ fn binary(n: int) -> str {
     ret s
 }
 
-fn main() {
-    print(binary(5))
-    print(binary(10))
-    print(binary(255))
-    print(binary(1024))
-}
+for n in [5, 10, 255, 1024] { print(binary(n)) }

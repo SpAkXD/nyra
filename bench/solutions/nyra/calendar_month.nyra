@@ -1,23 +1,9 @@
-fn cell(day: int, days: int) -> str {
-    if day < 1 || day > days {
-        ret "  "
-    }
-    ret if day < 10 { " {day}" } else { "{day}" }
-}
+fn cell(day: int, days: int) -> str = if day < 1 || day > days { "  " } else { str(day).pad_left(2) }
+ex cell(0, 31) == "  ", cell(7, 31) == " 7", cell(31, 31) == "31"
 
-fn main() {
-    let days = 31
-    let first = 2 // Monday is 0, so Wednesday is 2
-    print("Mo Tu We Th Fr Sa Su")
-    var monday = 1 - first
-    while monday <= days {
-        var line = cell(monday, days)
-        for col in 1..7 {
-            if monday + col <= days {
-                line = "{line} {cell(monday + col, days)}"
-            }
-        }
-        print(line)
-        monday += 7
-    }
+let days = 31
+let first = 2 // Monday is 0, so Wednesday is 2
+print("Mo Tu We Th Fr Sa Su")
+for monday in 1 - first..days + 1 step 7 {
+    print([cell(d, days) for d in monday..monday + 7 if d <= days].join(" "))
 }

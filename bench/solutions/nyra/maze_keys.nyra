@@ -1,131 +1,55 @@
-struct Maze {
-    cells: [[char]]
-    keys: [char]
+struct State {
+    r: int
+    c: int
+    keys: int       // the keys held, one bit per letter
+    path: str
 }
 
-fn pow2(k: int) -> int {
-    var p = 1
-    for i in 0..k { p *= 2 }
-    ret p
-}
+fn pow2(k: int) -> int = [2].repeat(k).fold(1, (acc, x) => acc * x)
 
-fn has_key(mask: int, k: int) -> bool = (mask / pow2(k)) % 2 == 1
-
-fn height(m: Maze) -> int = m.cells.len()
-fn width(m: Maze) -> int = m.cells[0].len()
-fn masks(m: Maze) -> int = pow2(m.keys.len())
-
-fn state_of(m: Maze, r: int, c: int, mask: int) -> int = (r * width(m) + c) * masks(m) + mask
-
-fn move_dr(d: int) -> int = [1, 0, 0, -1][d]
-fn move_dc(d: int) -> int = [0, -1, 1, 0][d]
-fn move_name(d: int) -> str = ["D", "L", "R", "U"][d]
-
-// the state after moving in direction d from state s, or -1 if the move is not allowed
-fn step(m: Maze, s: int, d: int) -> int {
-    let mask = s % masks(m)
-    let pos = s / masks(m)
-    let r = pos / width(m) + move_dr(d)
-    let c = pos % width(m) + move_dc(d)
-    if r < 0 || r >= height(m) || c < 0 || c >= width(m) { ret -1 }
-    let cell = m.cells[r][c]
-    if cell == '#' { ret -1 }
-    var next_mask = mask
-    if cell.is_upper() && cell != 'S' && cell != 'G' {
-        let k = m.keys.index_of(cell.lower())
-        if k < 0 || !has_key(mask, k) { ret -1 }
+// breadth first, trying D, L, R, U in that order: the first path to reach a state is the first in alphabetical order
+fn solve(grid: [str]) -> str {
+    var queue: [State] = []
+    for r, row in grid {
+        if row.contains('S') { queue.push(State(r: r, c: row.index_of('S'), keys: 0, path: "")) }
     }
-    if cell.is_lower() {
-        let k = m.keys.index_of(cell)
-        if !has_key(mask, k) { next_mask += pow2(k) }
-    }
-    ret state_of(m, r, c, next_mask)
-}
-
-fn at_goal(m: Maze, s: int) -> bool {
-    let pos = s / masks(m)
-    ret m.cells[pos / width(m)][pos % width(m)] == 'G'
-}
-
-fn solve(rows: [str]) -> str {
-    var cells: [[char]] = []
-    var keys: [char] = []
-    var start = 0
-    for r in 0..rows.len() {
-        cells.push(rows[r].chars())
-        for c in 0..rows[r].len() {
-            let ch = rows[r][c]
-            if ch.is_lower() && !keys.contains(ch) { keys.push(ch) }
-        }
-    }
-    let m = Maze(cells: cells, keys: keys)
-    for r in 0..rows.len() {
-        for c in 0..rows[r].len() {
-            if rows[r][c] == 'S' { start = state_of(m, r, c, 0) }
-        }
-    }
-    let total = height(m) * width(m) * masks(m)
-    var dist = [-1].repeat(total)
-    var order = [start]
-    dist[start] = 0
-    var best = -1
+    var seen: [str: bool] = [:]
     var head = 0
-    while head < order.len() {
-        let s = order[head]
+    while head < queue.len() {
+        let s = queue[head]
         head += 1
-        if at_goal(m, s) {
-            if best < 0 { best = dist[s] }
-            continue
-        }
         for d in 0..4 {
-            let t = step(m, s, d)
-            if t >= 0 && dist[t] < 0 {
-                dist[t] = dist[s] + 1
-                order.push(t)
+            let r = s.r + [1, 0, 0, -1][d]
+            let c = s.c + [0, -1, 1, 0][d]
+            if r < 0 || r >= grid.len() || c < 0 || c >= grid[0].len() { continue }
+            let cell = grid[r][c]
+            let path = s.path + str("DLRU"[d])
+            if cell == 'G' { ret "{path.len()} moves {path}" }
+            if cell == '#' { continue }
+            var keys = s.keys
+            if cell.is_upper() && cell != 'S' {
+                if keys / pow2(cell.lower().code() - 'a'.code()) % 2 == 0 { continue }   // a door without its key
+            } else if cell.is_lower() {
+                let bit = pow2(cell.code() - 'a'.code())
+                if keys / bit % 2 == 0 { keys += bit }
+            }
+            let state = State(r: r, c: c, keys: keys, path: path)
+            let id = "{r} {c} {state.keys}"
+            if !seen.has(id) {
+                seen[id] = true
+                queue.push(state)
             }
         }
     }
-    if best < 0 { ret "no path" }
-    // good[s]: s lies on a shortest path from S to G
-    var good = [false].repeat(total)
-    var i = order.len() - 1
-    while i >= 0 {
-        let s = order[i]
-        if at_goal(m, s) {
-            good[s] = dist[s] == best
-        } else {
-            for d in 0..4 {
-                let t = step(m, s, d)
-                if t >= 0 && dist[t] == dist[s] + 1 && good[t] { good[s] = true }
-            }
-        }
-        i -= 1
-    }
-    var path = ""
-    var s = start
-    while !at_goal(m, s) {
-        for d in 0..4 {
-            let t = step(m, s, d)
-            if t >= 0 && dist[t] == dist[s] + 1 && good[t] {
-                path += move_name(d)
-                s = t
-                break
-            }
-        }
-    }
-    ret "{best} moves {path}"
+    ret "no path"
 }
 
-fn main() {
-    let mazes = [
-        ["S...#", ".##.#", "....G"],
-        ["#########", "#S..A..G#", "#.#####.#", "#...a.#.#", "#########"],
-        ["S.B.G", "#.###", "b.A.a"],
-        ["#######", "#a#.#b#", "#.#.#.#", "#..S..#", "###A###", "###B###", "###G###"],
-        ["S.#..", ".##.#", "...#G"],
-        ["..S..", ".###.", "..G.."],
-    ]
-    for k in 0..mazes.len() {
-        print("maze {k + 1}: {solve(mazes[k])}")
-    }
-}
+let mazes = [
+    ["S...#", ".##.#", "....G"],
+    ["#########", "#S..A..G#", "#.#####.#", "#...a.#.#", "#########"],
+    ["S.B.G", "#.###", "b.A.a"],
+    ["#######", "#a#.#b#", "#.#.#.#", "#..S..#", "###A###", "###B###", "###G###"],
+    ["S.#..", ".##.#", "...#G"],
+    ["..S..", ".###.", "..G.."],
+]
+for k, grid in mazes { print("maze {k + 1}: {solve(grid)}") }

@@ -1,12 +1,13 @@
-fn rows() -> int = 5
-fn cols() -> int = 6
+let rows = 5
+let cols = 6
+var board = [['.'].repeat(cols)].repeat(rows)   // row 0 is the top row
 
-fn count_dir(board: [[char]], r: int, c: int, dr: int, dc: int) -> int {
-    let p = board[r][c]
+// how many discs of the same player follow (r, c) in the direction (dr, dc)
+fn count_dir(r: int, c: int, dr: int, dc: int) -> int {
     var n = 0
     var rr = r + dr
     var cc = c + dc
-    while rr >= 0 && rr < rows() && cc >= 0 && cc < cols() && board[rr][cc] == p {
+    while rr >= 0 && rr < rows && cc >= 0 && cc < cols && board[rr][cc] == board[r][c] {
         n += 1
         rr += dr
         cc += dc
@@ -14,59 +15,47 @@ fn count_dir(board: [[char]], r: int, c: int, dr: int, dc: int) -> int {
     ret n
 }
 
-fn wins(board: [[char]], r: int, c: int) -> bool {
+fn wins(r: int, c: int) -> bool {
     let drs = [0, 1, 1, 1]
     let dcs = [1, 0, 1, -1]
     for k in 0..4 {
-        let line = 1 + count_dir(board, r, c, drs[k], dcs[k]) + count_dir(board, r, c, -drs[k], -dcs[k])
-        if line >= 4 { ret true }
+        if 1 + count_dir(r, c, drs[k], dcs[k]) + count_dir(r, c, -drs[k], -dcs[k]) >= 4 { ret true }
     }
     ret false
 }
 
 fn play(k: int, moves: [int]) {
-    // row 0 is the top row
-    var board = [['.'].repeat(cols())].repeat(rows())
+    board = [['.'].repeat(cols)].repeat(rows)
     var result = ""
-    for i in 0..moves.len() {
+    for i, m in moves {
         let player = if i % 2 == 0 { 'X' } else { 'O' }
-        let col = moves[i] - 1
-        if col < 0 || col >= cols() || board[0][col] != '.' {
+        let col = m - 1
+        if col < 0 || col >= cols || board[0][col] != '.' {
             result = "illegal move {i + 1} by {player}"
             break
         }
-        var r = rows() - 1
+        var r = rows - 1
         while board[r][col] != '.' { r -= 1 }
         board[r][col] = player
-        if wins(board, r, col) {
+        if wins(r, col) {
             result = "{player} wins at move {i + 1}"
             break
         }
     }
     if result == "" {
-        var full = true
-        for c in 0..cols() {
-            if board[0][c] == '.' { full = false }
-        }
-        result = if full { "draw" } else { "no winner after {moves.len()} moves" }
+        result = if board[0].contains('.') { "no winner after {moves.len()} moves" } else { "draw" }
     }
     print("game {k}: {result}")
-    for row in board {
-        print(row.join(""))
-    }
+    for row in board { print(row.join("")) }
 }
 
-fn main() {
-    let games = [
-        [3, 4, 3, 4, 3, 4, 3],
-        [1, 2, 2, 3, 3, 4, 3, 4, 4, 6, 4],
-        [6, 6, 6, 6, 6, 6],
-        [2, 3, 4, 5, 1, 2, 3, 4, 7],
-        [1, 1, 2, 2, 4, 4, 3, 5, 5],
-        [4, 3, 3, 2, 2, 1, 2, 1, 1, 5, 1],
-        [1, 2, 3, 4, 5, 6, 6, 5],
-    ]
-    for k in 0..games.len() {
-        play(k + 1, games[k])
-    }
-}
+let games = [
+    [3, 4, 3, 4, 3, 4, 3],
+    [1, 2, 2, 3, 3, 4, 3, 4, 4, 6, 4],
+    [6, 6, 6, 6, 6, 6],
+    [2, 3, 4, 5, 1, 2, 3, 4, 7],
+    [1, 1, 2, 2, 4, 4, 3, 5, 5],
+    [4, 3, 3, 2, 2, 1, 2, 1, 1, 5, 1],
+    [1, 2, 3, 4, 5, 6, 6, 5],
+]
+for k, moves in games { play(k + 1, moves) }

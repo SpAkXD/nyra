@@ -1,7 +1,5 @@
-fn main() {
-    var x = 1
-    for i in 0..10 {
-        x = (x * 75 + 74) % 65537
-        print(x)
-    }
+var x = 1
+for _ in 0..10 {
+    x = (x * 75 + 74) % 65537
+    print(x)
 }
