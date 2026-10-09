@@ -1,0 +1,8 @@
+// expect: E0357 at 6:9
+// only: interp
+// flags: --interp --max-output 40
+fn main() {
+    for i in 0..1000 {
+        print("line number {i}")
+    }
+}

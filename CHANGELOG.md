@@ -15,6 +15,27 @@ version to the next; each entry says what changed. Error codes are stable: a num
   `sign` (or a variable `x`, `lo`, `hi`, ...) failed with E0206 at a line of the bundled library; names
   inside a module never clash with the program's, and no diagnostic points outside the program's file.
 
+Safety (so that agents can run Nyra unsupervised)
+- **Capabilities.** The `use` lines are the program's permissions: `json`, `math`, `text`, `time` and
+  `random` are always allowed, `fs`, `input` and `os` (and later `net`) need a capability. A `use` of a
+  module the run does not grant is error E0290, which names the module, the capability and the flag to
+  add. `--allow fs,os` grants only those, `--sandbox` grants nothing but what `--allow` names, and plain
+  `nyra run` grants everything as before. The MCP tool `nyra_run` grants only standard input unless its
+  `allow` argument says more; `nyra_check` and `nyra_test` take `allow` too.
+- `nyra outline --json` lists the capabilities each function needs, also through the functions it calls
+  (`"effects"`, and `"capabilities"` for the whole program); the text outline adds `[needs fs]`.
+- **A sandboxed interpreter.** `nyra run --interp` / `--sandbox` runs the program in the IR interpreter,
+  which now runs every program (maps, the whole standard library, JSON, input, arguments, `os.exit`).
+  Limits end a run with their own error and exit code: `--fuel` E0355 (120), `--max-memory` E0356 (121),
+  `--max-output` E0357 (122), `--max-depth` E0358 (123), `--max-time` E0359 (124). Steps are counted, so
+  the same program stops at the same statement everywhere. `time.sleep_ms` does not wait in the
+  interpreter. In `--sandbox` files stay below the working folder. `nyra_run` takes `sandbox: true`,
+  `fuel`, `max_memory`, `max_output` and `args`.
+- **Property examples.** `ex for n in 0..200: f(n) >= 0` runs its conditions for every `n` while the
+  program compiles and reports the first failing input (E0250, E0251, E0253 say `for n = 7`); E0292 and
+  E0293 are the errors of a malformed or too large range.
+- Examples now also run functions that use the standard library's pure functions (`math`, `text`, `json`).
+
 ## v0.5 (unreleased)
 
 Language

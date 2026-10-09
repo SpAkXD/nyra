@@ -66,6 +66,14 @@ with a runtime error is E0251, one that is not a `bool` E0252, and one that runs
 steps or 10,000 nested calls E0253. `nyra test file.nyra` runs them and counts what passed. `ex` is a
 keyword only at the start of an example, so it can still name a variable.
 
+A *property* checks conditions for many inputs: `ex for n in 0..200: f(n) >= 0, f(n) <= f(n + 1)`. The
+variable is an `int` that only the conditions see; the range is two whole-number literals (the end is
+exclusive), optionally `step k` (`10..0 step -2`), at most 100,000 values (more is E0293; a bound that is
+not a literal, or step 0, is E0292). Every condition runs for every value, in the interpreter, while the
+program compiles. The first input that fails is reported as E0250 (`example `f(n) >= 0` is false for n = 7:
+`f(n)` is -3`, with the actual and expected values), a runtime error for an input as E0251 and a run that
+does not finish within 10,000,000 steps as E0253, each saying which `n`.
+
 ## Variables
 ```nyra
 let x = 5               // immutable
@@ -324,8 +332,57 @@ program runs in and use `/`. JSON objects are read into structs by field name (o
 every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
 outside (input, files, arguments) must be UTF-8.
 
+## Capabilities and the sandbox
+A program says what it touches with its `use` lines, and a run decides what it may touch. The modules
+`json`, `math`, `text`, `time` and `random` are always available. The others are *effectful* and need a
+capability of the same name; any module that is not listed as pure needs one, so a module added later is
+closed by default:
+
+| capability | modules | allows |
+|---|---|---|
+| `fs` | `fs` | read, write, list and remove files and folders |
+| `input` | `input` | read standard input |
+| `os` | `os` | arguments, environment variables, `exit` |
+| `net` | none yet | network access |
+
+A `use` of a module whose capability the run does not grant is **compile error E0290**: the message names
+the module, the capability and the flag to add, and nothing runs. Which capabilities a run grants:
+
+| command | grants |
+|---|---|
+| `nyra run f.nyra` (also `check`, `build`, `test`) | everything |
+| `nyra run f.nyra --allow fs,os` | only those (`--allow all` grants everything, `--allow none` nothing) |
+| `nyra run f.nyra --sandbox` | nothing, plus what `--allow` names |
+| MCP `nyra_run` | `input`, plus the tool's `allow` list |
+
+Granting `os` also shows the program the environment variables of the process, and `fs` every file the
+process can reach (in the sandbox: every file below the working folder): grant only what a task needs.
+
+`nyra outline --json` lists what each function needs, also through the functions it calls: each function
+and the script have `"effects": ["fs", "input"]` (the capabilities, sorted; `[]` for a pure function), and
+`"capabilities"` at the top is what the whole program needs, which is the `--allow` list that runs it.
+
+`--interp` runs the program in the interpreter of the IR instead of a compiled program: in this process,
+with no C compiler or Node.js, and under limits that stop a runaway program with a runtime error that has
+a code and an exit code. `--sandbox` is `--interp` with no capabilities but those of `--allow`, and file
+paths confined to the working folder (no absolute path, no `..`: E0340). Any limit flag implies `--interp`.
+
+| limit | flag | default | error | exit code |
+|---|---|---|---|---|
+| steps: statements run, plus the elements and characters operations make | `--fuel N` | 2,000,000,000 | E0355 | 120 |
+| heap memory the run adds | `--max-memory SIZE` (`256M`) | 512M | E0356 | 121 |
+| bytes printed (the output is cut at the limit) | `--max-output SIZE` | 64M | E0357 | 122 |
+| nested calls | `--max-depth N` (at most 100,000) | 20,000 | E0358 | 123 |
+| real time | `--max-time MS` | none | E0359 | 124 |
+
+Steps are counted, not timed, so the same program with the same fuel stops at the same statement on every
+machine; memory is the heap the interpreter's own thread has added. In the interpreter `time.sleep_ms` does
+not wait: it moves a virtual clock that `time.now_ms` and `time.mono_ms` include, and costs one step per
+millisecond. The MCP tool `nyra_run` with `sandbox: true` runs a program this way (no child process) and
+takes `fuel`, `max_memory`, `max_output` (at most 16 KiB) and `timeout_ms`.
+
 ## Errors
-`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0309), a `message`,
+`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0359), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
 and a fixed program; [ERRORS.md](ERRORS.md) has them all. Positions are always in your file.
 
@@ -360,6 +417,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |
 | E0345 | `json.parse`: not JSON, or not the shape of the type: `expected an int at $.items[0].count` |
+| E0355-E0359 | `--interp` / `--sandbox` only: a limit of the interpreter was reached (steps, memory, output, call depth, time); exit codes 120 to 124, see Capabilities and the sandbox |
 
 ## Known differences between backends
 The supported targets are native (C) and `--js`; `--py`, `--ts`, `--rs` and `--go` are experimental. Everything
@@ -375,3 +433,6 @@ else, runtime errors included, is the same on each.
   ends and may lose output it has not written yet; `--go` grows its stack to 1 GB.
 - When the system itself runs out of memory (not a `repeat` that is too long, which is E0249
   everywhere), only native and `--js`/`--ts` report E0249; `--py` does too, without a position.
+- The interpreter (`--interp`, `--sandbox`) prints what the native target prints, ints included (no E0256),
+  with these differences: `time.sleep_ms` does not wait (a virtual clock), a recursion that is too deep is
+  E0358 instead of a crash, and the sandbox confines file paths to the working folder.

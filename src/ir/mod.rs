@@ -13,7 +13,9 @@
 //! write copies them first.
 
 pub mod eval;
+pub mod host;
 pub mod interp;
+pub mod jsonrt;
 pub mod lower;
 pub mod opt;
 pub mod print;

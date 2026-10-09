@@ -15,6 +15,7 @@ nyra test prog.nyra --json     # run the `ex` examples: {"ok":..,"examples":3,"p
 nyra check prog.nyra --json --fix   # the same, after repairing every mistake that has a certain fix
 nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
 nyra run prog.nyra --js        # or run on Node.js
+nyra run prog.nyra --sandbox   # run in the interpreter with limits, and no files/environment/input unless --allow names them
 nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
 ```
 
@@ -91,13 +92,31 @@ skips the last element (`for i in 1..xs.len() - 1`) gets:
   E0253 means it did not finish (a loop that never ends); keep examples small.
 - Compare floats with a range, not `==`: `ex mean([1.0, 2.0]) > 1.49, mean([1.0, 2.0]) < 1.51`.
 
+A *property* checks a condition for many inputs: `ex for n in 0..200: sq(n) >= 0, sq(n) == sq(-n)`. The range is
+two whole-number literals (the end is exclusive; `step k` is allowed), the variable is an `int` that the
+conditions see, and the first input that fails is reported as E0250 ("is false for n = 7") with the actual and
+expected value. Use a property for a rule that holds for every input (a result is never negative, sorting
+twice changes nothing, `parse(show(x)) == x`); use plain examples for exact values.
+
+**Run code you did not write, or let an agent run unsupervised, with capabilities.** `nyra run prog.nyra` grants
+everything. Modules that touch the world need a capability: `fs` (files), `input` (stdin), `os` (arguments,
+environment, `exit`). `--allow fs,os` grants only those, `--sandbox` grants nothing but what `--allow` names, in
+the interpreter with limits (`--fuel`, `--max-memory`, `--max-output`, `--max-depth`, `--max-time`). A `use` of a
+module that is not granted is error E0290 at compile time: it names the module and the flag to add. `nyra outline
+prog.nyra --json` tells what each function needs (`"effects": ["fs"]`, also through the calls it makes), so
+you know the `--allow` list before you run. A limit that is reached ends the program with E0355 (steps), E0356
+(memory), E0357 (output), E0358 (call depth) or E0359 (time) and exit code 120 to 124.
+
 Exit codes: `0` ok, `1` compile errors, `2` usage or tool problem (for example no C compiler: use `--js`),
-`101` runtime error (see the bottom of section 5). `nyra run prog.nyra --json` reports runtime errors as JSON too.
+`101` runtime error (see the bottom of section 5), `120` to `124` a limit of the interpreter. `nyra run prog.nyra --json`
+reports runtime errors as JSON too.
 
 **If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
 same loop needs no files: `nyra_check {code}` returns the JSON above (failed examples included),
 `nyra_test {code}` the result of every example, `nyra_run {code, backend}` returns
-`stdout`, `exit` and runtime `errors`, `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
+`stdout`, `exit` and runtime `errors` (it grants only standard input: pass `allow: ["fs"]` or `["os"]` for a program that
+uses those modules, or E0290 says so; `sandbox: true` runs it in the interpreter with `fuel`, `max_memory` and
+`max_output` limits), `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
 the agent card (`full: true`: the complete language spec). `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
 symbol, as described next.
 
@@ -420,6 +439,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0262 | optional type (`int?`, `Option<int>`) | there is no null: return `-1` or `""`, or a `bool` flag; `m.has(k)` before `m.get(k)` |
 | E0263 | `fn` inside a `struct`, or an `impl` block | write the function outside: `fn area(r: Rect)` |
 | E0264 | `class` | `struct Rect { w: int }` and plain functions |
+| E0290 | capability not granted | `use fs` / `os` / `input` needs `--allow fs` / `os` / `input` (CLI) or `allow: ["fs"]` (MCP); or drop the module |
+| E0292 | malformed property example | `ex for n in 0..200: f(n) >= 0`: the range is two whole-number literals, `step` is not 0 |
+| E0293 | property example has too many inputs | at most 100,000: shorten the range or add a `step` |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 
@@ -440,6 +462,11 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0246 | `char(n)` of an invalid code | codes go from 0 to 1114111, except 55296 to 57343 |
 | E0247 | `min()` or `max()` of an empty array | check `xs.len() > 0` first, or use `fold` with a start value |
 | E0249 | out of memory | `repeat` makes at most 536,870,888 bytes of text (UTF-16 units with `--js`, the same for ASCII) or 100,000,000 elements |
+| E0355 | step limit reached (interpreter, exit 120) | an endless loop or recursion; or raise `--fuel N` |
+| E0356 | memory limit reached (interpreter, exit 121) | a value that grows without end; or raise `--max-memory 1G` |
+| E0357 | output limit reached (interpreter, exit 122) | print less, or raise `--max-output` |
+| E0358 | call depth limit reached (interpreter, exit 123) | recursion without a base case; a deep one becomes a loop |
+| E0359 | time limit reached (interpreter, exit 124) | `--max-time MS` ran out |
 
 ## 6. Recipes
 
@@ -648,6 +675,10 @@ fn main() {
     print("took {text.fixed(time.mono_ms() - start, 1)} ms")
 }
 ```
+
+Files, the environment and standard input are *capabilities* (see section 1): a run that does not grant
+`fs`, `os` or `input` refuses a program with `use fs` and so on (E0290), and says which flag to add. Keep the
+module list of a program small, and read `nyra outline prog.nyra --json` to see which function needs what.
 
 ## 7. Complete programs
 

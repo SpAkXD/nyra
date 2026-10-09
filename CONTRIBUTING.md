@@ -33,7 +33,8 @@ hand to check one program the same way.
 |---|---|
 | `src/lexer.rs`, `src/parser.rs`, `src/ast.rs` | text to tokens to syntax tree |
 | `src/check.rs`, `src/check/` | type checker, and most error codes |
-| `src/ir/` | the intermediate representation: lowering (evaluation order, reference counting), checks, optimizations |
+| `src/ir/` | the intermediate representation: lowering (evaluation order, reference counting), checks, optimizations; `interp.rs`, `host.rs`, `jsonrt.rs`: the interpreter that `--sandbox` and the `ex` examples use |
+| `src/caps.rs`, `src/sandbox.rs`, `src/mem.rs` | capabilities (`use fs` needs `--allow fs`, E0290), the sandboxed run with its limits, the heap counter |
 | `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
 | `src/rt/c/`, `src/rt/js/` | the runtime code each backend embeds (strings, arrays, printing, runtime errors) |
 | `src/diag.rs`, `src/hints.rs` | error rendering, for humans and as JSON, and the hints that name the likely fix |
@@ -52,6 +53,9 @@ hand to check one program the same way.
 1. Describe it in `docs/SPEC.md` first. Keep the rules few: Nyra prefers one way to do each thing.
 2. Implement it through the whole pipeline: lexer, AST, parser, checker, IR lowering, then **both**
    backends and their runtimes. The same program must print the same output on C and on JavaScript.
+   The interpreter of the IR (`src/ir/interp.rs`, with `host.rs` and `jsonrt.rs`) runs every program for
+   `nyra run --interp` and `--sandbox`: a new runtime operation or standard function needs its case there
+   too, and `tests/sandbox.rs` checks that every example and runtime test prints the same as the compiled targets.
 3. Add an example: `examples/<name>.nyra` and `examples/<name>.out`. `cargo test` runs every example
    on every available backend and compares stdout exactly.
 4. Update `docs/AI_GUIDE.md` and `llms.txt` if an AI needs to know about the change. `cargo test`
@@ -69,7 +73,10 @@ hand to check one program the same way.
   "return", "ret")])` (`src/diag.rs`). An edit names the text it replaces, so a wrong position drops the fix
   instead of damaging code. Never guess: with alternatives, give a hint and no fix. Add a pair to
   `tests/fix.rs`.
-- Add `tests/errors/<name>.nyra` whose first line is `// expect: E0xxx`.
+- Add `tests/errors/<name>.nyra` whose first line is `// expect: E0xxx`. A program that needs command-line
+  flags says so with a line `// flags: --sandbox --allow fs` in its first three lines (also in the Wrong and
+  Fixed programs of `docs/ERRORS.md`). A run-time error of the interpreter's limits goes to `tests/runtime/`
+  with the lines `// only: interp` and `// flags: --interp --fuel 100000`.
 - Add the entry to `docs/ERRORS.md` (fields and order are described at the top of that file): what it
   means, why the rule exists, common causes, a **Wrong** program that produces exactly this code and a
   **Fixed** one that runs. `cargo test` checks all of it, and that the compiler and the database list

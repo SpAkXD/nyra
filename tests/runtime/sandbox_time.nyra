@@ -1,0 +1,9 @@
+// expect: E0359 at 7:9
+// only: interp
+// flags: --interp --max-time 150
+fn main() {
+    var n = 0
+    while true {
+        n += 1
+    }
+}

@@ -29,16 +29,18 @@ design may still change.
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0260-E0269 | type checker, parser (since v0.6) | warnings (E0260) and mistakes taken from other languages: negative positions, optional types, methods in structs, classes |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
+| E0290-E0293 | capabilities and properties (since v0.6) | a `use` of a module the run does not grant; a malformed or too large `ex for` property example |
 | E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
+| E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0354, E0360-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -2086,6 +2088,89 @@ print(area(Rect(w: 2, h: 3)))
 ```
 - **Related:** E0101, E0263
 
+## E0290: capability not granted
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The program has a `use` line for a standard module that needs a capability this run does not grant: "module `fs` needs the capability `fs` (read, write, list and remove files and folders), which is not granted". The modules `fs` (files), `input` (standard input), `os` (arguments, environment variables, `exit`) and later `net` are effectful and need the capability of their own name; `json`, `math`, `text`, `time` and `random` are always available. `nyra run` and `nyra build` grant everything unless `--sandbox` or `--allow` narrow it; the MCP tool `nyra_run` grants only standard input unless its `allow` argument says more.
+- **Why Nyra has this rule:** An agent that runs code it wrote itself, or code from someone else, should decide what that code may touch before it runs. The `use` lines already say which modules a program uses, so the check needs no annotations and happens at compile time, with the module, the capability and the flag to add in the message.
+- **Common causes:**
+  - running with `--sandbox` (nothing is granted but what `--allow` names) a program that reads a file
+  - `--allow fs` for a program that also uses `os.args()`: every module needs its own capability
+  - `nyra_run` without an `allow` argument for a program that uses `fs` or `os`
+- **Wrong:**
+```rust
+// flags: --sandbox
+use fs
+
+fn main() {
+    print(fs.exists("notes.txt"))
+}
+```
+- **Fixed:**
+```rust
+// flags: --sandbox --allow fs
+use fs
+
+fn main() {
+    print(fs.exists("notes.txt"))
+}
+```
+- **Related:** E0300, E0340
+
+## E0292: malformed property example
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The line after `ex for` is not a property header. A property example is `ex for n in 0..200: f(n) >= 0`: a variable, a range whose bounds are whole-number literals (an optional `step k`, not 0), a colon, and the conditions. The bounds are literals because the compiler runs the example while it compiles.
+- **Why Nyra has this rule:** One fixed form keeps properties easy to write and to read back. A range that is computed from variables or functions could not be known before the program runs, and an example sees no variables.
+- **Common causes:**
+  - a bound that is a name or a calculation (`0..count`, `0..2 * 50`)
+  - a missing colon, or a `{` where the colon belongs
+  - `step 0`
+- **Wrong:**
+```rust
+fn double(x: int) -> int = x * 2
+ex for n in 0..count: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+```
+- **Fixed:**
+```rust
+fn double(x: int) -> int = x * 2
+ex for n in 0..200: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+```
+- **Related:** E0250, E0293
+
+## E0293: property example has too many inputs
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The range of a property example has more than 100,000 values: "the property example `for n in 0..1000000` has 1000000 inputs; at most 100000 are run". A property runs its condition for every value of the range while the program compiles.
+- **Why Nyra has this rule:** The compiler must always finish quickly. A property is a sample of inputs, not a proof: a few hundred well-chosen values find almost every bug that a million would.
+- **Common causes:**
+  - a range written with too many zeros
+  - a small `step` over a huge range
+- **Wrong:**
+```rust
+fn double(x: int) -> int = x * 2
+ex for n in 0..1000000: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+```
+- **Fixed:**
+```rust
+fn double(x: int) -> int = x * 2
+ex for n in 0..1000000 step 1000: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+```
+- **Related:** E0250, E0253, E0292
+
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
 - **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
@@ -2859,3 +2944,155 @@ fn main() {
 }
 ```
 - **Related:** E0309, E0244
+
+## E0355: step limit reached
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** A program that runs in the interpreter (`nyra run --interp`, `--sandbox`, or `nyra_run` with `sandbox: true`) ran more steps than its fuel: "step limit reached: the program ran more than 100000 steps". Every statement costs a step, and so does every element or character an operation makes. The program stops after the output it printed so far, with exit code 120, at the statement that ran when the fuel ran out.
+- **Why Nyra has this rule:** Whoever runs a program unsupervised needs it to end. Counting steps instead of seconds makes the limit the same on every machine: the same program with the same fuel always stops at the same place.
+- **Common causes:**
+  - a `while` loop whose condition never becomes false
+  - recursion that never reaches its base case (also E0358)
+  - real work that needs more than the fuel: raise it with `--fuel N` (the default is 2,000,000,000; `nyra_run`: `fuel`)
+- **Wrong:**
+```rust
+// flags: --interp --fuel 100000
+fn main() {
+    var n = 0
+    while true {
+        n += 1
+    }
+}
+```
+- **Fixed:**
+```rust
+// flags: --interp --fuel 100000
+fn main() {
+    var n = 0
+    while n < 1000 {
+        n += 1
+    }
+    print(n)
+}
+```
+- **Related:** E0253, E0358, E0359
+
+## E0356: memory limit reached
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** A program that runs in the interpreter used more heap memory than its limit: "memory limit reached: the program used more than 16777216 bytes of memory". The interpreter measures the memory the run has added (every string, array, map and struct), and also checks before an operation such as `repeat` that would not fit. The program stops with exit code 121.
+- **Why Nyra has this rule:** A program that fills the memory of the machine takes everything else down with it. The limit makes a runaway program an error with a position instead.
+- **Common causes:**
+  - a loop that keeps adding to an array or a map and never stops
+  - a string doubled in a loop (`s = s + s`)
+  - a legitimate program that needs more: raise the limit with `--max-memory SIZE` (default 512M; `nyra_run`: `max_memory`)
+- **Wrong:**
+```rust
+// flags: --interp --max-memory 16M
+fn main() {
+    var xs: [int] = []
+    while true {
+        xs.push(1)
+    }
+}
+```
+- **Fixed:**
+```rust
+// flags: --interp --max-memory 16M
+fn main() {
+    var xs: [int] = []
+    for i in 0..1000 {
+        xs.push(i)
+    }
+    print(xs.len())
+}
+```
+- **Related:** E0249, E0355
+
+## E0357: output limit reached
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** A program that runs in the interpreter printed more bytes than its limit: "output limit reached: the program printed more than 100 bytes". The output is cut at the limit (the first bytes are written) and the program stops with exit code 122.
+- **Why Nyra has this rule:** A print loop that never ends fills a disk or an agent's context in seconds. The cap keeps what a run can say to a size somebody agreed to read.
+- **Common causes:**
+  - printing in a loop that never ends
+  - printing a big array or a long string inside a loop instead of once at the end
+  - a legitimate program with a lot of output: raise the limit with `--max-output SIZE` (default 64M; `nyra_run` allows at most 16 KiB)
+- **Wrong:**
+```rust
+// flags: --interp --max-output 100
+fn main() {
+    for i in 0..1000 {
+        print("line {i}")
+    }
+}
+```
+- **Fixed:**
+```rust
+// flags: --interp --max-output 100
+fn main() {
+    for i in 0..3 {
+        print("line {i}")
+    }
+}
+```
+- **Related:** E0355
+
+## E0358: call depth limit reached
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** A program that runs in the interpreter nested more calls than its limit: "call depth limit reached: more than 1000 calls were nested". It stops with exit code 123, at the call that went too deep.
+- **Why Nyra has this rule:** On the compiled targets a recursion that never ends crashes the program when its stack ends, often without a message. In the interpreter the depth is counted, so the same mistake is an error with a position, the same everywhere.
+- **Common causes:**
+  - a recursive function that never reaches its base case
+  - a recursion that is legitimately deep (a list of a hundred thousand elements): write it as a loop, or raise the limit with `--max-depth N` (default 20,000, at most 100,000)
+- **Wrong:**
+```rust
+// flags: --interp --max-depth 1000
+fn depth(n: int) -> int = depth(n + 1) + 1
+
+fn main() {
+    print(depth(0))
+}
+```
+- **Fixed:**
+```rust
+// flags: --interp --max-depth 1000
+fn depth(n: int) -> int {
+    if n >= 100 {
+        ret 0
+    }
+    ret depth(n + 1) + 1
+}
+
+fn main() {
+    print(depth(0))
+}
+```
+- **Related:** E0355
+
+## E0359: time limit reached
+- **Kind:** runtime error · **Since:** v0.6
+- **What it means:** A program that runs in the interpreter ran longer than its time limit: "time limit reached: the program ran longer than 200 ms". The limit is off unless it is given (`--max-time MS`; `nyra_run` always has one, `timeout_ms`, 10 seconds by default). The program stops with exit code 124.
+- **Why Nyra has this rule:** Steps (E0355) are the limit that is the same on every machine; real time is the last safety net for a run that has to end at a given moment, for example inside an agent's tool call. `time.sleep_ms` does not wait in the interpreter: it moves a virtual clock and costs steps.
+- **Common causes:**
+  - an endless loop, when the fuel is very large
+  - a heavy program on a slow machine
+- **Wrong:**
+```rust
+// flags: --interp --max-time 200
+fn main() {
+    var n = 0
+    while true {
+        n += 1
+    }
+}
+```
+- **Fixed:**
+```rust
+// flags: --interp --max-time 200
+fn main() {
+    var n = 0
+    while n < 1000 {
+        n += 1
+    }
+    print(n)
+}
+```
+- **Related:** E0355

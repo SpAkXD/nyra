@@ -1,0 +1,7 @@
+// expect: E0250
+fn abs_diff(a: int, b: int) -> int = a - b
+ex for n in -5..6: abs_diff(n, 0) >= 0
+
+fn main() {
+    print(abs_diff(3, 5))
+}

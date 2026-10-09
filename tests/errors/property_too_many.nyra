@@ -1,0 +1,7 @@
+// expect: E0293
+fn double(x: int) -> int = x * 2
+ex for n in 0..200000: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}

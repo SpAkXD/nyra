@@ -140,6 +140,32 @@ impl Type {
     }
 }
 
+/// The interned array element types, struct names and map types of the current thread. A thread
+/// that runs code of another thread (the interpreter, on its own stack) installs a copy first,
+/// else `Type::elem()` and friends would look up ids in empty tables.
+#[derive(Clone)]
+pub struct TypeTables {
+    elems: Vec<Type>,
+    structs: Vec<String>,
+    maps: Vec<(Type, Type)>,
+}
+
+/// A copy of the type tables of this thread.
+pub fn type_tables() -> TypeTables {
+    TypeTables {
+        elems: ELEMS.with(|e| e.borrow().clone()),
+        structs: STRUCTS.with(|s| s.borrow().clone()),
+        maps: MAPS.with(|m| m.borrow().clone()),
+    }
+}
+
+/// Makes the tables of another thread the tables of this one.
+pub fn install_type_tables(t: TypeTables) {
+    ELEMS.with(|e| *e.borrow_mut() = t.elems);
+    STRUCTS.with(|s| *s.borrow_mut() = t.structs);
+    MAPS.with(|m| *m.borrow_mut() = t.maps);
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub funcs: Vec<Func>,
@@ -189,7 +215,51 @@ pub struct Globals {
 #[derive(Debug)]
 pub struct Example {
     pub expr: Expr,
+    /// `ex for n in 0..200: f(n) >= 0`: the condition must hold for every `n` of the range.
+    pub forall: Option<Forall>,
 }
+
+/// The range of a property example: `for n in lo..hi step k`, written with whole-number literals.
+#[derive(Debug, Clone)]
+pub struct Forall {
+    pub var: String,
+    pub lo: i64,
+    pub hi: i64,
+    pub step: i64,
+    pub span: Span,
+}
+
+impl Forall {
+    /// How many values the range has.
+    pub fn count(&self) -> u64 {
+        let (lo, hi, step) = (self.lo as i128, self.hi as i128, self.step as i128);
+        let n = if step > 0 && hi > lo {
+            (hi - lo + step - 1) / step
+        } else if step < 0 && lo > hi {
+            (lo - hi + (-step) - 1) / (-step)
+        } else {
+            0
+        };
+        n as u64
+    }
+
+    /// The `k`-th value (`k < count()`).
+    pub fn value(&self, k: u64) -> i64 {
+        (self.lo as i128 + k as i128 * self.step as i128) as i64
+    }
+
+    /// `n in 0..200` or `n in 10..0 step -2`
+    pub fn text(&self) -> String {
+        if self.step == 1 {
+            format!("{} in {}..{}", self.var, self.lo, self.hi)
+        } else {
+            format!("{} in {}..{} step {}", self.var, self.lo, self.hi, self.step)
+        }
+    }
+}
+
+/// Property examples run at most this many inputs.
+pub const MAX_PROPERTY_INPUTS: u64 = 100_000;
 
 /// `use math`: the module's functions are then called as `math.sqrt(x)`.
 #[derive(Debug, Clone)]
