@@ -414,6 +414,9 @@ languages; each Nyra reference uses only the features of its task's `min_version
 5. If the installed compiler supports `min_version`, write `bench/solutions/nyra/<id>.nyra` with the features of that
    version only; `verify.py` then checks that it prints the same output on both backends. If a task cannot be solved
    cleanly in that version, raise its `min_version`.
+   Write it the way Nyra is meant to be written, because models copy the style of what they are shown: a script
+   (no `fn main`), `print(a, b)`, lambdas, comprehensions, maps and `for i, x in xs` where they fit, and `ex`
+   examples on the non-trivial functions.
 6. `python bench/test_bench.py`.
 
 Rules for a good task: all data is in the prompt and the prompt says exactly what to print and in what format; no
