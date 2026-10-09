@@ -9,15 +9,15 @@ coins.sort()
 coins.reverse()
 for qi in 1..lines.len() {
     let target = int(lines[qi])
-    let none = target + 1
-    var fewest = [none].repeat(target + 1)
+    let unreachable = target + 1
+    var fewest = [unreachable].repeat(target + 1)
     fewest[0] = 0
     for amount in 1..target + 1 {
         for c in coins {
             if c <= amount && fewest[amount - c] + 1 < fewest[amount] { fewest[amount] = fewest[amount - c] + 1 }
         }
     }
-    if fewest[target] == none {
+    if fewest[target] == unreachable {
         print("impossible")
         continue
     }
