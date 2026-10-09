@@ -327,25 +327,27 @@ Good to know:
 Do not use any of these. If the task needs one, say so in a sentence and write the closest program
 that works (section 6 has the usual replacements).
 
-- **Input of any kind**: no stdin, arguments, files, network, clock or random numbers. Programs are
-  closed, so put the test values in the program (`let n = 12`, `let data = [3, 1, 2]`).
-- **Types**: no maps or dictionaries, sets, tuples, enums, `Option`, `Result`, generics or type
-  aliases. Use an array of structs for a map, `contains` for a set, a struct for a tuple.
+- **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
+  are in the standard library (section 6b).
+- **Types**: no sets, tuples, enums, `Option`, `Result`, generics or type aliases. Use a map
+  `[str: bool]` or `contains` for a set, a struct for a tuple. Maps `[K: V]` exist (section 6).
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
   have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
   anything else with `sort_by(x => key)`.
 - **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `?:`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
-- **Declarations**: no global variables, nested functions, function values, overloading, default
-  arguments, methods on structs (`impl`, `self`), imports or modules. One file is one program. A lambda
-  (`x => x * 2`) is only an argument of an array method, and it cannot change variables.
-- **Library**: no `abs`, `min`, `max`, `pow`, `sqrt`, `floor`... Write them yourself (section 6).
-- **Errors**: no exceptions, `null`, `assert`, `panic` or `exit`. A failing operation stops the program
-  with a runtime error (section 5). To check a function, write examples: `ex f(2) == 4` (section 1).
-- **Output**: `print` always ends the line. There is no `printf` and no format specifier (`{x:.2f}` is
-  an error): a float always prints in its shortest form, so `12.5` is never shown as `12.50`. Pad text
-  yourself with `" ".repeat(n)` (section 6).
+- **Declarations**: no function values, overloading, default arguments, methods on structs (`impl`,
+  `self`) or modules of your own. One file is one program; it may `use` the standard modules (section
+  6b). A lambda (`x => x * 2`) is only an argument of an array method, and it cannot change variables.
+- **Library**: `abs`, `min` and `max` are builtins; everything else is a module function, never a
+  global one: `math.sqrt(x)` after `use math`, not `sqrt(x)`.
+- **Errors**: no exceptions, `null`, `assert` or `panic`. A failing operation stops the program with a
+  runtime error (section 5); `os.exit(code)` stops it on purpose. To check a function, write examples:
+  `ex f(2) == 4` (section 1).
+- **Output**: `print` ends the line unless its last argument is `end:` (`print(x, end: " ")`). There is
+  no `printf` and no format specifier (`{x:.2f}` is an error): a float prints in its shortest form; for
+  a fixed number of decimals use `text.fixed(x, 2)` (section 6b). Pad text with `s.pad_left(n)`.
 
 ## 5. Error codes
 
@@ -363,7 +365,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0101 | syntax error | `return`, `elif`, `i++`, `0..=n`, `{` on a new line, `Point { x: 1 }`, `xs[1..3]`, two statements on a line, `break` outside a loop: compare with section 2 |
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, or declared in another block |
-| E0202 | undefined function | not a builtin (`len`, `abs`, `sqrt`, `max`...): `xs.len()`, or define it yourself |
+| E0202 | undefined function | not a builtin (`len`, `sqrt`...): `xs.len()`, `math.sqrt(x)` after `use math`, or define it yourself |
+| E0300 · E0306 | module not found · module has no such item | the modules are `input os fs json time random math text`; `random.range(1, 7)`, not `randint` |
+| E0309 | `json.parse` needs a type | `let p: Point = json.parse(text)` |
 | E0203 | type mismatch | wrong argument, return or assigned type: `float(x)` / `int(x)`, write `2.0` not `2`; `int(c)` of a char: `c.code()` |
 | E0204 | wrong argument count | `print` takes exactly one argument; methods take a fixed number (`s.split(" ")`) |
 | E0205 | changing what is not a `var` | `let` variables, parameters and loop variables are immutable: use `var`, or an `inout` parameter |
@@ -424,7 +428,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 
 ## 6. Recipes
 
-Nyra has no standard library yet, so write small helpers yourself:
+Small helpers you write yourself (`abs`, `min` and `max` are builtins, but a program may define its own):
 
 ```rust
 fn abs(x: int) -> int = if x < 0 { -x } else { x }
@@ -484,23 +488,31 @@ fn words(text: str) -> [str] {                 // words(" a  b ") is ["a", "b"]
 }
 ```
 
-A map is an array of structs, and a custom sort is an insertion sort (it keeps equal elements in
-their order):
+Count with a map (`[K: V]`, keys `int`, `str`, `char` or `bool`; reading a missing key with `m[k]` is a
+runtime error, so count with `get` and a default):
+
+```rust
+fn word_counts(text: str) -> [str: int] {
+    var counts: [str: int] = [:]
+    for w in text.split(" ") {
+        if w != "" { counts[w] = counts.get(w, 0) + 1 }
+    }
+    ret counts
+}
+
+fn main() {
+    let counts = word_counts("a b a")
+    for w in counts { print("{w}: {counts[w]}") }   // in insertion order: a: 2, b: 1
+    print(counts.has("c"), counts.keys())
+}
+```
+
+A custom sort is an insertion sort (it keeps equal elements in their order):
 
 ```rust
 struct Count {
     word: str
     n: int
-}
-
-fn add_word(inout counts: [Count], word: str) {
-    for i in 0..counts.len() {
-        if counts[i].word == word {
-            counts[i].n += 1
-            ret
-        }
-    }
-    counts.push(Count(word: word, n: 1))
 }
 
 fn sort_by_n(inout cs: [Count]) {              // largest n first
@@ -544,6 +556,82 @@ var row = ""
 for j in 0..5 { row += "*" }
 print(row)                                  // *****
 print("-".repeat(5))                        // -----
+```
+
+## 6b. The standard library
+
+Import a module with `use name` at the top of the file (one per line) and call its functions with the
+module's name. The modules: `input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`; the full list
+of functions is in the spec. Read numbers from standard input, one per line, until it ends:
+
+```rust
+use input
+
+fn main() {
+    var total = 0
+    while !input.eof() {
+        let line = input.line().trim()
+        if line != "" { total += int(line) }
+    }
+    print("total: {total}")
+}
+```
+
+Arguments, files and the exit code (`nyra run prog.nyra -- notes.txt` passes `notes.txt`):
+
+```rust
+use os
+use fs
+
+fn main() {
+    let args = os.args()
+    if args.len() == 0 {
+        print("usage: prog <file>")
+        os.exit(2)
+    }
+    let path = args[0]
+    if !fs.exists(path) {
+        fs.write(path, "first line\n")
+    }
+    fs.append(path, "one more line\n")
+    print("{fs.read(path).split("\n").len() - 1} lines")
+}
+```
+
+JSON is read into the type the value goes to (a typed `let`, a parameter, a field, `ret`); a struct
+reads an object by field names, an array a list:
+
+```rust
+use json
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let ps: [Point] = json.parse("[{{\"x\": 1, \"y\": 2}}, {{\"x\": 3, \"y\": 4}}]")
+    print(ps[1].y)                              // 4
+    print(json.str(ps[0]))                      // {"x":1,"y":2}
+}
+```
+
+Random numbers, timing, math and decimals:
+
+```rust
+use random
+use time
+use math
+use text
+
+fn main() {
+    random.seed(42)                             // the same numbers in every run; leave it out for real randomness
+    let die = random.range(1, 7)                // 1 to 6: the upper bound is excluded
+    let start = time.mono_ms()
+    let r = math.sqrt(2.0) * math.pow(2.0, 10.0)
+    print(die >= 1, text.fixed(r, 2))           // true 1448.15
+    print("took {text.fixed(time.mono_ms() - start, 1)} ms")
+}
 ```
 
 ## 7. Complete programs

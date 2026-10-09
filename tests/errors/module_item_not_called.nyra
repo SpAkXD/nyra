@@ -1,0 +1,7 @@
+// expect: E0307
+use time
+
+fn main() {
+    let t = time.now_ms
+    print(t)
+}

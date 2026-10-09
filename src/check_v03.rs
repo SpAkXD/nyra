@@ -26,6 +26,7 @@ pub const STR_METHODS: &[&str] = &[
 pub const LAMBDA_METHODS: &[&str] = &["map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max"];
 /// The lambda methods of a string: each character is tested.
 pub const STR_LAMBDA_METHODS: &[&str] = &["count", "any", "all", "find_index"];
+pub const MAP_METHODS: &[&str] = &["len", "has", "get", "set", "remove", "keys", "values"];
 pub const CHAR_METHODS: &[&str] = &["code", "upper", "lower", "is_digit", "is_letter", "is_upper", "is_lower", "is_space"];
 
 /// The method `name` of type `t`, if it has one.
@@ -72,6 +73,19 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
             "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, false),
             _ => None,
         },
+        Type::Map(_) => {
+            let (k, v) = t.map_kv()?;
+            match name {
+                "len" => m(vec![], Int, false),
+                "has" => m(vec![k], Bool, false),
+                "get" => m(vec![k], v, false),
+                "set" => m(vec![k, v], Void, true),
+                "remove" => m(vec![k], Void, true),
+                "keys" => m(vec![], Type::array(k), false),
+                "values" => m(vec![], Type::array(v), false),
+                _ => None,
+            }
+        }
         Char => match name {
             "code" => m(vec![], Int, false),
             "upper" | "lower" => m(vec![], Char, false),
@@ -88,6 +102,7 @@ pub fn methods_of(t: Type) -> &'static [&'static str] {
         Type::Array(_) => ARRAY_METHODS,
         Type::Str => STR_METHODS,
         Type::Char => CHAR_METHODS,
+        Type::Map(_) => MAP_METHODS,
         _ => &[],
     }
 }
@@ -106,7 +121,7 @@ pub fn managed(t: Type, structs: &HashMap<String, StructInfo>) -> bool {
 
 fn managed_in(t: Type, structs: &HashMap<String, StructInfo>, seen: &mut Vec<String>) -> bool {
     match t {
-        Type::Str | Type::Array(_) => true,
+        Type::Str | Type::Array(_) | Type::Map(_) => true,
         Type::Struct(_) => {
             let Some(name) = t.struct_name() else { return false };
             if seen.contains(&name) {

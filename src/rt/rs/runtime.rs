@@ -100,8 +100,16 @@ fn ny_num(x: f64) -> String {
         return if x > 0.0 { "Infinity" } else { "-Infinity" }.into();
     }
     let sign = if x < 0.0 { "-" } else { "" };
-    // `{:e}` gives the shortest digits: "1.2345e-7"
-    let e = format!("{:e}", x.abs());
+    // the fewest digits that read back as x; between two such numbers the even one (the
+    // exact decimal rounding of `{:.N$e}`, like the C runtime's printf)
+    let mut e = format!("{:e}", x.abs());
+    for p in 0..17 {
+        let t = format!("{:.*e}", p, x.abs());
+        if t.parse::<f64>() == Ok(x.abs()) {
+            e = t;
+            break;
+        }
+    }
     let (mant, exp) = e.split_once('e').unwrap_or((&e, "0"));
     let digits: String = mant.chars().filter(|c| *c != '.').collect();
     let k = digits.len() as i32;
@@ -399,6 +407,112 @@ fn ny_lt_float(x: &f64, y: &f64) -> bool {
 }
 
 // ---- printing: arrays and structs as Nyra code ----
+
+// ---- maps: entries in insertion order (a removed one is a gap until the next compaction) and an
+// index from key to position; `Rc<NyMap>` is copied on write like an array ----
+
+#[derive(Clone)]
+struct NyMap<K, V> {
+    ents: Vec<Option<(K, V)>>,
+    index: std::collections::HashMap<K, usize>,
+    live: usize,
+}
+
+impl<K: Clone + Eq + std::hash::Hash, V: Clone> NyMap<K, V> {
+    fn len(&self) -> usize {
+        self.live
+    }
+    fn has(&self, k: &K) -> bool {
+        self.index.contains_key(k)
+    }
+    fn set(&mut self, k: K, v: V) {
+        if let Some(&i) = self.index.get(&k) {
+            self.ents[i] = Some((k, v));
+            return;
+        }
+        self.index.insert(k.clone(), self.ents.len());
+        self.ents.push(Some((k, v)));
+        self.live += 1;
+    }
+    fn remove(&mut self, k: &K) {
+        let Some(i) = self.index.remove(k) else { return };
+        self.ents[i] = None;
+        self.live -= 1;
+        if self.ents.len() > 8 && self.live < self.ents.len() / 2 {
+            let ents: Vec<(K, V)> = self.ents.drain(..).flatten().collect();
+            self.index.clear();
+            self.live = 0;
+            for (k, v) in ents {
+                self.set(k, v);
+            }
+        }
+    }
+    fn iter(&self) -> impl Iterator<Item = &(K, V)> {
+        self.ents.iter().flatten()
+    }
+}
+
+impl<K, V> Default for NyMap<K, V> {
+    fn default() -> Self {
+        NyMap { ents: Vec::new(), index: std::collections::HashMap::new(), live: 0 }
+    }
+}
+
+impl<K: Clone + Eq + std::hash::Hash, V: Clone + PartialEq> PartialEq for NyMap<K, V> {
+    fn eq(&self, o: &Self) -> bool {
+        self.live == o.live && self.iter().all(|(k, v)| o.index.get(k).is_some_and(|&j| o.ents[j].as_ref().is_some_and(|e| e.1 == *v)))
+    }
+}
+
+fn ny_mnew<K: Clone + Eq + std::hash::Hash, V: Clone>(kv: Vec<(K, V)>) -> Rc<NyMap<K, V>> {
+    let mut m = NyMap::default();
+    for (k, v) in kv {
+        m.set(k, v);
+    }
+    Rc::new(m)
+}
+
+/// `m[k]`: E0248 when the key is missing.
+fn ny_mget<'a, K: Clone + Eq + std::hash::Hash + NyShow, V: Clone>(m: &'a NyMap<K, V>, k: &K, line: u32, col: u32) -> &'a V {
+    match m.index.get(k) {
+        Some(&i) => &m.ents[i].as_ref().expect("an entry the index names").1,
+        None => ny_fail("E0248", &format!("key {} is not in the map", ny_show(k)), "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col),
+    }
+}
+
+fn ny_mget_or<'a, K: Clone + Eq + std::hash::Hash, V: Clone>(m: &'a NyMap<K, V>, k: &K, d: &'a V) -> &'a V {
+    match m.index.get(k) {
+        Some(&i) => &m.ents[i].as_ref().expect("an entry the index names").1,
+        None => d,
+    }
+}
+
+fn ny_mkeys<K: Clone + Eq + std::hash::Hash, V: Clone>(m: &NyMap<K, V>) -> Rc<Vec<K>> {
+    Rc::new(m.iter().map(|(k, _)| k.clone()).collect())
+}
+
+fn ny_mvalues<K: Clone + Eq + std::hash::Hash, V: Clone>(m: &NyMap<K, V>) -> Rc<Vec<V>> {
+    Rc::new(m.iter().map(|(_, v)| v.clone()).collect())
+}
+
+impl<K: Clone + Eq + std::hash::Hash + NyShow, V: Clone + NyShow> NyShow for Rc<NyMap<K, V>> {
+    fn show_in(&self, out: &mut String) {
+        if self.live == 0 {
+            out.push_str("[:]");
+            return;
+        }
+        out.push('[');
+        for (i, (k, v)) in self.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            k.show_in(out);
+            out.push_str(": ");
+            v.show_in(out);
+        }
+        out.push(']');
+    }
+}
 
 trait NyShow {
     fn show_in(&self, out: &mut String);

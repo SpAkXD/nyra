@@ -1,0 +1,15 @@
+["ann": 32, "bob": 27, "cid": 40] 3 27
+true false -1
+["ann", "bob", "cid"] [32, 27, 40]
+ann is 32
+bob is 27
+cid is 40
+["ann": 32, "bob": 27, "cid": 40] ["ann": 32, "bob": 99] false
+true false
+["the": 3, "cat": 1, "and": 2, "hat": 1, "bat": 1]
+most common: the (3)
+[1: 1, 4: 2, 9: 3, 16: 4, 25: 5] 4
+yes ['a': [1, 2], 'b': []] 2
+["home": Point(x: 1, y: 2), "work": Point(x: 10, y: 2)]
+["a": ["x": 1, "y": 2], "b": [:]] 2 [:]
+[0, 3, 6, 9, 12, 15, 18, 100] v18

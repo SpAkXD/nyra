@@ -25,6 +25,8 @@ const RESERVED: &[&str] = &[
 
 /// The Python runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/py/runtime.py");
+const STD: &str = include_str!("../rt/py/std.py");
+const JSON: &str = include_str!("../rt/py/json.py");
 
 /// A Nyra name as a Python identifier: `ny...` names belong to the runtime, and names Python
 /// itself uses (keywords, builtins the program calls) get a `_`.
@@ -45,6 +47,10 @@ fn hint(t: Ty) -> String {
         Ty::Bool => "bool".into(),
         Ty::Char | Ty::Str => "str".into(),
         Ty::Array(_) => format!("list[{}]", hint(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("dict[{}, {}]", hint(k), hint(v))
+        }
         Ty::Struct(_) => name(&t.struct_name().expect("a struct")),
         other => unreachable!("the Python backend got the type `{}`", other.name()),
     }
@@ -59,7 +65,25 @@ fn tdesc(t: Ty) -> String {
         Ty::Char => "c".into(),
         Ty::Str => "s".into(),
         Ty::Array(_) => format!("[{}", tdesc(t.elem().expect("an array"))),
+        // a map: the key type is one letter
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("{{{}{}", tdesc(k), tdesc(v))
+        }
         _ => "S".into(),
+    }
+}
+
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ("a", T), or a struct's class.
+fn jdesc(t: Ty) -> String {
+    match t {
+        Ty::Int => "\"i\"".into(),
+        Ty::Float => "\"f\"".into(),
+        Ty::Bool => "\"b\"".into(),
+        Ty::Char => "\"c\"".into(),
+        Ty::Str => "\"s\"".into(),
+        Ty::Array(_) => format!("(\"a\", {})", jdesc(t.elem().expect("an array"))),
+        _ => name(&t.struct_name().expect("a struct")),
     }
 }
 
@@ -70,6 +94,7 @@ fn has_float(m: &Module, t: Ty) -> bool {
         match t {
             Ty::Float => true,
             Ty::Array(_) => go(m, t.elem().expect("an array"), seen),
+            Ty::Map(_) => go(m, t.map_kv().expect("a map").1, seen),
             // a struct can contain itself through an array
             Ty::Struct(_) if seen.contains(&t) => false,
             Ty::Struct(_) => {
@@ -212,6 +237,16 @@ pub fn gen(m: &Module, file: &str) -> String {
         "import json\nimport math\nimport os\nimport re\nimport sys\n\n\n",
     ));
     classes(m, &mut out);
+    let json = m.uses_json();
+    if json {
+        // the fields of each struct for `json.str` and `json.parse`, after every class exists
+        for (_, s) in &m.structs.0 {
+            let fields: Vec<String> =
+                s.fields.iter().map(|(f, t)| format!("({}, \"{}\", {})", lit(f), name(f), jdesc(*t))).collect();
+            let _ = writeln!(out, "{}.ny_jf = [{}]", name(&s.name), fields.join(", "));
+        }
+        out.push_str("\n\n");
+    }
     for f in &m.funcs {
         let info = Info::new(f);
         // Python variables belong to the whole function, and two Nyra variables with the same
@@ -251,6 +286,12 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str("\n\n");
     }
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
+    if m.uses_std() {
+        out.push_str(STD);
+    }
+    if json {
+        out.push_str(JSON);
+    }
     let _ = write!(out, "\n\nif __name__ == \"__main__\":\n    ny_main({})\n", name(&m.func(m.main).name));
     out
 }
@@ -416,6 +457,8 @@ impl<'a> Gen<'a> {
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrAppend => format!("ny_extend({target}, {})", a[0]),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
+                    RtOp::MapSet => format!("{target}[{}] = {}", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.pop({}, None)", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 self.assign(*dst, code);
@@ -559,6 +602,7 @@ impl<'a> Gen<'a> {
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let code = match op {
             RtOp::Print => format!("print({})", self.print_arg(args)),
+            RtOp::PrintNoLine => format!("print({}, end=\"\")", self.text(args)),
             RtOp::Format => self.text(args),
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("ny_mod({}, {}, {at})", a[0], a[1]),
@@ -608,6 +652,32 @@ impl<'a> Gen<'a> {
             RtOp::ArrConcat => format!("ny_concat({}, {})", a[0], a[1]),
             // a char is a one-character str: `[str]` and `[char]` join alike
             RtOp::ArrJoin => format!("{}.join({})", self.expr(&args[1]), a[0]),
+            RtOp::MapNew => {
+                let items: Vec<String> = args.chunks(2).map(|p| format!("({}, {})", self.arg(&p[0]), self.owned(&p[1]))).collect();
+                format!("NyDict([{}])", items.join(", "))
+            }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                let get = if op == RtOp::MapGet {
+                    format!("ny_mget({}, {}, \"{}\", {at})", a[0], a[1], tdesc(k))
+                } else {
+                    format!("{}.get({}, {})", self.expr(&args[0]), a[1], a[2])
+                };
+                // a value that is a plain struct now has two owners (no `Dup` follows for it)
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_share({get})") } else { get }
+            }
+            RtOp::MapKeys => format!("NyList({})", a[0]),
+            RtOp::MapValues => format!("ny_share_all(NyList({}.values()))", self.expr(&args[0])),
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => format!("ny_jenc({}, {})", a[0], jdesc(self.ty(&args[0]))),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("ny_jparse({}, {}, {at})", a[0], jdesc(t))
+            }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         self.assign(dst, code);
@@ -747,7 +817,8 @@ impl<'a> Gen<'a> {
             Expr::Pure(p, args) => {
                 let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
                 match p {
-                    PureFn::StrLen | PureFn::ArrLen => format!("len({})", a[0]),
+                    PureFn::StrLen | PureFn::ArrLen | PureFn::MapLen => format!("len({})", a[0]),
+                    PureFn::MapHas => format!("({} in {})", self.expr(&args[1]), self.expr(&args[0])),
                     PureFn::StrContains => format!("({} in {})", self.expr(&args[1]), self.expr(&args[0])),
                     PureFn::StrStartsWith => format!("{}.startswith({})", self.expr(&args[0]), a[1]),
                     PureFn::StrEndsWith => format!("{}.endswith({})", self.expr(&args[0]), a[1]),

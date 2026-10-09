@@ -1,0 +1,14 @@
+3.14 0.6667 10 1 -1
+1.00 0.13 2.67 0.00 1.500
+123456789.988 0.10000000000000000555 Infinity NaN
+1000000000000000000000.0 0.00000123 0.000 309
+"42": int true, float true
+"-7": int true, float true
+"007": int true, float true
+"1.5": int false, float true
+"": int false, float false
+"-": int false, float false
+"9223372036854775807": int true, float true
+"9223372036854775808": int false, float true
+" 1": int false, float false
+"1e3": int false, float true

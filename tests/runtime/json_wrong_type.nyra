@@ -1,0 +1,12 @@
+// expect: E0345 at 10:24
+use json
+
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u: User = json.parse("{{\"name\": \"Ann\", \"age\": \"12\"}}")
+    print(u)
+}

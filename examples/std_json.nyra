@@ -1,0 +1,49 @@
+// JSON: `json.str(v)` writes any value; `json.parse(text)` reads the type the program asks for.
+use json
+
+struct Item {
+    name: str
+    tags: [str]
+    price: float
+    count: int
+}
+
+struct Order {
+    id: int
+    items: [Item]
+    paid: bool
+    code: char
+}
+
+fn total(o: Order) -> float {
+    var sum = 0.0
+    for it in o.items {
+        sum += it.price * float(it.count)
+    }
+    ret sum
+}
+
+fn main() {
+    let pen = Item(name: "pen \"blue\"", tags: ["office", "ü"], price: 1.5, count: 3)
+    let o = Order(id: 7, items: [pen, Item(name: "x", tags: [], price: 0.1 + 0.2, count: -1)], paid: true, code: 'Z')
+    let text = json.str(o)
+    print(text)
+    let back: Order = json.parse(text)
+    print(back == o, total(back))
+
+    // the type comes from where the value goes: a `let` with a type, a parameter, a field, `ret`
+    let grid: [[int]] = json.parse(" [ [1, 2], [], [-3] ] ")
+    print(grid, json.str(grid))
+    print(total(json.parse("{{\"id\": 1, \"items\": [{{\"name\": \"a\", \"tags\": [], \"price\": 2, \"count\": 5}}], \"paid\": false, \"code\": \"c\"}}")))
+
+    // fields the struct does not have are skipped; a repeated key keeps the last value
+    let item: Item = json.parse("{{\"extra\": [1, {{\"a\": null}}], \"name\": \"n\", \"tags\": [\"t\"], \"price\": 2.5e1, \"count\": 5, \"name\": \"second\"}}")
+    print(item)
+
+    // escapes, and values JSON cannot hold (infinity becomes null)
+    let s: str = json.parse("\"caf\\u00e9 \\ud83d\\ude00 \\\\ \\/ \\t\"")
+    print(s, json.str(s))
+    print(json.str("line\nbreak"), json.str(1.0 / 0.0), json.str(-0.0), json.str(1000000000000000000000.0), json.str(char(1)))
+    let flags: [bool] = json.parse("[true, false]")
+    print(flags, json.str(['a', 'é']))
+}

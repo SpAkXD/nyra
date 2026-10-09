@@ -329,7 +329,7 @@ fn stmts(ss: &mut Vec<Stmt>, strs: &mut Interner) {
             }
             StmtKind::Op { op, args, dst } => {
                 args.iter_mut().for_each(|a| fold(a, strs));
-                if matches!(op, RtOp::Print | RtOp::Format) {
+                if matches!(op, RtOp::Print | RtOp::PrintNoLine | RtOp::Format) {
                     text_parts(args, strs);
                 }
                 match fold_op(*op, args, *dst, strs) {

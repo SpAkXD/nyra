@@ -297,7 +297,7 @@ error[E0201]: undefined variable `Math`
   |
 2 |     print(Math.sqrt(4.0))
   |           ^
-  = hint: Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)
+  = hint: the math functions are in the standard module `math`: add `use math` and call `math.sqrt(x)`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -1512,13 +1512,14 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn` or `struct`, found `import`
+error[E0302]: `import math`: Nyra spells it `use math`
   --> case.nyra:1:1
   |
 1 | import math
   | ^
-  = hint: Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions
-  = explain: nyra explain E0101
+  = hint: write `use math`
+  = fix: `use math`
+  = explain: nyra explain E0302
 
 nyra: 1 error(s)
 ==== par_top_let
@@ -3154,7 +3155,7 @@ error[E0202]: undefined function `input`
   |
 2 |     let n = input()
   |             ^
-  = hint: Nyra has no input: put the values in the program, e.g. `let n = 12`
+  = hint: standard input is the module `input`: add `use input` and call `input.line()`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3225,7 +3226,7 @@ error[E0202]: undefined function `sqrt`
   |
 2 |     print(sqrt(2.0))
   |           ^
-  = hint: Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)
+  = hint: the math functions are in the standard module `math`: add `use math` and call e.g. `math.sqrt(x)`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -4014,7 +4015,7 @@ error[E0101]: expected end of line, found `:`
   |
 2 |     let x = std::max(1, 2)
   |                ^
-  = hint: `::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name
+  = hint: `::` paths do not exist: call a module's function with a dot, `math.sqrt(x)`, and other functions by their plain name
   = explain: nyra explain E0101
 
 nyra: 1 error(s)

@@ -31,6 +31,12 @@ function ny_rescue(e: unknown): Error {
     throw e;
 }
 
+// `print(x, end: "")`: text without a newline (a browser has no stdout: the console gets a line).
+function ny_write(s: string): void {
+    if (ny_process !== undefined) ny_process.stdout.write(s);
+    else console.log(s);
+}
+
 // ---- ints: `+ 0` turns -0 into 0 (an int never prints -0) ----
 function ny_div(a: number, b: number, line: number, col: number): number {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
@@ -195,7 +201,13 @@ function ny_share_all<T>(a: T[]): T[] {
 }
 // A copy of one level: the copy is not shared, the values it now shares are.
 function ny_copy<T>(v: T): T {
-    return Array.isArray(v) ? (ny_share_all(v.slice()) as T) : (v as any).ny_cp();
+    if (Array.isArray(v)) return ny_share_all(v.slice()) as T;
+    if (v instanceof Map) {
+        const m = new Map();
+        for (const [k, x] of v) m.set(k, ny_share(x));
+        return m as T;
+    }
+    return (v as any).ny_cp();
 }
 // `v` itself when it has one owner, else a copy: what a write needs.
 function ny_unique<T>(v: T): T {
@@ -266,8 +278,26 @@ function ny_eq(a: any, b: any): boolean {
         for (let i = 0; i < a.length; i++) if (!ny_eq(a[i], b[i])) return false;
         return true;
     }
+    if (a instanceof Map) {
+        if (a.size !== b.size) return false;
+        for (const [k, v] of a) if (!b.has(k) || !ny_eq(v, b.get(k))) return false;
+        return true;
+    }
     return a.ny_eq(b);
 }
+// ---- maps: JavaScript Maps (insertion order), copied on write like arrays ----
+// `[k: v, ...]`: the keys and values alternate.
+function ny_mnew<K, V>(kv: any[]): Map<K, V> {
+    const m = new Map<K, V>();
+    for (let i = 0; i < kv.length; i += 2) m.set(kv[i], kv[i + 1]);
+    return m;
+}
+// `m[k]`: E0248 when the key is missing (`kt` is the key's type, for the message).
+function ny_mget<K, V>(m: Map<K, V>, k: K, kt: string, line: number, col: number): V {
+    if (!m.has(k)) ny_panic("E0248", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
+    return m.get(k) as V;
+}
+function ny_mgetor<K, V>(m: Map<K, V>, k: K, d: V): V { return m.has(k) ? (m.get(k) as V) : d; }
 function ny_index_of<T>(a: T[], v: T): number {
     for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
     return -1;
@@ -322,6 +352,17 @@ function ny_fmt(v: any, t: string): string {
             return s + "]";
         }
         case "S": return v.ny_fmt();
+        case "{": {
+            // a map: "{" + the key type (one letter) + the value type
+            if (v.size === 0) return "[:]";
+            const kt = t[1], vt = t.slice(2);
+            let s = "[";
+            for (const [k, x] of v) {
+                if (s.length > 1) s += ", ";
+                s += ny_fmt(k, kt) + ": " + ny_fmt(x, vt);
+            }
+            return s + "]";
+        }
         default: return String(v);
     }
 }

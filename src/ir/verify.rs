@@ -44,6 +44,12 @@ impl Verifier<'_> {
         }
     }
 
+    /// The key and value types of a map operand.
+    fn kv(&self, e: &Expr, what: &str) -> Result<(Ty, Ty), String> {
+        let t = self.ty(e)?;
+        t.map_kv().ok_or_else(|| format!("{what}: expected a map, found {}", t.name()))
+    }
+
     /// The element type of an array operand.
     fn elem(&self, e: &Expr, what: &str) -> Result<Ty, String> {
         let t = self.ty(e)?;
@@ -112,6 +118,16 @@ impl Verifier<'_> {
             Expr::Pure(p, args) => {
                 let (params, ret) = p.sig();
                 match p {
+                    PureFn::MapLen | PureFn::MapHas => {
+                        let want = if *p == PureFn::MapLen { 1 } else { 2 };
+                        if args.len() != want {
+                            return Err(format!("{} takes {want} operands", p.name()));
+                        }
+                        let (k, _) = self.kv(&args[0], p.name())?;
+                        if want == 2 {
+                            self.expect(&args[1], k, p.name())?;
+                        }
+                    }
                     PureFn::ArrLen | PureFn::ArrContains | PureFn::ArrIndexOf => {
                         let want = if *p == PureFn::ArrLen { 1 } else { 2 };
                         if args.len() != want {
@@ -202,8 +218,8 @@ impl Verifier<'_> {
                 }
                 let dst_ty = dst.map(|d| self.local(d)).transpose()?;
                 let ret = match op {
-                    RtOp::Print | RtOp::Format => {
-                        if args.is_empty() && *op == RtOp::Print {
+                    RtOp::Print | RtOp::PrintNoLine | RtOp::Format => {
+                        if args.is_empty() && *op != RtOp::Format {
                             return Err("print needs parts".into());
                         }
                         for a in args {
@@ -253,6 +269,48 @@ impl Verifier<'_> {
                         self.args(&args[1..], &[t], op.name())?;
                         Some(t)
                     }
+                    RtOp::Std(f) => {
+                        let params: Vec<Ty> = f.params().iter().map(|(_, t)| t.ty()).collect();
+                        self.args(args, &params, op.name())?;
+                        let r = f.ret().ty();
+                        (r != Ty::Void).then_some(r)
+                    }
+                    RtOp::MapNew => {
+                        let t = dst_ty.ok_or("map_new needs a destination")?;
+                        let (k, v) = t.map_kv().ok_or("map_new must write a map")?;
+                        if args.len() % 2 != 0 {
+                            return Err("map_new takes keys and values".into());
+                        }
+                        for pair in args.chunks(2) {
+                            self.expect(&pair[0], k, "map key")?;
+                            self.expect(&pair[1], v, "map value")?;
+                        }
+                        Some(t)
+                    }
+                    RtOp::MapGet | RtOp::MapGetOr => {
+                        let (k, v) = self.kv(args.first().ok_or("map_get needs operands")?, op.name())?;
+                        let want: Vec<Ty> = if *op == RtOp::MapGet { vec![k] } else { vec![k, v] };
+                        self.args(&args[1..], &want, op.name())?;
+                        Some(v)
+                    }
+                    RtOp::MapKeys | RtOp::MapValues => {
+                        let (k, v) = self.kv(args.first().ok_or("map_keys needs an operand")?, op.name())?;
+                        if args.len() != 1 {
+                            return Err(format!("{} takes 1 operand", op.name()));
+                        }
+                        Some(Ty::array(if *op == RtOp::MapKeys { k } else { v }))
+                    }
+                    RtOp::JsonStr => {
+                        if args.len() != 1 {
+                            return Err("json_str takes 1 operand".into());
+                        }
+                        self.ty(&args[0])?;
+                        Some(Ty::Str)
+                    }
+                    RtOp::JsonParse => {
+                        self.args(args, &[Ty::Str], op.name())?;
+                        Some(dst_ty.ok_or("json_parse needs a destination")?)
+                    }
                     RtOp::ArrJoin => {
                         let elem = self.elem(args.first().ok_or("missing array")?, op.name())?;
                         if !matches!(elem, Ty::Str | Ty::Char) {
@@ -288,6 +346,12 @@ impl Verifier<'_> {
                             return Err("str_append on a non-string".into());
                         }
                         self.args(args, &[Ty::Str], "str_append")?;
+                        None
+                    }
+                    RtOp::MapSet | RtOp::MapRemove => {
+                        let (k, v) = t.map_kv().ok_or_else(|| format!("{} on {}", op.name(), t.name()))?;
+                        let want: Vec<Ty> = if *op == RtOp::MapSet { vec![k, v] } else { vec![k] };
+                        self.args(args, &want, op.name())?;
                         None
                     }
                     _ => {

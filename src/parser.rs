@@ -342,6 +342,7 @@ impl Parser {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
         let mut examples = Vec::new();
+        let mut uses = Vec::new();
         let mut top: Vec<Stmt> = Vec::new();
         loop {
             self.skip_newlines();
@@ -357,6 +358,14 @@ impl Parser {
                         }
                     }
                 }
+                // `use math` (and other languages' `import math`, `from math import sqrt`)
+                Tok::Ident(w) if self.starts_use(w) => match self.use_line() {
+                    Ok(u) => uses.push(u),
+                    Err(d) => {
+                        self.errs.push(d);
+                        self.sync_stmt();
+                    }
+                },
                 Tok::Fn => match self.func() {
                     Ok(f) => funcs.push(f),
                     Err(d) => {
@@ -412,7 +421,7 @@ impl Parser {
             }
         }
         funcs.append(&mut self.nested);
-        Program { funcs, structs, examples }
+        Program { funcs, structs, examples, uses }
     }
 
     /// True at `ex` followed by the start of a condition on the same line: a line of examples.
@@ -444,6 +453,52 @@ impl Parser {
         }
         self.end_stmt_after(None, Some("separate the examples with commas: `ex sq(3) == 9, sq(-2) == 4`"))?;
         Ok(list)
+
+    }
+
+
+    /// True if the word here starts an import line: `use name`, `import name`, `from name import ...`.
+    fn starts_use(&self, w: &str) -> bool {
+        matches!(w, "use" | "import" | "from") && matches!(self.peek_at(1), Tok::Ident(_) | Tok::Str(_))
+    }
+
+    /// `use name`: one standard module per line. Other languages' forms are reported with the Nyra
+    /// spelling (`import math` is `use math`).
+    fn use_line(&mut self) -> PResult<Use> {
+        let span = self.span();
+        let Tok::Ident(word) = self.bump().tok else { unreachable!("starts_use checked it") };
+        if let Tok::Str(path) = self.peek().clone() {
+            return Err(Diag::new("E0302", format!("`{word} \"{path}\"`: only the standard modules can be imported"), self.span())
+                .hint(format!("a program is one file for now; the standard modules are {}: write e.g. `use math`", crate::stdlib::module_list())));
+        }
+        let (module, mspan) = self.ident("a module name", "write the module after `use`: `use math`")?;
+        if word == "from" {
+            // `from math import sqrt`: Nyra imports the module and names it at each call
+            return Err(Diag::new("E0302", format!("`from {module} import ...` does not exist in Nyra"), span)
+                .hint(format!("write `use {module}` and call the functions with the module name: `{module}.name(...)`")));
+        }
+        let mut d = None;
+        if word == "import" {
+            d = Some(
+                Diag::new("E0302", format!("`import {module}`: Nyra spells it `use {module}`"), span)
+                    .hint(format!("write `use {module}`"))
+                    .fix(vec![Edit::replace(span, "import", "use")]),
+            );
+        }
+        if !matches!(self.peek(), Tok::Newline | Tok::Eof) {
+            let rest = match self.peek() {
+                Tok::Dot => format!("`use {module}` imports the whole module: call its functions as `{module}.name(...)`, there is no `use {module}.name`"),
+                Tok::Comma => "one module per line: `use math` and `use text` on two lines".to_string(),
+                Tok::Ident(w) if w == "as" => format!("modules cannot be renamed: write `use {module}` and call `{module}.name(...)`"),
+                _ => format!("a `use` line names one module: `use {module}`"),
+            };
+            return Err(Diag::new("E0302", format!("unexpected {} after `use {module}`", self.found()), self.span()).hint(rest));
+        }
+        if let Some(d) = d {
+            // the line is otherwise fine: the program is still read as if it said `use`
+            self.errs.push(d);
+        }
+        Ok(Use { module, span: mspan })
     }
 
     /// True if the token here starts a statement that may stand at the top level of a script.
@@ -644,9 +699,11 @@ impl Parser {
             self.bump();
             let elem = self.ty("an array type names the type of its elements: `[int]`")?;
             if self.at(&Tok::Colon) {
-                return Err(Diag::new("E0102", "map types like `[str: int]` are not in Nyra yet", span).hint(
-                    "maps come in the next version: for now use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`",
-                ));
+                // `[K: V]`: a map
+                self.bump();
+                let value = self.ty("a map type names its key and value types: `[str: int]`")?;
+                self.expect(Tok::RBracket, "`]` to close the map type").map_err(|d| d.or_hint("a map type is written `[str: int]`"))?;
+                return Ok(Type::map(elem, value));
             }
             self.expect(Tok::RBracket, "`]` to close the array type").map_err(|d| d.or_hint("an array type is written `[int]`"))?;
             return Ok(Type::array(elem));
@@ -898,7 +955,7 @@ impl Parser {
                 format!("put `{}` on a new line: Nyra has one statement per line", t.text())
             }
             (Tok::Colon, _) if matches!(self.peek_at(1), Tok::Colon) => {
-                "`::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name".to_string()
+                "`::` paths do not exist: call a module's function with a dot, `math.sqrt(x)`, and other functions by their plain name".to_string()
             }
             (Tok::Colon, Some(f)) if matches!(self.peek_at(1), Tok::Assign) => {
                 format!("`:=` does not exist: declare a variable with `let {f} = ...` (or `var {f} = ...` to change it later)")
@@ -950,6 +1007,13 @@ impl Parser {
 
     fn stmt(&mut self) -> PResult<Stmt> {
         let span = self.span();
+        if let Tok::Ident(w) = self.peek() {
+            if matches!(w.as_str(), "use" | "import") && matches!(self.peek_at(1), Tok::Ident(_)) {
+                let w = w.clone();
+                return Err(Diag::new("E0302", format!("`{w}` inside a block: imports go at the top of the file"), span)
+                    .hint("move the `use` line to the top of the file, outside every function"));
+            }
+        }
         let kind = match self.peek().clone() {
             Tok::Let | Tok::Var => {
                 let kw = self.bump().tok;
@@ -1298,6 +1362,41 @@ impl Parser {
         Ok(e)
     }
 
+    /// The rest of a map literal `[k: v, k2: v2]`, after its first key (the next token is `:`).
+    fn map_literal(&mut self, first: Expr, open: Span, span: Span) -> PResult<Expr> {
+        let mut pairs = Vec::new();
+        let mut key = first;
+        loop {
+            self.expect(Tok::Colon, "`:` after the key").map_err(|d| d.or_hint("a map literal is written `[\"a\": 1, \"b\": 2]`"))?;
+            self.skip_newlines();
+            let value = self.expr()?;
+            pairs.push((key, value));
+            self.skip_newlines();
+            match self.peek() {
+                Tok::Comma => {
+                    self.bump();
+                    self.skip_newlines();
+                    if self.at(&Tok::RBracket) {
+                        self.bump();
+                        break;
+                    }
+                    key = self.expr()?;
+                    self.skip_newlines();
+                }
+                Tok::RBracket => {
+                    self.bump();
+                    break;
+                }
+                _ => {
+                    return Err(self
+                        .unexpected(&format!("`,` or `]` in the map opened at {}:{}", open.line, open.col))
+                        .or_hint("separate the entries with commas: `[\"a\": 1, \"b\": 2]`"))
+                }
+            }
+        }
+        Ok(Expr::new(ExprKind::MapLit(pairs), span))
+    }
+
     fn primary(&mut self) -> PResult<Expr> {
         let span = self.span();
         let kind = match self.peek().clone() {
@@ -1319,6 +1418,12 @@ impl Parser {
             }
             Tok::LBracket => {
                 let open = self.bump().span;
+                // `[:]`: an empty map
+                if self.at(&Tok::Colon) && matches!(self.peek_at(1), Tok::RBracket) {
+                    self.bump();
+                    self.bump();
+                    return Ok(Expr::new(ExprKind::MapLit(Vec::new()), span));
+                }
                 let mut items = Vec::new();
                 loop {
                     self.skip_newlines();
@@ -1326,7 +1431,12 @@ impl Parser {
                         self.bump();
                         break;
                     }
-                    items.push(self.expr()?);
+                    let item = self.expr()?;
+                    // `[k: v, ...]`: a map literal
+                    if items.is_empty() && self.at(&Tok::Colon) {
+                        return self.map_literal(item, open, span);
+                    }
+                    items.push(item);
                     self.skip_newlines();
                     if items.len() == 1 && self.at(&Tok::For) {
                         let elem = items.pop().expect("one element");

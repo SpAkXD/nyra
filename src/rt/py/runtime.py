@@ -300,6 +300,18 @@ class NyList(list):
     ny_shared = False
 
 
+class NyDict(dict):
+    """A Nyra map: a dict (insertion order) that is copied before a write when it is shared."""
+    ny_shared = False
+
+
+def ny_mget(m, k, kt, line, col):
+    """`m[k]`: E0248 when the key is missing (`kt` is the key's type, for the message)."""
+    if k not in m:
+        ny_panic("E0248", f"key {ny_show(k, kt)} is not in the map", "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col)
+    return m[k]
+
+
 def ny_share(v):
     """`v` gets one more owner: a write to any of them copies it first."""
     v.ny_shared = True
@@ -318,6 +330,10 @@ def ny_copy(v):
     """A copy of one level: the copy is not shared, the values it now shares are."""
     if isinstance(v, NyList):
         return ny_share_all(NyList(v))
+    if isinstance(v, NyDict):
+        c = NyDict(v)
+        ny_share_all(list(c.values()))
+        return c
     return v.ny_copy()
 
 
@@ -407,6 +423,8 @@ def ny_eq(a, b):
     """Deep equality without Python's shortcut for the same object, so NaN never equals itself."""
     if isinstance(a, NyList):
         return len(a) == len(b) and all(ny_eq(x, y) for x, y in zip(a, b))
+    if isinstance(a, NyDict):
+        return len(a) == len(b) and all(k in b and ny_eq(v, b[k]) for k, v in a.items())
     return a == b
 
 
@@ -453,4 +471,10 @@ def ny_show(v, t):
     if k == "[":
         e = t[1:]
         return "[" + ", ".join(ny_show(x, e) for x in v) + "]"
+    if k == "{":
+        # a map: "{" + the key type (one letter) + the value type
+        if not v:
+            return "[:]"
+        kt, vt = t[1], t[2:]
+        return "[" + ", ".join(ny_show(a, kt) + ": " + ny_show(b, vt) for a, b in v.items()) + "]"
     return repr(v)

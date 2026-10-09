@@ -1,0 +1,4 @@
+// expect: E0201
+fn main() {
+    print(math.sqrt(2.0))
+}

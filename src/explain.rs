@@ -506,7 +506,7 @@ mod tests {
         assert!(e.wrong.contains("cout") && e.fixed.contains("count"));
         assert_eq!(e.related, ["E0202", "E0206", "E0205"]);
         assert!(!all.iter().find(|e| e.code == "E0220").unwrap().planned);
-        assert!(all.iter().find(|e| e.code == "E0300").unwrap().planned);
+        assert!(all.iter().find(|e| e.code == "E0310").unwrap().planned);
         assert_eq!(all.iter().find(|e| e.code == "E0241").unwrap().kind, "runtime error");
     }
 

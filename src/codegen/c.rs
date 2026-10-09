@@ -10,6 +10,9 @@ use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, St
 const PRELUDE: &str = include_str!("../rt/c/core.c");
 const STRINGS: &str = include_str!("../rt/c/str.c");
 const ARRAYS: &str = include_str!("../rt/c/arr.c");
+const STD: &str = include_str!("../rt/c/std.c");
+const MAPS: &str = include_str!("../rt/c/map.c");
+const JSON: &str = include_str!("../rt/c/json.c");
 
 const RESERVED: &[&str] = &[
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
@@ -45,6 +48,7 @@ fn ctype(t: Ty) -> String {
         Ty::Char => "nyrt_char".into(),
         Ty::Str => "nyrt_str*".into(),
         Ty::Array(_) => "nyrt_arr*".into(),
+        Ty::Map(_) => "nyrt_map*".into(),
         Ty::Struct(_) => format!("nyS_{}", t.struct_name().expect("a struct")),
         other => unreachable!("the C backend got the type `{}`", other.name()),
     }
@@ -83,6 +87,7 @@ fn rt_name(t: Ty) -> &'static str {
         Ty::Char => "char",
         Ty::Str => "str",
         Ty::Array(_) => "arr",
+        Ty::Map(_) => "map",
         other => unreachable!("no runtime functions for `{}` yet", other.name()),
     }
 }
@@ -152,6 +157,7 @@ fn structs(m: &Module, out: &mut String) {
                 match t {
                     Ty::Str => format!("nyrt_str_eq(x->{f}, y->{f})"),
                     Ty::Array(_) => format!("nyrt_arr_eq(x->{f}, y->{f})"),
+                    Ty::Map(_) => format!("nyrt_map_eq(x->{f}, y->{f})"),
                     Ty::Struct(_) => format!("{}_eq(&x->{f}, &y->{f})", ctype(*t)),
                     _ => format!("x->{f} == y->{f}"),
                 }
@@ -174,6 +180,7 @@ fn structs(m: &Module, out: &mut String) {
                 Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
                 Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
                 Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
+                Ty::Map(_) => format!("nyrt_buf_map(o, v->{f});"),
                 _ => format!("{}_fmt(o, &v->{f});", ctype(*t)),
             };
             let _ = writeln!(out, "    {line}");
@@ -181,6 +188,118 @@ fn structs(m: &Module, out: &mut String) {
         out.push_str("    nyrt_buf_lit(o, \")\", 1);\n}\n");
     }
     out.push('\n');
+}
+
+/// The arrays and structs whose values `json.str` writes or `json.parse` reads, with the ones
+/// inside them: each gets a generated encoder `nyJE_<k>` and decoder `nyJD_<k>`.
+fn json_types(m: &Module) -> Vec<Ty> {
+    fn add(m: &Module, t: Ty, v: &mut Vec<Ty>) {
+        if !matches!(t, Ty::Array(_) | Ty::Struct(_)) || v.contains(&t) {
+            return;
+        }
+        v.push(t);
+        match t {
+            Ty::Array(_) => add(m, t.elem().expect("an array"), v),
+            _ => {
+                for (_, ft) in &m.structs.get(t).expect("a struct").fields {
+                    add(m, *ft, v);
+                }
+            }
+        }
+    }
+    fn walk(m: &Module, f: &Func, ss: &[Stmt], v: &mut Vec<Ty>) {
+        for s in ss {
+            match &s.kind {
+                StmtKind::Op { op: RtOp::JsonStr, args, .. } => add(m, args[0].ty(f), v),
+                StmtKind::Op { op: RtOp::JsonParse, dst: Some(d), .. } => add(m, f.local(*d).ty, v),
+                StmtKind::If { then, els, .. } => {
+                    walk(m, f, then, v);
+                    walk(m, f, els, v);
+                }
+                StmtKind::Loop { head, body, step, .. } => {
+                    walk(m, f, head, v);
+                    walk(m, f, body, v);
+                    walk(m, f, step, v);
+                }
+                StmtKind::ForEach { body, .. } => walk(m, f, body, v),
+                _ => {}
+            }
+        }
+    }
+    let mut v = Vec::new();
+    for f in &m.funcs {
+        walk(m, f, &f.body, &mut v);
+    }
+    v
+}
+
+/// The JSON encoder (`enc`) or decoder of a type.
+fn jfn(json: &[Ty], t: Ty, enc: bool) -> String {
+    let (rt, gen) = if enc { ("nyrt_jenc", "nyJE") } else { ("nyrt_jdec", "nyJD") };
+    match t {
+        Ty::Array(_) | Ty::Struct(_) => format!("{gen}_{}", json.iter().position(|x| *x == t).expect("collected by json_types")),
+        _ => format!("{rt}_{}", rt_name(t)),
+    }
+}
+
+/// The encoders and decoders of the arrays and structs in `json`.
+fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
+    for k in 0..json.len() {
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *v);\nstatic void nyJD_{k}(nyrt_jp *p, void *out);");
+    }
+    for (k, t) in json.iter().enumerate() {
+        if let Some(elem) = t.elem() {
+            let _ = writeln!(
+                out,
+                "static void nyJE_{k}(nyrt_buf *b, const void *v) {{ nyrt_jenc_arr(b, v, {}); }}\nstatic void nyJD_{k}(nyrt_jp *p, void *out) {{ nyrt_jdec_arr(p, out, {}, {}); }}",
+                jfn(json, elem, true),
+                desc(elem),
+                jfn(json, elem, false)
+            );
+            continue;
+        }
+        let info = m.structs.get(*t).expect("a struct");
+        let n = ctype(*t);
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let key = format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
+            let _ = writeln!(out, "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});", string_lit(&key), key.len(), jfn(json, *ft, true), field(info, i));
+        }
+        if info.fields.is_empty() {
+            out.push_str("    nyrt_buf_lit(b, \"{\", 1);\n");
+        }
+        out.push_str("    nyrt_buf_lit(b, \"}\", 1);\n}\n");
+        let _ = writeln!(out, "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};\n    bool seen[{}] = {{0}};", info.fields.len().max(1));
+        out.push_str("    if (nyrt_jopen(p, '{', \"an object\")) {\n        do {\n            nyrt_str *k = nyrt_jkey(p);\n            ");
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let f = field(info, i);
+            let again = if m.managed(*ft) { format!("if (seen[{i}]) {} ", release(*ft, &format!("v.{f}"))) } else { String::new() };
+            let _ = write!(
+                out,
+                "if (k->len == {} && memcmp(k->data, {}, {}) == 0) {{\n                {again}nyrt_jpush_key(p, {});\n                {}(p, &v.{f});\n                nyrt_jpop(p);\n                seen[{i}] = true;\n            }} else ",
+                fname.len(),
+                string_lit(fname),
+                fname.len(),
+                string_lit(fname),
+                jfn(json, *ft, false)
+            );
+        }
+        out.push_str("nyrt_jskip(p);\n            nyrt_str_release(k);\n        } while (nyrt_jnext(p, '}'));\n    }\n");
+        for (i, (fname, _)) in info.fields.iter().enumerate() {
+            let _ = writeln!(out, "    if (!seen[{i}]) nyrt_jmissing(p, {});", string_lit(fname));
+        }
+        let _ = writeln!(out, "    *({n} *)out = v;\n}}");
+    }
+    out.push('\n');
+}
+
+/// The C name of a function: `ny_<name>` for the program's own, `nyM_<module>_<name>` for the
+/// standard library's functions written in Nyra (named `module.name`).
+fn fn_name(name: &str) -> String {
+    match name.split_once('.') {
+        Some((m, n)) => format!("nyM_{m}_{n}"),
+        None => format!("ny_{name}"),
+    }
 }
 
 /// `names` are the plain names; an `inout` parameter is a pointer.
@@ -196,7 +315,7 @@ fn signature(f: &Func, names: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    format!("static {} ny_{}({params})", f.ret.map_or("void".to_string(), ctype), f.name)
+    format!("static {} {}({params})", f.ret.map_or("void".to_string(), ctype), fn_name(&f.name))
 }
 
 /// `file` is the source path as given to nyra; runtime errors report it.
@@ -206,7 +325,20 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     out.push_str(ARRAYS);
     out.push('\n');
+    out.push_str(MAPS);
+    out.push('\n');
+    let std = m.uses_std();
+    if std {
+        out.push_str(STD);
+        out.push('\n');
+    }
     structs(m, &mut out);
+    let json = json_types(m);
+    if m.uses_json() {
+        out.push_str(JSON);
+        out.push('\n');
+        json_funcs(m, &json, &mut out);
+    }
     // string literals: read-only objects that are never freed (reference count 0); `const` also
     // lets the C compiler see that releasing one never reaches free()
     for (i, s) in m.strs.iter().enumerate() {
@@ -241,15 +373,17 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is used through its pointer: `(*p)`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, moving: false, unique: Vec::new(), lens: Vec::new() };
+        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, moving: false, unique: Vec::new(), lens: Vec::new(), json: &json };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
     }
+    // the standard library reads the program's arguments
+    let (params, args) = if std { ("int argc, char **argv", "\n    nyrt_argc = argc;\n    nyrt_argv = argv;") } else { ("void", "") };
     let _ = write!(
         out,
-        "int main(void) {{\n    nyrt_init();\n    ny_{}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
-        m.func(m.main).name
+        "int main({params}) {{{args}\n    nyrt_init();\n    {}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
+        fn_name(&m.func(m.main).name)
     );
     out
 }
@@ -269,6 +403,8 @@ struct Gen<'a> {
     unique: Vec<LocalId>,
     /// Arrays whose length an enclosing loop cannot change, with the C local holding it.
     lens: Vec<(LocalId, String)>,
+    /// The arrays and structs that are written as or read from JSON (see `json_types`).
+    json: &'a [Ty],
 }
 
 impl Gen<'_> {
@@ -488,7 +624,7 @@ impl Gen<'_> {
                         }
                     }
                 }
-                let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, parts.join(", ")));
+                let line = self.assign(*dst, format!("{}({})", fn_name(&self.m.func(*func).name), parts.join(", ")));
                 self.line(&line);
                 if inout {
                     self.indent -= 1;
@@ -705,6 +841,14 @@ impl Gen<'_> {
             }
             RtOp::ArrSort => format!("nyrt_arr_sort(&{lv});"),
             RtOp::ArrSortBy => format!("nyrt_arr_sort_by(&{lv}, {});", a[0]),
+            RtOp::MapSet | RtOp::MapRemove => {
+                let (k, v) = t.map_kv().expect("verified: a map");
+                if op == RtOp::MapSet {
+                    format!("nyrt_map_set(&{lv}, {}, {});", self.addr(&args[0], k), self.addr(&args[1], v))
+                } else {
+                    format!("nyrt_map_remove(&{lv}, {});", self.addr(&args[0], k))
+                }
+            }
             RtOp::ArrReverse => format!("nyrt_arr_reverse(&{lv});"),
             other => unreachable!("{} does not change a place", other.name()),
         };
@@ -729,6 +873,13 @@ impl Gen<'_> {
             RtOp::Format if dst.is_some() && args.len() == 1 && matches!(self.ty(&args[0]), Ty::Int | Ty::Char) => {
                 let f = if self.ty(&args[0]) == Ty::Int { "nyrt_int_str" } else { "nyrt_char_str" };
                 format!("{f}({})", a[0])
+            }
+            RtOp::PrintNoLine => {
+                for p in args {
+                    let line = self.put("nyrt_put", p);
+                    self.line(&line);
+                }
+                return;
             }
             RtOp::Format => {
                 let d = dst.map(|d| self.local(d).to_string()).unwrap_or_default();
@@ -763,6 +914,17 @@ impl Gen<'_> {
                 }
                 return;
             }
+            RtOp::MapNew => {
+                let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
+                let t = self.f.local(dst.expect("checked")).ty;
+                let (k, v) = t.map_kv().expect("verified: a map");
+                self.line(&format!("{d} = nyrt_map_new({}, {});", desc(k), desc(v)));
+                for pair in args.chunks(2) {
+                    let line = format!("nyrt_map_set(&{d}, {}, {});", self.addr(&pair[0], k), self.addr(&pair[1], v));
+                    self.line(&line);
+                }
+                return;
+            }
             RtOp::StructNew => {
                 let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
                 let t = self.f.local(dst.expect("checked")).ty;
@@ -779,6 +941,16 @@ impl Gen<'_> {
                 let root = if let Expr::Local(l) = args[0] { Some(l) } else { None };
                 self.elem(&a[0], root, elem, &args[1], span)
             }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                if op == RtOp::MapGet {
+                    format!("*({}*)nyrt_map_at({}, {}, {at})", ctype(v), a[0], self.addr(&args[1], k))
+                } else {
+                    format!("*({}*)nyrt_map_or({}, {}, {})", ctype(v), a[0], self.addr(&args[1], k), self.addr(&args[2], v))
+                }
+            }
+            RtOp::MapKeys => format!("nyrt_map_list({}, false)", a[0]),
+            RtOp::MapValues => format!("nyrt_map_list({}, true)", a[0]),
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", a[0]),
@@ -804,6 +976,31 @@ impl Gen<'_> {
             RtOp::ArrRepeat => format!("nyrt_arr_repeat({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("nyrt_arr_concat({}, {})", a[0], a[1]),
             RtOp::ArrJoin => format!("nyrt_arr_join({}, {})", a[0], a[1]),
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("nyrt_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => {
+                let d = self.local(dst.expect("verified: a destination")).to_string();
+                let t = self.ty(&args[0]);
+                let line = format!("{}(&nyrt_b, {});", jfn(self.json, t, true), self.addr(&args[0], t));
+                self.line("{");
+                self.indent += 1;
+                self.line("nyrt_buf nyrt_b = nyrt_buf_new();");
+                self.line(&line);
+                self.line(&format!("{d} = nyrt_buf_done(&nyrt_b);"));
+                self.indent -= 1;
+                self.line("}");
+                return;
+            }
+            RtOp::JsonParse => {
+                let d = dst.expect("verified: a destination");
+                let t = self.f.local(d).ty;
+                let line = format!("nyrt_jparse({}, {}, &{}, {at});", a[0], jfn(self.json, t, false), self.local(d));
+                self.line(&line);
+                return;
+            }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         let line = self.assign(dst, call);
@@ -930,6 +1127,7 @@ impl Gen<'_> {
                         let t = x.ty(self.f);
                         let eq = match t {
                             Ty::Struct(_) => format!("{}_eq({}, {})", ctype(t), self.addr(x, t), self.addr(y, t)),
+                            Ty::Map(_) => format!("nyrt_map_eq({}, {})", bare(&a), bare(&b)),
                             _ => format!("nyrt_arr_eq({}, {})", bare(&a), bare(&b)),
                         };
                         if *op == BinOp::DeepEq {
@@ -967,6 +1165,11 @@ impl Gen<'_> {
                         Expr::Local(l) if self.cached_len(*l).is_some() => self.cached_len(*l).unwrap_or_default().to_string(),
                         x => format!("{}->len", self.expr(x)),
                     },
+                    PureFn::MapLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::MapHas => {
+                        let k = self.ty(&args[0]).map_kv().expect("verified: a map").0;
+                        format!("nyrt_map_has({}, {})", a[0], self.addr(&args[1], k))
+                    }
                     PureFn::ArrContains | PureFn::ArrIndexOf => {
                         let elem = self.ty(&args[0]).elem().expect("verified: an array");
                         let f = if *p == PureFn::ArrContains { "contains" } else { "index_of" };

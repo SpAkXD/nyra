@@ -13,6 +13,7 @@ mod json;
 mod lexer;
 mod mcp;
 mod parser;
+mod stdlib;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -22,7 +23,7 @@ const USAGE: &str = "\
 nyra - a language for AI agents
 
 usage:
-  nyra run   <file.nyra>    compile and run
+  nyra run   <file.nyra> [-- args]   compile and run (args after `--` go to the program)
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
@@ -105,15 +106,21 @@ struct Opts {
     json: bool,
     time: bool,
     fix: bool,
+    /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
+    prog_args: Vec<String>,
 }
 
 fn parse_args() -> Result<Opts, String> {
     let mut args = std::env::args().skip(1);
     let mut positional = Vec::new();
     let mut opts =
-        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false };
+        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false, prog_args: Vec::new() };
     while let Some(a) = args.next() {
         match a.as_str() {
+            "--" => {
+                opts.prog_args = args.by_ref().collect();
+                break;
+            }
             "-h" | "--help" | "help" => return Err(USAGE.to_string()),
             "-V" | "--version" | "version" => return Err(format!("nyra {}", env!("CARGO_PKG_VERSION"))),
             "--js" => opts.target = Target::Js,
@@ -169,6 +176,10 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
         return Err(checked(errs));
     }
     let (mut prog, errs) = parser::parse(toks);
+    if !errs.is_empty() {
+        return Err(checked(errs));
+    }
+    let errs = stdlib::link(&mut prog);
     if !errs.is_empty() {
         return Err(checked(errs));
     }
@@ -417,6 +428,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         // the program's runtime errors are then printed as JSON too
         cmd.env("NYRA_JSON", "1");
     }
+    cmd.args(&opts.prog_args);
     let t = Instant::now();
     let status = cmd.status();
     let run_time = t.elapsed();
@@ -612,6 +624,9 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, St
     }
     let t = Instant::now();
     cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
+    // the math library (`math.sqrt`, `math.floor`) is separate outside Windows; it goes after the source
+    #[cfg(not(windows))]
+    cmd.arg("-lm");
     let failed = format!("`{cc}` failed to compile the generated C (this is a nyra bug)");
     if !capture {
         return match cmd.status() {

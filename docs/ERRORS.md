@@ -23,18 +23,18 @@ design may still change.
 | E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
-| E0201-E0215 | type checker | names, types, `ret`, conditions, lambdas |
+| E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 |
 | E0250-E0253 | examples | an `ex` example is false, stops with a runtime error, is not a `bool` or does not finish; checked while compiling |
-| E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
+| E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
-| E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
+| E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
-brace that starts no `{value}` is text. Numbers that are not listed (E0216-E0219, E0248, E0254-E0259, E0309,
-E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
+brace that starts no `{value}` is text. Numbers that are not listed (E0216-E0217, E0219, E0254-E0259,
+E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -699,6 +699,32 @@ fn main() {
 }
 ```
 - **Related:** E0213, E0204, E0203
+
+## E0218: map key type not allowed
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A map type `[K: V]` has a key type other than `int`, `str`, `char` or `bool`, such as `[float: str]` or `[Point: int]`.
+- **Why Nyra has this rule:** A key must compare exactly and hash the same way on every backend. Floats do not (rounding, `NaN`, `-0.0`), and arrays and structs as keys would be compared by content on some hosts and by identity on others.
+- **Common causes:**
+  - a float key, such as a price or a coordinate
+  - a struct or an array as the key, where a name or an id would do
+- **Wrong:**
+```rust
+fn main() {
+    var names: [float: str] = [:]
+    names[1.5] = "one and a half"
+    print(names)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var names: [str: str] = [:]
+    names[str(1.5)] = "one and a half"
+    print(names)
+}
+```
+- **Related:** E0248, E0102
+
 
 ## E0220: duplicate field in a struct
 - **Kind:** compile error · **Since:** v0.3
@@ -1564,6 +1590,32 @@ fn main() {
 ```
 - **Related:** E0242, E0240
 
+## E0248: key not in the map
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `m[k]` or `m.get(k)` read a key that the map does not have, for example `key "bob" is not in the map`.
+- **Why Nyra has this rule:** Nyra has no null, so a missing key cannot give "nothing". The program stops with a clear message instead of continuing with a made-up value. `m.has(k)` tests first, and `m.get(k, default)` gives a value for a missing key.
+- **Common causes:**
+  - counting with `m[k] += 1` before the key exists: write `m[k] = m.get(k, 0) + 1`
+  - a key with different text (case, spaces) from the one that was stored
+- **Wrong:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] += 1
+    print(counts)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] = counts.get("a", 0) + 1
+    print(counts)
+}
+```
+- **Related:** E0240, E0218
+
+
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3
 - **What it means:** The program asked for more memory than a string, an array or the machine can have, and it stops with exit code 101: "out of memory", at the operation that asked, or at position 0:0 when that is not known. `repeat` has a size limit on every backend, so a result of more than 536870888 characters (strings) or 100000000 elements (arrays) is reported at once, without trying to allocate it: `"ab".repeat(1000000000000)`. Natively, the error is also reported when the system gives no more memory. On JavaScript it is also reported when the engine runs out of string or array length, for example for a string built up past 536870888 characters. A JavaScript program that fills the whole heap is stopped by Node itself ("JavaScript heap out of memory", exit code 134), which cannot be reported as E0249.
@@ -1732,14 +1784,13 @@ fn main() {
 - **Related:** E0250, E0251
 
 ## E0300: module not found
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A `use` line names a module that cannot be found: a library name that is not in the standard library or the dependencies, or a quoted path to a file that does not exist (the file name must match exactly, including capital letters).
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
-  - a file path without `./`, or with the wrong capitalisation
-  - a dependency that is not listed in `nyra.toml`
-  - `use str`: the string helpers are in the `text` module (and `str(x)` is a builtin)
+  - a module of another language: `use io` or `use sys` (standard input is `input`, arguments and the exit code are in `os`)
+  - `use str`: string methods need no import (`s.split(",")`), and the `text` module has `text.fixed`
 - **Wrong:**
 ```rust
 use mth
@@ -1792,13 +1843,13 @@ fn main() {
 - **Related:** E0306, E0332
 
 ## E0302: bad `use` line
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A `use` line is not in one of the allowed forms or is in the wrong place. The forms are `use name`, `use "./path"` and `... as alias`; all `use` lines come first in the file, one per line.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An import is not written `use name`: another language's `import math` or `from math import sqrt`, a quoted path, an alias, or a `use` line inside a function. A `use` line names one module and stands at the top level of the file.
 - **Why Nyra has this rule:** One import syntax in one place, so the dependencies of a file are visible at the top. Other languages' spellings (`import`, `from ... import`, `use a.{b}`) are not accepted.
 - **Common causes:**
-  - `import math` instead of `use math`
-  - a `use` line after a function
-  - an alias that is not an identifier
+  - `import math` instead of `use math` (`nyra check --fix` rewrites it)
+  - `from math import sqrt`: import the module and call `math.sqrt(x)`
+  - a `use` line inside a function, or several modules on one line
 - **Wrong:**
 ```rust
 import math
@@ -1904,8 +1955,8 @@ fn main() {
 - **Related:** E0300, E0303
 
 ## E0306: module has no such item
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** `module.name` is used, but the module defines no public function or constant called `name`.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** `module.name` is used, but the module has no function or constant called `name`. The hint suggests the closest name, or the Nyra spelling of another language's function (`random.randint` is `random.range`, `json.dumps` is `json.str`).
 - **Why Nyra has this rule:** A typo after a module name must not turn into a new meaning. The message suggests the closest name.
 - **Common causes:**
   - a typo (`math.sqroot`)
@@ -1929,8 +1980,8 @@ fn main() {
 - **Related:** E0300, E0301, E0307
 
 ## E0307: wrong kind of module item
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A module item is used the wrong way: a function without a call (`math.sqrt`), a constant called like a function (`math.PI()`), or a module name used as a value.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A module item is used the wrong way: a function without a call (`time.now_ms`), a constant called like a function (`math.pi()`), or a module name used as a value.
 - **Why Nyra has this rule:** Functions are always called and constants are never called, so each use shows what kind of thing it is.
 - **Common causes:**
   - forgetting the parentheses on a function
@@ -1940,7 +1991,7 @@ fn main() {
 use math
 
 fn main() {
-    print(math.PI())
+    print(math.pi())
 }
 ```
 - **Fixed:**
@@ -1948,7 +1999,7 @@ fn main() {
 use math
 
 fn main() {
-    print(math.PI)
+    print(math.pi)
 }
 ```
 - **Related:** E0306, E0236
@@ -1977,6 +2028,33 @@ fn main() {
 }
 ```
 - **Related:** E0206
+
+## E0309: `json.parse` needs to know the type
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** `json.parse(text)` is used where nothing says which type to read. `json.parse` reads the type the value goes to: a `let` with a type, a parameter, a field, a `ret` value or an assignment.
+- **Why Nyra has this rule:** JSON is read into ordinary Nyra values (ints, floats, strings, arrays and structs), checked against their type, so there is no untyped "JSON value" that every use would have to inspect. The type must therefore be known where the text is read.
+- **Common causes:**
+  - `let x = json.parse(text)` without a type
+  - `print(json.parse(text))`: print takes values of any type
+- **Wrong:**
+```rust
+use json
+
+fn main() {
+    let xs = json.parse("[1, 2, 3]")
+    print(xs)
+}
+```
+- **Fixed:**
+```rust
+use json
+
+fn main() {
+    let xs: [int] = json.parse("[1, 2, 3]")
+    print(xs)
+}
+```
+- **Related:** E0230, E0345
 
 ## E0310: not available on this target
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
@@ -2304,8 +2382,8 @@ pub fn root(x: float) -> float = math.sqrt(x)
 - **Related:** E0301, E0302
 
 ## E0340: file operation failed
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A function of the `fs` module could not do its job, for example `fs.read: cannot read "x.txt" (not found)`. The reason is one of `not found`, `permission denied`, `is a directory`, `not valid UTF-8` or `io error`. The program stops with exit code 101 and the error points at your call.
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** A function of the `fs` module could not do its job, for example `fs.read: cannot read "x.txt" (not found)`. The reason is one of `not found`, `permission denied`, `is a directory`, `not a directory`, `already exists`, `not empty`, `not valid UTF-8` or `io error`. The program stops with exit code 101 and the error points at your call.
 - **Why Nyra has this rule:** Nyra has no exceptions and no null, so a call that cannot succeed stops the program with a clear message. Where recovery is plausible there is a probe that never fails, such as `fs.exists`, so a program can check first.
 - **Common causes:**
   - a wrong path: paths are relative to the folder the program runs in and use `/` on every system
@@ -2335,34 +2413,35 @@ fn main() {
 - **Related:** E0341, E0310
 
 ## E0341: input is not valid UTF-8
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Text that enters the program (standard input, files, command-line arguments, environment variables) is not valid UTF-8, for example `io.read_line: input is not valid UTF-8`.
-- **Why Nyra has this rule:** A `str` is UTF-8 text on every backend. Both backends check incoming text with the same rule, so a program behaves identically and never holds broken text.
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** Text that enters the program (standard input, files, command-line arguments, environment variables) is not valid UTF-8, for example `input.line: the input is not valid UTF-8`.
+- **Why Nyra has this rule:** A `str` is UTF-8 text on every backend. Every backend checks incoming text with the same rule, so a program behaves identically and never holds broken text.
 - **Common causes:**
   - binary data piped into the program
   - a text file in an old encoding such as Latin-1 or UTF-16
 - **Wrong:**
 ```rust
-use io
+// stdin: \xff\n
+use input
 
 fn main() {
     // run it as:  printf '\377\n' | nyra run main.nyra
-    print(io.read_line())
+    print(input.line())
 }
 ```
 - **Fixed:**
 ```rust
-use io
+use input
 
 fn main() {
     // run it as:  printf 'ok\n' | nyra run main.nyra
-    print(io.read_line())
+    print(input.line())
 }
 ```
 - **Related:** E0340, E0344
 
 ## E0342: bad argument value for a standard function
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **Kind:** runtime error · **Since:** v0.5
 - **What it means:** A standard library function received an argument that is valid in type but has no sensible result, such as `random.range(5, 5): need lo < hi and hi - lo <= 2^53` or `text.fixed: digits must be 0 to 100`.
 - **Why Nyra has this rule:** An empty range or a negative number of digits has no answer, and hosts disagree about what to return. A clear error beats a value that differs by backend.
 - **Common causes:**
@@ -2438,3 +2517,42 @@ fn main() {
 }
 ```
 - **Related:** E0342, E0341
+
+## E0345: JSON text does not fit
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `json.parse(text)` got text that is not JSON (`json.parse: invalid JSON at line 3: expected `,` or `}``), or JSON whose shape does not match the type it is read into (`json.parse: expected an int at $.items[2].count`, `json.parse: missing field "name" at $`). The path starts at `$`, the whole value.
+- **Why Nyra has this rule:** JSON is read straight into typed values, so every field a struct has must be there with the right type; fields the struct does not have are skipped. A mismatch stops the program instead of producing a value with holes, and the message says where.
+- **Common causes:**
+  - a number written as a string in the JSON (`"age": "12"` for an `int`)
+  - a float such as `1.5` where the type says `int`
+  - a missing field, or `null` (Nyra has no null)
+  - a trailing comma, single quotes or comments, which JSON does not allow
+- **Wrong:**
+```rust
+use json
+
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u: User = json.parse("{{\"name\": \"Ann\", \"age\": \"12\"}}")
+    print(u.age)
+}
+```
+- **Fixed:**
+```rust
+use json
+
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u: User = json.parse("{{\"name\": \"Ann\", \"age\": 12}}")
+    print(u.age)
+}
+```
+- **Related:** E0309, E0244

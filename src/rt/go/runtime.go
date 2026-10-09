@@ -417,6 +417,157 @@ func nyUnique[T any](a *Array[T]) *Array[T] {
 	return &Array[T]{items: nyShareAll(slices.Clone(a.items))}
 }
 
+// Map is a Nyra map: entries in insertion order (a removed one is a gap until the next
+// compaction), an index from key to position, and the mark for a shared map.
+type Map[K comparable, V any] struct {
+	keys   []K
+	vals   []V
+	alive  []bool
+	index  map[K]int
+	live   int
+	shared bool
+}
+
+func (m *Map[K, V]) nyShare() { m.shared = true }
+
+// nyMOf makes a map of the keys and values, in order (a repeated key keeps its first place).
+func nyMOf[K comparable, V any](keys []K, vals []V) *Map[K, V] {
+	m := &Map[K, V]{index: map[K]int{}}
+	for i := range keys {
+		m.set(keys[i], vals[i])
+	}
+	return m
+}
+
+func (m *Map[K, V]) has(k K) bool {
+	_, ok := m.index[k]
+	return ok
+}
+
+func (m *Map[K, V]) set(k K, v V) {
+	if i, ok := m.index[k]; ok {
+		m.vals[i] = v
+		return
+	}
+	m.index[k] = len(m.keys)
+	m.keys = append(m.keys, k)
+	m.vals = append(m.vals, v)
+	m.alive = append(m.alive, true)
+	m.live++
+}
+
+func (m *Map[K, V]) remove(k K) {
+	i, ok := m.index[k]
+	if !ok {
+		return
+	}
+	delete(m.index, k)
+	var zk K
+	var zv V
+	m.keys[i], m.vals[i], m.alive[i] = zk, zv, false
+	m.live--
+	if len(m.keys) > 8 && m.live < len(m.keys)/2 {
+		c := nyMCopy(m)
+		*m = *c
+	}
+}
+
+// nyMCopy is a compact copy; the values it shares are marked shared.
+func nyMCopy[K comparable, V any](m *Map[K, V]) *Map[K, V] {
+	c := &Map[K, V]{index: make(map[K]int, m.live)}
+	for i, k := range m.keys {
+		if m.alive[i] {
+			c.set(k, nyShare(m.vals[i]))
+		}
+	}
+	return c
+}
+
+// nyMUnique is `m` itself when it has one owner, else a copy: what a write needs.
+func nyMUnique[K comparable, V any](m *Map[K, V]) *Map[K, V] {
+	if !m.shared {
+		return m
+	}
+	return nyMCopy(m)
+}
+
+// nyMGet is m[k]: E0248 when the key is missing.
+func nyMGet[K comparable, V any](m *Map[K, V], k K, line, col int) V {
+	i, ok := m.index[k]
+	if !ok {
+		var b strings.Builder
+		nyShowAny(&b, k)
+		nyFail("E0248", "key "+b.String()+" is not in the map", "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col)
+	}
+	return m.vals[i]
+}
+
+func nyMGetOr[K comparable, V any](m *Map[K, V], k K, d V) V {
+	if i, ok := m.index[k]; ok {
+		return m.vals[i]
+	}
+	return d
+}
+
+func nyMKeys[K comparable, V any](m *Map[K, V]) *Array[K] {
+	out := make([]K, 0, m.live)
+	for i, k := range m.keys {
+		if m.alive[i] {
+			out = append(out, k)
+		}
+	}
+	return &Array[K]{items: out}
+}
+
+func nyMValues[K comparable, V any](m *Map[K, V]) *Array[V] {
+	out := make([]V, 0, m.live)
+	for i, v := range m.vals {
+		if m.alive[i] {
+			out = append(out, nyShare(v))
+		}
+	}
+	return &Array[V]{items: out}
+}
+
+func (m *Map[K, V]) nyEq(o any) bool {
+	n := o.(*Map[K, V])
+	if m.live != n.live {
+		return false
+	}
+	for i, k := range m.keys {
+		if !m.alive[i] {
+			continue
+		}
+		j, ok := n.index[k]
+		if !ok || !nyEqual(m.vals[i], n.vals[j]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Map[K, V]) nyShowIn(b *strings.Builder) {
+	if m.live == 0 {
+		b.WriteString("[:]")
+		return
+	}
+	b.WriteByte('[')
+	first := true
+	for i, k := range m.keys {
+		if !m.alive[i] {
+			continue
+		}
+		if !first {
+			b.WriteString(", ")
+		}
+		first = false
+		nyShowAny(b, k)
+		b.WriteString(": ")
+		nyShowAny(b, m.vals[i])
+	}
+	b.WriteByte(']')
+}
+
 // nyCheck is an index that must be in bounds (E0240).
 func nyCheck[T any](a *Array[T], i int64, line, col int) int64 {
 	if i < 0 || i >= int64(len(a.items)) {

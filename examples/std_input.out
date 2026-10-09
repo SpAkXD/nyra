@@ -1,0 +1,9 @@
+1: [hello] (5 characters)
+2: [12] (2 characters)
+3: [] (0 characters)
+4: [30] (2 characters)
+5: [wörld ✓] (7 characters)
+6: [-2] (2 characters)
+sum of the numbers: 40
+words: hello, wörld ✓
+after the end: [] true

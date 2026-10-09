@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 
 use super::{
-    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind,
+    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind,
     StrId, StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
@@ -113,7 +113,7 @@ fn mutates(e: &ast::Expr) -> bool {
     use ast::ExprKind as K;
     match &e.kind {
         K::Method(r, name, args) => {
-            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse" | "sort_by")
+            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse" | "sort_by" | "set")
                 || mutates(r)
                 || args.iter().any(mutates)
         }
@@ -129,6 +129,7 @@ fn mutates(e: &ast::Expr) -> bool {
         K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
         K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
         K::Array(xs) => xs.iter().any(mutates),
+        K::MapLit(pairs) => pairs.iter().any(|(k, v)| mutates(k) || mutates(v)),
         K::Interp(parts) => parts.iter().any(|p| matches!(p, ast::InterpPart::Expr(x) if mutates(x))),
         K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => false,
     }
@@ -432,15 +433,23 @@ impl<'a> Lower<'a> {
             ast::StmtKind::ForEach { var, index, iter, body } => {
                 // The loop keeps its own reference to the string or array (`it`), so the body
                 // may change the variable it came from without changing what the loop visits.
-                let elem = match iter.ty {
-                    Type::Str => Ty::Char,
-                    t => t.elem().expect("the checker allows strings and arrays"),
+                let (elem, ity) = match iter.ty {
+                    Type::Str => (Ty::Char, iter.ty),
+                    // a map: its keys, in insertion order
+                    t @ Type::Map(_) => {
+                        let k = t.map_kv().expect("a map").0;
+                        (k, Ty::array(k))
+                    }
+                    t => (t.elem().expect("the checker allows strings, arrays and maps"), t),
                 };
                 self.scopes.push(Scope::default());
-                let v = self.expr(iter, None, out);
-                let it = self.temp(iter.ty);
+                let mut v = self.expr(iter, None, out);
+                if ity != iter.ty {
+                    v = self.op(RtOp::MapKeys, vec![v], ity, None, span, out);
+                }
+                let it = self.temp(ity);
                 self.init(it, v, span, out);
-                if self.managed(iter.ty) {
+                if self.managed(ity) {
                     self.scopes.last_mut().expect("pushed").owned.push(it);
                 }
                 self.end_statement(span, out);
@@ -650,6 +659,28 @@ impl<'a> Lower<'a> {
             }
             return;
         }
+        // `m[k] = v`, `m[k] += v`: the map is the place, the key and the value its operands
+        if let ast::ExprKind::Index(base, key) = &target.kind {
+            if base.ty.map_kv().is_some() {
+                let later = mutates(key) || mutates(value);
+                let place = self.place(base, later, out);
+                let k = self.expr(key, None, out);
+                let k = if mutates(value) { self.snapshot(k, key.ty, key.span, out) } else { k };
+                let v = match op {
+                    None => self.expr(value, None, out),
+                    Some(op) => {
+                        let map = self.read(&place, base.ty, out);
+                        let old = self.map_read(RtOp::MapGet, vec![map, k.clone()], t, target.span, out);
+                        let old = if mutates(value) { self.snapshot(old, t, span, out) } else { old };
+                        let rhs = self.expr(value, None, out);
+                        self.binop(op, old, rhs, t, span, None, out)
+                    }
+                };
+                let v = self.held(v, t, span, out);
+                out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::MapSet, place, args: vec![k, v] }, span });
+                return;
+            }
+        }
         // an element or field: the indexes first (left to right), then the value
         let place = self.place(target, mutates(value), out);
         match op {
@@ -802,6 +833,18 @@ impl<'a> Lower<'a> {
         Expr::Local(d)
     }
 
+    /// `m[k]` / `m.get(k, default)`: the value is borrowed, so a managed one gets one more owner
+    /// (like an array element).
+    fn map_read(&mut self, op: RtOp, args: Vec<Expr>, t: Ty, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let d = self.temp(t);
+        out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op, args }, span });
+        if self.managed(t) {
+            out.push(Stmt { kind: StmtKind::Dup(d), span });
+            self.pending.push(d);
+        }
+        Expr::Local(d)
+    }
+
     /// Lowers `e`: its effects are appended to `out` and a pure expression for its value is
     /// returned. With `dst` (a fresh variable, or a plain value's target), a top-level call or
     /// operation writes straight into `dst`.
@@ -872,6 +915,9 @@ impl<'a> Lower<'a> {
                 if base.ty == Type::Str {
                     return self.op(RtOp::StrAt, vec![xs, i], Ty::Char, dst, span, out);
                 }
+                if base.ty.map_kv().is_some() {
+                    return self.map_read(RtOp::MapGet, vec![xs, i], e.ty, span, out);
+                }
                 self.elem(xs, i, e.ty, dst, span, out)
             }
             ast::ExprKind::Method(recv, name, args) => self.method(recv, name, args, e, dst, out),
@@ -879,6 +925,11 @@ impl<'a> Lower<'a> {
                 let refs: Vec<&ast::Expr> = items.iter().collect();
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
+            }
+            ast::ExprKind::MapLit(pairs) => {
+                let refs: Vec<&ast::Expr> = pairs.iter().flat_map(|(k, v)| [k, v]).collect();
+                let parts = self.operands(&refs, out);
+                self.op(RtOp::MapNew, parts, e.ty, dst, span, out)
             }
             ast::ExprKind::Field(base, name) => {
                 let k = self.field_index(base.ty, name);
@@ -988,13 +1039,18 @@ impl<'a> Lower<'a> {
         let span = e.span;
         match name {
             "print" => {
-                // `print(a, b)`: the values left to right, a space between them
+                // `print(a, b)`: the values left to right, a space between them; a last `end: e`
+                // is printed instead of the newline
+                let (args, end) = match args.split_last() {
+                    Some((last, rest)) if matches!(&last.kind, ast::ExprKind::Labeled(l, _) if l == "end") => (rest, Some(last)),
+                    _ => (args, None),
+                };
                 let mut parts = Vec::new();
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
                         parts.push(Expr::Str(self.strs.intern(" ")));
                     }
-                    let later = args[i + 1..].iter().any(mutates);
+                    let later = args[i + 1..].iter().chain(end).any(|x| mutates(x));
                     match &a.kind {
                         // an interpolated string: its parts directly (a later value that changes
                         // a variable gets the string built first)
@@ -1008,7 +1064,16 @@ impl<'a> Lower<'a> {
                         }
                     }
                 }
-                out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Print, args: parts }, span });
+                let op = match end {
+                    Some(e) => {
+                        let ast::ExprKind::Labeled(_, v) = &e.kind else { unreachable!("matched above") };
+                        let x = self.expr(v, None, out);
+                        parts.push(x);
+                        RtOp::PrintNoLine
+                    }
+                    None => RtOp::Print,
+                };
+                out.push(Stmt { kind: StmtKind::Op { dst: None, op, args: parts }, span });
                 // `print` returns nothing, so this value is never used
                 Expr::Bool(false)
             }
@@ -1059,6 +1124,23 @@ impl<'a> Lower<'a> {
                 // min: `b < a ? b : a` keeps the first on a tie; max: `a < b ? b : a`
                 let cond = if name == "min" { Expr::Binary(lt, b(y), b(x)) } else { Expr::Binary(lt, b(x), b(y)) };
                 Expr::Select(Box::new(cond), b(y), b(x))
+            }
+            // `json.str(v)` of any value, `json.parse(text)` into the type the checker gave the call
+            "json.str" | "json.parse" => {
+                let x = self.expr(&args[0], None, out);
+                let op = if name == "json.str" { RtOp::JsonStr } else { RtOp::JsonParse };
+                self.op(op, vec![x], e.ty, dst, span, out)
+            }
+            // a standard library function: its operands left to right, then the runtime call
+            _ if StdFn::from_name(name).is_some() => {
+                let f = StdFn::from_name(name).expect("matched above");
+                let refs: Vec<&ast::Expr> = args.iter().collect();
+                let vals = self.operands(&refs, out);
+                if e.ty == Type::Void {
+                    out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::Std(f), args: vals }, span });
+                    return Expr::Bool(false);
+                }
+                self.op(RtOp::Std(f), vals, e.ty, dst, span, out)
             }
             _ => {
                 let Some(&func) = self.ids.get(name) else {
@@ -1135,9 +1217,30 @@ impl<'a> Lower<'a> {
             }
             return Expr::Local(copy);
         }
+        if recv.ty.map_kv().is_some() && matches!(name, "set" | "remove") {
+            // changes the map: a place, fixed before the arguments run
+            let later = args.iter().any(mutates);
+            let place = self.place(recv, later, out);
+            let refs: Vec<&ast::Expr> = args.iter().collect();
+            let vals = self.operands(&refs, out);
+            let vals: Vec<Expr> = vals.into_iter().zip(args).map(|(v, a)| self.held(v, a.ty, a.span, out)).collect();
+            let op = if name == "set" { RtOp::MapSet } else { RtOp::MapRemove };
+            out.push(Stmt { kind: StmtKind::Mutate { dst: None, op, place, args: vals }, span });
+            return Expr::Bool(false);
+        }
         let mut refs: Vec<&ast::Expr> = vec![recv];
         refs.extend(args.iter());
         let mut all = self.operands(&refs, out);
+        if let Some((_, v)) = recv.ty.map_kv() {
+            return match name {
+                "len" => Expr::Pure(PureFn::MapLen, all),
+                "has" => Expr::Pure(PureFn::MapHas, all),
+                "get" if all.len() == 2 => self.map_read(RtOp::MapGet, all, v, span, out),
+                "get" => self.map_read(RtOp::MapGetOr, all, v, span, out),
+                "keys" => self.op(RtOp::MapKeys, all, e.ty, dst, span, out),
+                _ => self.op(RtOp::MapValues, all, e.ty, dst, span, out),
+            };
+        }
         if recv.ty == Type::Str {
             // a character searched for in text is the one-character string
             if matches!(name, "contains" | "starts_with" | "ends_with" | "index_of") && args[0].ty == Type::Char {

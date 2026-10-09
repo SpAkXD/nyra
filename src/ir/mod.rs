@@ -21,6 +21,7 @@ pub mod verify;
 
 use crate::ast::Span;
 pub use crate::ast::Type as Ty;
+pub use crate::stdlib::StdFn;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FuncId(pub u32);
@@ -52,18 +53,18 @@ impl Structs {
         }
     }
 
-    /// True for types whose values own heap memory: strings, arrays, and structs with such a field.
+    /// True for types whose values own heap memory: strings, arrays, maps, and structs with such a field.
     pub fn managed(&self, t: Ty) -> bool {
         match t {
-            Ty::Str | Ty::Array(_) => true,
+            Ty::Str | Ty::Array(_) | Ty::Map(_) => true,
             Ty::Struct(_) => self.get(t).is_some_and(|s| s.managed),
             _ => false,
         }
     }
 
-    /// True for aggregates: arrays and structs (deep equality, copy on write in JavaScript).
+    /// True for aggregates: arrays, maps and structs (deep equality, copy on write in JavaScript).
     pub fn aggregate(t: Ty) -> bool {
-        matches!(t, Ty::Array(_) | Ty::Struct(_))
+        matches!(t, Ty::Array(_) | Ty::Struct(_) | Ty::Map(_))
     }
 }
 
@@ -86,6 +87,31 @@ impl Module {
 
     pub fn managed(&self, t: Ty) -> bool {
         self.structs.managed(t)
+    }
+
+    /// True if some statement of the program runs an operation for which `f` is true (a backend
+    /// adds a part of its runtime only when the program needs it).
+    pub fn uses(&self, f: &dyn Fn(RtOp) -> bool) -> bool {
+        fn any(ss: &[Stmt], f: &dyn Fn(RtOp) -> bool) -> bool {
+            ss.iter().any(|s| match &s.kind {
+                StmtKind::Op { op, .. } | StmtKind::Mutate { op, .. } => f(*op),
+                StmtKind::If { then, els, .. } => any(then, f) || any(els, f),
+                StmtKind::Loop { head, body, step, .. } => any(head, f) || any(body, f) || any(step, f),
+                StmtKind::ForEach { body, .. } => any(body, f),
+                _ => false,
+            })
+        }
+        self.funcs.iter().any(|func| any(&func.body, f))
+    }
+
+    /// True if the program calls the standard library (`RtOp::Std`).
+    pub fn uses_std(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::Std(_)))
+    }
+
+    /// True if the program writes or reads JSON.
+    pub fn uses_json(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::JsonStr | RtOp::JsonParse))
     }
 }
 
@@ -187,6 +213,8 @@ pub enum StmtKind {
 pub enum RtOp {
     /// Prints the parts and a newline, without building a string.
     Print,
+    /// `print(a, end: e)`: prints the parts without the newline (the last part is `e`).
+    PrintNoLine,
     /// Builds a new string from the parts (interpolation, `str(x)`). `dst: str`, owned.
     Format,
     /// int `/` whose divisor may be 0 (runtime error E0241). `dst: int`.
@@ -264,12 +292,35 @@ pub enum RtOp {
     /// `Point(x: 1, y: 2)`: the fields in declaration order; the struct becomes one more owner
     /// of each managed field value.
     StructNew,
+    /// A standard library function (`fs.read(path)`): the runtime function `std_<module>_<name>`
+    /// of the backend, called with the operands and the position (a failure is a runtime error).
+    Std(StdFn),
+    /// `json.str(v)`: the JSON text of a value of any type (`dst: str`, owned).
+    JsonStr,
+    /// `[k: v, k2: v2]`: a new map of the destination's type; the operands are keys and values,
+    /// alternating. The map becomes one more owner of each.
+    MapNew,
+    /// `m[k]` (E0248 when the key is missing). Borrowed, like `ArrGet`.
+    MapGet,
+    /// `m.get(k, default)`: the value, or `default`. Borrowed.
+    MapGetOr,
+    /// `m.keys()`: a new array of the keys, in insertion order.
+    MapKeys,
+    /// `m.values()`: a new array of the values, in insertion order.
+    MapValues,
+    /// `m[k] = v`, `m.set(k, v)` (a `Mutate`): a new key goes last, an existing one keeps its place.
+    MapSet,
+    /// `m.remove(k)` (a `Mutate`): nothing happens when the key is missing.
+    MapRemove,
+    /// `json.parse(text)`: a value of the destination's type read from JSON text (E0345), owned.
+    JsonParse,
 }
 
 impl RtOp {
     pub fn name(self) -> &'static str {
         match self {
             RtOp::Print => "print",
+            RtOp::PrintNoLine => "print_no_line",
             RtOp::Format => "format",
             RtOp::DivInt => "div_int",
             RtOp::RemInt => "rem_int",
@@ -309,6 +360,16 @@ impl RtOp {
             RtOp::StrPadLeft => "str_pad_left",
             RtOp::StrPadRight => "str_pad_right",
             RtOp::StructNew => "struct_new",
+            RtOp::Std(f) => f.full_name(),
+            RtOp::JsonStr => "json_str",
+            RtOp::MapNew => "map_new",
+            RtOp::MapGet => "map_get",
+            RtOp::MapGetOr => "map_get_or",
+            RtOp::MapKeys => "map_keys",
+            RtOp::MapValues => "map_values",
+            RtOp::MapSet => "map_set",
+            RtOp::MapRemove => "map_remove",
+            RtOp::JsonParse => "json_parse",
         }
     }
 
@@ -317,7 +378,7 @@ impl RtOp {
     pub fn sig(self) -> (&'static [Ty], Option<Ty>) {
         use Ty::{Char, Float, Int, Str};
         match self {
-            RtOp::Print | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
+            RtOp::Print | RtOp::PrintNoLine | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
             RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
             RtOp::FloatToInt => (&[Float], Some(Int)),
             RtOp::StrConcat => (&[Str, Str], Some(Str)),
@@ -362,7 +423,12 @@ impl RtOp {
                 | RtOp::StructNew
                 | RtOp::StrPadLeft
                 | RtOp::StrPadRight
-        )
+                | RtOp::JsonStr
+                | RtOp::JsonParse
+                | RtOp::MapNew
+                | RtOp::MapKeys
+                | RtOp::MapValues
+        ) || matches!(self, RtOp::Std(f) if f.owned())
     }
 
     /// True for the operations that change a place (`Mutate`).
@@ -379,6 +445,8 @@ impl RtOp {
                 | RtOp::ArrAppend
                 | RtOp::ArrSwap
                 | RtOp::ArrSortBy
+                | RtOp::MapSet
+                | RtOp::MapRemove
         )
     }
 }
@@ -407,6 +475,10 @@ pub enum PureFn {
     ArrContains,
     /// `xs.index_of(v)`: the first index or -1
     ArrIndexOf,
+    /// entries in a map
+    MapLen,
+    /// `m.has(k)`
+    MapHas,
 }
 
 impl PureFn {
@@ -428,6 +500,8 @@ impl PureFn {
             PureFn::ArrLen => "arr_len",
             PureFn::ArrContains => "arr_contains",
             PureFn::ArrIndexOf => "arr_index_of",
+            PureFn::MapLen => "map_len",
+            PureFn::MapHas => "map_has",
         }
     }
 
@@ -440,8 +514,8 @@ impl PureFn {
             PureFn::StrIndexOf => (&[Str, Str], Int),
             PureFn::CharCode => (&[Char], Int),
             PureFn::CharUpper | PureFn::CharLower => (&[Char], Char),
-            PureFn::ArrLen | PureFn::ArrIndexOf => (&[], Int),
-            PureFn::ArrContains => (&[], Bool),
+            PureFn::ArrLen | PureFn::ArrIndexOf | PureFn::MapLen => (&[], Int),
+            PureFn::ArrContains | PureFn::MapHas => (&[], Bool),
             _ => (&[Char], Bool),
         }
     }

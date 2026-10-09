@@ -9,6 +9,7 @@ use crate::ast::*;
 use crate::check_v03::{self as v3, StructInfo};
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
+use crate::stdlib;
 
 mod lambda;
 
@@ -98,6 +99,8 @@ struct Checker {
     freed: HashMap<String, Freed>,
     /// How many lambdas enclose the current expression: inside one, nothing can be changed.
     lambda_depth: usize,
+    /// The imported standard modules and where their `use` line is.
+    modules: Vec<(String, Span)>,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -113,7 +116,25 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         arena_depth: 0,
         freed: HashMap::new(),
         lambda_depth: 0,
+        modules: Vec::new(),
     };
+
+    // the imported modules: their intrinsics are functions named `module.name`
+    for u in &prog.uses {
+        if stdlib::is_module(&u.module) && !c.modules.iter().any(|(m, _)| *m == u.module) {
+            c.modules.push((u.module.clone(), u.span));
+            for f in stdlib::StdFn::ALL.iter().filter(|f| f.path().0 == u.module) {
+                let sig = Sig {
+                    params: f.params().iter().map(|(_, t)| t.ty()).collect(),
+                    names: f.params().iter().map(|(n, _)| n.to_string()).collect(),
+                    inout: vec![false; f.params().len()],
+                    ret: f.ret().ty(),
+                    span: u.span,
+                };
+                c.fns.insert(f.full_name().to_string(), sig);
+            }
+        }
+    }
 
     // structs first: functions and bodies refer to them
     for sd in &prog.structs {
@@ -305,7 +326,7 @@ fn show(e: &Expr) -> Option<String> {
         ExprKind::Bool(b) => b.to_string(),
         ExprKind::Char(c) => v3::show_char(*c),
         ExprKind::Str(s) if s.len() <= 16 && !s.contains(['"', '\\', '\n', '\t', '\r']) => format!("\"{s}\""),
-        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::Comprehension(_) => return None,
+        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::Comprehension(_) | ExprKind::MapLit(_) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
             let a: Option<Vec<String>> = args.iter().map(show).collect();
@@ -557,6 +578,11 @@ impl Checker {
                 Diag::new("E0206", format!("`{name}` is already the name of a struct (line {})", sd.span.line), span)
                     .hint("variables start lowercase: rename the variable"),
             );
+        } else if let Some((_, at)) = self.modules.iter().find(|(m, _)| m == name) {
+            self.errs.push(
+                Diag::new("E0206", format!("`{name}` is already the name of a module (`use {name}` on line {})", at.line), span)
+                    .hint(format!("a variable cannot share a module's name: rename the variable, e.g. `{name}_value`")),
+            );
         }
         self.freed.remove(name);
         let arena = self.arena_depth;
@@ -567,6 +593,12 @@ impl Checker {
     fn check_type(&mut self, t: Type, span: Span) -> bool {
         match t {
             Type::Array(_) => t.elem().is_some_and(|e| self.check_type(e, span)),
+            Type::Map(_) => {
+                let Some((k, v)) = t.map_kv() else { return false };
+                // a bad key is reported, but the type stays usable (no second error for `[:]`)
+                self.map_key(k, span);
+                self.check_type(v, span)
+            }
             Type::Struct(_) => {
                 let name = t.struct_name().unwrap_or_default();
                 if self.structs.contains_key(&name) {
@@ -593,6 +625,39 @@ impl Checker {
 
     fn managed(&self, t: Type) -> bool {
         v3::managed(t, &self.structs)
+    }
+
+    /// True if a value of `t` holds a map (`json` does not handle maps yet).
+    fn has_map(&self, t: Type) -> bool {
+        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> bool {
+            match t {
+                Type::Map(_) => true,
+                Type::Array(_) => t.elem().is_some_and(|e| go(c, e, seen)),
+                Type::Struct(_) => {
+                    let Some(n) = t.struct_name() else { return false };
+                    if seen.contains(&n) {
+                        return false;
+                    }
+                    seen.push(n.clone());
+                    c.structs.get(&n).is_some_and(|s| s.fields.iter().any(|(_, ft, _)| go(c, *ft, seen)))
+                }
+                _ => false,
+            }
+        }
+        go(self, t, &mut Vec::new())
+    }
+
+    /// A map key must be an `int`, `str`, `char` or `bool` (E0218).
+    fn map_key(&mut self, k: Type, span: Span) -> bool {
+        if matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool) || k.is_unknown() {
+            return true;
+        }
+        let hint = match k {
+            Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
+            _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
+        };
+        self.errs.push(Diag::new("E0218", format!("a map key must be `int`, `str`, `char` or `bool`, found `{}`", k.name()), span).hint(hint));
+        false
     }
 
     /// A value of type `got` is used where `want` is needed. `e` is the expression, for the hint.
@@ -944,6 +1009,8 @@ impl Checker {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => it.elem().unwrap_or(Type::Unknown),
+                    // a map gives its keys, in insertion order
+                    Type::Map(_) => it.map_kv().map_or(Type::Unknown, |(k, _)| k),
                     t => {
                         let hint = match (t, show(iter)) {
                             (Type::Int, Some(s)) => format!("to count, loop over a range: `for {var} in 0..{s}`"),
@@ -1117,6 +1184,15 @@ impl Checker {
             self.errs.push(lambda::changes(e, what, span));
             return;
         }
+        // `m[k] = v` replaces a map's value; a value inside one cannot change in place
+        if map_step(e, what == "assign to") {
+            let shown = show(e).unwrap_or_else(|| "m[k]".into());
+            self.errs.push(
+                Diag::new("E0229", format!("cannot {what} `{shown}`: a value inside a map cannot change in place"), span)
+                    .hint("change a copy and store it back: `var v = m[k]`, change `v`, then `m[k] = v`"),
+            );
+            return;
+        }
         if let ExprKind::Index(b, _) = &e.kind {
             if b.ty == Type::Str {
                 self.errs.push(
@@ -1185,6 +1261,11 @@ impl Checker {
     /// The type of `e`. `want` is the type the context expects; only `[]` needs it.
     fn expr_with(&mut self, e: &mut Expr, want: Option<Type>) -> Type {
         let span = e.span;
+        // `math.sqrt(x)`, `math.pi`: an item of a module
+        if let Some(t) = self.module_item(e, want) {
+            e.ty = t;
+            return t;
+        }
         let t = match &mut e.kind {
             ExprKind::Int(_) => Type::Int,
             ExprKind::Float(_) => Type::Float,
@@ -1217,6 +1298,14 @@ impl Checker {
                     let name = name.clone();
                     self.check_freed(&name, span);
                     t
+                }
+                None if self.modules.iter().any(|(m, _)| m == name) => {
+                    let first = stdlib::names(name).into_iter().next().unwrap_or_default();
+                    self.errs.push(
+                        Diag::new("E0307", format!("`{name}` is a module, not a value"), span)
+                            .hint(format!("use the items of the module by their names, e.g. `{name}.{first}`")),
+                    );
+                    Type::Unknown
                 }
                 None if self.structs.contains_key(name.as_str()) => {
                     let fields: Vec<String> =
@@ -1340,10 +1429,14 @@ impl Checker {
                 }
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
+            ExprKind::MapLit(pairs) => self.map_lit(pairs, want, span),
             ExprKind::Index(base, index) => {
                 let bt = self.expr(base);
-                let it = self.expr(index);
-                if it != Type::Int && !it.is_unknown() {
+                let it = match bt.map_kv() {
+                    Some((k, _)) => self.expr_with(index, Some(k)),
+                    None => self.expr(index),
+                };
+                if bt.map_kv().is_none() && it != Type::Int && !it.is_unknown() {
                     let hint = match (it, show(index)) {
                         (Type::Float, Some(s)) => format!("convert it: `[int({s})]`"),
                         (Type::Char, Some(s)) => format!("an index is a position: to use the character's code write `[{s}.code()]`"),
@@ -1355,6 +1448,19 @@ impl Checker {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => bt.elem().unwrap_or(Type::Unknown),
+                    Type::Map(_) => {
+                        let (k, v) = bt.map_kv().unwrap_or((Type::Unknown, Type::Unknown));
+                        if it != k && !it.is_unknown() {
+                            let hint = match (k, show(index)) {
+                                (Type::Str, Some(s)) => format!("the keys are text: `[str({s})]`"),
+                                _ => format!("the keys of this map are `{}` values", k.name()),
+                            };
+                            self.errs.push(
+                                Diag::new("E0232", format!("a key of `{}` must be `{}`, found `{}`", bt.name(), k.name(), it.name()), index.span).hint(hint),
+                            );
+                        }
+                        v
+                    }
                     t => {
                         let shown = show(base);
                         let hint = match (t, shown) {
@@ -1409,6 +1515,198 @@ impl Checker {
         };
         e.ty = t;
         t
+    }
+
+    /// `module.name(args)` or `module.name`, where `module` is a standard module (and not a
+    /// variable). `None` for every other expression. A call becomes a call of the function named
+    /// `module.name`, a constant becomes its value.
+    fn module_item(&mut self, e: &mut Expr, want: Option<Type>) -> Option<Type> {
+        let (m, name, call) = match &e.kind {
+            ExprKind::Method(r, n, _) | ExprKind::Field(r, n) => match &r.kind {
+                ExprKind::Var(m) => (m.clone(), n.clone(), matches!(e.kind, ExprKind::Method(..))),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        if self.lookup(&m).is_some() || !stdlib::is_module(&m) {
+            return None;
+        }
+        let span = e.span;
+        let full = format!("{m}.{name}");
+        let check_args = |c: &mut Checker, e: &mut Expr| {
+            if let ExprKind::Method(_, _, args) = &mut e.kind {
+                for a in args.iter_mut() {
+                    c.arg_type(a, None);
+                }
+            }
+        };
+        if !self.modules.iter().any(|(x, _)| *x == m) {
+            // a function of the program that has the module's name: `fs.x` is then its own mistake
+            if self.fns.contains_key(&m) || self.decls.iter().any(|(d, _)| *d == m) {
+                return None;
+            }
+            let rspan = match &e.kind {
+                ExprKind::Method(r, ..) | ExprKind::Field(r, _) => r.span,
+                _ => span,
+            };
+            self.errs.push(
+                Diag::new("E0201", format!("undefined variable `{m}`"), rspan)
+                    .hint(format!("`{m}` is a standard module: add `use {m}` at the top of the file"))
+                    .fix(vec![Edit::insert(Span { line: 1, col: 1 }, format!("use {m}
+"))]),
+            );
+            check_args(self, e);
+            return Some(Type::Unknown);
+        }
+        if let Some(v) = stdlib::constant(&m, &name) {
+            if call {
+                let no_args = matches!(&e.kind, ExprKind::Method(_, _, a) if a.is_empty());
+                check_args(self, e);
+                self.errs.push(
+                    Diag::new("E0307", format!("`{full}` is a constant, not a function"), span)
+                        .hint(format!("drop the parentheses: `{full}`"))
+                        .fix_opt(no_args.then(|| Edit::replace(span, &format!("{name}()"), name.clone()))),
+                );
+                return Some(Type::Unknown);
+            }
+            e.kind = ExprKind::Float(v);
+            return Some(Type::Float);
+        }
+        let public = !name.starts_with('_');
+        let json = m == "json" && stdlib::JSON_FNS.contains(&name.as_str());
+        if !public || !(json || self.fns.contains_key(&full)) {
+            let items = stdlib::names(&m);
+            let (hint, fix) = match stdlib::renamed(&m, &name) {
+                Some(h) => (h.to_string(), None),
+                None => match suggest_fix(&name, items.iter().map(String::as_str)) {
+                    Some((h, f)) => (h, f.map(|f| Edit::replace(span, &name, f))),
+                    None => (format!("the items of `{m}` are {}", items.iter().map(|i| format!("`{i}`")).collect::<Vec<_>>().join(", ")), None),
+                },
+            };
+            check_args(self, e);
+            self.errs.push(Diag::new("E0306", format!("module `{m}` has no `{name}`"), span).hint(hint).fix_opt(fix));
+            return Some(Type::Unknown);
+        }
+        if !call {
+            let no_params = self.fns.get(&full).is_some_and(|s| s.params.is_empty());
+            self.errs.push(
+                Diag::new("E0307", format!("`{full}` is a function, not a value"), span)
+                    .hint(format!("call it: `{full}({})`", if no_params { "" } else { "..." }))
+                    .fix_opt(no_params.then(|| Edit::replace(span, &name, format!("{name}()")))),
+            );
+            return Some(Type::Unknown);
+        }
+        let ExprKind::Method(_, _, args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("checked above") };
+        e.kind = ExprKind::Call(full.clone(), args);
+        let ExprKind::Call(_, args) = &mut e.kind else { unreachable!("just set") };
+        if json {
+            return Some(self.json_call(&name, args, span, want));
+        }
+        Some(self.call(&full, args, span, want))
+    }
+
+    /// `json.str(value)` of any value; `json.parse(text)` gives the type the context needs.
+    fn json_call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
+        let parse = name == "parse";
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, if parse { Some(Type::Str) } else { None })).collect();
+        let shown = if parse { "json.parse(text)" } else { "json.str(value)" };
+        for a in args.iter() {
+            match &a.kind {
+                ExprKind::Inout(_) => {
+                    self.errs.push(Diag::new("E0237", format!("the argument of `json.{name}` is not `inout`"), a.span).hint("remove `inout`"))
+                }
+                ExprKind::Labeled(label, _) => self.errs.push(
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `json.{name}`"), a.span)
+                        .hint(format!("write the value alone: `{shown}`")),
+                ),
+                _ => {}
+            }
+        }
+        if tys.len() != 1 {
+            self.errs.push(
+                Diag::new("E0204", format!("`json.{name}` takes exactly 1 argument but {} {} given", tys.len(), was_were(tys.len())), span)
+                    .hint(format!("call it as `{shown}`")),
+            );
+            return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
+        }
+        let t = if parse { want.unwrap_or(Type::Unknown) } else { tys[0] };
+        if self.has_map(t) {
+            self.errs.push(
+                Diag::new("E0309", format!("`json.{name}` cannot handle the map type in `{}` yet", t.name()), span)
+                    .hint("use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"),
+            );
+            return if parse { t } else { Type::Str };
+        }
+        if !parse {
+            if tys[0] == Type::Void {
+                let msg = format!("`json.str` needs a value, but {} returns nothing", call_text(&args[0]));
+                self.errs.push(Diag::new("E0203", msg, args[0].span).hint(self.no_value_hint(&args[0])));
+            }
+            return Type::Str;
+        }
+        self.expect_ty(Type::Str, tys[0], &args[0], Ctx::Arg { f: "json.parse", idx: 0, param: "text" });
+        match want {
+            Some(t) if t.is_unknown() || (t != Type::Void && self.defined(t)) => t,
+            _ => {
+                self.errs.push(
+                    Diag::new("E0309", "`json.parse` needs to know the type it reads", span).hint(
+                        "give the value a type: `let p: Point = json.parse(text)`, `let xs: [int] = json.parse(text)`, or pass it where that type is expected",
+                    ),
+                );
+                Type::Unknown
+            }
+        }
+    }
+
+    /// `[k: v, k2: v2]`: the keys have one type and the values have one type; `[:]` takes its type
+    /// from the context.
+    fn map_lit(&mut self, pairs: &mut [(Expr, Expr)], want: Option<Type>, span: Span) -> Type {
+        let want_kv = want.and_then(Type::map_kv);
+        if pairs.is_empty() {
+            return match want {
+                Some(t @ Type::Map(_)) => t,
+                Some(t) if t.is_unknown() => Type::Unknown,
+                _ => {
+                    self.errs.push(
+                        Diag::new("E0230", "cannot infer the type of the empty map `[:]`", span)
+                            .hint("write its type where it is declared, e.g. `var counts: [str: int] = [:]`"),
+                    );
+                    Type::Unknown
+                }
+            };
+        }
+        let (mut kt, mut vt): (Option<Type>, Option<Type>) = (want_kv.map(|p| p.0), want_kv.map(|p| p.1));
+        let mut bad = false;
+        for (k, v) in pairs.iter_mut() {
+            let tk = self.expr_with(k, kt);
+            let tv = self.expr_with(v, vt);
+            for (t, slot, e, what) in [(tk, &mut kt, &*k, "key"), (tv, &mut vt, &*v, "value")] {
+                if t == Type::Void || t.is_unknown() {
+                    bad = true;
+                    continue;
+                }
+                match *slot {
+                    None => *slot = Some(t),
+                    Some(first) if first != t => {
+                        self.errs.push(
+                            Diag::new("E0231", format!("the {what}s of a map must all have one type: `{}` and `{}`", first.name(), t.name()), e.span)
+                                .hint(format!("convert this {what} to `{}`, or use a struct for values of different types", first.name())),
+                        );
+                        bad = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match (kt, vt) {
+            (Some(k), Some(v)) if !bad => {
+                if !self.map_key(k, pairs[0].0.span) {
+                    return Type::Unknown;
+                }
+                Type::map(k, v)
+            }
+            _ => Type::Unknown,
+        }
     }
 
     /// `[a, b, c]`: every element has one type. `[]` takes its type from the context.
@@ -1652,6 +1950,10 @@ impl Checker {
         let mut sig = sig;
         if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
             sig.params.push(Type::Char);
+        }
+        // `m.get(k, default)`
+        if let (Some((_, v)), "get", 2) = (rt.map_kv(), name, args.len()) {
+            sig.params.push(v);
         }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
@@ -2151,6 +2453,25 @@ impl Checker {
             "str" => Type::Str,
             _ => Type::Char,
         };
+        // `print(a, b, end: "")`: the last argument may replace the line end
+        if name == "print" {
+            if let Some((last, rest)) = args.split_last_mut() {
+                if matches!(&last.kind, ExprKind::Labeled(l, _) if l == "end") {
+                    let t = self.arg_type(last, Some(Type::Str));
+                    if let ExprKind::Labeled(_, v) = &last.kind {
+                        self.expect_ty(Type::Str, t, v, Ctx::Arg { f: "print", idx: rest.len(), param: "end" });
+                    }
+                    if rest.is_empty() {
+                        self.errs.push(
+                            Diag::new("E0204", "`print` needs a value before `end:`", span)
+                                .hint("give it the value to print: `print(\"text\", end: \"\")`"),
+                        );
+                        return ret;
+                    }
+                    return self.builtin("print", rest, span);
+                }
+            }
+        }
         let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
         for a in args.iter() {
             match &a.kind {
@@ -2158,8 +2479,11 @@ impl Checker {
                     Diag::new("E0237", format!("the argument of `{name}` is not `inout`"), a.span).hint("remove `inout`"),
                 ),
                 ExprKind::Labeled(label, _) => self.errs.push(
-                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span)
-                        .hint(format!("write the value alone: `{name}(x)`")),
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span).hint(if name == "print" {
+                        "write the values alone: `print(a, b)`; the only named argument is a last `end:`, as in `print(a, end: \"\")`".to_string()
+                    } else {
+                        format!("write the value alone: `{name}(x)`")
+                    }),
                 ),
                 _ => {}
             }
@@ -2368,5 +2692,15 @@ fn flatten_add<'a>(e: &'a Expr, parts: &mut Vec<&'a Expr>, nodes: &mut Vec<Span>
             flatten_add(r, parts, nodes);
         }
         _ => parts.push(e),
+    }
+}
+
+/// True if the place `e` reaches into a value inside a map: `m[k].x`, `m[k][0]`. With `top_ok`,
+/// `e` itself may be `m[k]` (an assignment replaces the value).
+fn map_step(e: &Expr, top_ok: bool) -> bool {
+    match &e.kind {
+        ExprKind::Index(b, _) if b.ty.map_kv().is_some() => !top_ok || map_step(b, false),
+        ExprKind::Index(b, _) | ExprKind::Field(b, _) => map_step(b, false),
+        _ => false,
     }
 }

@@ -233,7 +233,7 @@ pub fn pure(p: PureFn, args: Vec<Val>) -> R<Val> {
             Val::Bool((0x41..=0x5A).contains(&c) || (0x61..=0x7A).contains(&c))
         }
         PureFn::CharIsSpace => Val::Bool(is_space(chr(next()?)?)),
-        PureFn::ArrLen | PureFn::ArrContains | PureFn::ArrIndexOf => return Err(Stop::No),
+        PureFn::ArrLen | PureFn::ArrContains | PureFn::ArrIndexOf | PureFn::MapLen | PureFn::MapHas => return Err(Stop::No),
     })
 }
 
