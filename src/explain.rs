@@ -20,15 +20,7 @@ const DB: &str = include_str!("../docs/ERRORS.md");
 /// Width of the text printed for humans.
 const WIDTH: usize = 96;
 
-const FIELDS: [&str; 7] = [
-    "Kind",
-    "What it means",
-    "Why Nyra has this rule",
-    "Common causes",
-    "Wrong",
-    "Fixed",
-    "Related",
-];
+const FIELDS: [&str; 7] = ["Kind", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related"];
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -151,19 +143,16 @@ fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) 
         return Err(format!("{code} (line {kind_no}): the kind is `compile error` or `runtime error`, found `{kind}`"));
     }
     let planned = since.starts_with("planned for ");
-    let version_ok = |v: &str| {
-        v.strip_prefix("v0.").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
-    };
+    let version_ok = |v: &str| v.strip_prefix("v0.").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
     let since_ok = if planned {
-        since
-            .strip_prefix("planned for ")
-            .and_then(|r| r.strip_suffix(", not in the compiler yet"))
-            .is_some_and(version_ok)
+        since.strip_prefix("planned for ").and_then(|r| r.strip_suffix(", not in the compiler yet")).is_some_and(version_ok)
     } else {
         version_ok(since)
     };
     if !since_ok {
-        return Err(format!("{code} (line {kind_no}): Since is `v0.2` or `planned for v0.6, not in the compiler yet`, found `{since}`"));
+        return Err(format!(
+            "{code} (line {kind_no}): Since is `v0.2` or `planned for v0.6, not in the compiler yet`, found `{since}`"
+        ));
     }
 
     let text = |i: usize| -> Result<String, String> {

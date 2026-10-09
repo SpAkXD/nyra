@@ -81,7 +81,10 @@ fn test_passes_and_examples_are_not_compiled() {
     assert!(out.status.success());
     assert!(stderr(&out).contains("no examples"), "{}", stderr(&out));
     let out = nyra().args(["test", "--json"]).arg(&path).output().unwrap();
-    assert_eq!(stdout(&out).trim(), format!("{{\"ok\":true,\"file\":{:?},\"examples\":0,\"passed\":0,\"failed\":0,\"errors\":[]}}", path.display().to_string()));
+    assert_eq!(
+        stdout(&out).trim(),
+        format!("{{\"ok\":true,\"file\":{:?},\"examples\":0,\"passed\":0,\"failed\":0,\"errors\":[]}}", path.display().to_string())
+    );
 }
 
 #[test]
@@ -98,7 +101,10 @@ fn compile_errors_come_first() {
 #[test]
 fn ex_is_still_a_name() {
     // `ex` starts examples only when a condition follows it on the same line
-    let path = write("name.nyra", "var ex = [1]\nex.push(2)\nex[0] = 5\nex += [3]\nprint(ex, ex.len())\nfn ex2() -> int = 2  ex ex2() == 2\n");
+    let path = write(
+        "name.nyra",
+        "var ex = [1]\nex.push(2)\nex[0] = 5\nex += [3]\nprint(ex, ex.len())\nfn ex2() -> int = 2  ex ex2() == 2\n",
+    );
     let out = nyra().args(["run", "--js"]).arg(&path).output().unwrap();
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stdout(&out).trim(), "[5, 2, 3] 3");

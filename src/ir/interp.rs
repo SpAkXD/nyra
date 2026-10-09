@@ -67,7 +67,11 @@ pub enum Stop {
 
 /// int + - * / and negation outside the 64-bit range (E0255), worded like the runtimes.
 fn overflow(a: i64, op: &str, b: i64, span: Span) -> Stop {
-    let msg = if op == "~" { format!("int overflow: -({a}) does not fit in 64 bits") } else { format!("int overflow: {a} {op} {b} does not fit in 64 bits") };
+    let msg = if op == "~" {
+        format!("int overflow: -({a}) does not fit in 64 bits")
+    } else {
+        format!("int overflow: {a} {op} {b} does not fit in 64 bits")
+    };
     fail(
         "E0255",
         msg,
@@ -81,12 +85,22 @@ fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop
 }
 
 fn oob(i: i64, n: usize, span: Span) -> Stop {
-    fail("E0240", format!("index {i} is out of bounds for length {n}"), "valid indexes are 0 to len - 1; compare with `.len()` first", span)
+    fail(
+        "E0240",
+        format!("index {i} is out of bounds for length {n}"),
+        "valid indexes are 0 to len - 1; compare with `.len()` first",
+        span,
+    )
 }
 
 fn check_range(a: i64, b: i64, n: usize, span: Span) -> Result<(), Stop> {
     if a < 0 || a > b || b > n as i64 {
-        return Err(fail("E0240", format!("range {a}..{b} is out of bounds for length {n}"), "a range a..b needs 0 <= a <= b <= len", span));
+        return Err(fail(
+            "E0240",
+            format!("range {a}..{b} is out of bounds for length {n}"),
+            "a range a..b needs 0 <= a <= b <= len",
+            span,
+        ));
     }
     Ok(())
 }
@@ -507,9 +521,15 @@ impl<'m> Interp<'m> {
                     Some(Value::Int(a.wrapping_rem(b)))
                 }
             }
-            RtOp::AddInt => Some(Value::Int(i(0)?.checked_add(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "+", i(1).unwrap_or(0), span))?)),
-            RtOp::SubInt => Some(Value::Int(i(0)?.checked_sub(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "-", i(1).unwrap_or(0), span))?)),
-            RtOp::MulInt => Some(Value::Int(i(0)?.checked_mul(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "*", i(1).unwrap_or(0), span))?)),
+            RtOp::AddInt => {
+                Some(Value::Int(i(0)?.checked_add(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "+", i(1).unwrap_or(0), span))?))
+            }
+            RtOp::SubInt => {
+                Some(Value::Int(i(0)?.checked_sub(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "-", i(1).unwrap_or(0), span))?))
+            }
+            RtOp::MulInt => {
+                Some(Value::Int(i(0)?.checked_mul(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "*", i(1).unwrap_or(0), span))?))
+            }
             RtOp::NegInt => Some(Value::Int(i(0)?.checked_neg().ok_or_else(|| overflow(i(0).unwrap_or(0), "~", 0, span))?)),
             RtOp::FloatToInt => {
                 let Some(Value::Float(x)) = args.first() else { return Err(bug("int() of a value that is not a float")) };
@@ -546,7 +566,12 @@ impl<'m> Interp<'m> {
             RtOp::StrReplace => {
                 let (t, old, new) = (s(0)?, s(1)?, s(2)?);
                 if old.is_empty() {
-                    return Err(fail("E0243", "replace() needs a non-empty pattern".into(), "the text to replace can't be \"\"", span));
+                    return Err(fail(
+                        "E0243",
+                        "replace() needs a non-empty pattern".into(),
+                        "the text to replace can't be \"\"",
+                        span,
+                    ));
                 }
                 let r = t.replace(old, new);
                 self.tick(r.len() as u64)?;
@@ -595,7 +620,12 @@ impl<'m> Interp<'m> {
             RtOp::StrSplit => {
                 let (t, sep) = (s(0)?, s(1)?);
                 if sep.is_empty() {
-                    return Err(fail("E0243", "split() needs a non-empty separator".into(), "for the characters of a string use `s.chars()`", span));
+                    return Err(fail(
+                        "E0243",
+                        "split() needs a non-empty separator".into(),
+                        "for the characters of a string use `s.chars()`",
+                        span,
+                    ));
                 }
                 self.tick(t.len() as u64)?;
                 Some(Value::Arr(Rc::new(t.split(sep).map(|p| Value::Str(Rc::new(p.to_string()))).collect())))
@@ -1111,7 +1141,9 @@ mod tests {
 
     #[test]
     fn floats_print_like_javascript() {
-        for (x, s) in [(0.1 + 0.2, "0.30000000000000004"), (1e21, "1e+21"), (1e-7, "1e-7"), (123.0, "123"), (-0.0, "0"), (2.5e-6, "0.0000025")] {
+        for (x, s) in
+            [(0.1 + 0.2, "0.30000000000000004"), (1e21, "1e+21"), (1e-7, "1e-7"), (123.0, "123"), (-0.0, "0"), (2.5e-6, "0.0000025")]
+        {
             assert_eq!(num(x), s);
         }
     }

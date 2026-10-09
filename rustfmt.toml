@@ -1,0 +1,4 @@
+# The style of the code base: long lines, and short constructs kept on one line.
+# CI runs `cargo fmt --check`.
+max_width = 135
+use_small_heuristics = "Max"

@@ -186,7 +186,9 @@ pub fn renamed(module: &str, name: &str) -> Option<&'static str> {
         ("random", "randint" | "randrange" | "int" | "integer" | "next_int" | "nextInt") => {
             "use `random.range(lo, hi)`: the upper bound is excluded, so a die is `random.range(1, 7)`"
         }
-        ("random", "rand" | "uniform" | "float" | "next" | "nextDouble" | "next_float") => "use `random.random()`: a float from 0 up to (not including) 1",
+        ("random", "rand" | "uniform" | "float" | "next" | "nextDouble" | "next_float") => {
+            "use `random.random()`: a float from 0 up to (not including) 1"
+        }
         ("random", "srand" | "set_seed" | "seed_rng") => "use `random.seed(n)`",
         ("math", "abs" | "fabs" | "min" | "max") => "`abs`, `min` and `max` are builtins: call them without `math.`",
         ("math", "power" | "powf" | "powi") => "use `math.pow(x, y)`",
@@ -209,9 +211,13 @@ pub fn renamed(module: &str, name: &str) -> Option<&'static str> {
         ("input", "readlines" | "read_lines" | "all_lines") => "use `input.lines()`",
         ("input", "at_end" | "is_eof" | "done" | "empty" | "end") => "use `input.eof()`",
         ("json", "dumps" | "dump" | "stringify" | "encode" | "to_string" | "Marshal") => "use `json.str(value)`",
-        ("json", "loads" | "load" | "decode" | "from_str" | "Unmarshal") => "use `json.parse(text)` where the type is known: `let p: Point = json.parse(text)`",
+        ("json", "loads" | "load" | "decode" | "from_str" | "Unmarshal") => {
+            "use `json.parse(text)` where the type is known: `let p: Point = json.parse(text)`"
+        }
         ("time", "time" | "now" | "millis" | "current_ms" | "time_ms") => "use `time.now_ms()`: milliseconds since 1970",
-        ("time", "perf_counter" | "monotonic" | "clock" | "performance" | "nanos" | "instant") => "use `time.mono_ms()`: a monotonic clock in milliseconds, for timing code",
+        ("time", "perf_counter" | "monotonic" | "clock" | "performance" | "nanos" | "instant") => {
+            "use `time.mono_ms()`: a monotonic clock in milliseconds, for timing code"
+        }
         ("time", "sleep" | "Sleep" | "wait") => "use `time.sleep_ms(ms)`",
         ("text", "format" | "to_fixed" | "toFixed" | "round") => "use `text.fixed(x, digits)`: `text.fixed(3.14159, 2)` is \"3.14\"",
         _ => return None,

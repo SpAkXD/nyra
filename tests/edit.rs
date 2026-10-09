@@ -156,10 +156,7 @@ fn replace_changes_only_that_symbol() {
     let new = "fn grow(r: Rect, by: int) -> Rect = Rect(at: r.at, w: r.w * by, h: r.h * by)";
     let (ok, after, err) = edit("replace", SHAPES, &["--set", "grow", new], None);
     assert!(ok, "{err}");
-    let expected = SHAPES.replace(
-        "fn grow(r: Rect, by: int) -> Rect {\n    ret Rect(at: r.at, w: r.w + by, h: r.h + by)\n}",
-        new,
-    );
+    let expected = SHAPES.replace("fn grow(r: Rect, by: int) -> Rect {\n    ret Rect(at: r.at, w: r.w + by, h: r.h + by)\n}", new);
     assert_eq!(after, expected);
     assert!(err.contains("replaced fn grow (line 12)"), "{err}");
 }
@@ -184,7 +181,10 @@ fn stdin_definitions_replace_or_add() {
     let (ok, after, err) = edit("upsert", SHAPES, &[], Some(code));
     assert!(ok, "{err}");
     assert!(after.contains("// The area of a rectangle.\nfn area(r: Rect) -> int {\n    ret r.w * r.h\n}\n\nfn grow"), "{after}");
-    assert!(after.ends_with("    print(\"area is not renamed in a string\")\n}\n\nfn perimeter(r: Rect) -> int = 2 * (r.w + r.h)\n"), "{after}");
+    assert!(
+        after.ends_with("    print(\"area is not renamed in a string\")\n}\n\nfn perimeter(r: Rect) -> int = 2 * (r.w + r.h)\n"),
+        "{after}"
+    );
     assert!(err.contains("replaced fn area (lines 10-12), added fn perimeter (line 27)"), "{err}");
 }
 
@@ -283,21 +283,22 @@ fn rename_refuses_what_it_cannot_do_cleanly() {
 
 #[test]
 fn add_and_delete_fields() {
-    let src = "struct A {\n    x: int\n    y: int\n}\nstruct B { x: int, y: int }\nstruct C {\n    x: int,\n    y: int,\n}\nstruct D {}\n";
-    let (ok, after, err) = edit(
-        "fields",
-        src,
-        &[],
-        Some("@add-field A z: [str] after x\n@add-field B z: A\n@add-field C z: int\n@add-field D z: int\n"),
-    );
+    let src =
+        "struct A {\n    x: int\n    y: int\n}\nstruct B { x: int, y: int }\nstruct C {\n    x: int,\n    y: int,\n}\nstruct D {}\n";
+    let (ok, after, err) =
+        edit("fields", src, &[], Some("@add-field A z: [str] after x\n@add-field B z: A\n@add-field C z: int\n@add-field D z: int\n"));
     assert!(ok, "{err}");
     assert_eq!(
         after,
         "struct A {\n    x: int\n    z: [str]\n    y: int\n}\nstruct B { x: int, y: int, z: A }\nstruct C {\n    x: int,\n    y: int,\n    z: int,\n}\nstruct D { z: int }\n"
     );
-    let (ok, after, err) = edit("fields-delete", &after, &[], Some("@delete A.z\n@delete B.x\n@delete B.z\n@delete C.y\n@delete D.z\n"));
+    let (ok, after, err) =
+        edit("fields-delete", &after, &[], Some("@delete A.z\n@delete B.x\n@delete B.z\n@delete C.y\n@delete D.z\n"));
     assert!(ok, "{err}");
-    assert_eq!(after, "struct A {\n    x: int\n    y: int\n}\nstruct B { y: int }\nstruct C {\n    x: int,\n    z: int,\n}\nstruct D {}\n");
+    assert_eq!(
+        after,
+        "struct A {\n    x: int\n    y: int\n}\nstruct B { y: int }\nstruct C {\n    x: int,\n    z: int,\n}\nstruct D {}\n"
+    );
     // commas between fields but none after the last
     let (ok, after, _) = edit("fields-commas", "struct E {\n    a: int,\n    b: int\n}\n", &["--add-field", "E", "c: int"], None);
     assert!(ok);
@@ -463,7 +464,14 @@ fn mcp_tools() {
         call(2, "nyra_show", &format!(r#"{{"path":{p},"name":"area grow"}}"#)),
         call(3, "nyra_edit", &format!(r#"{{"path":{p},"edits":"@rename area surface"}}"#)),
         call(4, "nyra_edit", &format!(r#"{{"path":{p},"edits":{}}}"#, esc("fn surface(r: Rect) -> int = r.depth"))),
-        call(5, "nyra_edit", &format!(r#"{{"code":{},"edits":"@delete Point.y","force":true}}"#, esc("struct Point { x: int, y: int }\nfn main() {\n}\n"))),
+        call(
+            5,
+            "nyra_edit",
+            &format!(
+                r#"{{"code":{},"edits":"@delete Point.y","force":true}}"#,
+                esc("struct Point { x: int, y: int }\nfn main() {\n}\n")
+            ),
+        ),
         call(6, "nyra_show", &format!(r#"{{"path":{p},"name":"nothing"}}"#)),
         call(7, "nyra_outline", &format!(r#"{{"code":{}}}"#, esc("fn main() {\n}\n"))),
         call(8, "nyra_edit", r#"{"path":"notes.txt","edits":"@delete a"}"#),

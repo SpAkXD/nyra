@@ -330,9 +330,7 @@ pub fn writes_in(ss: &[Stmt], l: LocalId) -> bool {
     ss.iter().any(|s| {
         let direct = match &s.kind {
             StmtKind::Set(d, _) | StmtKind::Free(d) => *d == l,
-            StmtKind::Call { dst, args, .. } => {
-                *dst == Some(l) || args.iter().any(|a| matches!(a, Arg::InOut(p) if p.root == l))
-            }
+            StmtKind::Call { dst, args, .. } => *dst == Some(l) || args.iter().any(|a| matches!(a, Arg::InOut(p) if p.root == l)),
             StmtKind::Op { dst, .. } => *dst == Some(l),
             StmtKind::Store { place, .. } => place.root == l,
             StmtKind::Mutate { dst, place, .. } => *dst == Some(l) || place.root == l,

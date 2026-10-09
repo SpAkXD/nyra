@@ -46,33 +46,50 @@ fn program(code: &str) -> String {
     if code.lines().any(statement) {
         code.to_string()
     } else {
-        format!("{code}
+        format!(
+            "{code}
 fn main() {{
 }}
-")
+"
+        )
     }
 }
 
 #[test]
 fn definitions_alone_get_a_main() {
-    assert_eq!(program("fn g() = print(1)
-"), "fn g() = print(1)
+    assert_eq!(
+        program(
+            "fn g() = print(1)
+"
+        ),
+        "fn g() = print(1)
 
 fn main() {
 }
-");
-    assert_eq!(program("let p = 1
+"
+    );
+    assert_eq!(
+        program(
+            "let p = 1
 fn g() = print(p)
 g()
-"), "let p = 1
+"
+        ),
+        "let p = 1
 fn g() = print(p)
 g()
-");
-    assert_eq!(program("fn main() {
+"
+    );
+    assert_eq!(
+        program(
+            "fn main() {
 }
-"), "fn main() {
+"
+        ),
+        "fn main() {
 }
-");
+"
+    );
 }
 
 #[test]

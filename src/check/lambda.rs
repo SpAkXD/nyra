@@ -4,9 +4,9 @@
 //! elements. Inside a lambda nothing can be changed (no mutating method, no `inout`), so lowering
 //! may run a chain like `xs.filter(..).map(..).sum()` as one loop.
 
+use super::data;
 use super::{count, show, start, was_were, Checker, Decl};
 use crate::ast::*;
-use super::data;
 use crate::diag::Diag;
 
 /// E0213: a lambda where a value is needed.
@@ -19,9 +19,8 @@ pub(super) fn misplaced(span: Span) -> Diag {
 /// E0214: something inside a lambda changes a variable.
 pub(super) fn changes(e: &Expr, what: &str, span: Span) -> Diag {
     let shown = show(e).unwrap_or_else(|| "this value".into());
-    Diag::new("E0214", format!("a lambda cannot {what} `{shown}`: inside a lambda, variables are read-only"), span).hint(
-        "let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead",
-    )
+    Diag::new("E0214", format!("a lambda cannot {what} `{shown}`: inside a lambda, variables are read-only"), span)
+        .hint("let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead")
 }
 
 /// A name for a lambda parameter that `taken` does not reject: `x2`, `x3`, ...
@@ -182,9 +181,8 @@ impl Checker {
                         (Type::Int, Some(s)) => format!("to count, use a range: `[... for {var} in 0..{s}]`"),
                         _ => "a comprehension goes over a range `a..b`, an array or a string".to_string(),
                     };
-                    self.errs.push(
-                        Diag::new("E0234", format!("cannot loop over `{}` in a comprehension", t.name()), src.span).hint(hint),
-                    );
+                    self.errs
+                        .push(Diag::new("E0234", format!("cannot loop over `{}` in a comprehension", t.name()), src.span).hint(hint));
                     Type::Unknown
                 }
             },
@@ -271,8 +269,9 @@ impl Checker {
         }
         if t == Type::Void {
             self.errs.push(
-                Diag::new("E0215", format!("the lambda of `.{m}()` gives no value: its body returns nothing"), bspan)
-                    .hint(format!("the body is the value the method uses, e.g. `{example}`; to do something for each element write a `for` loop")),
+                Diag::new("E0215", format!("the lambda of `.{m}()` gives no value: its body returns nothing"), bspan).hint(format!(
+                    "the body is the value the method uses, e.g. `{example}`; to do something for each element write a `for` loop"
+                )),
             );
             return Type::Unknown;
         }
@@ -291,8 +290,12 @@ impl Checker {
             }
             Kind::Key if !matches!(t, Type::Int | Type::Float | Type::Str | Type::Char) => {
                 self.errs.push(
-                    Diag::new("E0228", format!("`sort_by` needs a key of type `int`, `float`, `str` or `char`, found `{}`", t.name()), bspan)
-                        .hint("sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`"),
+                    Diag::new(
+                        "E0228",
+                        format!("`sort_by` needs a key of type `int`, `float`, `str` or `char`, found `{}`", t.name()),
+                        bspan,
+                    )
+                    .hint("sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`"),
                 );
                 Type::Unknown
             }

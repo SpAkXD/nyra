@@ -19,8 +19,8 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind,
-    StrId, StructInfo, Structs, Ty, UnOp,
+    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind, StrId,
+    StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
 
@@ -35,8 +35,7 @@ pub fn lower(prog: &ast::Program) -> Result<Module, String> {
     let writers: HashSet<String> =
         prog.globals.uses.iter().filter(|(_, us)| us.iter().any(|u| u.inout)).map(|(f, _)| f.clone()).collect();
     WRITERS.with(|w| *w.borrow_mut() = writers);
-    let ids: HashMap<String, FuncId> =
-        prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
+    let ids: HashMap<String, FuncId> = prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
     let structs = struct_table(prog);
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
@@ -568,7 +567,8 @@ impl<'a> Lower<'a> {
         }
         // a script variable that a function changes is no counter of the script, and no facts
         // are kept about it (any call may change it)
-        self.changed = self.globals.uses.values().flatten().filter(|u| u.inout).map(|u| self.globals.vars[u.var].name.clone()).collect();
+        self.changed =
+            self.globals.uses.values().flatten().filter(|u| u.inout).map(|u| self.globals.vars[u.var].name.clone()).collect();
         self.counters = counters(&f.body, &self.changed);
         // the script variables it uses: hidden parameters after the others, `inout` when changed
         let globals = self.globals;
@@ -585,7 +585,14 @@ impl<'a> Lower<'a> {
         let mut body = Vec::new();
         self.block(&f.body, &mut body, false);
         let ret = if f.ret == Type::Void { None } else { Some(f.ret) };
-        Func { name: f.name.clone(), params: f.params.len() + uses.len(), ret, locals: std::mem::take(&mut self.locals), body, span: f.span }
+        Func {
+            name: f.name.clone(),
+            params: f.params.len() + uses.len(),
+            ret,
+            locals: std::mem::take(&mut self.locals),
+            body,
+            span: f.span,
+        }
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
@@ -823,7 +830,9 @@ impl<'a> Lower<'a> {
                     self.block(els, &mut e, false);
                 }
                 // after `if c { ...; ret }` the rest of the block knows that `c` is false
-                let leaves = |b: &[ast::Stmt]| b.last().is_some_and(|s| matches!(s.kind, ast::StmtKind::Ret(_) | ast::StmtKind::Break | ast::StmtKind::Continue));
+                let leaves = |b: &[ast::Stmt]| {
+                    b.last().is_some_and(|s| matches!(s.kind, ast::StmtKind::Ret(_) | ast::StmtKind::Break | ast::StmtKind::Continue))
+                };
                 if els.is_some() || !leaves(then) {
                     self.restore(before, mark);
                 }
@@ -1005,7 +1014,15 @@ impl<'a> Lower<'a> {
     /// That next value never overflows: `i + 1` stays at most `b` while `i < b`; with a bigger step,
     /// a round whose `i + k` would reach (or pass) the end sets `i` to the end instead, which ends
     /// the loop the same way.
-    fn range(&mut self, i: LocalId, start: &ast::Expr, end: &ast::Expr, step: Option<&ast::Expr>, span: Span, out: &mut Vec<Stmt>) -> (Expr, Expr) {
+    fn range(
+        &mut self,
+        i: LocalId,
+        start: &ast::Expr,
+        end: &ast::Expr,
+        step: Option<&ast::Expr>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> (Expr, Expr) {
         let a = self.expr(start, None, out);
         let b = self.expr(end, None, out);
         let k = step.map(|k| self.expr(k, None, out));
@@ -1158,7 +1175,8 @@ impl<'a> Lower<'a> {
         // an element or field: the indexes first (left to right), then the value
         let place = self.place(target, mutates(value), out);
         // once the store ran, its indexes were valid
-        let indexes: Vec<Expr> = place.path.iter().filter_map(|s| if let Step::Index(i, _) = s { Some(i.clone()) } else { None }).collect();
+        let indexes: Vec<Expr> =
+            place.path.iter().filter_map(|s| if let Step::Index(i, _) = s { Some(i.clone()) } else { None }).collect();
         match op {
             None => {
                 let v = self.expr(value, None, out);
@@ -1483,11 +1501,7 @@ impl<'a> Lower<'a> {
         }
         let t = self.temp(Ty::Bool);
         out.push(Stmt { kind: StmtKind::Set(t, a), span });
-        let cond = if op == ast::BinOp::And {
-            Expr::Local(t)
-        } else {
-            Expr::Unary(UnOp::Not, Box::new(Expr::Local(t)))
-        };
+        let cond = if op == ast::BinOp::And { Expr::Local(t) } else { Expr::Unary(UnOp::Not, Box::new(Expr::Local(t))) };
         rhs.push(Stmt { kind: StmtKind::Set(t, b), span });
         self.end_statement(span, &mut rhs);
         self.pending = saved;
@@ -1654,7 +1668,8 @@ impl<'a> Lower<'a> {
                     let x = &v[0];
                     let zero = if float { Expr::Float(0.0) } else { Expr::Int(0) };
                     // -x fails only for the smallest int, which is negative: abs of it overflows too
-                    let neg = if float { Expr::Unary(UnOp::FNeg, b(x)) } else { self.int_neg(x.clone(), None, span, out) };                    return Expr::Select(Box::new(Expr::Binary(lt, b(x), Box::new(zero))), Box::new(neg), b(x));
+                    let neg = if float { Expr::Unary(UnOp::FNeg, b(x)) } else { self.int_neg(x.clone(), None, span, out) };
+                    return Expr::Select(Box::new(Expr::Binary(lt, b(x), Box::new(zero))), Box::new(neg), b(x));
                 }
                 let (x, y) = (&v[0], &v[1]);
                 // min: `b < a ? b : a` keeps the first on a tie; max: `a < b ? b : a`
@@ -1699,7 +1714,15 @@ impl<'a> Lower<'a> {
         }
     }
 
-    fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+    fn method(
+        &mut self,
+        recv: &ast::Expr,
+        name: &str,
+        args: &[ast::Expr],
+        e: &ast::Expr,
+        dst: Option<LocalId>,
+        out: &mut Vec<Stmt>,
+    ) -> Expr {
         let span = e.span;
         if lambda::is_chain_method(recv.ty, name) {
             // a loop that may run no round
@@ -1738,11 +1761,7 @@ impl<'a> Lower<'a> {
         if name == "reversed" {
             // a copy, reversed in place: `xs.slice(0, len)` / the characters, then `reverse`
             let v = self.expr(recv, None, out);
-            let (arr, t) = if recv.ty == Type::Str {
-                (RtOp::StrChars, Type::array(Ty::Char))
-            } else {
-                (RtOp::ArrSlice, recv.ty)
-            };
+            let (arr, t) = if recv.ty == Type::Str { (RtOp::StrChars, Type::array(Ty::Char)) } else { (RtOp::ArrSlice, recv.ty) };
             let args = if arr == RtOp::StrChars {
                 vec![v]
             } else {
@@ -1750,7 +1769,10 @@ impl<'a> Lower<'a> {
                 vec![v, Expr::Int(0), len]
             };
             let Expr::Local(copy) = self.op(arr, args, t, None, span, out) else { unreachable!() };
-            out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::ArrReverse, place: Place::local(copy), args: Vec::new() }, span });
+            out.push(Stmt {
+                kind: StmtKind::Mutate { dst: None, op: RtOp::ArrReverse, place: Place::local(copy), args: Vec::new() },
+                span,
+            });
             if recv.ty == Type::Str {
                 let sep = Expr::Str(self.strs.intern(""));
                 return self.op(RtOp::ArrJoin, vec![Expr::Local(copy), sep], Ty::Str, dst, span, out);

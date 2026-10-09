@@ -418,8 +418,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             }
             if !closed {
                 errs.push(
-                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span)
-                        .hint("add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)"),
+                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span).hint(
+                        "add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)",
+                    ),
                 );
             }
             let tok = if parts.is_empty() {
@@ -461,8 +462,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
         if c == '.' {
             let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
-            let before_digit = next.is_ascii_digit()
-                && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
+            let before_digit =
+                next.is_ascii_digit() && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
             if !after_digit && !before_digit {
                 toks.push(Token { tok: Tok::Dot, span });
                 i += 1;
@@ -572,7 +573,18 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
     let binary = |t: &Tok| {
         matches!(
             t,
-            Tok::Plus | Tok::Star | Tok::Slash | Tok::Percent | Tok::Eq | Tok::Ne | Tok::Lt | Tok::Le | Tok::Gt | Tok::Ge | Tok::And | Tok::Or
+            Tok::Plus
+                | Tok::Star
+                | Tok::Slash
+                | Tok::Percent
+                | Tok::Eq
+                | Tok::Ne
+                | Tok::Lt
+                | Tok::Le
+                | Tok::Gt
+                | Tok::Ge
+                | Tok::And
+                | Tok::Or
         )
     };
     // `-` too: a statement cannot start with a negation. Not `++` or `--` (`i--`, `--i`), which
@@ -611,7 +623,9 @@ fn closure_params(cs: &[char], i: usize) -> Option<(usize, Vec<String>)> {
     let close = cs[i + 1..].iter().take_while(|c| **c != '\n').position(|c| *c == '|')? + i + 1;
     let inside: String = cs[i + 1..close].iter().collect();
     let names: Vec<String> = inside.split(',').map(|n| n.trim().to_string()).collect();
-    let word = |n: &String| n.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && n.chars().all(|c| c.is_alphanumeric() || c == '_');
+    let word = |n: &String| {
+        n.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && n.chars().all(|c| c.is_alphanumeric() || c == '_')
+    };
     names.iter().all(word).then_some((close + 1 - i, names))
 }
 
@@ -636,9 +650,7 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         }
         let digits: String = cs[start..i].iter().collect();
         // `5.len()` is not a float either
-        let fix = after
-            .is_none_or(|a| !(a.is_alphanumeric() || a == '_' || a == '.'))
-            .then(|| Edit::replace(span, ".", ".0"));
+        let fix = after.is_none_or(|a| !(a.is_alphanumeric() || a == '_' || a == '.')).then(|| Edit::replace(span, ".", ".0"));
         (format!("a float needs digits on both sides of the dot: write `{digits}.0`"), fix)
     } else {
         (hints::bad_char(c), hints::char_fix(c).map(|to| Edit::replace(span, &c.to_string(), to)))

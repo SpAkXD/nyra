@@ -228,7 +228,11 @@ fn check_json_fix_reports_how_many_errors_were_fixed() {
     assert_eq!(json.get("ok").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(json.get("fixed").and_then(|v| v.as_u64()), Some(2));
     // the summary of the edits goes to stderr, a unified diff without context lines
-    assert!(stderr(&out).contains("@@ -2,2 +2,2 @@\n-    let x = 1;\n-    print(x);\n+    let x = 1\n+    print(x)\n"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("@@ -2,2 +2,2 @@\n-    let x = 1;\n-    print(x);\n+    let x = 1\n+    print(x)\n"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]

@@ -113,8 +113,16 @@ struct Opts {
 fn parse_args() -> Result<Opts, String> {
     let mut args = std::env::args().skip(1);
     let mut positional = Vec::new();
-    let mut opts =
-        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false, prog_args: Vec::new() };
+    let mut opts = Opts {
+        cmd: String::new(),
+        file: String::new(),
+        target: Target::Native,
+        out: None,
+        json: false,
+        time: false,
+        fix: false,
+        prog_args: Vec::new(),
+    };
     while let Some(a) = args.next() {
         match a.as_str() {
             "--" => {
@@ -251,8 +259,13 @@ fn real_main() -> ExitCode {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {
                         return fail(format!("cannot write `{}`: {e}", opts.file));
                     }
-                    eprint!("nyra: fixed {} error(s) in {}:
-{}", r.fixed, opts.file, fix::diff(&src, &r.text));
+                    eprint!(
+                        "nyra: fixed {} error(s) in {}:
+{}",
+                        r.fixed,
+                        opts.file,
+                        fix::diff(&src, &r.text)
+                    );
                     fixed = r.fixed;
                     r.value
                 }
@@ -534,7 +547,8 @@ fn cc_cached(
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
-const RUSTC_FLAGS: &[&str] = &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
+const RUSTC_FLAGS: &[&str] =
+    &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
 
 /// Compiles generated Rust with rustc (NYRA_RUSTC, else `rustc`), cached like C.
 fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), String> {
@@ -670,8 +684,5 @@ fn find_cc() -> Option<String> {
             return Some(cc.to_string());
         }
     }
-    ["gcc", "clang", "cc", "tcc"]
-        .into_iter()
-        .find(|cc| Command::new(cc).arg("--version").output().is_ok())
-        .map(String::from)
+    ["gcc", "clang", "cc", "tcc"].into_iter().find(|cc| Command::new(cc).arg("--version").output().is_ok()).map(String::from)
 }

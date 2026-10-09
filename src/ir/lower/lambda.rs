@@ -45,15 +45,37 @@ impl<'e> Step<'e> {
 /// What the end of the chain does with each element that comes through.
 enum Sink<'e> {
     /// the chain's own result: an array of what comes through
-    Collect { acc: LocalId },
-    Sum { acc: LocalId, float: bool },
-    Count { acc: LocalId },
+    Collect {
+        acc: LocalId,
+    },
+    Sum {
+        acc: LocalId,
+        float: bool,
+    },
+    Count {
+        acc: LocalId,
+    },
     /// `any`: true and stop at the first element; `all` sets false (its step is negated)
-    Stop { acc: LocalId, value: bool },
-    FindIndex { acc: LocalId, pos: LocalId, lambda: &'e ast::Expr },
+    Stop {
+        acc: LocalId,
+        value: bool,
+    },
+    FindIndex {
+        acc: LocalId,
+        pos: LocalId,
+        lambda: &'e ast::Expr,
+    },
     /// `min` / `max`: `n` counts the elements, `m` is the best so far
-    Best { m: LocalId, n: LocalId, max: bool, elem: Ty },
-    Fold { acc: LocalId, lambda: &'e ast::Expr },
+    Best {
+        m: LocalId,
+        n: LocalId,
+        max: bool,
+        elem: Ty,
+    },
+    Fold {
+        acc: LocalId,
+        lambda: &'e ast::Expr,
+    },
 }
 
 /// The parameters and the body of a lambda argument (the checker allows nothing else).
@@ -88,7 +110,14 @@ fn local(l: LocalId) -> Box<Expr> {
 
 impl Lower<'_> {
     /// `recv.name(args)` for a method of `is_chain_method`.
-    pub(super) fn chain_method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, out: &mut Vec<Stmt>) -> Expr {
+    pub(super) fn chain_method(
+        &mut self,
+        recv: &ast::Expr,
+        name: &str,
+        args: &[ast::Expr],
+        e: &ast::Expr,
+        out: &mut Vec<Stmt>,
+    ) -> Expr {
         if name == "sort_by" {
             return self.sort_by(recv, &args[0], e.span, out);
         }
@@ -187,9 +216,11 @@ impl Lower<'_> {
         self.pending = saved;
 
         match sink {
-            Sink::Collect { acc } | Sink::Sum { acc, .. } | Sink::Count { acc } | Sink::Stop { acc, .. } | Sink::FindIndex { acc, .. } => {
-                Expr::Local(acc)
-            }
+            Sink::Collect { acc }
+            | Sink::Sum { acc, .. }
+            | Sink::Count { acc }
+            | Sink::Stop { acc, .. }
+            | Sink::FindIndex { acc, .. } => Expr::Local(acc),
             Sink::Best { m, n, max, elem } => {
                 let which = int(i64::from(max));
                 out.push(st(StmtKind::Op { dst: None, op: RtOp::CheckNonEmpty, args: vec![Expr::Local(n), which] }, span));

@@ -161,7 +161,10 @@ fn early_drops(ss: &mut Vec<Stmt>, temp: &[bool]) {
             continue;
         }
         let mut j = k;
-        while j > 0 && !stmt_mentions(&ss[j - 1], t) && !matches!(ss[j - 1].kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue) {
+        while j > 0
+            && !stmt_mentions(&ss[j - 1], t)
+            && !matches!(ss[j - 1].kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue)
+        {
             j -= 1;
         }
         // a `dup` stays right after the statement that set its local (backends pair them up)

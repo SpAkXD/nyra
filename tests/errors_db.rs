@@ -9,8 +9,8 @@
 mod common;
 
 use std::collections::BTreeSet;
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use common::{check_json, nyra, scratch, stderr, stdout, Json};
@@ -213,7 +213,8 @@ fn explain_prints_an_entry() {
     let out = nyra().args(["explain", "E0201"]).output().unwrap();
     assert!(out.status.success());
     let text = stdout(&out);
-    for part in ["E0201: undefined variable", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related:"] {
+    for part in ["E0201: undefined variable", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related:"]
+    {
         assert!(text.contains(part), "missing `{part}` in:\n{text}");
     }
     assert!(text.contains("print(cout)") && text.contains("print(count)"));

@@ -179,22 +179,51 @@ impl Place {
 pub enum StmtKind {
     /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
-    Call { dst: Option<LocalId>, func: FuncId, args: Vec<Arg> },
-    Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
+    Call {
+        dst: Option<LocalId>,
+        func: FuncId,
+        args: Vec<Arg>,
+    },
+    Op {
+        dst: Option<LocalId>,
+        op: RtOp,
+        args: Vec<Expr>,
+    },
     /// `place = value` for a place below a local (a whole local is `Set`). Every array on the
     /// way is made unique first (copy on write) and every index is checked. The value is
     /// borrowed: the place becomes one more owner, and its old value has one owner less.
-    Store { place: Place, value: Expr },
+    Store {
+        place: Place,
+        value: Expr,
+    },
     /// An operation that changes a place in place: `xs.push(v)`, `xs.pop()`, `xs += ys`,
     /// `s += t`. The place is made unique first, like for a `Store`. `dst` gets the result.
-    Mutate { dst: Option<LocalId>, op: RtOp, place: Place, args: Vec<Expr> },
-    If { cond: Expr, then: Vec<Stmt>, els: Vec<Stmt> },
+    Mutate {
+        dst: Option<LocalId>,
+        op: RtOp,
+        place: Place,
+        args: Vec<Expr>,
+    },
+    If {
+        cond: Expr,
+        then: Vec<Stmt>,
+        els: Vec<Stmt>,
+    },
     /// Each round: run `head`, leave if `cond` is false, run `body`, then `step`.
     /// `continue` goes to `step`.
-    Loop { head: Vec<Stmt>, cond: Expr, body: Vec<Stmt>, step: Vec<Stmt> },
+    Loop {
+        head: Vec<Stmt>,
+        cond: Expr,
+        body: Vec<Stmt>,
+        step: Vec<Stmt>,
+    },
     /// `for var in iter`: a string gives each `char`, an array each element. `iter` is a local
     /// the loop owns, so the body may change the variable it came from; `var` borrows from it.
-    ForEach { var: LocalId, iter: Expr, body: Vec<Stmt> },
+    ForEach {
+        var: LocalId,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     Continue,
     Return(Option<Expr>),

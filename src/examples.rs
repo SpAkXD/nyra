@@ -85,9 +85,10 @@ pub fn run(prog: &mut Program) -> Outcome {
         let span = start(&e);
         let func = prog.funcs.len() - base;
         let call_of = |x: &Expr, funcs: &[Func]| match &x.kind {
-            ExprKind::Call(name, args) => funcs[..base].iter().find(|f| f.name == *name).map(|f| {
-                (name.clone(), f.params.iter().map(|p| p.name.clone()).collect(), args.iter().map(source).collect())
-            }),
+            ExprKind::Call(name, args) => funcs[..base]
+                .iter()
+                .find(|f| f.name == *name)
+                .map(|f| (name.clone(), f.params.iter().map(|p| p.name.clone()).collect(), args.iter().map(source).collect())),
             _ => None,
         };
         let user_fns: Vec<&str> = prog.funcs[..base].iter().map(|f| f.name.as_str()).collect();
@@ -354,7 +355,9 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
         ExprKind::Comprehension(c) => {
             let src = match &c.src {
                 ast::CompSrc::Each(x) => first_call(x, fns),
-                ast::CompSrc::Range(a, b, k) => first_call(a, fns).or_else(|| first_call(b, fns)).or_else(|| k.as_ref().and_then(|k| first_call(k, fns))),
+                ast::CompSrc::Range(a, b, k) => {
+                    first_call(a, fns).or_else(|| first_call(b, fns)).or_else(|| k.as_ref().and_then(|k| first_call(k, fns)))
+                }
             };
             src.or_else(|| first_call(&c.elem, fns)).or_else(|| c.cond.as_ref().and_then(|x| first_call(x, fns)))
         }

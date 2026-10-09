@@ -42,9 +42,7 @@ fn unescape(s: &str) -> String {
 }
 
 fn escape(s: &str) -> String {
-    s.chars()
-        .map(|c| if matches!(c, '\u{FEFF}' | '\u{200B}') { format!("\\u{{{:X}}}", c as u32) } else { c.to_string() })
-        .collect()
+    s.chars().map(|c| if matches!(c, '\u{FEFF}' | '\u{200B}') { format!("\\u{{{:X}}}", c as u32) } else { c.to_string() }).collect()
 }
 
 /// The text before the first case, and the cases.
@@ -88,8 +86,12 @@ fn diagnostics_match_the_golden_file() {
 
         // the rules every diagnostic follows, read from the human output
         let blocks: Vec<&str> = actual.split("error[").skip(1).collect();
-        assert!(!blocks.is_empty(), "{}: no error in the output:
-{actual}", case.name);
+        assert!(
+            !blocks.is_empty(),
+            "{}: no error in the output:
+{actual}",
+            case.name
+        );
         for block in &blocks {
             let head = block.lines().next().unwrap_or("");
             let (code, message) = head.split_once("]: ").unwrap_or(("", ""));

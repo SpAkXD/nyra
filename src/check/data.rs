@@ -14,12 +14,54 @@ pub struct MSig {
 }
 
 pub const ARRAY_METHODS: &[&str] = &[
-    "len", "push", "pop", "insert", "remove", "swap", "slice", "contains", "index_of", "repeat", "sort", "reverse", "join", "reversed",
-    "map", "filter", "count", "any", "all", "find_index", "sort_by", "fold", "sum", "min", "max",
+    "len",
+    "push",
+    "pop",
+    "insert",
+    "remove",
+    "swap",
+    "slice",
+    "contains",
+    "index_of",
+    "repeat",
+    "sort",
+    "reverse",
+    "join",
+    "reversed",
+    "map",
+    "filter",
+    "count",
+    "any",
+    "all",
+    "find_index",
+    "sort_by",
+    "fold",
+    "sum",
+    "min",
+    "max",
 ];
 pub const STR_METHODS: &[&str] = &[
-    "len", "chars", "codes", "slice", "contains", "starts_with", "ends_with", "index_of", "split", "replace", "trim", "upper",
-    "lower", "repeat", "pad_left", "pad_right", "reversed", "count", "any", "all", "find_index",
+    "len",
+    "chars",
+    "codes",
+    "slice",
+    "contains",
+    "starts_with",
+    "ends_with",
+    "index_of",
+    "split",
+    "replace",
+    "trim",
+    "upper",
+    "lower",
+    "repeat",
+    "pad_left",
+    "pad_right",
+    "reversed",
+    "count",
+    "any",
+    "all",
+    "find_index",
 ];
 /// The methods that take a lambda, plus `sum`, `min` and `max`, which run the same kind of loop
 /// (checked in `check/lambda.rs`, lowered to loops in `ir/lower.rs`).
@@ -52,7 +94,9 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
                 "reversed" => m(vec![], t, false),
                 // the types depend on the lambda: see `check/lambda.rs`
                 "sum" | "min" | "max" => m(vec![], e, false),
-                "map" | "filter" | "sort_by" | "count" | "any" | "all" | "find_index" => m(vec![Type::Unknown], Type::Unknown, name == "sort_by"),
+                "map" | "filter" | "sort_by" | "count" | "any" | "all" | "find_index" => {
+                    m(vec![Type::Unknown], Type::Unknown, name == "sort_by")
+                }
                 "fold" => m(vec![Type::Unknown, Type::Unknown], Type::Unknown, false),
                 _ => None,
             }
@@ -192,10 +236,9 @@ pub fn frees_in(stmts: &[Stmt], out: &mut Vec<(String, Span)>, assigned: &mut Ve
                     frees_in(e, out, assigned);
                 }
             }
-            StmtKind::While { body, .. }
-            | StmtKind::For { body, .. }
-            | StmtKind::ForEach { body, .. }
-            | StmtKind::Arena(body) => frees_in(body, out, assigned),
+            StmtKind::While { body, .. } | StmtKind::For { body, .. } | StmtKind::ForEach { body, .. } | StmtKind::Arena(body) => {
+                frees_in(body, out, assigned)
+            }
             _ => {}
         }
     }

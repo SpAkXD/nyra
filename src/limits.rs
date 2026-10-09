@@ -116,12 +116,14 @@ mod windows {
                 }
                 let job = Job(job);
                 let mut info = ExtendedLimits::default();
-                info.basic.limit_flags = JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_PROCESS_TIME | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                info.basic.limit_flags =
+                    JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_PROCESS_TIME | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
                 // in units of 100 ns
                 info.basic.per_process_user_time_limit = (cpu_secs as i64).saturating_mul(10_000_000);
                 info.process_memory_limit = super::MEMORY as usize;
                 let size = std::mem::size_of::<ExtendedLimits>() as u32;
-                let set = SetInformationJobObject(job.0, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut c_void, size);
+                let set =
+                    SetInformationJobObject(job.0, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut c_void, size);
                 if set == 0 || AssignProcessToJobObject(job.0, child.as_raw_handle() as Handle) == 0 {
                     return None;
                 }

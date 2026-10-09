@@ -46,10 +46,7 @@ fn call(id: u64, tool: &str, args: &str) -> String {
 }
 
 fn reply(replies: &[Json], id: u64) -> &Json {
-    replies
-        .iter()
-        .find(|r| r.get("id").and_then(Json::as_u64) == Some(id))
-        .unwrap_or_else(|| panic!("no reply with id {id}"))
+    replies.iter().find(|r| r.get("id").and_then(Json::as_u64) == Some(id)).unwrap_or_else(|| panic!("no reply with id {id}"))
 }
 
 fn result(replies: &[Json], id: u64) -> &Json {

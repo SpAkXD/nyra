@@ -205,12 +205,16 @@ fn array_method(w: &str, r: &str) -> Option<String> {
         "includes" | "has" | "contain" => format!("write `{r}.contains(x)`"),
         "indexof" | "find" | "position" => format!("`{r}.index_of(x)` gives the position of the first match, or -1"),
         "removeat" | "delete" | "erase" => format!("`{r}.remove(i)` removes the element at position `i` and gives it back"),
-        "first" | "front" => format!("the first element is `{r}[0]` (check `{r}.len() > 0` first); the first that passes a test: `{r}.find_index(x => test)`"),
+        "first" | "front" => format!(
+            "the first element is `{r}[0]` (check `{r}.len() > 0` first); the first that passes a test: `{r}.find_index(x => test)`"
+        ),
         "last" | "back" => format!("the last element is `{r}[{r}.len() - 1]` (check `{r}.len() > 0` first)"),
         "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`); `{r}.sort_by(x => key)` sorts by a key"),
         "rev" | "toreversed" => format!("`{r}.reversed()` gives a reversed copy; `{r}.reverse()` reverses in place"),
         "sortby" | "sortbykey" | "sortedby" => format!("`{r}.sort_by(x => key)` sorts in place by a key (`{r}` must be a `var`)"),
-        "reduce" | "inject" | "aggregate" => format!("`{r}.fold(start, (acc, x) => ...)` combines the elements, e.g. `{r}.fold(0, (acc, x) => acc + x)`"),
+        "reduce" | "inject" | "aggregate" => {
+            format!("`{r}.fold(start, (acc, x) => ...)` combines the elements, e.g. `{r}.fold(0, (acc, x) => acc + x)`")
+        }
         "findindex" | "indexwhere" => format!("`{r}.find_index(x => test)` gives the position of the first match, or -1"),
         "some" | "anymatch" | "exists" => format!("`{r}.any(x => test)` is true if one element passes"),
         "every" | "allmatch" | "forall" => format!("`{r}.all(x => test)` is true if every element passes"),
@@ -219,7 +223,9 @@ fn array_method(w: &str, r: &str) -> Option<String> {
         "foreach" | "each" => format!("loop over the elements: `for x in {r} {{ ... }}` (`for i, x in {r}` also gives the position)"),
         "enumerate" | "withindex" | "indexed" => format!("`for i, x in {r} {{ ... }}` gives each position and element"),
         "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
-        "sublist" | "subarray" | "take" => format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`"),
+        "sublist" | "subarray" | "take" => {
+            format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`")
+        }
         "concat" | "extend" | "addall" => format!("join arrays with `+`: `{r} + other`, or append in place with `{r} += other`"),
         "flatten" | "flat" => format!("join the inner arrays: `{r}.fold(empty, (acc, x) => acc + x)` or a loop with `+=`"),
         "zip" => format!("loop over the positions: `for i, x in {r} {{ ... other[i] ... }}`"),
@@ -329,9 +335,34 @@ pub fn method_rename(t: Type, name: &str) -> Option<&'static str> {
 pub fn is_type_word(w: &str) -> bool {
     matches!(
         w.to_ascii_lowercase().as_str(),
-        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "i8" | "i16" | "i32"
-            | "i64" | "u8" | "u16" | "u32" | "u64" | "float" | "double" | "real" | "f32" | "f64" | "bool" | "boolean"
-            | "str" | "string" | "char" | "void"
+        "int"
+            | "integer"
+            | "long"
+            | "short"
+            | "number"
+            | "byte"
+            | "uint"
+            | "usize"
+            | "isize"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "float"
+            | "double"
+            | "real"
+            | "f32"
+            | "f64"
+            | "bool"
+            | "boolean"
+            | "str"
+            | "string"
+            | "char"
+            | "void"
     )
 }
 
@@ -339,8 +370,8 @@ pub fn is_type_word(w: &str) -> bool {
 pub fn nyra_type(w: &str) -> Option<&'static str> {
     Some(match w.to_ascii_lowercase().as_str() {
         "string" | "text" | "cstring" | "varchar" | "str" => "str",
-        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16"
-        | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
+        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16" | "i32"
+        | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
         "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => "float",
         "bool" | "boolean" => "bool",
         "char" | "character" | "rune" => "char",
@@ -374,7 +405,9 @@ pub fn type_name(name: &str) -> String {
             "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
-        "tuple" | "pair" => "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string(),
+        "tuple" | "pair" => {
+            "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
+        }
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()
         }

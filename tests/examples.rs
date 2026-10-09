@@ -35,9 +35,11 @@ fn run_example(path: &PathBuf, flags: &[&str], env: &[(&str, &str)]) -> (Output,
     let side = |ext: &str| std::fs::read_to_string(path.with_extension(ext)).ok();
     let full = std::fs::canonicalize(path).unwrap();
     let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
-    let dir = std::env::temp_dir()
-        .join("nyra-examples")
-        .join(format!("{stem}-{}-{}", std::process::id(), RUNS.fetch_add(1, Ordering::SeqCst)));
+    let dir = std::env::temp_dir().join("nyra-examples").join(format!(
+        "{stem}-{}-{}",
+        std::process::id(),
+        RUNS.fetch_add(1, Ordering::SeqCst)
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let mut cmd = nyra();
@@ -88,11 +90,8 @@ fn runs_on(src: &str, flags: &[&str]) -> bool {
 }
 
 fn files(dir: &str) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|e| e == "nyra"))
-        .collect();
+    let mut v: Vec<PathBuf> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|e| e == "nyra")).collect();
     v.sort();
     v
 }
@@ -149,9 +148,11 @@ fn runtime_errors_report_code_position_and_exit_101() {
     for path in files("tests/runtime") {
         let src = std::fs::read_to_string(&path).unwrap();
         // first line: `// expect: E0241 at 2:35`
-        let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).unwrap_or_else(|| {
-            panic!("{} has no `// expect:` line", path.display())
-        });
+        let expect = src
+            .lines()
+            .next()
+            .and_then(|l| l.strip_prefix("// expect: "))
+            .unwrap_or_else(|| panic!("{} has no `// expect:` line", path.display()));
         let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
         let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default();
         for flags in &backends {
@@ -163,12 +164,22 @@ fn runtime_errors_report_code_position_and_exit_101() {
             let label = format!("{} {:?}", path.display(), flags);
             assert_eq!(out.status.code(), Some(101), "{label}: exit code; stderr:\n{stderr}");
             assert!(stderr.contains(&format!("runtime error[{code}]")), "{label}: stderr was:\n{stderr}");
-            assert!(stderr.contains(&format!(":{at}\n")) || stderr.contains(&format!(":{at}\r\n")), "{label}: position {at} missing:\n{stderr}");
-            assert_eq!(stdout.replace("\r\n", "\n"), stdout_expected.replace("\r\n", "\n"), "{label}: stdout (must be flushed before the error)");
+            assert!(
+                stderr.contains(&format!(":{at}\n")) || stderr.contains(&format!(":{at}\r\n")),
+                "{label}: position {at} missing:\n{stderr}"
+            );
+            assert_eq!(
+                stdout.replace("\r\n", "\n"),
+                stdout_expected.replace("\r\n", "\n"),
+                "{label}: stdout (must be flushed before the error)"
+            );
 
             let (json, _) = run_example(&path, &[*flags, &["--json"][..]].concat(), &[]);
             let stderr = String::from_utf8_lossy(&json.stderr);
-            assert!(stderr.contains(&format!("\"code\":\"{code}\"")) && stderr.contains("\"runtime\":true"), "{label} --json: {stderr}");
+            assert!(
+                stderr.contains(&format!("\"code\":\"{code}\"")) && stderr.contains("\"runtime\":true"),
+                "{label} --json: {stderr}"
+            );
         }
     }
 }
@@ -187,11 +198,7 @@ fn bad_programs_report_expected_error_codes() {
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(!out.status.success(), "{} should fail to compile", path.display());
         assert!(stdout.starts_with("{\"ok\":false"), "{}: not JSON: {stdout}", path.display());
-        assert!(
-            stdout.contains(&format!("\"code\":\"{code}\"")),
-            "{}: expected {code}, got {stdout}",
-            path.display()
-        );
+        assert!(stdout.contains(&format!("\"code\":\"{code}\"")), "{}: expected {code}, got {stdout}", path.display());
     }
 }
 
@@ -225,14 +232,16 @@ fn check_on(path: &PathBuf, flags: &[&str]) -> Option<String> {
     let Some(expect) = expect else {
         let expected = std::fs::read_to_string(path.with_extension("out")).ok()?.replace("\r\n", "\n");
         let (out, exit) = run_example(path, flags, &[]);
-        let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
+        let (stdout, stderr) =
+            (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
         if out.status.code() != Some(exit) {
             return Some(format!("{label} failed (exit code {:?}, expected {exit}):\n{stderr}", out.status.code()));
         }
         return (stdout != expected).then(|| format!("{label} output differs:\n--- got\n{stdout}--- expected\n{expected}"));
     };
     let (out, _) = run_example(path, flags, &[]);
-    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
+    let (stdout, stderr) =
+        (String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"), String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n"));
     let (code, at) = expect.trim().split_once(" at ").expect("expected `E0xxx at L:C`");
     let stdout_expected = std::fs::read_to_string(path.with_extension("out")).unwrap_or_default().replace("\r\n", "\n");
     if out.status.code() != Some(101) {
@@ -275,7 +284,9 @@ fn check_target(flags: &[&str]) {
 
 #[test]
 fn every_example_on_python() {
-    let py = std::env::var("NYRA_PYTHON").ok().or_else(|| ["python3", "python"].into_iter().find(|p| works(p, &["--version"])).map(String::from));
+    let py = std::env::var("NYRA_PYTHON")
+        .ok()
+        .or_else(|| ["python3", "python"].into_iter().find(|p| works(p, &["--version"])).map(String::from));
     if py.is_none() {
         missing("no Python (python3, python or NYRA_PYTHON)");
         return;

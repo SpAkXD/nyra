@@ -205,7 +205,8 @@ impl Checker {
             if let Some(i) = g.find(name) {
                 if g.cur.own.contains(name) {
                     let line = g.vars[i].0.span.line;
-                    let local = self.decls.iter().find(|(n, _)| n == name).map(|(_, s)| format!(" (line {})", s.line)).unwrap_or_default();
+                    let local =
+                        self.decls.iter().find(|(n, _)| n == name).map(|(_, s)| format!(" (line {})", s.line)).unwrap_or_default();
                     return Some(
                         Diag::new(
                             "E0216",
@@ -298,8 +299,14 @@ impl Checker {
                     if let Some(&w) = cw.iter().find(|&&w| self.managed(var(w).ty)) {
                         let v = &var(w).name;
                         errs.push(
-                            Diag::new("E0238", format!("`{callee}` changes the script variable `{v}`, so it cannot be called inside this `arena` block"), s.span)
-                                .hint(format!("values created in an `arena` are freed at its `}}`: call `{callee}` after the block")),
+                            Diag::new(
+                                "E0238",
+                                format!(
+                                    "`{callee}` changes the script variable `{v}`, so it cannot be called inside this `arena` block"
+                                ),
+                                s.span,
+                            )
+                            .hint(format!("values created in an `arena` are freed at its `}}`: call `{callee}` after the block")),
                         );
                     }
                 }
@@ -362,7 +369,10 @@ impl Checker {
                         name = (2..)
                             .map(|n| format!("{}{n}", g.name))
                             .find(|n| {
-                                !f.own.contains(n) && !self.g.taken.contains(n) && !out.vars.iter().any(|v| v.name == *n) && !names.contains(n)
+                                !f.own.contains(n)
+                                    && !self.g.taken.contains(n)
+                                    && !out.vars.iter().any(|v| v.name == *n)
+                                    && !names.contains(n)
                             })
                             .unwrap_or_default();
                     }

@@ -17,17 +17,112 @@ use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, St
 const SAFE_INT: u64 = (1 << 53) - 1;
 
 const RESERVED: &[&str] = &[
-    "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-    "delete", "do", "else", "enum", "eval", "export", "extends", "false", "finally", "for", "function",
-    "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
-    "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
-    "try", "typeof", "var", "void", "while", "with", "yield", "undefined", "NaN", "Infinity", "console",
-    "Math", "String", "Number", "Object", "Array", "JSON", "Symbol", "BigInt", "Error", "RangeError", "globalThis",
-    "process", "require", "module", "exports", "NyPanic", "NY_SURR", "NY_ESC", "Ref", "type", "declare",
-    "namespace", "abstract", "as", "any", "boolean", "number", "string", "never", "unknown", "readonly",
-    "keyof", "infer", "is", "asserts", "get", "set", "of", "constructor", "Boolean", "Map", "Set", "Date",
-    "NyExit", "TextDecoder", "Atomics", "SharedArrayBuffer", "Int32Array", "Uint32Array", "Uint8Array", "ArrayBuffer",
-    "DataView", "performance", "crypto",
+    "arguments",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "eval",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+    "undefined",
+    "NaN",
+    "Infinity",
+    "console",
+    "Math",
+    "String",
+    "Number",
+    "Object",
+    "Array",
+    "JSON",
+    "Symbol",
+    "BigInt",
+    "Error",
+    "RangeError",
+    "globalThis",
+    "process",
+    "require",
+    "module",
+    "exports",
+    "NyPanic",
+    "NY_SURR",
+    "NY_ESC",
+    "Ref",
+    "type",
+    "declare",
+    "namespace",
+    "abstract",
+    "as",
+    "any",
+    "boolean",
+    "number",
+    "string",
+    "never",
+    "unknown",
+    "readonly",
+    "keyof",
+    "infer",
+    "is",
+    "asserts",
+    "get",
+    "set",
+    "of",
+    "constructor",
+    "Boolean",
+    "Map",
+    "Set",
+    "Date",
+    "NyExit",
+    "TextDecoder",
+    "Atomics",
+    "SharedArrayBuffer",
+    "Int32Array",
+    "Uint32Array",
+    "Uint8Array",
+    "ArrayBuffer",
+    "DataView",
+    "performance",
+    "crypto",
 ];
 
 /// The TypeScript runtime, emitted after the program (`@FILE@` becomes the source path).
@@ -221,7 +316,11 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str(JSON);
     }
     // `os.exit(n)` throws `NyExit` (only programs that use the standard library can)
-    let exit = if std { "    if (e instanceof NyExit) {\n        if (ny_process !== undefined) ny_process.exitCode = e.code;\n    } else {\n" } else { "" };
+    let exit = if std {
+        "    if (e instanceof NyExit) {\n        if (ny_process !== undefined) ny_process.exitCode = e.code;\n    } else {\n"
+    } else {
+        ""
+    };
     let (inner, close) = if std { ("    ", "    }\n") } else { ("", "") };
     let _ = write!(
         out,
@@ -617,7 +716,11 @@ impl Gen<'_> {
                     format!("ny_mgetor({}, {}, {})", a[0], a[1], a[2])
                 };
                 // a value that is a plain struct now has two owners (no `Dup` follows for it)
-                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_share({get})") } else { get }
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) {
+                    format!("ny_share({get})")
+                } else {
+                    get
+                }
             }
             RtOp::MapKeys => format!("[...{}.keys()]", self.expr(&args[0])),
             RtOp::MapValues => format!("ny_share_all([...{}.values()])", self.expr(&args[0])),

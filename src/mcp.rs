@@ -347,8 +347,7 @@ impl Server {
             let compiler = self.cc.get_or_insert_with(crate::find_cc).clone().ok_or_else(|| {
                 tool_error("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use backend \"js\"")
             })?;
-            let (exe, t) =
-                crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
+            let (exe, t) = crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
             cc_ms = Some(t);
             Command::new(exe)
         };
@@ -420,7 +419,8 @@ impl Server {
 }
 
 /// The names of the tools (as in `TOOLS`).
-const TOOL_NAMES: &[&str] = &["nyra_spec", "nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"];
+const TOOL_NAMES: &[&str] =
+    &["nyra_spec", "nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"];
 
 fn tools() -> Json {
     let mut tools = Json::parse(TOOLS).expect("TOOLS is valid JSON");
@@ -445,9 +445,30 @@ fn resources() -> Json {
         Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
     };
     vec![
-        res("nyra://spec", "spec", "Nyra language spec", "The complete language: types, operators, builtins, methods, structs, memory, runtime errors", "text/markdown", Some(SPEC.len())),
-        res("nyra://guide", "guide", "Nyra guide for AI agents", "Workflow, do/don't rules, what does not exist yet, error codes with fixes, recipes, complete programs", "text/markdown", Some(GUIDE.len())),
-        res("nyra://errors", "errors", "Nyra error index", "Every error code with its title, kind and version (JSON); nyra://errors/E0201 reads one entry", "application/json", None),
+        res(
+            "nyra://spec",
+            "spec",
+            "Nyra language spec",
+            "The complete language: types, operators, builtins, methods, structs, memory, runtime errors",
+            "text/markdown",
+            Some(SPEC.len()),
+        ),
+        res(
+            "nyra://guide",
+            "guide",
+            "Nyra guide for AI agents",
+            "Workflow, do/don't rules, what does not exist yet, error codes with fixes, recipes, complete programs",
+            "text/markdown",
+            Some(GUIDE.len()),
+        ),
+        res(
+            "nyra://errors",
+            "errors",
+            "Nyra error index",
+            "Every error code with its title, kind and version (JSON); nyra://errors/E0201 reads one entry",
+            "application/json",
+            None,
+        ),
     ]
     .into()
 }
@@ -665,11 +686,20 @@ mod tests {
     #[test]
     fn tool_definitions_are_valid() {
         let tools = tools();
-        let names: Vec<&str> =
-            tools.as_array().unwrap().iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
+        let names: Vec<&str> = tools.as_array().unwrap().iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
         assert_eq!(
             names,
-            ["nyra_spec", "nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"]
+            [
+                "nyra_spec",
+                "nyra_check",
+                "nyra_test",
+                "nyra_run",
+                "nyra_explain",
+                "nyra_build",
+                "nyra_outline",
+                "nyra_show",
+                "nyra_edit"
+            ]
         );
         for t in tools.as_array().unwrap() {
             assert_eq!(t.get("inputSchema").and_then(|s| s.get("type")).and_then(Json::as_str), Some("object"));
