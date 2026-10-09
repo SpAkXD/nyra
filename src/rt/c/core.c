@@ -92,8 +92,13 @@ static NYRT_NORETURN void nyrt_panic(const char *code, const char *msg, const ch
     exit(101);
 }
 // int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255).
-static NYRT_NORETURN void nyrt_overflow(int64_t a, const char *op, int64_t b, int line, int col) {
-    char msg[128];
+// The error path is out of line and takes few arguments (the operands and one packed position:
+// line, column and operator). A call with more made the C compiler give up inlining and
+// unrolling around the checked operations (`fib` ran 2.5 times slower than without checks).
+#define NYRT_AT(line, col, op) (((int64_t)(line) << 32) | ((int64_t)((col) & 0xffffff) << 8) | (int64_t)(op))
+static NYRT_NORETURN void nyrt_overflow(int64_t a, int64_t b, int64_t at) {
+    char msg[128], op[2] = { (char)(at & 0xff), 0 };
+    int line = (int)(at >> 32), col = (int)((at >> 8) & 0xffffff);
     if (*op == '~') snprintf(msg, sizeof msg, "int overflow: -(%lld) does not fit in 64 bits", (long long)a);
     else snprintf(msg, sizeof msg, "int overflow: %lld %s %lld does not fit in 64 bits", (long long)a, op, (long long)b);
     nyrt_panic("E0255", msg,
@@ -110,36 +115,36 @@ static NYRT_NORETURN void nyrt_overflow(int64_t a, const char *op, int64_t b, in
 static inline int64_t nyrt_add(int64_t a, int64_t b, int line, int col) {
 #ifdef NYRT_OVF_BUILTINS
     int64_t r;
-    if (NYRT_UNLIKELY(__builtin_add_overflow(a, b, &r))) nyrt_overflow(a, "+", b, line, col);
+    if (NYRT_UNLIKELY(__builtin_add_overflow(a, b, &r))) nyrt_overflow(a, b, NYRT_AT(line, col, '+'));
     return r;
 #else
-    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) nyrt_overflow(a, "+", b, line, col);
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) nyrt_overflow(a, b, NYRT_AT(line, col, '+'));
     return a + b;
 #endif
 }
 static inline int64_t nyrt_sub(int64_t a, int64_t b, int line, int col) {
 #ifdef NYRT_OVF_BUILTINS
     int64_t r;
-    if (NYRT_UNLIKELY(__builtin_sub_overflow(a, b, &r))) nyrt_overflow(a, "-", b, line, col);
+    if (NYRT_UNLIKELY(__builtin_sub_overflow(a, b, &r))) nyrt_overflow(a, b, NYRT_AT(line, col, '-'));
     return r;
 #else
-    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) nyrt_overflow(a, "-", b, line, col);
+    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) nyrt_overflow(a, b, NYRT_AT(line, col, '-'));
     return a - b;
 #endif
 }
 static inline int64_t nyrt_mul(int64_t a, int64_t b, int line, int col) {
 #ifdef NYRT_OVF_BUILTINS
     int64_t r;
-    if (NYRT_UNLIKELY(__builtin_mul_overflow(a, b, &r))) nyrt_overflow(a, "*", b, line, col);
+    if (NYRT_UNLIKELY(__builtin_mul_overflow(a, b, &r))) nyrt_overflow(a, b, NYRT_AT(line, col, '*'));
     return r;
 #else
     if (a > 0 ? (b > 0 ? a > INT64_MAX / b : b < INT64_MIN / a) : (b > 0 ? a < INT64_MIN / b : (a != 0 && b < INT64_MAX / a)))
-        nyrt_overflow(a, "*", b, line, col);
+        nyrt_overflow(a, b, NYRT_AT(line, col, '*'));
     return a * b;
 #endif
 }
 static inline int64_t nyrt_neg(int64_t a, int line, int col) {
-    if (NYRT_UNLIKELY(a == INT64_MIN)) nyrt_overflow(a, "~", 0, line, col);
+    if (NYRT_UNLIKELY(a == INT64_MIN)) nyrt_overflow(a, 0, NYRT_AT(line, col, '~'));
     return -a;
 }
 // int / and %: division by zero is a runtime error; MIN / -1 overflows (x86 would trap).
@@ -149,7 +154,7 @@ static NYRT_NORETURN void nyrt_div_zero(int line, int col) {
 static inline int64_t nyrt_div(int64_t a, int64_t b, int line, int col) {
     if (NYRT_UNLIKELY(b == 0)) nyrt_div_zero(line, col);
     if (NYRT_UNLIKELY(b == -1)) {
-        if (a == INT64_MIN) nyrt_overflow(a, "/", b, line, col);
+        if (a == INT64_MIN) nyrt_overflow(a, b, NYRT_AT(line, col, '/'));
         return -a;
     }
     return a / b;
