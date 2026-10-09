@@ -156,6 +156,8 @@ A prefix shorter than the minimum is silently not cached (no error): with `--spe
 caches nothing, which the runner reports after the warm-up ("was not cached"); the full spec (6,900 tokens on
 Haiku) is cached. `--dry-run` estimates the cost of an Anthropic run with these prices and the cache.
 
+What the card costs and saves, measured on 38 tasks with Sonnet 5.5 and Haiku 4.5: [`research/AB-card.md`](../research/AB-card.md).
+
 A run prints one line per finished task, then the Markdown summary (for several models: one line per model, then
 the comparison), and writes, for every model:
 
