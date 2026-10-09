@@ -1,0 +1,97 @@
+// Tuples, options, enums, formats and helpers working together (a regression test of the combinations).
+struct Box {
+    items: [(int, str)]
+    tag: str?
+}
+
+enum Op { Add, Sub, Mul }
+
+fn apply(op: Op, a: int, b: int) -> int {
+    match op {
+        Op.Add => ret a + b
+        Op.Sub => ret a - b
+        Op.Mul => ret a * b
+    }
+}
+
+fn pairs_of(xs: [int]) -> [(int, int)] {
+    var out: [(int, int)] = []
+    for i in 0..xs.len() {
+        for j in i + 1..xs.len() {
+            out.push((xs[i], xs[j]))
+        }
+    }
+    ret out
+}
+
+fn best(xs: [str]) -> str? {
+    var found: str? = none
+    for x in xs {
+        if found == none || x.len() > (found ?? "").len() {
+            found = x
+        }
+    }
+    ret found
+}
+
+var grid: [[(int, str)]] = [[(2, "b"), (1, "a")], [(9, "z"), (3, "y"), (3, "x")]]
+grid[0].sort()
+grid[1].sort()
+print(grid)
+var b = Box(items: [(3, "c"), (1, "a"), (2, "b")], tag: "t")
+b.items.sort()
+print(b, b.tag ?? "-")
+b.tag = none
+print(b.tag, b.items.sorted().reversed())
+let ws = ["bb", "a", "ccc", "dd"]
+print(ws.sorted_by(w => (-w.len(), w)))
+print(ws.find(w => w.len() > 5) ?? "none", ws.find(w => w.len() == 2))
+print(best(ws), best([]))
+if let w = best(ws) {
+    print("best {w:>6}|{w.len():03}")
+}
+let ps = pairs_of([3, 1, 2])
+print(ps, ps.sorted(), ps.max_by(p => p.0 * p.1))
+for (a, c) in ps {
+    print("{a:2}{c:3} {a + c:>4}")
+}
+var total = 0
+for op in Op.all() {
+    total += apply(op, 6, 3)
+    print("{op}: {apply(op, 6, 3)}")
+}
+print(total)
+var m: [str: (int, str)] = [:]
+m["x"] = (1, "one")
+m["y"] = (2, "two")
+for (k, v) in m.items() {
+    print(k, v, v.0 + 1)
+}
+print(m.get("x") ?? (0, "-"), m.get("q") ?? (0, "-"))
+let words = "the quick brown fox".split(" ")
+let lens = zip(words, words.map(w => w.len()))
+print(lens.sorted_by(p => (p.1, p.0)))
+let (first, rest) = (words[0], words[1..])
+print(first, rest, rest.len())
+print(words.chunks(2), "abcdef"[1..4], "abcdef"[..2], words[2..].sorted())
+let nums = [5, 3, 8, 1, 9, 2]
+print(nums.sorted()[..3], nums.max_by(x => -x), nums.min_by(x => (x % 3, x)))
+print(3 in nums, 7 in nums, "q" in words, "fox" in words, 'x' in "box")
+fn grade(var score: int) -> str {
+    score = score / 10
+    match score {
+        10, 9 => ret "A"
+        8 => ret "B"
+        _ => ret "C"
+    }
+}
+print(grade(95), grade(81), grade(40))
+let keys = ["b", "a"]
+var counts: [str: int] = [:]
+for k in keys {
+    counts[k] = counts.get(k) ?? 0
+    counts[k] += 1
+}
+print(counts)
+let ab = "ab"
+print("{3.14159:8.3}|{42:<6}|{7:+}|{1234567:,}|{ab:^6}|{'z':>3}|{true:5}")

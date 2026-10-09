@@ -699,17 +699,17 @@ impl Checker {
                 hint
             };
             self.errs.push(Diag::new("E0206", msg, span).hint(hint));
-        } else if let Some(sig) = self.fns.get(name) {
+        } else if let (false, Some(sig)) = (self.fname.starts_with("core."), self.fns.get(name)) {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a function (line {})", sig.span.line), span)
                     .hint(format!("a variable cannot share a function's name: rename the variable, e.g. `{name}_value`")),
             );
-        } else if let Some(sd) = self.structs.get(name) {
+        } else if let (false, Some(sd)) = (self.fname.starts_with("core."), self.structs.get(name)) {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a struct (line {})", sd.span.line), span)
                     .hint("variables start lowercase: rename the variable"),
             );
-        } else if let Some((_, at)) = self.modules.iter().find(|(m, _)| m == name) {
+        } else if let (false, Some((_, at))) = (self.fname.starts_with("core."), self.modules.iter().find(|(m, _)| m == name)) {
             self.errs.push(
                 Diag::new("E0206", format!("`{name}` is already the name of a module (`use {name}` on line {})", at.line), span)
                     .hint(format!("a variable cannot share a module's name: rename the variable, e.g. `{name}_value`")),
