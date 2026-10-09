@@ -20,7 +20,7 @@ design may still change.
 
 | Range | Stage | What goes wrong |
 |---|---|---|
-| E0001-E0006 | lexer | characters, numbers and strings |
+| E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
 | E0201-E0215 | type checker | names, types, `ret`, conditions, lambdas |
@@ -32,7 +32,8 @@ design may still change.
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0216-E0219, E0248, E0254-E0259, E0309,
+Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
+brace that starts no `{value}` is text. Numbers that are not listed (E0216-E0219, E0248, E0254-E0259, E0309,
 E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -103,7 +104,7 @@ fn main() {
     print("hello")
 }
 ```
-- **Related:** E0004, E0006
+- **Related:** E0004
 
 ## E0003: number too large for `int`
 - **Kind:** compile error · **Since:** v0.1
@@ -136,7 +137,7 @@ fn main() {
 - **Common causes:**
   - a Windows path: write every backslash twice (`"C:\\Users"`)
   - `\u00e9` or `\x41`: type the character itself, as in `"é"`
-  - `\{` or `\}`: braces are doubled instead (`{{`, `}}`), see E0006
+  - `\{` or `\}`: a brace needs no escape (`"{"` is text; `{{` also prints `{`)
   - `\'`: a single quote needs no escape
 - **Wrong:**
 ```rust
@@ -150,7 +151,7 @@ fn main() {
     print("C:\\Users\\nyra")
 }
 ```
-- **Related:** E0006, E0002
+- **Related:** E0002
 
 ## E0005: semicolon
 - **Kind:** compile error · **Since:** v0.1
@@ -175,29 +176,6 @@ fn main() {
 }
 ```
 - **Related:** E0001, E0101
-
-## E0006: bad `{` or `}` in a string
-- **Kind:** compile error · **Since:** v0.2
-- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a double quote inside the braces.
-- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
-- **Common causes:**
-  - printing a literal brace (JSON, code, a set) without doubling it
-  - a placeholder `{}` copied from a Rust or Python format string: name the variable, `"{x}"`
-  - a string literal inside the braces, as in `"{n == "x"}"`: store the text in a variable and use `{name}`
-  - a `{` that is never closed, as in `"total: {x"`
-- **Wrong:**
-```rust
-fn main() {
-    print("{")
-}
-```
-- **Fixed:**
-```rust
-fn main() {
-    print("{{")
-}
-```
-- **Related:** E0004, E0101
 
 ## E0007: bad character literal
 - **Kind:** compile error · **Since:** v0.3
@@ -267,7 +245,7 @@ fn main() {
     print(double(4))
 }
 ```
-- **Related:** E0102, E0212, E0006, E0001
+- **Related:** E0102, E0212, E0001
 
 ## E0102: unknown type
 - **Kind:** compile error · **Since:** v0.1

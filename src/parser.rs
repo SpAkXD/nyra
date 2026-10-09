@@ -21,7 +21,7 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
             _ => None,
         })
         .collect();
-    let mut p = Parser { toks, structs, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0, loop_depth: 0 };
+    let mut p = Parser { toks, structs, pos: 0, errs: Vec::new(), in_string: false, cut_blocks: 0, loop_depth: 0, nested: Vec::new() };
     let prog = p.program();
     (prog, p.errs)
 }
@@ -39,6 +39,8 @@ struct Parser {
     cut_blocks: usize,
     /// How many loops enclose the current statement (`break`/`continue` need one).
     loop_depth: usize,
+    /// Functions defined inside a function body: they are ordinary top-level functions.
+    nested: Vec<Func>,
 }
 
 impl Parser {
@@ -409,6 +411,7 @@ impl Parser {
                 funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
             }
         }
+        funcs.append(&mut self.nested);
         Program { funcs, structs, examples }
     }
 
@@ -770,6 +773,20 @@ impl Parser {
                 Tok::RBrace => {
                     self.bump();
                     return Ok(stmts);
+                }
+                // an indented `fn` inside a body is a helper written in place: it becomes an ordinary
+                // function (it sees no locals around it). A `fn` at the start of a line is the next
+                // function after a missing `}`.
+                Tok::Fn if self.span().col > 1 => {
+                    let depth = std::mem::take(&mut self.loop_depth);
+                    match self.func() {
+                        Ok(f) => self.nested.push(f),
+                        Err(d) => {
+                            self.errs.push(d);
+                            self.sync_stmt();
+                        }
+                    }
+                    self.loop_depth = depth;
                 }
                 Tok::Eof | Tok::Fn | Tok::Struct => return Err(self.unclosed_block(open, what)),
                 _ => match self.stmt() {
@@ -1265,7 +1282,7 @@ impl Parser {
         for t in &mut toks {
             t.span = shift(t.span);
         }
-        let mut sub = Parser { toks, structs: Vec::new(), pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0, loop_depth: 0 };
+        let mut sub = Parser { toks, structs: Vec::new(), pos: 0, errs: Vec::new(), in_string: true, cut_blocks: 0, loop_depth: 0, nested: Vec::new() };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);
         let e = e?;

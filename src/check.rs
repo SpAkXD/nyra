@@ -446,6 +446,30 @@ impl Checker {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
 
+    /// `"${root}/logs"` where `root` is undefined: text written for a template engine (shell,
+    /// JavaScript), not a value. The fix doubles the braces so the string keeps the text.
+    fn literal_dollar_brace(&mut self, x: &Expr, before: usize) {
+        fn path(e: &Expr) -> Option<(String, Span)> {
+            match &e.kind {
+                ExprKind::Var(n) => Some((n.clone(), e.span)),
+                ExprKind::Field(b, f) => path(b).map(|(t, s)| (format!("{t}.{f}"), s)),
+                _ => None,
+            }
+        }
+        let Some((text, root)) = path(x) else { return };
+        let Some(d) = self.errs[before..].iter_mut().find(|d| d.code == "E0201" && d.span == root && d.fix.is_empty()) else {
+            return;
+        };
+        if root.col < 2 {
+            return;
+        }
+        let open = Span { line: root.line, col: root.col - 1 };
+        d.hint = Some(format!(
+            "`{{{text}}}` inserts the value of `{text}`; to keep `${{{text}}}` as text, double the braces: `${{{{{text}}}}}`"
+        ));
+        d.fix = vec![Edit::replace(open, &format!("{{{text}}}"), format!("{{{{{text}}}}}")).after("$")];
+    }
+
     fn undefined_var(&self, name: &str, span: Span, assigning: bool) -> Diag {
         let d = Diag::new("E0201", format!("undefined variable `{name}`"), span);
         // the name of a function: the call parentheses are probably missing
@@ -1170,7 +1194,10 @@ impl Checker {
             ExprKind::Interp(parts) => {
                 for p in parts.iter_mut() {
                     if let InterpPart::Expr(x) = p {
-                        if self.expr(x) == Type::Void {
+                        let before = self.errs.len();
+                        let ty = self.expr(x);
+                        self.literal_dollar_brace(x, before);
+                        if ty == Type::Void {
                             self.errs.push(
                                 Diag::new(
                                     "E0203",

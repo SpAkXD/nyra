@@ -199,20 +199,6 @@ error[E0001]: unexpected character `.`
   = explain: nyra explain E0001
 
 nyra: 1 error(s)
-==== lex_empty_braces
-fn main() {
-    print("a {} b")
-}
-----
-error[E0006]: empty `{}` in a string: there is no expression to insert
-  --> case.nyra:2:14
-  |
-2 |     print("a {} b")
-  |              ^
-  = hint: put an expression between the braces, e.g. `{x}`, or write `{{}}` to print literal braces
-  = explain: nyra explain E0006
-
-nyra: 1 error(s)
 ==== lex_escape_brace
 fn main() {
     print("a \{ b")
@@ -238,7 +224,7 @@ error[E0004]: unknown escape `\U` in a string
   |
 2 |     print("C:\Users")
   |              ^
-  = hint: the escapes are `\n` `\t` `\r` `\\` and `\"`; to write a literal backslash, double it: `\\U`
+  = hint: the escapes are `\n` `\t` `\r` `\0` `\\` and `\"`; to write a literal backslash, double it: `\\U`
   = explain: nyra explain E0004
 
 nyra: 1 error(s)
@@ -299,34 +285,6 @@ error[E0001]: unexpected character `#`
   = hint: comments start with `//`, not `#`
   = fix: `// say hello`
   = explain: nyra explain E0001
-
-nyra: 1 error(s)
-==== lex_lone_close
-fn main() {
-    print("a } b")
-}
-----
-error[E0006]: unmatched `}` in a string: there is no `{` for it to close
-  --> case.nyra:2:14
-  |
-2 |     print("a } b")
-  |              ^
-  = hint: write `}}` to print a literal `}`
-  = explain: nyra explain E0006
-
-nyra: 1 error(s)
-==== lex_lone_open
-fn main() {
-    print("{")
-}
-----
-error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
-  --> case.nyra:2:12
-  |
-2 |     print("{")
-  |            ^
-  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
-  = explain: nyra explain E0006
 
 nyra: 1 error(s)
 ==== lex_math
@@ -477,20 +435,6 @@ error[E0001]: unexpected character `×`
   = hint: write `*` for multiplication
   = fix: `print(2 * 3)`
   = explain: nyra explain E0001
-
-nyra: 1 error(s)
-==== lex_unclosed
-fn main() {
-    print("a {x")
-}
-----
-error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
-  --> case.nyra:2:14
-  |
-2 |     print("a {x")
-  |              ^
-  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
-  = explain: nyra explain E0006
 
 nyra: 1 error(s)
 ==== lex_unterminated
@@ -854,12 +798,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected an expression, found keyword `ret`
+error[E0101]: expected an expression, found end of line
   --> case.nyra:1:23
   |
 1 | fn f(x: int) -> int = ret x
   |                       ^
-  = hint: a one-line function returns its expression itself, so there is no `ret`: `fn f(x: int) -> int = x`
+  = hint: the expression must start on the same line as `=`: `fn f() -> int = 1`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1407,39 +1351,6 @@ error[E0101]: expected an expression, found end of line
 2 |     let x =
   |            ^
   = hint: write a value after `=`: `let x = 0`
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
-==== par_line_start_op
-fn main() {
-    let x = 1
-        + 2
-}
-----
-error[E0101]: expected an expression, found `+`
-  --> case.nyra:3:9
-  |
-3 |         + 2
-  |         ^
-  = hint: a line cannot start with `+`: end the previous line with the operator instead (a line may break after an operator, never before one)
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
-==== par_nested_fn
-fn f() {
-    fn g() {
-    }
-}
-fn main() {
-    print(1)
-}
-----
-error[E0101]: expected `}` to close the `{` of `fn f` opened at 1:8, found keyword `fn`
-  --> case.nyra:2:5
-  |
-2 |     fn g() {
-  |     ^
-  = hint: functions cannot be nested: add the missing `}` before this `fn`, or move the inner function to the top level
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3403,7 +3314,7 @@ error[E0201]: undefined variable `nope`
   |
 2 |     print("{nope}")
   |             ^
-  = hint: declare it first: `let nope = ...`
+  = hint: `{nope}` inserts the value of `nope`; to keep `${nope}` as text, double the braces: `${{nope}}`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)

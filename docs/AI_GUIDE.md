@@ -265,8 +265,7 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Structs are built with a call | `Point { x: 1, y: 2 }` (E0101), `Point(1, 2)` (E0225) | `Point(x: 1, y: 2)` |
 | Struct names are uppercase | `struct point` (E0221) | `struct Point` |
 | No methods on structs | `p.area()` (E0227) | `fn area(p: Point) -> int`, then `area(p)` |
-| Braces in strings | `print("{")`, `print("{}")` (E0006) | `print("{{")`, `print("{{}}")` |
-| No quotes inside `{ }` | `print("{f("a")}")` (E0006) | `let t = f("a")`, then `print("{t}")` |
+| No quotes inside `{ }` | `print("{f("a")}")` | `let t = f("a")`, then `print("{t}")` |
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
 | Literals | `.5`, `5.`, `1e5`, `1_000`, `0xFF` (E0001, E0101) | `0.5`, `5.0`, `100000.0`, `1000`, `255` |
@@ -360,7 +359,6 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0003 | number too large | `int` max is 9223372036854775807 |
 | E0004 | unknown escape | strings know `\n` `\t` `\r` `\\` `\"`; chars also `\'` |
 | E0005 | semicolon | delete it |
-| E0006 | bad brace in a string | `{` starts an interpolation: a lone `{` or `}`, an empty `{}` or quotes inside `{ }` are errors. Write `{{` and `}}` for literal braces |
 | E0007 | bad char literal | `'ab'`, `''`: a char holds exactly one character; text uses `"ab"` |
 | E0101 | syntax error | `return`, `elif`, `i++`, `0..=n`, `{` on a new line, `Point { x: 1 }`, `xs[1..3]`, two statements on a line, `break` outside a loop: compare with section 2 |
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |

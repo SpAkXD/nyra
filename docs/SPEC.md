@@ -11,7 +11,9 @@ context and the agent can write Nyra. For common mistakes and complete examples,
   functions cannot see the script's variables.
 - Every function signature is fully typed. Local variable types are inferred.
 - One statement per line. There are no semicolons. A line may break inside `( )`, between the
-  elements of `[ ]`, and after a binary operator.
+  elements of `[ ]`, after a binary operator, and before a binary operator or a `.` (the next line
+  starts with it). `ret`, `break` and `continue` may follow a statement on its line: `{ print("no") ret }`.
+- A `fn` written (indented) inside a function body is an ordinary function; it cannot see the locals around it.
 - Everything is evaluated left to right: arguments, operands and the parts of a string.
 - Names use letters, digits and `_` (`row_count`, `x2`, `_`). Comments: `// to end of line`.
 
@@ -21,7 +23,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `int` | 64-bit signed: `42`, `-7` |
 | `float` | 64-bit: `2.5`, `3.0` (always a dot with digits on both sides) |
 | `bool` | `true`, `false` |
-| `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \\ \"` |
+| `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \0 \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
 | `Point` | a struct you declare |
@@ -116,8 +118,8 @@ Parentheses group: `(a + b) * c`.
 | `abs(x)` · `min(a, b)` · `max(a, b)` | on `int`s or on `float`s (a program may define its own instead) |
 
 ## Strings and chars
-`"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. Every other `{` or `}` in a string is
-doubled: `"{{[]}}"` is the text `{[]}`. Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
+`"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
+`"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
 `a + b` joins two strings. Lengths and positions count characters (code points): `"héllo".len()`
 is 5, and `s[i]` is a `char` (from 0). A char is not a `str` and not an `int`; convert explicitly:
 ```nyra
