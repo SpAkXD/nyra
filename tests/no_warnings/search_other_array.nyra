@@ -1,0 +1,14 @@
+fn main() {
+    var seen: [int] = []
+    for i in 0..10 {
+        seen.push(i)
+    }
+    let wanted = [3, 4]
+    var hits = 0
+    for i in 0..5000 {
+        if wanted.contains(i % 10) {
+            hits += 1
+        }
+    }
+    print(hits, seen.len())
+}

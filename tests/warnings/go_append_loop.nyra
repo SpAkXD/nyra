@@ -1,0 +1,9 @@
+// expect: E0362 at 6:9
+// target: go
+fn main() {
+    var s = ""
+    for i in 0..2000 {
+        s += str(i)
+    }
+    print(s.len())
+}

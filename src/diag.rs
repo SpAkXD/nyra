@@ -118,11 +118,48 @@ impl Diag {
     }
 }
 
+thread_local! {
+    /// The warnings of the program being compiled (see `warn`).
+    static WARNINGS: std::cell::RefCell<Vec<Diag>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Records a warning: a mistake that is probably there but that the language allows, so the build
+/// goes on (`"${x}"` prints a `$`). Warnings are printed to stderr and listed in `--json`.
+pub fn warn(d: Diag) {
+    WARNINGS.with(|w| {
+        let mut w = w.borrow_mut();
+        if !w.iter().any(|o| o.code == d.code && o.span == d.span) {
+            w.push(d);
+        }
+    });
+}
+
+/// Forgets the warnings of the last compilation.
+pub fn clear_warnings() {
+    WARNINGS.with(|w| w.borrow_mut().clear());
+}
+
+/// The warnings of the last compilation, in the order of the source.
+pub fn warnings() -> Vec<Diag> {
+    let mut v = WARNINGS.with(|w| w.borrow().clone());
+    v.sort_by_key(|d| (d.span.line, d.span.col));
+    v
+}
+
 pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
+    render(diags, file, src, "error")
+}
+
+/// The warnings of the last compilation for humans (empty when there are none).
+pub fn render_warnings(file: &str, src: &str) -> String {
+    render(&warnings(), file, src, "warning")
+}
+
+fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
     let lines: Vec<&str> = src.lines().collect();
     let mut out = String::new();
     for d in diags {
-        out += &format!("error[{}]: {}\n", d.code, d.msg);
+        out += &format!("{label}[{}]: {}\n", d.code, d.msg);
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
         if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
             let num = d.span.line.to_string();
@@ -145,7 +182,16 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
 }
 
 pub fn render_json(diags: &[Diag], file: &str) -> String {
-    format!("{{\"ok\":{},\"errors\":{}}}", diags.is_empty(), render_json_errors(diags, file))
+    format!("{{\"ok\":{},\"errors\":{}{}}}", diags.is_empty(), render_json_errors(diags, file), warnings_json(file))
+}
+
+/// `,"warnings":[..]` with the warnings of the last compilation, or nothing when there are none.
+pub fn warnings_json(file: &str) -> String {
+    let w = warnings();
+    if w.is_empty() {
+        return String::new();
+    }
+    format!(",\"warnings\":{}", render_json_errors(&w, file))
 }
 
 /// The `errors` array of `render_json`.

@@ -137,7 +137,8 @@ nyra test examples/inline_examples.nyra   # run the `ex` examples and count what
 ```
 
 Save the program above as `scores.nyra` and run `nyra scores.nyra`. You never pass flags to the C
-compiler: Nyra calls it with `-O2 -fwrapv -ffp-contract=off` (plus `-s` to strip the executable) and
+compiler: Nyra calls it with `-fwrapv -ffp-contract=off` (plus `-s` to strip the executable) and `-O2` for
+`build`; `run` uses `-O1` so the first output comes sooner (`run --release` is `-O2`). It
 caches the result, so running an unchanged program again skips the C compiler. Editor support: syntax
 highlighting for VS Code is in [`editors/vscode`](editors/vscode).
 
@@ -411,6 +412,7 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `-o <path>` | output path for `build` (`-o -` prints to stdout) |
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
 | `--fix` | with `check`, `run` and `build`: apply the fixes that errors carry, check again, and write the file back if it then compiles |
+| `--release` | with `run`: compile the generated C with `-O2` like `build` does (`run` is `-O1` by default: a shorter compile, about the same speed) |
 | `--time` | show how long each step took |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example

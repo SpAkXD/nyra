@@ -1,0 +1,11 @@
+fn main() {
+    var seen: [int: bool] = [:]
+    var uniq = 0
+    for i in 0..100000 {
+        if !seen.has(i % 1000) {
+            seen[i % 1000] = true
+            uniq += 1
+        }
+    }
+    print(uniq)
+}

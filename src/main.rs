@@ -13,6 +13,7 @@ mod lexer;
 mod limits;
 mod mcp;
 mod parser;
+mod perfwarn;
 mod stdlib;
 
 use std::path::{Path, PathBuf};
@@ -42,6 +43,8 @@ options:
   --json       print errors as JSON (compile and runtime), for AI agents
   --fix        apply the fixes the errors suggest, check again, and write the
                file back if it then compiles (then run or build it as usual)
+  --release    (run) optimize the generated C like `build` does (-O2); `run` compiles faster
+               by default (-O1), so the first output comes sooner
   --time       show how long each step took
 
 `build` writes an executable natively and source code for every other target.
@@ -49,15 +52,33 @@ options:
 node (js and ts), python3 (NYRA_PYTHON), rustc (NYRA_RUSTC) or go (NYRA_GO).
 ";
 
-/// Flags nyra passes to the C compiler. Kept deliberately short:
-/// -O2      optimize
+/// Flags nyra passes to the C compiler, besides the optimization level (see `Opt`). Kept deliberately short:
 /// -fwrapv  make int overflow wrap (defined behavior, as the spec says)
 /// -ffp-contract=off  never fuse float operations (a*b+c), so results match JavaScript
 /// -s       strip symbols for a smaller executable (macOS's linker ignores it, so it's left out there)
 #[cfg(not(target_os = "macos"))]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off", "-s"];
+const CC_FLAGS: &[&str] = &["-fwrapv", "-ffp-contract=off", "-s"];
 #[cfg(target_os = "macos")]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
+const CC_FLAGS: &[&str] = &["-fwrapv", "-ffp-contract=off"];
+
+/// How hard the C compiler optimizes. `nyra build` and `nyra run --release` use `Release` (-O2). A
+/// plain `nyra run` is about getting the first output soon, so it uses `Fast` (-O1): the compile is
+/// a third shorter on big programs and the program runs about as fast as at -O2 (-O0 is no
+/// faster to compile, as it still emits the whole runtime, and runs 3 to 10 times slower).
+#[derive(Clone, Copy, PartialEq)]
+pub enum Opt {
+    Fast,
+    Release,
+}
+
+impl Opt {
+    fn flag(self) -> &'static str {
+        match self {
+            Opt::Fast => "-O1",
+            Opt::Release => "-O2",
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Target {
@@ -106,6 +127,8 @@ struct Opts {
     json: bool,
     time: bool,
     fix: bool,
+    /// `run --release`: compile the C with -O2 (see `Opt`).
+    release: bool,
     /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
     prog_args: Vec<String>,
 }
@@ -121,6 +144,7 @@ fn parse_args() -> Result<Opts, String> {
         json: false,
         time: false,
         fix: false,
+        release: false,
         prog_args: Vec::new(),
     };
     while let Some(a) = args.next() {
@@ -145,6 +169,7 @@ fn parse_args() -> Result<Opts, String> {
             "--json" => opts.json = true,
             "--time" => opts.time = true,
             "--fix" => opts.fix = true,
+            "--release" => opts.release = true,
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -174,6 +199,7 @@ fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
 
 /// Lexes, parses and type-checks, without running the examples.
 fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    diag::clear_warnings();
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
         fix::validate(&mut errs, src);
@@ -273,6 +299,7 @@ fn real_main() -> ExitCode {
                     if opts.json {
                         println!("{}", diag::render_json(&diags, &opts.file));
                     } else {
+                        eprint!("{}", diag::render_warnings(&opts.file, &src));
                         eprint!("{}", diag::render_human(&diags, &opts.file, &src));
                         eprintln!("nyra: {} error(s)", diags.len());
                     }
@@ -285,6 +312,12 @@ fn real_main() -> ExitCode {
         }
     };
 
+    // slow patterns: warnings too (E0360-E0362)
+    perfwarn::check(&prog, opts.target == Target::Go);
+    // warnings do not stop the build; `check --json` lists them in its JSON instead
+    if !(opts.json && opts.cmd == "check") {
+        eprint!("{}", diag::render_warnings(&opts.file, &src));
+    }
     if opts.cmd == "check" {
         if opts.json {
             let json = diag::render_json(&[], &opts.file);
@@ -331,6 +364,7 @@ fn test(opts: &Opts, src: &str) -> ExitCode {
     if opts.json {
         println!("{}", examples::json(&out, &opts.file));
     } else {
+        eprint!("{}", diag::render_warnings(&opts.file, src));
         eprint!("{}", diag::render_human(&out.errors, &opts.file, src));
         eprintln!("nyra: {} ({})", examples::summary(&out, &opts.file), ms(start.elapsed()));
     }
@@ -368,11 +402,11 @@ fn generate(prog: &ast::Program, target: Target, file: &str) -> Result<String, S
 const NO_CC: &str = "no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js";
 
 /// The executable for generated C, built in the shared temp dir (see `cc_cached`).
-fn native(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
+fn native(code: &str, stem: &str, source: &str, opt: Opt) -> Result<(PathBuf, Option<Duration>), ExitCode> {
     let Some(compiler) = find_cc() else {
         return Err(fail(NO_CC));
     };
-    cc_cached(&compiler, code, stem, source, &temp_dir(), false).map_err(fail)
+    cc_cached(&compiler, code, stem, source, &temp_dir(), opt, false).map_err(fail)
 }
 
 fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
@@ -388,7 +422,7 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     let mut cc_part = String::new();
     if opts.target == Target::Native {
-        let (exe, cc_time) = match native(code, stem, &opts.file) {
+        let (exe, cc_time) = match native(code, stem, &opts.file, Opt::Release) {
             Ok(r) => r,
             Err(code) => return code,
         };
@@ -438,7 +472,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
             let built = match opts.target {
                 Target::Rs => rust_cached(code, stem, &opts.file).map_err(fail),
                 Target::Go => go_cached(code, stem, &opts.file).map_err(fail),
-                _ => native(code, stem, &opts.file),
+                _ => native(code, stem, &opts.file, if opts.release { Opt::Release } else { Opt::Fast }),
             };
             match built {
                 Ok((exe, t)) => {
@@ -540,10 +574,13 @@ fn cc_cached(
     stem: &str,
     source: &str,
     dir: &Path,
+    opt: Opt,
     capture: bool,
 ) -> Result<(PathBuf, Option<Duration>), String> {
-    let key = format!("{compiler} | {}", CC_FLAGS.join(" "));
-    cached(code, stem, source, "c", &key, dir, |src, exe| cc(compiler, src, exe, capture))
+    let key = format!("{compiler} | {} {}", opt.flag(), CC_FLAGS.join(" "));
+    // (the builds of each optimization level are kept apart, so `run` and `build` of one file do not evict each other)
+    let variant = if opt == Opt::Fast { "fast" } else { "" };
+    cached(code, stem, source, "c", variant, &key, dir, |src, exe| cc(compiler, src, exe, opt, capture))
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
@@ -557,7 +594,7 @@ fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<
         return Err("no Rust compiler found (tried rustc); install Rust or set NYRA_RUSTC".into());
     }
     let key = format!("{rustc} | {}", RUSTC_FLAGS.join(" "));
-    cached(code, stem, source, "rs", &key, &temp_dir(), |src, exe| {
+    cached(code, stem, source, "rs", "", &key, &temp_dir(), |src, exe| {
         let t = Instant::now();
         match Command::new(&rustc).args(RUSTC_FLAGS).arg("-o").arg(exe).arg(src).status() {
             Ok(s) if s.success() => Ok(t.elapsed()),
@@ -572,7 +609,7 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
     if !works(&go, &["version"]) {
         return Err("no Go toolchain found (tried go); install Go or set NYRA_GO".into());
     }
-    cached(code, stem, source, "go", &go, &temp_dir(), |src, exe| {
+    cached(code, stem, source, "go", "", &go, &temp_dir(), |src, exe| {
         let t = Instant::now();
         // one file builds without a module (it must end in `.go`)
         match Command::new(&go).args(["build", "-o"]).arg(exe).arg(src).status() {
@@ -585,11 +622,13 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
 /// Compiles generated code into an executable in `dir` with `build(source, exe)`. If the same
 /// code was already compiled with the same tool (`key`), the old executable is reused.
 /// Returns the executable and the build time (`None` when cached).
+#[allow(clippy::too_many_arguments)]
 fn cached(
     code: &str,
     stem: &str,
     source: &str,
     ext: &str,
+    variant: &str,
     key: &str,
     dir: &Path,
     build: impl FnOnce(&Path, &Path) -> Result<Duration, String>,
@@ -603,6 +642,9 @@ fn cached(
     // (C builds keep the group names they had before the other compiled targets came)
     if ext != "c" {
         parts.push(ext.as_bytes());
+    }
+    if !variant.is_empty() {
+        parts.push(variant.as_bytes());
     }
     let group = format!("{stem}-{:08x}-", fnv1a(&parts) as u32);
     let exe_suffix = std::env::consts::EXE_SUFFIX;
@@ -640,7 +682,7 @@ fn cached(
 }
 
 /// Runs the C compiler. Returns how long it took.
-fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, String> {
+fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool) -> Result<Duration, String> {
     let mut cmd = Command::new(cc);
     // A compiler given by full path needs its own directory on PATH to find its DLLs/tools.
     if let Some(dir) = Path::new(&cc).parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -650,7 +692,7 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, St
         }
     }
     let t = Instant::now();
-    cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
+    cmd.arg(opt.flag()).args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
     // the math library (`math.sqrt`, `math.floor`) is separate outside Windows; it goes after the source
     #[cfg(not(windows))]
     cmd.arg("-lm");

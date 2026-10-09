@@ -158,7 +158,25 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
         let (ok, json) = check_json(&dir, &fixed_file);
         assert!(ok, "{code}: the Fixed example does not compile:\n{fixed}\n{json:?}");
 
-        if item.kind == "runtime error" {
+        if item.kind == "warning" {
+            // a warning does not stop the build: the Wrong program compiles and lists exactly this warning
+            // (a first line `// target: go`: the warning is only given for that target)
+            let flags: &[&str] = if wrong.starts_with("// target: go") { &["--go"] } else { &[] };
+            let (ok, json) = common::check_json_with(&dir, flags, &wrong_file);
+            assert!(ok, "{code}: a warning example must compile:\n{wrong}\n{json:?}");
+            let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap_or(&[]);
+            assert!(!warnings.is_empty(), "{code}: the Wrong example gives no warning");
+            for w in warnings {
+                assert_eq!(
+                    w.get("code").and_then(|c| c.as_str()),
+                    Some(code.as_str()),
+                    "{code}: the Wrong example gave another warning"
+                );
+                assert!(w.get("hint").and_then(|h| h.as_str()).is_some_and(|h| !h.is_empty()), "{code}: the warning has no hint");
+            }
+            let (_, fixed_json) = check_json(&dir, &fixed_file);
+            assert!(fixed_json.get("warnings").is_none(), "{code}: the Fixed example still warns:\n{fixed}");
+        } else if item.kind == "runtime error" {
             // ...and the wrong one compiles but stops at run time with that code
             let (ok, json) = check_json(&dir, &wrong_file);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
@@ -353,8 +371,13 @@ fn expected_codes(dir: &str) -> BTreeSet<String> {
 fn every_code_of_the_compiler_has_a_test_program() {
     let compile = expected_codes("tests/errors");
     let runtime = expected_codes("tests/runtime");
+    let warnings = expected_codes("tests/warnings");
     for item in listed().iter().filter(|e| !e.planned) {
-        let folder = if item.kind == "runtime error" { ("tests/runtime", &runtime) } else { ("tests/errors", &compile) };
+        let folder = match item.kind.as_str() {
+            "runtime error" => ("tests/runtime", &runtime),
+            "warning" => ("tests/warnings", &warnings),
+            _ => ("tests/errors", &compile),
+        };
         assert!(
             folder.1.contains(&item.code),
             "{} has no program in {}: add one whose first line is `// expect: {}`",
