@@ -44,12 +44,10 @@ ex mean([1.0, 2.0, 4.0]) > 2.33, mean([1.0, 2.0, 4.0]) < 2.34, mean([]) == 0.0
 fn fib(n: int) -> int = if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
 ex fib(0) == 0, fib(1) == 1, fib(10) == 55
 
-fn main() {
-    print(sq(12))
-    print(dist(-4, 9))
-    print(clamp(42, Range(lo: 0, hi: 10)))
-    print(words("  three   little  words "))
-    print(title("the quick brown fox"))
-    print(mean([2.5, 3.5]))
-    print(fib(20))
-}
+print(sq(12))
+print(dist(-4, 9))
+print(clamp(42, Range(lo: 0, hi: 10)))
+print(words("  three   little  words "))
+print(title("the quick brown fox"))
+print(mean([2.5, 3.5]))
+print(fib(20))

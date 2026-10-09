@@ -49,6 +49,14 @@ Tools
   `--spec full|card`, `--ex-examples` and `--budget` for `--provider anthropic`, and the verified prices
   of Opus 5.5, Sonnet 5.5 and Haiku 4.5. The card against the full spec: `research/AB-card.md`.
 
+Project
+- The Python, TypeScript, Rust and Go targets are marked experimental (README, SPEC, `nyra --help`, llms.txt);
+  native (C) and JavaScript are the supported targets. No code or tests were removed.
+- The benchmark's Nyra reference solutions and the `examples/` are written as scripts in current style
+  (no `fn main`, `print(a, b)`, lambdas, comprehensions, maps, `for i, x in xs`); `examples/explicit_main.nyra`
+  keeps the `fn main` form.
+- `docs/DESIGN.md` records what was decided not to do yet, and why.
+
 ## v0.4.0 (2026-10-08)
 
 - Four more backends: Python, TypeScript, Rust and Go (`--target`), tested on every example.

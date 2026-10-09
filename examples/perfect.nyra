@@ -16,8 +16,6 @@ fn is_perfect(n: int) -> bool {
     ret n > 1 && divisor_sum(n) == n
 }
 
-fn main() {
-    for n in 1..10000 {
-        if is_perfect(n) { print(n) }
-    }
+for n in 1..10000 {
+    if is_perfect(n) { print(n) }
 }

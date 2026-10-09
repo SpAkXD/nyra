@@ -1,19 +1,14 @@
-fn main() {
-    let n = 500000
-    let m = 1000000007
-    var xs: [int] = []
-    var x = 12345
-    for _ in 0..n {
-        x = x * 48271 % 2147483647
-        xs.push(x)
-    }
-    xs.sort()
-    var check = 0
-    for i in 0..n {
-        check = (check + (i + 1) * xs[i]) % m
-    }
-    print(xs[0])
-    print(xs[n - 1])
-    print(xs[n / 2])
-    print(check)
+let n = 500000
+var xs: [int] = []
+var x = 12345
+for _ in 0..n {
+    x = x * 48271 % 2147483647
+    xs.push(x)
 }
+xs.sort()
+var check = 0
+for i, v in xs { check = (check + (i + 1) * v) % 1000000007 }
+print(xs[0])
+print(xs[n - 1])
+print(xs[n / 2])
+print(check)

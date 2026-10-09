@@ -1,73 +1,47 @@
-struct Account {
-    name: str
-    balance: int
-}
-
-// the position of the account called `name`, or -1
-fn find(accounts: [Account], name: str) -> int {
-    for i in 0..accounts.len() {
-        if accounts[i].name == name {
-            ret i
+var balance: [str: int] = [:]
+let commands = "open A 100; open B 50; open A 10; deposit C 5; withdraw B 70; transfer A B 60; transfer B A 112; transfer B A 109; transfer A A 5; withdraw A 25; close B; transfer A B 1; deposit A 7; withdraw A 15; close A; open B 0; close B"
+for command in commands.split("; ") {
+    let w = command.split(" ")
+    let op = w[0]
+    let x = w[1]
+    if op == "open" {
+        if balance.has(x) {
+            print("{x} exists")
+        } else {
+            balance[x] = int(w[2])
+            print("opened {x}")
         }
-    }
-    ret -1
-}
-
-fn main() {
-    let commands = "open A 100; open B 50; open A 10; deposit C 5; withdraw B 70; transfer A B 60; transfer B A 112; transfer B A 109; transfer A A 5; withdraw A 25; close B; transfer A B 1; deposit A 7; withdraw A 15; close A; open B 0; close B"
-    var accounts: [Account] = []
-    for command in commands.split("; ") {
-        let words = command.split(" ")
-        let op = words[0]
-        let x = words[1]
-        let i = find(accounts, x)
-        if op == "open" {
-            if i >= 0 {
-                print("{x} exists")
-            } else {
-                accounts.push(Account(name: x, balance: int(words[2])))
-                print("opened {x}")
-            }
-        } else if op == "deposit" {
-            if i < 0 {
-                print("{x} unknown")
-            } else {
-                accounts[i].balance += int(words[2])
-                print("{x} balance {accounts[i].balance}")
-            }
-        } else if op == "withdraw" {
-            let n = int(words[2])
-            if i < 0 {
-                print("{x} unknown")
-            } else if accounts[i].balance - n < 0 {
-                print("{x} insufficient")
-            } else {
-                accounts[i].balance -= n
-                print("{x} balance {accounts[i].balance}")
-            }
-        } else if op == "transfer" {
-            let y = words[2]
-            let j = find(accounts, y)
-            let n = int(words[3])
-            if i < 0 || j < 0 {
-                print("unknown account")
-            } else if accounts[i].balance < n + 1 {
-                print("{x} insufficient")
-            } else {
-                // when x and y are the same account, n goes out and comes back: only the fee is paid
-                accounts[i].balance -= n + 1
-                accounts[j].balance += n
-                print("{x} balance {accounts[i].balance} {y} balance {accounts[j].balance}")
-            }
-        } else if op == "close" {
-            if i < 0 {
-                print("{x} unknown")
-            } else if accounts[i].balance != 0 {
-                print("{x} not empty")
-            } else {
-                accounts.remove(i)
-                print("closed {x}")
-            }
+    } else if op == "deposit" || op == "withdraw" {
+        let n = int(w[2])
+        if !balance.has(x) {
+            print("{x} unknown")
+        } else if op == "withdraw" && balance[x] < n {
+            print("{x} insufficient")
+        } else {
+            balance[x] += if op == "deposit" { n } else { -n }
+            print("{x} balance {balance[x]}")
+        }
+    } else if op == "transfer" {
+        let y = w[2]
+        let n = int(w[3])
+        if !balance.has(x) || !balance.has(y) {
+            print("unknown account")
+        } else if balance[x] < n + 1 {
+            print("{x} insufficient")
+        } else {
+            // when x and y are the same account, n goes out and comes back: only the fee is paid
+            balance[x] -= n + 1
+            balance[y] += n
+            print("{x} balance {balance[x]} {y} balance {balance[y]}")
+        }
+    } else if op == "close" {
+        if !balance.has(x) {
+            print("{x} unknown")
+        } else if balance[x] != 0 {
+            print("{x} not empty")
+        } else {
+            balance.remove(x)
+            print("closed {x}")
         }
     }
 }

@@ -225,12 +225,14 @@ class MockProvider(Provider):
         if defect == "no_code":
             return "Here is my solution: I would loop over the numbers and print the results."
         if lang == "nyra":
+            # the references are scripts (statements at the top level); a program may still use `fn main`
             if defect == "wrong":
-                broken = code.replace("fn main() {", "fn main() {\n    print(12345)", 1)
+                broken = code.replace("fn main() {", "fn main() {\n    print(12345)", 1) if "fn main() {" in code \
+                    else "print(12345)\n" + code
             elif defect == "syntax":
                 broken = "@\n" + code
-            else:  # runtime: Nyra has no portable crash, use another compile error (missing `main`)
-                broken = code.replace("fn main()", "fn mian()", 1)
+            else:  # runtime: Nyra has no portable crash, use another compile error (an undefined variable)
+                broken = code + "print(mock_undefined_variable)\n"
         elif lang == "rust":
             if defect == "wrong":
                 broken = code.replace("fn main() {", 'fn main() {\n    println!("12345");', 1)

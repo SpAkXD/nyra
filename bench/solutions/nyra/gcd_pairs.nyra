@@ -1,18 +1,7 @@
-fn gcd(a: int, b: int) -> int {
-    var x = a
-    var y = b
-    while y != 0 {
-        let t = x % y
-        x = y
-        y = t
-    }
-    ret x
-}
+fn gcd(a: int, b: int) -> int = if b == 0 { a } else { gcd(b, a % b) }
 
-fn main() {
-    print(gcd(48, 18))
-    print(gcd(1071, 462))
-    print(gcd(17, 5))
-    print(gcd(1000000, 250000))
-    print(gcd(270, 192))
-}
+print(gcd(48, 18))
+print(gcd(1071, 462))
+print(gcd(17, 5))
+print(gcd(1000000, 250000))
+print(gcd(270, 192))

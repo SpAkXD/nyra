@@ -17,36 +17,34 @@ fn longest_word(text: str) -> str {
     }
 }
 
-fn main() {
-    var big = [0].repeat(100000)
-    print(big.len())
-    free(big)
-    big = [1, 2, 3]
-    print(big)
-    let table = [1, 4, 9, 16]
-    keep(table)
-    print(table)
-    var copy = table
-    copy.push(25)
-    print(copy)
-    print(table)
-    var total = 0
-    for line in ["a bb ccc", "dddd e"] {
-        arena {
-            total += line.split(" ").len()
-        }
+var big = [0].repeat(100000)
+print(big.len())
+free(big)
+big = [1, 2, 3]
+print(big)
+let table = [1, 4, 9, 16]
+keep(table)
+print(table)
+var copy = table
+copy.push(25)
+print(copy)
+print(table)
+var total = 0
+for line in ["a bb ccc", "dddd e"] {
+    arena {
+        total += line.split(" ").len()
     }
-    print(total)
-    print(longest_word("the quick brown fox"))
-    var doc = Doc(title: "notes", lines: ["one", "two"])
-    keep(doc)
-    doc.lines.push("three")
-    print(doc)
-    let name = "kept " + str(1)
-    keep(name)
-    print(name)
-    var s = "temp" + "!"
-    free(s)
-    s = "again"
-    print(s)
 }
+print(total)
+print(longest_word("the quick brown fox"))
+var doc = Doc(title: "notes", lines: ["one", "two"])
+keep(doc)
+doc.lines.push("three")
+print(doc)
+let name = "kept " + str(1)
+keep(name)
+print(name)
+var s = "temp" + "!"
+free(s)
+s = "again"
+print(s)

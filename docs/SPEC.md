@@ -362,8 +362,8 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0345 | `json.parse`: not JSON, or not the shape of the type: `expected an int at $.items[0].count` |
 
 ## Known differences between backends
-The targets are native (C), `--js`, `--py`, `--ts`, `--rs` and `--go`; everything else, runtime errors
-included, is the same on each.
+The supported targets are native (C) and `--js`; `--py`, `--ts`, `--rs` and `--go` are experimental. Everything
+else, runtime errors included, is the same on each.
 - Ints: an overflow of the 64-bit range is E0255 on every target. With `--js` and `--ts` an int is a
   JavaScript number, exact only up to 2^53 - 1 (9007199254740991): a program that goes beyond (an
   operation, a literal, `int(s)`, `int(x)`, `json.parse`) stops with E0256 there, where the other

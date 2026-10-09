@@ -1,11 +1,7 @@
-fn main() {
-    let xs = [4, 7, 1, 9, 6, 5, 2, 8]
-    let target = 11
-    for i in 0..xs.len() {
-        for j in i + 1..xs.len() {
-            if xs[i] + xs[j] == target {
-                print("{i} {j}")
-            }
-        }
+let xs = [4, 7, 1, 9, 6, 5, 2, 8]
+let target = 11
+for i, x in xs {
+    for j in i + 1..xs.len() {
+        if x + xs[j] == target { print(i, j) }
     }
 }

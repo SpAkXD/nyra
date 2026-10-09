@@ -1,40 +1,28 @@
-fn energy(pos: [[int]], vel: [[int]]) -> int {
-    var total = 0
-    for b in 0..pos.len() {
-        let p = abs(pos[b][0]) + abs(pos[b][1]) + abs(pos[b][2])
-        let k = abs(vel[b][0]) + abs(vel[b][1]) + abs(vel[b][2])
-        total += p * k
-    }
-    ret total
-}
+var pos = [[-7, 17, -11], [9, 12, 5], [-9, 0, -4], [4, 6, 0], [1, -13, 8]]
+var vel = [[0, 0, 0]].repeat(5)
 
-fn main() {
-    var pos = [[-7, 17, -11], [9, 12, 5], [-9, 0, -4], [4, 6, 0], [1, -13, 8]]
-    var vel = [[0, 0, 0]].repeat(5)
-    for step in 1..20001 {
-        for a in 0..5 {
-            for b in a + 1..5 {
-                for axis in 0..3 {
-                    if pos[a][axis] < pos[b][axis] {
-                        vel[a][axis] += 1
-                        vel[b][axis] -= 1
-                    } else if pos[a][axis] > pos[b][axis] {
-                        vel[a][axis] -= 1
-                        vel[b][axis] += 1
-                    }
+// potential energy times kinetic energy of every body, added up
+fn energy() -> int = [pos[b].map(x => abs(x)).sum() * vel[b].map(x => abs(x)).sum() for b in 0..5].sum()
+
+for step in 1..20001 {
+    for a in 0..5 {
+        for b in a + 1..5 {
+            for axis in 0..3 {
+                if pos[a][axis] < pos[b][axis] {
+                    vel[a][axis] += 1
+                    vel[b][axis] -= 1
+                } else if pos[a][axis] > pos[b][axis] {
+                    vel[a][axis] -= 1
+                    vel[b][axis] += 1
                 }
             }
         }
-        for b in 0..5 {
-            for axis in 0..3 {
-                pos[b][axis] += vel[b][axis]
-            }
-        }
-        if step % 4000 == 0 {
-            print(energy(pos, vel))
-        }
     }
     for b in 0..5 {
-        print(pos[b][0], pos[b][1], pos[b][2], vel[b][0], vel[b][1], vel[b][2])
+        for axis in 0..3 { pos[b][axis] += vel[b][axis] }
     }
+    if step % 4000 == 0 { print(energy()) }
+}
+for b in 0..5 {
+    print(pos[b][0], pos[b][1], pos[b][2], vel[b][0], vel[b][1], vel[b][2])
 }

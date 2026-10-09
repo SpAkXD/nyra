@@ -1,16 +1,3 @@
-fn digit_sum(n: int) -> int {
-    var rest = n
-    var total = 0
-    while rest > 0 {
-        total = total + rest % 10
-        rest = rest / 10
-    }
-    ret total
-}
+fn digit_sum(n: int) -> int = str(n).chars().map(c => int(str(c))).sum()
 
-fn main() {
-    print(digit_sum(12345))
-    print(digit_sum(9999))
-    print(digit_sum(100000))
-    print(digit_sum(987654321))
-}
+for n in [12345, 9999, 100000, 987654321] { print(digit_sum(n)) }

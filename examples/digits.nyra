@@ -23,16 +23,14 @@ fn is_palindrome(n: int) -> bool {
     ret n == reverse(n)
 }
 
-fn main() {
-    print(digit_sum(12345))
-    print(reverse(12345))
-    print(is_palindrome(12321))
-    print(is_palindrome(12345))
+print(digit_sum(12345))
+print(reverse(12345))
+print(is_palindrome(12321))
+print(is_palindrome(12345))
 
-    // palindromes from 1 to 999
-    var count = 0
-    for n in 1..1000 {
-        if is_palindrome(n) { count = count + 1 }
-    }
-    print(count)
+// palindromes from 1 to 999
+var count = 0
+for n in 1..1000 {
+    if is_palindrome(n) { count = count + 1 }
 }
+print(count)

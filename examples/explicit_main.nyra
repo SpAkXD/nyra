@@ -1,0 +1,15 @@
+// the other examples are scripts; a program may also put its statements in `fn main()`
+struct Counter {
+    name: str
+    n: int
+}
+
+fn bump(c: Counter) -> Counter = Counter(name: c.name, n: c.n + 1)
+
+fn main() {
+    var c = Counter(name: "calls", n: 0)
+    for i in 0..3 {
+        c = bump(c)
+    }
+    print(c)
+}

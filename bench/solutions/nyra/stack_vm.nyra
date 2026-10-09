@@ -1,13 +1,9 @@
+// how many values an instruction needs on the stack
+let arity = ["pop": 1, "dup": 1, "print": 1, "jz": 1, "swap": 2, "over": 2, "add": 2, "sub": 2, "mul": 2, "div": 2, "mod": 2]
+let arithmetic = ["add", "sub", "mul", "div", "mod"]
+
 // the index of the line after the label `name`
 fn target(lines: [str], name: str) -> int = lines.index_of(name + ":") + 1
-
-fn needs(op: str) -> int {
-    if op == "pop" || op == "dup" || op == "print" || op == "jz" { ret 1 }
-    if op == "swap" || op == "over" || op == "add" || op == "sub" || op == "mul" || op == "div" || op == "mod" {
-        ret 2
-    }
-    ret 0
-}
 
 fn run(lines: [str]) {
     var stack: [int] = []
@@ -28,7 +24,7 @@ fn run(lines: [str]) {
         let w = text.split(" ")
         let op = w[0]
         let n = pc + 1
-        if stack.len() < needs(op) {
+        if stack.len() < arity.get(op, 0) {
             print("error at line {n}: stack underflow")
             break
         }
@@ -40,13 +36,10 @@ fn run(lines: [str]) {
         } else if op == "dup" {
             stack.push(stack[stack.len() - 1])
         } else if op == "swap" {
-            let b = stack.pop()
-            let a = stack.pop()
-            stack.push(b)
-            stack.push(a)
+            stack.swap(stack.len() - 1, stack.len() - 2)
         } else if op == "over" {
             stack.push(stack[stack.len() - 2])
-        } else if op == "add" || op == "sub" || op == "mul" || op == "div" || op == "mod" {
+        } else if arithmetic.contains(op) {
             let b = stack[stack.len() - 1]
             let a = stack[stack.len() - 2]
             if (op == "div" || op == "mod") && b == 0 {
@@ -55,17 +48,7 @@ fn run(lines: [str]) {
             }
             stack.pop()
             stack.pop()
-            if op == "add" {
-                stack.push(a + b)
-            } else if op == "sub" {
-                stack.push(a - b)
-            } else if op == "mul" {
-                stack.push(a * b)
-            } else if op == "div" {
-                stack.push(a / b)
-            } else {
-                stack.push(a % b)
-            }
+            stack.push(if op == "add" { a + b } else if op == "sub" { a - b } else if op == "mul" { a * b } else if op == "div" { a / b } else { a % b })
         } else if op == "print" {
             print(stack.pop())
         } else if op == "jmp" {
@@ -85,27 +68,19 @@ fn run(lines: [str]) {
             break
         }
     }
-    if stack.len() == 0 {
-        print("stack: empty")
-    } else {
-        var parts: [str] = []
-        for v in stack { parts.push("{v}") }
-        print("stack: " + parts.join(" "))
-    }
+    print(if stack.len() == 0 { "stack: empty" } else { "stack: " + stack.map(v => str(v)).join(" ") })
 }
 
-fn main() {
-    let programs = [
-        ["push 9875", "call digits", "print", "push 406", "call digits", "print", "halt", "digits:", "push 0",
-         "loop:", "over", "jz done", "over", "push 10", "mod", "add", "swap", "push 10", "div", "swap",
-         "jmp loop", "done:", "swap", "pop", "ret"],
-        ["push 5", "push 3", "sub", "dup", "print", "push 7", "swap", "sub", "print", "push -4", "ret", "print"],
-        ["push 3", "top:", "dup", "print", "push 2", "mul", "jmp top"],
-        ["push 6", "push 4", "call f", "print", "f:", "over", "over", "mod", "jz g", "push 0", "div", "g:", "ret"],
-        ["push 1", "push 2", "swap", "over", "add", "add", "mul", "push 8"],
-    ]
-    for k in 0..programs.len() {
-        print("program {k + 1}")
-        run(programs[k])
-    }
+let programs = [
+    ["push 9875", "call digits", "print", "push 406", "call digits", "print", "halt", "digits:", "push 0",
+     "loop:", "over", "jz done", "over", "push 10", "mod", "add", "swap", "push 10", "div", "swap",
+     "jmp loop", "done:", "swap", "pop", "ret"],
+    ["push 5", "push 3", "sub", "dup", "print", "push 7", "swap", "sub", "print", "push -4", "ret", "print"],
+    ["push 3", "top:", "dup", "print", "push 2", "mul", "jmp top"],
+    ["push 6", "push 4", "call f", "print", "f:", "over", "over", "mod", "jz g", "push 0", "div", "g:", "ret"],
+    ["push 1", "push 2", "swap", "over", "add", "add", "mul", "push 8"],
+]
+for k, program in programs {
+    print("program {k + 1}")
+    run(program)
 }

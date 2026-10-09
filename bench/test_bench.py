@@ -229,8 +229,9 @@ class TaskSet(unittest.TestCase):
         # the mock's deliberately broken replies edit these programs textually
         for t in self.tasks:
             nyra = run.SOLUTIONS_DIR / "nyra" / f"{t.id}.nyra"
-            if nyra.is_file():
-                self.assertIn("fn main() {", nyra.read_text(encoding="utf-8"), nyra.name)
+            if nyra.is_file():  # scripts: the mock adds a statement before them or after them
+                text = nyra.read_text(encoding="utf-8")
+                self.assertTrue(text.endswith("\n") and "\r" not in text, nyra.name)
             rust = (run.SOLUTIONS_DIR / "rust" / f"{t.id}.rs").read_text(encoding="utf-8")
             self.assertIn("fn main() {", rust, f"{t.id}.rs")
             for lang, ext in (("typescript", ".ts"), ("rust", ".rs")):

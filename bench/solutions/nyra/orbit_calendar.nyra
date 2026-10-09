@@ -1,22 +1,15 @@
-struct Date {
-    y: int
-    m: int
-    d: int
-}
+struct Date { y: int, m: int, d: int }
+
+let weekdays = ["Ari", "Bel", "Cor", "Dun", "Eld", "Fen"]
 
 fn is_leap(y: int) -> bool = (y % 6 == 0 && y % 90 != 0) || y % 360 == 0
 
-fn month_days(y: int, m: int) -> int {
-    if m < 10 { ret 36 }
-    if is_leap(y) { ret 42 }
-    ret 41
-}
+fn month_days(y: int, m: int) -> int = if m < 10 { 36 } else if is_leap(y) { 42 } else { 41 }
+ex month_days(1, 1) == 36, month_days(6, 10) == 42, month_days(7, 10) == 41
 
 fn year_days(y: int) -> int = 9 * 36 + month_days(y, 10)
 
-fn valid(dt: Date) -> bool {
-    ret dt.y >= 1 && dt.m >= 1 && dt.m <= 10 && dt.d >= 1 && dt.d <= month_days(dt.y, dt.m)
-}
+fn valid(dt: Date) -> bool = dt.y >= 1 && dt.m >= 1 && dt.m <= 10 && dt.d >= 1 && dt.d <= month_days(dt.y, dt.m)
 
 fn parse(text: str) -> Date {
     let p = text.split("-")
@@ -25,11 +18,9 @@ fn parse(text: str) -> Date {
 
 // days since 0001-01-01
 fn ordinal(dt: Date) -> int {
-    var n = 0
-    for y in 1..dt.y { n += year_days(y) }
-    for m in 1..dt.m { n += month_days(dt.y, m) }
-    ret n + dt.d - 1
+    ret [year_days(y) for y in 1..dt.y].sum() + [month_days(dt.y, m) for m in 1..dt.m].sum() + dt.d - 1
 }
+ex ordinal(Date(y: 1, m: 1, d: 1)) == 0, ordinal(Date(y: 1, m: 2, d: 1)) == 36
 
 fn from_ordinal(ord: int) -> Date {
     var n = ord
@@ -45,18 +36,13 @@ fn from_ordinal(ord: int) -> Date {
     }
     ret Date(y: y, m: m, d: n + 1)
 }
+ex from_ordinal(0) == Date(y: 1, m: 1, d: 1), from_ordinal(36) == Date(y: 1, m: 2, d: 1)
 
-fn weekdays() -> [str] = ["Ari", "Bel", "Cor", "Dun", "Eld", "Fen"]
-
-fn pad(n: int, width: int) -> str {
-    let s = str(n)
-    ret "0".repeat(width - s.len()) + s
-}
+fn pad(n: int, width: int) -> str = str(n).pad_left(width, '0')
 
 fn show(ord: int) -> str {
     let dt = from_ordinal(ord)
-    let wd = weekdays()[ord % 6]
-    ret "{pad(dt.y, 4)}-{pad(dt.m, 2)}-{pad(dt.d, 2)} {wd}"
+    ret "{pad(dt.y, 4)}-{pad(dt.m, 2)}-{pad(dt.d, 2)} {weekdays[ord % 6]}"
 }
 
 fn answer(query: str) -> str {
@@ -74,7 +60,7 @@ fn answer(query: str) -> str {
     }
     // NTH k WEEKDAY YYYY-MM
     let k = int(w[1])
-    let target = weekdays().index_of(w[2])
+    let target = weekdays.index_of(w[2])
     let p = w[3].split("-")
     let first = Date(y: int(p[0]), m: int(p[1]), d: 1)
     if !valid(first) { ret "invalid date" }
@@ -89,9 +75,5 @@ fn answer(query: str) -> str {
     ret "none"
 }
 
-fn main() {
-    let queries = "ADD 0001-01-01 0; ADD 0359-10-40 3; ADD 0360-10-41 1; ADD 0450-03-17 -1000; DIFF 0090-10-41 0091-01-01; DIFF 0721-05-30 0001-01-01; ADD 0539-10-42 1; NTH 3 Dun 0540-07; NTH 7 Fen 0012-10; NTH 7 Ari 0013-10; DIFF 0180-10-42 0181-01-01; ADD 0002-01-01 -365; NTH 7 Bel 0013-10; ADD 0005-11-01 1; ADD 0359-01-01 365"
-    for q in queries.split("; ") {
-        print(answer(q))
-    }
-}
+let queries = "ADD 0001-01-01 0; ADD 0359-10-40 3; ADD 0360-10-41 1; ADD 0450-03-17 -1000; DIFF 0090-10-41 0091-01-01; DIFF 0721-05-30 0001-01-01; ADD 0539-10-42 1; NTH 3 Dun 0540-07; NTH 7 Fen 0012-10; NTH 7 Ari 0013-10; DIFF 0180-10-42 0181-01-01; ADD 0002-01-01 -365; NTH 7 Bel 0013-10; ADD 0005-11-01 1; ADD 0359-01-01 365"
+for q in queries.split("; ") { print(answer(q)) }

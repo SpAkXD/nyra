@@ -7,87 +7,54 @@ struct Row {
 
 // 12000 -> "12,000"
 fn grouped(n: int) -> str {
-    let digits = "{n}"
+    let digits = str(n)
     var out = ""
-    for i in 0..digits.len() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
-            out += ","
-        }
-        out += str(digits[i])
+    for i, d in digits {
+        if i > 0 && (digits.len() - i) % 3 == 0 { out += "," }
+        out += str(d)
     }
     ret out
 }
+ex grouped(12000) == "12,000", grouped(999) == "999", grouped(1234567) == "1,234,567"
 
-fn dollars(cents: int) -> str {
-    let rest = cents % 100
-    let two = if rest < 10 { "0{rest}" } else { "{rest}" }
-    ret "{grouped(cents / 100)}.{two}"
-}
+fn dollars(cents: int) -> str = "{grouped(cents / 100)}.{str(cents % 100).pad_left(2, '0')}"
+ex dollars(5) == "0.05", dollars(123456) == "1,234.56"
 
-fn short_note(note: str) -> str {
-    if note.len() > 10 { ret note.slice(0, 9) + "~" }
-    ret note
-}
+fn short_note(note: str) -> str = if note.len() > 10 { note.slice(0, 9) + "~" } else { note }
 
 // align: 0 left, 1 right, 2 center
 fn fit(text: str, width: int, align: int) -> str {
     let pad = width - text.len()
-    if align == 0 { ret text + " ".repeat(pad) }
-    if align == 1 { ret " ".repeat(pad) + text }
-    let left = pad / 2
-    ret " ".repeat(left) + text + " ".repeat(pad - left)
+    if align == 0 { ret text.pad_right(width) }
+    if align == 1 { ret text.pad_left(width) }
+    ret " ".repeat(pad / 2) + text + " ".repeat(pad - pad / 2)
 }
+ex fit("ab", 5, 0) == "ab   ", fit("ab", 5, 1) == "   ab", fit("ab", 5, 2) == " ab  "
 
-fn border(widths: [int], fill: str) -> str {
-    var line = "+"
-    for w in widths {
-        line += fill.repeat(w + 2) + "+"
-    }
-    ret line
-}
+fn border(widths: [int], fill: str) -> str = "+" + widths.map(w => fill.repeat(w + 2) + "+").join("")
 
 fn row_line(cells: [str], widths: [int], aligns: [int]) -> str {
-    var parts: [str] = []
-    for i in 0..cells.len() {
-        parts.push(fit(cells[i], widths[i], aligns[i]))
-    }
-    ret "| " + parts.join(" | ") + " |"
+    ret "| " + [fit(cells[i], widths[i], aligns[i]) for i in 0..cells.len()].join(" | ") + " |"
 }
 
-fn main() {
-    let rows = [
-        Row(item: "bolts", qty: 12000, price: 5, note: "bulk"),
-        Row(item: "hex nuts", qty: 350, price: 12, note: "galvanized"),
-        Row(item: "washers", qty: 7, price: 123456, note: "special order"),
-        Row(item: "anchor", qty: 1, price: 99, note: ""),
-        Row(item: "rivets", qty: 1500, price: 3, note: "aluminium"),
-        Row(item: "brackets", qty: 24, price: 1050, note: "left-hand only"),
-    ]
-    let aligns = [0, 1, 1, 1, 2]
-    let header = ["item", "qty", "price", "amount", "note"]
-    var body: [[str]] = []
-    var total_qty = 0
-    var total_amount = 0
-    for r in rows {
-        let amount = r.qty * r.price
-        total_qty += r.qty
-        total_amount += amount
-        body.push([r.item, grouped(r.qty), dollars(r.price), dollars(amount), short_note(r.note)])
-    }
-    let total = ["TOTAL", grouped(total_qty), "", dollars(total_amount), ""]
-    var widths = [0].repeat(5)
-    for cells in [header] + body + [total] {
-        for i in 0..5 {
-            if cells[i].len() > widths[i] { widths[i] = cells[i].len() }
-        }
-    }
-    print(border(widths, "-"))
-    print(row_line(header, widths, aligns))
-    print(border(widths, "="))
-    for cells in body {
-        print(row_line(cells, widths, aligns))
-    }
-    print(border(widths, "-"))
-    print(row_line(total, widths, aligns))
-    print(border(widths, "-"))
-}
+let rows = [
+    Row(item: "bolts", qty: 12000, price: 5, note: "bulk"),
+    Row(item: "hex nuts", qty: 350, price: 12, note: "galvanized"),
+    Row(item: "washers", qty: 7, price: 123456, note: "special order"),
+    Row(item: "anchor", qty: 1, price: 99, note: ""),
+    Row(item: "rivets", qty: 1500, price: 3, note: "aluminium"),
+    Row(item: "brackets", qty: 24, price: 1050, note: "left-hand only"),
+]
+let aligns = [0, 1, 1, 1, 2]
+let header = ["item", "qty", "price", "amount", "note"]
+let body = [[r.item, grouped(r.qty), dollars(r.price), dollars(r.qty * r.price), short_note(r.note)] for r in rows]
+let total = ["TOTAL", grouped(rows.map(r => r.qty).sum()), "", dollars(rows.map(r => r.qty * r.price).sum()), ""]
+let everything = [header] + body + [total]
+let widths = [everything.map(cells => cells[i].len()).max() for i in 0..5]
+print(border(widths, "-"))
+print(row_line(header, widths, aligns))
+print(border(widths, "="))
+for cells in body { print(row_line(cells, widths, aligns)) }
+print(border(widths, "-"))
+print(row_line(total, widths, aligns))
+print(border(widths, "-"))

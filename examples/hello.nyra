@@ -1,3 +1,1 @@
-fn main() {
-    print("hello from nyra")
-}
+print("hello from nyra")

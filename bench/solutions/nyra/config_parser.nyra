@@ -1,163 +1,86 @@
-struct Setting {
-    section: str
-    key: str
-    value: str
-}
+// literal braces in strings are doubled
+let lines = [
+    "; settings",
+    "title = demo",
+    "[server]",
+    "host = example.org",
+    "port = 8080",
+    "name = \"  main  \"",
+    "port = 9090",
+    "[paths]",
+    "root = /srv",
+    "logs = ${{paths.root}}/logs",
+    "data = ${{root}}/data",
+    "bad line here",
+    "[ server ]",
+    "url = http://${{host}}:${{port}}/",
+    "alias = ${{missing}}",
+    "= value",
+    "   # indented comment",
+    "",
+    "[paths]",
+    "tags += web",
+    "tags += api",
+    "root = /var",
+    "quoted = \"${{root}}\"",
+    "[extra]",
+    "formula = x=y+1",
+    "mirror = ${{server.url}}${{paths.root}}",
+    "broken = ${{paths.data}}${{server.nope}}",
+    "half = \"open",
+]
+var settings: [str: str] = [:]    // "section.key" -> value
+var current = ""                  // the section being read
+var missing = ""                  // set by expand: the first unknown reference
 
-// the position of SECTION.KEY, or -1
-fn find(settings: [Setting], section: str, key: str) -> int {
-    for i in 0..settings.len() {
-        if settings[i].section == section && settings[i].key == key {
-            ret i
-        }
-    }
-    ret -1
-}
-
-fn before(a: Setting, b: Setting) -> bool {
-    if a.section != b.section { ret a.section < b.section }
-    ret a.key < b.key
-}
-
-struct Expanded {
-    text: str
-    missing: str   // the first unknown reference, or "" when every reference is known
-}
-
-// VALUE with every ${S.K} and ${K} replaced from left to right
-fn expand(settings: [Setting], section: str, value: str) -> Expanded {
+// VALUE with every ${S.K} and ${K} replaced from left to right; "" when a reference is unknown
+fn expand(value: str) -> str {
     var out = ""
-    var i = 0
-    while i < value.len() {
-        let rest = value.slice(i, value.len())
+    var rest = value
+    while rest.contains("${{") {
         let start = rest.index_of("${{")
-        if start < 0 {
-            out += rest
-            break
-        }
         let after = rest.slice(start + 2, rest.len())
         let close = after.index_of("}}")
-        if close < 0 {
-            out += rest
-            break
-        }
-        out += rest.slice(0, start)
+        if close < 0 { break }
         let r = after.slice(0, close)
-        let dot = r.index_of(".")
-        var s = section
-        var k = r
-        if dot >= 0 {
-            s = r.slice(0, dot)
-            k = r.slice(dot + 1, r.len())
+        let id = if r.contains(".") { r } else { "{current}.{r}" }
+        if !settings.has(id) {
+            missing = r
+            ret ""
         }
-        let j = find(settings, s, k)
-        if j < 0 {
-            ret Expanded(text: "", missing: r)
-        }
-        out += settings[j].value
-        i += start + 2 + close + 1
+        out += rest.slice(0, start) + settings[id]
+        rest = after.slice(close + 1, after.len())
     }
-    ret Expanded(text: out, missing: "")
+    ret out + rest
 }
 
-fn main() {
-    // literal braces in strings are doubled
-    let lines = [
-        "; settings",
-        "title = demo",
-        "[server]",
-        "host = example.org",
-        "port = 8080",
-        "name = \"  main  \"",
-        "port = 9090",
-        "[paths]",
-        "root = /srv",
-        "logs = ${{paths.root}}/logs",
-        "data = ${{root}}/data",
-        "bad line here",
-        "[ server ]",
-        "url = http://${{host}}:${{port}}/",
-        "alias = ${{missing}}",
-        "= value",
-        "   # indented comment",
-        "",
-        "[paths]",
-        "tags += web",
-        "tags += api",
-        "root = /var",
-        "quoted = \"${{root}}\"",
-        "[extra]",
-        "formula = x=y+1",
-        "mirror = ${{server.url}}${{paths.root}}",
-        "broken = ${{paths.data}}${{server.nope}}",
-        "half = \"open",
-    ]
-    var settings: [Setting] = []
-    var section = ""
-    var has_section = false
-    for n in 1..lines.len() + 1 {
-        let line = lines[n - 1]
-        let t = line.trim()
-        if t == "" || t.starts_with(";") || t.starts_with("#") {
-            continue
-        }
-        if t.starts_with("[") && t.ends_with("]") {
-            section = t.slice(1, t.len() - 1).trim()
-            has_section = true
-            continue
-        }
-        let eq = line.index_of("=")
-        if eq < 0 {
-            print("line {n}: syntax error")
-            continue
-        }
-        var left = line.slice(0, eq)
-        let append = left.ends_with("+")
-        if append {
-            left = left.slice(0, left.len() - 1)
-        }
-        let key = left.trim()
-        let raw = line.slice(eq + 1, line.len()).trim()
-        if key == "" {
-            print("line {n}: empty key")
-            continue
-        }
-        if !has_section {
-            print("line {n}: no section")
-            continue
-        }
-        var value = raw
-        if raw.len() >= 2 && raw.starts_with("\"") && raw.ends_with("\"") {
-            value = raw.slice(1, raw.len() - 1)
-        } else {
-            let e = expand(settings, section, raw)
-            if e.missing != "" {
-                print("line {n}: unknown reference {e.missing}")
-                continue
-            }
-            value = e.text
-        }
-        let i = find(settings, section, key)
-        if i < 0 {
-            settings.push(Setting(section: section, key: key, value: value))
-        } else if append {
-            settings[i].value = settings[i].value + "," + value
-        } else {
-            settings[i].value = value
-        }
+var has_section = false
+for i, line in lines {
+    let n = i + 1
+    let t = line.trim()
+    if t == "" || t.starts_with(";") || t.starts_with("#") { continue }
+    if t.starts_with("[") && t.ends_with("]") {
+        current = t.slice(1, t.len() - 1).trim()
+        has_section = true
+        continue
     }
-    print("---")
-    // insertion sort by section, then key
-    for i in 1..settings.len() {
-        let s = settings[i]
-        var j = i
-        while j > 0 && before(s, settings[j - 1]) {
-            settings[j] = settings[j - 1]
-            j -= 1
-        }
-        settings[j] = s
-    }
-    for s in settings {
-        print("{s.section}.{s.key} = [{s.value}]")
-    }
+    let eq = line.index_of("=")
+    if eq < 0 { print("line {n}: syntax error") continue }
+    var left = line.slice(0, eq)
+    let append = left.ends_with("+")
+    if append { left = left.slice(0, left.len() - 1) }
+    let key = left.trim()
+    let raw = line.slice(eq + 1, line.len()).trim()
+    if key == "" { print("line {n}: empty key") continue }
+    if !has_section { print("line {n}: no section") continue }
+    let quoted = raw.len() >= 2 && raw.starts_with("\"") && raw.ends_with("\"")
+    missing = ""
+    let value = if quoted { raw.slice(1, raw.len() - 1) } else { expand(raw) }
+    if missing != "" { print("line {n}: unknown reference {missing}") continue }
+    let id = "{current}.{key}"
+    if append && settings.has(id) { settings[id] += "," + value } else { settings[id] = value }
 }
+print("---")
+var ids = settings.keys()
+ids.sort()
+for id in ids { print("{id} = [{settings[id]}]") }

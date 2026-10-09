@@ -4,32 +4,23 @@ struct Item {
     quantity: int
 }
 
-fn money(cents: int) -> str {
-    let c = cents % 100
-    let zero = if c < 10 { "0" } else { "" }
-    ret "{cents / 100}.{zero}{c}"
-}
+fn money(cents: int) -> str = "{cents / 100}.{str(cents % 100).pad_left(2, '0')}"
 
-fn line(label: str, cents: int) {
-    let amount = money(cents)
-    print(label + " ".repeat(8 - label.len()) + " ".repeat(8 - amount.len()) + amount)
-}
+fn line(label: str, cents: int) = print(label.pad_right(8) + money(cents).pad_left(8))
 
-fn main() {
-    let items = [
-        Item(name: "apple", price: 125, quantity: 3),
-        Item(name: "bread", price: 399, quantity: 1),
-        Item(name: "milk", price: 89, quantity: 12),
-        Item(name: "cheese", price: 1450, quantity: 2),
-    ]
-    var subtotal = 0
-    for item in items {
-        let total = item.price * item.quantity
-        subtotal += total
-        line(item.name, total)
-    }
-    let tax = (subtotal * 825 + 5000) / 10000
-    line("subtotal", subtotal)
-    line("tax", tax)
-    line("total", subtotal + tax)
+let items = [
+    Item(name: "apple", price: 125, quantity: 3),
+    Item(name: "bread", price: 399, quantity: 1),
+    Item(name: "milk", price: 89, quantity: 12),
+    Item(name: "cheese", price: 1450, quantity: 2),
+]
+var subtotal = 0
+for item in items {
+    let total = item.price * item.quantity
+    subtotal += total
+    line(item.name, total)
 }
+let tax = (subtotal * 825 + 5000) / 10000
+line("subtotal", subtotal)
+line("tax", tax)
+line("total", subtotal + tax)

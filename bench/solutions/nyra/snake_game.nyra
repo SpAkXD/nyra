@@ -1,86 +1,56 @@
-struct Pos {
-    x: int
-    y: int
-}
+struct Pos { x: int, y: int }
 
-fn width() -> int = 8
-fn height() -> int = 6
+let width = 8
+let height = 6
+let steps = ['U': Pos(x: 0, y: -1), 'D': Pos(x: 0, y: 1), 'L': Pos(x: -1, y: 0), 'R': Pos(x: 1, y: 0)]
 
-fn step_of(c: char) -> Pos {
-    if c == 'U' { ret Pos(x: 0, y: -1) }
-    if c == 'D' { ret Pos(x: 0, y: 1) }
-    if c == 'L' { ret Pos(x: -1, y: 0) }
-    ret Pos(x: 1, y: 0)
-}
+fn opposite(a: char, b: char) -> bool = steps[a].x == -steps[b].x && steps[a].y == -steps[b].y
 
-fn opposite(a: char, b: char) -> bool {
-    let da = step_of(a)
-    let db = step_of(b)
-    ret da.x == -db.x && da.y == -db.y
-}
-
-fn main() {
-    // head first, tail last
-    var snake = [Pos(x: 2, y: 2), Pos(x: 1, y: 2), Pos(x: 0, y: 2)]
-    var dir = 'R'
-    let foods = [
-        Pos(x: 4, y: 2), Pos(x: 2, y: 2), Pos(x: 6, y: 4),
-        Pos(x: 0, y: 5), Pos(x: 7, y: 0), Pos(x: 3, y: 3),
-    ]
-    var food_index = 0
-    var has_food = true
-    var score = 0
-    var ended_at = 0
-    let moves = "RRDLURLDDRDLLLLLLURDRR"
-    for k in 0..moves.len() {
-        let letter = moves[k]
-        if !opposite(letter, dir) { dir = letter }
-        let d = step_of(dir)
-        let head = Pos(x: snake[0].x + d.x, y: snake[0].y + d.y)
-        let grows = has_food && head == foods[food_index]
-        let tail = snake[snake.len() - 1]
-        var dies = head.x < 0 || head.x >= width() || head.y < 0 || head.y >= height()
-        if !dies {
-            let body = snake.slice(0, snake.len() - 1)
-            dies = body.contains(head) || (grows && head == tail)
-        }
-        if dies {
-            ended_at = k + 1
-            break
-        }
-        snake.insert(0, head)
-        if grows {
-            score += 1
-            // the next food: the next listed position the snake does not cover
-            has_food = false
-            food_index += 1
-            while food_index < foods.len() {
-                if !snake.contains(foods[food_index]) {
-                    has_food = true
-                    break
-                }
-                food_index += 1
+// head first, tail last
+var snake = [Pos(x: 2, y: 2), Pos(x: 1, y: 2), Pos(x: 0, y: 2)]
+var dir = 'R'
+let foods = [
+    Pos(x: 4, y: 2), Pos(x: 2, y: 2), Pos(x: 6, y: 4),
+    Pos(x: 0, y: 5), Pos(x: 7, y: 0), Pos(x: 3, y: 3),
+]
+var food_index = 0
+var has_food = true
+var score = 0
+var ended_at = 0
+for k, letter in "RRDLURLDDRDLLLLLLURDRR" {
+    if !opposite(letter, dir) { dir = letter }
+    let head = Pos(x: snake[0].x + steps[dir].x, y: snake[0].y + steps[dir].y)
+    let grows = has_food && head == foods[food_index]
+    var dies = head.x < 0 || head.x >= width || head.y < 0 || head.y >= height
+    if !dies {
+        dies = snake.slice(0, snake.len() - 1).contains(head) || (grows && head == snake[snake.len() - 1])
+    }
+    if dies {
+        ended_at = k + 1
+        break
+    }
+    snake.insert(0, head)
+    if grows {
+        score += 1
+        // the next food: the next listed position the snake does not cover
+        has_food = false
+        food_index += 1
+        while food_index < foods.len() {
+            if !snake.contains(foods[food_index]) {
+                has_food = true
+                break
             }
-        } else {
-            snake.pop()
+            food_index += 1
         }
-    }
-    if ended_at > 0 {
-        print("game over at move {ended_at}")
     } else {
-        print("all moves done")
-    }
-    print("score {score}")
-    print("length {snake.len()}")
-    var board = [['.'].repeat(width())].repeat(height())
-    if has_food {
-        board[foods[food_index].y][foods[food_index].x] = '*'
-    }
-    for i in 1..snake.len() {
-        board[snake[i].y][snake[i].x] = 'o'
-    }
-    board[snake[0].y][snake[0].x] = 'H'
-    for row in board {
-        print(row.join(""))
+        snake.pop()
     }
 }
+print(if ended_at > 0 { "game over at move {ended_at}" } else { "all moves done" })
+print("score {score}")
+print("length {snake.len()}")
+var board = [['.'].repeat(width)].repeat(height)
+if has_food { board[foods[food_index].y][foods[food_index].x] = '*' }
+for p in snake.slice(1, snake.len()) { board[p.y][p.x] = 'o' }
+board[snake[0].y][snake[0].x] = 'H'
+for row in board { print(row.join("")) }

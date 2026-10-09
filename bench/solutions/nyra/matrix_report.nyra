@@ -1,44 +1,20 @@
 // "[2 -1; 1 3]" -> [[2, -1], [1, 3]]
-fn parse(text: str) -> [[int]] {
-    var m: [[int]] = []
-    for row in text.slice(1, text.len() - 1).split("; ") {
-        var r: [int] = []
-        for w in row.split(" ") { r.push(int(w)) }
-        m.push(r)
-    }
-    ret m
-}
+fn parse(text: str) -> [[int]] = text.slice(1, text.len() - 1).split("; ").map(row => row.split(" ").map(w => int(w)))
+ex parse("[2 -1; 1 3]") == [[2, -1], [1, 3]]
+
+fn transpose(a: [[int]]) -> [[int]] = [[a[i][j] for i in 0..a.len()] for j in 0..a[0].len()]
+ex transpose([[1, 2, 3], [4, 5, 6]]) == [[1, 4], [2, 5], [3, 6]]
+
+fn dot(x: [int], y: [int]) -> int = [x[k] * y[k] for k in 0..x.len()].sum()
 
 fn mul(a: [[int]], b: [[int]]) -> [[int]] {
-    var out = [[0].repeat(b[0].len())].repeat(a.len())
-    for i in 0..a.len() {
-        for j in 0..b[0].len() {
-            for k in 0..b.len() { out[i][j] += a[i][k] * b[k][j] }
-        }
-    }
-    ret out
+    let bt = transpose(b)
+    ret [[dot(row, col) for col in bt] for row in a]
 }
-
-fn transpose(a: [[int]]) -> [[int]] {
-    var out = [[0].repeat(a.len())].repeat(a[0].len())
-    for i in 0..a.len() {
-        for j in 0..a[0].len() { out[j][i] = a[i][j] }
-    }
-    ret out
-}
+ex mul([[1, 2], [3, 4]], [[0, 1], [1, 0]]) == [[2, 1], [4, 3]]
 
 // the matrix without row 0 and column `col`
-fn minor(a: [[int]], col: int) -> [[int]] {
-    var out: [[int]] = []
-    for i in 1..a.len() {
-        var r: [int] = []
-        for j in 0..a.len() {
-            if j != col { r.push(a[i][j]) }
-        }
-        out.push(r)
-    }
-    ret out
-}
+fn minor(a: [[int]], col: int) -> [[int]] = [[a[i][j] for j in 0..a.len() if j != col] for i in 1..a.len()]
 
 fn det(a: [[int]]) -> int {
     if a.len() == 1 { ret a[0][0] }
@@ -50,44 +26,26 @@ fn det(a: [[int]]) -> int {
     }
     ret total
 }
+ex det([[1, 2], [3, 4]]) == -2, det([[5]]) == 5
 
 fn show(title: str, m: [[int]]) {
     print(title)
-    var widths = [0].repeat(m[0].len())
+    let widths = [m.map(row => str(row[j]).len()).max() for j in 0..m[0].len()]
     for row in m {
-        for j in 0..row.len() {
-            let w = str(row[j]).len()
-            if w > widths[j] { widths[j] = w }
-        }
-    }
-    for row in m {
-        var parts: [str] = []
-        for j in 0..row.len() {
-            let s = str(row[j])
-            parts.push(" ".repeat(widths[j] - s.len()) + s)
-        }
-        print(parts.join("  "))
+        print([str(row[j]).pad_left(widths[j]) for j in 0..row.len()].join("  "))
     }
 }
 
-fn main() {
-    let a = parse("[2 -1 0; 1 3 -2; 0 4 1]")
-    let b = parse("[1 2; -3 0; 5 -1]")
-    let c = parse("[2 -1; 1 3]")
-    let d = parse("[3 1 2 -1; 1 2 0 -2; 4 -1 6 -3; 5 0 2 1]")
-    let ab = mul(a, b)
-    show("A*B", ab)
-    show("(A*B)^T", transpose(ab))
-    var c6 = c
-    for i in 0..5 { c6 = mul(c6, c) }
-    show("C^6", c6)
-    var r = mul(a, a)
-    for i in 0..3 {
-        for j in 0..3 {
-            r[i][j] -= 3 * a[i][j]
-            if i == j { r[i][j] += 2 }
-        }
-    }
-    show("A*A-3A+2I", r)
-    print("det(D) = {det(d)}")
-}
+let a = parse("[2 -1 0; 1 3 -2; 0 4 1]")
+let b = parse("[1 2; -3 0; 5 -1]")
+let c = parse("[2 -1; 1 3]")
+let d = parse("[3 1 2 -1; 1 2 0 -2; 4 -1 6 -3; 5 0 2 1]")
+let ab = mul(a, b)
+show("A*B", ab)
+show("(A*B)^T", transpose(ab))
+var c6 = c
+for _ in 0..5 { c6 = mul(c6, c) }
+show("C^6", c6)
+let aa = mul(a, a)
+show("A*A-3A+2I", [[aa[i][j] - 3 * a[i][j] + (if i == j { 2 } else { 0 }) for j in 0..3] for i in 0..3])
+print("det(D) = {det(d)}")

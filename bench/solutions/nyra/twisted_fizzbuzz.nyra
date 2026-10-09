@@ -1,18 +1,15 @@
-fn has_seven(n: int) -> bool {
-    var x = n
-    while x > 0 {
-        if x % 10 == 7 { ret true }
-        x = x / 10
-    }
-    ret false
-}
+fn has_seven(n: int) -> bool = str(n).contains('7')
 
-fn main() {
-    for n in 1..41 {
-        if has_seven(n) { print("Seven") }
-        else if n % 3 == 0 && n % 4 == 0 { print("Twelve") }
-        else if n % 3 == 0 { print("Three") }
-        else if n % 4 == 0 { print("Four") }
-        else { print(n) }
+for n in 1..41 {
+    if has_seven(n) {
+        print("Seven")
+    } else if n % 12 == 0 {
+        print("Twelve")
+    } else if n % 3 == 0 {
+        print("Three")
+    } else if n % 4 == 0 {
+        print("Four")
+    } else {
+        print(n)
     }
 }

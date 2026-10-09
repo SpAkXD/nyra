@@ -1,16 +1,3 @@
-fn reverse(n: int) -> int {
-    var rest = n
-    var result = 0
-    while rest > 0 {
-        result = result * 10 + rest % 10
-        rest = rest / 10
-    }
-    ret result
-}
+fn reverse(n: int) -> int = int(str(n).reversed())
 
-fn main() {
-    print(reverse(12345))
-    print(reverse(1200))
-    print(reverse(907))
-    print(reverse(86420))
-}
+for n in [12345, 1200, 907, 86420] { print(reverse(n)) }

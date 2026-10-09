@@ -10,47 +10,45 @@ fn first_square_above(n: int) -> int {
     ret i
 }
 
-fn main() {
-    // continue skips the rest of the body; a for loop still steps
-    var odd = ""
-    for i in 0..10 {
-        if i % 2 == 0 {
-            continue
-        }
-        odd += str(i)
+// continue skips the rest of the body; a for loop still steps
+var odd = ""
+for i in 0..10 {
+    if i % 2 == 0 {
+        continue
     }
-    print(odd)
-    print(first_square_above(50))
-    // break leaves only the inner loop
-    var pairs = 0
-    for a in 0..5 {
-        for b in 0..5 {
-            if b > a {
-                break
-            }
-            pairs += 1
-        }
-    }
-    print(pairs)
-    // over a string
-    var vowels = ""
-    for c in "programming language" {
-        if c == ' ' {
+    odd += str(i)
+}
+print(odd)
+print(first_square_above(50))
+// break leaves only the inner loop
+var pairs = 0
+for a in 0..5 {
+    for b in 0..5 {
+        if b > a {
             break
         }
-        if c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' {
-            vowels += str(c)
-        }
+        pairs += 1
     }
-    print(vowels)
-    var n = 0
-    var sum = 0
-    while n < 20 {
-        n += 1
-        if n % 3 != 0 {
-            continue
-        }
-        sum += n
-    }
-    print(sum)
 }
+print(pairs)
+// over a string
+var vowels = ""
+for c in "programming language" {
+    if c == ' ' {
+        break
+    }
+    if c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' {
+        vowels += str(c)
+    }
+}
+print(vowels)
+var n = 0
+var sum = 0
+while n < 20 {
+    n += 1
+    if n % 3 != 0 {
+        continue
+    }
+    sum += n
+}
+print(sum)

@@ -18,7 +18,7 @@ body:
     id: version
     attributes:
       label: Output of `nyra --version`
-      placeholder: nyra 0.2.0
+      placeholder: nyra 0.5.0-dev
     validations:
       required: true
   - type: textarea
