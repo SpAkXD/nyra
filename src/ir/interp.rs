@@ -20,6 +20,7 @@ use std::rc::Rc;
 
 use super::{Arg, BinOp, Expr, Func, FuncId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
 use crate::ast::Span;
+use crate::stdlib::StdFn;
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -715,6 +716,19 @@ impl<'m> Interp<'m> {
                 }
                 None
             }
+            RtOp::Std(StdFn::TextFixed) => {
+                let (Some(Value::Float(x)), d) = (args.first(), i(1)?) else { return Err(bug("text.fixed without a float")) };
+                if !(0..=100).contains(&d) {
+                    return Err(fail(
+                        "E0342",
+                        format!("text.fixed: digits must be 0 to 100, got {d}"),
+                        "`text.fixed(x, 2)` shows two decimals",
+                        span,
+                    ));
+                }
+                self.tick(d as u64)?;
+                text(text_fixed(*x, d as usize))
+            }
             other => return Err(bug(&format!("{} outside of a `Mutate`", other.name()))),
         };
         Ok(v)
@@ -902,6 +916,45 @@ pub fn compare(a: &Value, b: &Value) -> Option<Ordering> {
     }
 }
 
+/// `text.fixed(x, d)`: the exact value of `x` rounded to `d` decimals, ties away from zero.
+fn text_fixed(x: f64, d: usize) -> String {
+    if !x.is_finite() {
+        return num(x);
+    }
+    // every digit of the exact value (a double has at most 1074 decimals)
+    let full = format!("{:.1100}", x.abs());
+    let (whole, frac) = full.split_once('.').unwrap_or((&full, ""));
+    let mut digits: Vec<u8> = whole.bytes().chain(frac.bytes().take(d)).collect();
+    if frac.as_bytes().get(d).is_some_and(|c| *c >= b'5') {
+        let mut i = digits.len();
+        loop {
+            if i == 0 {
+                digits.insert(0, b'1');
+                break;
+            }
+            i -= 1;
+            if digits[i] == b'9' {
+                digits[i] = b'0';
+            } else {
+                digits[i] += 1;
+                break;
+            }
+        }
+    }
+    let zero = digits.iter().all(|c| *c == b'0');
+    let point = digits.len() - d;
+    let mut out = String::new();
+    if x.is_sign_negative() && !zero {
+        out.push('-');
+    }
+    out.extend(digits[..point].iter().map(|c| *c as char));
+    if d > 0 {
+        out.push('.');
+        out.extend(digits[point..].iter().map(|c| *c as char));
+    }
+    out
+}
+
 /// A value as `print` shows it: text and chars as they are, arrays and structs as Nyra code.
 pub fn display(m: &Module, v: &Value) -> String {
     match v {
@@ -941,14 +994,18 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 out.push('?');
                 return;
             };
-            out.push_str(&info.name);
+            if !info.tuple {
+                out.push_str(&info.name);
+            }
             out.push('(');
             for (k, ((name, _), x)) in info.fields.iter().zip(fields.iter()).enumerate() {
                 if k > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(name);
-                out.push_str(": ");
+                if !info.tuple {
+                    out.push_str(name);
+                    out.push_str(": ");
+                }
                 show_in(m, x, out);
             }
             out.push(')');

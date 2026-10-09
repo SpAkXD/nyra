@@ -341,7 +341,7 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
     let all = |xs: &[Expr]| xs.iter().find_map(|x| first_call(x, fns));
     match &e.kind {
         ExprKind::Call(name, args) => all(args).or_else(|| fns.contains(&name.as_str()).then(|| name.clone())),
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => first_call(x, fns),
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => first_call(x, fns),
         ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
@@ -452,6 +452,7 @@ pub fn source(e: &Expr) -> String {
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
         ExprKind::Tuple(xs) => format!("({})", list(xs)),
+        ExprKind::Fmt(x, spec) => format!("{}:{}", source(x), spec.text),
         ExprKind::MapLit(kvs) if kvs.is_empty() => "[:]".to_string(),
         ExprKind::MapLit(kvs) => {
             let items: Vec<String> = kvs.iter().map(|(k, v)| format!("{}: {}", source(k), source(v))).collect();

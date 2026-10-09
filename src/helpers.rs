@@ -16,6 +16,8 @@ pub enum H {
     Cmp(&'static str, Type),
     /// `sort_keyed(inout xs: [T], ks: [K])`: sorts `xs` by the keys `ks` (tuples), stable
     SortKeyed(Type, Type),
+    /// the sign, thousands separators and padding of a format specifier
+    Fmt,
 }
 
 impl H {
@@ -32,6 +34,7 @@ impl H {
                 format!("core.cmp_{o}_{}", t.mangle())
             }
             H::SortKeyed(t, k) => format!("core.sort_{}_{}", t.mangle(), k.mangle()),
+            H::Fmt => "core.fmt".to_string(),
         }
     }
 
@@ -40,6 +43,7 @@ impl H {
         match self {
             H::Cmp(op, t) => cmp_source(op, *t),
             H::SortKeyed(arr, key) => sort_keyed_source(*arr, *key),
+            H::Fmt => FMT.to_string(),
         }
     }
 }
@@ -60,6 +64,39 @@ pub fn orderable(t: Type) -> bool {
         None => matches!(t, Type::Int | Type::Float | Type::Str | Type::Char | Type::Bool),
     }
 }
+
+const FMT: &str = r#"fn __h(s: str, plus: bool, comma: bool, width: int, align: char, fill: char, zero: bool) -> str {
+    var t = s
+    if comma {
+        var start = 0
+        if t.len() > 0 && (t[0] == '-' || t[0] == '+') { start = 1 }
+        var end = start
+        while end < t.len() && t[end].is_digit() { end += 1 }
+        let count = end - start
+        var out = ""
+        for i in 0..count {
+            if i > 0 && (count - i) % 3 == 0 { out += "," }
+            out += str(t[start + i])
+        }
+        t = t.slice(0, start) + out + t.slice(end, t.len())
+    }
+    if plus && t.len() > 0 && t[0] != '-' { t = "+" + t }
+    let n = t.len()
+    if n >= width { ret t }
+    if zero {
+        var sign = ""
+        var rest = t
+        if n > 0 && (t[0] == '-' || t[0] == '+') {
+            sign = t.slice(0, 1)
+            rest = t.slice(1, n)
+        }
+        ret sign + rest.pad_left(width - sign.len(), '0')
+    }
+    if align == '<' { ret t.pad_right(width, fill) }
+    if align == '^' { ret t.pad_left(n + (width - n) / 2, fill).pad_right(width, fill) }
+    ret t.pad_left(width, fill)
+}
+"#;
 
 fn cmp_source(op: &str, t: Type) -> String {
     let es = t.tuple_elems().unwrap_or_default();

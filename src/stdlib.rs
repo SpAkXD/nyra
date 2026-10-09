@@ -315,7 +315,9 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
                     }
                 }
             }
-            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => expr(x, m, own),
+            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+                expr(x, m, own)
+            }
             ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
                 expr(a, m, own);
                 expr(b, m, own);

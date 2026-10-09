@@ -436,7 +436,9 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
                 }
             }
         }
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => lambda_names(x, out),
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+            lambda_names(x, out)
+        }
         ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
             lambda_names(a, out);
             lambda_names(b, out);

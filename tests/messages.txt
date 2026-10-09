@@ -1184,31 +1184,31 @@ nyra: 1 error(s)
 ==== par_interp_fmt
 fn main() {
     let x = 1.5
-    print("{x:.2f}")
+    print("{x:e}")
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:3:15
+error[E0270]: invalid format specifier `e` in a string: `e` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
   |
-3 |     print("{x:.2f}")
-  |               ^
-  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
-  = explain: nyra explain E0001
+3 |     print("{x:e}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
 
 nyra: 1 error(s)
 ==== par_interp_fmt2
 fn main() {
     let x = 1
-    print("{x:5}")
+    print("{x:5q}")
 }
 ----
-error[E0101]: expected `}` after the expression, found `:`
-  --> case.nyra:3:14
+error[E0270]: invalid format specifier `5q` in a string: `q` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
   |
-3 |     print("{x:5}")
-  |              ^
-  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
-  = explain: nyra explain E0101
+3 |     print("{x:5q}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
 
 nyra: 1 error(s)
 ==== par_interp_missing
@@ -5368,6 +5368,51 @@ error[E0309]: `json.str` cannot handle the tuple type in `(int, int)` yet
   |                ^
   = hint: use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`
   = explain: nyra explain E0309
+
+nyra: 1 error(s)
+==== format_spec_syntax
+fn main() {
+    let x = 5
+    print("{x:q}")
+}
+----
+error[E0270]: invalid format specifier `q` in a string: `q` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
+  |
+3 |     print("{x:q}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
+
+nyra: 1 error(s)
+==== format_spec_text_decimals
+fn main() {
+    let name = "ann"
+    print("{name:.2}")
+}
+----
+error[E0271]: the format specifier `.2` does not fit a `str`: `.N` rounds a float to N decimals
+  --> case.nyra:3:13
+  |
+3 |     print("{name:.2}")
+  |             ^
+  = hint: only a float has decimals: `{x:.2}`; to cut a text use `s.slice(0, n)`
+  = explain: nyra explain E0271
+
+nyra: 1 error(s)
+==== format_spec_int_decimals
+fn main() {
+    let n = 7
+    print("{n:.2f}")
+}
+----
+error[E0271]: the format specifier `.2f` does not fit an `int`: `.N` rounds a float to N decimals
+  --> case.nyra:3:13
+  |
+3 |     print("{n:.2f}")
+  |             ^
+  = hint: decimals are for floats: convert with `float(x)`, as in `{float(x):.2}`
+  = explain: nyra explain E0271
 
 nyra: 1 error(s)
 ==== for_pattern_not_tuple

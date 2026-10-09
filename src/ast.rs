@@ -406,9 +406,12 @@ impl Expr {
     pub fn each_mut(&mut self, f: &mut dyn FnMut(&mut Expr)) {
         f(self);
         match &mut self.kind {
-            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Lambda(_, x) => {
-                x.each_mut(f)
-            }
+            ExprKind::Unary(_, x)
+            | ExprKind::Field(x, _)
+            | ExprKind::Labeled(_, x)
+            | ExprKind::Inout(x)
+            | ExprKind::Lambda(_, x)
+            | ExprKind::Fmt(x, _) => x.each_mut(f),
             ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
                 a.each_mut(f);
                 b.each_mut(f);
@@ -521,6 +524,8 @@ pub enum ExprKind {
     Array(Vec<Expr>),
     /// `(a, b)`: a tuple of two or more values
     Tuple(Vec<Expr>),
+    /// `value:spec` inside `{ }` of a string: the value as text, aligned, padded or rounded
+    Fmt(Box<Expr>, FmtSpec),
     /// `["a": 1, "b": 2]`, `[:]`
     MapLit(Vec<(Expr, Expr)>),
     /// `base[index]`
@@ -538,6 +543,34 @@ pub enum ExprKind {
     Lambda(Vec<(String, Span)>, Box<Expr>),
     /// `[elem for var in src if cond]`: a new array, built by a loop like `map` and `filter`
     Comprehension(Box<Comp>),
+}
+
+/// A format specifier, the part after the colon in `"{x:>8}"`: `[[fill]align][+][0][width][,][.precision][type]`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FmtSpec {
+    /// the specifier as written
+    pub text: String,
+    pub fill: Option<char>,
+    /// `<`, `>` or `^`
+    pub align: Option<char>,
+    /// `+`: a sign on positive numbers
+    pub plus: bool,
+    /// `0`: pad a number with zeros after its sign
+    pub zero: bool,
+    pub width: usize,
+    /// `,`: thousands separators
+    pub comma: bool,
+    /// `.2`: decimals of a float
+    pub prec: Option<usize>,
+    /// `f`, `d` or `s`
+    pub ty: Option<char>,
+}
+
+impl FmtSpec {
+    /// True if the text needs the padding and grouping helper function, not just the digits.
+    pub fn needs_helper(&self) -> bool {
+        self.width > 0 || self.comma || self.plus
+    }
 }
 
 /// `[elem for var in src if cond]`. Like a lambda's body, `elem` and `cond` only read variables.

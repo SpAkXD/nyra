@@ -147,6 +147,22 @@ Parentheses group: `(a + b) * c`.
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
 `"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
+A format specifier after a colon shapes the text of a value, with the same result on every backend:
+```nyra
+let name = "ann"
+let n = 42
+let pi = 3.14159
+print("[{name:8}] [{name:>8}] [{name:^8}] [{n:6}] [{name:*<6}]")   // [ann     ] [     ann] [  ann   ] [    42] [ann***]
+print("{n:05} {n:+} {pi:.2} {pi:8.3} {1234567:,} {pi:>10.1}")      // 00042 +42 3.14    3.142 1,234,567        3.1
+```
+The parts, in this order: a fill character and an alignment (`<` left, `>` right, `^` centered; the default is
+left for text and right for numbers), `+` (a sign on positive numbers), `0` (zeros after the sign), the width,
+`,` (thousands separators), `.N` (N decimals of a float, rounded exactly like `text.fixed`: ties away from zero),
+and optionally `f`, `d` or `s`. `{x:.2f}` and `{n:5d}` are accepted as in Python. Width, fill and alignment work
+on any value (a tuple or an array is first written as `print` shows it); decimals, `,`, `+` and `0` need a
+number (E0271); anything else after the colon is E0270. The colon belongs to the specifier only outside
+brackets and quotes, so `{xs[0]}` and `{f("a")}` are unchanged.
+
 `a + b` joins two strings. Lengths and positions count characters (code points): `"héllo".len()`
 is 5, and `s[i]` is a `char` (from 0). A char is not a `str` and not an `int`; convert explicitly:
 ```nyra
@@ -311,7 +327,7 @@ when. They are checked at compile time, and a program prints the same with or wi
 `free` and `keep` take a local `let`/`var` holding a `str`, an array or a struct that contains one.
 
 ## Printing
-`print(x)`, `str(x)` and `"{x}"` show the same text. Arrays, tuples and structs print as Nyra code, with
+`print(x)`, `str(x)` and `"{x}"` show the same text (`"{x:>8}"` adds a format specifier). Arrays, tuples and structs print as Nyra code, with
 strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `(1, "a")`, `Point(x: 1, y: 2)`. Numbers print
 like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`,
 `1.0 / 0.0` prints `Infinity`, never `-0`.

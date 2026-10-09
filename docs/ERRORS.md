@@ -1968,6 +1968,54 @@ fn main() {
 ```
 - **Related:** E0255
 
+## E0270: invalid format specifier
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The text after the colon in `{value:spec}` inside a string is not a format specifier Nyra understands. A specifier is `[[fill]align][+][0][width][,][.decimals]`, optionally ending in `f`, `d` or `s`: `{x:>8}` right-aligns in 8 characters, `{x:*^9}` centers with `*`, `{n:05}` pads with zeros, `{n:+}` shows the sign, `{n:,}` adds thousands separators, `{f:.2}` rounds to 2 decimals, and they combine: `{f:>10.2}`.
+- **Why Nyra has this rule:** Tables and money need aligned, rounded numbers, and every backend must print exactly the same text. Nyra takes the useful subset of Python's format language, and refuses the rest instead of guessing.
+- **Common causes:**
+  - a Python or C specifier Nyra does not have (`{x:e}`, `{x:x}`, `{x:%}`, `{x!r}`)
+  - a `.` without the number of decimals after it
+  - a width above 100000 or more than 100 decimals
+- **Wrong:**
+```rust
+fn main() {
+    let x = 5
+    print("{x:q}")
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let x = 5
+    print("{x:>4}")
+}
+```
+- **Related:** E0271
+
+## E0271: format specifier does not fit the value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The format specifier is valid, but not for the type of the value: decimals (`.2`) and the type letter `f` are for floats, `d` is for ints, `s` is for text, and the separator `,`, the sign `+` and the zero padding `0` are for numbers. Width, fill and alignment work for every value.
+- **Why Nyra has this rule:** Rounding text or putting separators into a name is almost always a mistake; Python raises an error for these, and so does Nyra, at compile time.
+- **Common causes:**
+  - `{name:.2}` to cut a text (use `name.slice(0, 2)`)
+  - `{count:.2f}` on an int (convert with `float(count)`)
+  - `{label:,}` on text
+- **Wrong:**
+```rust
+fn main() {
+    let name = "ann"
+    print("{name:.2}")
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let name = "ann"
+    print("{name.slice(0, 2)}")
+}
+```
+- **Related:** E0270
+
 ## E0272: a pattern does not fit the value
 - **Kind:** compile error · **Since:** v0.6
 - **What it means:** A pattern such as `let (a, b) = value`, `(x, y) = value` or `for (k, v) in pairs` takes a tuple apart, but the value is not a tuple, or it has a different number of elements than the pattern has names.

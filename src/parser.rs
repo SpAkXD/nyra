@@ -13,7 +13,7 @@ use crate::lexer::{self, StrPart, Tok, Token};
 
 type PResult<T> = Result<T, Diag>;
 
-const FORMAT_SPEC_HINT: &str = "format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form";
+const FORMAT_SPEC_HINT: &str = "a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`";
 
 pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
     // every `struct Name` of the file, so a type can name a struct that is declared further down
@@ -1613,8 +1613,13 @@ impl Parser {
 
     /// Parses the expression inside `{ }` of an interpolated string.
     fn sub_expr(&mut self, code: &str, base: Span) -> PResult<Expr> {
+        // `{x:>8}`: the value, then the format specifier
+        let (code, spec_text) = match split_spec(code) {
+            Some(i) => (&code[..i], Some(&code[i + 1..])),
+            None => (code, None),
+        };
         let shift = |s: Span| Span { line: base.line, col: base.col + s.col - 1 };
-        let spec = code.contains(':');
+        let spec = false;
         let (mut toks, errs) = lexer::lex(code);
         if let Some((first, rest)) = errs.split_first() {
             for d in rest {
@@ -1657,7 +1662,13 @@ impl Parser {
             };
             return Err(d.hint(hint));
         }
-        Ok(e)
+        match spec_text.filter(|t| !t.is_empty()) {
+            Some(text) => {
+                let spec = parse_spec(text, base)?;
+                Ok(Expr::new(ExprKind::Fmt(Box::new(e), spec), base))
+            }
+            None => Ok(e),
+        }
     }
 
     /// The rest of a map literal `[k: v, k2: v2]`, after its first key (the next token is `:`).
@@ -2111,6 +2122,95 @@ impl Parser {
             _ => d.or_hint(generic),
         }
     }
+}
+
+/// Where the format specifier starts in the code of `{ }`: the first `:` outside brackets and
+/// string or character literals.
+fn split_spec(code: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut chars = code.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                while let Some((_, d)) = chars.next() {
+                    if d == '\\' {
+                        chars.next();
+                    } else if d == c {
+                        break;
+                    }
+                }
+            }
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The format specifier `[[fill]align][+][0][width][,][.precision][type]` (Python's, without the
+/// parts Nyra has no use for).
+fn parse_spec(text: &str, at: Span) -> PResult<FmtSpec> {
+    let bad = |why: String| {
+        Diag::new("E0270", format!("invalid format specifier `{text}` in a string: {why}"), at).hint(FORMAT_SPEC_HINT)
+    };
+    let cs: Vec<char> = text.chars().collect();
+    let mut spec = FmtSpec { text: text.to_string(), fill: None, align: None, plus: false, zero: false, width: 0, comma: false, prec: None, ty: None };
+    let mut i = 0;
+    let is_align = |c: char| matches!(c, '<' | '>' | '^');
+    if cs.len() >= 2 && is_align(cs[1]) {
+        spec.fill = Some(cs[0]);
+        spec.align = Some(cs[1]);
+        i = 2;
+    } else if !cs.is_empty() && is_align(cs[0]) {
+        spec.align = Some(cs[0]);
+        i = 1;
+    }
+    if cs.get(i) == Some(&'+') {
+        spec.plus = true;
+        i += 1;
+    }
+    if cs.get(i) == Some(&'0') {
+        spec.zero = true;
+        i += 1;
+    }
+    let digits = |i: &mut usize| -> Option<usize> {
+        let start = *i;
+        while cs.get(*i).is_some_and(|c| c.is_ascii_digit()) {
+            *i += 1;
+        }
+        (*i > start).then(|| cs[start..*i].iter().collect::<String>().parse::<usize>().unwrap_or(usize::MAX))
+    };
+    if let Some(w) = digits(&mut i) {
+        if w > 100_000 {
+            return Err(bad(format!("a width of {w} is too large (the most is 100000)")));
+        }
+        spec.width = w;
+    }
+    if cs.get(i) == Some(&',') {
+        spec.comma = true;
+        i += 1;
+    }
+    if cs.get(i) == Some(&'.') {
+        i += 1;
+        match digits(&mut i) {
+            Some(p) if p <= 100 => spec.prec = Some(p),
+            Some(p) => return Err(bad(format!("{p} decimals are too many (the most is 100)"))),
+            None => return Err(bad("the `.` needs the number of decimals after it: `.2`".to_string())),
+        }
+    }
+    if let Some(&t) = cs.get(i) {
+        if matches!(t, 'f' | 'd' | 's') {
+            spec.ty = Some(t);
+            i += 1;
+        }
+    }
+    if i < cs.len() {
+        let rest: String = cs[i..].iter().collect();
+        return Err(bad(format!("`{rest}` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)")));
+    }
+    Ok(spec)
 }
 
 /// `name.i`: the i-th part of a tuple held by the variable `name`.

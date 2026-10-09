@@ -386,6 +386,7 @@ fn show(e: &Expr) -> Option<String> {
             let a: Option<Vec<String>> = items.iter().map(show).collect();
             format!("({})", a?.join(", "))
         }
+        ExprKind::Fmt(..) => return None,
         ExprKind::Index(b, i) => format!("{}[{}]", operand(b)?, show(i)?),
         ExprKind::Field(b, f) => format!("{}.{f}", operand(b)?),
         ExprKind::Method(r, m, args) => {
@@ -1579,6 +1580,11 @@ impl Checker {
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
             ExprKind::Tuple(items) => self.tuple_lit(items, want),
+            ExprKind::Fmt(inner, spec) => {
+                let t = self.expr(inner);
+                self.check_spec(t, inner, spec, span);
+                Type::Str
+            }
             ExprKind::MapLit(pairs) => self.map_lit(pairs, want, span),
             ExprKind::Index(base, index) => {
                 let bt = self.expr(base);
@@ -1888,6 +1894,46 @@ impl Checker {
                 Type::map(k, v)
             }
             _ => Type::Unknown,
+        }
+    }
+
+    /// `{x:spec}`: the specifier must make sense for the type of `x`.
+    fn check_spec(&mut self, t: Type, inner: &Expr, spec: &FmtSpec, span: Span) {
+        if t.is_unknown() {
+            return;
+        }
+        if t == Type::Void {
+            self.errs.push(
+                Diag::new("E0203", format!("{} returns nothing, so it cannot be put into a string", call_text(inner)), inner.span)
+                    .hint("only values can go inside `{ }`: call it on its own line before the string"),
+            );
+            return;
+        }
+        let number = matches!(t, Type::Int | Type::Float);
+        let shown = &spec.text;
+        let mut bad = |why: String, hint: String| {
+            self.errs.push(Diag::new("E0271", format!("the format specifier `{shown}` does not fit {}: {why}", article(t)), span).hint(hint));
+        };
+        if spec.prec.is_some() && t != Type::Float {
+            let hint = if t == Type::Int {
+                "decimals are for floats: convert with `float(x)`, as in `{float(x):.2}`".to_string()
+            } else {
+                "only a float has decimals: `{x:.2}`; to cut a text use `s.slice(0, n)`".to_string()
+            };
+            bad("`.N` rounds a float to N decimals".to_string(), hint);
+        } else if (spec.comma || spec.plus || spec.zero) && !number {
+            let what = if spec.comma { "`,`" } else if spec.plus { "`+`" } else { "`0`" };
+            bad(format!("{what} is for numbers"), "an `int` or a `float` can have separators, a sign and zeros; align a text with `<`, `>` or `^`".to_string());
+        } else {
+            match (spec.ty, t) {
+                (Some('f'), Type::Float) | (Some('d'), Type::Int) | (Some('s'), Type::Str) | (None, _) => {}
+                (Some('f'), _) => bad("`f` is for floats".to_string(), "write `{x:.2}`, with `x` a float".to_string()),
+                (Some('d'), _) => bad("`d` is for ints".to_string(), "write `{n}` or `{n:5}`, with `n` an int".to_string()),
+                (Some(_), _) => bad("`s` is for text".to_string(), "write `{x:>8}` without the letter".to_string()),
+            }
+        }
+        if spec.needs_helper() {
+            self.need(H::Fmt, span);
         }
     }
 

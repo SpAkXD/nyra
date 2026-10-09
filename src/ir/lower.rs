@@ -149,7 +149,7 @@ fn mutates(e: &ast::Expr) -> bool {
         K::Call(name, args) => {
             WRITERS.with(|w| w.borrow().contains(name)) || args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a))
         }
-        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) => mutates(x),
+        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) | K::Fmt(x, _) => mutates(x),
         K::Comprehension(c) => {
             let src = match &c.src {
                 ast::CompSrc::Each(x) => mutates(x),
@@ -171,7 +171,7 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
     use ast::ExprKind as K;
     f(e);
     match &e.kind {
-        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) => each_expr(x, f),
+        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) | K::Fmt(x, _) => each_expr(x, f),
         K::Binary(_, a, b) | K::Index(a, b) => {
             each_expr(a, f);
             each_expr(b, f);
@@ -1464,6 +1464,36 @@ impl<'a> Lower<'a> {
                 let refs: Vec<&ast::Expr> = items.iter().collect();
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
+            }
+            ast::ExprKind::Fmt(x, spec) => {
+                let v = self.expr(x, None, out);
+                // the text of the value: a float with decimals is rounded exactly like `text.fixed`
+                let body = match (x.ty, spec.prec) {
+                    (Type::Float, Some(p)) => {
+                        let digits = vec![v, Expr::Int(p as i64)];
+                        self.op(RtOp::Std(StdFn::TextFixed), digits, Ty::Str, None, span, out)
+                    }
+                    (Type::Str, _) => v,
+                    _ => self.op(RtOp::Format, vec![v], Ty::Str, None, span, out),
+                };
+                if !spec.needs_helper() {
+                    return body;
+                }
+                let number = matches!(x.ty, Type::Int | Type::Float);
+                let align = spec.align.unwrap_or(if number { '>' } else { '<' });
+                // `{n:<05}` has an explicit alignment: the 0 is then just the fill
+                let zero_fill = spec.zero && spec.align.is_some();
+                let fill = spec.fill.unwrap_or(if zero_fill { '0' } else { ' ' });
+                let args = vec![
+                    Arg::Val(body),
+                    Arg::Val(Expr::Bool(spec.plus)),
+                    Arg::Val(Expr::Bool(spec.comma)),
+                    Arg::Val(Expr::Int(spec.width as i64)),
+                    Arg::Val(Expr::Char(align as u32)),
+                    Arg::Val(Expr::Char(fill as u32)),
+                    Arg::Val(Expr::Bool(spec.zero && spec.align.is_none())),
+                ];
+                self.call_helper(H::Fmt, args, Ty::Str, dst, span, out)
             }
             ast::ExprKind::Tuple(items) => {
                 let refs: Vec<&ast::Expr> = items.iter().collect();

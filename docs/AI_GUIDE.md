@@ -311,6 +311,9 @@ Good to know:
   loop over such text use `for c in s`, or `let cs = s.chars()` once and index `cs[i]`.
 - `upper`, `lower` and the `is_*` tests know ASCII letters only: `'é'.is_letter()` is false and
   `"é".upper()` is `"é"`. `s.split(" ")` keeps empty parts: `"a  b".split(" ")` is `["a", "", "b"]`.
+- Format specifiers go after a colon inside the braces: `{name:<10}` left-aligns in 10 characters, `{n:>6}`
+  right-aligns, `{n:^6}` centers, `{n:08}` pads with zeros, `{x:.2}` rounds a float to 2 decimals (`.2f` also
+  works), `{n:,}` adds thousands separators, `{x:*>8}` fills with `*`. They combine: `{total:>12,.2}`.
 - Every `{` in a string starts an interpolation, so text with braces doubles them:
   `"{{[()]}}"` is `{[()]}`. With single braces the compiler reads what is between them as code and
   reports an error about that code (for `"{[]}"` it says it cannot infer the type of `[]`).
@@ -356,8 +359,8 @@ that works (section 6 has the usual replacements).
   runtime error (section 5); `os.exit(code)` stops it on purpose. To check a function, write examples:
   `ex f(2) == 4` (section 1).
 - **Output**: `print` ends the line unless its last argument is `end:` (`print(x, end: " ")`). There is
-  no `printf` and no format specifier (`{x:.2f}` is an error): a float prints in its shortest form; for
-  a fixed number of decimals use `text.fixed(x, 2)` (section 6b). Pad text with `s.pad_left(n)`.
+  no `printf`; shape values inside the string with a format specifier, as in Python: `"{x:>8}"`, `"{n:05}"`,
+  `"{f:.2}"`, `"{n:,}"`, `"{f:>10.2}"` (see the spec). A float without `.N` prints in its shortest form.
 
 ## 5. Error codes
 
@@ -418,6 +421,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
 | E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
 | E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
+| E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
+| E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
 | E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |
 | E0273 | no such tuple position | a pair has `.0` and `.1` |
 
