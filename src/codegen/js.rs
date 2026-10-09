@@ -197,10 +197,18 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let eq = if eqs.is_empty() { "true".to_string() } else { eqs.join(" && ") };
         let _ = writeln!(out, "    ny_eq(o) {{ return {eq}; }}");
-        let parts: Vec<String> =
-            s.fields.iter().zip(&fields).map(|((name, t), f)| format!("\"{name}: \" + ny_fmt(this.{f}, \"{}\")", tdesc(*t))).collect();
+        let parts: Vec<String> = s
+            .fields
+            .iter()
+            .zip(&fields)
+            .map(|((name, t), f)| {
+                let label = if s.tuple { String::new() } else { format!("\"{name}: \" + ") };
+                format!("{label}ny_fmt(this.{f}, \"{}\")", tdesc(*t))
+            })
+            .collect();
         let body = if parts.is_empty() { String::new() } else { format!(" + {}", parts.join(" + \", \" + ")) };
-        let _ = writeln!(out, "    ny_fmt() {{ return \"{}(\"{body} + \")\"; }}", s.name);
+        let head = if s.tuple { "(".to_string() } else { format!("{}(", s.name) };
+        let _ = writeln!(out, "    ny_fmt() {{ return \"{head}\"{body} + \")\"; }}");
         out.push_str("}\n");
     }
     if !m.structs.0.is_empty() {

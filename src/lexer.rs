@@ -209,7 +209,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 i += 1;
             }
             let mut is_float = false;
-            if i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
+            // after a `.` the digits are a tuple position (`t.0.1` is `t.0` then `.1`), never a float
+            let position = matches!(toks.last().map(|t| &t.tok), Some(Tok::Dot));
+            if !position && i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
                 is_float = true;
                 i += 1;
                 while i < cs.len() && cs[i].is_ascii_digit() {
@@ -461,7 +463,11 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
         // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
         if c == '.' {
-            let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
+            // (not in `t.1.0`: after a `.` the digits are a tuple position)
+            let after_digit = i > 0
+                && cs[i - 1].is_ascii_digit()
+                && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)))
+                && !(toks.len() >= 2 && toks[toks.len() - 2].tok == Tok::Dot);
             let before_digit =
                 next.is_ascii_digit() && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
             if !after_digit && !before_digit {

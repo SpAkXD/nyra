@@ -6,6 +6,7 @@ mod edit;
 mod examples;
 mod explain;
 mod fix;
+mod helpers;
 mod hints;
 mod ir;
 mod json;

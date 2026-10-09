@@ -35,6 +35,8 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
         nested: Vec::new(),
         depth: 0,
         too_deep: None,
+        queue: Vec::new(),
+        hidden: 0,
     };
     let prog = p.program();
     let mut errs = p.errs;
@@ -71,6 +73,18 @@ struct Parser {
     depth: usize,
     /// Where the code got nested too deeply (parsing stopped there).
     too_deep: Option<Span>,
+    /// Statements that follow the one `stmt` returned: `let (a, b) = f()` is a hidden `let` of the
+    /// whole value (returned) and one `let` per name (queued).
+    queue: Vec<Stmt>,
+    /// How many hidden names (`·t1`) were made: each destructuring or `if let` has its own.
+    hidden: usize,
+}
+
+/// A pattern: `a`, `_` or `(a, (b, _))`.
+enum Pat {
+    Name(String, Span),
+    Wild,
+    Tuple(Vec<Pat>),
 }
 
 impl Parser {
@@ -449,7 +463,10 @@ impl Parser {
                 }
                 // a statement at the top level: the program is a script, its statements form `main`
                 _ if self.starts_script_statement() => match self.stmt() {
-                    Ok(s) => top.push(s),
+                    Ok(s) => {
+                        top.push(s);
+                        top.append(&mut self.queue);
+                    }
                     Err(d) => {
                         self.errs.push(d);
                         self.sync_stmt();
@@ -578,7 +595,7 @@ impl Parser {
     /// Words of other languages (`import`, `class`, `int main(`) keep their own errors.
     fn starts_script_statement(&self) -> bool {
         match self.peek() {
-            Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Arena | Tok::Ret => true,
+            Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Arena | Tok::Ret | Tok::LParen => true,
             Tok::Ident(w) => {
                 let c_style = hints::is_type_word(w) && matches!(self.peek_at(1), Tok::Ident(_));
                 hints::top_level_word(w).is_none() && !c_style
@@ -772,6 +789,26 @@ impl Parser {
 
     fn ty_inner(&mut self, hint: &str) -> PResult<Type> {
         let span = self.span();
+        if self.at(&Tok::LParen) {
+            // `(int, str)`: a tuple type
+            self.deeper()?;
+            self.bump();
+            let mut elems = Vec::new();
+            loop {
+                elems.push(self.ty("a tuple type lists its element types: `(int, str)`")?);
+                if self.at(&Tok::Comma) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+            self.expect(Tok::RParen, "`)` to close the tuple type").map_err(|d| d.or_hint("a tuple type is written `(int, str)`"))?;
+            if elems.len() < 2 {
+                return Err(Diag::new("E0101", "a tuple type needs at least two element types", span)
+                    .hint("write `(int, str)`; for one value use its type alone"));
+            }
+            return Ok(Type::tuple(&elems));
+        }
         if self.at(&Tok::LBracket) {
             self.deeper()?;
             self.bump();
@@ -934,8 +971,12 @@ impl Parser {
                 Tok::Eof if self.too_deep.is_some() => return Ok(stmts),
                 Tok::Eof | Tok::Fn | Tok::Struct => return Err(self.unclosed_block(open, what)),
                 _ => match self.stmt() {
-                    Ok(s) => stmts.push(s),
+                    Ok(s) => {
+                        stmts.push(s);
+                        stmts.append(&mut self.queue);
+                    }
                     Err(d) => {
+                        self.queue.clear();
                         self.errs.push(d);
                         self.sync_stmt();
                     }
@@ -1106,6 +1147,9 @@ impl Parser {
                 let kw = self.bump().tok;
                 let mutable = kw == Tok::Var;
                 let word = kw.text();
+                if self.at(&Tok::LParen) {
+                    return self.let_pattern(mutable, word, span);
+                }
                 let (name, name_span) = self.ident("a variable name", &format!("write the name after `{word}`: `{word} x = 0`"))?;
                 let ty = if self.at(&Tok::Colon) {
                     self.bump();
@@ -1149,14 +1193,19 @@ impl Parser {
             Tok::For => {
                 self.bump();
                 const LOOPS: &str = "loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`";
-                let (first, _) = self.ident("a loop variable", LOOPS)?;
+                // a loop variable is a name, or a tuple pattern: `for (k, v) in pairs`
+                let (first, first_pat) = self.loop_var(LOOPS)?;
                 // `for i, x in xs`: the position, then the element
-                let (index, var) = if self.at(&Tok::Comma) && matches!(self.peek_at(1), Tok::Ident(_)) {
+                let (index, var, var_pat) = if self.at(&Tok::Comma) && matches!(self.peek_at(1), Tok::Ident(_) | Tok::LParen) {
                     self.bump();
-                    let (second, _) = self.ident("a loop variable", LOOPS)?;
-                    (Some(first), second)
+                    let (second, second_pat) = self.loop_var(LOOPS)?;
+                    if first_pat.is_some() {
+                        return Err(Diag::new("E0101", "the position of `for i, x in xs` is a name, not a pattern", span)
+                            .hint("write the position first, then the element: `for i, (a, b) in pairs`"));
+                    }
+                    (Some(first), second, second_pat)
                 } else {
-                    (None, first)
+                    (None, first, first_pat)
                 };
                 self.expect(Tok::In, "`in`").map_err(|d| d.or_hint(LOOPS))?;
                 let start = self.expr()?;
@@ -1175,6 +1224,11 @@ impl Parser {
                         return Err(self.unexpected("`..`").hint(hint).fix_opt(fix));
                     }
                 }
+                if self.at(&Tok::DotDot) && var_pat.is_some() {
+                    return Err(self.unexpected("`{` to start the body of this `for`").hint(
+                        "a range gives one number at a time: a pattern like `(a, b)` goes with an array of tuples, `for (a, b) in pairs`",
+                    ));
+                }
                 if self.at(&Tok::DotDot) && index.is_some() {
                     return Err(self.unexpected("`{` to start the body of this `for`").hint(
                         "`for i, x in xs` goes over an array or a string; over a range the variable is already the position: `for i in a..b`",
@@ -1192,7 +1246,14 @@ impl Parser {
                     let body = self.loop_body("for")?;
                     StmtKind::For { var, start, end, step, body }
                 } else {
-                    let body = self.loop_body("for")?;
+                    let mut body = self.loop_body("for")?;
+                    if let Some(pat) = &var_pat {
+                        // the names of the pattern are `let`s at the start of each round
+                        let mut binds = Vec::new();
+                        self.bind(pat, &var, false, span, &mut binds);
+                        binds.append(&mut body);
+                        body = binds;
+                    }
                     StmtKind::ForEach { var, index, iter: start, body }
                 }
             }
@@ -1225,6 +1286,18 @@ impl Parser {
                     _ => None,
                 };
                 let e = self.expr()?;
+                // `(a, b) = (b, a)`: every target gets its part of the value
+                if matches!(e.kind, ExprKind::Tuple(_)) && self.at(&Tok::Assign) {
+                    self.bump();
+                    let value = self.expr()?;
+                    self.end_stmt()?;
+                    let ExprKind::Tuple(targets) = e.kind else { unreachable!("matched above") };
+                    let tmp = self.hidden_name();
+                    let mut rest = Vec::new();
+                    self.assign_parts(targets, &tmp, span, &mut rest);
+                    self.queue.append(&mut rest);
+                    return Ok(Stmt { kind: StmtKind::Let { name: tmp, mutable: false, ty: None, value }, span });
+                }
                 // `place = value` / `place op= value` (the checker makes sure it is a place)
                 if self.at(&Tok::Assign) || matches!(self.peek(), Tok::OpAssign(_)) {
                     let op = match self.bump().tok {
@@ -1241,6 +1314,108 @@ impl Parser {
             }
         };
         Ok(Stmt { kind, span })
+    }
+
+    /// A name no program can write, for the value a pattern takes apart.
+    fn hidden_name(&mut self) -> String {
+        self.hidden += 1;
+        format!("\u{b7}t{}", self.hidden)
+    }
+
+    /// `a`, `_` or `(a, (b, _))`.
+    fn pattern(&mut self, hint: &str) -> PResult<Pat> {
+        self.same_depth(|p| {
+            p.deeper()?;
+            if !p.at(&Tok::LParen) {
+                let (name, span) = p.ident("a name or a tuple pattern", hint)?;
+                return Ok(if name == "_" { Pat::Wild } else { Pat::Name(name, span) });
+            }
+            let open = p.bump().span;
+            let mut items = vec![p.pattern(hint)?];
+            while p.at(&Tok::Comma) {
+                p.bump();
+                items.push(p.pattern(hint)?);
+            }
+            p.expect(Tok::RParen, "`)` to close the pattern").map_err(|d| d.or_hint(hint.to_string()))?;
+            if items.len() < 2 {
+                return Err(Diag::new("E0101", "a tuple pattern names at least two values", open)
+                    .hint("write `(a, b)`: one name per element of the tuple, `_` for one you do not need"));
+            }
+            Ok(Pat::Tuple(items))
+        })
+    }
+
+    /// The variable of a `for`: a name, or a pattern (then the loop variable is a hidden name).
+    fn loop_var(&mut self, hint: &str) -> PResult<(String, Option<Pat>)> {
+        if !self.at(&Tok::LParen) {
+            return Ok((self.ident("a loop variable", hint)?.0, None));
+        }
+        let pat = self.pattern(hint)?;
+        Ok((self.hidden_name().replace("t", "l"), Some(pat)))
+    }
+
+    /// `let (a, b) = value` / `var (a, b) = value`: a hidden `let` of the value, then one
+    /// declaration per name (queued).
+    fn let_pattern(&mut self, mutable: bool, word: &str, span: Span) -> PResult<Stmt> {
+        let hint = format!("a pattern looks like `{word} (a, b) = f()`");
+        let pat = self.pattern(&hint)?;
+        let ty = if self.at(&Tok::Colon) {
+            self.bump();
+            Some(self.ty("write the tuple type after the colon: `let (a, b): (int, str) = f()`")?)
+        } else {
+            None
+        };
+        if !self.at(&Tok::Assign) {
+            return Err(self.unexpected("`=`").or_hint(hint));
+        }
+        self.bump();
+        let value = self.expr()?;
+        self.end_stmt()?;
+        let tmp = self.hidden_name();
+        let mut rest = Vec::new();
+        self.bind(&pat, &tmp, mutable, span, &mut rest);
+        self.queue.append(&mut rest);
+        Ok(Stmt { kind: StmtKind::Let { name: tmp, mutable: false, ty, value }, span })
+    }
+
+    /// Declarations for the names of `pat`, which takes apart the value of the variable `src`.
+    fn bind(&mut self, pat: &Pat, src: &str, mutable: bool, span: Span, out: &mut Vec<Stmt>) {
+        let Pat::Tuple(items) = pat else { return };
+        let n = items.len();
+        for (i, item) in items.iter().enumerate() {
+            let part = |name: &str| part_of(name, i, n, span);
+            match item {
+                Pat::Wild => {}
+                Pat::Name(name, at) => {
+                    out.push(Stmt { kind: StmtKind::Let { name: name.clone(), mutable, ty: None, value: part(src) }, span: *at });
+                }
+                Pat::Tuple(_) => {
+                    let inner = self.hidden_name();
+                    out.push(Stmt { kind: StmtKind::Let { name: inner.clone(), mutable: false, ty: None, value: part(src) }, span });
+                    self.bind(item, &inner, mutable, span, out);
+                }
+            }
+        }
+    }
+
+    /// `(a, b) = value`: `a = src.0`, `b = src.1` (a nested tuple takes a hidden variable).
+    fn assign_parts(&mut self, targets: Vec<Expr>, src: &str, span: Span, out: &mut Vec<Stmt>) {
+        let n = targets.len();
+        for (i, target) in targets.into_iter().enumerate() {
+            let part = |name: &str| part_of(name, i, n, span);
+            match target.kind {
+                ExprKind::Var(ref n) if n == "_" => {}
+                ExprKind::Tuple(inner_targets) => {
+                    let inner = self.hidden_name();
+                    out.push(Stmt { kind: StmtKind::Let { name: inner.clone(), mutable: false, ty: None, value: part(src) }, span });
+                    self.assign_parts(inner_targets, &inner, span, out);
+                }
+                _ => {
+                    let at = target.span;
+                    out.push(Stmt { kind: StmtKind::Assign { target, op: None, value: part(src) }, span: at });
+                }
+            }
+        }
     }
 
     /// The body of a loop: `break` and `continue` are allowed inside.
@@ -1462,6 +1637,8 @@ impl Parser {
             nested: Vec::new(),
             depth: self.depth,
             too_deep: None,
+            queue: Vec::new(),
+            hidden: 0,
         };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);
@@ -1632,6 +1809,17 @@ impl Parser {
             Tok::LParen => {
                 let open = self.bump().span;
                 let e = self.expr()?;
+                // `(a, b)`: a comma makes a tuple
+                if self.at(&Tok::Comma) {
+                    let mut items = vec![e];
+                    while self.at(&Tok::Comma) {
+                        self.bump();
+                        items.push(self.expr()?);
+                    }
+                    self.expect(Tok::RParen, &format!("`)` to close the tuple opened at {}:{}", open.line, open.col))
+                        .map_err(|d| d.or_hint("separate the values with commas: `(1, \"a\")`"))?;
+                    return self.postfix(Expr::new(ExprKind::Tuple(items), open));
+                }
                 self.expect(Tok::RParen, &format!("`)` to close the `(` opened at {}:{}", open.line, open.col))
                     .map_err(|d| d.or_hint("add the missing `)`: every `(` needs a matching `)`"))?;
                 return self.postfix(e);
@@ -1786,6 +1974,12 @@ impl Parser {
                 Tok::Dot => {
                     self.bump();
                     let span = self.span();
+                    // `t.0`: the position in a tuple
+                    if let Tok::Int(n) = self.peek().clone() {
+                        self.bump();
+                        e = Expr::new(ExprKind::Field(Box::new(e), n.to_string()), span);
+                        continue;
+                    }
                     let (name, _) = self.ident(
                         "a field or method name after `.`",
                         "write a field (`p.x`) or a method call (`xs.len()`) after the dot",
@@ -1917,6 +2111,12 @@ impl Parser {
             _ => d.or_hint(generic),
         }
     }
+}
+
+/// `name.i`: the i-th part of a tuple held by the variable `name`.
+/// The field is named `i/n`: the pattern has `n` parts, which the checker compares with the tuple.
+fn part_of(name: &str, i: usize, n: usize, span: Span) -> Expr {
+    Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(name.to_string()), span)), format!("{i}/{n}")), span)
 }
 
 /// `0..10` for `range(10)` and `1..n` for `range(1, n)`, when the arguments are simple.

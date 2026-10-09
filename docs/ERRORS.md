@@ -26,6 +26,7 @@ design may still change.
 | E0101-E0103 | parser | grammar, type names, nesting depth |
 | E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
+| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match` |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
 | E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
@@ -34,7 +35,7 @@ design may still change.
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
-brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
+brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259, E0276-E0289 (until used),
 E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -1966,6 +1967,56 @@ fn main() {
 }
 ```
 - **Related:** E0255
+
+## E0272: a pattern does not fit the value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A pattern such as `let (a, b) = value`, `(x, y) = value` or `for (k, v) in pairs` takes a tuple apart, but the value is not a tuple, or it has a different number of elements than the pattern has names.
+- **Why Nyra has this rule:** A tuple has a fixed size and each element has its own type, so taking it apart is checked like a call: a pattern with too few or too many names is almost always a mistake, and the message shows the tuple's type.
+- **Common causes:**
+  - `let (a, b) = f()` where `f` returns one value or an array
+  - a pattern with three names for a pair, or two names for a triple
+- **Wrong:**
+```rust
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b, c) = pair()
+    print(a, b, c)
+}
+```
+- **Fixed:**
+```rust
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b) = pair()
+    print(a, b)
+}
+```
+- **Related:** E0273, E0224
+
+## E0273: no such position in the tuple
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A tuple element is read with `.0`, `.1`, ... but the tuple has fewer elements than that. The message shows the tuple's type and the valid positions.
+- **Why Nyra has this rule:** The size of a tuple is part of its type, so a position past the end is known to be wrong at compile time instead of failing while the program runs.
+- **Common causes:**
+  - counting from 1 instead of 0: the first element of a tuple is `.0`
+  - reading the third element of a pair
+- **Wrong:**
+```rust
+fn main() {
+    let t = (1, "a")
+    print(t.2)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let t = (1, "a")
+    print(t.1)
+}
+```
+- **Related:** E0272, E0240
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5

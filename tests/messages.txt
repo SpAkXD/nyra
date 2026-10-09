@@ -2298,7 +2298,7 @@ fn main() {
     print(a < b < c)
 }
 ----
-error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s, two `float`s, two `str`s or two `char`s
+error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those
   --> case.nyra:5:17
   |
 5 |     print(a < b < c)
@@ -4631,7 +4631,7 @@ fn main() {
     flags.sort()
 }
 ----
-error[E0228]: `sort` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+error[E0228]: `sort` needs `[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those, found `[bool]`
   --> case.nyra:3:11
   |
 3 |     flags.sort()
@@ -4648,13 +4648,13 @@ fn main() {
     }
 }
 ----
-error[E0101]: expected a loop variable, found `(`
-  --> case.nyra:3:9
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:3:5
   |
 3 |     for (i, x) in xs {
-  |         ^
-  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
-  = explain: nyra explain E0101
+  |     ^
+  = hint: `for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`
+  = explain: nyra explain E0272
 
 nyra: 1 error(s)
 ==== for_enumerate
@@ -5276,5 +5276,114 @@ error[E0103]: the code is nested more than 256 levels deep
   |                                                                                                                                                                                                                                                                         ^
   = hint: split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own
   = explain: nyra explain E0103
+
+nyra: 1 error(s)
+==== tuple_pattern_not_tuple
+fn main() {
+    let (a, b) = 5
+    print(a, b)
+}
+----
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:2:5
+  |
+2 |     let (a, b) = 5
+  |     ^
+  = hint: a pattern takes a tuple apart, e.g. the result of `fn f() -> (int, str)`; for a single value write `let a = ...`
+  = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== tuple_pattern_arity
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b, c) = pair()
+    print(a, b, c)
+}
+----
+error[E0272]: the pattern has 3 names but the tuple `(int, int)` has 2 elements
+  --> case.nyra:4:5
+  |
+4 |     let (a, b, c) = pair()
+  |     ^
+  = hint: write one name for each element, `_` for one you do not need: `(_, _)`
+  = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== tuple_position
+fn main() {
+    let t = (1, "a")
+    print(t.2)
+}
+----
+error[E0273]: the tuple `(int, str)` has 2 elements, so `.2` does not exist
+  --> case.nyra:3:13
+  |
+3 |     print(t.2)
+  |             ^
+  = hint: the positions are `.0` to `.1`
+  = explain: nyra explain E0273
+
+nyra: 1 error(s)
+==== tuple_unordered
+fn main() {
+    print(([1], 2) < ([2], 3))
+}
+----
+error[E0210]: cannot use `<` on `([int], int)` and `([int], int)`: `<` needs two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those
+  --> case.nyra:2:20
+  |
+2 |     print(([1], 2) < ([2], 3))
+  |                    ^
+  = hint: tuples are ordered when every element is a number, text, a char or a bool (or such a tuple): compare the other parts one by one
+  = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== tuple_map_key
+fn main() {
+    var seen: [(int, int): bool] = [:]
+    seen[(1, 2)] = true
+}
+----
+error[E0218]: a map key must be `int`, `str`, `char` or `bool`, found `(int, int)`
+  --> case.nyra:2:5
+  |
+2 |     var seen: [(int, int): bool] = [:]
+  |     ^
+  = hint: a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `"{x},{y}"`
+  = explain: nyra explain E0218
+
+nyra: 1 error(s)
+==== tuple_json
+use json
+
+fn main() {
+    print(json.str((1, 2)))
+}
+----
+error[E0309]: `json.str` cannot handle the tuple type in `(int, int)` yet
+  --> case.nyra:4:16
+  |
+4 |     print(json.str((1, 2)))
+  |                ^
+  = hint: use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`
+  = explain: nyra explain E0309
+
+nyra: 1 error(s)
+==== for_pattern_not_tuple
+fn main() {
+    let xs = [1, 2]
+    for (a, b) in xs {
+        print(a, b)
+    }
+}
+----
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:3:5
+  |
+3 |     for (a, b) in xs {
+  |     ^
+  = hint: `for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`
+  = explain: nyra explain E0272
 
 nyra: 1 error(s)

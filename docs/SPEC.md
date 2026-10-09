@@ -29,6 +29,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
 | `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
+| `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
 | `Point` | a struct you declare |
 
 ## Functions
@@ -126,7 +127,7 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 | `-x` `!x` | `-` on int/float, `!` on bool |
 | `*` `/` `%` | int,int or float,float (`%` int only; int `/` truncates toward zero) |
 | `+` `-` | int,int or float,float; `+` also joins two `str`s or two arrays of one type |
-| `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char → bool |
+| `<` `<=` `>` `>=` | int,int · float,float · str,str · char,char · tuple,tuple of those → bool |
 | `==` `!=` | same type on both sides → bool (strings, arrays and structs compare by content) |
 | `&&` `\|\|` | bool; the right side runs only when needed |
 
@@ -189,7 +190,7 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 | `xs.swap(i, j)` | exchange elements `i` and `j` |
 | `xs.contains(v)` · `xs.index_of(v)` | `bool` · first index or `-1` |
 | `xs.slice(a, b)` · `xs.repeat(n)` | elements `a` to `b - 1` · `n` copies, one after another |
-| `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`) |
+| `xs.sort()` · `xs.reverse()` | in place, return nothing (`sort`: `[int]` `[float]` `[str]` `[char]`, or tuples of those) |
 | `xs.join(sep)` | `[str]` or `[char]` → one `str` |
 | `xs.reversed()` · `s.reversed()` | a reversed copy (`xs.reverse()` reverses in place) |
 | `xs.sum()` · `xs.min()` · `xs.max()` | `[int]`/`[float]` sum (0 when empty) · smallest/largest of `[int] [float] [str] [char]`, like `min(a, b)` from left to right (empty: E0247) |
@@ -211,7 +212,7 @@ print([x * x for x in xs if x > 0], [i * 2 for i in 0..3])   // [9, 16] [0, 2, 4
 | `xs.count(x => test)` · `xs.any(...)` · `xs.all(...)` | `int` · `bool` · `bool` (also on a `str`: each char) |
 | `xs.find_index(x => test)` | position of the first element that passes, or `-1` (also on a `str`) |
 | `xs.fold(start, (acc, x) => e)` | `acc` starts as `start` and becomes `e` for each element: the last `acc` |
-| `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key computed once per element |
+| `xs.sort_by(x => key)` | in place, stable, by an `int`/`float`/`str`/`char` key (or a tuple of them) computed once per element |
 
 A chain of `map` and `filter` and the method that ends it run as one loop, element by element (no
 array in between); `any`, `all` and `find_index` stop at the answer. `[e for x in src if c]` (the
@@ -254,6 +255,31 @@ print(Line(a: p, b: q))               // Line(a: Point(x: 1, y: 2), b: Point(x: 
 Struct names start with an uppercase letter. A struct cannot contain itself (use an array:
 `kids: [Tree]`). Structs have no methods: write `fn area(r: Rect) -> int` and call `area(r)`.
 
+## Tuples
+```nyra
+fn divmod(a: int, b: int) -> (int, int) = (a / b, a % b)
+
+let t = divmod(17, 5)                    // (3, 2)
+print(t.0, t.1)                          // 3 2: positions start at 0
+let (q, r) = divmod(17, 5)               // take it apart: q is 3, r is 2
+var (x, y) = (1, 2)
+(x, y) = (y, x)                          // swap: x is 2, y is 1
+let (name, _) = ("ann", 31)              // `_` skips a part
+for (k, v) in [("a", 1), ("b", 2)] {
+    print(k, v)
+}
+print((1, "a") < (1, "b"))               // true: parts are compared one by one
+var pairs = [(3, "c"), (1, "z"), (3, "a")]
+pairs.sort()                             // [(1, "z"), (3, "a"), (3, "c")]
+print(pairs[0], pairs.len())             // (1, "z") 3
+```
+A comma makes a tuple (`(a + b) * c` is still a grouping). The parts are fixed by the type: `(int, str)` is
+not `(str, int)`, and `t.2` of a pair is E0273. A pattern must name every part (`_` skips one): a wrong
+count is E0272. Tuples are values like structs: they are copied, compare with `==` and `!=` by content, and
+`<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
+(or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
+int that stands for it) and `json` cannot read or write one (use a struct).
+
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
 are cheap: data is shared until one side changes it). `var b = a` then `b.push(3)` leaves `a` as it
@@ -285,8 +311,8 @@ when. They are checked at compile time, and a program prints the same with or wi
 `free` and `keep` take a local `let`/`var` holding a `str`, an array or a struct that contains one.
 
 ## Printing
-`print(x)`, `str(x)` and `"{x}"` show the same text. Arrays and structs print as Nyra code, with
-strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `Point(x: 1, y: 2)`. Numbers print
+`print(x)`, `str(x)` and `"{x}"` show the same text. Arrays, tuples and structs print as Nyra code, with
+strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `(1, "a")`, `Point(x: 1, y: 2)`. Numbers print
 like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`,
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 

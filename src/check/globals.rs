@@ -441,7 +441,7 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
             lambda_names(a, out);
             lambda_names(b, out);
         }
-        ExprKind::Call(_, args) | ExprKind::Array(args) => args.iter().for_each(|x| lambda_names(x, out)),
+        ExprKind::Call(_, args) | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().for_each(|x| lambda_names(x, out)),
         ExprKind::MapLit(kvs) => {
             for (k, v) in kvs {
                 lambda_names(k, out);

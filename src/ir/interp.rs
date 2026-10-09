@@ -888,6 +888,16 @@ pub fn compare(a: &Value, b: &Value) -> Option<Ordering> {
         (Value::Float(x), Value::Float(y)) => x.partial_cmp(y),
         (Value::Char(x), Value::Char(y)) => Some(x.cmp(y)),
         (Value::Str(x), Value::Str(y)) => Some(x.as_str().cmp(y.as_str())),
+        (Value::Bool(x), Value::Bool(y)) => Some(x.cmp(y)),
+        // tuples: element by element, the first difference decides
+        (Value::Struct(_, xs), Value::Struct(_, ys)) => {
+            for (x, y) in xs.iter().zip(ys.iter()) {
+                if !equal(x, y) {
+                    return compare(x, y);
+                }
+            }
+            Some(Ordering::Equal)
+        }
         _ => None,
     }
 }

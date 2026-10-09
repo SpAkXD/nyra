@@ -1,0 +1,71 @@
+// Tuples: several values in one, returned, taken apart, compared, sorted and printed.
+fn divmod(a: int, b: int) -> (int, int) {
+    ret (a / b, a % b)
+}
+
+fn minmax(xs: [int]) -> (int, int) = (xs.min(), xs.max())   ex minmax([4, 1, 9]) == (1, 9), minmax([2]) == (2, 2)
+
+struct Item {
+    name: str
+    at: (int, int)
+}
+
+let p = (1, "a")
+print(p)
+print(p.0, p.1)
+let (q, r) = divmod(17, 5)
+print(q, r)
+var (x, y) = (3, 4)
+(x, y) = (y, x)
+print(x, y)
+let (lo, hi) = minmax([4, 1, 9, 3])
+print("range {lo}..{hi}")
+
+// a tuple holds any types, nested and in arrays
+let nested = ((1, 2), "z", [1.5, 2.5])
+print(nested)
+print(nested.0.1, nested.2[0])
+let (pair, label, _) = nested
+let (a, b) = pair
+print(a + b, label)
+
+var pairs = [("b", 2), ("a", 2), ("c", 1)]
+for (name, n) in pairs {
+    print("{name}={n}")
+}
+for i, (name, n) in pairs {
+    print(i, name, n)
+}
+
+// comparison is element by element, so tuples sort
+print((1, "b") < (1, "c"), (2, "a") < (1, "z"), (1, 2) == (1, 2), (1, 2) != (1, 3))
+print((1, 2) <= (1, 2), (3, 0) > (2, 9), (1.5, 'a') >= (1.5, 'b'))
+pairs.sort()
+print(pairs)
+var scores = [(3, "ann"), (1, "bob"), (3, "abe"), (2, "cy")]
+scores.sort()
+print(scores)
+print(scores[0].1, scores.len())
+print(scores.contains((2, "cy")), scores.index_of((9, "x")))
+
+// tuples in structs, maps and as function arguments
+let it = Item(name: "box", at: (4, 5))
+print(it)
+print(it.at.0 + it.at.1)
+var where_is: [str: (int, int)] = ["home": (0, 0)]
+where_is["shop"] = (3, 4)
+print(where_is)
+print(where_is["shop"].1)
+
+fn swap_pair(t: (int, str)) -> (str, int) = (t.1, t.0)   ex swap_pair((1, "a")) == ("a", 1), (1, 2) < (1, 3)
+print(swap_pair((7, "seven")))
+let empty: [(int, int)] = []
+print(empty, empty.len())
+var grid: [(int, int)] = []
+for i in 0..3 {
+    grid.push((i, i * i))
+}
+print(grid)
+print((true, 'c', 2.5))
+print(str((1, "x")) + "!")
+print("t = {(1, 2)}")

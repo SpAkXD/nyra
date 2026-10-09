@@ -140,6 +140,12 @@ pub fn method_sig(t: Type, name: &str) -> Option<MSig> {
     }
 }
 
+/// True for the element types `sort` and `sort_by` keys can have: `int`, `float`, `str`, `char`,
+/// and tuples of those (and of `bool`s).
+pub fn sortable(t: Type) -> bool {
+    matches!(t, Type::Int | Type::Float | Type::Str | Type::Char) || (t.is_tuple() && crate::helpers::orderable(t))
+}
+
 /// The methods of a type, for "did you mean" and "the methods are" hints.
 pub fn methods_of(t: Type) -> &'static [&'static str] {
     match t {

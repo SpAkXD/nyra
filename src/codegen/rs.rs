@@ -190,10 +190,13 @@ fn structs(m: &Module, out: &mut String) {
             out.push_str("}\n\n");
         }
         let _ = writeln!(out, "impl NyShow for {n} {{\n    fn show_in(&self, out: &mut String) {{");
-        let _ = writeln!(out, "        out.push_str({});", lit(&format!("{}(", s.name)));
+        let _ = writeln!(out, "        out.push_str({});", lit(&if s.tuple { "(".to_string() } else { format!("{}(", s.name) }));
         for (k, (f, _)) in s.fields.iter().enumerate() {
-            let label = format!("{}{f}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple { sep.to_string() } else { format!("{sep}{f}: ") };
+            if !label.is_empty() {
+                let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            }
             let _ = writeln!(out, "        self.{}.show_in(out);", name(f));
         }
         out.push_str("        out.push(')');\n    }\n}\n\n");

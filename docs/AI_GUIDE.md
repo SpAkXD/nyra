@@ -221,6 +221,7 @@ let cart = [Item(name: "pen", price: 3), Item(name: "ink", price: 9)]
 print(total(cart))                        // 12
 print(cart[0])                            // Item(name: "pen", price: 3)
 
+let (quot, rem) = (17 / 5, 17 % 5)        // a tuple takes several values at once: quot is 3, rem is 2
 print("x = {x}, sum = {add(x, 2)}, gcd = {gcd(48, 18)}")
 print(float(x) / ratio)                   // 2.8: conversions are explicit, float(...) and int(...)
 print(7 / 2)                              // 3: int division truncates
@@ -228,7 +229,7 @@ print(bigger + limit())                   // 107
 shout("done")
 ```
 
-Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]` and the structs you declare.
+Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)` and the structs you declare.
 Function signatures are always fully typed; local types are inferred. The builtins are `print(x)`,
 `str(x)`, `int(x)`, `float(x)`, `char(n)`, `free(x)` and `keep(x)`; everything else on strings, chars
 and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are in the spec.
@@ -295,6 +296,10 @@ Good to know:
 - An `if` used as a value needs an `else`, one expression per branch, and the same type in both
   branches. `else if` chains work and the branches may span lines. A one-line function's expression
   starts on the same line as its `=`.
+- A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
+  `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
+  `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
+  print as `(1, "a")`. A tuple cannot be a map key or go through `json`.
 - Values are copies. `var b = a` copies an array, a string or a struct, and so does passing it to a
   function or storing it in another array; changing the copy never changes the original. Copies are
   cheap (the data is shared until one side changes). To let a function change the caller's variable,
@@ -332,8 +337,8 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, tuples, enums, `Option`, `Result`, generics or type aliases. Use a map
-  `[str: bool]` or `contains` for a set, a struct for a tuple. Maps `[K: V]` exist (section 6).
+- **Types**: no sets, enums, `Option`, `Result`, generics or type aliases. Use a map
+  `[str: bool]` or `contains` for a set. Tuples `(int, str)` (section 2) and maps `[K: V]` (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
   have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
@@ -396,7 +401,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0225 | fields unnamed or out of order | `Point(x: 1, y: 2)`, in declaration order |
 | E0226 | named argument to a function | names are only for structs: `add(1, 2)` |
 | E0227 | unknown method | the `hint` lists the methods of the type; structs have none: `fn area(r: Rect)` |
-| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str` or `char`; `sum` needs numbers |
+| E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str`, `char` or a tuple of those; `sum` needs numbers |
 | E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable |
 | E0230 | type of `[]` unknown | `var xs: [int] = []` |
 | E0231 | mixed array elements | one type per array; a struct for mixed data |
@@ -413,6 +418,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
 | E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
 | E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
+| E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |
+| E0273 | no such tuple position | a pair has `.0` and `.1` |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 

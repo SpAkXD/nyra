@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
+use crate::helpers::{self, H};
 use crate::hints;
 use crate::stdlib;
 use data::StructInfo;
@@ -115,6 +116,8 @@ struct Checker {
     modules: Vec<(String, Span)>,
     /// Script variables: what functions see of them and do with them (see `globals.rs`).
     g: globals::State,
+    /// Helper functions (see `helpers.rs`) that were asked for and are not checked yet.
+    generated: Vec<Func>,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -132,6 +135,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         lambda_depth: 0,
         modules: Vec::new(),
         g: globals::State::new(prog),
+        generated: Vec::new(),
     };
 
     // the imported modules: their intrinsics are functions named `module.name`
@@ -296,6 +300,18 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
     for ex in &mut prog.examples {
         c.example(&mut ex.expr);
     }
+    // the helper functions the program asked for (checking one may ask for more)
+    while let Some(mut f) = c.generated.pop() {
+        c.func(&mut f);
+        prog.funcs.push(f);
+    }
+    // the tuple types the program uses are structs
+    let mut tuples: Vec<(&String, &StructInfo)> = c.structs.iter().filter(|(n, _)| n.starts_with(TUPLE_PREFIX)).collect();
+    tuples.sort_by(|a, b| a.0.cmp(b.0));
+    for (name, info) in tuples {
+        let fields = info.fields.iter().map(|(n, t, s)| Field { name: n.clone(), ty: *t, span: *s }).collect();
+        prog.structs.push(StructDef { name: name.clone(), fields, span: info.span });
+    }
     prog.globals = c.finish_globals();
     c.errs
 }
@@ -365,6 +381,10 @@ fn show(e: &Expr) -> Option<String> {
         ExprKind::Array(items) => {
             let a: Option<Vec<String>> = items.iter().map(show).collect();
             format!("[{}]", a?.join(", "))
+        }
+        ExprKind::Tuple(items) => {
+            let a: Option<Vec<String>> = items.iter().map(show).collect();
+            format!("({})", a?.join(", "))
         }
         ExprKind::Index(b, i) => format!("{}[{}]", operand(b)?, show(i)?),
         ExprKind::Field(b, f) => format!("{}.{f}", operand(b)?),
@@ -642,11 +662,22 @@ impl Checker {
                 self.check_type(v, span)
             }
             Type::Struct(_) => {
+                if let Some(elems) = t.tuple_elems() {
+                    let mut ok = true;
+                    for e in elems {
+                        ok &= self.check_type(e, span);
+                    }
+                    if ok {
+                        self.register_tuple(t);
+                    }
+                    return ok;
+                }
                 let name = t.struct_name().unwrap_or_default();
                 if self.structs.contains_key(&name) {
                     return true;
                 }
-                let names: Vec<&str> = self.structs.keys().map(String::as_str).collect();
+                let names: Vec<&str> =
+                    self.structs.keys().map(String::as_str).filter(|n| !n.starts_with(TUPLE_PREFIX)).collect();
                 let hint = if hints::nyra_type(&name).is_some() || hints::is_type_word(&name) {
                     hints::type_name(&name)
                 } else if let Some(s) = suggest(&name, names.iter().copied()) {
@@ -675,21 +706,56 @@ impl Checker {
         data::managed(t, &self.structs)
     }
 
-    /// True if a value of `t` holds a map (`json` does not handle maps yet).
-    fn has_map(&self, t: Type) -> bool {
-        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> bool {
+    /// Makes the struct of the tuple type `t` known: `(int, str)` has the fields `_0` and `_1`.
+    fn register_tuple(&mut self, t: Type) {
+        let Some(elems) = t.tuple_elems() else { return };
+        let name = t.struct_name().unwrap_or_default();
+        if self.structs.contains_key(&name) {
+            return;
+        }
+        let at = Span { line: 0, col: 0 };
+        let fields = elems.iter().enumerate().map(|(i, e)| (format!("_{i}"), *e, at)).collect();
+        self.structs.insert(name, StructInfo { fields, span: at });
+    }
+
+    /// The program needs the helper function `h` (see `helpers.rs`): it is added once, and checked
+    /// with the other functions. `at` is where the program asked for it.
+    fn need(&mut self, h: H, at: Span) {
+        let name = h.name();
+        if self.fns.contains_key(&name) {
+            return;
+        }
+        let f = match helpers::build(&h, at) {
+            Ok(f) => f,
+            Err(bug) => panic!("compiler bug: {bug}"),
+        };
+        let sig = Sig {
+            params: f.params.iter().map(|p| p.ty).collect(),
+            names: f.params.iter().map(|p| p.name.clone()).collect(),
+            inout: f.params.iter().map(|p| p.inout).collect(),
+            ret: f.ret,
+            span: at,
+        };
+        self.fns.insert(name, sig);
+        self.generated.push(f);
+    }
+
+    /// `"map"` or `"tuple"` if a value of `t` holds one (`json` does not handle them yet).
+    fn json_blocker(&self, t: Type) -> Option<&'static str> {
+        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> Option<&'static str> {
             match t {
-                Type::Map(_) => true,
-                Type::Array(_) => t.elem().is_some_and(|e| go(c, e, seen)),
+                Type::Map(_) => Some("map"),
+                Type::Array(_) => t.elem().and_then(|e| go(c, e, seen)),
+                Type::Struct(_) if t.is_tuple() => Some("tuple"),
                 Type::Struct(_) => {
-                    let Some(n) = t.struct_name() else { return false };
+                    let n = t.struct_name()?;
                     if seen.contains(&n) {
-                        return false;
+                        return None;
                     }
                     seen.push(n.clone());
-                    c.structs.get(&n).is_some_and(|s| s.fields.iter().any(|(_, ft, _)| go(c, *ft, seen)))
+                    c.structs.get(&n).and_then(|s| s.fields.iter().find_map(|(_, ft, _)| go(c, *ft, seen)))
                 }
-                _ => false,
+                _ => None,
             }
         }
         go(self, t, &mut Vec::new())
@@ -702,6 +768,7 @@ impl Checker {
         }
         let hint = match k {
             Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
+            _ if k.is_tuple() => "a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `\"{x},{y}\"`".to_string(),
             _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
         };
         self.errs.push(
@@ -1511,6 +1578,7 @@ impl Checker {
                 }
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
+            ExprKind::Tuple(items) => self.tuple_lit(items, want),
             ExprKind::MapLit(pairs) => self.map_lit(pairs, want, span),
             ExprKind::Index(base, index) => {
                 let bt = self.expr(base);
@@ -1576,7 +1644,13 @@ impl Checker {
             ExprKind::Field(base, name) => {
                 let bt = self.expr(base);
                 let shown = show(base);
-                self.field_type(bt, name, shown, span)
+                let hidden = matches!(&base.kind, ExprKind::Var(v) if v.starts_with('\u{b7}'));
+                if bt.is_tuple() || (hidden && !bt.is_unknown()) {
+                    let in_for = matches!(&base.kind, ExprKind::Var(v) if v.starts_with("\u{b7}l"));
+                    self.tuple_field(bt, name, hidden, in_for, span)
+                } else {
+                    self.field_type(bt, name, shown, span)
+                }
             }
             ExprKind::Method(recv, name, args) => self.method(recv, name, args, span),
             ExprKind::Labeled(label, v) => {
@@ -1730,10 +1804,14 @@ impl Checker {
             return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
         }
         let t = if parse { want.unwrap_or(Type::Unknown) } else { tys[0] };
-        if self.has_map(t) {
+        if let Some(kind) = self.json_blocker(t) {
+            let hint = if kind == "map" {
+                "use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"
+            } else {
+                "use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`"
+            };
             self.errs.push(
-                Diag::new("E0309", format!("`json.{name}` cannot handle the map type in `{}` yet", t.name()), span)
-                    .hint("use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"),
+                Diag::new("E0309", format!("`json.{name}` cannot handle the {kind} type in `{}` yet", t.name()), span).hint(hint),
             );
             return if parse { t } else { Type::Str };
         }
@@ -1810,6 +1888,93 @@ impl Checker {
                 Type::map(k, v)
             }
             _ => Type::Unknown,
+        }
+    }
+
+    /// `(a, b)`: the tuple type of the types of its values.
+    fn tuple_lit(&mut self, items: &mut [Expr], want: Option<Type>) -> Type {
+        let want_elems = want.and_then(Type::tuple_elems);
+        let mut tys = Vec::new();
+        let mut bad = false;
+        for (i, it) in items.iter_mut().enumerate() {
+            let t = self.expr_with(it, want_elems.as_ref().and_then(|w| w.get(i).copied()));
+            if t == Type::Void {
+                self.errs.push(
+                    Diag::new("E0203", format!("{} returns nothing, so it cannot be an element of a tuple", call_text(it)), it.span)
+                        .hint(self.no_value_hint(it)),
+                );
+                bad = true;
+            } else if t.is_unknown() {
+                bad = true;
+            } else {
+                tys.push(t);
+            }
+        }
+        if bad {
+            return Type::Unknown;
+        }
+        let t = Type::tuple(&tys);
+        self.register_tuple(t);
+        t
+    }
+
+    /// `t.0`: the type of a tuple's element. The field is renamed `_0`, the name of the struct field.
+    /// A name like `0/2` comes from a pattern `(a, b)`: the 2 must be the tuple's size.
+    fn tuple_field(&mut self, bt: Type, name: &mut String, pattern: bool, in_for: bool, span: Span) -> Type {
+        let (pos, wanted) = match name.split_once('/') {
+            Some((i, n)) => (i.to_string(), n.parse::<usize>().ok()),
+            None => (name.trim_start_matches('_').to_string(), None),
+        };
+        let again = self.errs.iter().any(|d| d.code == "E0272" && d.span == span);
+        let Some(elems) = bt.tuple_elems() else {
+            if !again {
+                self.errs.push(
+                    Diag::new("E0272", format!("cannot take apart {}: a pattern like `(a, b)` needs a tuple", article(bt)), span).hint(
+                        if in_for {
+                            "`for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`"
+                        } else {
+                            "a pattern takes a tuple apart, e.g. the result of `fn f() -> (int, str)`; for a single value write `let a = ...`"
+                        },
+                    ),
+                );
+            }
+            return Type::Unknown;
+        };
+        if let (Some(n), true) = (wanted, pattern) {
+            if n != elems.len() {
+                if again {
+                    return Type::Unknown;
+                }
+                self.errs.push(
+                    Diag::new(
+                        "E0272",
+                        format!("the pattern has {} but the tuple `{}` has {}", count(n, "name"), bt.name(), count(elems.len(), "element")),
+                        span,
+                    )
+                    .hint(format!("write one name for each element, `_` for one you do not need: `({})`", vec!["_"; elems.len()].join(", "))),
+                );
+                return Type::Unknown;
+            }
+        }
+        match pos.parse::<usize>() {
+            Ok(i) if i < elems.len() => {
+                *name = format!("_{i}");
+                elems[i]
+            }
+            Ok(i) => {
+                self.errs.push(
+                    Diag::new("E0273", format!("the tuple `{}` has {}, so `.{i}` does not exist", bt.name(), count(elems.len(), "element")), span)
+                        .hint(format!("the positions are `.0` to `.{}`", elems.len() - 1)),
+                );
+                Type::Unknown
+            }
+            Err(_) => {
+                self.errs.push(
+                    Diag::new("E0224", format!("`{}` has no field `{name}`", bt.name()), span)
+                        .hint("the elements of a tuple are read by position: `t.0`, `t.1`, or taken apart with `let (a, b) = t`"),
+                );
+                Type::Unknown
+            }
         }
     }
 
@@ -2042,8 +2207,7 @@ impl Checker {
         // element types that some methods need
         if let Some(e) = rt.elem() {
             let bad = match name {
-                "sort" => (!matches!(e, Type::Int | Type::Float | Type::Str | Type::Char))
-                    .then_some("`[int]`, `[float]`, `[str]` or `[char]`"),
+                "sort" => (!data::sortable(e)).then_some("`[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those"),
                 "join" => (!matches!(e, Type::Str | Type::Char)).then_some("`[str]` or `[char]`"),
                 _ => None,
             };
@@ -2056,6 +2220,12 @@ impl Checker {
                     "sort by a key yourself: e.g. loop and insert each element at its place".to_string()
                 };
                 self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
+            }
+        }
+        // sorting tuples: a helper function sorts by their parts
+        if name == "sort" && rt.elem().is_some_and(Type::is_tuple) {
+            if let Some(e) = rt.elem().filter(|e| helpers::orderable(*e)) {
+                self.need(H::SortKeyed(rt, e), span);
             }
         }
         // `s.pad_left(n)` fills with spaces; `s.pad_left(n, '0')` with a character
@@ -2132,6 +2302,11 @@ impl Checker {
             BinOp::Eq | BinOp::Ne => (l == r && l != Void).then_some(Bool),
             BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => match (l, r) {
                 (Int, Int) | (Float, Float) | (Str, Str) | (Char, Char) => Some(Bool),
+                // tuples compare element by element, like text
+                _ if l == r && l.is_tuple() && helpers::orderable(l) => {
+                    self.need(H::Cmp(op.symbol(), l), span);
+                    Some(Bool)
+                }
                 _ => None,
             },
             BinOp::And | BinOp::Or => (l == Bool && r == Bool).then_some(Bool),
@@ -2144,7 +2319,7 @@ impl Checker {
         let needs = match op {
             BinOp::Add => "two `int`s, two `float`s, two `str`s or two arrays of one type",
             BinOp::Sub | BinOp::Mul | BinOp::Div => "two `int`s or two `float`s",
-            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => "two `int`s, two `float`s, two `str`s or two `char`s",
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => "two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those",
             BinOp::Mod => "two `int`s",
             BinOp::Eq | BinOp::Ne => "two values of the same type",
             BinOp::And | BinOp::Or => "two `bool`s",
@@ -2282,6 +2457,9 @@ impl Checker {
             } else {
                 format!("`{sym}` compares two values of one type: convert one side (`float(x)`, `int(x)`) or write the literal with the right type")
             }
+        } else if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge) && l.is_tuple() && l == r {
+            "tuples are ordered when every element is a number, text, a char or a bool (or such a tuple): compare the other parts one by one"
+                .to_string()
         } else if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge) && (l.elem().is_some() || l.struct_name().is_some()) {
             "only numbers, strings and characters are ordered: compare elements or fields instead".to_string()
         } else {

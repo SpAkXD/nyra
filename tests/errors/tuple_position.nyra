@@ -1,0 +1,5 @@
+// expect: E0273
+fn main() {
+    let t = (1, "a")
+    print(t.2)
+}

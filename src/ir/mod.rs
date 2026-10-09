@@ -38,6 +38,8 @@ pub struct StructInfo {
     pub fields: Vec<(String, Ty)>,
     /// A field owns heap memory (directly or through a nested struct).
     pub managed: bool,
+    /// A tuple `(a, b)`: printed without a name and without field names.
+    pub tuple: bool,
 }
 
 /// The structs of a program by type id (`Ty::Struct(id)`), in an order where each struct comes

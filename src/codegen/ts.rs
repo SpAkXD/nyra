@@ -241,10 +241,12 @@ fn classes(m: &Module, out: &mut String) {
             .enumerate()
             .map(|(k, ((fname, t), f))| {
                 let sep = if k > 0 { ", " } else { "" };
-                format!("{sep}{fname}: ${{ny_fmt(this.{f}, \"{}\")}}", tdesc(*t))
+                let label = if s.tuple { String::new() } else { format!("{fname}: ") };
+                format!("{sep}{label}${{ny_fmt(this.{f}, \"{}\")}}", tdesc(*t))
             })
             .collect();
-        let _ = writeln!(out, "    ny_fmt(): string {{\n        return `{}({})`;\n    }}", template_text(&s.name), parts.concat());
+        let head = if s.tuple { String::new() } else { template_text(&s.name) };
+        let _ = writeln!(out, "    ny_fmt(): string {{\n        return `{head}({})`;\n    }}", parts.concat());
         out.push_str("}\n\n");
     }
 }

@@ -3,6 +3,11 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.6 (unreleased)
+
+Language
+- Tuples: `(1, "a")`, `t.0`, `fn f() -> (int, bool)`, `let (a, b) = f()`, `(a, b) = (b, a)`, `for (k, v) in pairs`. They compare and sort part by part and print as `(1, "a")`. New codes E0272, E0273.
+
 ## v0.5 (unreleased)
 
 Language

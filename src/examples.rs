@@ -345,7 +345,7 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
         ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
-        ExprKind::Array(xs) => all(xs),
+        ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
         ExprKind::MapLit(kvs) => kvs.iter().find_map(|(k, v)| first_call(k, fns).or_else(|| first_call(v, fns))),
         ExprKind::Interp(parts) => parts.iter().find_map(|p| match p {
             InterpPart::Expr(x) => first_call(x, fns),
@@ -451,13 +451,14 @@ pub fn source(e: &Expr) -> String {
         ExprKind::Call(n, args) => format!("{n}({})", list(args)),
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
+        ExprKind::Tuple(xs) => format!("({})", list(xs)),
         ExprKind::MapLit(kvs) if kvs.is_empty() => "[:]".to_string(),
         ExprKind::MapLit(kvs) => {
             let items: Vec<String> = kvs.iter().map(|(k, v)| format!("{}: {}", source(k), source(v))).collect();
             format!("[{}]", items.join(", "))
         }
         ExprKind::Index(b, i) => format!("{}[{}]", tight(b), source(i)),
-        ExprKind::Field(b, f) => format!("{}.{f}", tight(b)),
+        ExprKind::Field(b, f) => format!("{}.{}", tight(b), f.strip_prefix('_').filter(|n| n.parse::<usize>().is_ok()).unwrap_or(f)),
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),
         ExprKind::Inout(v) => format!("inout {}", source(v)),

@@ -1,0 +1,7 @@
+// expect: E0272
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b, c) = pair()
+    print(a, b, c)
+}

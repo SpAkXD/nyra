@@ -33,7 +33,12 @@ thread_local! {
     static ELEMS: RefCell<Vec<Type>> = const { RefCell::new(Vec::new()) };
     static STRUCTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     static MAPS: RefCell<Vec<(Type, Type)>> = const { RefCell::new(Vec::new()) };
+    /// The element types of the tuple types, by struct id (a tuple type is a struct, see `Type::tuple`).
+    static TUPLES: RefCell<HashMap<u32, Vec<Type>>> = RefCell::new(HashMap::new());
 }
+
+/// The name prefix of the structs that stand for tuple types. No program can write it as a type.
+pub const TUPLE_PREFIX: &str = "Tup_";
 
 impl Type {
     /// `[elem]`. An array of an unknown type is unknown.
@@ -95,6 +100,61 @@ impl Type {
         })
     }
 
+    /// The tuple type `(a, b, ...)`. A tuple is a struct whose fields are `_0`, `_1`, ...: the name
+    /// spells the element types, so equal tuple types are the same type. A tuple of an unknown
+    /// type is unknown.
+    pub fn tuple(elems: &[Type]) -> Type {
+        if elems.iter().any(|t| t.is_unknown()) {
+            return Type::Unknown;
+        }
+        let name = format!("{TUPLE_PREFIX}t{}{}", elems.len(), elems.iter().map(|t| t.mangle()).collect::<String>());
+        let t = Type::structure(&name);
+        if let Type::Struct(id) = t {
+            TUPLES.with(|m| {
+                m.borrow_mut().entry(id).or_insert_with(|| elems.to_vec());
+            });
+        }
+        t
+    }
+
+    /// The element types of a tuple type.
+    pub fn tuple_elems(self) -> Option<Vec<Type>> {
+        match self {
+            Type::Struct(id) => TUPLES.with(|m| m.borrow().get(&id).cloned()),
+            _ => None,
+        }
+    }
+
+    pub fn is_tuple(self) -> bool {
+        self.tuple_elems().is_some()
+    }
+
+    /// A short, unambiguous spelling of the type that is safe in a name: `i` int, `f` float,
+    /// `b` bool, `s` str, `c` char, `a<T>` array, `m<K><V>` map, `t<n><T>...` tuple, `S<len><name>` struct.
+    pub fn mangle(self) -> String {
+        match self {
+            Type::Int => "i".into(),
+            Type::Float => "f".into(),
+            Type::Bool => "b".into(),
+            Type::Str => "s".into(),
+            Type::Char => "c".into(),
+            Type::Void => "v".into(),
+            Type::Unknown => "u".into(),
+            Type::Array(_) => format!("a{}", self.elem().map(Type::mangle).unwrap_or_default()),
+            Type::Map(_) => match self.map_kv() {
+                Some((k, v)) => format!("m{}{}", k.mangle(), v.mangle()),
+                None => String::new(),
+            },
+            Type::Struct(_) => {
+                let name = self.struct_name().unwrap_or_default();
+                match name.strip_prefix(TUPLE_PREFIX) {
+                    Some(rest) if self.is_tuple() => rest.to_string(),
+                    _ => format!("S{}{name}", name.len()),
+                }
+            }
+        }
+    }
+
     /// The element type of an array.
     pub fn elem(self) -> Option<Type> {
         match self {
@@ -121,7 +181,10 @@ impl Type {
             Type::Void => "void".into(),
             Type::Unknown => "?".into(),
             Type::Array(_) => format!("[{}]", self.elem().map(Type::name).unwrap_or_default()),
-            Type::Struct(_) => self.struct_name().unwrap_or_default(),
+            Type::Struct(_) => match self.tuple_elems() {
+                Some(es) => format!("({})", es.iter().map(|t| t.name()).collect::<Vec<_>>().join(", ")),
+                None => self.struct_name().unwrap_or_default(),
+            },
             Type::Map(_) => match self.map_kv() {
                 Some((k, v)) => format!("[{}: {}]", k.name(), v.name()),
                 None => String::new(),
@@ -338,6 +401,97 @@ impl Expr {
     pub fn new(kind: ExprKind, span: Span) -> Self {
         Expr { kind, span, ty: Type::Unknown }
     }
+
+    /// Calls `f` on this expression, then on every expression inside it.
+    pub fn each_mut(&mut self, f: &mut dyn FnMut(&mut Expr)) {
+        f(self);
+        match &mut self.kind {
+            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Lambda(_, x) => {
+                x.each_mut(f)
+            }
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+                a.each_mut(f);
+                b.each_mut(f);
+            }
+            ExprKind::If(c, a, b) => {
+                c.each_mut(f);
+                a.each_mut(f);
+                b.each_mut(f);
+            }
+            ExprKind::Call(_, xs) | ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(|x| x.each_mut(f)),
+            ExprKind::Method(r, _, xs) => {
+                r.each_mut(f);
+                xs.iter_mut().for_each(|x| x.each_mut(f));
+            }
+            ExprKind::MapLit(pairs) => pairs.iter_mut().for_each(|(k, v)| {
+                k.each_mut(f);
+                v.each_mut(f);
+            }),
+            ExprKind::Interp(parts) => parts.iter_mut().for_each(|p| {
+                if let InterpPart::Expr(x) = p {
+                    x.each_mut(f)
+                }
+            }),
+            ExprKind::Comprehension(c) => {
+                match &mut c.src {
+                    CompSrc::Each(x) => x.each_mut(f),
+                    CompSrc::Range(a, b, k) => {
+                        a.each_mut(f);
+                        b.each_mut(f);
+                        if let Some(k) = k {
+                            k.each_mut(f);
+                        }
+                    }
+                }
+                c.elem.each_mut(f);
+                if let Some(x) = &mut c.cond {
+                    x.each_mut(f);
+                }
+            }
+            ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::Var(_) => {}
+        }
+    }
+}
+
+/// Calls `f` on every statement of `stmts` and of the blocks nested in them, and `g` on every
+/// expression in them.
+pub fn each_stmt_mut(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut Stmt), g: &mut dyn FnMut(&mut Expr)) {
+    for s in stmts {
+        f(s);
+        match &mut s.kind {
+            StmtKind::Let { value, .. } => value.each_mut(g),
+            StmtKind::Assign { target, value, .. } => {
+                target.each_mut(g);
+                value.each_mut(g);
+            }
+            StmtKind::If { cond, then, els } => {
+                cond.each_mut(g);
+                each_stmt_mut(then, f, g);
+                if let Some(e) = els {
+                    each_stmt_mut(e, f, g);
+                }
+            }
+            StmtKind::While { cond, body } => {
+                cond.each_mut(g);
+                each_stmt_mut(body, f, g);
+            }
+            StmtKind::For { start, end, step, body, .. } => {
+                start.each_mut(g);
+                end.each_mut(g);
+                if let Some(k) = step {
+                    k.each_mut(g);
+                }
+                each_stmt_mut(body, f, g);
+            }
+            StmtKind::ForEach { iter, body, .. } => {
+                iter.each_mut(g);
+                each_stmt_mut(body, f, g);
+            }
+            StmtKind::Arena(body) => each_stmt_mut(body, f, g),
+            StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => e.each_mut(g),
+            StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -365,6 +519,8 @@ pub enum ExprKind {
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     /// `[a, b, c]`
     Array(Vec<Expr>),
+    /// `(a, b)`: a tuple of two or more values
+    Tuple(Vec<Expr>),
     /// `["a": 1, "b": 2]`, `[:]`
     MapLit(Vec<(Expr, Expr)>),
     /// `base[index]`

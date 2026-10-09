@@ -232,11 +232,15 @@ fn structs(m: &Module, out: &mut String) {
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
         // `Point(x: 1, y: 2)`: the way the value is written in Nyra
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
-        let head = format!("{}(", s.name);
+        // (a tuple prints as `(1, "a")`: no name, no field names)
+        let head = if s.tuple { "(".to_string() } else { format!("{}(", s.name) };
         let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&head), head.len());
         for (k, (fname, t)) in s.fields.iter().enumerate() {
-            let label = format!("{}{fname}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple { sep.to_string() } else { format!("{sep}{fname}: ") };
+            if !label.is_empty() {
+                let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            }
             let f = field(s, k);
             let line = match t {
                 Ty::Int => format!("nyrt_buf_int(o, v->{f});"),

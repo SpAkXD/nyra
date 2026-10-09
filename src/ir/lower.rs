@@ -23,6 +23,7 @@ use super::{
     StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
+use crate::helpers::H;
 
 mod bounds;
 mod lambda;
@@ -77,7 +78,8 @@ fn struct_table(prog: &ast::Program) -> Structs {
         }
         let fields: Vec<(String, Ty)> = def.fields.iter().map(|f| (f.name.clone(), f.ty)).collect();
         let managed = fields.iter().any(|(_, t)| table.managed(*t));
-        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed }));
+        let tuple = Ty::Struct(id).is_tuple();
+        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple }));
     }
     let mut ids: Vec<u32> = defs.keys().copied().collect();
     ids.sort_unstable();
@@ -157,7 +159,7 @@ fn mutates(e: &ast::Expr) -> bool {
         }
         K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
         K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
-        K::Array(xs) => xs.iter().any(mutates),
+        K::Array(xs) | K::Tuple(xs) => xs.iter().any(mutates),
         K::MapLit(pairs) => pairs.iter().any(|(k, v)| mutates(k) || mutates(v)),
         K::Interp(parts) => parts.iter().any(|p| matches!(p, ast::InterpPart::Expr(x) if mutates(x))),
         K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => false,
@@ -179,7 +181,7 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
             each_expr(a, f);
             each_expr(b, f);
         }
-        K::Call(_, xs) | K::Array(xs) => xs.iter().for_each(|x| each_expr(x, f)),
+        K::Call(_, xs) | K::Array(xs) | K::Tuple(xs) => xs.iter().for_each(|x| each_expr(x, f)),
         K::Method(r, _, xs) => {
             each_expr(r, f);
             xs.iter().for_each(|x| each_expr(x, f));
@@ -1463,6 +1465,11 @@ impl<'a> Lower<'a> {
                 let elems = self.operands(&refs, out);
                 self.op(RtOp::ArrNew, elems, e.ty, dst, span, out)
             }
+            ast::ExprKind::Tuple(items) => {
+                let refs: Vec<&ast::Expr> = items.iter().collect();
+                let vals = self.operands(&refs, out);
+                self.op(RtOp::StructNew, vals, e.ty, dst, span, out)
+            }
             ast::ExprKind::MapLit(pairs) => {
                 let refs: Vec<&ast::Expr> = pairs.iter().flat_map(|(k, v)| [k, v]).collect();
                 let parts = self.operands(&refs, out);
@@ -1533,6 +1540,10 @@ impl<'a> Lower<'a> {
         }
         if op == A::Add && t.elem().is_some() {
             return self.op(RtOp::ArrConcat, vec![a, b], t, dst, span, out);
+        }
+        // tuples are ordered element by element: a generated helper function decides
+        if t.is_tuple() && matches!(op, A::Lt | A::Le | A::Gt | A::Ge) {
+            return self.call_helper(H::Cmp(op.symbol(), t), vec![Arg::Val(a), Arg::Val(b)], Ty::Bool, dst, span, out);
         }
         if Structs::aggregate(t) {
             let iop = if op == A::Eq { BinOp::DeepEq } else { BinOp::DeepNe };
@@ -1714,6 +1725,21 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// A call of a generated helper function (see `helpers.rs`).
+    fn call_helper(&mut self, h: H, args: Vec<Arg>, ret: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let func = *self.ids.get(&h.name()).unwrap_or_else(|| panic!("the helper {} was not generated", h.name()));
+        if ret == Ty::Void {
+            out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span });
+            return Expr::Bool(false);
+        }
+        let d = match dst {
+            Some(d) => d,
+            None => self.owned_temp(ret),
+        };
+        out.push(Stmt { kind: StmtKind::Call { dst: Some(d), func, args }, span });
+        Expr::Local(d)
+    }
+
     fn method(
         &mut self,
         recv: &ast::Expr,
@@ -1730,6 +1756,15 @@ impl<'a> Lower<'a> {
             let v = self.chain_method(recv, name, args, e, out);
             self.restore(facts, mark);
             return v;
+        }
+        // `xs.sort()` of tuples: the helper function sorts the array by the tuples themselves
+        if name == "sort" && recv.ty.elem().is_some_and(Ty::is_tuple) {
+            let place = self.place(recv, false, out);
+            let cur = self.read(&place, recv.ty, out);
+            let keys = self.snapshot(cur, recv.ty, span, out);
+            self.forget(place.root);
+            let h = H::SortKeyed(recv.ty, recv.ty.elem().expect("an array"));
+            return self.call_helper(h, vec![Arg::InOut(place), Arg::Val(keys)], Ty::Void, None, span, out);
         }
         if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse") {
             // changes the receiver: a place, fixed before the arguments run

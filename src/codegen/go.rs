@@ -222,10 +222,13 @@ fn structs(m: &Module, out: &mut String) {
             let _ = writeln!(out, "func (v {n}) nyEq(o any) bool {{\n\tw := o.({n})\n\treturn {}\n}}\n", eqs.join(" && "));
         }
         let _ = writeln!(out, "func (v {n}) nyShowIn(b *strings.Builder) {{");
-        let _ = writeln!(out, "\tb.WriteString({})", lit(&format!("{}(", s.name)));
+        let _ = writeln!(out, "\tb.WriteString({})", lit(&if s.tuple { "(".to_string() } else { format!("{}(", s.name) }));
         for (k, (f, _)) in s.fields.iter().enumerate() {
-            let label = format!("{}{f}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "\tb.WriteString({})", lit(&label));
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple { sep.to_string() } else { format!("{sep}{f}: ") };
+            if !label.is_empty() {
+                let _ = writeln!(out, "\tb.WriteString({})", lit(&label));
+            }
             let _ = writeln!(out, "\tnyShowAny(b, v.{})", name(f));
         }
         out.push_str("\tb.WriteByte(')')\n}\n\n");

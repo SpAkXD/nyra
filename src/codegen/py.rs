@@ -252,10 +252,10 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let eq = if eqs.is_empty() { "True".to_string() } else { eqs.join(" and ") };
         let _ = writeln!(out, "\n    def __eq__(self, other) -> bool:\n        return {eq}");
-        let mut pieces = vec![Piece::Text(format!("{}(", s.name))];
+        let mut pieces = vec![Piece::Text(if s.tuple { "(".to_string() } else { format!("{}(", s.name) })];
         for (k, ((fname, t), f)) in s.fields.iter().zip(&fields).enumerate() {
             let sep = if k > 0 { ", " } else { "" };
-            pieces.push(Piece::Text(format!("{sep}{fname}: ")));
+            pieces.push(Piece::Text(if s.tuple { sep.to_string() } else { format!("{sep}{fname}: ") }));
             let value = match t {
                 Ty::Char | Ty::Str => format!("ny_show(self.{f}, '{}')", tdesc(*t)),
                 _ => shown_in_fstring(*t, &format!("self.{f}")),
