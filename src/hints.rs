@@ -352,9 +352,9 @@ pub fn type_name(name: &str) -> String {
             "an array type is written `[T]`, e.g. `[int]` or `[str]`".to_string()
         }
         "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
-            "Nyra has no maps yet: use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`".to_string()
+            "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
-        "set" | "hashset" => "Nyra has no sets yet: use an array and `xs.contains(x)`".to_string(),
+        "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
         "tuple" | "pair" => "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string(),
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()

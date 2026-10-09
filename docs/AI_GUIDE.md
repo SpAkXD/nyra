@@ -237,8 +237,8 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no maps or dictionaries, sets, tuples, enums, `Option`, `Result`, generics or type
-  aliases. Use an array of structs for a map, `contains` for a set, a struct for a tuple.
+- **Types**: no sets, tuples, enums, `Option`, `Result`, generics or type aliases. Use a map
+  `[str: bool]` or `contains` for a set, a struct for a tuple. Maps `[K: V]` exist (section 6).
 - **Methods you may expect**: arrays have no `map`, `filter`, `reduce`, `sum`, `min`, `max`, `count`,
   `find`, `sort_by` or `append`; strings have no `format`, `pad`, `trim_start`, `char_at`, `reverse` or
   `is_digit` (chars have `is_digit`). Write a loop or a small function (section 6). `sort()` works
@@ -388,23 +388,31 @@ fn words(text: str) -> [str] {                 // words(" a  b ") is ["a", "b"]
 }
 ```
 
-A map is an array of structs, and a custom sort is an insertion sort (it keeps equal elements in
-their order):
+Count with a map (`[K: V]`, keys `int`, `str`, `char` or `bool`; reading a missing key with `m[k]` is a
+runtime error, so count with `get` and a default):
+
+```rust
+fn word_counts(text: str) -> [str: int] {
+    var counts: [str: int] = [:]
+    for w in text.split(" ") {
+        if w != "" { counts[w] = counts.get(w, 0) + 1 }
+    }
+    ret counts
+}
+
+fn main() {
+    let counts = word_counts("a b a")
+    for w in counts { print("{w}: {counts[w]}") }   // in insertion order: a: 2, b: 1
+    print(counts.has("c"), counts.keys())
+}
+```
+
+A custom sort is an insertion sort (it keeps equal elements in their order):
 
 ```rust
 struct Count {
     word: str
     n: int
-}
-
-fn add_word(inout counts: [Count], word: str) {
-    for i in 0..counts.len() {
-        if counts[i].word == word {
-            counts[i].n += 1
-            ret
-        }
-    }
-    counts.push(Count(word: word, n: 1))
 }
 
 fn sort_by_n(inout cs: [Count]) {              // largest n first

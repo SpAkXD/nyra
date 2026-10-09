@@ -47,6 +47,10 @@ fn hint(t: Ty) -> String {
         Ty::Bool => "bool".into(),
         Ty::Char | Ty::Str => "str".into(),
         Ty::Array(_) => format!("list[{}]", hint(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("dict[{}, {}]", hint(k), hint(v))
+        }
         Ty::Struct(_) => name(&t.struct_name().expect("a struct")),
         other => unreachable!("the Python backend got the type `{}`", other.name()),
     }
@@ -61,6 +65,11 @@ fn tdesc(t: Ty) -> String {
         Ty::Char => "c".into(),
         Ty::Str => "s".into(),
         Ty::Array(_) => format!("[{}", tdesc(t.elem().expect("an array"))),
+        // a map: the key type is one letter
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("{{{}{}", tdesc(k), tdesc(v))
+        }
         _ => "S".into(),
     }
 }
@@ -85,6 +94,7 @@ fn has_float(m: &Module, t: Ty) -> bool {
         match t {
             Ty::Float => true,
             Ty::Array(_) => go(m, t.elem().expect("an array"), seen),
+            Ty::Map(_) => go(m, t.map_kv().expect("a map").1, seen),
             // a struct can contain itself through an array
             Ty::Struct(_) if seen.contains(&t) => false,
             Ty::Struct(_) => {
@@ -440,6 +450,8 @@ impl<'a> Gen<'a> {
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrAppend => format!("ny_extend({target}, {})", a[0]),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
+                    RtOp::MapSet => format!("{target}[{}] = {}", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.pop({}, None)", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 self.assign(*dst, code);
@@ -632,6 +644,22 @@ impl<'a> Gen<'a> {
             RtOp::ArrConcat => format!("ny_concat({}, {})", a[0], a[1]),
             // a char is a one-character str: `[str]` and `[char]` join alike
             RtOp::ArrJoin => format!("{}.join({})", self.expr(&args[1]), a[0]),
+            RtOp::MapNew => {
+                let items: Vec<String> = args.chunks(2).map(|p| format!("({}, {})", self.arg(&p[0]), self.owned(&p[1]))).collect();
+                format!("NyDict([{}])", items.join(", "))
+            }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                let get = if op == RtOp::MapGet {
+                    format!("ny_mget({}, {}, \"{}\", {at})", a[0], a[1], tdesc(k))
+                } else {
+                    format!("{}.get({}, {})", self.expr(&args[0]), a[1], a[2])
+                };
+                // a value that is a plain struct now has two owners (no `Dup` follows for it)
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_share({get})") } else { get }
+            }
+            RtOp::MapKeys => format!("NyList({})", a[0]),
+            RtOp::MapValues => format!("ny_share_all(NyList({}.values()))", self.expr(&args[0])),
             RtOp::Std(f) => {
                 let mut parts = a.clone();
                 parts.push(at.to_string());
@@ -781,7 +809,8 @@ impl<'a> Gen<'a> {
             Expr::Pure(p, args) => {
                 let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
                 match p {
-                    PureFn::StrLen | PureFn::ArrLen => format!("len({})", a[0]),
+                    PureFn::StrLen | PureFn::ArrLen | PureFn::MapLen => format!("len({})", a[0]),
+                    PureFn::MapHas => format!("({} in {})", self.expr(&args[1]), self.expr(&args[0])),
                     PureFn::StrContains => format!("({} in {})", self.expr(&args[1]), self.expr(&args[0])),
                     PureFn::StrStartsWith => format!("{}.startswith({})", self.expr(&args[0]), a[1]),
                     PureFn::StrEndsWith => format!("{}.endswith({})", self.expr(&args[0]), a[1]),

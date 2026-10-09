@@ -51,18 +51,18 @@ impl Structs {
         }
     }
 
-    /// True for types whose values own heap memory: strings, arrays, and structs with such a field.
+    /// True for types whose values own heap memory: strings, arrays, maps, and structs with such a field.
     pub fn managed(&self, t: Ty) -> bool {
         match t {
-            Ty::Str | Ty::Array(_) => true,
+            Ty::Str | Ty::Array(_) | Ty::Map(_) => true,
             Ty::Struct(_) => self.get(t).is_some_and(|s| s.managed),
             _ => false,
         }
     }
 
-    /// True for aggregates: arrays and structs (deep equality, copy on write in JavaScript).
+    /// True for aggregates: arrays, maps and structs (deep equality, copy on write in JavaScript).
     pub fn aggregate(t: Ty) -> bool {
-        matches!(t, Ty::Array(_) | Ty::Struct(_))
+        matches!(t, Ty::Array(_) | Ty::Struct(_) | Ty::Map(_))
     }
 }
 
@@ -288,6 +288,21 @@ pub enum RtOp {
     Std(StdFn),
     /// `json.str(v)`: the JSON text of a value of any type (`dst: str`, owned).
     JsonStr,
+    /// `[k: v, k2: v2]`: a new map of the destination's type; the operands are keys and values,
+    /// alternating. The map becomes one more owner of each.
+    MapNew,
+    /// `m[k]` (E0247 when the key is missing). Borrowed, like `ArrGet`.
+    MapGet,
+    /// `m.get(k, default)`: the value, or `default`. Borrowed.
+    MapGetOr,
+    /// `m.keys()`: a new array of the keys, in insertion order.
+    MapKeys,
+    /// `m.values()`: a new array of the values, in insertion order.
+    MapValues,
+    /// `m[k] = v`, `m.set(k, v)` (a `Mutate`): a new key goes last, an existing one keeps its place.
+    MapSet,
+    /// `m.remove(k)` (a `Mutate`): nothing happens when the key is missing.
+    MapRemove,
     /// `json.parse(text)`: a value of the destination's type read from JSON text (E0345), owned.
     JsonParse,
 }
@@ -336,6 +351,13 @@ impl RtOp {
             RtOp::StructNew => "struct_new",
             RtOp::Std(f) => f.full_name(),
             RtOp::JsonStr => "json_str",
+            RtOp::MapNew => "map_new",
+            RtOp::MapGet => "map_get",
+            RtOp::MapGetOr => "map_get_or",
+            RtOp::MapKeys => "map_keys",
+            RtOp::MapValues => "map_values",
+            RtOp::MapSet => "map_set",
+            RtOp::MapRemove => "map_remove",
             RtOp::JsonParse => "json_parse",
         }
     }
@@ -391,6 +413,9 @@ impl RtOp {
                 | RtOp::StrPadRight
                 | RtOp::JsonStr
                 | RtOp::JsonParse
+                | RtOp::MapNew
+                | RtOp::MapKeys
+                | RtOp::MapValues
         ) || matches!(self, RtOp::Std(f) if f.owned())
     }
 
@@ -407,6 +432,8 @@ impl RtOp {
                 | RtOp::ArrReverse
                 | RtOp::ArrAppend
                 | RtOp::ArrSwap
+                | RtOp::MapSet
+                | RtOp::MapRemove
         )
     }
 }
@@ -435,6 +462,10 @@ pub enum PureFn {
     ArrContains,
     /// `xs.index_of(v)`: the first index or -1
     ArrIndexOf,
+    /// entries in a map
+    MapLen,
+    /// `m.has(k)`
+    MapHas,
 }
 
 impl PureFn {
@@ -456,6 +487,8 @@ impl PureFn {
             PureFn::ArrLen => "arr_len",
             PureFn::ArrContains => "arr_contains",
             PureFn::ArrIndexOf => "arr_index_of",
+            PureFn::MapLen => "map_len",
+            PureFn::MapHas => "map_has",
         }
     }
 
@@ -468,8 +501,8 @@ impl PureFn {
             PureFn::StrIndexOf => (&[Str, Str], Int),
             PureFn::CharCode => (&[Char], Int),
             PureFn::CharUpper | PureFn::CharLower => (&[Char], Char),
-            PureFn::ArrLen | PureFn::ArrIndexOf => (&[], Int),
-            PureFn::ArrContains => (&[], Bool),
+            PureFn::ArrLen | PureFn::ArrIndexOf | PureFn::MapLen => (&[], Int),
+            PureFn::ArrContains | PureFn::MapHas => (&[], Bool),
             _ => (&[Char], Bool),
         }
     }

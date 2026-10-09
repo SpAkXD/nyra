@@ -47,6 +47,10 @@ fn rstype(t: Ty) -> String {
         Ty::Char => "char".into(),
         Ty::Str => "Str".into(),
         Ty::Array(_) => format!("Rc<Vec<{}>>", rstype(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("Rc<NyMap<{}, {}>>", rstype(k), rstype(v))
+        }
         Ty::Struct(_) => name(&t.struct_name().expect("a struct")),
         other => unreachable!("the Rust backend got the type `{}`", other.name()),
     }
@@ -527,6 +531,15 @@ impl<'a> Gen<'a> {
                         let ys = self.operand(&args[0], root, Use::Borrow);
                         format!("ny_append({}, {ys})", self.place(place, &[root]).mut_ref())
                     }
+                    RtOp::MapSet => {
+                        let k = self.operand(&args[0], root, Use::Owned);
+                        let v = self.operand(&args[1], root, Use::Owned);
+                        format!("Rc::make_mut({}).set({k}, {v})", self.place(place, &[root]).mut_ref())
+                    }
+                    RtOp::MapRemove => {
+                        let k = self.operand(&args[0], root, Use::Owned);
+                        format!("Rc::make_mut({}).remove(&{k})", self.place(place, &[root]).mut_ref())
+                    }
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 self.assign(s, *dst, code);
@@ -706,6 +719,14 @@ impl<'a> Gen<'a> {
                     format!("{r}.clone()")
                 }
             }
+            RtOp::MapNew => {
+                let items: Vec<String> = args.chunks(2).map(|p| format!("({}, {})", self.owned(&p[0]), self.owned(&p[1]))).collect();
+                format!("ny_mnew(vec![{}])", items.join(", "))
+            }
+            RtOp::MapGet => format!("ny_mget(&{}, &{}, {at}).clone()", self.expr(&args[0]), self.owned(&args[1])),
+            RtOp::MapGetOr => format!("ny_mget_or(&{}, &{}, &{}).clone()", self.expr(&args[0]), self.owned(&args[1]), self.owned(&args[2])),
+            RtOp::MapKeys => format!("ny_mkeys(&{})", self.expr(&args[0])),
+            RtOp::MapValues => format!("ny_mvalues(&{})", self.expr(&args[0])),
             RtOp::ArrSlice => format!("ny_slice({}, {}, {}, {at})", self.borrow(&args[0]), a[1], a[2]),
             RtOp::ArrRepeat => format!("ny_repeat({}, {}, {at})", self.borrow(&args[0]), a[1]),
             RtOp::ArrConcat => format!("ny_concat({}, {})", self.borrow(&args[0]), self.borrow(&args[1])),
@@ -743,7 +764,7 @@ impl<'a> Gen<'a> {
                     let x = self.arg(p);
                     values.push(match self.ty(p) {
                         Ty::Float => format!("ny_num({x})"),
-                        Ty::Array(_) | Ty::Struct(_) => format!("ny_show(&{})", self.expr(p)),
+                        Ty::Array(_) | Ty::Struct(_) | Ty::Map(_) => format!("ny_show(&{})", self.expr(p)),
                         _ => x,
                     });
                 }
@@ -858,7 +879,8 @@ impl<'a> Gen<'a> {
                     PureFn::CharIsUpper => format!("{}.is_ascii_uppercase()", self.expr(&args[0])),
                     PureFn::CharIsLower => format!("{}.is_ascii_lowercase()", self.expr(&args[0])),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
-                    PureFn::ArrLen => format!("({}.len() as i64)", self.expr(&args[0])),
+                    PureFn::ArrLen | PureFn::MapLen => format!("({}.len() as i64)", self.expr(&args[0])),
+                    PureFn::MapHas => format!("{}.has(&{})", self.expr(&args[0]), self.owned(&args[1])),
                     PureFn::ArrContains => format!("{}.contains(&{})", self.expr(&args[0]), self.expr(&args[1])),
                     PureFn::ArrIndexOf => format!("ny_index_of({}, &{})", self.borrow(&args[0]), self.expr(&args[1])),
                 }

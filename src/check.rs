@@ -309,7 +309,7 @@ fn show(e: &Expr) -> Option<String> {
         ExprKind::Bool(b) => b.to_string(),
         ExprKind::Char(c) => v3::show_char(*c),
         ExprKind::Str(s) if s.len() <= 16 && !s.contains(['"', '\\', '\n', '\t', '\r']) => format!("\"{s}\""),
-        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) => return None,
+        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::MapLit(_) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
             let a: Option<Vec<String>> = args.iter().map(show).collect();
@@ -538,6 +538,12 @@ impl Checker {
     fn check_type(&mut self, t: Type, span: Span) -> bool {
         match t {
             Type::Array(_) => t.elem().is_some_and(|e| self.check_type(e, span)),
+            Type::Map(_) => {
+                let Some((k, v)) = t.map_kv() else { return false };
+                // a bad key is reported, but the type stays usable (no second error for `[:]`)
+                self.map_key(k, span);
+                self.check_type(v, span)
+            }
             Type::Struct(_) => {
                 let name = t.struct_name().unwrap_or_default();
                 if self.structs.contains_key(&name) {
@@ -564,6 +570,39 @@ impl Checker {
 
     fn managed(&self, t: Type) -> bool {
         v3::managed(t, &self.structs)
+    }
+
+    /// True if a value of `t` holds a map (`json` does not handle maps yet).
+    fn has_map(&self, t: Type) -> bool {
+        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> bool {
+            match t {
+                Type::Map(_) => true,
+                Type::Array(_) => t.elem().is_some_and(|e| go(c, e, seen)),
+                Type::Struct(_) => {
+                    let Some(n) = t.struct_name() else { return false };
+                    if seen.contains(&n) {
+                        return false;
+                    }
+                    seen.push(n.clone());
+                    c.structs.get(&n).is_some_and(|s| s.fields.iter().any(|(_, ft, _)| go(c, *ft, seen)))
+                }
+                _ => false,
+            }
+        }
+        go(self, t, &mut Vec::new())
+    }
+
+    /// A map key must be an `int`, `str`, `char` or `bool` (E0213).
+    fn map_key(&mut self, k: Type, span: Span) -> bool {
+        if matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool) || k.is_unknown() {
+            return true;
+        }
+        let hint = match k {
+            Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
+            _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
+        };
+        self.errs.push(Diag::new("E0213", format!("a map key must be `int`, `str`, `char` or `bool`, found `{}`", k.name()), span).hint(hint));
+        false
     }
 
     /// A value of type `got` is used where `want` is needed. `e` is the expression, for the hint.
@@ -893,6 +932,8 @@ impl Checker {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => it.elem().unwrap_or(Type::Unknown),
+                    // a map gives its keys, in insertion order
+                    Type::Map(_) => it.map_kv().map_or(Type::Unknown, |(k, _)| k),
                     t => {
                         let hint = match (t, show(iter)) {
                             (Type::Int, Some(s)) => format!("to count, loop over a range: `for {var} in 0..{s}`"),
@@ -1055,6 +1096,15 @@ impl Checker {
     /// `e` is changed (assigned into, a mutating method, `inout`): it must be a place whose root
     /// variable can change.
     fn check_place(&mut self, e: &Expr, what: &str, span: Span) {
+        // `m[k] = v` replaces a map's value; a value inside one cannot change in place
+        if map_step(e, what == "assign to") {
+            let shown = show(e).unwrap_or_else(|| "m[k]".into());
+            self.errs.push(
+                Diag::new("E0229", format!("cannot {what} `{shown}`: a value inside a map cannot change in place"), span)
+                    .hint("change a copy and store it back: `var v = m[k]`, change `v`, then `m[k] = v`"),
+            );
+            return;
+        }
         if let ExprKind::Index(b, _) = &e.kind {
             if b.ty == Type::Str {
                 self.errs.push(
@@ -1287,10 +1337,14 @@ impl Checker {
                 }
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
+            ExprKind::MapLit(pairs) => self.map_lit(pairs, want, span),
             ExprKind::Index(base, index) => {
                 let bt = self.expr(base);
-                let it = self.expr(index);
-                if it != Type::Int && !it.is_unknown() {
+                let it = match bt.map_kv() {
+                    Some((k, _)) => self.expr_with(index, Some(k)),
+                    None => self.expr(index),
+                };
+                if bt.map_kv().is_none() && it != Type::Int && !it.is_unknown() {
                     let hint = match (it, show(index)) {
                         (Type::Float, Some(s)) => format!("convert it: `[int({s})]`"),
                         (Type::Char, Some(s)) => format!("an index is a position: to use the character's code write `[{s}.code()]`"),
@@ -1302,6 +1356,19 @@ impl Checker {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => bt.elem().unwrap_or(Type::Unknown),
+                    Type::Map(_) => {
+                        let (k, v) = bt.map_kv().unwrap_or((Type::Unknown, Type::Unknown));
+                        if it != k && !it.is_unknown() {
+                            let hint = match (k, show(index)) {
+                                (Type::Str, Some(s)) => format!("the keys are text: `[str({s})]`"),
+                                _ => format!("the keys of this map are `{}` values", k.name()),
+                            };
+                            self.errs.push(
+                                Diag::new("E0232", format!("a key of `{}` must be `{}`, found `{}`", bt.name(), k.name(), it.name()), index.span).hint(hint),
+                            );
+                        }
+                        v
+                    }
                     t => {
                         let shown = show(base);
                         let hint = match (t, shown) {
@@ -1465,6 +1532,14 @@ impl Checker {
             );
             return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
         }
+        let t = if parse { want.unwrap_or(Type::Unknown) } else { tys[0] };
+        if self.has_map(t) {
+            self.errs.push(
+                Diag::new("E0309", format!("`json.{name}` cannot handle the map type in `{}` yet", t.name()), span)
+                    .hint("use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"),
+            );
+            return if parse { t } else { Type::Str };
+        }
         if !parse {
             if tys[0] == Type::Void {
                 let msg = format!("`json.str` needs a value, but {} returns nothing", call_text(&args[0]));
@@ -1483,6 +1558,57 @@ impl Checker {
                 );
                 Type::Unknown
             }
+        }
+    }
+
+    /// `[k: v, k2: v2]`: the keys have one type and the values have one type; `[:]` takes its type
+    /// from the context.
+    fn map_lit(&mut self, pairs: &mut [(Expr, Expr)], want: Option<Type>, span: Span) -> Type {
+        let want_kv = want.and_then(Type::map_kv);
+        if pairs.is_empty() {
+            return match want {
+                Some(t @ Type::Map(_)) => t,
+                Some(t) if t.is_unknown() => Type::Unknown,
+                _ => {
+                    self.errs.push(
+                        Diag::new("E0230", "cannot infer the type of the empty map `[:]`", span)
+                            .hint("write its type where it is declared, e.g. `var counts: [str: int] = [:]`"),
+                    );
+                    Type::Unknown
+                }
+            };
+        }
+        let (mut kt, mut vt): (Option<Type>, Option<Type>) = (want_kv.map(|p| p.0), want_kv.map(|p| p.1));
+        let mut bad = false;
+        for (k, v) in pairs.iter_mut() {
+            let tk = self.expr_with(k, kt);
+            let tv = self.expr_with(v, vt);
+            for (t, slot, e, what) in [(tk, &mut kt, &*k, "key"), (tv, &mut vt, &*v, "value")] {
+                if t == Type::Void || t.is_unknown() {
+                    bad = true;
+                    continue;
+                }
+                match *slot {
+                    None => *slot = Some(t),
+                    Some(first) if first != t => {
+                        self.errs.push(
+                            Diag::new("E0231", format!("the {what}s of a map must all have one type: `{}` and `{}`", first.name(), t.name()), e.span)
+                                .hint(format!("convert this {what} to `{}`, or use a struct for values of different types", first.name())),
+                        );
+                        bad = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match (kt, vt) {
+            (Some(k), Some(v)) if !bad => {
+                if !self.map_key(k, pairs[0].0.span) {
+                    return Type::Unknown;
+                }
+                Type::map(k, v)
+            }
+            _ => Type::Unknown,
         }
     }
 
@@ -1723,6 +1849,10 @@ impl Checker {
         let mut sig = sig;
         if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
             sig.params.push(Type::Char);
+        }
+        // `m.get(k, default)`
+        if let (Some((_, v)), "get", 2) = (rt.map_kv(), name, args.len()) {
+            sig.params.push(v);
         }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
@@ -2460,5 +2590,15 @@ fn flatten_add<'a>(e: &'a Expr, parts: &mut Vec<&'a Expr>, nodes: &mut Vec<Span>
             flatten_add(r, parts, nodes);
         }
         _ => parts.push(e),
+    }
+}
+
+/// True if the place `e` reaches into a value inside a map: `m[k].x`, `m[k][0]`. With `top_ok`,
+/// `e` itself may be `m[k]` (an assignment replaces the value).
+fn map_step(e: &Expr, top_ok: bool) -> bool {
+    match &e.kind {
+        ExprKind::Index(b, _) if b.ty.map_kv().is_some() => !top_ok || map_step(b, false),
+        ExprKind::Index(b, _) | ExprKind::Field(b, _) => map_step(b, false),
+        _ => false,
     }
 }

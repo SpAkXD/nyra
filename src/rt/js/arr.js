@@ -14,7 +14,13 @@ function ny_shall(a) {
 }
 // A copy of one level: the copy is not shared, the elements it now shares are.
 function ny_cp(a) {
-    return Array.isArray(a) ? ny_shall(a.slice()) : a.ny_cp();
+    if (Array.isArray(a)) return ny_shall(a.slice());
+    if (a instanceof Map) {
+        const m = new Map();
+        for (const [k, v] of a) m.set(k, ny_sh(v));
+        return m;
+    }
+    return a.ny_cp();
 }
 // `obj[key]`, made unique for a write (copied and stored back when it was shared).
 function ny_u(obj, key) {
@@ -81,8 +87,26 @@ function ny_eq(a, b) {
         for (let i = 0; i < a.length; i++) if (!ny_eq(a[i], b[i])) return false;
         return true;
     }
+    if (a instanceof Map) {
+        if (a.size !== b.size) return false;
+        for (const [k, v] of a) if (!b.has(k) || !ny_eq(v, b.get(k))) return false;
+        return true;
+    }
     return a.ny_eq(b);
 }
+// ---- maps: JavaScript Maps (insertion order), copied on write like arrays ----
+// `[k: v, ...]`: the keys and values alternate.
+function ny_mnew(kv) {
+    const m = new Map();
+    for (let i = 0; i < kv.length; i += 2) m.set(kv[i], kv[i + 1]);
+    return m;
+}
+// `m[k]`: E0247 when the key is missing (`kt` is the key's type, for the message).
+function ny_mget(m, k, kt, line, col) {
+    if (!m.has(k)) ny_panic("E0247", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
+    return m.get(k);
+}
+function ny_mgetor(m, k, d) { return m.has(k) ? m.get(k) : d; }
 function ny_aindex(a, v) {
     for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
     return -1;
@@ -148,6 +172,17 @@ function ny_fmt(v, t) {
             return s + "]";
         }
         case "S": return v.ny_fmt();
+        case "{": {
+            // a map: "{" + the key type (one letter) + the value type
+            if (v.size === 0) return "[:]";
+            const kt = t[1], vt = t.slice(2);
+            let s = "[";
+            for (const [k, x] of v) {
+                if (s.length > 1) s += ", ";
+                s += ny_fmt(k, kt) + ": " + ny_fmt(x, vt);
+            }
+            return s + "]";
+        }
         default: return String(v);
     }
 }

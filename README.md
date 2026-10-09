@@ -96,7 +96,7 @@ compiler to tell the AI exactly what to fix.
 - **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
   (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
 - **Standard library:** `use input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`, the same on every
-  backend (`math` gives identical digits everywhere). **Not yet:** maps, modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
+  backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. **Not yet:** modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
   syntax may still change before 1.0.
 
 ## Install

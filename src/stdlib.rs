@@ -320,6 +320,12 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
                 expr(b, m, own);
             }
             ExprKind::Array(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
+            ExprKind::MapLit(pairs) => {
+                for (k, v) in pairs {
+                    expr(k, m, own);
+                    expr(v, m, own);
+                }
+            }
             ExprKind::Method(r, _, args) => {
                 expr(r, m, own);
                 args.iter_mut().for_each(|a| expr(a, m, own));

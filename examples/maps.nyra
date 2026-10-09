@@ -1,0 +1,80 @@
+// Maps: `[K: V]` with int, str, char or bool keys. They are values (copied when assigned, like
+// arrays) and keep their keys in insertion order.
+struct Point {
+    x: int
+    y: int
+}
+
+fn count_words(text: str) -> [str: int] {
+    var counts: [str: int] = [:]
+    for w in text.split(" ") {
+        if w != "" {
+            counts[w] = counts.get(w, 0) + 1
+        }
+    }
+    ret counts
+}
+
+fn main() {
+    var ages = ["ann": 31, "bob": 27]
+    ages["cid"] = 40
+    ages["ann"] += 1                       // an existing key keeps its place
+    print(ages, ages.len(), ages["bob"])
+    print(ages.has("bob"), ages.has("dan"), ages.get("dan", -1))
+    print(ages.keys(), ages.values())
+    for name in ages {
+        print("{name} is {ages[name]}")
+    }
+
+    // values: a copy is independent
+    var older = ages
+    older.set("bob", 99)
+    older.remove("cid")
+    older.remove("nobody")
+    print(ages, older, ages == older)
+    print(older == ["bob": 99, "ann": 32], older == [:])
+
+    let counts = count_words("the cat and the hat and the bat")
+    print(counts)
+    var best = ""
+    for w in counts.keys() {
+        if best == "" || counts[w] > counts[best] {
+            best = w
+        }
+    }
+    print("most common: {best} ({counts[best]})")
+
+    // other key types, and values that are arrays, structs and maps
+    var squares: [int: int] = [:]
+    for i in 1..6 {
+        squares[i * i] = i
+    }
+    print(squares, squares[16])
+    let flags = [true: "yes", false: "no"]
+    let letters = ['a': [1, 2], 'b': []]
+    print(flags[1 > 0], letters, letters['a'].len())
+    var places: [str: Point] = ["home": Point(x: 1, y: 2)]
+    var p = places["home"]
+    p.x = 10
+    places["work"] = p
+    print(places)
+    var nested: [str: [str: int]] = ["a": ["x": 1]]
+    var inner = nested["a"]
+    inner["y"] = 2
+    nested["a"] = inner
+    nested["b"] = [:]
+    print(nested, nested["a"]["y"], str(nested["b"]))
+
+    // removing many keys keeps the order of the rest
+    var big: [int: str] = [:]
+    for i in 0..20 {
+        big[i] = "v{i}"
+    }
+    for i in 0..20 {
+        if i % 3 != 0 {
+            big.remove(i)
+        }
+    }
+    big[100] = "last"
+    print(big.keys(), big[18])
+}

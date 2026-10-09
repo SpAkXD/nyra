@@ -10,6 +10,7 @@ const PRELUDE: &str = include_str!("../rt/c/core.c");
 const STRINGS: &str = include_str!("../rt/c/str.c");
 const ARRAYS: &str = include_str!("../rt/c/arr.c");
 const STD: &str = include_str!("../rt/c/std.c");
+const MAPS: &str = include_str!("../rt/c/map.c");
 const JSON: &str = include_str!("../rt/c/json.c");
 
 const RESERVED: &[&str] = &[
@@ -46,6 +47,7 @@ fn ctype(t: Ty) -> String {
         Ty::Char => "nyrt_char".into(),
         Ty::Str => "nyrt_str*".into(),
         Ty::Array(_) => "nyrt_arr*".into(),
+        Ty::Map(_) => "nyrt_map*".into(),
         Ty::Struct(_) => format!("nyS_{}", t.struct_name().expect("a struct")),
         other => unreachable!("the C backend got the type `{}`", other.name()),
     }
@@ -84,6 +86,7 @@ fn rt_name(t: Ty) -> &'static str {
         Ty::Char => "char",
         Ty::Str => "str",
         Ty::Array(_) => "arr",
+        Ty::Map(_) => "map",
         other => unreachable!("no runtime functions for `{}` yet", other.name()),
     }
 }
@@ -153,6 +156,7 @@ fn structs(m: &Module, out: &mut String) {
                 match t {
                     Ty::Str => format!("nyrt_str_eq(x->{f}, y->{f})"),
                     Ty::Array(_) => format!("nyrt_arr_eq(x->{f}, y->{f})"),
+                    Ty::Map(_) => format!("nyrt_map_eq(x->{f}, y->{f})"),
                     Ty::Struct(_) => format!("{}_eq(&x->{f}, &y->{f})", ctype(*t)),
                     _ => format!("x->{f} == y->{f}"),
                 }
@@ -175,6 +179,7 @@ fn structs(m: &Module, out: &mut String) {
                 Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
                 Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
                 Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
+                Ty::Map(_) => format!("nyrt_buf_map(o, v->{f});"),
                 _ => format!("{}_fmt(o, &v->{f});", ctype(*t)),
             };
             let _ = writeln!(out, "    {line}");
@@ -318,6 +323,8 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push_str(STRINGS);
     out.push('\n');
     out.push_str(ARRAYS);
+    out.push('\n');
+    out.push_str(MAPS);
     out.push('\n');
     let std = m.uses_std();
     if std {
@@ -686,6 +693,14 @@ impl Gen<'_> {
             }
             RtOp::ArrSort => format!("nyrt_arr_sort(&{lv});"),
             RtOp::ArrSwap => format!("nyrt_arr_swap(&{lv}, {}, {}, {at});", a[0], a[1]),
+            RtOp::MapSet | RtOp::MapRemove => {
+                let (k, v) = t.map_kv().expect("verified: a map");
+                if op == RtOp::MapSet {
+                    format!("nyrt_map_set(&{lv}, {}, {});", self.addr(&args[0], k), self.addr(&args[1], v))
+                } else {
+                    format!("nyrt_map_remove(&{lv}, {});", self.addr(&args[0], k))
+                }
+            }
             RtOp::ArrReverse => format!("nyrt_arr_reverse(&{lv});"),
             other => unreachable!("{} does not change a place", other.name()),
         };
@@ -739,6 +754,17 @@ impl Gen<'_> {
                 }
                 return;
             }
+            RtOp::MapNew => {
+                let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
+                let t = self.f.local(dst.expect("checked")).ty;
+                let (k, v) = t.map_kv().expect("verified: a map");
+                self.line(&format!("{d} = nyrt_map_new({}, {});", desc(k), desc(v)));
+                for pair in args.chunks(2) {
+                    let line = format!("nyrt_map_set(&{d}, {}, {});", self.addr(&pair[0], k), self.addr(&pair[1], v));
+                    self.line(&line);
+                }
+                return;
+            }
             RtOp::StructNew => {
                 let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
                 let t = self.f.local(dst.expect("checked")).ty;
@@ -754,6 +780,16 @@ impl Gen<'_> {
                 let elem = self.ty(&args[0]).elem().expect("verified: an array");
                 format!("*({}*)nyrt_arr_at({}, {}, {at})", ctype(elem), a[0], a[1])
             }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                if op == RtOp::MapGet {
+                    format!("*({}*)nyrt_map_at({}, {}, {at})", ctype(v), a[0], self.addr(&args[1], k))
+                } else {
+                    format!("*({}*)nyrt_map_or({}, {}, {})", ctype(v), a[0], self.addr(&args[1], k), self.addr(&args[2], v))
+                }
+            }
+            RtOp::MapKeys => format!("nyrt_map_list({}, false)", a[0]),
+            RtOp::MapValues => format!("nyrt_map_list({}, true)", a[0]),
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", a[0]),
@@ -929,6 +965,7 @@ impl Gen<'_> {
                         let t = x.ty(self.f);
                         let eq = match t {
                             Ty::Struct(_) => format!("{}_eq({}, {})", ctype(t), self.addr(x, t), self.addr(y, t)),
+                            Ty::Map(_) => format!("nyrt_map_eq({}, {})", bare(&a), bare(&b)),
                             _ => format!("nyrt_arr_eq({}, {})", bare(&a), bare(&b)),
                         };
                         if *op == BinOp::DeepEq {
@@ -962,7 +999,11 @@ impl Gen<'_> {
                     PureFn::CharIsUpper => format!("nyrt_char_is_upper({})", a[0]),
                     PureFn::CharIsLower => format!("nyrt_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("nyrt_is_space({})", a[0]),
-                    PureFn::ArrLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::ArrLen | PureFn::MapLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::MapHas => {
+                        let k = self.ty(&args[0]).map_kv().expect("verified: a map").0;
+                        format!("nyrt_map_has({}, {})", a[0], self.addr(&args[1], k))
+                    }
                     PureFn::ArrContains | PureFn::ArrIndexOf => {
                         let elem = self.ty(&args[0]).elem().expect("verified: an array");
                         let f = if *p == PureFn::ArrContains { "contains" } else { "index_of" };

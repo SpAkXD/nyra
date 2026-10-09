@@ -654,9 +654,11 @@ impl Parser {
             self.bump();
             let elem = self.ty("an array type names the type of its elements: `[int]`")?;
             if self.at(&Tok::Colon) {
-                return Err(Diag::new("E0102", "map types like `[str: int]` are not in Nyra yet", span).hint(
-                    "maps come in the next version: for now use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`",
-                ));
+                // `[K: V]`: a map
+                self.bump();
+                let value = self.ty("a map type names its key and value types: `[str: int]`")?;
+                self.expect(Tok::RBracket, "`]` to close the map type").map_err(|d| d.or_hint("a map type is written `[str: int]`"))?;
+                return Ok(Type::map(elem, value));
             }
             self.expect(Tok::RBracket, "`]` to close the array type").map_err(|d| d.or_hint("an array type is written `[int]`"))?;
             return Ok(Type::array(elem));
@@ -1304,6 +1306,41 @@ impl Parser {
         Ok(e)
     }
 
+    /// The rest of a map literal `[k: v, k2: v2]`, after its first key (the next token is `:`).
+    fn map_literal(&mut self, first: Expr, open: Span, span: Span) -> PResult<Expr> {
+        let mut pairs = Vec::new();
+        let mut key = first;
+        loop {
+            self.expect(Tok::Colon, "`:` after the key").map_err(|d| d.or_hint("a map literal is written `[\"a\": 1, \"b\": 2]`"))?;
+            self.skip_newlines();
+            let value = self.expr()?;
+            pairs.push((key, value));
+            self.skip_newlines();
+            match self.peek() {
+                Tok::Comma => {
+                    self.bump();
+                    self.skip_newlines();
+                    if self.at(&Tok::RBracket) {
+                        self.bump();
+                        break;
+                    }
+                    key = self.expr()?;
+                    self.skip_newlines();
+                }
+                Tok::RBracket => {
+                    self.bump();
+                    break;
+                }
+                _ => {
+                    return Err(self
+                        .unexpected(&format!("`,` or `]` in the map opened at {}:{}", open.line, open.col))
+                        .or_hint("separate the entries with commas: `[\"a\": 1, \"b\": 2]`"))
+                }
+            }
+        }
+        Ok(Expr::new(ExprKind::MapLit(pairs), span))
+    }
+
     fn primary(&mut self) -> PResult<Expr> {
         let span = self.span();
         let kind = match self.peek().clone() {
@@ -1325,6 +1362,12 @@ impl Parser {
             }
             Tok::LBracket => {
                 let open = self.bump().span;
+                // `[:]`: an empty map
+                if self.at(&Tok::Colon) && matches!(self.peek_at(1), Tok::RBracket) {
+                    self.bump();
+                    self.bump();
+                    return Ok(Expr::new(ExprKind::MapLit(Vec::new()), span));
+                }
                 let mut items = Vec::new();
                 loop {
                     self.skip_newlines();
@@ -1332,7 +1375,12 @@ impl Parser {
                         self.bump();
                         break;
                     }
-                    items.push(self.expr()?);
+                    let item = self.expr()?;
+                    // `[k: v, ...]`: a map literal
+                    if items.is_empty() && self.at(&Tok::Colon) {
+                        return self.map_literal(item, open, span);
+                    }
+                    items.push(item);
                     self.skip_newlines();
                     match self.peek() {
                         Tok::Comma => {

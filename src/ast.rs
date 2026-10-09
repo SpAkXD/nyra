@@ -24,11 +24,14 @@ pub enum Type {
     Array(u32),
     /// A struct; the id indexes the interned struct names.
     Struct(u32),
+    /// `[K: V]`; the id indexes the interned (key, value) pairs.
+    Map(u32),
 }
 
 thread_local! {
     static ELEMS: RefCell<Vec<Type>> = const { RefCell::new(Vec::new()) };
     static STRUCTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static MAPS: RefCell<Vec<(Type, Type)>> = const { RefCell::new(Vec::new()) };
 }
 
 impl Type {
@@ -48,6 +51,32 @@ impl Type {
             };
             Type::Array(id as u32)
         })
+    }
+
+    /// `[key: value]`. A map with an unknown part is unknown.
+    pub fn map(key: Type, value: Type) -> Type {
+        if key == Type::Unknown || value == Type::Unknown {
+            return Type::Unknown;
+        }
+        MAPS.with(|m| {
+            let mut m = m.borrow_mut();
+            let id = match m.iter().position(|p| *p == (key, value)) {
+                Some(i) => i,
+                None => {
+                    m.push((key, value));
+                    m.len() - 1
+                }
+            };
+            Type::Map(id as u32)
+        })
+    }
+
+    /// The key and value types of a map.
+    pub fn map_kv(self) -> Option<(Type, Type)> {
+        match self {
+            Type::Map(id) => Some(MAPS.with(|m| m.borrow()[id as usize])),
+            _ => None,
+        }
     }
 
     /// The struct type named `name` (whether or not it is defined: the checker says so).
@@ -92,6 +121,10 @@ impl Type {
             Type::Unknown => "?".into(),
             Type::Array(_) => format!("[{}]", self.elem().map(Type::name).unwrap_or_default()),
             Type::Struct(_) => self.struct_name().unwrap_or_default(),
+            Type::Map(_) => match self.map_kv() {
+                Some((k, v)) => format!("[{}: {}]", k.name(), v.name()),
+                None => String::new(),
+            },
         }
     }
 
@@ -100,6 +133,7 @@ impl Type {
         match self {
             Type::Unknown => true,
             Type::Array(_) => self.elem().is_some_and(Type::is_unknown),
+            Type::Map(_) => self.map_kv().is_some_and(|(k, v)| k.is_unknown() || v.is_unknown()),
             _ => false,
         }
     }
@@ -260,6 +294,8 @@ pub enum ExprKind {
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     /// `[a, b, c]`
     Array(Vec<Expr>),
+    /// `["a": 1, "b": 2]`, `[:]`
+    MapLit(Vec<(Expr, Expr)>),
     /// `base[index]`
     Index(Box<Expr>, Box<Expr>),
     /// `base.name`

@@ -56,6 +56,10 @@ fn gotype(t: Ty) -> String {
         Ty::Char => "rune".into(),
         Ty::Str => "string".into(),
         Ty::Array(_) => format!("*Array[{}]", gotype(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("*Map[{}, {}]", gotype(k), gotype(v))
+        }
         Ty::Struct(_) => name(&t.struct_name().expect("a struct")),
         other => unreachable!("the Go backend got the type `{}`", other.name()),
     }
@@ -135,7 +139,7 @@ fn structs(m: &Module, out: &mut String) {
                 .map(|(f, t)| {
                     let f = name(f);
                     match t {
-                        Ty::Array(_) => format!("nyEqual(v.{f}, w.{f})"),
+                        Ty::Array(_) | Ty::Map(_) => format!("nyEqual(v.{f}, w.{f})"),
                         Ty::Struct(_) if m.managed(*t) => format!("v.{f}.nyEq(w.{f})"),
                         _ => format!("v.{f} == w.{f}"),
                     }
@@ -442,6 +446,8 @@ impl<'a> Gen<'a> {
                     RtOp::ArrReverse => format!("slices.Reverse({target}.items)"),
                     RtOp::ArrSwap => format!("nySwap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("nyExtend({target}, {})", a[0]),
+                    RtOp::MapSet => format!("{target}.set({}, {})", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.remove({})", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 self.assign(s, *dst, code);
@@ -500,6 +506,8 @@ impl<'a> Gen<'a> {
         let n = p.path.len();
         if t.elem().is_some() && (n > 0 || unique) {
             self.line(&format!("{lv} = nyUnique({lv})"));
+        } else if t.map_kv().is_some() && n == 0 && unique {
+            self.line(&format!("{lv} = nyMUnique({lv})"));
         }
         for (k, step) in p.path.iter().enumerate() {
             let last = k + 1 == n;
@@ -508,7 +516,8 @@ impl<'a> Gen<'a> {
                     t = t.elem().expect("verified: an array");
                     let elem = format!("{lv}.items[nyCheck({lv}, {}, {}, {})]", self.arg(i), span.line, span.col);
                     let array = t.elem().is_some();
-                    if last && !(unique && array) {
+                    let map = t.map_kv().is_some();
+                    if last && !(unique && (array || map)) {
                         return elem;
                     }
                     // a pointer to the element, so the index is checked once
@@ -516,6 +525,8 @@ impl<'a> Gen<'a> {
                     self.line(&format!("{ptr} := &{elem}"));
                     if array {
                         self.line(&format!("*{ptr} = nyUnique(*{ptr})"));
+                    } else if map {
+                        self.line(&format!("*{ptr} = nyMUnique(*{ptr})"));
                     }
                     lv = format!("(*{ptr})");
                 }
@@ -525,6 +536,8 @@ impl<'a> Gen<'a> {
                     lv = format!("{lv}.{}", name(&info.fields[*fi as usize].0));
                     if t.elem().is_some() && (!last || unique) {
                         self.line(&format!("{lv} = nyUnique({lv})"));
+                    } else if t.map_kv().is_some() && last && unique {
+                        self.line(&format!("{lv} = nyMUnique({lv})"));
                     }
                 }
             }
@@ -590,6 +603,17 @@ impl<'a> Gen<'a> {
                 format!("{}{{{}}}", name(&info.name), fields.join(", "))
             }
             RtOp::ArrGet => format!("nyGet({}, {}, {at})", a[0], a[1]),
+            RtOp::MapNew => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                let (k, v) = t.map_kv().expect("verified: a map");
+                let keys: Vec<String> = args.chunks(2).map(|p| self.arg(&p[0])).collect();
+                let vals: Vec<String> = args.chunks(2).map(|p| self.owned(&p[1])).collect();
+                format!("nyMOf([]{}{{{}}}, []{}{{{}}})", gotype(k), keys.join(", "), gotype(v), vals.join(", "))
+            }
+            RtOp::MapGet => format!("nyMGet({}, {}, {at})", a[0], a[1]),
+            RtOp::MapGetOr => format!("nyMGetOr({}, {}, {})", a[0], a[1], a[2]),
+            RtOp::MapKeys => format!("nyMKeys({})", a[0]),
+            RtOp::MapValues => format!("nyMValues({})", a[0]),
             RtOp::ArrSlice => format!("nySlice({}, {}, {}, {at})", a[0], a[1], a[2]),
             RtOp::ArrRepeat => format!("nyRepeat({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("nyConcat({}, {})", a[0], a[1]),
@@ -792,6 +816,8 @@ impl<'a> Gen<'a> {
                     PureFn::CharIsLower => format!("nyIsLower({})", a[0]),
                     PureFn::CharIsSpace => format!("nyIsSpace({})", a[0]),
                     PureFn::ArrLen => format!("int64(len({}.items))", self.expr(&args[0])),
+                    PureFn::MapLen => format!("int64({}.live)", self.expr(&args[0])),
+                    PureFn::MapHas => format!("{}.has({})", self.expr(&args[0]), a[1]),
                     PureFn::ArrContains => format!("(nyIndexOf({}, {}) >= 0)", a[0], a[1]),
                     PureFn::ArrIndexOf => format!("nyIndexOf({}, {})", a[0], a[1]),
                 }

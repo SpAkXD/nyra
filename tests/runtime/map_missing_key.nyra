@@ -1,0 +1,6 @@
+// expect: E0247 at 5:15
+fn main() {
+    let ages = ["ann": 31]
+    print(ages["ann"])
+    print(ages["bob"] + 1)
+}

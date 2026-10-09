@@ -24,6 +24,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
+| `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
 | `Point` | a struct you declare |
 
 ## Functions
@@ -149,6 +150,25 @@ let more = xs + [4, 5]                // a new array; xs is unchanged
 
 Changing an array (`xs[i] = v`, `+=`, `push pop insert remove swap sort reverse`) needs a `var`.
 
+## Maps
+```nyra
+var ages = ["ann": 31, "bob": 27]       // type [str: int]
+ages["cid"] = 40                        // add, or replace (an existing key keeps its place)
+ages["ann"] += 1
+print(ages["bob"], ages.get("dan", 0))  // 27 0: `m[k]` of a missing key is error E0247
+for name in ages { print(name) }        // the keys, in insertion order
+```
+| method | result |
+|---|---|
+| `m.len()` · `m.has(k)` | number of entries · `bool` |
+| `m.get(k)` · `m.get(k, default)` | the value (like `m[k]`) · the value or `default` |
+| `m.set(k, v)` · `m.remove(k)` | like `m[k] = v` · removes `k` (nothing happens if it is missing) |
+| `m.keys()` · `m.values()` | arrays, in insertion order |
+
+Maps are values like arrays (`var b = a` copies), compare with `==` by content in any order and print
+as `["ann": 31, "bob": 27]` (`[:]` when empty). Changing a map needs a `var`; a value inside a map does
+not change in place (`m[k].x = 1` is an error: copy, change, `m[k] = v`).
+
 ## Structs
 ```nyra
 struct Point {
@@ -250,6 +270,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0244 | `int(s)` or `float(s)` of text that is not a number |
 | E0245 | `int(x)` of NaN, infinity or a float outside the int range |
 | E0246 | `char(n)` of an invalid code (valid: 0 to 1114111, except 55296 to 57343) |
+| E0247 | `m[k]` of a key the map does not have |
 | E0249 | out of memory; `repeat` makes at most 536,870,888 bytes of text or 100,000,000 elements |
 | E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
 | E0341 | input, an argument or a variable is not UTF-8 |

@@ -1,0 +1,5 @@
+// expect: E0213
+fn main() {
+    var prices: [float: str] = [:]
+    print(prices.len())
+}

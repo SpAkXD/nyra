@@ -23,7 +23,7 @@ design may still change.
 | E0001-E0006 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
-| E0201-E0212 | type checker | names, types, `ret`, conditions |
+| E0201-E0213 | type checker | names, types, `ret`, conditions, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 |
 | E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
@@ -31,7 +31,7 @@ design may still change.
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248,
+Codes are stable: a number is never reused for another error. Numbers that are not listed (E0248,
 E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -644,6 +644,31 @@ fn main() {
 }
 ```
 - **Related:** E0101, E0203, E0209
+
+## E0213: map key type not allowed
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A map type `[K: V]` has a key type other than `int`, `str`, `char` or `bool`, such as `[float: str]` or `[Point: int]`.
+- **Why Nyra has this rule:** A key must compare exactly and hash the same way on every backend. Floats do not (rounding, `NaN`, `-0.0`), and arrays and structs as keys would be compared by content on some hosts and by identity on others.
+- **Common causes:**
+  - a float key, such as a price or a coordinate
+  - a struct or an array as the key, where a name or an id would do
+- **Wrong:**
+```rust
+fn main() {
+    var names: [float: str] = [:]
+    names[1.5] = "one and a half"
+    print(names)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var names: [str: str] = [:]
+    names[str(1.5)] = "one and a half"
+    print(names)
+}
+```
+- **Related:** E0247, E0102
 
 ## E0220: duplicate field in a struct
 - **Kind:** compile error · **Since:** v0.3
@@ -1478,6 +1503,31 @@ fn main() {
 }
 ```
 - **Related:** E0244, E0245
+
+## E0247: key not in the map
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `m[k]` or `m.get(k)` read a key that the map does not have, for example `key "bob" is not in the map`.
+- **Why Nyra has this rule:** Nyra has no null, so a missing key cannot give "nothing". The program stops with a clear message instead of continuing with a made-up value. `m.has(k)` tests first, and `m.get(k, default)` gives a value for a missing key.
+- **Common causes:**
+  - counting with `m[k] += 1` before the key exists: write `m[k] = m.get(k, 0) + 1`
+  - a key with different text (case, spaces) from the one that was stored
+- **Wrong:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] += 1
+    print(counts)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] = counts.get("a", 0) + 1
+    print(counts)
+}
+```
+- **Related:** E0240, E0213
 
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3

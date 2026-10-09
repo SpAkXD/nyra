@@ -61,6 +61,11 @@ fn tdesc(t: Ty) -> String {
         Ty::Char => "c".into(),
         Ty::Str => "s".into(),
         Ty::Array(_) => format!("[{}", tdesc(t.elem().expect("an array"))),
+        // a map: the key type is one letter
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("{{{}{}", tdesc(k), tdesc(v))
+        }
         _ => "S".into(),
     }
 }
@@ -357,6 +362,8 @@ impl Gen<'_> {
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("ny_append({target}, {})", a[0]),
+                    RtOp::MapSet => format!("{target}.set({}, {})", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.delete({})", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 let line = self.assign(*dst, code);
@@ -513,6 +520,22 @@ impl Gen<'_> {
                 let t = self.f.local(dst.expect("verified: a destination")).ty;
                 format!("ny_jparse({}, {}, {at})", a[0], jdesc(t))
             }
+            RtOp::MapNew => {
+                let items: Vec<String> = args.iter().map(|x| self.owned(x)).collect();
+                format!("ny_mnew([{}])", items.join(", "))
+            }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                let get = if op == RtOp::MapGet {
+                    format!("ny_mget({}, {}, \"{}\", {at})", a[0], a[1], tdesc(k))
+                } else {
+                    format!("ny_mgetor({}, {}, {})", a[0], a[1], a[2])
+                };
+                // a value that is a plain struct now has two owners (no `Dup` follows for it)
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_sh({get})") } else { get }
+            }
+            RtOp::MapKeys => format!("[...{}.keys()]", self.expr(&args[0])),
+            RtOp::MapValues => format!("ny_shall([...{}.values()])", self.expr(&args[0])),
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         let line = self.assign(dst, code);
@@ -683,6 +706,8 @@ impl Gen<'_> {
                     PureFn::CharIsUpper => format!("ny_char_is_upper({})", a[0]),
                     PureFn::CharIsLower => format!("ny_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
+                    PureFn::MapLen => format!("{}.size", self.expr(&args[0])),
+                    PureFn::MapHas => format!("{}.has({})", self.expr(&args[0]), a[1]),
                     PureFn::ArrLen => format!("{}.length", self.expr(&args[0])),
                     PureFn::ArrContains => format!("(ny_aindex({}, {}) >= 0)", a[0], a[1]),
                     PureFn::ArrIndexOf => format!("ny_aindex({}, {})", a[0], a[1]),

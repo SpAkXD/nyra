@@ -1,0 +1,10 @@
+// expect: E0229
+struct P {
+    x: int
+}
+
+fn main() {
+    var m = ["a": P(x: 1)]
+    m["a"].x = 2
+    print(m)
+}
