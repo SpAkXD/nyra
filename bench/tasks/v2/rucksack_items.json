@@ -1,0 +1,37 @@
+{
+  "id": "rucksack_items",
+  "title": "Rucksack item priorities",
+  "category": "aoc-style",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Each line of standard input is the content of one rucksack: a string of letters, one letter per item. A rucksack has two compartments: its first half and its second half (the line must have an even length). Item types have priorities: `a` to `z` are 1 to 26 and `A` to `Z` are 27 to 52.\n\nLines that are empty are skipped; a line with an odd length or with a character that is not a letter prints `line N: invalid` (N counts from 1) and is ignored from then on. For every remaining rucksack exactly one item type appears in both compartments in the data of the tests (if there are several, take the one with the lowest priority; if there is none, count 0). Print `shared=S`, the sum of the priorities of these shared item types over all valid rucksacks. Then take the valid rucksacks in groups of three consecutive ones (the first three, the next three, ...; an incomplete last group is ignored) and in each group find the item type that all three carry (if several, the lowest priority; if none, 0): print `badges=B` with the sum of these priorities.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "vJrwpWtwJgWrhcsFMMfFFhFp\njqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL\nPmmdzqPrVvPwwTWBwg\nwMqvLMZHhHMvwLHjbvcjnnSBnvTQFn\nttgJtRGJQctTZtZT\nCrZsJsPPZsGzwwsLwLmpwMDw\n",
+      "expected_output": "shared=157\nbadges=70\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "aa\n",
+      "expected_output": "shared=1\nbadges=0\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "abAB\nxyXY\nab\nABAB\naA\nzZ\nzz\n",
+      "expected_output": "shared=53\nbadges=0\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "abc\nab1c\n\nab\nbb\ncc\n",
+      "expected_output": "line 1: invalid\nline 2: invalid\nshared=5\nbadges=0\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "qAxBqy\nmqnoqp\nrsqrqt\ndDefDg\nhDijDk\nlDmnDo\n",
+      "expected_output": "shared=141\nbadges=47\n"
+    }
+  ]
+}

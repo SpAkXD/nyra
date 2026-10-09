@@ -1,0 +1,37 @@
+{
+  "id": "bowling_score",
+  "title": "Score a bowling game",
+  "category": "simulation",
+  "difficulty": "hard",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each non-empty line is one complete ten-pin bowling game, given as the list of rolls (the number of pins knocked down by each roll) separated by single spaces. Print the game's score, or `invalid`.\n\nScoring: a game has 10 frames. In frames 1 to 9 a frame is either a strike (10 pins with the first roll, the frame is over after one roll) or two rolls; in the 10th frame the player gets a third roll after a strike or a spare (a spare: the two rolls together knock down all 10 pins). A frame's score is the pins it knocked down, plus for a strike the next two rolls, and for a spare the next roll. The game score is the sum of the 10 frame scores. (In the 10th frame the extra rolls are only bonus rolls; they count once.)\n\nA line is `invalid` if a roll is not an integer from 0 to 10 written as plain digits without leading zeros, if the two rolls of a frame knock down more than 10 pins (in the 10th frame the same holds for the rolls that follow a non-strike; after a strike in the 10th frame the two bonus rolls are either a strike and then any roll, or two rolls that add up to at most 10), or if the line has too few or too many rolls for exactly one complete game. Empty lines are skipped.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "10 10 10 10 10 10 10 10 10 10 10 10\n9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0\n5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5\n10 10\n1 2 3\n",
+      "expected_output": "300\n90\n150\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n10 7 3 9 0 10 0 8 8 2 0 6 10 10 10 8 1\n10 5 5 5 5 10 10 0 0 7 3 9 1 5 5 3\n0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 10\n",
+      "expected_output": "0\n167\ninvalid\n110\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "10 10 10 10 10 10 10 10 10 10 10 10 0\n10 10 10 10 10 10 10 10 10 10 10\n9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0 9 0 0\n6 5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 10 5 6\n",
+      "expected_output": "invalid\ninvalid\ninvalid\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "-1 5\n3 x 4\n3.0 4\n11 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n 5  5 \n10 10 10 10 10 10 10 10 10 10 5 5 5\n10 10 10 10 10 10 10 10 10 10 10 5\n",
+      "expected_output": "invalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\n295\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7\n3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3\n0 10 10 10 10 10 10 10 10 10 10 10 10\n10 10 10 10 10 10 10 10 10 10 10 10 10\n1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1\n",
+      "expected_output": "170\n130\n290\ninvalid\ninvalid\n"
+    }
+  ]
+}

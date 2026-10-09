@@ -1,0 +1,42 @@
+{
+  "id": "invoice_total",
+  "title": "Invoice with tax",
+  "category": "floats",
+  "difficulty": "hard",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read an invoice from standard input. Each line is either an item `DESCRIPTION;QTY;PRICE` or the tax line `tax=RATE` (at most one, anywhere; the last one wins if there are more). DESCRIPTION is any non-empty text without `;`. QTY is a whole number from 1 to 9999 written with digits only. PRICE is an amount of money written with digits and optionally a `.` followed by one or two digits (`12`, `3.5`, `0.99`). RATE is a percentage written the same way, at most two digits after the point (`8`, `8.25`). Blank lines are skipped, and any other line prints `line N: invalid` (N counts from 1) and is ignored.\n\nWork in cents with whole numbers, never with floating point. For each valid item print `DESCRIPTION: QTY x PRICE = TOTAL` where PRICE and TOTAL are written with exactly two digits after the point and TOTAL is QTY times PRICE. After the last line print `subtotal=S`, `tax=T` and `total=G`, in the same two-digit form, where S is the sum of the item totals, T is S times RATE percent rounded to the nearest cent with halves rounded up (T is 0.00 when there is no tax line), and G is S plus T.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "Widget;3;4.50\nGadget;1;19.99\ntax=8.25\nBroken line\nCable;12;0.35\nFree sample;2;0\n",
+      "expected_output": "Widget: 3 x 4.50 = 13.50\nGadget: 1 x 19.99 = 19.99\nline 4: invalid\nCable: 12 x 0.35 = 4.20\nFree sample: 2 x 0.00 = 0.00\nsubtotal=37.69\ntax=3.11\ntotal=40.80\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "Only item;1;1\n",
+      "expected_output": "Only item: 1 x 1.00 = 1.00\nsubtotal=1.00\ntax=0.00\ntotal=1.00\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "Tea;10;2.5\nCoffee beans, 1 kg;2;17.3\nMug;4;7.99\ntax=20\n",
+      "expected_output": "Tea: 10 x 2.50 = 25.00\nCoffee beans, 1 kg: 2 x 17.30 = 34.60\nMug: 4 x 7.99 = 31.96\nsubtotal=91.56\ntax=18.31\ntotal=109.87\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "A;9999;99.99\nB;1;0.01\ntax=0.5\ntax=7.75\nC;0;1\nD;1;1.234\nE;x;1\n;1;1\nF;1;\n",
+      "expected_output": "A: 9999 x 99.99 = 999800.01\nB: 1 x 0.01 = 0.01\nline 5: invalid\nline 6: invalid\nline 7: invalid\nline 8: invalid\nline 9: invalid\nsubtotal=999800.02\ntax=77484.50\ntotal=1077284.52\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "Penny;1;0.01\nPenny;3;0.01\nDime;5;0.10\ntax=50\n",
+      "expected_output": "Penny: 1 x 0.01 = 0.01\nPenny: 3 x 0.01 = 0.03\nDime: 5 x 0.10 = 0.50\nsubtotal=0.54\ntax=0.27\ntotal=0.81\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "tax=10\n",
+      "expected_output": "subtotal=0.00\ntax=0.00\ntotal=0.00\n"
+    }
+  ]
+}

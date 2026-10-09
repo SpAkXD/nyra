@@ -23,8 +23,10 @@ from typing import Optional
 
 FAILURE_KINDS = ("no_code", "compile_error", "toolchain_error", "runtime_error", "timeout", "output_limit",
                  "wrong_output")
-DISPLAY = {"nyra": "Nyra", "python": "Python", "typescript": "TypeScript", "rust": "Rust"}
+DISPLAY = {"nyra": "Nyra", "python": "Python", "typescript": "TypeScript", "rust": "Rust",
+           "nyra-edit": "Nyra (symbol edit)", "python-rewrite": "Python (rewrite)", "python-diff": "Python (diff)"}
 LANG_ORDER = ("nyra", "python", "typescript", "rust")  # the languages, in table-column order (run.py uses it too)
+ARM_ORDER = ("nyra-edit", "python-rewrite", "python-diff")  # the arms of the edit tier (bench/edit_arms.py)
 SPEED_CATEGORY = "speed"  # the tasks whose runtime is summarized (the others finish in well under a millisecond)
 EFFICIENCY_REFERENCE = "python"  # the language the efficiency view is relative to (when it was run)
 RUNTIME_FLOOR_MS = 1.0  # a median runtime below this counts as this much in a ratio: start-up varies by more
@@ -37,7 +39,8 @@ def display(lang: str) -> str:
 def ordered_langs(langs) -> list:
     """Known languages in the standard column order, then any others alphabetically."""
     langs = set(langs)
-    return [lang for lang in LANG_ORDER if lang in langs] + sorted(langs - set(LANG_ORDER))
+    known = LANG_ORDER + ARM_ORDER
+    return [lang for lang in known if lang in langs] + sorted(langs - set(known))
 
 
 # ---------------------------------------------------------------------------- statistics

@@ -1,0 +1,42 @@
+{
+  "id": "queue_wait_times",
+  "title": "Waiting times at a single counter",
+  "category": "floats",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Customers arrive at a counter served by one clerk, who serves them one at a time in the order of their arrival. Read lines from standard input: each is `ARRIVAL SERVICE`, two integers (minutes since opening and minutes the service takes), with arrival times that never decrease from one line to the next. Lines may have extra spaces around the numbers (fields are separated by one or more spaces). A customer starts being served at the later of their arrival time and the moment the previous customer's service ended; their wait is the time between arrival and the start of service.\n\nPrint the results as three lines:\n`customers=N`\n`average wait=A max wait=M` where A is the mean wait written with exactly 2 decimal digits and M the largest wait (an integer);\n`busy=P%` where P is the share of time the clerk was serving, between the first arrival and the end of the last service, in percent with exactly 1 decimal digit.\nIf there are no customers print only `customers=0`. When the clerk is never idle between the first arrival and the end, P is 100.0. Every answer in the tests is far from a rounding tie.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "0 5\n2 3\n4 2\n20 4\n21 1\n",
+      "expected_output": "customers=5\naverage wait=2.00 max wait=4\nbusy=60.0%\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0 10\n",
+      "expected_output": "customers=1\naverage wait=0.00 max wait=0\nbusy=100.0%\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1 4\n1 4\n1 4\n1 4\n1 4\n1 4\n1 4\n",
+      "expected_output": "customers=7\naverage wait=12.00 max wait=24\nbusy=100.0%\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "5 3\n  6   2\n30 5\n31 5\n32 5\n33 1\n100 2\n",
+      "expected_output": "customers=7\naverage wait=3.71 max wait=12\nbusy=23.7%\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "",
+      "expected_output": "customers=0\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "0 1\n10 1\n20 1\n30 1\n40 1\n50 1\n60 1\n",
+      "expected_output": "customers=7\naverage wait=0.00 max wait=0\nbusy=11.5%\n"
+    }
+  ]
+}

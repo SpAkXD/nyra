@@ -1,0 +1,55 @@
+use input
+
+let lines = input.lines()
+let head = lines[0].split(" ")
+let w = int(head[0])
+let h = int(head[1])
+let generations = int(head[2])
+var grid: [[bool]] = []
+for r in 0..h {
+    var row: [bool] = []
+    for c in 0..w {
+        row.push(lines[1 + r][c] == '#')
+    }
+    grid.push(row)
+}
+
+fn neighbours(g: [[bool]], r: int, c: int) -> int {
+    var n = 0
+    for dr in -1..2 {
+        for dc in -1..2 {
+            if dr == 0 && dc == 0 { continue }
+            let rr = r + dr
+            let cc = c + dc
+            if rr >= 0 && rr < g.len() && cc >= 0 && cc < g[0].len() && g[rr][cc] { n += 1 }
+        }
+    }
+    ret n
+}
+
+for _ in 0..generations {
+    var next: [[bool]] = []
+    for r in 0..h {
+        var row: [bool] = []
+        for c in 0..w {
+            let n = neighbours(grid, r, c)
+            row.push(n == 3 || (grid[r][c] && n == 2))
+        }
+        next.push(row)
+    }
+    grid = next
+}
+var alive = 0
+for r in 0..h {
+    var text = ""
+    for c in 0..w {
+        if grid[r][c] {
+            text += "#"
+            alive += 1
+        } else {
+            text += "."
+        }
+    }
+    print(text)
+}
+print("alive={alive}")

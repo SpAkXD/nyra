@@ -1,0 +1,31 @@
+use input
+
+var totals: [int] = []
+var current = 0
+var open = false
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line == "" {
+        if open {
+            totals.push(current)
+            current = 0
+            open = false
+        }
+    } else if line.all(c => c.is_digit()) {
+        current += int(line)
+        open = true
+    } else {
+        print("line {n}: invalid")
+    }
+}
+if open { totals.push(current) }
+totals.sort()
+totals.reverse()
+var top3 = 0
+for i in 0..min(3, totals.len()) {
+    top3 += totals[i]
+}
+print("hikers={totals.len()}")
+print("top1={if totals.len() > 0 { totals[0] } else { 0 }}")
+print("top3={top3}")

@@ -1,0 +1,31 @@
+use input
+
+let lines = input.lines()
+var key: [int] = []
+for c in lines[0] {
+    key.push(c.code() - 'a'.code())
+}
+for li in 1..lines.len() {
+    let line = lines[li]
+    if line.len() < 2 || (line[0] != 'E' && line[0] != 'D') || line[1] != ' ' {
+        print("error")
+        continue
+    }
+    var sign = 1
+    if line[0] == 'D' { sign = -1 }
+    var out = ""
+    var i = 0
+    for k in 2..line.len() {
+        let c = line[k]
+        if c.is_letter() {
+            var base = 'A'.code()
+            if c.is_lower() { base = 'a'.code() }
+            let shifted = (c.code() - base + sign * key[i % key.len()] + 26) % 26
+            out += str(char(shifted + base))
+            i += 1
+        } else {
+            out += str(c)
+        }
+    }
+    print(out)
+}

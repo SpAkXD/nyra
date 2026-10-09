@@ -1,0 +1,32 @@
+{
+  "id": "longest_palindrome",
+  "title": "Longest palindromic substring",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input. For each line print its longest substring that reads the same forwards and backwards (case-sensitive, every character counts, spaces included). If several have the same length print the one that starts first. A line without any character prints `(empty)`. Lines are at most 300 characters long and contain no tabs.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "babad\ncbbd\na\n\nforgeeksskeegfor\nabc\n",
+      "expected_output": "bab\nbb\na\n(empty)\ngeeksskeeg\na\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "racecar\nabacdfgdcaba\naaaa\nab\nAa\nx y x\n",
+      "expected_output": "racecar\naba\naaaa\na\nA\nx y x\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "noon is at noon\nstep on no pets\nlevel  level\nabcba abcba\n",
+      "expected_output": "noon\nstep on no pets\nlevel  level\nabcba abcba\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "zz\nzzz y zzz\n12321\n1221\n123421\n",
+      "expected_output": "zz\nzzz y zzz\n12321\n1221\n1\n"
+    }
+  ]
+}

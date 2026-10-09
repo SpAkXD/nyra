@@ -1,0 +1,37 @@
+{
+  "id": "cleanup_ranges",
+  "title": "Overlapping cleanup assignments",
+  "category": "aoc-style",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Each line of standard input assigns a pair of workers two ranges of section numbers, written `a-b,c-d` (whole numbers written with digits only, with a <= b and c <= d). Count the pairs in which one range fully contains the other, and the pairs whose ranges overlap in at least one section (a pair counted as containing also counts as overlapping). Blank lines are skipped; a line that is not of that exact shape, or whose ranges are written backwards (a > b or c > d), prints `line N: invalid` (N counts from 1) and is ignored. Print `contained=X overlapping=Y`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "2-4,6-8\n2-3,4-5\n5-7,7-9\n2-8,3-7\n6-6,4-6\n2-6,4-8\n",
+      "expected_output": "contained=2 overlapping=4\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1-1,1-1\n",
+      "expected_output": "contained=1 overlapping=1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1-10,2-3\n2-3,1-10\n1-5,5-10\n5-10,1-5\n1-2,3-4\n3-4,1-2\n",
+      "expected_output": "contained=2 overlapping=4\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "10-2,1-5\n1-5,9-3\n1-5\n1-5,2-7,3-4\na-5,1-2\n1--5,1-2\n01-05,02-03\n 1-5,2-3\n1-5, 2-3\n99999-100000,100000-100000\n",
+      "expected_output": "line 1: invalid\nline 2: invalid\nline 3: invalid\nline 4: invalid\nline 5: invalid\nline 6: invalid\nline 8: invalid\nline 9: invalid\ncontained=2 overlapping=2\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "",
+      "expected_output": "contained=0 overlapping=0\n"
+    }
+  ]
+}

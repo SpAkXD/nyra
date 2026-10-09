@@ -1,0 +1,44 @@
+use input
+use text
+
+fn is_number(s: str) -> bool {
+    var t = s
+    if t.starts_with("-") { t = t.slice(1, t.len()) }
+    let parts = t.split(".")
+    if parts.len() > 2 { ret false }
+    for p in parts {
+        if p.len() == 0 || !p.all(c => c.is_digit()) { ret false }
+    }
+    ret true
+}
+
+var count = 0
+var sx = 0.0
+var sy = 0.0
+var sxy = 0.0
+var sxx = 0.0
+var n = 0
+for raw in input.lines() {
+    n += 1
+    if raw == "" { continue }
+    let parts = raw.split(" ")
+    if parts.len() == 2 && is_number(parts[0]) && is_number(parts[1]) {
+        let x = float(parts[0])
+        let y = float(parts[1])
+        count += 1
+        sx += x
+        sy += y
+        sxy += x * y
+        sxx += x * x
+    } else {
+        print("line {n}: bad point")
+    }
+}
+let denominator = float(count) * sxx - sx * sx
+if count < 2 || denominator == 0.0 {
+    print("n={count} undefined")
+} else {
+    let a = (float(count) * sxy - sx * sy) / denominator
+    let b = (sy - a * sx) / float(count)
+    print("n={count} slope={text.fixed(a, 4)} intercept={text.fixed(b, 4)}")
+}

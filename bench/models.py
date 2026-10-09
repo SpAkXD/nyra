@@ -79,6 +79,37 @@ def default_model_ids(path: Path = DEFAULT_MODELS_FILE) -> list:
     return [e["id"] if isinstance(e, dict) else e for e in data["models"]]
 
 
+PRESET_KEYS = ("tier", "samples", "repairs", "anthropic", "openrouter")
+
+
+def load_preset(name: str, path: Path = DEFAULT_MODELS_FILE) -> dict:
+    """A named bundle from bench/models.json: {"tier", "samples", "repairs", "anthropic": [ids], "openrouter": [ids]}.
+    `--preset NAME` of run.py fills in whatever the command line leaves out from it."""
+    data = load_default_models(path)
+    presets = data.get("presets")
+    if not isinstance(presets, dict) or name not in presets:
+        known = ", ".join(sorted(presets)) if isinstance(presets, dict) and presets else "none"
+        raise ModelsError(f"{Path(path).name} has no preset {name!r} (presets: {known})")
+    preset = presets[name]
+    if not isinstance(preset, dict):
+        raise ModelsError(f"{Path(path).name}: preset {name!r} must be an object")
+    for key in ("anthropic", "openrouter"):
+        ids = preset.get(key, [])
+        if not isinstance(ids, list) or not all(isinstance(i, str) and i.strip() and " " not in i for i in ids):
+            raise ModelsError(f"{Path(path).name}: preset {name!r}: `{key}` must be a list of model ids")
+        if len(set(ids)) != len(ids):
+            raise ModelsError(f"{Path(path).name}: preset {name!r}: duplicate ids in `{key}`")
+    for key in ("samples", "repairs"):
+        if key in preset and (not isinstance(preset[key], int) or isinstance(preset[key], bool) or preset[key] < 0):
+            raise ModelsError(f"{Path(path).name}: preset {name!r}: `{key}` must be a whole number")
+    return preset
+
+
+def preset_names(path: Path = DEFAULT_MODELS_FILE) -> list:
+    presets = load_default_models(path).get("presets")
+    return sorted(presets) if isinstance(presets, dict) else []
+
+
 def lookup(by_id: dict, model_id: str) -> Optional[dict]:
     """The listing entry of a model id. `vendor/model:variant` (:online, :nitro, :floor, ...) is the same model with
     different routing and is not listed on its own, so it falls back to `vendor/model`."""
@@ -152,6 +183,9 @@ def main(argv=None) -> int:
         listing = fetch_models()
         if args.check:
             ids = [i.strip() for i in args.ids.split(",") if i.strip()] if args.ids else default_model_ids(Path(args.file))
+            if not args.ids:  # the OpenRouter ids of the presets must exist too
+                for pname in preset_names(Path(args.file)):
+                    ids += [i for i in load_preset(pname, Path(args.file)).get("openrouter", []) if i not in ids]
             bad = missing_ids(listing, ids)
             for mid, near in bad:
                 print(f"MISSING {mid}" + (f"  (similar: {', '.join(near)})" if near else ""))

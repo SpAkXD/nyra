@@ -1,0 +1,37 @@
+{
+  "id": "kv_config",
+  "title": "Parse a configuration file",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read a configuration file in INI style from standard input and print the settings it defines.\n\nEach line is handled after removing the spaces and tabs at its start and end:\n- an empty line, or a line that starts with `#`, is ignored;\n- a line that starts with `[` and ends with `]` starts a section. Its name is the text between the brackets with surrounding spaces and tabs removed. An empty name is a syntax error;\n- a line that contains `=` is a setting. The key is the text before the first `=`, the value is everything after it, both with surrounding spaces and tabs removed (the value may be empty and may contain `=`). An empty key is a syntax error. The setting's full name is `section.key` when a section has been started and just `key` before the first section. A later setting with the same full name replaces the earlier one;\n- any other line is a syntax error.\n\nFor every syntax error print `line N: syntax error` immediately (N counts from 1 over all lines). A line with a syntax error changes nothing else, and a bad section line does not change the current section. After the last line print every setting as `fullname=value`, sorted by full name in plain character order, and then `entries=E errors=X` with the number of settings and of syntax errors.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "# server\nname = demo\n[net]\nport=8080\nhost = localhost  \nbad line\n[]\nport = 9090\n",
+      "expected_output": "line 6: syntax error\nline 7: syntax error\nname=demo\nnet.host=localhost\nnet.port=9090\nentries=3 errors=2\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "[a]\nx=1\n[b]\nx=2\n[a]\ny=3\nx=4\n",
+      "expected_output": "a.x=4\na.y=3\nb.x=2\nentries=3 errors=0\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "k=v=w\n=nokey\nempty=\n[ spaced name ]\n  indented  =  yes  \n#c=1\n  # also a comment\n[x\nx]\n",
+      "expected_output": "line 2: syntax error\nline 8: syntax error\nline 9: syntax error\nempty=\nk=v=w\nspaced name.indented=yes\nentries=3 errors=3\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "",
+      "expected_output": "entries=0 errors=0\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "Zed=1\nalpha=2\n_u=3\n10=ten\n9=nine\n[S]\nb=1\nB=2\na=3\n",
+      "expected_output": "10=ten\n9=nine\nS.B=2\nS.a=3\nS.b=1\nZed=1\n_u=3\nalpha=2\nentries=8 errors=0\n"
+    }
+  ]
+}

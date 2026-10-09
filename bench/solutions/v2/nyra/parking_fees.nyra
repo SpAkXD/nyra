@@ -1,0 +1,39 @@
+use input
+
+var plates: [str] = []
+var since: [int] = []
+var revenue = 0
+var n = 0
+for line in input.lines() {
+    n += 1
+    let parts = line.split(" ")
+    let when = parts[0]
+    let kind = parts[1]
+    let plate = parts[2]
+    let minutes = int(when.slice(0, 2)) * 60 + int(when.slice(3, 5))
+    let at = plates.index_of(plate)
+    if kind == "IN" {
+        if at >= 0 {
+            print("line {n}: already inside")
+        } else {
+            plates.push(plate)
+            since.push(minutes)
+        }
+    } else {
+        if at < 0 {
+            print("line {n}: not inside")
+        } else {
+            let stay = minutes - since[at]
+            plates.remove(at)
+            since.remove(at)
+            var fee = 0
+            if stay > 15 { fee = min(20, 2 * ((stay + 59) / 60)) }
+            revenue += fee
+            print("{plate} paid ${fee}")
+        }
+    }
+}
+print("revenue=${revenue}")
+var left = plates
+left.sort()
+print("still inside: " + (if left.len() > 0 { left.join(",") } else { "none" }))

@@ -1,0 +1,37 @@
+{
+  "id": "roman_convert",
+  "title": "Roman numerals both ways",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input and convert each one. Spaces at the start and end of a line are ignored, and a line that is then empty is skipped.\n\n- A line made only of decimal digits is a number. If its value is between 1 and 3999 print its Roman numeral in the standard form (M, CM, D, CD, C, XC, L, XL, X, IX, V, IV, I; for example 1994 is `MCMXCIV`). Leading zeros are allowed (`007` is 7). Any other value prints `INVALID`.\n- A line made only of the uppercase letters I V X L C D M is a Roman numeral. If it is written in exactly the standard form, with no other spelling of the same value (so `IIII`, `VX`, `IC` and `MMMM` are not valid), print its value as a decimal number. Otherwise print `INVALID`.\n- Anything else prints `INVALID`.\n\nPrint one result per non-skipped line.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1994\nXIV\n0\nIIII\nmmxx\n  42  \n3999\n",
+      "expected_output": "MCMXCIV\n14\nINVALID\nINVALID\nINVALID\nXLII\nMMMCMXCIX\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1\n2\n3\n4\n5\n9\n14\n40\n90\n400\n900\n3888\n",
+      "expected_output": "I\nII\nIII\nIV\nV\nIX\nXIV\nXL\nXC\nCD\nCM\nMMMDCCCLXXXVIII\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "I\nIV\nVI\nIX\nXL\nXC\nCD\nCM\nMMMCMXCIX\nMMMM\nVV\nIL\nXM\nDD\nCCCC\nIXI\n",
+      "expected_output": "1\n4\n6\n9\n40\n90\n400\n900\n3999\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "   \nMMXXIV\niv\n",
+      "expected_output": "2024\nINVALID\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "4000\n0001\n12x\n-5\n3.0\n\nXIIII\nXXXX\nLXXXVIII\nMCMLXXXIV\n",
+      "expected_output": "INVALID\nI\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\n88\n1984\n"
+    }
+  ]
+}

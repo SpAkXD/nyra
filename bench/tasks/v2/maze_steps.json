@@ -1,0 +1,37 @@
+{
+  "id": "maze_steps",
+  "title": "Shortest way through mazes",
+  "category": "graphs",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input one or more mazes, separated by one or more empty lines. A maze is a block of lines of equal length made of `.` (free), `#` (wall), `S` (start) and `E` (exit), with exactly one `S` and one `E`. Moving one cell up, down, left or right through free cells (the cells `S` and `E` are free too) takes one step; you cannot leave the maze or cross walls.\n\nFor the k-th maze (counted from 1) print `Maze k: N`, where N is the smallest number of steps from `S` to `E`, or `Maze k: no path`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "S..#\n.#.#\n...E\n\nS#E\n...\n\nS#.\n##.\n..E\n",
+      "expected_output": "Maze 1: 5\nMaze 2: 4\nMaze 3: no path\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "SE\n",
+      "expected_output": "Maze 1: 1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "S....\n.###.\n.#E#.\n.#.#.\n...#.\n",
+      "expected_output": "Maze 1: 8\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "S.#.....\n..#.###.\n..#.#E#.\n..#.#.#.\n....#...\n",
+      "expected_output": "Maze 1: 23\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "#S#\n#.#\n#E#\n\n\n\nS.........E\n\nE\nS\n",
+      "expected_output": "Maze 1: 2\nMaze 2: 10\nMaze 3: 1\n"
+    }
+  ]
+}

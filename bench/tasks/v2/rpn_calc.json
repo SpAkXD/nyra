@@ -1,0 +1,37 @@
+{
+  "id": "rpn_calc",
+  "title": "Reverse Polish calculator",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each non-empty line is an expression in reverse Polish notation. Tokens are separated by one or more spaces. A token is either an integer (an optional minus sign and digits, such as `7` or `-12`) or one of the operators `+`, `-`, `*`, `/`. Reading the tokens from left to right, an integer is pushed on a stack; an operator takes the top two values (the deeper one is the left operand: `8 3 -` is 5), and pushes the result. `/` is integer division that truncates toward zero (`-7 2 /` is -3, `7 -2 /` is -3).\n\nFor every line print its value. If something goes wrong, print `error: ` followed by the reason of the FIRST problem met while reading from left to right (nothing after it is looked at):\n- `bad token T` for a token T that is neither an integer nor an operator;\n- `stack underflow` for an operator when fewer than two values are on the stack;\n- `division by zero` for a division whose right operand is 0.\nIf the tokens run out without a problem and the stack does not hold exactly one value, print `error: leftover values`. Lines that are empty or only spaces are skipped. All intermediate values stay far below 2^53 in absolute value.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "3 4 +\n5 1 2 + 4 * + 3 -\n2 0 /\n1 +\n-7 2 /\n4 x *\n1 2\n",
+      "expected_output": "7\n14\nerror: division by zero\nerror: stack underflow\n-3\nerror: bad token x\nerror: leftover values\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "10\n-3\n7 -2 /\n-7 -2 /\n100 7 / 3 *\n0 5 -\n",
+      "expected_output": "10\n-3\n-3\n3\n42\n-5\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1 2 3 + + 4 *\n  6   2  /  \n2 3 4\n+\n5 +\n1 0 /\n0 0 /\n3 y\n3 4 5 6\n",
+      "expected_output": "24\n3\nerror: leftover values\nerror: stack underflow\nerror: stack underflow\nerror: division by zero\nerror: division by zero\nerror: bad token y\nerror: leftover values\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "\n   \n12 -\n12 -3 -\n-\n- 5\n1 2 3 4 5 + + + +\n9 3 / 3 /\n2.5 1 +\n",
+      "expected_output": "error: stack underflow\n15\nerror: stack underflow\nerror: stack underflow\n15\n1\nerror: bad token 2.5\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "999999 999999 *\n1000000 3 / 3 *\n-5 -5 *\n8 2 / 2 / 2 /\n",
+      "expected_output": "999998000001\n999999\n25\n1\n"
+    }
+  ]
+}

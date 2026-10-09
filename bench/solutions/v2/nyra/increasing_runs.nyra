@@ -1,0 +1,22 @@
+use input
+
+for line in input.lines() {
+    var values: [int] = []
+    for t in line.split(" ") {
+        if t != "" { values.push(int(t)) }
+    }
+    // longest[i]: length of the best subsequence that ends at element i (quadratic, plenty fast here)
+    var strict = 0
+    var loose = 0
+    var s_len = [1].repeat(values.len())
+    var l_len = [1].repeat(values.len())
+    for i in 0..values.len() {
+        for j in 0..i {
+            if values[j] < values[i] && s_len[j] + 1 > s_len[i] { s_len[i] = s_len[j] + 1 }
+            if values[j] <= values[i] && l_len[j] + 1 > l_len[i] { l_len[i] = l_len[j] + 1 }
+        }
+        strict = max(strict, s_len[i])
+        loose = max(loose, l_len[i])
+    }
+    print("strict={strict} nondecreasing={loose}")
+}

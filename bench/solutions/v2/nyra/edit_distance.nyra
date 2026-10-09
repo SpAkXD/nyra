@@ -1,0 +1,23 @@
+use input
+
+fn distance(a: str, b: str) -> int {
+    var previous: [int] = []
+    for j in 0..b.len() + 1 {
+        previous.push(j)
+    }
+    for i in 1..a.len() + 1 {
+        var row: [int] = [i]
+        for j in 1..b.len() + 1 {
+            var cost = 1
+            if a[i - 1] == b[j - 1] { cost = 0 }
+            row.push(min(min(previous[j] + 1, row[j - 1] + 1), previous[j - 1] + cost))
+        }
+        previous = row
+    }
+    ret previous[b.len()]
+}
+
+for line in input.lines() {
+    let parts = line.split("|")
+    if parts.len() == 2 { print(distance(parts[0], parts[1])) } else { print("invalid") }
+}

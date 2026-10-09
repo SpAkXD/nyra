@@ -1,0 +1,45 @@
+use input
+
+fn priority(c: char) -> int {
+    if c.is_lower() { ret c.code() - 'a'.code() + 1 }
+    ret c.code() - 'A'.code() + 27
+}
+
+// the lowest priority of a letter that is in all of the texts, 0 if there is none
+fn lowest_common(texts: [str]) -> int {
+    var best = 0
+    for p in 1..53 {
+        var everywhere = true
+        for t in texts {
+            if !t.any(c => priority(c) == p) { everywhere = false }
+        }
+        if everywhere {
+            best = p
+            break
+        }
+    }
+    ret best
+}
+
+var valid: [str] = []
+var shared = 0
+var n = 0
+for line in input.lines() {
+    n += 1
+    if line == "" { continue }
+    if line.len() % 2 != 0 || !line.all(c => c.is_letter()) {
+        print("line {n}: invalid")
+        continue
+    }
+    valid.push(line)
+    let half = line.len() / 2
+    shared += lowest_common([line.slice(0, half), line.slice(half, line.len())])
+}
+var badges = 0
+var i = 0
+while i + 3 <= valid.len() {
+    badges += lowest_common([valid[i], valid[i + 1], valid[i + 2]])
+    i += 3
+}
+print("shared={shared}")
+print("badges={badges}")

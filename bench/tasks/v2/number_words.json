@@ -1,0 +1,32 @@
+{
+  "id": "number_words",
+  "title": "Numbers in English words",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input, each an integer written as an optional minus sign and decimal digits (spaces at the start and end are ignored; empty lines are skipped). For each line print the number in English words, in lowercase: `zero`, `one`, ..., `nineteen`, `twenty`, `thirty`, `forty`, `fifty`, `sixty`, `seventy`, `eighty`, `ninety`; tens and units joined by a hyphen (`twenty-one`, `ninety-nine`); `one hundred`, `two hundred five`; groups separated by `thousand` and `million` (`one thousand`, `twelve thousand three hundred forty-five`, `one million`). No `and`, no commas. A negative number starts with `minus`. Print `invalid` for a line that is not an integer of that shape, or whose absolute value is above 999999999 (leading zeros are allowed: `007` is `seven`; `-0` is `zero`).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "0\n13\n21\n100\n1001\n-45\n1000000\n12x\n1000000000\n",
+      "expected_output": "zero\nthirteen\ntwenty-one\none hundred\none thousand one\nminus forty-five\none million\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1\n10\n19\n20\n30\n99\n101\n110\n999\n",
+      "expected_output": "one\nten\nnineteen\ntwenty\nthirty\nninety-nine\none hundred one\none hundred ten\nnine hundred ninety-nine\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1000\n1010\n20000\n100000\n999999\n123456\n100100\n-1000001\n",
+      "expected_output": "one thousand\none thousand ten\ntwenty thousand\none hundred thousand\nnine hundred ninety-nine thousand nine hundred ninety-nine\none hundred twenty-three thousand four hundred fifty-six\none hundred thousand one hundred\nminus one million one\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "999999999\n-999999999\n000\n-0\n  42  \n1 2\n--1\n+5\n123456789\n",
+      "expected_output": "nine hundred ninety-nine million nine hundred ninety-nine thousand nine hundred ninety-nine\nminus nine hundred ninety-nine million nine hundred ninety-nine thousand nine hundred ninety-nine\nzero\nzero\nforty-two\ninvalid\ninvalid\ninvalid\none hundred twenty-three million four hundred fifty-six thousand seven hundred eighty-nine\n"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+use input
+use text
+
+let ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+let tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+fn below_thousand(n: int) -> [str] {
+    var words: [str] = []
+    var rest = n
+    if rest >= 100 {
+        words.push(ones[rest / 100])
+        words.push("hundred")
+        rest = rest % 100
+    }
+    if rest >= 20 {
+        var w = tens[rest / 10]
+        if rest % 10 > 0 { w += "-" + ones[rest % 10] }
+        words.push(w)
+    } else if rest > 0 {
+        words.push(ones[rest])
+    }
+    ret words
+}
+
+fn spell(n: int) -> str {
+    if n == 0 { ret "zero" }
+    var words: [str] = []
+    let millions = n / 1000000
+    let thousands = n % 1000000 / 1000
+    let units = n % 1000
+    if millions > 0 { words = words + below_thousand(millions) + ["million"] }
+    if thousands > 0 { words = words + below_thousand(thousands) + ["thousand"] }
+    if units > 0 { words = words + below_thousand(units) }
+    ret words.join(" ")
+}
+
+for raw in input.lines() {
+    let s = raw.trim()
+    if s == "" { continue }
+    let negative = s.starts_with("-")
+    let digits = if negative { s.slice(1, s.len()) } else { s }
+    if digits.len() == 0 || !digits.all(c => c.is_digit()) {
+        print("invalid")
+        continue
+    }
+    // a value above 999999999 is invalid; check the length first so that int() cannot overflow
+    var significant = digits
+    while significant.len() > 1 && significant[0] == '0' {
+        significant = significant.slice(1, significant.len())
+    }
+    if significant.len() > 9 {
+        print("invalid")
+        continue
+    }
+    let n = int(significant)
+    if negative && n > 0 { print("minus " + spell(n)) } else { print(spell(n)) }
+}

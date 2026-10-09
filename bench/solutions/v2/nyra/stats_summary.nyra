@@ -1,0 +1,52 @@
+use input
+use math
+use text
+
+// the text is one number of the shape -?digits(.digits)?
+fn is_number(s: str) -> bool {
+    var t = s
+    if t.starts_with("-") { t = t.slice(1, t.len()) }
+    let parts = t.split(".")
+    if parts.len() > 2 { ret false }
+    for p in parts {
+        if p.len() == 0 || !p.all(c => c.is_digit()) { ret false }
+    }
+    ret true
+}
+
+var values: [float] = []
+var n = 0
+for raw in input.lines() {
+    n += 1
+    let s = raw.trim()
+    if s == "" { continue }
+    if is_number(s) {
+        values.push(float(s))
+    } else {
+        print("line {n}: not a number")
+    }
+}
+if values.len() == 0 {
+    print("no data")
+} else {
+    let count = values.len()
+    var total = 0.0
+    for v in values {
+        total += v
+    }
+    let mean = total / float(count)
+    var ordered = values
+    ordered.sort()
+    var median = ordered[count / 2]
+    if count % 2 == 0 { median = (ordered[count / 2 - 1] + ordered[count / 2]) / 2.0 }
+    var squares = 0.0
+    for v in values {
+        squares += (v - mean) * (v - mean)
+    }
+    let stddev = math.sqrt(squares / float(count))
+    print("count={count}")
+    print("mean={text.fixed(mean, 3)}")
+    print("median={text.fixed(median, 3)}")
+    print("stddev={text.fixed(stddev, 3)}")
+    print("range={text.fixed(ordered[0], 3)}..{text.fixed(ordered[count - 1], 3)}")
+}

@@ -1,0 +1,32 @@
+{
+  "id": "bracket_check",
+  "title": "Balanced brackets",
+  "category": "parsing",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input. For each line (empty lines included) decide whether its round, square and curly brackets `()`, `[]`, `{}` are balanced; every other character is ignored. Print `OK` for a balanced line. Otherwise print `ERROR at N`, where N is the 1-based position (counting characters from the start of the line, spaces included) of the first problem:\n- a closing bracket that does not match the most recently opened bracket still open, or that has nothing to match: N is the position of that closing bracket;\n- if the line ends while brackets are still open: N is the position of the most recently opened bracket that is still open.\nPrint one result per input line. All characters are ASCII.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "(a + b) * [c - {d}]\n(]\n((\n\n}{\nx[(y)]z)\n",
+      "expected_output": "OK\nERROR at 2\nERROR at 2\nOK\nERROR at 1\nERROR at 8\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "()\n[]\n{}\n([{}])\n([)]\n{[}]\n(((((\n)))))\n",
+      "expected_output": "OK\nOK\nOK\nOK\nERROR at 3\nERROR at 3\nERROR at 5\nERROR at 1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "no brackets at all\n   \n( ( ( ) ) )   ]\na(b[c{d}e]f)g(h\n{ \"key\": [1, (2)] }\n((()))(()\n",
+      "expected_output": "OK\nOK\nERROR at 15\nERROR at 14\nOK\nERROR at 7\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "[\n]\n[]]\n[[]\n([]{()})[\n{{{{}}}}}\n",
+      "expected_output": "ERROR at 1\nERROR at 1\nERROR at 3\nERROR at 1\nERROR at 9\nERROR at 9\n"
+    }
+  ]
+}

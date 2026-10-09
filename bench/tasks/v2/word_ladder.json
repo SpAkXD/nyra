@@ -1,0 +1,47 @@
+{
+  "id": "word_ladder",
+  "title": "Word ladder",
+  "category": "graphs",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line `START END` (two lowercase words of the same length), then a word list with one lowercase word per line (every word has that same length). A ladder from START to END is a sequence of words that begins with START and ends with END, in which each word differs from the one before it in exactly one letter (same position, a different letter), and every word after START is in the word list. START itself does not have to be in the list. Print `LENGTH w1 w2 ... wn` with the number of words of the shortest ladder, a space, and the ladder itself; when several shortest ladders exist print the one that comes first in alphabetical order (compare the ladders word by word, plain character order). If START and END are the same word the ladder is just that word (length 1, even if it is not in the list). Print `no ladder` when there is none (including when END is not in the list and differs from START).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "hit cog\nhot\ndot\ndog\nlot\nlog\ncog\n",
+      "expected_output": "5 hit hot dot dog cog\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "same same\nother\n",
+      "expected_output": "1 same\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "aaa ccc\naab\nabb\nabc\nacc\nccc\naac\nacc\nbbb\n",
+      "expected_output": "4 aaa aac acc ccc\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "lead gold\nload\ngoad\ngold\nroad\nlord\ngord\n",
+      "expected_output": "4 lead load goad gold\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "cat dog\ncot\ncog\ndog\ndot\ncut\ncog\n",
+      "expected_output": "4 cat cot cog dog\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "ab cd\nac\nad\ncd\naa\nca\ncb\n",
+      "expected_output": "3 ab ad cd\n"
+    },
+    {
+      "name": "hidden6",
+      "stdin": "xyz xyy\nxyz\nxzz\n",
+      "expected_output": "no ladder\n"
+    }
+  ]
+}

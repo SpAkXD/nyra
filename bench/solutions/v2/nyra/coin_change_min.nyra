@@ -1,0 +1,40 @@
+use input
+
+let lines = input.lines()
+var coins: [int] = []
+for t in lines[0].split(" ") {
+    coins.push(int(t))
+}
+coins.sort()
+coins.reverse()
+for qi in 1..lines.len() {
+    let target = int(lines[qi])
+    let none = target + 1
+    var fewest = [none].repeat(target + 1)
+    fewest[0] = 0
+    for amount in 1..target + 1 {
+        for c in coins {
+            if c <= amount && fewest[amount - c] + 1 < fewest[amount] { fewest[amount] = fewest[amount - c] + 1 }
+        }
+    }
+    if fewest[target] == none {
+        print("impossible")
+        continue
+    }
+    var used: [str] = []
+    var left = target
+    while left > 0 {
+        for c in coins {
+            if c <= left && fewest[left - c] == fewest[left] - 1 {
+                used.push(str(c))
+                left -= c
+                break
+            }
+        }
+    }
+    var text = "{fewest[target]}:"
+    for u in used {
+        text += " " + u
+    }
+    print(text)
+}

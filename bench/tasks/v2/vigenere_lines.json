@@ -1,0 +1,32 @@
+{
+  "id": "vigenere_lines",
+  "title": "Vigenere cipher",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line with the key (one or more lowercase letters), then lines of the form `E text` or `D text`: a command letter, one space, and the text. For `E` print the text encrypted with the Vigenere cipher, for `D` print it decrypted. Only the letters `a-z` and `A-Z` of the text are changed: the i-th letter of the text (counting only letters, from 0, restarting at 0 on every line) is moved forward (E) or backward (D) in the alphabet by the value of the key letter at position i modulo the key length (`a` is 0, `b` is 1, ...), wrapping around, and keeps its case. All other characters (spaces, digits, punctuation) stay where they are and do not use up a key letter. A line that does not start with `E ` or `D ` prints `error`. The text may be empty after the command (`E ` prints an empty line).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "lemon\nE Attack at dawn!\nD Lxfopv ef rnhr!\nE \nX nope\nE Zz\n",
+      "expected_output": "Lxfopv ef rnhr!\nAttack at dawn!\n\nerror\nKd\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "a\nE Hello, World\nD Hello, World\n",
+      "expected_output": "Hello, World\nHello, World\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "abc\nE xyz XYZ\nD abc ABC\nE 123 !?\nE a b c d e f\n",
+      "expected_output": "xzb XZB\naaa AAA\n123 !?\na c e d f h\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "zebra\nE The quick brown fox\nD Sdi tkbao uqbrj\ne lower\nD\n",
+      "expected_output": "Slf huhgl srnao wow\nTzh ckcwn dqcni\nerror\nerror\n"
+    }
+  ]
+}

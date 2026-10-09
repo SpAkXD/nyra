@@ -1,0 +1,32 @@
+use input
+
+fn expand(s: str, left: int, right: int) -> int {
+    var lo = left
+    var hi = right
+    while lo >= 0 && hi < s.len() && s[lo] == s[hi] {
+        lo -= 1
+        hi += 1
+    }
+    ret hi - lo - 1
+}
+
+for line in input.lines() {
+    if line == "" {
+        print("(empty)")
+        continue
+    }
+    var best_start = 0
+    var best_len = 1
+    for center in 0..line.len() {
+        for kind in 0..2 {
+            let length = expand(line, center, center + kind)
+            var s = center - (length - 1) / 2
+            if kind == 1 { s = center - length / 2 + 1 }
+            if length > best_len || (length == best_len && s < best_start) {
+                best_start = s
+                best_len = length
+            }
+        }
+    }
+    print(line.slice(best_start, best_start + best_len))
+}

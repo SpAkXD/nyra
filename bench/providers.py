@@ -114,6 +114,9 @@ class Provider:
 # --------------------------------------------------------------------------- mock
 
 DEFECTS = ("no_code", "syntax", "runtime", "wrong")
+# Not part of the "mix": `hardcode` replies with a program that ignores its input and prints the example's answer. It only
+# makes sense for tasks with hidden inputs (the v2 tier), where it must pass the example and fail the hidden inputs.
+EXTRA_DEFECTS = ("hardcode",)
 
 
 def _estimate_tokens(text: str) -> int:
@@ -122,6 +125,19 @@ def _estimate_tokens(text: str) -> int:
 
 def _fence(lang: str, code: str) -> str:
     return f"```{lang}\n{code.rstrip()}\n```"
+
+
+def hardcoded_program(lang: str, text: str) -> str:
+    """A program that ignores its input and prints `text`: what a model that memorizes the example would write."""
+    if lang == "python":
+        return "import sys\nsys.stdout.write(" + repr(text) + ")\n"
+    if lang == "typescript":
+        return "process.stdout.write(" + json.dumps(text) + ");\n"
+    if lang == "rust":
+        return "fn main() {\n    print!(\"{}\", " + json.dumps(text) + ");\n}\n"
+    quoted = (text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+              .replace("{", "{{").replace("}", "}}"))
+    return 'fn main() {\n    print("' + quoted + '", end: "")\n}\n'
 
 
 class MockProvider(Provider):
@@ -157,11 +173,11 @@ class MockProvider(Provider):
             variant = self.model[len("mock-"):] if self.model.startswith("mock-") else None
             if variant == "flaky":
                 flaky = True
-            elif variant in DEFECTS:
+            elif variant in DEFECTS or variant in EXTRA_DEFECTS:
                 flaky = variant
             else:
                 raise ValueError(f"unknown mock model {self.model!r}; use mock, mock-flaky or "
-                                 f"mock-<{'|'.join(DEFECTS)}>")
+                                 f"mock-<{'|'.join(DEFECTS + EXTRA_DEFECTS)}>")
         self.flaky = flaky
 
     def has_reference(self, lang: str, task_id: str) -> bool:
@@ -170,7 +186,7 @@ class MockProvider(Provider):
     def defect_for(self, lang: str, task_id: str) -> Optional[str]:
         if not self.flaky:
             return None
-        if self.flaky in DEFECTS:
+        if self.flaky in DEFECTS or self.flaky in EXTRA_DEFECTS:
             return self.flaky
         h = int(hashlib.sha256(f"{lang}/{task_id}".encode()).hexdigest(), 16) % 7
         return DEFECTS[h] if h < len(DEFECTS) else None
@@ -181,7 +197,13 @@ class MockProvider(Provider):
         if code is None:
             raise ProviderError(f"mock provider has no reference solution for {lang}/{task_id}")
         defect = self.defect_for(lang, task_id) if attempt == 1 else None
-        text = _fence(lang, code) if defect is None else self._broken_reply(lang, code, defect)
+        example = meta.get("example_output")
+        if defect == "hardcode" and example is None:
+            defect = None  # a task without hidden inputs has nothing to hard-code
+        if defect == "hardcode":
+            text = _fence(lang, hardcoded_program(lang, example))
+        else:
+            text = _fence(lang, code) if defect is None else self._broken_reply(lang, code, defect)
         prompt_chars = len(system) + sum(len(m["content"]) for m in messages)
         usage = Usage(_estimate_tokens("x" * prompt_chars), _estimate_tokens(text), estimated=True)
         return Reply(text=text, usage=usage, stop_reason="end_turn", latency_s=0.0, model=self.model)

@@ -9,5 +9,15 @@
     {"id": "google/gemini-3.8-flash", "note": "Google, fast"},
     {"id": "x-ai/grok-4.7", "note": "xAI"},
     {"id": "deepseek/deepseek-v4.1-flash", "note": "DeepSeek, cheap"}
-  ]
+  ],
+  "presets_comment": "Named bundles for `--preset NAME`: the models for each provider, and the settings of a run. A preset only fills in what the command line leaves out (--models, --samples, --tier win). `cheap`: Claude Haiku 4.5 and Sonnet 5.5 (through the Anthropic API or OpenRouter) and the two cheap OpenRouter models of the list above, 5 samples of every task of the v2 tier, so that every number gets an interval.",
+  "presets": {
+    "cheap": {
+      "tier": "v2",
+      "samples": 5,
+      "repairs": 3,
+      "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-5-5"],
+      "openrouter": ["anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-5.5", "google/gemini-3.8-flash", "deepseek/deepseek-v4.1-flash"]
+    }
+  }
 }
