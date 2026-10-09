@@ -11,6 +11,7 @@ mod hints;
 mod ir;
 mod json;
 mod lexer;
+mod limits;
 mod mcp;
 mod parser;
 mod stdlib;

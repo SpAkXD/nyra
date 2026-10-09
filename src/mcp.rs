@@ -42,7 +42,7 @@ const TOOLS: &str = r#"[
 {"name":"nyra_spec","title":"Nyra language spec","description":"The complete Nyra language spec (Markdown). Nyra is not in your training data: read it once before writing Nyra. part \"guide\" returns the AI guide instead: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"part":{"type":"string","enum":["spec","guide"],"description":"default spec"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
+{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code with its title.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
@@ -353,7 +353,7 @@ impl Server {
             Command::new(exe)
         };
         cmd.current_dir(&self.dir).env("NYRA_JSON", "1");
-        let ran = execute(cmd, stdin, Duration::from_millis(timeout)).map_err(|e| {
+        let ran = execute(cmd, stdin, Duration::from_millis(timeout), target == Target::Js).map_err(|e| {
             let hint = if target == Target::Js { " (is Node.js installed? or use backend \"native\")" } else { "" };
             tool_error(format!("failed to start the program: {e}{hint}"))
         })?;
@@ -372,6 +372,21 @@ impl Server {
             }
         }
 
+        // Node.js ends a program that hits the memory limit with a dump of its heap: report the
+        // out-of-memory error that the native runtime reports
+        if errors.is_empty() && ran.exit != Some(0) && rest.to_ascii_lowercase().contains("out of memory") {
+            let msg = format!("out of memory: the program needs more than the {} MiB nyra_run gives it", crate::limits::MEMORY >> 20);
+            errors.push(obj([
+                ("code", "E0249".into()),
+                ("message", msg.into()),
+                ("file", FILE.into()),
+                ("line", Json::from(0)),
+                ("col", Json::from(0)),
+                ("hint", "the program needs more memory than the system gave it".into()),
+                ("runtime", true.into()),
+            ]));
+            rest.clear();
+        }
         let mut fields = vec![
             ("ok", Json::from(ran.exit == Some(0))),
             ("exit", ran.exit.map(|c| Json::from(c as i64)).unwrap_or(Json::Null)),
@@ -548,10 +563,15 @@ struct Ran {
 }
 
 /// Runs `cmd` with `stdin` as its input, captures its output (capped) and kills it after `timeout`.
-fn execute(mut cmd: Command, stdin: &str, timeout: Duration) -> std::io::Result<Ran> {
+/// The program gets at most `limits::MEMORY` of memory and a CPU-time budget (`node`: it runs
+/// on Node.js, see `limits`).
+fn execute(mut cmd: Command, stdin: &str, timeout: Duration, node: bool) -> std::io::Result<Ran> {
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let cpu = crate::limits::cpu_seconds(timeout.as_millis() as u64);
+    crate::limits::before_spawn(&mut cmd, cpu, node);
     let start = Instant::now();
     let mut child = cmd.spawn()?;
+    let limited = crate::limits::after_spawn(&child, cpu);
     if let Some(mut pipe) = child.stdin.take() {
         let input = stdin.as_bytes().to_vec();
         // a thread, so a program that never reads cannot block us; dropping the pipe sends EOF
@@ -577,6 +597,7 @@ fn execute(mut cmd: Command, stdin: &str, timeout: Duration) -> std::io::Result<
         thread::sleep(pause);
         pause = (pause * 2).min(Duration::from_millis(5));
     };
+    drop(limited);
     let elapsed = start.elapsed();
     let collect = |h: Option<JoinHandle<(Vec<u8>, bool)>>| h.and_then(|h| h.join().ok()).unwrap_or_default();
     let (out, out_cut) = collect(out);

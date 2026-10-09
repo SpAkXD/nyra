@@ -314,3 +314,37 @@ fn deeply_nested_code_gets_an_error_and_the_server_keeps_going() {
     }
     assert_eq!(tool_json(&replies, 3).1.get("ok").and_then(Json::as_bool), Some(true));
 }
+
+#[test]
+fn a_program_that_eats_memory_stops_and_the_server_keeps_going() {
+    // macOS does not enforce memory rlimits: the program would take what the machine has
+    if cfg!(target_os = "macos") {
+        return;
+    }
+    let hog = "fn main() {\n    var xs = [1, 2, 3, 4]\n    while true {\n        xs += xs\n    }\n}\n";
+    let init = request(1, "initialize", r#"{"protocolVersion":"2025-06-18","capabilities":{}}"#);
+    let mut requests = vec![init, call(2, "nyra_run", &format!(r#"{{"code":{}}}"#, esc(hog)))];
+    if node_available() {
+        requests.push(call(3, "nyra_run", &format!(r#"{{"code":{},"backend":"js"}}"#, esc(hog))));
+    }
+    requests.push(call(4, "nyra_run", &format!(r#"{{"code":{}}}"#, esc(HELLO))));
+    let replies = session(&requests);
+    let mut ids = vec![2];
+    if node_available() {
+        ids.push(3);
+    }
+    for id in ids {
+        let (_, json) = tool_json(&replies, id);
+        // without a C compiler there is nothing to run natively
+        if json.get("error").is_some() {
+            continue;
+        }
+        assert_eq!(json.get("ok").and_then(Json::as_bool), Some(false), "{json:?}");
+        let errors = json.get("errors").and_then(Json::as_array).unwrap_or_else(|| panic!("{json:?}"));
+        assert_eq!(errors[0].get("code").and_then(Json::as_str), Some("E0249"), "{json:?}");
+    }
+    let (_, json) = tool_json(&replies, 4);
+    if json.get("error").is_none() {
+        assert_eq!(json.get("stdout").and_then(Json::as_str), Some("hi 0\nhi 1\nhi 2\n"));
+    }
+}

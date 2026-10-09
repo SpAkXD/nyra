@@ -214,6 +214,13 @@ both backends and the error database as tools, and needs no files or shell acces
 
 Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
 
+**Limits and safety.** Each tool call runs on its own thread, so input that crashes the compiler gets
+an error reply and the server keeps going. A program started by `nyra_run` is stopped after its
+timeout and gets at most 1 GiB of memory and a CPU-time budget (a Job Object on Windows, `setrlimit`
+on Linux and macOS; macOS does not enforce the memory limit). These limits protect the machine from
+a runaway program, but they are no sandbox: the program can read and write files and use the network
+like any process of yours. For code you do not trust, run `nyra mcp` inside a container or VM.
+
 **Claude Code:**
 
 ```
