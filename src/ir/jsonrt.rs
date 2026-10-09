@@ -8,7 +8,18 @@ use super::{Module, Ty};
 use crate::ast::Span;
 
 /// `json.str(v)`: the compact JSON text of a value. A map never gets here (the checker refuses it).
+/// Values nested deeper than `MAX_DEPTH` (a tree built by a loop) are written as `null`.
 pub fn encode(m: &Module, v: &Value, out: &mut String) {
+    encode_at(m, v, out, 0);
+}
+
+const MAX_DEPTH: usize = 20_000;
+
+fn encode_at(m: &Module, v: &Value, out: &mut String, depth: usize) {
+    if depth > MAX_DEPTH {
+        out.push_str("null");
+        return;
+    }
     match v {
         Value::Int(n) => out.push_str(&n.to_string()),
         Value::Float(x) => out.push_str(&if x.is_finite() { num(*x) } else { "null".to_string() }),
@@ -21,7 +32,7 @@ pub fn encode(m: &Module, v: &Value, out: &mut String) {
                 if i > 0 {
                     out.push(',');
                 }
-                encode(m, x, out);
+                encode_at(m, x, out, depth + 1);
             }
             out.push(']');
         }
@@ -34,7 +45,7 @@ pub fn encode(m: &Module, v: &Value, out: &mut String) {
                 out.push(if k == 0 { '{' } else { ',' });
                 out.push_str(&crate::diag::json_str(name));
                 out.push(':');
-                encode(m, x, out);
+                encode_at(m, x, out, depth + 1);
             }
             out.push('}');
         }
@@ -394,7 +405,7 @@ impl Parser<'_> {
                         }
                     }
                 }
-                Ok(Value::Arr(Rc::new(v)))
+                Ok(Value::arr(v))
             }
             Ty::Struct(id) => {
                 let Some(info) = self.m.structs.get(ty) else { return Err(self.type_err("a known struct")) };
@@ -422,7 +433,7 @@ impl Parser<'_> {
                         None => return Err(self.missing(name)),
                     }
                 }
-                Ok(Value::Struct(id, Rc::new(fields)))
+                Ok(Value::strukt(id, fields))
             }
             _ => Err(self.type_err("a type json.parse can read")),
         }

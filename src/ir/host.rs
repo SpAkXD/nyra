@@ -161,7 +161,7 @@ impl Host {
             }
         };
         let text = |t: String| Some(Value::Str(Rc::new(t)));
-        let strs = |v: Vec<String>| Some(Value::Arr(Rc::new(v.into_iter().map(|t| Value::Str(Rc::new(t))).collect())));
+        let strs = |v: Vec<String>| Some(Value::arr(v.into_iter().map(|t| Value::Str(Rc::new(t))).collect()));
         Ok(match f {
             StdFn::InputLine => {
                 out.flush();

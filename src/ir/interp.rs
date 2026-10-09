@@ -39,10 +39,74 @@ pub enum Value {
     Bool(bool),
     Char(char),
     Str(Rc<String>),
-    Arr(Rc<Vec<Value>>),
+    Arr(Rc<Items>),
     /// A struct: its type id (`Ty::Struct(id)`) and its fields in declaration order.
-    Struct(u32, Rc<Vec<Value>>),
+    Struct(u32, Rc<Items>),
     Map(Rc<MapVal>),
+}
+
+impl Value {
+    /// A new array.
+    pub fn arr(items: Vec<Value>) -> Value {
+        Value::Arr(Rc::new(Items(items)))
+    }
+
+    /// A new struct value.
+    pub fn strukt(id: u32, fields: Vec<Value>) -> Value {
+        Value::Struct(id, Rc::new(Items(fields)))
+    }
+
+    fn nested(&self) -> bool {
+        matches!(self, Value::Arr(_) | Value::Struct(..) | Value::Map(_))
+    }
+}
+
+/// The elements of an array or the fields of a struct. Dropping values that nest deeply (a tree
+/// that a loop built one level at a time) must not recurse once per level, or a program could
+/// overflow the stack of the process that interprets it: a value released last is taken apart
+/// with a work list instead.
+#[derive(Clone, Debug)]
+pub struct Items(Vec<Value>);
+
+impl std::ops::Deref for Items {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Items {
+    fn deref_mut(&mut self) -> &mut Vec<Value> {
+        &mut self.0
+    }
+}
+
+impl Drop for Items {
+    fn drop(&mut self) {
+        if self.0.iter().any(Value::nested) {
+            dismantle(std::mem::take(&mut self.0));
+        }
+    }
+}
+
+/// Drops `work` and everything below it without recursion: a nested value that nobody else
+/// holds gives up its parts to the list.
+fn dismantle(mut work: Vec<Value>) {
+    while let Some(v) = work.pop() {
+        match v {
+            Value::Arr(rc) | Value::Struct(_, rc) => {
+                if let Ok(mut inner) = Rc::try_unwrap(rc) {
+                    work.append(&mut inner.0);
+                }
+            }
+            Value::Map(rc) => {
+                if let Ok(mut inner) = Rc::try_unwrap(rc) {
+                    work.extend(inner.ents.drain(..).flatten().map(|(_, v)| v));
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The key of a map entry: an int, a string, a char or a bool.
@@ -61,6 +125,14 @@ pub struct MapVal {
     ents: Vec<Option<(Value, Value)>>,
     index: HashMap<MapKey, usize>,
     live: usize,
+}
+
+impl Drop for MapVal {
+    fn drop(&mut self) {
+        if self.ents.iter().flatten().any(|(_, v)| v.nested()) {
+            dismantle(self.ents.drain(..).flatten().map(|(_, v)| v).collect());
+        }
+    }
 }
 
 impl MapVal {
@@ -711,7 +783,7 @@ impl<'m> Interp<'m> {
                 _ => Err(bug("an operand that should be an int")),
             }
         };
-        let arr = |k: usize| -> Result<&Rc<Vec<Value>>, Stop> {
+        let arr = |k: usize| -> Result<&Rc<Items>, Stop> {
             match args.get(k) {
                 Some(Value::Arr(xs)) => Ok(xs),
                 _ => Err(bug("an operand that should be an array")),
@@ -835,13 +907,14 @@ impl<'m> Interp<'m> {
             }
             RtOp::StrChars | RtOp::StrCodes => {
                 let t = s(0)?;
+                self.reserve(t.len() as u64 * 16)?;
                 self.tick(t.len() as u64)?;
                 let items = if op == RtOp::StrChars {
                     t.chars().map(Value::Char).collect()
                 } else {
                     t.chars().map(|c| Value::Int(c as i64)).collect()
                 };
-                Some(Value::Arr(Rc::new(items)))
+                Some(Value::arr(items))
             }
             RtOp::StrSplit => {
                 let (t, sep) = (s(0)?, s(1)?);
@@ -853,8 +926,9 @@ impl<'m> Interp<'m> {
                         span,
                     ));
                 }
+                self.reserve(t.len() as u64 * 16)?;
                 self.tick(t.len() as u64)?;
-                Some(Value::Arr(Rc::new(t.split(sep).map(|p| Value::Str(Rc::new(p.to_string()))).collect())))
+                Some(Value::arr(t.split(sep).map(|p| Value::Str(Rc::new(p.to_string()))).collect()))
             }
             RtOp::CheckStep => {
                 if i(0)? == 0 {
@@ -884,10 +958,10 @@ impl<'m> Interp<'m> {
             }
             RtOp::ArrNew => {
                 self.tick(args.len() as u64)?;
-                Some(Value::Arr(Rc::new(args.to_vec())))
+                Some(Value::arr(args.to_vec()))
             }
             RtOp::StructNew => match ty {
-                Some(Ty::Struct(id)) => Some(Value::Struct(id, Rc::new(args.to_vec()))),
+                Some(Ty::Struct(id)) => Some(Value::strukt(id, args.to_vec())),
                 _ => return Err(bug("a struct made for a destination that is not a struct")),
             },
             RtOp::ArrGet => {
@@ -900,8 +974,9 @@ impl<'m> Interp<'m> {
             RtOp::ArrSlice => {
                 let (xs, a, b) = (arr(0)?, i(1)?, i(2)?);
                 check_range(a, b, xs.len(), span)?;
+                self.reserve((b - a) as u64 * 16)?;
                 self.tick((b - a) as u64)?;
-                Some(Value::Arr(Rc::new(xs[a as usize..b as usize].to_vec())))
+                Some(Value::arr(xs[a as usize..b as usize].to_vec()))
             }
             RtOp::ArrRepeat => {
                 let (xs, n) = (arr(0)?, i(1)?);
@@ -917,13 +992,13 @@ impl<'m> Interp<'m> {
                 for _ in 0..n {
                     out.extend(xs.iter().cloned());
                 }
-                Some(Value::Arr(Rc::new(out)))
+                Some(Value::arr(out))
             }
             RtOp::ArrConcat => {
                 let (a, b) = (arr(0)?, arr(1)?);
                 self.reserve((a.len() + b.len()) as u64 * 16)?;
                 self.tick((a.len() + b.len()) as u64)?;
-                Some(Value::Arr(Rc::new(a.iter().chain(b.iter()).cloned().collect())))
+                Some(Value::arr(a.iter().chain(b.iter()).cloned().collect()))
             }
             RtOp::ArrJoin => {
                 let (xs, sep) = (arr(0)?, s(1)?);
@@ -974,7 +1049,7 @@ impl<'m> Interp<'m> {
                 let Some(Value::Map(mv)) = args.first() else { return Err(bug("an operand that should be a map")) };
                 self.tick(mv.len() as u64)?;
                 let items = mv.iter().map(|(k, v)| if op == RtOp::MapKeys { k.clone() } else { v.clone() }).collect();
-                Some(Value::Arr(Rc::new(items)))
+                Some(Value::arr(items))
             }
             RtOp::JsonStr => {
                 let mut out = String::new();
@@ -1155,20 +1230,41 @@ fn binary(op: BinOp, a: Value, b: Value) -> Result<Value, Stop> {
 
 /// `==` of two values: strings, arrays and structs by content; a NaN equals nothing.
 pub fn equal(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::Int(x), Value::Int(y)) => x == y,
-        (Value::Float(x), Value::Float(y)) => x == y,
-        (Value::Bool(x), Value::Bool(y)) => x == y,
-        (Value::Char(x), Value::Char(y)) => x == y,
-        (Value::Str(x), Value::Str(y)) => x == y,
-        (Value::Arr(x), Value::Arr(y)) => x.len() == y.len() && x.iter().zip(y.iter()).all(|(p, q)| equal(p, q)),
-        (Value::Struct(s, x), Value::Struct(t, y)) => s == t && x.iter().zip(y.iter()).all(|(p, q)| equal(p, q)),
-        // by content, in any order
-        (Value::Map(x), Value::Map(y)) => {
-            x.len() == y.len() && x.iter().all(|(k, v)| matches!(y.get(k), Ok(Some(w)) if equal(v, w)))
+    // (a work list instead of recursion: values can nest as deep as a loop builds them)
+    let mut pairs = vec![(a, b)];
+    while let Some((a, b)) = pairs.pop() {
+        let same = match (a, b) {
+            (Value::Int(x), Value::Int(y)) => x == y,
+            (Value::Float(x), Value::Float(y)) => x == y,
+            (Value::Bool(x), Value::Bool(y)) => x == y,
+            (Value::Char(x), Value::Char(y)) => x == y,
+            (Value::Str(x), Value::Str(y)) => x == y,
+            (Value::Arr(x), Value::Arr(y)) => {
+                pairs.extend(x.iter().zip(y.iter()));
+                x.len() == y.len()
+            }
+            (Value::Struct(s, x), Value::Struct(t, y)) => {
+                pairs.extend(x.iter().zip(y.iter()));
+                s == t
+            }
+            // by content, in any order
+            (Value::Map(x), Value::Map(y)) => {
+                let mut same = x.len() == y.len();
+                for (k, v) in x.iter() {
+                    match y.get(k) {
+                        Ok(Some(w)) => pairs.push((v, w)),
+                        _ => same = false,
+                    }
+                }
+                same
+            }
+            _ => false,
+        };
+        if !same {
+            return false;
         }
-        _ => false,
     }
+    true
 }
 
 /// The order of two ints, floats, chars or strings (by code points); `None` for a NaN.
@@ -1194,11 +1290,18 @@ pub fn display(m: &Module, v: &Value) -> String {
 /// A value as Nyra code: `"text"`, `'c'`, `[1, 2]`, `Point(x: 1, y: 2)`.
 pub fn show(m: &Module, v: &Value) -> String {
     let mut out = String::new();
-    show_in(m, v, &mut out);
+    show_in(m, v, &mut out, 0);
     out
 }
 
-fn show_in(m: &Module, v: &Value, out: &mut String) {
+/// Values nested deeper than this (a tree built by a loop) are shown as `...` below it.
+const SHOW_DEPTH: usize = 20_000;
+
+fn show_in(m: &Module, v: &Value, out: &mut String, depth: usize) {
+    if depth > SHOW_DEPTH {
+        out.push_str("...");
+        return;
+    }
     match v {
         Value::Unset => out.push('?'),
         Value::Int(n) => out.push_str(&n.to_string()),
@@ -1212,7 +1315,7 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 if i > 0 {
                     out.push_str(", ");
                 }
-                show_in(m, x, out);
+                show_in(m, x, out, depth + 1);
             }
             out.push(']');
         }
@@ -1226,9 +1329,9 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 if i > 0 {
                     out.push_str(", ");
                 }
-                show_in(m, k, out);
+                show_in(m, k, out, depth + 1);
                 out.push_str(": ");
-                show_in(m, x, out);
+                show_in(m, x, out, depth + 1);
             }
             out.push(']');
         }
@@ -1245,7 +1348,7 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 }
                 out.push_str(name);
                 out.push_str(": ");
-                show_in(m, x, out);
+                show_in(m, x, out, depth + 1);
             }
             out.push(')');
         }

@@ -349,3 +349,98 @@ fn a_program_that_eats_memory_stops_and_the_server_keeps_going() {
         assert_eq!(json.get("stdout").and_then(Json::as_str), Some("hi 0\nhi 1\nhi 2\n"));
     }
 }
+
+// ---- capabilities and the sandbox ---------------------------------------------------------------------------
+
+const READS_A_FILE: &str = "use fs\n\nfn main() {\n    print(fs.exists(\"Cargo.toml\"))\n}\n";
+const READS_STDIN: &str = "use input\n\nfn main() {\n    print(input.line().upper())\n}\n";
+const READS_ARGS: &str = "use os\n\nfn main() {\n    print(os.args())\n}\n";
+const FILL_MEMORY: &str = "fn main() {\n    var xs: [int] = []\n    while true {\n        xs.push(1)\n    }\n}\n";
+const CHATTY: &str = "fn main() {\n    for i in 0..100000 {\n        print(\"line {i}\")\n    }\n}\n";
+
+#[test]
+fn capabilities_and_the_sandbox() {
+    let requests = vec![
+        // 2-3: the default grants standard input only; `allow` names the rest
+        call(2, "nyra_run", &format!(r#"{{"code":{}}}"#, esc(READS_A_FILE))),
+        call(3, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(READS_A_FILE))),
+        call(4, "nyra_check", &format!(r#"{{"code":{},"allow":["fs"]}}"#, esc(READS_A_FILE))),
+        call(5, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(READS_A_FILE))),
+        call(6, "nyra_run", &format!(r#"{{"code":{},"allow":["files"]}}"#, esc(READS_A_FILE))),
+        // 7-13: the sandbox runs the program in the interpreter, with the limits
+        call(7, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"allow":["fs"]}}"#, esc(READS_A_FILE))),
+        call(8, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"stdin":"hello\nworld\n"}}"#, esc(READS_STDIN))),
+        call(9, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"fuel":5000}}"#, esc(FOREVER))),
+        call(10, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"max_memory":4194304}}"#, esc(FILL_MEMORY))),
+        call(11, "nyra_run", &format!(r#"{{"code":{},"sandbox":true}}"#, esc(CHATTY))),
+        call(12, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"allow":["os"],"args":["a","b c"]}}"#, esc(READS_ARGS))),
+        call(13, "nyra_run", &format!(r#"{{"code":{},"sandbox":true}}"#, esc(OUT_OF_BOUNDS))),
+        call(14, "nyra_run", &format!(r#"{{"code":{},"sandbox":true}}"#, esc(TYPO))),
+        call(15, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"fuel":0}}"#, esc(HELLO))),
+        call(16, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"timeout_ms":200,"fuel":100000000000}}"#, esc(FOREVER))),
+    ];
+    let replies = session(&requests);
+
+    // a compile error, as from nyra_check: E0290 names the module, the capability and what to pass
+    let (is_error, denied) = tool_json(&replies, 2);
+    assert!(!is_error);
+    assert_eq!(denied.get("ok").and_then(Json::as_bool), Some(false));
+    let e = &denied.get("errors").and_then(Json::as_array).unwrap()[0];
+    assert_eq!(e.get("code").and_then(Json::as_str), Some("E0290"));
+    assert!(e.get("message").and_then(Json::as_str).unwrap().contains("module `fs` needs the capability `fs`"));
+    assert!(e.get("hint").and_then(Json::as_str).unwrap().contains("allow: [\"fs\"]"), "{e:?}");
+    // nyra_check and nyra_test agree with nyra_run
+    assert_eq!(tool_json(&replies, 3).1, denied);
+    assert_eq!(tool_text(&replies, 4), (false, r#"{"ok":true,"errors":[]}"#.to_string()));
+    assert_eq!(tool_json(&replies, 5).1, denied);
+    // an unknown capability is a tool error that says what exists
+    let (is_error, bad) = tool_json(&replies, 6);
+    assert!(is_error);
+    assert!(bad.get("error").and_then(Json::as_str).unwrap().contains("unknown capability `files`"), "{bad:?}");
+
+    // the sandbox: no child process, same JSON as nyra_run
+    let (is_error, ok) = tool_json(&replies, 7);
+    assert!(!is_error, "{ok:?}");
+    assert_eq!((ok.get("ok").and_then(Json::as_bool), ok.get("exit").and_then(Json::as_u64)), (Some(true), Some(0)));
+    assert_eq!(ok.get("stdout").and_then(Json::as_str), Some("true\n"));
+    assert!(ok.get("steps").and_then(Json::as_u64).is_some_and(|s| s > 0));
+    let (_, input) = tool_json(&replies, 8);
+    assert_eq!(input.get("stdout").and_then(Json::as_str), Some("HELLO\n"), "{input:?}");
+
+    // each limit: its code, its exit code, the position, and the output so far
+    let limit = |id: u64, code: &str, exit: u64| -> Json {
+        let (is_error, r) = tool_json(&replies, id);
+        assert!(!is_error);
+        assert_eq!(r.get("ok").and_then(Json::as_bool), Some(false));
+        assert_eq!(r.get("exit").and_then(Json::as_u64), Some(exit), "{r:?}");
+        let e = &r.get("errors").and_then(Json::as_array).unwrap()[0];
+        assert_eq!(e.get("code").and_then(Json::as_str), Some(code), "{r:?}");
+        assert_eq!(e.get("runtime").and_then(Json::as_bool), Some(true));
+        assert!(e.get("line").and_then(Json::as_u64).is_some_and(|l| l > 0));
+        r
+    };
+    limit(9, "E0355", 120);
+    limit(10, "E0356", 121);
+    let chatty = limit(11, "E0357", 122);
+    assert_eq!(chatty.get("truncated").and_then(Json::as_bool), Some(true));
+    assert_eq!(chatty.get("stdout").and_then(Json::as_str).unwrap().len(), 16 * 1024);
+    let timed = limit(16, "E0359", 124);
+    assert_eq!(timed.get("timeout").and_then(Json::as_bool), Some(true));
+
+    // arguments, runtime errors of the program, compile errors
+    assert_eq!(tool_json(&replies, 12).1.get("stdout").and_then(Json::as_str), Some("[\"a\", \"b c\"]\n"));
+    let (_, oob) = tool_json(&replies, 13);
+    assert_eq!(oob.get("exit").and_then(Json::as_u64), Some(101));
+    assert_eq!(oob.get("stdout").and_then(Json::as_str), Some("before\n"));
+    assert_eq!(oob.get("errors").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str), Some("E0240"));
+    assert_eq!(tool_json(&replies, 14).1.get("errors").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str), Some("E0201"));
+    let (is_error, zero) = tool_json(&replies, 15);
+    assert!(is_error, "{zero:?}");
+
+    // the same sandboxed program stops at the same step every time
+    let again = session(&[call(2, "nyra_run", &format!(r#"{{"code":{},"sandbox":true,"fuel":5000}}"#, esc(FOREVER)))]);
+    let first = tool_json(&replies, 9).1;
+    let second = tool_json(&again, 2).1;
+    assert_eq!(first.get("errors"), second.get("errors"), "deterministic");
+    assert_eq!(first.get("steps"), second.get("steps"));
+}

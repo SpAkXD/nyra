@@ -217,9 +217,9 @@ both backends and the error database as tools, and needs no files or shell acces
 | Tool | What it does |
 |---|---|
 | `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
-| `nyra_check` | `{code}` → the same JSON as `nyra check --json` |
-| `nyra_test` | `{code}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
-| `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
+| `nyra_check` | `{code, allow?}` → the same JSON as `nyra check --json` (with the capabilities `nyra_run` would grant) |
+| `nyra_test` | `{code, allow?}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
+| `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?, allow?: ["fs", "os", "input", "net"], sandbox?, fuel?, max_memory?, max_output?, args?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped; grants only `input` unless `allow` says more; `sandbox: true` runs it in the interpreter with limits, no child process) |
 | `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |
 | `nyra_build` | `{code, target?: "c"\|"js"}` → the generated C or JavaScript |
 | `nyra_outline` | `{path}` or `{code}` → one line per function and struct with its line range |
@@ -232,8 +232,13 @@ Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and 
 an error reply and the server keeps going. A program started by `nyra_run` is stopped after its
 timeout and gets at most 1 GiB of memory and a CPU-time budget (a Job Object on Windows, `setrlimit`
 on Linux and macOS; macOS does not enforce the memory limit). These limits protect the machine from
-a runaway program, but they are no sandbox: the program can read and write files and use the network
-like any process of yours. For code you do not trust, run `nyra mcp` inside a container or VM.
+a runaway program. A program that `nyra_run` starts only gets the capabilities in its `allow` list
+(standard input by default): a `use fs` or `use os` without them is a compile error (E0290). With
+`sandbox: true` the program does not start a process at all: it runs in the interpreter, with limits on
+steps (`fuel`), memory (`max_memory`) and output that stop it with E0355 to E0357 at the same place on
+every machine, and with its files confined to the working folder. A compiled program (`sandbox` false)
+is still an ordinary process of yours once it has its capabilities: for code you do not trust, use
+`sandbox: true`, or run `nyra mcp` inside a container or VM.
 
 **Claude Code:**
 
@@ -483,10 +488,14 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `--json` | print errors as JSON (compile and runtime errors), for AI agents and tools; with `explain`, print the entry as JSON |
 | `--fix` | with `check`, `run` and `build`: apply the fixes that errors carry, check again, and write the file back if it then compiles |
 | `--time` | show how long each step took |
+| `--allow fs,os` | grant only these [capabilities](#safe-to-run-unsupervised) (`fs`, `input`, `os`, `net`; `all`, `none`) |
+| `--sandbox` | run in the interpreter, granting nothing but `--allow`, with files confined to the working folder and the limits below |
+| `--interp` | run in the interpreter (no C compiler or Node.js needed), with the limits |
+| `--fuel N` `--max-memory S` `--max-output S` `--max-depth N` `--max-time MS` | the limits of an interpreted run; any of them implies `--interp` |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example
 an index out of bounds, which prints `runtime error[E0240]` with the file and position, identically on
-every target). `NYRA_CC`, `NYRA_PYTHON`, `NYRA_RUSTC` and `NYRA_GO` select the tools.
+every target), `120` to `124` a limit of the interpreter was reached (steps, memory, output, call depth, time). `NYRA_CC`, `NYRA_PYTHON`, `NYRA_RUSTC` and `NYRA_GO` select the tools.
 
 ## How it works
 
@@ -502,7 +511,8 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | `src/lexer.rs` | text to tokens |
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
 | `src/check.rs`, `src/check/` | type checking, collects every error in one pass |
-| `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
+| `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations; `interp.rs` (with `host.rs`, `jsonrt.rs`) interprets it |
+| `src/caps.rs`, `src/sandbox.rs`, `src/mem.rs` | capabilities (E0290), the sandboxed run and its limits, the heap counter behind the memory limit |
 | `src/codegen/` | the backends: `c.rs`, `js.rs`, `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
 | `src/rt/*/` | the runtimes they embed: strings, arrays, printing, runtime errors |
 | `src/diag.rs`, `src/hints.rs` | errors for humans and JSON for agents, and the "what did you probably mean" hints |

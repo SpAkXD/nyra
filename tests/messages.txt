@@ -5278,3 +5278,54 @@ error[E0103]: the code is nested more than 256 levels deep
   = explain: nyra explain E0103
 
 nyra: 1 error(s)
+==== property_range_not_literal
+fn double(x: int) -> int = x * 2
+ex for n in 0..count: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0292]: the range of a property example is made of whole-number literals
+  --> case.nyra:2:16
+  |
+2 | ex for n in 0..count: double(n) >= 0
+  |                ^
+  = hint: write a property as `ex for n in 0..200: f(n) >= 0`: a variable, a range of whole-number literals (an optional `step k`), a colon and the conditions
+  = explain: nyra explain E0292
+
+nyra: 1 error(s)
+==== property_too_many_inputs
+fn double(x: int) -> int = x * 2
+ex for n in 0..1000000: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0293]: the property example `for n in 0..1000000` has 1000000 inputs; at most 100000 are run
+  --> case.nyra:2:4
+  |
+2 | ex for n in 0..1000000: double(n) >= 0
+  |    ^
+  = hint: use a smaller range, or a `step`, so the property finishes while the program compiles
+  = explain: nyra explain E0293
+
+nyra: 1 error(s)
+==== property_false_for_one_input
+fn double(x: int) -> int = x * 2 - 1
+ex for n in 0..200: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0250]: example `double(n) >= 0` is false for n = 0: `double(n)` is -1
+  --> case.nyra:2:21
+  |
+2 | ex for n in 0..200: double(n) >= 0
+  |                     ^
+  = hint: if the property is right, `double` is wrong for n = 0: trace it with that value and fix it; change the example only if it expects the wrong thing
+  = explain: nyra explain E0250
+
+nyra: 1 error(s)
