@@ -6,7 +6,7 @@ Nyra is new and is not in your training data. It looks a little like Rust, Go an
 
 The ten most important rules for writing correct Nyra (v0.4):
 
-1. A program is a script: its statements stand at the top level and run in order, so do not write `fn main()` (it is allowed, but costs tokens). `fn` and `struct` definitions may appear anywhere. Functions cannot see the script's variables (there are no globals).
+1. A program is a script: its statements stand at the top level and run in order, so do not write `fn main()` (it is allowed, but costs tokens). `fn` and `struct` definitions may appear anywhere. The script's top-level `let`/`var` variables are visible in every function, which may change the `var`s (`var pos = 0` then `fn advance() { pos += 1 }`): no need to pass them as parameters. Declare them before the first call that uses them.
 2. No semicolons. One statement per line. Braces are required and `{` stays on the same line as `fn`, `if`, `else`, `while` and `for`. Comments are `// ...`.
 3. Types are `int` (64-bit), `float`, `bool`, `str`, `char` (`'a'`), arrays `[T]` (`[1, 2, 3]`) and structs. Parameters and return types are always written (`fn add(a: int, b: int) -> int`); local types are inferred, but an empty array needs one: `var xs: [int] = []`.
 4. Types never convert implicitly: `1 + 2.0` and `"n=" + 5` are errors. Write `float(x)`, `int(x)` or `str(x)`, and write float literals with a dot (`2.0`, never `2`).
@@ -45,6 +45,7 @@ Every example has a matching `.out` file with the exact expected output, and run
 - [arrays.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/arrays.nyra): every array method, nested arrays, printing
 - [structs.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/structs.nyra): declaring, building, changing and comparing structs
 - [inout.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/inout.nyra): functions that change the caller's variables
+- [globals.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/globals.nyra): script variables used and changed by functions (a small parser)
 - [loops.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/loops.nyra): `break` and `continue`
 - [memory.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/memory.nyra): `free`, `arena` and `keep`
 - [fib.nyra](https://raw.githubusercontent.com/SpAkXD/nyra/main/examples/fib.nyra): recursion

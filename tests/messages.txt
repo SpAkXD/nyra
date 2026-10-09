@@ -1502,7 +1502,7 @@ error[E0101]: expected `fn` or `struct`, found `const`
   |
 1 | const MAX = 10
   | ^
-  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+  = hint: Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1533,7 +1533,7 @@ error[E0101]: statements at the top level and a `fn main` in the same program
   |
 1 | let max = 10
   | ^
-  = hint: there are no global variables: a constant is a function, e.g. `fn max() -> int = 10`; or move the `let` into `main`
+  = hint: a program with `fn main` has no script variables: move `max` into `main`, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3625,7 +3625,7 @@ error[E0101]: expected `fn` or `struct`, found `const`
   |
 1 | const LIMIT: int = 100
   | ^
-  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+  = hint: Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -5039,5 +5039,228 @@ error[E0101]: expected `{` or `=` to start the body of `fn f`, found `=>`
   |                     ^
   = hint: `=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`
   = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== global_declared_later
+fn advance() { pos += 1 }
+advance()
+var pos = 0
+----
+error[E0217]: `advance` uses the script variable `pos`, which is declared later (line 3)
+  --> case.nyra:2:1
+  |
+2 | advance()
+  | ^
+  = hint: a function can run only after the script variables it uses exist: move `var pos = ...` (line 3) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_declared_by_the_call
+fn next() -> int {
+    pos += 1
+    ret pos
+}
+var pos = next()
+----
+error[E0217]: `next` uses the script variable `pos`, which this statement is still declaring (line 5)
+  --> case.nyra:5:11
+  |
+5 | var pos = next()
+  |           ^
+  = hint: a function can run only after the script variables it uses exist: move `var pos = ...` (line 5) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_used_through_a_call
+fn a() -> int = b()
+fn b() -> int = n
+print(a())
+let n = 3
+----
+error[E0217]: `a` uses the script variable `n`, which is declared later (line 4)
+  --> case.nyra:3:7
+  |
+3 | print(a())
+  |       ^
+  = hint: a function can run only after the script variables it uses exist: move `let n = ...` (line 4) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_let_changed
+let pos = 0
+fn advance() { pos += 1 }
+advance()
+----
+error[E0205]: cannot assign to `pos`: it was declared with `let` on line 1
+  --> case.nyra:2:16
+  |
+2 | fn advance() { pos += 1 }
+  |                ^
+  = hint: declare it with `var` to make it changeable: `var pos = ...` on line 1
+  = fix: `var pos = 0`
+  = explain: nyra explain E0205
+
+nyra: 1 error(s)
+==== global_hidden_by_local
+var pos = 0
+fn f() {
+    print(pos)
+    let pos = 3
+    print(pos)
+}
+f()
+----
+error[E0216]: `pos` is a script variable (line 1), but `f` declares its own `pos` (line 4), so it cannot see the script's
+  --> case.nyra:3:11
+  |
+3 |     print(pos)
+  |           ^
+  = hint: a name means one thing in a function: to use the script variable here, rename the function's own `pos` (e.g. `pos2`); a function that declares `pos` sees only its own
+  = explain: nyra explain E0216
+
+nyra: 1 error(s)
+==== global_in_example
+var pos = 0
+fn get() -> int = pos   ex get() == 0
+print(get())
+----
+error[E0254]: this example calls `get`, which uses the script variable `pos`
+  --> case.nyra:2:28
+  |
+2 | fn get() -> int = pos   ex get() == 0
+  |                            ^
+  = hint: examples run while the program compiles, before the script, so they cannot call a function that uses script variables: give it the value as a parameter instead, or remove this example
+  = explain: nyra explain E0254
+
+nyra: 1 error(s)
+==== global_inout_alias
+var pos = 0
+fn advance() { pos += 1 }
+fn twice(inout n: int) {
+    advance()
+    n += 1
+}
+twice(inout pos)
+----
+error[E0237]: `pos` is passed `inout` to `twice`, which also uses the script variable `pos`
+  --> case.nyra:7:7
+  |
+7 | twice(inout pos)
+  |       ^
+  = hint: `twice` sees `pos` itself: change it there instead of passing it, or pass a copy (`var t = pos`, `inout t`, then `pos = t`)
+  = explain: nyra explain E0237
+
+nyra: 1 error(s)
+==== global_changed_in_lambda
+var pos = 0
+fn next() -> int {
+    pos += 1
+    ret pos
+}
+print([1, 2].map(x => x + next()))
+----
+error[E0214]: a lambda cannot call `next`: it changes the script variable `pos`, and inside a lambda variables are read-only
+  --> case.nyra:6:27
+  |
+6 | print([1, 2].map(x => x + next()))
+  |                           ^
+  = hint: call `next` in a `for` loop instead
+  = explain: nyra explain E0214
+
+nyra: 1 error(s)
+==== global_changed_in_arena
+var xs: [str] = []
+fn add() { xs.push("a") }
+arena {
+    add()
+}
+----
+error[E0238]: `add` changes the script variable `xs`, so it cannot be called inside this `arena` block
+  --> case.nyra:4:5
+  |
+4 |     add()
+  |     ^
+  = hint: values created in an `arena` are freed at its `}`: call `add` after the block
+  = explain: nyra explain E0238
+
+nyra: 1 error(s)
+==== global_freed_before_call
+var xs = ["a"]
+fn show() = print(xs)
+free(xs)
+show()
+----
+error[E0239]: `show` uses the script variable `xs`, which was freed at line 3
+  --> case.nyra:4:1
+  |
+4 | show()
+  | ^
+  = hint: give `xs` a new value first (`xs = ...`, needs `var`), or move `free(xs)` after this call
+  = explain: nyra explain E0239
+
+nyra: 1 error(s)
+==== global_freed_in_function
+var xs = ["a"]
+fn f() { free(xs) }
+f()
+----
+error[E0238]: cannot free script variable `xs` in function `f`: the script still needs it
+  --> case.nyra:2:10
+  |
+2 | fn f() { free(xs) }
+  |          ^
+  = hint: only variables declared in this function can be freed or kept; call `free(xs)` at the top level of the script
+  = explain: nyra explain E0238
+
+nyra: 1 error(s)
+==== global_in_block_of_script
+if true {
+    var pos = 0
+    print(pos)
+}
+fn advance() { pos += 1 }
+advance()
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:5:16
+  |
+5 | fn advance() { pos += 1 }
+  |                ^
+  = hint: `pos` is declared inside a block of the script (line 2): functions see only the variables declared at the top level of the script; declare it there, before the block
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== main_local_in_function
+fn main() {
+    var pos = 0
+    advance()
+}
+fn advance() { pos += 1 }
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:5:16
+  |
+5 | fn advance() { pos += 1 }
+  |                ^
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== main_local_in_nested_function
+fn main() {
+    var pos = 1
+    fn show() {
+        print(pos)
+    }
+    show()
+}
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:4:15
+  |
+4 |         print(pos)
+  |               ^
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = explain: nyra explain E0201
 
 nyra: 1 error(s)

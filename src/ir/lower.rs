@@ -15,7 +15,8 @@
 //! variable (`xs.pop()`), the operands before it are first copied into temporaries, so every
 //! operand still sees the program state of its own turn (left-to-right evaluation).
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 use super::{
     visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind,
@@ -27,13 +28,17 @@ mod lambda;
 
 /// Lowers a type-checked program. Fails for features the backends do not support yet.
 pub fn lower(prog: &ast::Program) -> Result<Module, String> {
+    // the functions that change script variables: a call of one changes variables
+    let writers: HashSet<String> =
+        prog.globals.uses.iter().filter(|(_, us)| us.iter().any(|u| u.inout)).map(|(f, _)| f.clone()).collect();
+    WRITERS.with(|w| *w.borrow_mut() = writers);
     let ids: HashMap<String, FuncId> =
         prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
     let structs = struct_table(prog);
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
     for f in &prog.funcs {
-        let mut l = Lower::new(&ids, &mut strs, &structs);
+        let mut l = Lower::new(&ids, &mut strs, &structs, &prog.globals);
         let mut func = l.func(f);
         if let Some(what) = l.unsupported {
             return Err(what);
@@ -98,6 +103,17 @@ impl Strs {
     }
 }
 
+/// True if `e` reads one of `locals`.
+fn reads_any(e: &Expr, locals: &[LocalId]) -> bool {
+    if locals.is_empty() {
+        return false;
+    }
+    let mut found = false;
+    let mut s = [Stmt { kind: StmtKind::Return(Some(e.clone())), span: Span { line: 0, col: 0 } }];
+    visit_locals(&mut s, &mut |l| found |= locals.contains(l));
+    found
+}
+
 /// An int constant, also through negation (`-1`).
 fn const_int(e: &Expr) -> Option<i64> {
     match e {
@@ -107,8 +123,13 @@ fn const_int(e: &Expr) -> Option<i64> {
     }
 }
 
+thread_local! {
+    /// The functions of the program being lowered that change script variables.
+    static WRITERS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+}
+
 /// True if evaluating `e` can change a variable: a method that changes its receiver, or a
-/// call with an `inout` argument.
+/// call with an `inout` argument or of a function that changes script variables.
 fn mutates(e: &ast::Expr) -> bool {
     use ast::ExprKind as K;
     match &e.kind {
@@ -117,7 +138,9 @@ fn mutates(e: &ast::Expr) -> bool {
                 || mutates(r)
                 || args.iter().any(mutates)
         }
-        K::Call(_, args) => args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a)),
+        K::Call(name, args) => {
+            WRITERS.with(|w| w.borrow().contains(name)) || args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a))
+        }
         K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) => mutates(x),
         K::Comprehension(c) => {
             let src = match &c.src {
@@ -158,10 +181,13 @@ struct Lower<'a> {
     /// Owned temporaries of the `map` steps of the chain loop being lowered: a `break` out of
     /// that loop (`any`, `all`, `find_index`) releases them first.
     chain_live: Vec<LocalId>,
+    globals: &'a ast::Globals,
+    /// The hidden parameters of the function being lowered, by script variable.
+    hidden: HashMap<usize, LocalId>,
 }
 
 impl<'a> Lower<'a> {
-    fn new(ids: &'a HashMap<String, FuncId>, strs: &'a mut Strs, structs: &'a Structs) -> Self {
+    fn new(ids: &'a HashMap<String, FuncId>, strs: &'a mut Strs, structs: &'a Structs, globals: &'a ast::Globals) -> Self {
         Lower {
             ids,
             strs,
@@ -171,6 +197,8 @@ impl<'a> Lower<'a> {
             pending: Vec::new(),
             unsupported: None,
             chain_live: Vec::new(),
+            globals,
+            hidden: HashMap::new(),
         }
     }
 
@@ -192,10 +220,22 @@ impl<'a> Lower<'a> {
             self.locals[id.0 as usize].inout = p.inout;
             self.scopes[0].names.insert(p.name.clone(), id);
         }
+        // the script variables it uses: hidden parameters after the others, `inout` when changed
+        let globals = self.globals;
+        let uses = globals.uses.get(&f.name).map_or(&[][..], Vec::as_slice);
+        for u in uses {
+            let g = &globals.vars[u.var];
+            let id = self.new_local(Some(u.name.clone()), g.ty);
+            self.locals[id.0 as usize].inout = u.inout;
+            self.hidden.insert(u.var, id);
+            if u.name == g.name {
+                self.scopes[0].names.insert(u.name.clone(), id);
+            }
+        }
         let mut body = Vec::new();
         self.block(&f.body, &mut body, false);
         let ret = if f.ret == Type::Void { None } else { Some(f.ret) };
-        Func { name: f.name.clone(), params: f.params.len(), ret, locals: std::mem::take(&mut self.locals), body, span: f.span }
+        Func { name: f.name.clone(), params: f.params.len() + uses.len(), ret, locals: std::mem::take(&mut self.locals), body, span: f.span }
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
@@ -550,7 +590,7 @@ impl<'a> Lower<'a> {
                     // a call whose plain result is not used writes nowhere
                     if let Some(&func) = self.ids.get(name) {
                         if !self.managed(e.ty) {
-                            let args = self.call_args(args, out);
+                            let args = self.call_args(name, args, out);
                             out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span: e.span });
                             self.end_statement(span, out);
                             return;
@@ -763,12 +803,36 @@ impl<'a> Lower<'a> {
         self.operands(&refs, out)
     }
 
-    /// The arguments of a call to a user function, left to right. An `inout` argument is a
-    /// place; next to one, every plain argument is copied first, so it keeps the value it had
-    /// even when the callee changes the same variable through the `inout` one.
-    fn call_args(&mut self, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Arg> {
-        let any_inout = args.iter().any(|a| matches!(a.kind, ast::ExprKind::Inout(_)));
-        let mut v = Vec::with_capacity(args.len());
+    /// The arguments of a call to the user function `callee`, left to right, then the script
+    /// variables it uses (hidden parameters). An `inout` argument is a place; a plain argument
+    /// that reads a variable passed `inout` is copied first, so it keeps the value it had even
+    /// when the callee changes the variable through the `inout` one.
+    fn call_args(&mut self, callee: &str, args: &[ast::Expr], out: &mut Vec<Stmt>) -> Vec<Arg> {
+        let globals = self.globals;
+        let hidden: Vec<(LocalId, bool)> = globals
+            .uses
+            .get(callee)
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .map(|u| {
+                // in a function its own hidden parameter, in the script the variable itself
+                let l = match self.hidden.get(&u.var) {
+                    Some(&l) => l,
+                    None => self.lookup(&globals.vars[u.var].name),
+                };
+                (l, u.inout)
+            })
+            .collect();
+        // the variables the callee can change
+        let mut changed: Vec<LocalId> = hidden.iter().filter(|(_, io)| *io).map(|(l, _)| *l).collect();
+        for a in args {
+            if let ast::ExprKind::Inout(p) = &a.kind {
+                if let Some(root) = crate::check_v03::place_root(p) {
+                    changed.push(self.lookup(root));
+                }
+            }
+        }
+        let mut v = Vec::with_capacity(args.len() + hidden.len());
         for (i, a) in args.iter().enumerate() {
             let later = args[i + 1..].iter().any(mutates);
             match &a.kind {
@@ -778,10 +842,13 @@ impl<'a> Lower<'a> {
                 }
                 _ => {
                     let x = self.expr(a, None, out);
-                    let x = if later || any_inout { self.snapshot(x, a.ty, a.span, out) } else { x };
+                    let x = if later || reads_any(&x, &changed) { self.snapshot(x, a.ty, a.span, out) } else { x };
                     v.push(Arg::Val(x));
                 }
             }
+        }
+        for (l, inout) in hidden {
+            v.push(if inout { Arg::InOut(Place::local(l)) } else { Arg::Val(Expr::Local(l)) });
         }
         v
     }
@@ -1148,7 +1215,7 @@ impl<'a> Lower<'a> {
                     let fields = self.fields(args, out);
                     return self.op(RtOp::StructNew, fields, e.ty, dst, span, out);
                 };
-                let args = self.call_args(args, out);
+                let args = self.call_args(name, args, out);
                 if e.ty == Type::Void {
                     out.push(Stmt { kind: StmtKind::Call { dst: None, func, args }, span });
                     return Expr::Bool(false);

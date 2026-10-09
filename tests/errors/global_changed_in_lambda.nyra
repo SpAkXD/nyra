@@ -1,0 +1,7 @@
+// expect: E0214
+var pos = 0
+fn next() -> int {
+    pos += 1
+    ret pos
+}
+print([1, 2].map(x => x + next()))

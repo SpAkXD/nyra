@@ -166,7 +166,7 @@ struct Item {                                 // a struct: named fields, upperca
 
 fn add(a: int, b: int) -> int = a + b         // one-line function: the expression is the result
 fn shout(msg: str) = print("{msg}!")          // no `->`: returns nothing
-fn limit() -> int = 100                       // constants are functions: there are no globals
+fn limit() -> int = 100                       // a constant: a function, or a script `let`
 
 fn gcd(a: int, b: int) -> int {               // block body: return with `ret`
     if b == 0 { ret a }
@@ -186,7 +186,7 @@ fn double_all(inout xs: [int]) {              // `inout`: may change the caller'
 
 // the program: statements at the top level run in order (no `fn main` needed)
 let x = 7                                 // immutable, type inferred (int)
-var count = 0                             // mutable
+var count = 0                             // mutable; top-level variables are visible in every function
 let ratio: float = 2.5                    // type annotation is optional
 count += x                                // also -= *= /= %=  (var only)
 
@@ -253,6 +253,7 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Return with `ret` | `return x` (E0101) | `ret x` |
 | Every path returns | `if x > 0 { ret 1 }` as the last statement (E0207) | add `ret 0` after it, or `else { ret 0 }` |
 | Scripts need no `main` | `fn main()` around everything (it works, but costs tokens) | statements at the top level |
+| Functions see script variables | `inout pos: int, inout tokens: [Token]` on every helper; or `fn main` locals used in a function (E0201) | `var pos = 0` at the top level, then `fn advance() { pos += 1 }`; declare it before the first call (E0217) |
 | Ranges are exclusive | `0..=9` (E0101), `0.0..1.0` (E0203), `'a'..'z'` (E0210) | `0..10` with int bounds |
 | `print` joins values with a space | `print(a + " " + b)` | `print(a, b)` |
 | `+` joins two strings | `"n=" + 5`, `s + c` with a char `c` (E0210) | `"n=" + str(5)`, `"n={n}"`, `s + str(c)` |
@@ -337,9 +338,11 @@ that works (section 6 has the usual replacements).
   anything else with `sort_by(x => key)`.
 - **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `?:`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
-- **Declarations**: no function values, overloading, default arguments, methods on structs (`impl`,
-  `self`) or modules of your own. One file is one program; it may `use` the standard modules (section
-  6b). A lambda (`x => x * 2`) is only an argument of an array method, and it cannot change variables.
+- **Declarations**: no global variables outside a script (a script's top-level variables are visible in
+  functions; in a program with `fn main` nothing is), no closures, function values, overloading, default
+  arguments, methods on structs (`impl`, `self`) or modules of your own. One file is one program; it may
+  `use` the standard modules (section 6b). A lambda (`x => x * 2`) is only an argument of an array
+  method, and it cannot change variables.
 - **Library**: `abs`, `min` and `max` are builtins; everything else is a module function, never a
   global one: `math.sqrt(x)` after `use math`, not `sqrt(x)`.
 - **Errors**: no exceptions, `null`, `assert` or `panic`. A failing operation stops the program with a
@@ -381,6 +384,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0213 | lambda used as a value | a lambda is only an argument: `xs.map(x => x * 2)`; to name it, write a `fn` |
 | E0214 | lambda changes a variable | variables are read-only inside a lambda: use the method's result, or a `for` loop |
 | E0215 | bad lambda argument | `xs.count(x => x == 3)`, not `xs.count(3)`; `fold` takes `(acc, x) => ...` |
+| E0216 | script variable hidden by a local | a function that declares `x` cannot use the script's `x`: rename its own one |
+| E0217 | script variable used before it exists | a call runs the function: declare the script variables it uses (also through calls) above the call |
 | E0220 | field defined twice | rename one of them |
 | E0221 | lowercase struct name | `struct Point`, not `struct point` |
 | E0222 | struct contains itself | keep the children in an array: `kids: [Node]` |
@@ -405,6 +410,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0251 | example stops with a runtime error | the function fails for that input: handle it (an empty array, 0), or use an input it accepts |
 | E0252 | example is not a `bool` | `ex sq(3) == 9`, not `ex sq(3)` |
 | E0253 | example did not finish | a loop or a recursion that never ends for that input; or an input that is too big |
+| E0254 | example calls a function that uses script variables | examples run before the script: pass the value as a parameter, or drop the example |
 
 **Runtime errors** stop a running program with exit code 101, after everything it printed so far:
 
@@ -757,6 +763,7 @@ More programs with expected output live in
 ## 8. Checklist before you answer
 
 1. The program is a script: statements at the top level, `fn` and `struct` definitions anywhere (no `fn main` needed).
+   Its top-level variables are visible in every function (declare them before the first call that uses them).
 2. No `;`, `return`, `elif`, `++`, `0..=n`, `xs[a..b]`, `Point { x: 1 }`, or Allman-style `{` on its own line.
 3. Every name is unique inside its function (parameters, loop variables and locals), and no variable
    shares a name with a function or a struct.

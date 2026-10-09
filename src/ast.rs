@@ -1,6 +1,7 @@
 //! Syntax tree produced by the parser and annotated by the type checker.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
@@ -147,6 +148,41 @@ pub struct Program {
     pub examples: Vec<Example>,
     /// The `use name` lines: the standard modules the program imports.
     pub uses: Vec<Use>,
+    /// The program is a script: `main` is made of its top-level statements.
+    pub script: bool,
+    /// The script's top-level variables and the functions that use them (filled by the checker).
+    pub globals: Globals,
+}
+
+/// A `let` or `var` at the top level of a script: every function may read it (and change it,
+/// when it is a `var`).
+#[derive(Debug, Clone)]
+pub struct Global {
+    pub name: String,
+    pub ty: Type,
+    pub mutable: bool,
+    pub span: Span,
+    /// The index of its statement among the script's top-level statements.
+    pub stmt: usize,
+}
+
+/// One script variable a function uses, directly or through the functions it calls. Lowering
+/// passes it as a hidden parameter: `inout` when the function (or a callee) changes it.
+#[derive(Debug, Clone)]
+pub struct GlobalUse {
+    /// Index into `Globals::vars`.
+    pub var: usize,
+    pub inout: bool,
+    /// The hidden parameter's name: the variable's own name, unless the function declares a
+    /// variable of that name itself (it then cannot see the script variable, only pass it on).
+    pub name: String,
+}
+
+#[derive(Debug, Default)]
+pub struct Globals {
+    pub vars: Vec<Global>,
+    /// For each function that uses script variables: what it uses, in declaration order.
+    pub uses: HashMap<String, Vec<GlobalUse>>,
 }
 
 /// One example of `ex f(3) == 9, f(-2) == 4`: a `bool` condition that must be true.

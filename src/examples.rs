@@ -4,8 +4,8 @@
 //! fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
 //! ```
 //!
-//! An example is never compiled into the program. It cannot see variables (there are no global
-//! ones), so it only holds constants and calls, and the compiler can always run it: every
+//! An example is never compiled into the program. It cannot see variables (nor call a function that
+//! uses the script's variables: E0254), so it only holds constants and calls, and the compiler can always run it: every
 //! `nyra check`, `run` and `build` evaluates every example, and a false one is a compile error
 //! with both values (E0250). `nyra test` reports the same, with how many passed.
 //!
