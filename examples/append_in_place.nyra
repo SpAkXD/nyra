@@ -1,0 +1,72 @@
+// `s = s + x` appends in place, so building a string in a loop is not quadratic. The
+// output must be what plain concatenation gives, also when `s` has other owners or the
+// right-hand side reads `s`.
+var total = ""
+
+fn mark(n: int) -> str {
+    total = total + "<" + str(n) + ">"
+    ret "m{n}"
+}
+
+fn grow(inout s: str, n: int) {
+    s = s + "[" + str(n) + "]"
+}
+
+var s = ""
+for i in 0..5 {
+    s = s + str(i) + ","
+}
+print(s)
+
+var shared = "ab"
+let keep = shared
+shared = shared + "cd" + "ef"
+print(keep, shared)
+
+var twice = "xy"
+twice = twice + twice
+twice = twice + "-" + twice
+print(twice)
+
+var mixed = "a"
+mixed = mixed + "b" + mixed + "c"
+print(mixed)
+
+var calls = "s:"
+calls = calls + mark(1) + mark(2)
+print(calls, total)
+
+var g = "g"
+grow(inout g, 1)
+grow(inout g, 2)
+print(g)
+
+var words = ["one", "two", "three"]
+var line = ""
+for w in words {
+    line = line + w.upper() + " "
+}
+print(line.trim())
+line = line + words[1] + words[2]
+print(line)
+
+var xs: [int] = []
+for i in 0..4 {
+    xs = xs + [i * i]
+}
+let ys = xs
+xs = xs + xs + [99]
+print(xs, ys)
+
+var big = ""
+for i in 0..3000 {
+    big = big + "ab" + str(i % 10)
+}
+print(big.len(), big.slice(0, 12))
+var n = 0
+for c in big {
+    if c == 'b' {
+        n += 1
+    }
+}
+print(n)
