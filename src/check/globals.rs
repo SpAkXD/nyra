@@ -231,7 +231,7 @@ impl Checker {
         } else if g.explicit_main && self.fname != "main" {
             if let Some((_, at)) = g.main_decls.iter().find(|(n, _)| n == name && !own) {
                 return Some(Diag::new("E0201", format!("undefined variable `{name}`"), span).hint(format!(
-                    "`{name}` is a variable of `fn main` (line {}), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use",
+                    "`{name}` is a variable of `fn main` (line {}), and functions cannot see it: pass it as a parameter, or declare it at the top level of the file (a script variable), which every function can use",
                     at.line
                 )));
             }

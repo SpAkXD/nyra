@@ -1,0 +1,85 @@
+// A value inside a map changes in place: m[k].push(x), m[k].field = v, m[k][i] = v, m[k] += 1.
+// Maps and the values in them are still values: a copy never sees the change (copy on write).
+struct Player {
+    name: str
+    score: int
+    tags: [str]
+}
+
+struct Club {
+    members: [str: Player]
+}
+
+fn group_by_length(words: [str]) -> [int: [str]] {
+    var groups: [int: [str]] = [:]
+    for w in words {
+        if !groups.has(w.len()) {
+            groups[w.len()] = []
+        }
+        groups[w.len()].push(w)
+    }
+    return groups
+}
+
+fn main() {
+    var groups = group_by_length(["a", "bb", "cc", "d", "eee"])
+    print(groups)
+    let before = groups
+    groups[2].push("ff")
+    groups[1][0] = "A"
+    groups[2].sort()
+    groups[2].reverse()
+    print(groups)
+    print(before)
+
+    var players = ["ann": Player(name: "Ann", score: 1, tags: [])]
+    players["ann"].score += 10
+    players["ann"].score = players["ann"].score * 2
+    players["ann"].tags.push("new")
+    players["ann"].tags.push("pro")
+    players["ann"].tags[0] = "NEW"
+    let snapshot = players
+    players["ann"].name = "Annie"
+    players["ann"].tags.remove(1)
+    print(players)
+    print(snapshot)
+
+    var club = Club(members: ["bob": Player(name: "Bob", score: 3, tags: ["x"])])
+    club.members["bob"].score += 1
+    club.members["bob"].tags.push("y")
+    print(club)
+
+    var nested: [str: [str: int]] = ["a": ["x": 1]]
+    nested["a"]["y"] = 2
+    nested["a"]["x"] += 5
+    nested["a"].remove("y")
+    print(nested)
+
+    var counts = ["k": 1]
+    counts["k"] += 1
+    counts["k"] *= 10
+    print(counts)
+
+    var lines: [int: str] = [1: "a"]
+    lines[1] += "b"
+    print(lines)
+
+    var grid: [str: [[int]]] = ["g": [[0, 0], [0, 0]]]
+    grid["g"][1][0] = 7
+    grid["g"][0].push(9)
+    print(grid)
+
+    var stack: [bool: [int]] = [true: [1, 2, 3]]
+    let top = stack[true].pop()
+    stack[true].swap(0, 1)
+    stack[true].insert(1, 99)
+    print(top, stack)
+
+    // the key is evaluated before the value, and only once
+    var order = ["a": [0]]
+    var i = 0
+    order["a"].push(i + 1)
+    i += 1
+    order["a"].push(i + 1)
+    print(order, order["a"].len())
+}

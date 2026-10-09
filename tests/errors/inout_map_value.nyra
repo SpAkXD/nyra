@@ -1,10 +1,10 @@
 // expect: E0229
-struct P {
-    x: int
+fn bump(inout n: int) {
+    n += 1
 }
 
 fn main() {
-    var m = ["a": P(x: 1)]
-    m["a"].x = 2
+    var m = ["a": 1]
+    bump(inout m["a"])
     print(m)
 }

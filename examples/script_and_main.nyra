@@ -1,0 +1,20 @@
+// statements at the top level run first, in order; then `main()` is called
+var total = 0
+let limit = 3
+
+fn add(n: int) {
+    total += n
+}
+
+fn main() {
+    let local = 100
+    print("main starts, total is {total}")
+    add(local)
+    print("main ends, total is {total}")
+}
+
+print("script starts, limit is {limit}")
+for i in 0..limit {
+    add(i)
+}
+print("script ends, total is {total}")

@@ -13,6 +13,8 @@ If a feature is not described, it does not exist yet (section 4).
 nyra check prog.nyra --json    # compile only (and run the `ex` examples); {"ok":true,"errors":[]} when clean
 nyra test prog.nyra --json     # run the `ex` examples: {"ok":..,"examples":3,"passed":2,"failed":1,"errors":[..]}
 nyra check prog.nyra --json --fix   # the same, after repairing every mistake that has a certain fix
+nyra check prog.nyra --strict  # errors stay errors (without it, mistakes with one certain fix are repaired in memory)
+nyra fmt prog.nyra             # rewrite the file in canonical form (the fixes applied, `return`, 4-space indent)
 nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
 nyra run prog.nyra --js        # or run on Node.js
 nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
@@ -30,15 +32,19 @@ nyra explain E0201 --json      # what an error code means: why, causes, a wrong 
    with an older one, read ERRORS.md instead.)
 3. Run it and compare the output with what you expect.
 
-**Let the compiler fix simple mistakes first.** An error whose repair is certain carries a `fix`:
-`return` -> `ret`, a `;`, `elif` -> `else if`, `and`/`or`/`not` -> `&&`/`||`/`!`, `True` -> `true`,
+**The compiler fixes simple mistakes by itself.** An error whose repair is certain carries a `fix`:
+a `;`, `elif` -> `else if`, `and`/`or`/`not` -> `&&`/`||`/`!`, `True` -> `true`,
 `'hello'` -> `"hello"`, `xs.length()` -> `xs.len()`, `string`/`i32` -> `str`/`int`, `Point { x: 1 }` ->
 `Point(x: 1)`, `Point(1, 2)` -> `Point(x: 1, y: 2)`, `5.` -> `5.0`, `2` -> `2.0` where a `float` is needed,
 `let` -> `var` for a variable that changes, `print "hi"` -> `print("hi")`, `{` on its own line, and more.
-`--fix` applies all of them, checks again and writes the file back when it then compiles (the edits
-are printed to stderr as a diff; `check --json` adds `"fixed":N`); `nyra run prog.nyra --fix` then runs
-the program. If an error without a fix remains, the file is not changed and you get the errors as usual.
-**Use `--fix` before you spend a model call on a repair.** In the JSON each fix is a list of edits:
+`check`, `run`, `build` and `test` apply all of them **in memory**, check again and go on with the repaired
+program; each repair is reported as a warning (on stderr; with `--json`, `check` adds a `warnings` array
+with `code`, `line`, `col`, `message`, `applied` and `fix` per repair, and `run` prints it to stderr), and
+the file is not changed. `--fix` also writes the file back when it then compiles (the edits are printed
+to stderr as a diff; `check --json` adds `"fixed":N`), and `--strict` turns all this off: errors stay
+errors. If an error without a fix remains, you get the errors as usual (about the file as it is).
+**Read the warnings and write the repaired form next time**, or run `nyra fmt prog.nyra` to rewrite the
+file. In the JSON of an error each fix is a list of edits:
 
 ```json
 {"code":"E0005","message":"unexpected `;`: Nyra has no semicolons","file":"a.nyra","line":2,"col":14,"hint":"delete the `;`: ...","fix":[{"line":2,"col":14,"end_line":2,"end_col":15,"text":""}]}
@@ -60,7 +66,7 @@ fn largest(xs: [int]) -> int {
     for x in xs {
         if x > best { best = x }
     }
-    ret best
+    return best
 }
 ex largest([3, 9, 4]) == 9, largest([1, 2, 7]) == 7, largest([-5]) == -5
 
@@ -119,7 +125,7 @@ replaces the symbol of the same name or is added at the end, or commands, each f
 ```
 @replace discount
 fn discount(total: int) -> int {
-    ret total / 10
+    return total / 10
 }
 @add after discount
 fn tax(total: int) -> int = total / 5
@@ -168,23 +174,23 @@ fn add(a: int, b: int) -> int = a + b         // one-line function: the expressi
 fn shout(msg: str) = print("{msg}!")          // no `->`: returns nothing
 fn limit() -> int = 100                       // a constant: a function, or a script `let`
 
-fn gcd(a: int, b: int) -> int {               // block body: return with `ret`
-    if b == 0 { ret a }
-    ret gcd(b, a % b)
+fn gcd(a: int, b: int) -> int {               // block body: return with `return` (`ret` also works)
+    if b == 0 { return a }
+    return gcd(b, a % b)
 }
 ex gcd(48, 18) == 6, gcd(7, 0) == 7           // examples: checked while compiling, never run
 
 fn total(items: [Item]) -> int {
     var sum = 0
     for it in items { sum += it.price }       // `for x in xs`: each element of an array
-    ret sum
+    return sum
 }
 
 fn double_all(inout xs: [int]) {              // `inout`: may change the caller's variable
     for i in 0..xs.len() { xs[i] *= 2 }
 }
 
-// the program: statements at the top level run in order (no `fn main` needed)
+// the program: statements at the top level run in order (no `fn main` needed; with one, it runs after them)
 let x = 7                                 // immutable, type inferred (int)
 var count = 0                             // mutable; top-level variables are visible in every function
 let ratio: float = 2.5                    // type annotation is optional
@@ -237,7 +243,6 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 
 | Rule | Don't (error) | Do |
 |---|---|---|
-| Only `fn` and `struct` at top level | `let max = 10` at top level (E0101) | `fn max() -> int = 10` |
 | No semicolons | `let x = 1;` (E0005) | `let x = 1` |
 | One statement per line | `let a = 1 let b = 2` (E0101) | two lines |
 | `{` on the same line | `fn main()` newline `{` (E0101) | `fn main() {` |
@@ -251,9 +256,8 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | No shadowing | `let x = 1` ... `let x = 2` in one function (E0206) | a new name, or `var` and reassign |
 | Unique names | `let str = "a"`, `for char in s`, a variable named like a function (E0206) | `let text = "a"`, `for c in s` |
 | Bool conditions | `if n {`, `if xs {` (E0209) | `if n != 0 {`, `if xs.len() > 0 {` |
-| Return with `ret` | `return x` (E0101) | `ret x` |
-| Every path returns | `if x > 0 { ret 1 }` as the last statement (E0207) | add `ret 0` after it, or `else { ret 0 }` |
-| Scripts need no `main` | `fn main()` around everything (it works, but costs tokens) | statements at the top level |
+| Every path returns | `if x > 0 { return 1 }` as the last statement (E0207) | add `return 0` after it, or `else { return 0 }` |
+| Scripts need no `main` | `fn main()` around everything (it works, but costs tokens) | statements at the top level; a `fn main` next to them runs after them |
 | Functions see script variables | `inout pos: int, inout tokens: [Token]` on every helper; or `fn main` locals used in a function (E0201) | `var pos = 0` at the top level, then `fn advance() { pos += 1 }`; declare it before the first call (E0217) |
 | Ranges are exclusive | `0..=9` (E0101), `0.0..1.0` (E0203), `'a'..'z'` (E0210) | `0..10` with int bounds |
 | `print` joins values with a space | `print(a + " " + b)` | `print(a, b)` |
@@ -271,12 +275,13 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Comments | `# note`, `/* note */` (E0001, E0101) | `// note` |
 | Examples go outside functions | `ex f(1) == 2` inside a body (E0101), `ex f(1)` (E0252) | after the closing `}`: `ex f(1) == 2` |
 | Literals | `.5`, `5.`, `1e5`, `1_000`, `0xFF` (E0001, E0101) | `0.5`, `5.0`, `100000.0`, `1000`, `255` |
-| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `c ? a : b` (E0101, E0210, E0001) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `if c { a } else { b }` |
+| Operators | `and`, `or`, `i++`, `2 ** 3`, `a < b < c`, `a ?? b` (E0101, E0210) | `&&`, `i += 1`, `2 * 2 * 2`, `a < b && b < c`, `c ? a : b` |
 
 Good to know:
 
 - Operators, high to low: calls, fields, indexes and methods · `-x` `!x` · `*` `/` `%` · `+` `-` ·
-  `<` `<=` `>` `>=` · `==` `!=` · `&&` · `||`. `%` is for ints only. `==` and `!=` need the same type on
+  `<` `<=` `>` `>=` · `==` `!=` · `&&` · `||` · `c ? a : b` (the same as `if c { a } else { b }`: a `bool`
+  condition, one type in both branches, only the chosen one runs). `%` is for ints only. `==` and `!=` need the same type on
   both sides and compare strings, arrays and structs by content. `<` and `>` work on `int`, `float`,
   `str` and `char`. `&&` and `||` skip their right side when the left side decides.
 - Int division truncates toward zero: `7 / 2` is `3`, `-7 / 2` is `-3`, `-7 % 3` is `-1`.
@@ -290,7 +295,7 @@ Good to know:
   int beyond 2^53 - 1 (9007199254740991) stops it with E0256. For a hash or a random number generator,
   keep the value small with `%` at every step: `h = (h * 31 + c.code()) % 1000000007`.
 - A name declared inside `{ }` is gone after the closing brace (you may reuse it then). Functions and
-  structs can be defined in any order and functions can call each other. `ret` with no value leaves a
+  structs can be defined in any order and functions can call each other. `return` with no value leaves a
   function that returns nothing.
 - An `if` used as a value needs an `else`, one expression per branch, and the same type in both
   branches. `else if` chains work and the branches may span lines. A one-line function's expression
@@ -338,10 +343,10 @@ that works (section 6 has the usual replacements).
   (`push`) or `flatten`; strings have no `format`, `pad`, `trim_start`, `char_at` or `is_digit` (chars
   have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]` and `[char]`, ascending; sort
   anything else with `sort_by(x => key)`.
-- **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `?:`,
+- **Syntax**: no slices `xs[a..b]` (`xs.slice(a, b)`), no negative indexes, no `match`, `switch`, `??`, `?.`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
-  functions; in a program with `fn main` nothing is), no closures, function values, overloading, default
+  functions, also with a `fn main`; the local variables of `fn main` are not), no closures, function values, overloading, default
   arguments, methods on structs (`impl`, `self`) or modules of your own. One file is one program; it may
   `use` the standard modules (section 6b). A lambda (`x => x * 2`) is only an argument of an array
   method, and it cannot change variables.
@@ -361,13 +366,13 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 
 | Code | Meaning | Usual cause and fix |
 |---|---|---|
-| E0001 | unexpected character | `#`, `?`, `.5`, `5.`, single `&` or `\|`: use `//`, `if` / `else`, `0.5`, `&&` |
+| E0001 | unexpected character | `#`, `$`, `.5`, `5.`, single `&` or `\|`: use `//`, `0.5`, `&&` |
 | E0002 | unterminated string | strings end on the same line: close with `"`, use `\n` for line breaks |
 | E0003 | number too large | `int` max is 9223372036854775807 |
 | E0004 | unknown escape | strings know `\n` `\t` `\r` `\\` `\"`; chars also `\'` |
 | E0005 | semicolon | delete it |
 | E0007 | bad char literal | `'ab'`, `''`: a char holds exactly one character; text uses `"ab"` |
-| E0101 | syntax error | `return`, `elif`, `i++`, `0..=n`, `{` on a new line, `Point { x: 1 }`, `xs[1..3]`, two statements on a line, `break` outside a loop: compare with section 2 |
+| E0101 | syntax error | `elif`, `i++`, `a ?? b`, `0..=n`, `{` on a new line, `Point { x: 1 }`, `xs[1..3]`, two statements on a line, `break` outside a loop: compare with section 2 |
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, or declared in another block |
 | E0202 | undefined function | the builtins are `print`, `str`, `int`, `float`, `char`, `abs`, `min`, `max`; `len(xs)` is `xs.len()`, `sqrt(x)` is `math.sqrt(x)` after `use math`; else define it yourself |
@@ -377,7 +382,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0204 | wrong argument count | functions and methods take a fixed number (`s.split(" ")`, `min(a, b)`); `print(a, b, end: "")` takes any number of values and an optional last `end:` |
 | E0205 | changing what is not a `var` | `let` variables, parameters and loop variables are immutable: use `var`, or an `inout` parameter |
 | E0206 | name already defined | no shadowing, no duplicate functions or structs, no variable named like a function or a struct |
-| E0207 | bad or missing `ret` | end every path of a `->` function with `ret value`; no `ret value` without `->` |
+| E0207 | bad or missing `return` | end every path of a `->` function with `return value`; no `return value` without `->` |
 | E0208 | no `fn main()` and no top-level statements | write the program's statements at the top level (a script) |
 | E0209 | condition is not `bool` | compare: `if n != 0`, `if xs.len() > 0` |
 | E0210 | operator on wrong types | `int + float`, `"a" + 1`, `"a" + 'b'`, `'a' + 1`, `c == "a"`, `xs + 5`, `"a" < 1`, `a < b < c` |
@@ -397,7 +402,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0226 | named argument to a function | names are only for structs: `add(1, 2)` |
 | E0227 | unknown method | the `hint` lists the methods of the type; structs have none: `fn area(r: Rect)` |
 | E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str` or `char`; `sum` needs numbers |
-| E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable |
+| E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable, not `inout m[k]` |
 | E0230 | type of `[]` unknown | `var xs: [int] = []` |
 | E0231 | mixed array elements | one type per array; a struct for mixed data |
 | E0232 | index is not an `int` | `xs[int(f)]` |
@@ -447,13 +452,13 @@ fn is_even(n: int) -> bool = n % 2 == 0
 fn pow(base: int, exp: int) -> int {
     var result = 1
     for i in 0..exp { result *= base }
-    ret result
+    return result
 }
 
 fn sqrt(x: float) -> float {                   // Newton's method; x must be > 0.0
     var g = x / 2.0
     for i in 0..20 { g = (g + x / g) / 2.0 }
-    ret g
+    return g
 }
 ```
 
@@ -463,7 +468,7 @@ Arrays and text:
 fn sum(xs: [int]) -> int {
     var total = 0
     for x in xs { total += x }
-    ret total
+    return total
 }
 
 fn largest(xs: [int]) -> int {                 // xs must not be empty
@@ -471,18 +476,18 @@ fn largest(xs: [int]) -> int {                 // xs must not be empty
     for x in xs {
         if x > best { best = x }
     }
-    ret best
+    return best
 }
 
 fn reversed(s: str) -> str {                   // reversed("abc") is "cba"
     var cs = s.chars()
     cs.reverse()
-    ret cs.join("")
+    return cs.join("")
 }
 
 fn pad_left(s: str, width: int) -> str {       // pad_left("7", 3) is "  7"
-    if s.len() >= width { ret s }
-    ret " ".repeat(width - s.len()) + s
+    if s.len() >= width { return s }
+    return " ".repeat(width - s.len()) + s
 }
 
 fn digit(c: char) -> int = c.code() - '0'.code()   // digit('7') is 7
@@ -492,12 +497,13 @@ fn words(text: str) -> [str] {                 // words(" a  b ") is ["a", "b"]
     for w in text.split(" ") {
         if w != "" { out.push(w) }
     }
-    ret out
+    return out
 }
 ```
 
 Count with a map (`[K: V]`, keys `int`, `str`, `char` or `bool`; reading a missing key with `m[k]` is a
-runtime error, so count with `get` and a default):
+runtime error, so count with `get` and a default). A value inside a map changes in place, like an array
+element: `groups[k].push(x)` (the key must exist), `players[k].score += 1`, `grid[k][i] = 0`:
 
 ```rust
 fn word_counts(text: str) -> [str: int] {
@@ -505,13 +511,23 @@ fn word_counts(text: str) -> [str: int] {
     for w in text.split(" ") {
         if w != "" { counts[w] = counts.get(w, 0) + 1 }
     }
-    ret counts
+    return counts
+}
+
+fn group_by_length(words: [str]) -> [int: [str]] {
+    var groups: [int: [str]] = [:]
+    for w in words {
+        if !groups.has(w.len()) { groups[w.len()] = [] }
+        groups[w.len()].push(w)                      // a value inside a map changes in place
+    }
+    return groups
 }
 
 fn main() {
     let counts = word_counts("a b a")
     for w in counts { print("{w}: {counts[w]}") }   // in insertion order: a: 2, b: 1
     print(counts.has("c"), counts.keys())
+    print(group_by_length(["a", "bb", "c"]))         // [1: ["a", "c"], 2: ["bb"]]
 }
 ```
 
@@ -536,7 +552,7 @@ fn sort_by_n(inout cs: [Count]) {              // largest n first
 }
 ```
 
-Leave a loop early with `break` (only the innermost loop) or leave the whole function with `ret`:
+Leave a loop early with `break` (only the innermost loop) or leave the whole function with `return`:
 
 ```rust
 fn first_divisor(n: int) -> int {              // smallest divisor above 1
@@ -547,7 +563,7 @@ fn first_divisor(n: int) -> int {              // smallest divisor above 1
             break
         }
     }
-    ret found
+    return found
 }
 ```
 
@@ -606,7 +622,7 @@ fn main() {
 }
 ```
 
-JSON is read into the type the value goes to (a typed `let`, a parameter, a field, `ret`); a struct
+JSON is read into the type the value goes to (a typed `let`, a parameter, a field, `return`); a struct
 reads an object by field names, an array a list:
 
 ```rust
@@ -656,7 +672,7 @@ for i in 1..16 {
 }
 ```
 
-Word counts (a struct, an array of structs, `split`, early `ret`, changing an element's field).
+Word counts (a struct, an array of structs, `split`, early `return`, changing an element's field).
 Prints `the: 4`, `cat: 2`, `saw: 2`, `dog: 2`, then `6 different words`:
 
 ```rust
@@ -667,9 +683,9 @@ struct Count {
 
 fn index_of_word(counts: [Count], word: str) -> int {
     for i in 0..counts.len() {
-        if counts[i].word == word { ret i }
+        if counts[i].word == word { return i }
     }
-    ret -1
+    return -1
 }
 
 let text = "the cat saw the dog and the dog saw the cat run"
@@ -695,8 +711,8 @@ Title case and an acronym (chars, `str(c)`, `slice`, `join`). Prints `Portable N
 
 ```rust
 fn capitalized(word: str) -> str {
-    if word == "" { ret word }
-    ret str(word[0].upper()) + word.slice(1, word.len())
+    if word == "" { return word }
+    return str(word[0].upper()) + word.slice(1, word.len())
 }
 
 let name = "portable network graphics"
@@ -725,7 +741,7 @@ fn neighbours(g: [[bool]], r: int, c: int) -> int {
             }
         }
     }
-    ret n
+    return n
 }
 
 fn step(g: [[bool]]) -> [[bool]] {
@@ -736,7 +752,7 @@ fn step(g: [[bool]]) -> [[bool]] {
             next[r][c] = n == 3 || (g[r][c] && n == 2)
         }
     }
-    ret next
+    return next
 }
 
 fn show(g: [[bool]]) {
@@ -764,9 +780,9 @@ More programs with expected output live in
 
 ## 8. Checklist before you answer
 
-1. The program is a script: statements at the top level, `fn` and `struct` definitions anywhere (no `fn main` needed).
+1. The program is a script: statements at the top level, `fn` and `struct` definitions anywhere (no `fn main` needed; a `fn main` runs after the statements).
    Its top-level variables are visible in every function (declare them before the first call that uses them).
-2. No `;`, `return`, `elif`, `++`, `0..=n`, `xs[a..b]`, `Point { x: 1 }`, or Allman-style `{` on its own line.
+2. No `;`, `elif`, `++`, `0..=n`, `xs[a..b]`, `Point { x: 1 }`, or Allman-style `{` on its own line.
 3. Every name is unique inside its function (parameters, loop variables and locals), and no variable
    shares a name with a function or a struct.
 4. Both sides of every operator have the same type; floats are written with a dot (`2.0`);
@@ -774,7 +790,7 @@ More programs with expected output live in
 5. Chars are in single quotes and compared with chars (`s[i] == 'a'`); `+` joins only two strings or two arrays.
 6. Everything that changes is a `var` (or an `inout` parameter, written `inout` at the call too); empty
    arrays have a type (`var xs: [int] = []`).
-7. Every `if` / `while` condition is a comparison or a `bool`, and every `->` function ends with `ret`
+7. Every `if` / `while` condition is a comparison or a `bool`, and every `->` function ends with `return`
    on all paths (a one-line `=` function needs none).
 8. Indexes stay in `0..len`, and literal braces in strings are doubled (`{{` `}}`); nothing inside
    `{ }` contains a `"`.

@@ -70,9 +70,12 @@ compiler to tell the AI exactly what to fix.
 - **Examples catch logic mistakes before anything runs.** `fn sq(x: int) -> int = x * x  ex sq(3) == 9`:
   every `ex` condition is evaluated while the program compiles and never compiled into it, so a function
   that is wrong for its own examples is a compile error that shows the value it really gave.
-- **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
-  `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
-  fix, and `--fix` applies them all: a slip costs no extra model call.
+- **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (a `;`, `elif`,
+  `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable fix. `check`, `run`
+  and `build` apply those fixes in memory and go on, reporting each as a warning, and `--fix` writes them to
+  the file: a slip costs no extra model call.
+- **It accepts what models write anyway.** `return` (and `ret`), `c ? a : b`, a `fn main` next to top-level
+  statements, `groups[k].push(x)` on a map value.
 - **Compact programs.** One-line functions, string interpolation, `if` as a value, lambdas and built-in
   methods on strings and arrays keep code short. [`bench/`](bench) measures first-try correctness and
   token count against Python, TypeScript and Rust.
@@ -95,7 +98,8 @@ compiler to tell the AI exactly what to fix.
   `sort`, `join`, ...), lambdas (`xs.map(x => x * 2)`) and comprehensions, `inout` parameters, `break`
   and `continue`. Memory is freed by reference counting, with no garbage collector, and `free`, `arena`
   and `keep` say when if you want to.
-- **Short code:** scripts without `fn main`, one-line functions, `+=` and friends, string interpolation,
+- **Short code:** scripts without `fn main` (or with one: the statements run first), one-line functions,
+  `c ? a : b`, `+=` and friends, string interpolation,
   `if` as a value, `print(a, b)`.
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
   runtime errors with the exact position, and a build cache that skips the C compiler when the program
@@ -172,14 +176,17 @@ nyra run prog.nyra
 
 ### Self-repair with `--fix`
 
-Many mistakes have exactly one possible repair: `return x` is `ret x`, a `;` goes, `elif` is `else if`,
+Many mistakes have exactly one possible repair: a `;` goes, `elif` is `else if`,
 `and` is `&&`, `True` is `true`, `'hello'` is `"hello"`, `xs.length()` is `xs.len()`, `string` is `str`,
 `Point { x: 1 }` is `Point(x: 1)`, `5.` is `5.0`, `print "hi"` is `print("hi")`. Such an error carries a
-**fix**, and `nyra check --fix` (or `run --fix`, `build --fix`) applies every fix, checks again (a few
-rounds, since fixing the syntax can reveal a type error with its own fix) and, if the program then
-compiles, writes it back, prints the edits to stderr as a diff and goes on. If an error without a fix
-remains, the file is left unchanged and the errors are reported as usual. A program that compiles is
-never touched.
+**fix**. `nyra check`, `run`, `build` and `test` apply every fix **in memory**, check again (a few rounds,
+since fixing the syntax can reveal a type error with its own fix) and go on with the repaired program;
+each repair is a warning on stderr (with `--json`, `check` prints a `warnings` array with the `code`,
+position and applied text of each one), and the file is not written. `--fix` writes the file back when it
+then compiles (and prints the edits to stderr as a diff); `--strict` keeps every error an error. If an
+error without a fix remains, the errors are reported as usual. A program that compiles is never touched.
+`nyra fmt prog.nyra` rewrites a file into canonical form: the fixes applied, `return` for `ret`, four-space
+indentation. It never changes what the program does.
 
 **Agents should run `--fix` (or apply the JSON `fix` themselves) before asking a model to repair a
 program**: a mistake with a fix then costs no model call and no tokens. In the JSON form the fix is a
@@ -187,8 +194,8 @@ list of edits, each replacing the text from `line`:`col` up to (not including) `
 with `text` (columns count characters, from 1):
 
 ```
-{"code":"E0101","message":"`return` is not part of Nyra: ...","line":2,"col":12,"hint":"Nyra spells it `ret`: ...",
- "fix":[{"line":2,"col":5,"end_line":2,"end_col":11,"text":"ret"}]}
+{"code":"E0101","message":"`elif` is not part of Nyra: ...","line":4,"col":7,"hint":"write `else if` (two words) ...",
+ "fix":[{"line":4,"col":7,"end_line":4,"end_col":11,"text":"else if"}]}
 ```
 
 A fix is only given where it is certain. When there are alternatives there is a hint and no fix: a typo
@@ -296,9 +303,9 @@ fn add(a: int, b: int) -> int = a + b          // one-line function: the express
 fn greet(name: str) = print("hi {name}")       // no `->`: returns nothing
 fn dist2(p: Point) -> int = p.x * p.x + p.y * p.y
 
-fn gcd(a: int, b: int) -> int {                // block body: `ret` returns
-    if b == 0 { ret a }
-    ret gcd(b, a % b)
+fn gcd(a: int, b: int) -> int {                // block body: `return` returns
+    if b == 0 { return a }
+    return gcd(b, a % b)
 }
 
 fn bump(inout n: int) { n += 1 }               // `inout`: may change the caller's variable
@@ -342,7 +349,10 @@ fn main() {                                    // every program starts here
 - **Values, not references:** assigning or passing an array or a struct copies it; only an `inout`
   parameter changes the caller's variable.
 - **Scripts:** without `fn main`, the top-level statements are the program, and their `let`/`var`
-  variables are visible in every function: `var pos = 0` then `fn advance() { pos += 1 }`.
+  variables are visible in every function: `var pos = 0` then `fn advance() { pos += 1 }`. With a `fn main`
+  too, the statements run first and then `main()` is called.
+- **Conditional value:** `c ? a : b` is `if c { a } else { b }` (a `bool` condition, one type for both
+  branches); it nests to the right.
 - **Strings** are UTF-8 and count characters: `s[i]` is a `char` (`'a'`), `+` joins two strings, and
   `==` and `<` compare them by content. Arrays and structs print as Nyra code.
 - **Conditions must be `bool`:** `if n != 0`, not `if n`.

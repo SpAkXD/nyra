@@ -140,6 +140,10 @@ impl Type {
     }
 }
 
+/// The name of a program's own `fn main` when it also has statements at the top level: those
+/// statements become the function `main` (they run first), which then calls this one.
+pub const USER_MAIN: &str = "__main";
+
 #[derive(Debug)]
 pub struct Program {
     pub funcs: Vec<Func>,

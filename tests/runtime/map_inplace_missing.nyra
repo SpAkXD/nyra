@@ -1,0 +1,7 @@
+// expect: E0248 at 6:11
+fn main() {
+    var groups: [str: [int]] = ["a": [1]]
+    groups["a"].push(2)
+    print(groups)
+    groups["b"].push(3)
+}

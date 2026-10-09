@@ -11,7 +11,7 @@ nyra explain --planned        # the same, with the planned codes of future desig
 ```
 
 Errors from `nyra check file.nyra --json` carry the code (`"code":"E0201"`) and a `hint` that usually contains the
-fix already; this file explains the rule behind it. When the repair is certain (`return` for `ret`, a `;`, `'text'`, ...)
+fix already; this file explains the rule behind it. When the repair is certain (`elif` for `else if`, a `;`, `'text'`, ...)
 the error also carries it as a `fix` of text edits, and `nyra check --fix` applies it. The programs under **Wrong** and **Fixed** are tested: for every
 code the compiler can emit, the wrong program produces exactly that code and the fixed program compiles and runs.
 Codes marked *planned* are described in the design for a future version; the compiler does not emit them yet and the
@@ -24,7 +24,7 @@ design may still change.
 | E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0103 | parser | grammar, type names, nesting depth |
-| E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
+| E0201-E0218 | type checker | names, types, `return`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
@@ -59,12 +59,11 @@ Each entry is a heading `## E0xxx: title` followed by these fields, in this orde
 
 ## E0001: unexpected character
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
-- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `?`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
+- **What it means:** The source contains a character that cannot start any Nyra token. Nyra's alphabet is small: letters, digits, `_`, strings in double quotes, characters in single quotes (`'a'`), `//` comments and the symbols `( ) { } [ ] , : ? . + - * / % = < > !` plus the two-character forms `-> .. == != <= >= && || += -= *= /= %=`. A `.` is only valid inside a float (`2.5`), in a range (`0..10`) or between a value and a field or method name (`p.x`, `s.len()`), and `&` and `|` only in pairs.
+- **Why Nyra has this rule:** A closed alphabet keeps every program unambiguous. Characters that mean something in other languages (`#`, `$`, `@`) are not silently ignored or reinterpreted: you get a precise error at the exact position.
 - **Common causes:**
   - a `#` comment: Nyra comments start with `//`
   - backticks or typographic quotes (“ ” ‘ ’): text uses straight double quotes (single quotes hold one character, `'a'`)
-  - `?` and `:` as a ternary: write `if cond { a } else { b }` as a value
   - a single `&` or `|`: write `&&` or `||`
   - `.5` or `5.`: a float needs digits on both sides of the dot (`0.5`, `5.0`)
   - `$`, `@`, `^`, `~` or a backslash outside a string or a character
@@ -211,39 +210,50 @@ fn main() {
 ## E0101: unexpected token
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** The parser found a token that cannot appear at this point. The message names what it expected and what it found (for example: expected end of line, found `x`); the hint usually names the construct you meant.
-- **Why Nyra has this rule:** The grammar is small and strict on purpose: `ret` is the only way to return, braces are always required and `{` stays on the line of its `fn`, `if`, `else`, `while` or `for`, and there is one statement per line. So every program has exactly one spelling, and a model that knows another language is corrected at the first deviation.
+- **Why Nyra has this rule:** The grammar is small and strict on purpose: `return` is the only way to return (`ret` is accepted as a short spelling), braces are always required and `{` stays on the line of its `fn`, `if`, `else`, `while` or `for`, and there is one statement per line. So every program has exactly one spelling, and a model that knows another language is corrected at the first deviation.
 - **Common causes:**
-  - `return`, `elif`, `elseif`, `and`, `or`, `not`, `function`, `def`: Nyra spells them `ret`, `else if`, `&&`, `||`, `!`, `fn`
+  - `elif`, `elseif`, `and`, `or`, `not`, `function`, `def`: Nyra spells them `else if`, `&&`, `||`, `!`, `fn`
   - `i++`, `i--`, `2 ** 3`, `0..=9`, `a === b`: these operators do not exist
   - a lambda written as in another language, `lambda x: x * 2`, `|x| x * 2` or `x -> x * 2`: write `x => x * 2`
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
-  - code outside a function in a program with `fn main`: only `fn` and `struct` definitions may then be at the top level (and there is no `import`)
+  - a conditional value `c ? a : b` that lacks its `:` part, or a `?` anywhere else
+  - an `import` or a `class` at the top level of the file
   - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
   - `for (i, x) in xs`: write the two variables without parentheses, `for i, x in xs`
-  - `break` or `continue` outside a loop: to leave a function write `ret`
+  - `break` or `continue` outside a loop: to leave a function write `return`
   - `0xFF`, `1_000` and `1e5` number forms: write `255`, `1000`, `100000.0`
   - `=` where `==` was meant, as in `if x = 1 {`
   - a format specifier inside a string, as in `"{x:.2f}"`
 - **Wrong:**
 ```rust
-fn double(x: int) -> int {
-    return x * 2
+fn sign(x: int) -> int {
+    if x > 0 {
+        return 1
+    } elif x < 0 {
+        return -1
+    }
+    return 0
 }
 
 fn main() {
-    print(double(4))
+    print(sign(4))
 }
 ```
 - **Fixed:**
 ```rust
-fn double(x: int) -> int {
-    ret x * 2
+fn sign(x: int) -> int {
+    if x > 0 {
+        return 1
+    } else if x < 0 {
+        return -1
+    }
+    return 0
 }
 
 fn main() {
-    print(double(4))
+    print(sign(4))
 }
 ```
 - **Related:** E0102, E0212, E0001
@@ -315,9 +325,9 @@ fn main() {
   - the variable is declared later in the function: move its `let` above the use
   - the variable was declared inside an inner `{ }` block and is used after the block ended: declare it before the block
   - a function used without call parentheses: write `limit()`, not `limit`
-  - a function that uses a variable of `fn main`: functions see only a script's top-level variables, so drop `fn main` and write its statements at the top level, or pass the value as a parameter (the hint says which)
+  - a function that uses a local variable of `fn main`: functions see only the variables declared at the top level of the file (script variables), so declare it there, or pass the value as a parameter (the hint says which)
   - assigning to a variable that was never declared (`count = 1`): declare it first with `var count = 0`
-  - words from other languages: `null`, `None`, `return`, `self`, `True`
+  - words from other languages: `null`, `None`, `self`, `True`
 - **Wrong:**
 ```rust
 fn main() {
@@ -358,7 +368,7 @@ fn pow(b: int, e: int) -> int {
     for i in 0..e {
         r *= b
     }
-    ret r
+    return r
 }
 
 fn main() {
@@ -369,7 +379,7 @@ fn main() {
 
 ## E0203: type mismatch
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function or method call, a field of a struct construction, a `ret` value, the bounds of a `for` range, or the argument of `int()`, `float()` or `char()`. A call to a function that returns nothing cannot be used as a value either.
+- **What it means:** A value has one type where another is required: the initial value of a `let` with a type annotation, an assignment, an argument of a function or method call, a field of a struct construction, a `return` value, the bounds of a `for` range, or the argument of `int()`, `float()` or `char()`. A call to a function that returns nothing cannot be used as a value either.
 - **Why Nyra has this rule:** Nothing converts implicitly. Turning an `int` into a `float` (or back) changes the result, so you write it: `float(n)` and `int(x)` (which truncates toward zero). That makes every numeric conversion visible in the code.
 - **Common causes:**
   - an `int` where a `float` is needed: write `2.0` for a literal, `float(n)` for a variable
@@ -485,21 +495,21 @@ fn main() {
 ```
 - **Related:** E0205, E0201
 
-## E0207: bad or missing `ret`
+## E0207: bad or missing `return`
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** The use of `ret` does not match the function's signature. A function declared `-> T` must end every path with `ret value`; a function without `->` cannot return a value; and `ret` without a value is only valid in a function that returns nothing.
-- **Why Nyra has this rule:** Returning is always explicit, so the end of every path is visible and there is no implicit "last expression is the result" in block functions. The one-line form `fn f(x: int) -> int = x * 2` needs no `ret`.
+- **What it means:** The use of `return` (or its short spelling `ret`) does not match the function's signature. A function declared `-> T` must end every path with `return value`; a function without `->` cannot return a value; and `return` without a value is only valid in a function that returns nothing.
+- **Why Nyra has this rule:** Returning is always explicit, so the end of every path is visible and there is no implicit "last expression is the result" in block functions. The one-line form `fn f(x: int) -> int = x * 2` needs no `return`.
 - **Common causes:**
-  - the last `if` has no `else` and no `ret` follows it: add a final `ret` or an `else { ret ... }`
-  - the last line is a value (`a + b`) written Rust-style without `ret`
-  - a loop that may run zero times is the last statement: add a `ret` after it
-  - `ret 1` in a function whose signature has no `-> int`
-  - `ret` with no value in a function that returns a value
+  - the last `if` has no `else` and no `return` follows it: add a final `return` or an `else { return ... }`
+  - the last line is a value (`a + b`) written Rust-style without `return`
+  - a loop that may run zero times is the last statement: add a `return` after it
+  - `return 1` in a function whose signature has no `-> int`
+  - `return` with no value in a function that returns a value
 - **Wrong:**
 ```rust
 fn sign(x: int) -> int {
-    if x > 0 { ret 1 }
-    if x < 0 { ret -1 }
+    if x > 0 { return 1 }
+    if x < 0 { return -1 }
 }
 
 fn main() {
@@ -509,9 +519,9 @@ fn main() {
 - **Fixed:**
 ```rust
 fn sign(x: int) -> int {
-    if x > 0 { ret 1 }
-    if x < 0 { ret -1 }
-    ret 0
+    if x > 0 { return 1 }
+    if x < 0 { return -1 }
+    return 0
 }
 
 fn main() {
@@ -606,7 +616,7 @@ fn main() {
 ## E0211: bad `main`
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** `fn main` declares parameters or a return type. `main` takes nothing and returns nothing.
-- **Why Nyra has this rule:** A program has no command-line arguments, input or exit code yet, and `main` behaves identically on every backend. To stop early, write `ret` without a value.
+- **Why Nyra has this rule:** A program has no command-line arguments, input or exit code yet, and `main` behaves identically on every backend. To stop early, write `return` without a value.
 - **Common causes:**
   - `fn main() -> int` copied from C or Rust
   - `fn main(args: ...)`: programs are closed, so put the values in the program (`let n = 12`)
@@ -614,7 +624,7 @@ fn main() {
 - **Wrong:**
 ```rust
 fn main() -> int {
-    ret 0
+    return 0
 }
 ```
 - **Fixed:**
@@ -625,12 +635,12 @@ fn main() {
 ```
 - **Related:** E0208, E0207
 
-## E0212: bad `if` used as a value
+## E0212: bad `if` or `? :` used as a value
 - **Kind:** compile error · **Since:** v0.2
-- **What it means:** An `if` that is used as a value (`let x = if c { a } else { b }`) is incomplete or inconsistent: it has no `else`, a branch is not exactly one expression (an empty branch, a statement, several lines), a branch produces no value, or the two branches have different types.
+- **What it means:** An `if` that is used as a value (`let x = if c { a } else { b }`, also written `let x = c ? a : b`) is incomplete or inconsistent: it has no `else`, a branch is not exactly one expression (an empty branch, a statement, several lines), a branch produces no value, or the two branches have different types.
 - **Why Nyra has this rule:** A value must exist on every path and have one type, so the compiler can give it that type. Branches that do things belong in an `if` statement, which has no value.
 - **Common causes:**
-  - `let x = if c { 1 }` without `else`
+  - `let x = if c { 1 }` without `else` (the `? :` form always has both parts)
   - a branch that holds two lines or a statement such as `print(...)` or an assignment
   - an empty branch `{ }`
   - branches of different types, such as `{ 1 } else { 2.5 }`: convert one (`float(1)`, or write `1.0`)
@@ -1102,13 +1112,14 @@ fn main() {
 
 ## E0229: cannot assign to this expression
 - **Kind:** compile error · **Since:** v0.3
-- **What it means:** The left side of an assignment, the receiver of a method that changes its receiver (`push`, `pop`, `insert`, `remove`, `sort`, `reverse`) or an `inout` argument is not something that can change. Only a variable, a field or an element of one can. The messages name the case: "cannot assign to a character of a string: strings are immutable" (`name[0] = 'A'`), "cannot call `.push()` on a temporary value: it changes its receiver" (`items().push(3)`), "cannot assign to this expression" (`a + b = 3`) and "`inout` needs a variable, a field or an element" (`bump(inout 5)`). A variable that is not a `var` is a different error, E0205.
+- **What it means:** The left side of an assignment, the receiver of a method that changes its receiver (`push`, `pop`, `insert`, `remove`, `sort`, `reverse`) or an `inout` argument is not something that can change. Only a variable, a field or an element of one can (an element or field inside a map value too: `m[k].push(x)`, `m[k].n += 1`; only `inout` cannot reach into a map). The messages name the case: "cannot assign to a character of a string: strings are immutable" (`name[0] = 'A'`), "cannot call `.push()` on a temporary value: it changes its receiver" (`items().push(3)`), "cannot assign to this expression" (`a + b = 3`), "`inout` needs a variable, a field or an element" (`bump(inout 5)`) and "a value inside a map cannot be passed `inout`" (`bump(inout m["a"])`). A variable that is not a `var` is a different error, E0205.
 - **Why Nyra has this rule:** Only variables, and the fields and elements inside them, can change. A string is a value that never changes in place: to change a character, build a new string and assign it. A temporary value has no name, so a change to it would be lost.
 - **Common causes:**
   - `s[0] = 'A'` on a string: build the new string with `slice` and `+`
   - `push`, `pop` or `sort` on the result of a function call: store the result in a `var` first
   - an assignment to an expression such as `a + b = 3` or `f() = 1`
   - `inout` with a value that is not a variable, such as `inout 5` or `inout f()`
+  - `inout m[k]`, a value inside a map: copy it into a `var`, pass that, and store it back with `m[k] = v`
 - **Wrong:**
 ```rust
 fn main() {
@@ -1129,7 +1140,7 @@ fn main() {
 
 ## E0230: cannot infer the type of `[]`
 - **Kind:** compile error · **Since:** v0.3
-- **What it means:** An empty array literal `[]` appears where nothing says what its element type is. The message is "cannot infer the type of the empty array `[]`" and the hint shows `var xs: [int] = []`. The type is known, and `[]` is fine, where it is declared (`var xs: [int] = []`), assigned to a variable, passed as an argument, put in a struct field, returned with `ret`, pushed or inserted into an array of arrays, or compared with or added to an array of known type (`xs == []`, `xs + []`).
+- **What it means:** An empty array literal `[]` appears where nothing says what its element type is. The message is "cannot infer the type of the empty array `[]`" and the hint shows `var xs: [int] = []`. The type is known, and `[]` is fine, where it is declared (`var xs: [int] = []`), assigned to a variable, passed as an argument, put in a struct field, returned with `return`, pushed or inserted into an array of arrays, or compared with or added to an array of known type (`xs == []`, `xs + []`).
 - **Why Nyra has this rule:** Every array has one element type, and an empty literal contains no element to read it from. The compiler never guesses a type, so a program is the same on every backend.
 - **Common causes:**
   - `var xs = []` or `let xs = []` without a type, to be filled later with `push`
@@ -1367,7 +1378,7 @@ fn main() {
   - `free(n)` or `keep(n)` on an `int`, `float`, `bool` or `char`: there is nothing to free
   - freeing or keeping a parameter or a loop variable: the caller owns it
   - `free(xs[0])` or `free(p.name)`: `free` needs a whole variable, and to drop an element early you assign an empty value (`xs[0] = []`)
-  - `names.push(...)` or `best = w` inside an `arena` while the variable was declared before the block: change it after the block, or let a function whose body is the `arena` return the result with `ret`
+  - `names.push(...)` or `best = w` inside an `arena` while the variable was declared before the block: change it after the block, or let a function whose body is the `arena` return the result with `return`
 - **Wrong:**
 ```rust
 fn main() {
@@ -1394,7 +1405,7 @@ fn longest(text: str) -> str {
                 best = w
             }
         }
-        ret best
+        return best
     }
 }
 
@@ -1478,8 +1489,8 @@ fn main() {
 - **Fixed:**
 ```rust
 fn div(a: int, b: int) -> int {
-    if b == 0 { ret 0 }
-    ret a / b
+    if b == 0 { return 0 }
+    return a / b
 }
 
 fn main() {
@@ -1572,14 +1583,14 @@ fn main() {
 ```rust
 fn is_number(s: str) -> bool {
     if s.len() == 0 {
-        ret false
+        return false
     }
     for c in s {
         if !c.is_digit() {
-            ret false
+            return false
         }
     }
-    ret true
+    return true
 }
 
 fn main() {
@@ -1742,8 +1753,8 @@ fn main() {
 ```rust
 // the distance between two numbers on a line
 fn dist(a: int, b: int) -> int {
-    if a > b { ret a - b }
-    ret a - b
+    if a > b { return a - b }
+    return a - b
 }
 ex dist(7, 2) == 5, dist(2, 7) == 5
 
@@ -1755,8 +1766,8 @@ fn main() {
 ```rust
 // the distance between two numbers on a line
 fn dist(a: int, b: int) -> int {
-    if a > b { ret a - b }
-    ret b - a
+    if a > b { return a - b }
+    return b - a
 }
 ex dist(7, 2) == 5, dist(2, 7) == 5
 
@@ -1780,7 +1791,7 @@ fn main() {
 fn mean(xs: [int]) -> int {
     var total = 0
     for x in xs { total += x }
-    ret total / xs.len()
+    return total / xs.len()
 }
 ex mean([2, 4, 6]) == 4, mean([]) == 0
 
@@ -1791,10 +1802,10 @@ fn main() {
 - **Fixed:**
 ```rust
 fn mean(xs: [int]) -> int {
-    if xs.len() == 0 { ret 0 }
+    if xs.len() == 0 { return 0 }
     var total = 0
     for x in xs { total += x }
-    ret total / xs.len()
+    return total / xs.len()
 }
 ex mean([2, 4, 6]) == 4, mean([]) == 0
 
@@ -1845,7 +1856,7 @@ fn digits(n: int) -> int {
     while left >= 10 {
         count += 1
     }
-    ret count
+    return count
 }
 ex digits(7) == 1, digits(1234) == 4
 
@@ -1862,7 +1873,7 @@ fn digits(n: int) -> int {
         left /= 10
         count += 1
     }
-    ret count
+    return count
 }
 ex digits(7) == 1, digits(1234) == 4
 
@@ -1907,7 +1918,7 @@ fn hash(s: str) -> int {
     for c in s {
         h = h * 1099511628211 + c.code()
     }
-    ret h
+    return h
 }
 
 fn main() {
@@ -1922,7 +1933,7 @@ fn hash(s: str) -> int {
     for c in s {
         h = (h * 31 + c.code()) % 1000000007
     }
-    ret h
+    return h
 }
 
 fn main() {
@@ -2215,7 +2226,7 @@ fn main() {
 
 ## E0309: `json.parse` needs to know the type
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** `json.parse(text)` is used where nothing says which type to read. `json.parse` reads the type the value goes to: a `let` with a type, a parameter, a field, a `ret` value or an assignment.
+- **What it means:** `json.parse(text)` is used where nothing says which type to read. `json.parse` reads the type the value goes to: a `let` with a type, a parameter, a field, a `return` value or an assignment.
 - **Why Nyra has this rule:** JSON is read into ordinary Nyra values (ints, floats, strings, arrays and structs), checked against their type, so there is no untyped "JSON value" that every use would have to inspect. The type must therefore be known where the text is read.
 - **Common causes:**
   - `let x = json.parse(text)` without a type
@@ -2327,7 +2338,7 @@ fn main() {
 - **Wrong:**
 ```rust
 extern c fn twice(x: int) -> int {
-    ret x * 2
+    return x * 2
 }
 ```
 - **Fixed:**

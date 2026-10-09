@@ -7,10 +7,9 @@ use crate::ast::Type;
 use crate::diag::suggest;
 
 /// A word from another language that Nyra spells differently or does not have.
-/// Used where a syntax error is caused by that word (`return x`, `a and b`, `elif`).
+/// Used where a syntax error is caused by that word (`a and b`, `elif`).
 pub fn word(w: &str) -> Option<String> {
     let hint = match w {
-        "return" => "Nyra spells it `ret`: replace `return` with `ret`",
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
         "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
         "and" => "write `&&` for logical and: `a && b`",
@@ -76,7 +75,7 @@ pub fn top_level_word(w: &str) -> Option<String> {
 /// Hint for an undefined variable whose name is a keyword or literal of another language.
 pub fn undefined_variable(w: &str) -> Option<String> {
     match w {
-        "return" | "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self" | "this" => word(w),
+        "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self" | "this" => word(w),
         _ => None,
     }
 }
@@ -116,7 +115,6 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "floor" | "ceil" | "round" | "trunc" => {
             "these are in the standard module `math` (`math.floor(x)` gives a float); `int(x)` truncates a float to an int"
         }
-        "return" => return word(w),
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
         "string" | "String" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" | "sprintf" => {
             "convert with `str(x)`, or build text with interpolation, e.g. `\"{x}\"`"
@@ -517,7 +515,6 @@ pub fn invisible_char(c: char) -> Option<&'static str> {
 pub fn bad_char(c: char) -> String {
     match c {
         '#' => "comments start with `//`, not `#`".into(),
-        '?' => "Nyra has no `?`: for a conditional value write `if cond { a } else { b }`".into(),
         '&' => "write `&&` for logical and (there are no bit operations)".into(),
         '|' => "write `||` for logical or (there are no bit operations)".into(),
         '^' | '~' => "Nyra has no bit operations or power operator: multiply (`x * x`) or use a loop".into(),
