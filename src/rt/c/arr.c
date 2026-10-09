@@ -94,6 +94,11 @@ static inline int64_t nyrt_ix(const nyrt_arr *a, int64_t i, int line, int col) {
     if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)a->len)) nyrt_arr_bad_index(a, i, line, col);
     return i;
 }
+// The same with the length read before a loop that cannot change it (`n`).
+static inline int64_t nyrt_ixn(const nyrt_arr *a, int64_t i, int64_t n, int line, int col) {
+    if (NYRT_UNLIKELY((uint64_t)i >= (uint64_t)n)) nyrt_arr_bad_index(a, i, line, col);
+    return i;
+}
 // Before a write: makes `*p` the only owner (the copy, like the memory check, is the slow path).
 static inline void nyrt_arr_mut(nyrt_arr **p) {
     if (NYRT_UNLIKELY((*p)->rc != 1)) nyrt_arr_unique(p);
@@ -368,6 +373,24 @@ static nyrt_arr *nyrt_str_split(const nyrt_str *s, const nyrt_str *sep, int line
 }
 static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
     NYRT_LIVE(a);
+    if (a->ty == &nyrt_T_str) {
+        // the size first, then one allocation
+        nyrt_str **xs = NYRT_ELEMS(nyrt_str *, a);
+        int64_t len = 0, nchars = 0;
+        for (int64_t i = 0; i < a->len; i++) { NYRT_LIVE(xs[i]); len += xs[i]->len; nchars += xs[i]->nchars; }
+        if (a->len > 1) { len += sep->len * (a->len - 1); nchars += sep->nchars * (a->len - 1); }
+        nyrt_str *r = nyrt_str_alloc(len);
+        char *o = r->data;
+        for (int64_t i = 0; i < a->len; i++) {
+            if (i) { memcpy(o, sep->data, (size_t)sep->len); o += sep->len; }
+            memcpy(o, xs[i]->data, (size_t)xs[i]->len);
+            o += xs[i]->len;
+        }
+        *o = '\0';
+        r->len = len;
+        r->nchars = nchars;
+        return r;
+    }
     nyrt_buf b = nyrt_buf_new();
     for (int64_t i = 0; i < a->len; i++) {
         if (i) nyrt_buf_str(&b, sep);
@@ -378,16 +401,36 @@ static nyrt_str *nyrt_arr_join(const nyrt_arr *a, const nyrt_str *sep) {
 }
 
 // ---- sorting (after the element types it dispatches on) ----------------------------------------
-// The same merge sort for the sortable element types, without a call per comparison.
+// A stable merge sort for the sortable element types, without a call per comparison: insertion
+// sort for short runs, no merge when the halves are already in order, and only the left half
+// copied out. Every stable sort gives the same result (the orders are strict weak orders, NaN
+// last), so the output matches the plain merge sort of the other backends.
 #define NYRT_MSORT(name, T, LT) \
     static void name(T *a, T *tmp, int64_t lo, int64_t hi) { \
-        if (hi - lo < 2) return; \
+        if (hi - lo <= 16) { \
+            for (int64_t i = lo + 1; i < hi; i++) { \
+                T x = a[i]; \
+                int64_t j = i; \
+                while (j > lo && LT(x, a[j - 1])) { a[j] = a[j - 1]; j--; } \
+                a[j] = x; \
+            } \
+            return; \
+        } \
         int64_t mid = lo + (hi - lo) / 2; \
         name(a, tmp, lo, mid); \
         name(a, tmp, mid, hi); \
-        int64_t i = lo, j = mid; \
-        for (int64_t k = lo; k < hi; k++) tmp[k] = (j < hi && (i >= mid || LT(a[j], a[i]))) ? a[j++] : a[i++]; \
-        memcpy(a + lo, tmp + lo, (size_t)(hi - lo) * sizeof(T)); \
+        if (!LT(a[mid], a[mid - 1])) return; \
+        memcpy(tmp + lo, a + lo, (size_t)(mid - lo) * sizeof(T)); \
+        int64_t i = lo, j = mid, k = lo; \
+        while (i < mid && j < hi) { /* no branch: the comparison picks the side */ \
+            T l = tmp[i]; \
+            T r = a[j]; \
+            int right = LT(r, l); \
+            a[k++] = right ? r : l; \
+            j += right; \
+            i += !right; \
+        } \
+        while (i < mid) a[k++] = tmp[i++]; \
     }
 #define NYRT_LT(x, y) ((x) < (y))
 #define NYRT_LT_STR(x, y) (nyrt_str_cmp((x), (y)) < 0)

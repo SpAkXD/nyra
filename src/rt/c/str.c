@@ -353,17 +353,38 @@ static nyrt_str *nyrt_str_pad(const nyrt_str *s, int64_t n, nyrt_char c, bool le
     if (left) nyrt_buf_str(&b, s);
     return nyrt_buf_done(&b);
 }
-// str(c): never allocates for ASCII (immortal one-character strings).
+// A string that is never freed (reference count 0, like a literal or `keep`): made once, on
+// first use, then shared by every `str(c)` / `str(n)` of the same value.
+static nyrt_str *nyrt_immortal(const char *p, int64_t n) {
+    nyrt_str *s = nyrt_str_from(p, n);
+    s->rc = 0;
+    nyrt_live--;
+    return s;
+}
+// str(c): allocates only the first time for an ASCII character.
 static nyrt_str *nyrt_char_str(nyrt_char c) {
-    static nyrt_str ascii[128];
-    static char bytes[128][2];
-    if (c < 128) {
-        nyrt_str *s = &ascii[c];
-        if (!s->data) { bytes[c][0] = (char)c; s->data = bytes[c]; s->len = s->cap = s->nchars = 1; }
-        return s;
-    }
+    static nyrt_str *ascii[128];
     char t[4];
+    if (c < 128) {
+        if (!ascii[c]) { t[0] = (char)c; ascii[c] = nyrt_immortal(t, 1); }
+        return ascii[c];
+    }
     return nyrt_str_from(t, nyrt_utf8_encode(c, t));
+}
+// str(n): allocates only the first time for 0 to 255.
+static nyrt_str *nyrt_int_str(int64_t x) {
+    static nyrt_str *small[256];
+    char t[24], *p = nyrt_int_text(t, x);
+    int64_t n = t + 24 - p;
+    if (x >= 0 && x < 256) {
+        if (!small[x]) small[x] = nyrt_immortal(p, n);
+        return small[x];
+    }
+    nyrt_str *s = nyrt_str_alloc(n);
+    memcpy(s->data, p, (size_t)n);
+    s->data[n] = '\0';
+    s->len = s->nchars = n;
+    return s;
 }
 static nyrt_char nyrt_char_from(int64_t n, int line, int col) {
     if (n < 0 || n > 1114111 || (n >= 55296 && n <= 57343)) {

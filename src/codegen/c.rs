@@ -241,7 +241,7 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is used through its pointer: `(*p)`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0 };
+        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, moving: false, unique: Vec::new(), lens: Vec::new() };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -262,6 +262,13 @@ struct Gen<'a> {
     indent: usize,
     /// Counter for helper names (loop cursors, element pointers).
     tmp: usize,
+    /// The statement being generated gives its value away (`push`/store of a temporary that is
+    /// released right after): no retain, and the release is skipped.
+    moving: bool,
+    /// Arrays that an enclosing loop made unique before it started (see `hoist`).
+    unique: Vec<LocalId>,
+    /// Arrays whose length an enclosing loop cannot change, with the C local holding it.
+    lens: Vec<(LocalId, String)>,
 }
 
 impl Gen<'_> {
@@ -284,6 +291,13 @@ impl Gen<'_> {
         while k < ss.len() {
             if self.format_append(&ss[k..]) {
                 k += 3;
+                continue;
+            }
+            if self.moves(&ss[k..]) {
+                self.moving = true;
+                self.stmt(&ss[k]);
+                self.moving = false;
+                k += 2;
                 continue;
             }
             self.stmt(&ss[k]);
@@ -318,18 +332,92 @@ impl Gen<'_> {
         true
     }
 
+    /// True for `xs.push(t)` or `xs[i] = t` of a temporary `t` followed by `drop t`: the value
+    /// moves into the array instead of getting one more owner and losing one.
+    fn moves(&self, ss: &[Stmt]) -> bool {
+        let [a, b, ..] = ss else { return false };
+        let (place, value) = match &a.kind {
+            StmtKind::Mutate { dst: None, op: RtOp::ArrPush, place, args } if args.len() == 1 => (place, &args[0]),
+            StmtKind::Store { place, value } if !place.path.is_empty() => (place, value),
+            _ => return false,
+        };
+        let Expr::Local(t) = value else { return false };
+        self.f.local(*t).name.is_none()
+            && place.root != *t
+            && matches!(b.kind, StmtKind::Drop(d) if d == *t)
+            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) if mentions(i, *t)))
+    }
+
     /// `NYRT_ELEMS(T, xs)[nyrt_ix(xs, i, line, col)]`: element `i` of the array `xs` (an
-    /// expression without effects), its index checked (E0240).
-    fn elem(&self, xs: &str, elem: Ty, i: &Expr, span: Span) -> String {
-        format!("NYRT_ELEMS({}, {xs})[nyrt_ix({xs}, {}, {}, {})]", ctype(elem), self.arg(i), span.line, span.col)
+    /// expression without effects), its index checked (E0240). `root`: the local `xs` is, if
+    /// it is one (a loop may hold its length in a C local).
+    fn elem(&self, xs: &str, root: Option<LocalId>, elem: Ty, i: &Expr, span: Span) -> String {
+        let (i, line, col) = (self.arg(i), span.line, span.col);
+        let ix = match root.and_then(|r| self.cached_len(r)) {
+            Some(n) => format!("nyrt_ixn({xs}, {i}, {n}, {line}, {col})"),
+            None => format!("nyrt_ix({xs}, {i}, {line}, {col})"),
+        };
+        format!("NYRT_ELEMS({}, {xs})[{ix}]", ctype(elem))
     }
 
     /// A pointer to element `i` of the array at the lvalue `xs`: returns `(*p)`.
-    fn elem_slot(&mut self, xs: &str, elem: Ty, i: &Expr, span: Span) -> String {
+    fn elem_slot(&mut self, xs: &str, root: Option<LocalId>, elem: Ty, i: &Expr, span: Span) -> String {
         let p = self.fresh("p");
-        let line = format!("{} *{p} = &{};", ctype(elem), self.elem(xs, elem, i, span));
+        let line = format!("{} *{p} = &{};", ctype(elem), self.elem(xs, root, elem, i, span));
         self.line(&line);
         format!("(*{p})")
+    }
+
+    fn cached_len(&self, l: LocalId) -> Option<&str> {
+        self.lens.iter().rev().find(|(x, _)| *x == l).map(|(_, n)| n.as_str())
+    }
+
+    /// Before a loop: every array local that the loop only indexes, measures and writes
+    /// elements of (no new value, no other owner, no call that sees it) is made unique once,
+    /// before the loop, instead of before every write (when the loop writes it), and its length
+    /// is read once (when the loop cannot change it). Copy on write still happens: at most once,
+    /// on the way into the loop. Returns how many entries to drop afterwards, and whether a C
+    /// block was opened.
+    fn hoist(&mut self, s: &Stmt) -> (usize, usize, bool) {
+        let (u0, l0) = (self.unique.len(), self.lens.len());
+        let mut opened = false;
+        for (k, local) in self.f.locals.iter().enumerate() {
+            let x = LocalId(k as u32);
+            if !matches!(local.ty, Ty::Array(_)) {
+                continue;
+            }
+            let mut u = ArrUse::default();
+            if !stmt_ok(s, x, &mut u) || !u.mentioned {
+                continue;
+            }
+            let lv = self.local(x).to_string();
+            let unique = u.writes && !self.unique.contains(&x);
+            let len = !u.resizes && self.cached_len(x).is_none();
+            if (unique || len) && !opened {
+                self.line("{");
+                self.indent += 1;
+                opened = true;
+            }
+            if unique {
+                self.line(&format!("nyrt_arr_mut(&{lv});"));
+                self.unique.push(x);
+            }
+            if len {
+                let n = self.fresh("n");
+                self.line(&format!("int64_t {n} = {lv}->len;"));
+                self.lens.push((x, n));
+            }
+        }
+        (self.unique.len() - u0, self.lens.len() - l0, opened)
+    }
+
+    fn unhoist(&mut self, (u, l, opened): (usize, usize, bool)) {
+        self.unique.truncate(self.unique.len() - u);
+        self.lens.truncate(self.lens.len() - l);
+        if opened {
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     fn local(&self, l: LocalId) -> &str {
@@ -413,15 +501,18 @@ impl Gen<'_> {
                 self.indent += 1;
                 let (parent, last) = self.place_parent(place);
                 let t = self.ty(value);
+                let root = if place.path.len() == 1 { Some(place.root) } else { None };
                 let slot = match last {
-                    Some((i, span)) => self.elem_slot(&parent, t, &i, span),
+                    Some((i, span)) => self.elem_slot(&parent, root, t, &i, span),
                     None => parent,
                 };
                 let v = self.arg(value);
                 if self.m.managed(t) {
                     // the new value gets its owner before the old one loses its own (`xs[0] = xs[0]`)
-                    let line = self.retain_value(t, value);
-                    self.line(&line);
+                    if !self.moving {
+                        let line = self.retain_value(t, value);
+                        self.line(&line);
+                    }
                     self.line(&release(t, &slot));
                 }
                 self.line(&format!("{slot} = {v};"));
@@ -430,8 +521,13 @@ impl Gen<'_> {
             }
             StmtKind::Mutate { dst, op, place, args } => self.mutate(*dst, *op, place, args, &at),
             StmtKind::If { .. } => self.if_chain(s),
-            StmtKind::Loop { head, cond, body, step } => self.lp(head, cond, body, step),
+            StmtKind::Loop { head, cond, body, step } => {
+                let h = self.hoist(s);
+                self.lp(head, cond, body, step);
+                self.unhoist(h);
+            }
             StmtKind::ForEach { var, iter, body } => {
+                let h = self.hoist(s);
                 let it = self.expr(iter);
                 let v = self.local(*var).to_string();
                 match self.ty(iter) {
@@ -454,6 +550,7 @@ impl Gen<'_> {
                 self.stmts(body);
                 self.indent -= 1;
                 self.line("}");
+                self.unhoist(h);
             }
             StmtKind::Break => self.line("break;"),
             StmtKind::Continue => self.line("continue;"),
@@ -499,13 +596,17 @@ impl Gen<'_> {
         for (k, step) in p.path.iter().enumerate() {
             match step {
                 Step::Index(i, span) => {
-                    // this array is about to change below this point
-                    self.line(&format!("nyrt_arr_mut(&{lv});"));
+                    // this array is about to change below this point (unless a loop made the
+                    // local unique already)
+                    if !(k == 0 && self.unique.contains(&p.root)) {
+                        self.line(&format!("nyrt_arr_mut(&{lv});"));
+                    }
                     if k + 1 == n {
                         return (lv, Some((i.clone(), *span)));
                     }
                     let elem = t.elem().expect("verified: an array");
-                    lv = self.elem_slot(&lv, elem, i, *span);
+                    let root = if k == 0 { Some(p.root) } else { None };
+                    lv = self.elem_slot(&lv, root, elem, i, *span);
                     t = elem;
                 }
                 Step::Field(k) => {
@@ -525,7 +626,8 @@ impl Gen<'_> {
             None => parent,
             Some((i, span)) => {
                 let t = self.place_ty(p);
-                self.elem_slot(&parent, t, &i, span)
+                let root = if p.path.len() == 1 { Some(p.root) } else { None };
+                self.elem_slot(&parent, root, t, &i, span)
             }
         }
     }
@@ -555,7 +657,8 @@ impl Gen<'_> {
         let lv = self.place(place);
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let d = dst.map(|d| self.local(d).to_string());
-        if elem.is_some() && op != RtOp::ArrAppend {
+        let hoisted = place.path.is_empty() && self.unique.contains(&place.root);
+        if elem.is_some() && op != RtOp::ArrAppend && !hoisted {
             self.line(&format!("nyrt_arr_mut(&{lv});"));
         }
         let call = match op {
@@ -567,7 +670,7 @@ impl Gen<'_> {
                 let slot = format!("NYRT_ELEMS({}, {lv})[{lv}->len]", ctype(e));
                 self.line(&format!("if (NYRT_UNLIKELY({lv}->len == {lv}->cap)) nyrt_arr_grow(&{lv}, 1);"));
                 self.line(&format!("{slot} = nyrt_v;"));
-                if self.m.managed(e) {
+                if self.m.managed(e) && !self.moving {
                     self.line(&retain(e, &slot));
                 }
                 format!("{lv}->len++;")
@@ -621,6 +724,11 @@ impl Gen<'_> {
                 self.line("putchar('\\n');");
                 return;
             }
+            // `str(n)`, `str(c)`: small ints and ASCII chars are immortal strings, made once
+            RtOp::Format if dst.is_some() && args.len() == 1 && matches!(self.ty(&args[0]), Ty::Int | Ty::Char) => {
+                let f = if self.ty(&args[0]) == Ty::Int { "nyrt_int_str" } else { "nyrt_char_str" };
+                format!("{f}({})", a[0])
+            }
             RtOp::Format => {
                 let d = dst.map(|d| self.local(d).to_string()).unwrap_or_default();
                 self.line("{");
@@ -667,7 +775,8 @@ impl Gen<'_> {
             }
             RtOp::ArrGet => {
                 let elem = self.ty(&args[0]).elem().expect("verified: an array");
-                self.elem(&a[0], elem, &args[1], span)
+                let root = if let Expr::Local(l) = args[0] { Some(l) } else { None };
+                self.elem(&a[0], root, elem, &args[1], span)
             }
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
@@ -852,7 +961,10 @@ impl Gen<'_> {
                     PureFn::CharIsUpper => format!("nyrt_char_is_upper({})", a[0]),
                     PureFn::CharIsLower => format!("nyrt_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("nyrt_is_space({})", a[0]),
-                    PureFn::ArrLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::ArrLen => match &args[0] {
+                        Expr::Local(l) if self.cached_len(*l).is_some() => self.cached_len(*l).unwrap_or_default().to_string(),
+                        x => format!("{}->len", self.expr(x)),
+                    },
                     PureFn::ArrContains | PureFn::ArrIndexOf => {
                         let elem = self.ty(&args[0]).elem().expect("verified: an array");
                         let f = if *p == PureFn::ArrContains { "contains" } else { "index_of" };
@@ -882,4 +994,87 @@ fn string_lit(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// How a loop uses an array local (see `Gen::hoist`).
+#[derive(Default)]
+struct ArrUse {
+    mentioned: bool,
+    /// It writes elements (or changes the array in place).
+    writes: bool,
+    /// It changes the length (`push`, `pop`, `insert`, `remove`, `+=`).
+    resizes: bool,
+}
+
+/// True if every mention of `x` in `e` is its length or a search in it.
+fn expr_ok(e: &Expr, x: LocalId, u: &mut ArrUse) -> bool {
+    match e {
+        Expr::Local(l) => *l != x,
+        Expr::Pure(PureFn::ArrLen | PureFn::ArrContains | PureFn::ArrIndexOf, args) if matches!(args[0], Expr::Local(l) if l == x) => {
+            u.mentioned = true;
+            args[1..].iter().all(|a| expr_ok(a, x, u))
+        }
+        Expr::Unary(_, a) | Expr::IntToFloat(a) | Expr::Field(a, _, _) => expr_ok(a, x, u),
+        Expr::Binary(_, a, b) => expr_ok(a, x, u) && expr_ok(b, x, u),
+        Expr::Select(c, a, b) => expr_ok(c, x, u) && expr_ok(a, x, u) && expr_ok(b, x, u),
+        Expr::Pure(_, args) => args.iter().all(|a| expr_ok(a, x, u)),
+        Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => true,
+    }
+}
+
+fn place_ok(p: &Place, x: LocalId, u: &mut ArrUse) -> bool {
+    p.path.iter().all(|s| match s {
+        Step::Index(i, _) => expr_ok(i, x, u),
+        Step::Field(_) => true,
+    })
+}
+
+/// True if `s` uses the array local `x` only by reading elements, its length or searching it,
+/// and by writing elements or changing it in place: never a new value for `x`, another owner
+/// of its array, or a call that sees it. `u` collects how.
+fn stmt_ok(s: &Stmt, x: LocalId, u: &mut ArrUse) -> bool {
+    let all = |ss: &[Stmt], u: &mut ArrUse| ss.iter().all(|s| stmt_ok(s, x, u));
+    match &s.kind {
+        StmtKind::Set(d, e) => *d != x && expr_ok(e, x, u),
+        StmtKind::Call { dst, args, .. } => {
+            *dst != Some(x)
+                && args.iter().all(|a| match a {
+                    Arg::Val(e) => expr_ok(e, x, u),
+                    Arg::InOut(p) => p.root != x && place_ok(p, x, u),
+                })
+        }
+        StmtKind::Op { dst, op, args } => {
+            *dst != Some(x)
+                && args.iter().enumerate().all(|(k, a)| {
+                    if k == 0 && *op == RtOp::ArrGet && matches!(a, Expr::Local(l) if *l == x) {
+                        u.mentioned = true;
+                        true
+                    } else {
+                        expr_ok(a, x, u)
+                    }
+                })
+        }
+        StmtKind::Store { place, value } => {
+            if place.root == x {
+                u.mentioned = true;
+                u.writes = true;
+            }
+            place_ok(place, x, u) && expr_ok(value, x, u)
+        }
+        StmtKind::Mutate { dst, op, place, args } => {
+            if place.root == x {
+                u.mentioned = true;
+                u.writes = true;
+                let resize = matches!(op, RtOp::ArrPush | RtOp::ArrPop | RtOp::ArrInsert | RtOp::ArrRemove | RtOp::ArrAppend);
+                u.resizes |= place.path.is_empty() && resize;
+            }
+            *dst != Some(x) && place_ok(place, x, u) && args.iter().all(|a| expr_ok(a, x, u))
+        }
+        StmtKind::If { cond, then, els } => expr_ok(cond, x, u) && all(then, u) && all(els, u),
+        StmtKind::Loop { head, cond, body, step } => expr_ok(cond, x, u) && all(head, u) && all(body, u) && all(step, u),
+        StmtKind::ForEach { var, iter, body } => *var != x && expr_ok(iter, x, u) && all(body, u),
+        StmtKind::Return(Some(e)) => expr_ok(e, x, u),
+        StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => *l != x,
+        StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => true,
+    }
 }
