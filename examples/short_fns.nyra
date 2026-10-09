@@ -3,17 +3,15 @@ fn square(x: int) -> int = x * x
 fn half(x: float) -> float = x / 2.0
 fn show(x: int) = print(x)
 
-fn main() {
-    var total = 0
-    for i in 1..11 {
-        total += square(i)
-    }
-    show(total)
-    var n = 100
-    n -= 1
-    n *= 2
-    n /= 4
-    n %= 10
-    show(n)
-    print(half(5.0))
+var total = 0
+for i in 1..11 {
+    total += square(i)
 }
+show(total)
+var n = 100
+n -= 1
+n *= 2
+n /= 4
+n %= 10
+show(n)
+print(half(5.0))

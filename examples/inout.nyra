@@ -47,39 +47,37 @@ fn next(inout n: int) -> int {
     ret n * 2
 }
 
-fn main() {
-    var x = 1
-    var y = 2
-    swap(inout x, inout y)
-    print("{x} {y}")
-    var u = User(name: "ann", tags: [])
-    let before = u
-    add_tag(inout u, "admin")
-    print(u)
-    print(before)
-    var grid = [[0].repeat(3)].repeat(2)
-    fill(inout grid[1], 7)
-    print(grid)
-    var word = "hey"
-    let copy = word
-    shout(inout word)
-    print(word)
-    print(copy)
-    var nums = [1, 2, 3]
-    bump_all(inout nums)
-    print(nums)
-    var stack = ["a", "b", "c"]
-    print(take_last(inout stack))
-    print(stack)
-    var pair = [1, 2]
-    y = 5
-    swap(inout pair[0], inout y)
-    print(pair)
-    print(y)
-    var arr = [1, 2]
-    print(grow(inout arr, arr))
-    print(arr)
-    var k = 1
-    k = next(inout k)
-    print(k)
-}
+var x = 1
+var y = 2
+swap(inout x, inout y)
+print("{x} {y}")
+var u = User(name: "ann", tags: [])
+let before = u
+add_tag(inout u, "admin")
+print(u)
+print(before)
+var grid = [[0].repeat(3)].repeat(2)
+fill(inout grid[1], 7)
+print(grid)
+var word = "hey"
+let copy = word
+shout(inout word)
+print(word)
+print(copy)
+var nums = [1, 2, 3]
+bump_all(inout nums)
+print(nums)
+var stack = ["a", "b", "c"]
+print(take_last(inout stack))
+print(stack)
+var pair = [1, 2]
+y = 5
+swap(inout pair[0], inout y)
+print(pair)
+print(y)
+var arr = [1, 2]
+print(grow(inout arr, arr))
+print(arr)
+var k = 1
+k = next(inout k)
+print(k)

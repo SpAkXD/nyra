@@ -3,6 +3,4 @@ fn fib(n: int) -> int {
     ret fib(n - 1) + fib(n - 2)
 }
 
-fn main() {
-    print(fib(30))
-}
+print(fib(30))

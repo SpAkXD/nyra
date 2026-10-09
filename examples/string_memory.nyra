@@ -34,29 +34,27 @@ fn count_until_stop(text: str) -> int {
     ret n
 }
 
-fn main() {
-    print(label(0))
-    print(label(7))
-    print(longest("ab", "abc"))
-    print(longest("same", "four"))
-    print(find_first_long(10))
-    print(count_until_stop("ab c.d"))
-    var acc = "start"
-    for i in 0..3 {
-        acc = acc + "-" + label(i)
-    }
-    print(acc)
-    var copy = acc
-    acc += "!"
-    print(copy)
-    print(acc)
-    let part = if copy.len() > 5 { copy.slice(0, 5) } else { "short" }
-    print(part)
-    let tmp = "temporary " + str(1)
-    free(tmp)
-    var big = ""
-    for i in 0..1000 {
-        big += "ab"
-    }
-    print(big.len())
+print(label(0))
+print(label(7))
+print(longest("ab", "abc"))
+print(longest("same", "four"))
+print(find_first_long(10))
+print(count_until_stop("ab c.d"))
+var acc = "start"
+for i in 0..3 {
+    acc = acc + "-" + label(i)
 }
+print(acc)
+var copy = acc
+acc += "!"
+print(copy)
+print(acc)
+let part = if copy.len() > 5 { copy.slice(0, 5) } else { "short" }
+print(part)
+let tmp = "temporary " + str(1)
+free(tmp)
+var big = ""
+for i in 0..1000 {
+    big += "ab"
+}
+print(big.len())

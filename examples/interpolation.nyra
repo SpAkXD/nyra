@@ -1,15 +1,13 @@
 // v0.2: string interpolation
 fn area(w: int, h: int) -> int = w * h
 
-fn main() {
-    let name = "Nyra"
-    let w = 3
-    let h = 4
-    print("hello, {name}!")
-    print("{w} x {h} = {area(w, h)}")
-    print("half of 7 is {float(7) / 2.0}, smaller: {w < h}")
-    print("100% sure, {{braces}} work")
-    let version = "v{0}.{1 + 1}"
-    print(version)
-    print(version == "v0.2")
-}
+let name = "Nyra"
+let w = 3
+let h = 4
+print("hello, {name}!")
+print("{w} x {h} = {area(w, h)}")
+print("half of 7 is {float(7) / 2.0}, smaller: {w < h}")
+print("100% sure, {{braces}} work")
+let version = "v{0}.{1 + 1}"
+print(version)
+print(version == "v0.2")

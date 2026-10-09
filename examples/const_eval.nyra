@@ -31,22 +31,20 @@ fn spin(n: int) -> int {
     ret acc
 }
 
-fn main() {
-    let m = 7
-    print(fib(20))
-    print(greet("ab", 3))
-    print(half(3.0) + 0.1)
-    print(0.1 + 0.2)
-    print(1.0 / 3.0)
-    print(-0.0 * 1.0)
-    print(noisy(3))
-    print(100 % m, -100 / m)
-    print("héllo".len(), "héllo".index_of("l"), 'a'.upper())
-    print(int("-42") + 1, char(66), "abc" < "abd")
-    print(spin(10), spin(3000000))
-    var total = 0
-    for n in 0..m {
-        total += fib(n)
-    }
-    print(total)
+let m = 7
+print(fib(20))
+print(greet("ab", 3))
+print(half(3.0) + 0.1)
+print(0.1 + 0.2)
+print(1.0 / 3.0)
+print(-0.0 * 1.0)
+print(noisy(3))
+print(100 % m, -100 / m)
+print("héllo".len(), "héllo".index_of("l"), 'a'.upper())
+print(int("-42") + 1, char(66), "abc" < "abd")
+print(spin(10), spin(3000000))
+var total = 0
+for n in 0..m {
+    total += fib(n)
 }
+print(total)

@@ -1,17 +1,15 @@
 // Program arguments (`std_args.args`), environment variables and the exit code (`std_args.exit`).
 use os
 
-fn main() {
-    let args = os.args()
-    print("{args.len()} arguments: {args}")
-    for a in args {
-        print("[{a}]")
-    }
-    print(os.has_env("NYRA_SURELY_UNSET_VARIABLE"), "[{os.env("NYRA_SURELY_UNSET_VARIABLE")}]")
-    print(os.has_env(""), os.has_env("A=B"))
-    if args.len() > 2 {
-        print("stopping with code 3")
-        os.exit(3)
-    }
-    print("never printed")
+let args = os.args()
+print("{args.len()} arguments: {args}")
+for a in args {
+    print("[{a}]")
 }
+print(os.has_env("NYRA_SURELY_UNSET_VARIABLE"), "[{os.env("NYRA_SURELY_UNSET_VARIABLE")}]")
+print(os.has_env(""), os.has_env("A=B"))
+if args.len() > 2 {
+    print("stopping with code 3")
+    os.exit(3)
+}
+print("never printed")

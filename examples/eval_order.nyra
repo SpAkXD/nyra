@@ -6,12 +6,10 @@ fn note(label: str, value: int) -> int {
 
 fn add(a: int, b: int) -> int = a + b
 
-fn main() {
-    print(add(note("a", 1), note("b", 2)))
-    print(note("x", 10) - note("y", 3))
-    let p = "p"
-    let q = "q"
-    print("{note(p, 1)} and {note(q, 2)}")
-    let s = "sum {note(p, 5) + note(q, 6)}"
-    print(s)
-}
+print(add(note("a", 1), note("b", 2)))
+print(note("x", 10) - note("y", 3))
+let p = "p"
+let q = "q"
+print("{note(p, 1)} and {note(q, 2)}")
+let s = "sum {note(p, 5) + note(q, 6)}"
+print(s)

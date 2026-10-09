@@ -1,11 +1,9 @@
 // Integer results never show -0, on every backend.
-fn main() {
-    print(0 * -5)
-    print(-4 % 2)
-    print(-1 / 2)
-    let z = 0
-    print(-z)
-    print(int(-0.5))
-    print(1.0 / float(0 * -5))
-    print("{0 * -5} {int(-0.5)}")
-}
+print(0 * -5)
+print(-4 % 2)
+print(-1 / 2)
+let z = 0
+print(-z)
+print(int(-0.5))
+print(1.0 / float(0 * -5))
+print("{0 * -5} {int(-0.5)}")
