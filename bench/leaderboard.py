@@ -271,8 +271,8 @@ def build_page(entries: list, generated: Optional[str] = None) -> str:
 <h1>Nyra benchmark results</h1>
 <p class="muted">Generated {esc(generated)} from the summaries in <code>bench/published/</code>. {intro}</p>
 <div class="card small">
-<strong>How to read this.</strong> A program passes a task only if it is right on every input, including hidden ones the model never saw.
-<em>First try</em> is the share of runs whose first program passed; <em>within repairs</em> allows the model to retry after seeing
+<strong>How to read this.</strong> A program passes a task only if its output is exactly right; in the stdin tier that means on
+every input, including hidden ones the model never saw, so printing the example's answer fails. <em>First try</em> is the share of runs whose first program passed; <em>within repairs</em> allows the model to retry after seeing
 the compiler's or interpreter's messages. <em>Code tokens</em> count the program alone with the model's own tokenizer; <em>billed
 tokens</em> are what the API charged for the reply, thinking included. Nyra is given its language spec in the prompt; the other
 languages rely on what the model already knows. Intervals are 95%; with few tasks they are wide. Method, tasks and caveats:
