@@ -161,7 +161,10 @@ fn early_drops(ss: &mut Vec<Stmt>, temp: &[bool]) {
             continue;
         }
         let mut j = k;
-        while j > 0 && !stmt_mentions(&ss[j - 1], t) && !matches!(ss[j - 1].kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue) {
+        while j > 0
+            && !stmt_mentions(&ss[j - 1], t)
+            && !matches!(ss[j - 1].kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue)
+        {
             j -= 1;
         }
         // a `dup` stays right after the statement that set its local (backends pair them up)
@@ -403,7 +406,7 @@ enum Folded {
 }
 
 /// A runtime operation with constant operands, computed now. Integer `/` and `%` by a constant
-/// other than 0 become the plain operators (they cannot fail).
+/// other than 0 and -1 become the plain operators (they cannot fail).
 fn fold_op(op: RtOp, args: &[Expr], dst: Option<LocalId>, strs: &mut Interner) -> Folded {
     if matches!(op, RtOp::Print | RtOp::ArrNew | RtOp::StructNew) {
         return Folded::No;
@@ -412,7 +415,8 @@ fn fold_op(op: RtOp, args: &[Expr], dst: Option<LocalId>, strs: &mut Interner) -
         let a = Box::new(a.clone());
         return match (op, *k) {
             (_, 0) => Folded::No,
-            (RtOp::DivInt, -1) => Folded::Set(d, Expr::Unary(UnOp::INeg, a)),
+            // `MIN / -1` overflows: the runtime checks it
+            (RtOp::DivInt, -1) => Folded::No,
             (_, -1) => Folded::Set(d, Expr::Int(0)),
             (RtOp::DivInt, _) => Folded::Set(d, Expr::Binary(BinOp::IDiv, a, Box::new(Expr::Int(*k)))),
             _ => Folded::Set(d, Expr::Binary(BinOp::IRem, a, Box::new(Expr::Int(*k)))),
@@ -449,14 +453,14 @@ fn exprs_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
                     }
                 }
             }
-            StmtKind::Op { args, .. } => args.iter_mut().for_each(|a| f(a)),
+            StmtKind::Op { args, .. } => args.iter_mut().for_each(&mut *f),
             StmtKind::Store { place: p, value } => {
                 place(p, f);
                 f(value);
             }
             StmtKind::Mutate { place: p, args, .. } => {
                 place(p, f);
-                args.iter_mut().for_each(|a| f(a));
+                args.iter_mut().for_each(&mut *f);
             }
             StmtKind::If { cond, then, els } => {
                 f(cond);
@@ -655,7 +659,8 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
     let mut out: Vec<Expr> = Vec::with_capacity(parts.len());
     for p in std::mem::take(parts) {
         let text = match &p {
-            Expr::Int(n) => Some(n.to_string()),
+            // (an int JavaScript cannot hold exactly stays: printing it stops the program there)
+            Expr::Int(n) if eval::safe_int(*n) => Some(n.to_string()),
             Expr::Bool(b) => Some(b.to_string()),
             Expr::Char(c) => char::from_u32(*c).map(|c| c.to_string()),
             Expr::Str(id) => Some(strs.get(*id).to_string()),
@@ -713,12 +718,20 @@ fn fold(e: &mut Expr, strs: &mut Interner) {
     }
 }
 
-/// The value of `e` if its operands are constants (one level; `fold` works bottom-up).
+/// The value of `e` if its operands are constants (one level; `fold` works bottom-up). Ints
+/// follow `eval`: no overflow, and nothing beyond what JavaScript holds exactly.
 fn constant(e: &Expr, strs: &mut Interner) -> Option<Expr> {
     use Expr::{Bool, Int};
+    let safe = |r: Option<i64>| r.filter(|n| eval::safe_int(*n)).map(Int);
+    let unsafe_operand = |x: &Expr| matches!(x, Int(n) if !eval::safe_int(*n));
+    match e {
+        Expr::Unary(_, x) if unsafe_operand(x) => return None,
+        Expr::Binary(_, a, b) if unsafe_operand(a) || unsafe_operand(b) => return None,
+        _ => {}
+    }
     Some(match e {
         Expr::Unary(UnOp::INeg, x) => match **x {
-            Int(n) => Int(n.wrapping_neg()),
+            Int(n) => safe(n.checked_neg())?,
             _ => return None,
         },
         Expr::Unary(UnOp::Not, x) => match **x {
@@ -731,12 +744,12 @@ fn constant(e: &Expr, strs: &mut Interner) -> Option<Expr> {
             _ => return None,
         },
         Expr::Binary(op, a, b) => match (op, &**a, &**b) {
-            (BinOp::IAdd, Int(x), Int(y)) => Int(x.wrapping_add(*y)),
-            (BinOp::ISub, Int(x), Int(y)) => Int(x.wrapping_sub(*y)),
-            (BinOp::IMul, Int(x), Int(y)) => Int(x.wrapping_mul(*y)),
+            (BinOp::IAdd, Int(x), Int(y)) => safe(x.checked_add(*y))?,
+            (BinOp::ISub, Int(x), Int(y)) => safe(x.checked_sub(*y))?,
+            (BinOp::IMul, Int(x), Int(y)) => safe(x.checked_mul(*y))?,
             // the IR guarantees a constant divisor other than 0 and -1 here
-            (BinOp::IDiv, Int(x), Int(y)) => Int(x.wrapping_div(*y)),
-            (BinOp::IRem, Int(x), Int(y)) => Int(x.wrapping_rem(*y)),
+            (BinOp::IDiv, Int(x), Int(y)) => safe(x.checked_div(*y))?,
+            (BinOp::IRem, Int(x), Int(y)) => safe(x.checked_rem(*y))?,
             (BinOp::IEq, Int(x), Int(y)) => Bool(x == y),
             (BinOp::INe, Int(x), Int(y)) => Bool(x != y),
             (BinOp::ILt, Int(x), Int(y)) => Bool(x < y),

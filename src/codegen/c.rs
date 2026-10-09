@@ -15,13 +15,77 @@ const MAPS: &str = include_str!("../rt/c/map.c");
 const JSON: &str = include_str!("../rt/c/json.c");
 
 const RESERVED: &[&str] = &[
-    "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
-    "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return",
-    "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void",
-    "volatile", "while", "bool", "true", "false", "NULL", "EOF", "errno", "stdin", "stdout", "stderr",
-    "main", "printf", "puts", "putchar", "fwrite", "fputs", "snprintf", "sprintf", "strcmp", "strcpy", "strtod",
-    "memcpy", "memmove", "memcmp", "strlen", "atoi", "malloc", "realloc", "free", "exit", "getenv", "int64_t",
-    "uint32_t", "uint64_t", "size_t", "DBL_MAX", "INT64_MAX", "INT64_MIN",
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "bool",
+    "true",
+    "false",
+    "NULL",
+    "EOF",
+    "errno",
+    "stdin",
+    "stdout",
+    "stderr",
+    "main",
+    "printf",
+    "puts",
+    "putchar",
+    "fwrite",
+    "fputs",
+    "snprintf",
+    "sprintf",
+    "strcmp",
+    "strcpy",
+    "strtod",
+    "memcpy",
+    "memmove",
+    "memcmp",
+    "strlen",
+    "atoi",
+    "malloc",
+    "realloc",
+    "free",
+    "exit",
+    "getenv",
+    "int64_t",
+    "uint32_t",
+    "uint64_t",
+    "size_t",
+    "DBL_MAX",
+    "INT64_MAX",
+    "INT64_MIN",
 ];
 
 /// More C words a user name must not be: keywords of newer C and compilers, common macros.
@@ -31,8 +95,8 @@ fn var(name: &str) -> String {
     // `ny...` names belong to nyra (user functions are `ny_<name>`, the runtime is `nyrt_*`).
     // Names starting with `_` are reserved in C, and an all-caps name may be a macro of the
     // C library (`INT32_MAX`, `WIN32`, `BUFSIZ`): both get a suffix too.
-    let macro_like = name.chars().any(|c| c.is_ascii_uppercase())
-        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    let macro_like =
+        name.chars().any(|c| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
     if RESERVED.contains(&name) || RESERVED_MORE.contains(&name) || name.starts_with("ny") || name.starts_with('_') || macro_like {
         format!("{name}_")
     } else {
@@ -124,7 +188,8 @@ fn structs(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
         let n = format!("nyS_{}", s.name);
         if s.managed {
-            let _ = writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);\nstatic void {n}_keep(void *p);");
+            let _ =
+                writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);\nstatic void {n}_keep(void *p);");
         }
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b);");
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p);");
@@ -263,14 +328,27 @@ fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
         let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
         for (i, (fname, ft)) in info.fields.iter().enumerate() {
             let key = format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
-            let _ = writeln!(out, "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});", string_lit(&key), key.len(), jfn(json, *ft, true), field(info, i));
+            let _ = writeln!(
+                out,
+                "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});",
+                string_lit(&key),
+                key.len(),
+                jfn(json, *ft, true),
+                field(info, i)
+            );
         }
         if info.fields.is_empty() {
             out.push_str("    nyrt_buf_lit(b, \"{\", 1);\n");
         }
         out.push_str("    nyrt_buf_lit(b, \"}\", 1);\n}\n");
-        let _ = writeln!(out, "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};\n    bool seen[{}] = {{0}};", info.fields.len().max(1));
-        out.push_str("    if (nyrt_jopen(p, '{', \"an object\")) {\n        do {\n            nyrt_str *k = nyrt_jkey(p);\n            ");
+        let _ = writeln!(
+            out,
+            "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};\n    bool seen[{}] = {{0}};",
+            info.fields.len().max(1)
+        );
+        out.push_str(
+            "    if (nyrt_jopen(p, '{', \"an object\")) {\n        do {\n            nyrt_str *k = nyrt_jkey(p);\n            ",
+        );
         for (i, (fname, ft)) in info.fields.iter().enumerate() {
             let f = field(info, i);
             let again = if m.managed(*ft) { format!("if (seen[{i}]) {} ", release(*ft, &format!("v.{f}"))) } else { String::new() };
@@ -373,7 +451,18 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is used through its pointer: `(*p)`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, moving: false, unique: Vec::new(), lens: Vec::new(), json: &json };
+        let mut g = Gen {
+            m,
+            f,
+            names: &uses,
+            out: String::new(),
+            indent: 1,
+            tmp: 0,
+            moving: false,
+            unique: Vec::new(),
+            lens: Vec::new(),
+            json: &json,
+        };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -952,6 +1041,10 @@ impl Gen<'_> {
             RtOp::MapKeys => format!("nyrt_map_list({}, false)", a[0]),
             RtOp::MapValues => format!("nyrt_map_list({}, true)", a[0]),
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("nyrt_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("nyrt_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("nyrt_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("nyrt_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("nyrt_str_concat({}, {})", a[0], a[1]),

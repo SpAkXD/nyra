@@ -5,6 +5,15 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// A test part that needs a tool this machine lacks: skipped with a note, unless
+/// `NYRA_REQUIRE_ALL_TARGETS=1` (CI on Linux, where every toolchain is installed) makes it a failure.
+pub fn missing(what: &str) {
+    if std::env::var("NYRA_REQUIRE_ALL_TARGETS").is_ok_and(|v| v == "1") {
+        panic!("{what}, but NYRA_REQUIRE_ALL_TARGETS=1 requires every target");
+    }
+    eprintln!("skipped: {what}");
+}
+
 pub fn nyra() -> Command {
     Command::new(env!("CARGO_BIN_EXE_nyra"))
 }

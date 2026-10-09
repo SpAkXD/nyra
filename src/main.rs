@@ -1,6 +1,5 @@
 mod ast;
 mod check;
-mod check_v03;
 mod codegen;
 mod diag;
 mod edit;
@@ -11,6 +10,7 @@ mod hints;
 mod ir;
 mod json;
 mod lexer;
+mod limits;
 mod mcp;
 mod parser;
 mod stdlib;
@@ -27,7 +27,7 @@ usage:
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
-  nyra explain [CODE]       explain an error code (without CODE: list all codes)
+  nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
   nyra outline <file.nyra>  list the functions and structs with their lines
   nyra show <file.nyra> <name>    print one function, struct or Struct.field
@@ -113,8 +113,16 @@ struct Opts {
 fn parse_args() -> Result<Opts, String> {
     let mut args = std::env::args().skip(1);
     let mut positional = Vec::new();
-    let mut opts =
-        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false, prog_args: Vec::new() };
+    let mut opts = Opts {
+        cmd: String::new(),
+        file: String::new(),
+        target: Target::Native,
+        out: None,
+        json: false,
+        time: false,
+        fix: false,
+        prog_args: Vec::new(),
+    };
     while let Some(a) = args.next() {
         match a.as_str() {
             "--" => {
@@ -199,7 +207,20 @@ fn fail(msg: impl std::fmt::Display) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// The stack of the threads that compile. The parser limits nesting (E0103), so the stages that
+/// recurse over a program (parser, checker, lowering, backends) stay far below this; the size is a
+/// second safety net. Only address space is reserved: memory is used as the stack grows.
+pub const STACK: usize = 256 << 20;
+
 fn main() -> ExitCode {
+    // everything runs on a thread with a big stack (see `STACK`)
+    match std::thread::Builder::new().name("nyra".into()).stack_size(STACK).spawn(real_main) {
+        Ok(t) => t.join().unwrap_or(ExitCode::from(101)),
+        Err(_) => real_main(),
+    }
+}
+
+fn real_main() -> ExitCode {
     // `nyra explain [CODE] [--json]` needs no source file
     if std::env::args().nth(1).as_deref() == Some("explain") {
         return explain::run(std::env::args().skip(2).collect());
@@ -238,8 +259,13 @@ fn main() -> ExitCode {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {
                         return fail(format!("cannot write `{}`: {e}", opts.file));
                     }
-                    eprint!("nyra: fixed {} error(s) in {}:
-{}", r.fixed, opts.file, fix::diff(&src, &r.text));
+                    eprint!(
+                        "nyra: fixed {} error(s) in {}:
+{}",
+                        r.fixed,
+                        opts.file,
+                        fix::diff(&src, &r.text)
+                    );
                     fixed = r.fixed;
                     r.value
                 }
@@ -521,7 +547,8 @@ fn cc_cached(
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
-const RUSTC_FLAGS: &[&str] = &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
+const RUSTC_FLAGS: &[&str] =
+    &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
 
 /// Compiles generated Rust with rustc (NYRA_RUSTC, else `rustc`), cached like C.
 fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), String> {
@@ -657,8 +684,5 @@ fn find_cc() -> Option<String> {
             return Some(cc.to_string());
         }
     }
-    ["gcc", "clang", "cc", "tcc"]
-        .into_iter()
-        .find(|cc| Command::new(cc).arg("--version").output().is_ok())
-        .map(String::from)
+    ["gcc", "clang", "cc", "tcc"].into_iter().find(|cc| Command::new(cc).arg("--version").output().is_ok()).map(String::from)
 }

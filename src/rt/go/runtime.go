@@ -67,11 +67,54 @@ func nyF64(x float64) float64 { return x }
 
 // ---- ints ----
 
+// int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255).
+func nyOverflow(a int64, op string, b int64, line, col int) {
+	msg := fmt.Sprintf("int overflow: %d %s %d does not fit in 64 bits", a, op, b)
+	if op == "~" {
+		msg = fmt.Sprintf("int overflow: -(%d) does not fit in 64 bits", a)
+	}
+	nyFail("E0255", msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+}
+
+func nyAdd(a, b int64, line, col int) int64 {
+	r := a + b
+	if (a >= 0) == (b >= 0) && (r >= 0) != (a >= 0) {
+		nyOverflow(a, "+", b, line, col)
+	}
+	return r
+}
+
+func nySub(a, b int64, line, col int) int64 {
+	r := a - b
+	if (a >= 0) != (b >= 0) && (r >= 0) != (a >= 0) {
+		nyOverflow(a, "-", b, line, col)
+	}
+	return r
+}
+
+func nyMul(a, b int64, line, col int) int64 {
+	r := a * b
+	if a != 0 && (r/a != b || (a == -1 && b == math.MinInt64) || (b == -1 && a == math.MinInt64)) {
+		nyOverflow(a, "*", b, line, col)
+	}
+	return r
+}
+
+func nyNeg(a int64, line, col int) int64 {
+	if a == math.MinInt64 {
+		nyOverflow(a, "~", 0, line, col)
+	}
+	return -a
+}
+
 func nyDiv(a, b int64, line, col int) int64 {
 	if b == 0 {
 		nyFail("E0241", "division by zero", "check the divisor first", line, col)
 	}
-	return a / b // MinInt64 / -1 wraps in Go
+	if b == -1 && a == math.MinInt64 {
+		nyOverflow(a, "/", b, line, col)
+	}
+	return a / b
 }
 
 func nyRem(a, b int64, line, col int) int64 {

@@ -1,0 +1,7 @@
+// expect: E0255 at 6:11
+// only: native py rs go
+fn main() {
+    let m = -9223372036854775807 - 1
+    print(m)
+    print(abs(m))
+}

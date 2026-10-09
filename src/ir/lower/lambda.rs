@@ -14,13 +14,13 @@
 //! so the loop can run where the call is, in the statement's left-to-right order.
 
 use super::{ast, BinOp, Expr, LocalId, Lower, Place, RtOp, Scope, Span, Stmt, StmtKind, Ty, Type, UnOp};
-use crate::check_v03 as v3;
+use crate::check::data;
 
 /// True if `recv.name(..)` is lowered here.
 pub(super) fn is_chain_method(recv: Ty, name: &str) -> bool {
     match recv {
-        Ty::Array(_) => v3::LAMBDA_METHODS.contains(&name),
-        Ty::Str => v3::STR_LAMBDA_METHODS.contains(&name),
+        Ty::Array(_) => data::LAMBDA_METHODS.contains(&name),
+        Ty::Str => data::STR_LAMBDA_METHODS.contains(&name),
         _ => false,
     }
 }
@@ -45,15 +45,37 @@ impl<'e> Step<'e> {
 /// What the end of the chain does with each element that comes through.
 enum Sink<'e> {
     /// the chain's own result: an array of what comes through
-    Collect { acc: LocalId },
-    Sum { acc: LocalId, float: bool },
-    Count { acc: LocalId },
+    Collect {
+        acc: LocalId,
+    },
+    Sum {
+        acc: LocalId,
+        float: bool,
+    },
+    Count {
+        acc: LocalId,
+    },
     /// `any`: true and stop at the first element; `all` sets false (its step is negated)
-    Stop { acc: LocalId, value: bool },
-    FindIndex { acc: LocalId, pos: LocalId, lambda: &'e ast::Expr },
+    Stop {
+        acc: LocalId,
+        value: bool,
+    },
+    FindIndex {
+        acc: LocalId,
+        pos: LocalId,
+        lambda: &'e ast::Expr,
+    },
     /// `min` / `max`: `n` counts the elements, `m` is the best so far
-    Best { m: LocalId, n: LocalId, max: bool, elem: Ty },
-    Fold { acc: LocalId, lambda: &'e ast::Expr },
+    Best {
+        m: LocalId,
+        n: LocalId,
+        max: bool,
+        elem: Ty,
+    },
+    Fold {
+        acc: LocalId,
+        lambda: &'e ast::Expr,
+    },
 }
 
 /// The parameters and the body of a lambda argument (the checker allows nothing else).
@@ -88,7 +110,14 @@ fn local(l: LocalId) -> Box<Expr> {
 
 impl Lower<'_> {
     /// `recv.name(args)` for a method of `is_chain_method`.
-    pub(super) fn chain_method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, out: &mut Vec<Stmt>) -> Expr {
+    pub(super) fn chain_method(
+        &mut self,
+        recv: &ast::Expr,
+        name: &str,
+        args: &[ast::Expr],
+        e: &ast::Expr,
+        out: &mut Vec<Stmt>,
+    ) -> Expr {
         if name == "sort_by" {
             return self.sort_by(recv, &args[0], e.span, out);
         }
@@ -187,9 +216,11 @@ impl Lower<'_> {
         self.pending = saved;
 
         match sink {
-            Sink::Collect { acc } | Sink::Sum { acc, .. } | Sink::Count { acc } | Sink::Stop { acc, .. } | Sink::FindIndex { acc, .. } => {
-                Expr::Local(acc)
-            }
+            Sink::Collect { acc }
+            | Sink::Sum { acc, .. }
+            | Sink::Count { acc }
+            | Sink::Stop { acc, .. }
+            | Sink::FindIndex { acc, .. } => Expr::Local(acc),
             Sink::Best { m, n, max, elem } => {
                 let which = int(i64::from(max));
                 out.push(st(StmtKind::Op { dst: None, op: RtOp::CheckNonEmpty, args: vec![Expr::Local(n), which] }, span));
@@ -222,8 +253,8 @@ impl Lower<'_> {
         match &c.src {
             ast::CompSrc::Range(a, b, k) => {
                 let i = self.new_local(Some(c.var[0].0.clone()), Ty::Int);
-                let (cond, k) = self.range(i, a, b, k.as_ref(), span, out);
-                range = Some((i, cond, k));
+                let (cond, next) = self.range(i, a, b, k.as_ref(), span, out);
+                range = Some((i, cond, next));
             }
             ast::CompSrc::Each(src) => {
                 let v = self.expr(src, None, out);
@@ -246,9 +277,9 @@ impl Lower<'_> {
         let saved = std::mem::take(&mut self.pending);
         let live = std::mem::take(&mut self.chain_live);
         let mut body = Vec::new();
-        if let Some((i, cond, k)) = range {
+        if let Some((i, cond, next)) = range {
             self.steps(&steps, Expr::Local(i), Ty::Int, &sink, span, &mut body);
-            let next = st(StmtKind::Set(i, Expr::Binary(BinOp::IAdd, local(i), Box::new(k))), span);
+            let next = st(StmtKind::Set(i, next), span);
             out.push(st(StmtKind::Loop { head: Vec::new(), cond, body, step: vec![next] }, span));
         } else if let Some((it, elem)) = each {
             let x = self.new_local(Some(c.var[0].0.clone()), elem);
@@ -345,7 +376,11 @@ impl Lower<'_> {
             Sink::Collect { acc } => {
                 out.push(st(StmtKind::Mutate { dst: None, op: RtOp::ArrPush, place: Place::local(acc), args: vec![cur] }, span));
             }
-            Sink::Sum { acc, float } => out.push(st(add(acc, cur, if float { BinOp::FAdd } else { BinOp::IAdd }), span)),
+            Sink::Sum { acc, float: true } => out.push(st(add(acc, cur, BinOp::FAdd), span)),
+            // an int sum may overflow: the checked operation
+            Sink::Sum { acc, float: false } => {
+                out.push(st(StmtKind::Op { dst: Some(acc), op: RtOp::AddInt, args: vec![Expr::Local(acc), cur] }, span));
+            }
             Sink::Count { acc } => out.push(st(add(acc, Expr::Int(1), BinOp::IAdd), span)),
             Sink::Stop { acc, value } => {
                 out.push(st(StmtKind::Set(acc, Expr::Bool(value)), span));

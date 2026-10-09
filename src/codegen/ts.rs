@@ -5,24 +5,124 @@
 //! person would write: typed signatures and classes, variables declared where they are first
 //! needed, counted loops as `for (let i = a; i < b; i++)`, and the runtime at the end of the file.
 
+use std::cell::Cell;
 use std::fmt::Write;
 
 use super::scope::{self, range_for, Info};
 use super::{bare, names};
+use crate::ast::Span;
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
+/// The largest int JavaScript numbers hold exactly (`Number.MAX_SAFE_INTEGER`).
+const SAFE_INT: u64 = (1 << 53) - 1;
+
 const RESERVED: &[&str] = &[
-    "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-    "delete", "do", "else", "enum", "eval", "export", "extends", "false", "finally", "for", "function",
-    "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
-    "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
-    "try", "typeof", "var", "void", "while", "with", "yield", "undefined", "NaN", "Infinity", "console",
-    "Math", "String", "Number", "Object", "Array", "JSON", "Symbol", "BigInt", "Error", "RangeError", "globalThis",
-    "process", "require", "module", "exports", "NyPanic", "NY_SURR", "NY_ESC", "Ref", "type", "declare",
-    "namespace", "abstract", "as", "any", "boolean", "number", "string", "never", "unknown", "readonly",
-    "keyof", "infer", "is", "asserts", "get", "set", "of", "constructor", "Boolean", "Map", "Set", "Date",
-    "NyExit", "TextDecoder", "Atomics", "SharedArrayBuffer", "Int32Array", "Uint32Array", "Uint8Array", "ArrayBuffer",
-    "DataView", "performance", "crypto",
+    "arguments",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "eval",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+    "undefined",
+    "NaN",
+    "Infinity",
+    "console",
+    "Math",
+    "String",
+    "Number",
+    "Object",
+    "Array",
+    "JSON",
+    "Symbol",
+    "BigInt",
+    "Error",
+    "RangeError",
+    "globalThis",
+    "process",
+    "require",
+    "module",
+    "exports",
+    "NyPanic",
+    "NY_SURR",
+    "NY_ESC",
+    "Ref",
+    "type",
+    "declare",
+    "namespace",
+    "abstract",
+    "as",
+    "any",
+    "boolean",
+    "number",
+    "string",
+    "never",
+    "unknown",
+    "readonly",
+    "keyof",
+    "infer",
+    "is",
+    "asserts",
+    "get",
+    "set",
+    "of",
+    "constructor",
+    "Boolean",
+    "Map",
+    "Set",
+    "Date",
+    "NyExit",
+    "TextDecoder",
+    "Atomics",
+    "SharedArrayBuffer",
+    "Int32Array",
+    "Uint32Array",
+    "Uint8Array",
+    "ArrayBuffer",
+    "DataView",
+    "performance",
+    "crypto",
 ];
 
 /// The TypeScript runtime, emitted after the program (`@FILE@` becomes the source path).
@@ -202,7 +302,7 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is a box: the value is `p.v`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("{x}.v") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, info: &info, names: &uses, out: String::new(), indent: 1, tmp: 0 };
+        let mut g = Gen { m, f, info: &info, names: &uses, out: String::new(), indent: 1, tmp: 0, span: Cell::new(f.span) };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
@@ -216,7 +316,11 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str(JSON);
     }
     // `os.exit(n)` throws `NyExit` (only programs that use the standard library can)
-    let exit = if std { "    if (e instanceof NyExit) {\n        if (ny_process !== undefined) ny_process.exitCode = e.code;\n    } else {\n" } else { "" };
+    let exit = if std {
+        "    if (e instanceof NyExit) {\n        if (ny_process !== undefined) ny_process.exitCode = e.code;\n    } else {\n"
+    } else {
+        ""
+    };
     let (inner, close) = if std { ("    ", "    }\n") } else { ("", "") };
     let _ = write!(
         out,
@@ -251,6 +355,9 @@ struct Gen<'a> {
     indent: usize,
     /// Counter for helper names (boxes, element references).
     tmp: usize,
+    /// The position of the statement being generated (an int literal JavaScript cannot hold
+    /// exactly stops the program there: E0256).
+    span: Cell<Span>,
 }
 
 impl Gen<'_> {
@@ -271,6 +378,7 @@ impl Gen<'_> {
     fn stmts(&mut self, ss: &[Stmt]) {
         let mut k = 0;
         while k < ss.len() {
+            self.span.set(ss[k].span);
             self.declare_before(&ss[k]);
             if let Some(r) = range_for(ss, k, self.info) {
                 if let Some(p) = r.pre {
@@ -355,6 +463,7 @@ impl Gen<'_> {
     }
 
     fn stmt(&mut self, s: &Stmt) {
+        self.span.set(s.span);
         let at = format!("{}, {}", s.span.line, s.span.col);
         match &s.kind {
             StmtKind::Set(l, e) => {
@@ -534,6 +643,10 @@ impl Gen<'_> {
             RtOp::PrintNoLine => format!("ny_write({})", self.template(args)),
             RtOp::Format => self.template(args),
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("ny_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("ny_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("ny_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("ny_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("ny_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("ny_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("{} + {}", self.expr(&args[0]), self.expr(&args[1])),
@@ -603,7 +716,11 @@ impl Gen<'_> {
                     format!("ny_mgetor({}, {}, {})", a[0], a[1], a[2])
                 };
                 // a value that is a plain struct now has two owners (no `Dup` follows for it)
-                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_share({get})") } else { get }
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) {
+                    format!("ny_share({get})")
+                } else {
+                    get
+                }
             }
             RtOp::MapKeys => format!("[...{}.keys()]", self.expr(&args[0])),
             RtOp::MapValues => format!("ny_share_all([...{}.values()])", self.expr(&args[0])),
@@ -617,6 +734,7 @@ impl Gen<'_> {
         let mut head = "if";
         loop {
             let StmtKind::If { cond, then, els } = &cur.kind else { unreachable!() };
+            self.span.set(cur.span);
             let line = format!("{head} ({}) {{", self.arg(cond));
             self.line(&line);
             self.block(then);
@@ -708,6 +826,11 @@ impl Gen<'_> {
 
     fn expr(&self, e: &Expr) -> String {
         match e {
+            // every int is a safe integer here: a bigger literal would be rounded
+            Expr::Int(n) if n.unsigned_abs() > SAFE_INT => {
+                let at = self.span.get();
+                format!("ny_unsafe_int(\"{n}\", {}, {})", at.line, at.col)
+            }
             Expr::Int(n) => n.to_string(),
             Expr::Float(f) if f.is_infinite() => (if *f > 0.0 { "Infinity" } else { "(-Infinity)" }).to_string(),
             Expr::Float(f) => format!("{f:?}"),

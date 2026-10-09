@@ -14,13 +14,90 @@ use super::scope::{self, range_for, Info};
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
-    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def",
-    "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda",
-    "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case",
-    "print", "len", "str", "int", "float", "bool", "list", "dict", "set", "tuple", "range", "ord", "chr",
-    "isinstance", "getattr", "setattr", "hasattr", "repr", "abs", "all", "any", "zip", "map", "enumerate",
-    "super", "object", "type", "self", "other", "math", "json", "os", "re", "sys", "Exception", "MemoryError",
-    "annotations", "min", "max", "sum", "iter", "next", "open", "input", "id", "hash", "format",
+    "False",
+    "None",
+    "True",
+    "and",
+    "as",
+    "assert",
+    "async",
+    "await",
+    "break",
+    "class",
+    "continue",
+    "def",
+    "del",
+    "elif",
+    "else",
+    "except",
+    "finally",
+    "for",
+    "from",
+    "global",
+    "if",
+    "import",
+    "in",
+    "is",
+    "lambda",
+    "nonlocal",
+    "not",
+    "or",
+    "pass",
+    "raise",
+    "return",
+    "try",
+    "while",
+    "with",
+    "yield",
+    "match",
+    "case",
+    "print",
+    "len",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "range",
+    "ord",
+    "chr",
+    "isinstance",
+    "getattr",
+    "setattr",
+    "hasattr",
+    "repr",
+    "abs",
+    "all",
+    "any",
+    "zip",
+    "map",
+    "enumerate",
+    "super",
+    "object",
+    "type",
+    "self",
+    "other",
+    "math",
+    "json",
+    "os",
+    "re",
+    "sys",
+    "Exception",
+    "MemoryError",
+    "annotations",
+    "min",
+    "max",
+    "sum",
+    "iter",
+    "next",
+    "open",
+    "input",
+    "id",
+    "hash",
+    "format",
 ];
 
 /// The Python runtime, emitted after the program (`@FILE@` becomes the source path).
@@ -241,8 +318,7 @@ pub fn gen(m: &Module, file: &str) -> String {
     if json {
         // the fields of each struct for `json.str` and `json.parse`, after every class exists
         for (_, s) in &m.structs.0 {
-            let fields: Vec<String> =
-                s.fields.iter().map(|(f, t)| format!("({}, \"{}\", {})", lit(f), name(f), jdesc(*t))).collect();
+            let fields: Vec<String> = s.fields.iter().map(|(f, t)| format!("({}, \"{}\", {})", lit(f), name(f), jdesc(*t))).collect();
             let _ = writeln!(out, "{}.ny_jf = [{}]", name(&s.name), fields.join(", "));
         }
         out.push_str("\n\n");
@@ -605,6 +681,10 @@ impl<'a> Gen<'a> {
             RtOp::PrintNoLine => format!("print({}, end=\"\")", self.text(args)),
             RtOp::Format => self.text(args),
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("ny_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("ny_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("ny_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("ny_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("ny_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("ny_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("{} + {}", self.expr(&args[0]), self.expr(&args[1])),
@@ -664,7 +744,11 @@ impl<'a> Gen<'a> {
                     format!("{}.get({}, {})", self.expr(&args[0]), a[1], a[2])
                 };
                 // a value that is a plain struct now has two owners (no `Dup` follows for it)
-                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) { format!("ny_share({get})") } else { get }
+                if matches!(v, Ty::Struct(_)) && !self.m.managed(v) {
+                    format!("ny_share({get})")
+                } else {
+                    get
+                }
             }
             RtOp::MapKeys => format!("NyList({})", a[0]),
             RtOp::MapValues => format!("ny_share_all(NyList({}.values()))", self.expr(&args[0])),

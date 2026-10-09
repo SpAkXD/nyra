@@ -15,13 +15,90 @@ use super::scope::{self, mentions, range_for, Info};
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
-    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for", "if", "impl",
-    "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
-    "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn",
-    "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual",
-    "yield", "try", "union", "gen", "Rc", "Vec", "String", "Str", "Option", "Some", "None", "Ok", "Err",
-    "Result", "Default", "Clone", "Copy", "PartialEq", "std", "core", "drop", "print", "println", "eprintln",
-    "format", "vec", "char", "i64", "f64", "bool", "str", "u32", "usize", "i32", "Box",
+    "as",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+    "async",
+    "await",
+    "dyn",
+    "abstract",
+    "become",
+    "box",
+    "do",
+    "final",
+    "macro",
+    "override",
+    "priv",
+    "typeof",
+    "unsized",
+    "virtual",
+    "yield",
+    "try",
+    "union",
+    "gen",
+    "Rc",
+    "Vec",
+    "String",
+    "Str",
+    "Option",
+    "Some",
+    "None",
+    "Ok",
+    "Err",
+    "Result",
+    "Default",
+    "Clone",
+    "Copy",
+    "PartialEq",
+    "std",
+    "core",
+    "drop",
+    "print",
+    "println",
+    "eprintln",
+    "format",
+    "vec",
+    "char",
+    "i64",
+    "f64",
+    "bool",
+    "str",
+    "u32",
+    "usize",
+    "i32",
+    "Box",
 ];
 
 /// The Rust runtime, emitted after the program (`@FILE@` becomes the source path).
@@ -150,8 +227,12 @@ fn json_impls(m: &Module, out: &mut String) {
             );
         }
         out.push_str("                    _ => p.skip(),\n                }\n                if !p.next(b'}') {\n                    break;\n                }\n            }\n        }\n");
-        let fields: Vec<String> =
-            s.fields.iter().enumerate().map(|(k, (f, _))| format!("{}: f{k}.unwrap_or_else(|| p.missing({}))", name(f), lit(f))).collect();
+        let fields: Vec<String> = s
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(k, (f, _))| format!("{}: f{k}.unwrap_or_else(|| p.missing({}))", name(f), lit(f)))
+            .collect();
         let _ = writeln!(out, "        {n} {{ {} }}\n    }}\n}}\n", fields.join(", "));
     }
 }
@@ -231,7 +312,6 @@ impl Pos {
         }
     }
 }
-
 
 /// How an operand of a change in place is used.
 #[derive(Clone, Copy)]
@@ -470,7 +550,8 @@ impl<'a> Gen<'a> {
             }
             StmtKind::Call { dst, func, args } => {
                 // the variables passed `inout` are borrowed mutably for the whole call
-                let roots: Vec<LocalId> = args.iter().filter_map(|a| if let Arg::InOut(p) = a { Some(p.root) } else { None }).collect();
+                let roots: Vec<LocalId> =
+                    args.iter().filter_map(|a| if let Arg::InOut(p) = a { Some(p.root) } else { None }).collect();
                 let mut parts = Vec::with_capacity(args.len());
                 for a in args {
                     match a {
@@ -643,13 +724,21 @@ impl<'a> Gen<'a> {
         let code = match op {
             RtOp::Print => {
                 let (fmt, values) = self.format_parts(args);
-                let line = if values.is_empty() { format!("println!(\"{fmt}\");") } else { format!("println!(\"{fmt}\", {});", values.join(", ")) };
+                let line = if values.is_empty() {
+                    format!("println!(\"{fmt}\");")
+                } else {
+                    format!("println!(\"{fmt}\", {});", values.join(", "))
+                };
                 self.line(&line);
                 return;
             }
             RtOp::PrintNoLine => {
                 let (fmt, values) = self.format_parts(args);
-                let line = if values.is_empty() { format!("print!(\"{fmt}\");") } else { format!("print!(\"{fmt}\", {});", values.join(", ")) };
+                let line = if values.is_empty() {
+                    format!("print!(\"{fmt}\");")
+                } else {
+                    format!("print!(\"{fmt}\", {});", values.join(", "))
+                };
                 self.line(&line);
                 return;
             }
@@ -671,6 +760,10 @@ impl<'a> Gen<'a> {
                 }
             }
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("ny_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("ny_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("ny_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("ny_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("ny_rem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("ny_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("Rc::new(format!(\"{{}}{{}}\", {}, {}))", a[0], a[1]),
@@ -730,7 +823,9 @@ impl<'a> Gen<'a> {
                 format!("ny_mnew(vec![{}])", items.join(", "))
             }
             RtOp::MapGet => format!("ny_mget(&{}, &{}, {at}).clone()", self.expr(&args[0]), self.owned(&args[1])),
-            RtOp::MapGetOr => format!("ny_mget_or(&{}, &{}, &{}).clone()", self.expr(&args[0]), self.owned(&args[1]), self.owned(&args[2])),
+            RtOp::MapGetOr => {
+                format!("ny_mget_or(&{}, &{}, &{}).clone()", self.expr(&args[0]), self.owned(&args[1]), self.owned(&args[2]))
+            }
             RtOp::MapKeys => format!("ny_mkeys(&{})", self.expr(&args[0])),
             RtOp::MapValues => format!("ny_mvalues(&{})", self.expr(&args[0])),
             RtOp::ArrSlice => format!("ny_slice({}, {}, {}, {at})", self.borrow(&args[0]), a[1], a[2]),

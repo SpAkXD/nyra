@@ -100,7 +100,8 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     let first = fix.iter().map(|e| e.start.line).min()?;
     // an edit of whole lines (from the start of one line to the start of another) does not
     // touch the line it ends at
-    let whole_lines = |e: &Edit| e.start.col == 1 && e.end.col == 1 && e.end.line > e.start.line && (e.text.is_empty() || e.text.ends_with('\n'));
+    let whole_lines =
+        |e: &Edit| e.start.col == 1 && e.end.col == 1 && e.end.line > e.start.line && (e.text.is_empty() || e.text.ends_with('\n'));
     let last = fix.iter().map(|e| if whole_lines(e) { e.end.line - 1 } else { e.end.line }).max()?;
     let fixed = apply(src, fix)?;
     let added: usize = fix.iter().map(|e| e.text.matches('\n').count()).sum();
@@ -212,7 +213,13 @@ pub fn diff(old: &str, new: &str) -> String {
         let end = ops[k..].iter().position(|(op, _)| *op == '=').map_or(ops.len(), |p| k + p);
         let hunk = &ops[k..end];
         let (dels, adds) = (hunk.iter().filter(|(op, _)| *op == '-').count(), hunk.iter().filter(|(op, _)| *op == '+').count());
-        let range = |start: usize, n: usize| if n == 1 { start.to_string() } else { format!("{},{n}", if n == 0 { start - 1 } else { start }) };
+        let range = |start: usize, n: usize| {
+            if n == 1 {
+                start.to_string()
+            } else {
+                format!("{},{n}", if n == 0 { start - 1 } else { start })
+            }
+        };
         out += &format!("@@ -{} +{} @@\n", range(la, dels), range(lb, adds));
         for (op, line) in hunk.iter().filter(|(op, _)| *op == '-').chain(hunk.iter().filter(|(op, _)| *op == '+')) {
             out += &format!("{op}{line}\n");
@@ -234,7 +241,7 @@ mod tests {
     fn edits_apply_only_where_they_find_their_text() {
         let src = "fn main() {\n    return 1\n}\n";
         let ok = Edit::replace(at(2, 5), "return", "ret");
-        assert_eq!(apply(src, &[ok.clone()]).as_deref(), Some("fn main() {\n    ret 1\n}\n"));
+        assert_eq!(apply(src, std::slice::from_ref(&ok)).as_deref(), Some("fn main() {\n    ret 1\n}\n"));
         // one column off: the text there is not `return`, so nothing happens
         assert_eq!(apply(src, &[Edit::replace(at(2, 4), "return", "ret")]), None);
         // out of range
@@ -248,7 +255,7 @@ mod tests {
     fn a_range_may_hold_whitespace_around_the_expected_text() {
         let src = "fn main()\n{\n}\n";
         let join = Edit::range(at(1, 9), at(2, 1), ")", ") ");
-        assert_eq!(apply(src, &[join.clone()]).as_deref(), Some("fn main() {\n}\n"));
+        assert_eq!(apply(src, std::slice::from_ref(&join)).as_deref(), Some("fn main() {\n}\n"));
         assert_eq!(preview(src, &[join]).as_deref(), Some("`fn main() {`"));
         // a comment in the range is not whitespace
         assert_eq!(apply("fn main() // c\n{\n}\n", &[Edit::range(at(1, 9), at(2, 1), ")", ") ")]), None);

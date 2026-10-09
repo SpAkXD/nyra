@@ -44,10 +44,7 @@ impl<'a> Lines<'a> {
             return self.text.len();
         };
         let line_end = self.content_end(start);
-        self.text[start..line_end]
-            .char_indices()
-            .nth(s.col.saturating_sub(1))
-            .map_or(line_end, |(i, _)| start + i)
+        self.text[start..line_end].char_indices().nth(s.col.saturating_sub(1)).map_or(line_end, |(i, _)| start + i)
     }
 
     /// The 1-based line of a byte offset.
@@ -467,12 +464,7 @@ fn splice(text: &str, a: usize, b: usize, with: &str) -> String {
 /// New code as sent: `\n` line breaks, the common indentation removed, no blank lines around it.
 fn clean(code: &str) -> String {
     let code = code.replace("\r\n", "\n");
-    let indent = code
-        .lines()
-        .filter(|l| !is_blank(l))
-        .map(|l| l.len() - l.trim_start().len())
-        .min()
-        .unwrap_or(0);
+    let indent = code.lines().filter(|l| !is_blank(l)).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
     let lines: Vec<&str> = code.lines().map(|l| if l.len() >= indent { &l[indent..] } else { l.trim_start() }).collect();
     let text = lines.join("\n");
     let text = text.trim_end();
@@ -556,7 +548,10 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
                     }
                     let fname = new.split(':').next().unwrap_or("").trim().to_string();
                     let text = splice(text, f.start, f.end, &new);
-                    Ok(Applied { text, notes: vec![note(format!("replaced field {}.{}", s.name, f.name), &format!("{}.{fname}", s.name))] })
+                    Ok(Applied {
+                        text,
+                        notes: vec![note(format!("replaced field {}.{}", s.name, f.name), &format!("{}.{fname}", s.name))],
+                    })
                 }
                 Target::Item(item) => {
                     let mut ds = defs(code)?;
@@ -610,7 +605,10 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
                 }
                 Place::After(anchor) => {
                     let Target::Item(a) = o.find(anchor, text)? else {
-                        return Err("`@add after` takes a function or struct; for a field use `@add-field Struct name: type after field`".into());
+                        return Err(
+                            "`@add after` takes a function or struct; for a field use `@add-field Struct name: type after field`"
+                                .into(),
+                        );
                     };
                     let at = lines.next_line(a.end);
                     let pre = if at == text.len() && !text.ends_with('\n') { format!("{nl}{gap}") } else { gap.to_string() };
@@ -823,7 +821,10 @@ fn walk(e: &Expr, f: &mut dyn FnMut(&Expr)) {
 fn parse(text: &str) -> Result<(Program, Vec<Token>), String> {
     let first = |ds: Vec<Diag>| {
         let d = &ds[0];
-        format!("a rename needs a file without syntax errors; line {}: {} (fix it first, e.g. by replacing that symbol)", d.span.line, d.msg)
+        format!(
+            "a rename needs a file without syntax errors; line {}: {} (fix it first, e.g. by replacing that symbol)",
+            d.span.line, d.msg
+        )
     };
     let (toks, errs) = lexer::lex(text);
     if !errs.is_empty() {
@@ -1095,7 +1096,10 @@ fn errors_json(diags: &[Diag], text: &str) -> Json {
 fn outcome_json(out: &Outcome, applied: bool, code: bool) -> Json {
     let mut f: Vec<(&str, Json)> = vec![("ok", applied.into())];
     if !applied {
-        f.push(("refused", format!("the edit adds {} error(s); nothing was changed (force applies it anyway)", out.added.len()).into()));
+        f.push((
+            "refused",
+            format!("the edit adds {} error(s); nothing was changed (force applies it anyway)", out.added.len()).into(),
+        ));
     }
     f.push(("edits", out.notes.iter().map(|n| Json::from(n.as_str())).collect::<Vec<_>>().into()));
     if out.fixed > 0 {
@@ -1166,7 +1170,13 @@ pub fn outline_json(text: &str, file: &str) -> Json {
                 "fields",
                 i.fields
                     .iter()
-                    .map(|x| obj([("name", x.name.clone().into()), ("type", x.ty.clone().into()), ("line", (lines.line(x.start) as i64).into())]))
+                    .map(|x| {
+                        obj([
+                            ("name", x.name.clone().into()),
+                            ("type", x.ty.clone().into()),
+                            ("line", (lines.line(x.start) as i64).into()),
+                        ])
+                    })
                     .collect::<Vec<_>>()
                     .into(),
             )),
@@ -1194,9 +1204,7 @@ fn show_one(text: &str, name: &str) -> Result<(String, &'static str, usize, usiz
     }
     Ok(match o.find(name, text)? {
         Target::Item(i) => (i.name.clone(), i.kind.word(), lines.line(i.doc), lines.line(i.end), text[i.doc..i.end].to_string()),
-        Target::Field(_, f) => {
-            (name.to_string(), "field", lines.line(f.start), lines.line(f.start), text[f.start..f.end].to_string())
-        }
+        Target::Field(_, f) => (name.to_string(), "field", lines.line(f.start), lines.line(f.start), text[f.start..f.end].to_string()),
     })
 }
 
@@ -1455,7 +1463,10 @@ fn edit_cli(file: &str, src: &str, args: Vec<String>, json: bool) -> ExitCode {
         }
     } else {
         eprint!("{}", diag::render_human(&out.added, file, &out.text));
-        eprintln!("nyra: edit refused: it adds {} error(s) (shown in the edited text); {file} is unchanged (--force applies it anyway)", out.added.len());
+        eprintln!(
+            "nyra: edit refused: it adds {} error(s) (shown in the edited text); {file} is unchanged (--force applies it anyway)",
+            out.added.len()
+        );
     }
     if applied {
         ExitCode::SUCCESS
@@ -1559,7 +1570,10 @@ mod tests {
         let o = outline(src);
         assert_eq!(o.items.len(), 3);
         let add = &o.items[0];
-        assert_eq!((add.sig.as_str(), &src[add.doc..add.end]), ("fn add(a: int, b: int) -> int", "// adds\nfn add(a: int,\n    b: int) -> int = a + b // sum"));
+        assert_eq!(
+            (add.sig.as_str(), &src[add.doc..add.end]),
+            ("fn add(a: int, b: int) -> int", "// adds\nfn add(a: int,\n    b: int) -> int = a + b // sum")
+        );
         assert_eq!(o.items[1].sig, "struct P { x: int, ys: [int] }");
         assert_eq!(o.items[1].fields[1].ty, "[int]");
         assert_eq!(o.script.len(), 1);

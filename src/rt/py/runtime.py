@@ -61,9 +61,44 @@ def ny_rem(a, b):
     return -r if a < 0 else r
 
 
+def ny_overflow(a, op, b, line, col):
+    """int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255)."""
+    msg = f"int overflow: -({a}) does not fit in 64 bits" if op == "~" else f"int overflow: {a} {op} {b} does not fit in 64 bits"
+    ny_panic("E0255", msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+
+
+def ny_add(a, b, line, col):
+    r = a + b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "+", b, line, col)
+
+
+def ny_sub(a, b, line, col):
+    r = a - b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "-", b, line, col)
+
+
+def ny_mul(a, b, line, col):
+    r = a * b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "*", b, line, col)
+
+
+def ny_neg(a, line, col):
+    if a == -9223372036854775808:
+        ny_overflow(a, "~", 0, line, col)
+    return -a
+
+
 def ny_div(a, b, line, col):
     if b == 0:
         ny_panic("E0241", "division by zero", "check the divisor first", line, col)
+    if b == -1 and a == -9223372036854775808:
+        ny_overflow(a, "/", b, line, col)
     return ny_quot(a, b)
 
 

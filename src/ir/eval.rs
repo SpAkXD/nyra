@@ -4,8 +4,10 @@
 //! array or a struct, printing, an operation that would fail at run time (that error must
 //! happen when the program runs, with its position), or a computation longer than its step
 //! budget. Every operation it does give a result for computes exactly what the runtimes compute:
-//! ints wrap, floats are IEEE doubles (no formatting: a float is never turned into text here),
-//! string positions count characters.
+//! floats are IEEE doubles (no formatting: a float is never turned into text here), string
+//! positions count characters. Ints never wrap: an overflow is a runtime error (E0255), so it is
+//! left to the program. Compile time also never makes or uses an int beyond 2^53 - 1: JavaScript
+//! cannot hold one exactly and stops there (E0256), at the position of the operation.
 
 use std::collections::HashMap;
 
@@ -39,6 +41,21 @@ const CALL_STEPS: u64 = 200_000;
 const MODULE_STEPS: u64 = 2_000_000;
 /// The deepest recursion compile time follows.
 const MAX_DEPTH: usize = 40;
+/// The largest int every backend holds exactly (JavaScript's `Number.MAX_SAFE_INTEGER`).
+pub const SAFE_INT: i64 = (1 << 53) - 1;
+
+/// True for an int every backend holds exactly.
+pub fn safe_int(n: i64) -> bool {
+    (-SAFE_INT..=SAFE_INT).contains(&n)
+}
+
+/// An int result, if it is one compile time may make (see the module comment).
+fn int_result(n: Option<i64>) -> R<Val> {
+    match n {
+        Some(n) if safe_int(n) => Ok(Val::Int(n)),
+        _ => Err(Stop::No),
+    }
+}
 
 impl Val {
     /// The value as an IR constant, if every backend can write it as a literal that means
@@ -58,7 +75,7 @@ impl Val {
     /// The value of a constant expression (a literal).
     pub fn of(e: &Expr, strs: &[String]) -> Option<Val> {
         Some(match e {
-            Expr::Int(n) => Val::Int(*n),
+            Expr::Int(n) if safe_int(*n) => Val::Int(*n),
             Expr::Float(f) => Val::Float(*f),
             Expr::Bool(b) => Val::Bool(*b),
             Expr::Char(c) => Val::Char(*c),
@@ -122,7 +139,7 @@ fn is_space(c: u32) -> bool {
 /// A unary or binary operator on constant operands (`None`: not a constant operation).
 pub fn unary(op: UnOp, x: Val) -> R<Val> {
     Ok(match op {
-        UnOp::INeg => Val::Int(int(x)?.wrapping_neg()),
+        UnOp::INeg => int_result(int(x)?.checked_neg())?,
         UnOp::FNeg => Val::Float(-float(x)?),
         UnOp::Not => Val::Bool(!boolean(x)?),
     })
@@ -134,12 +151,11 @@ pub fn binary(op: BinOp, a: Val, b: Val) -> R<Val> {
         IAdd | ISub | IMul | IDiv | IRem | IEq | INe | ILt | ILe | IGt | IGe => {
             let (x, y) = (int(a)?, int(b)?);
             match op {
-                IAdd => Val::Int(x.wrapping_add(y)),
-                ISub => Val::Int(x.wrapping_sub(y)),
-                IMul => Val::Int(x.wrapping_mul(y)),
-                IDiv | IRem if y == 0 => return Err(Stop::No),
-                IDiv => Val::Int(x.wrapping_div(y)),
-                IRem => Val::Int(x.wrapping_rem(y)),
+                IAdd => int_result(x.checked_add(y))?,
+                ISub => int_result(x.checked_sub(y))?,
+                IMul => int_result(x.checked_mul(y))?,
+                IDiv => int_result(x.checked_div(y))?,
+                IRem => int_result(x.checked_rem(y))?,
                 IEq => Val::Bool(x == y),
                 INe => Val::Bool(x != y),
                 ILt => Val::Bool(x < y),
@@ -247,18 +263,22 @@ pub fn op(op: RtOp, args: Vec<Val>) -> R<Option<Val>> {
             let (a, b) = (int(next()?)?, int(next()?)?);
             match (op, b) {
                 (_, 0) => return Err(Stop::No),
-                (RtOp::DivInt, -1) => Val::Int(a.wrapping_neg()),
+                (RtOp::DivInt, _) => int_result(a.checked_div(b))?,
                 (_, -1) => Val::Int(0),
-                (RtOp::DivInt, _) => Val::Int(a / b),
                 _ => Val::Int(a % b),
             }
         }
+        // an overflow is the program's runtime error (E0255)
+        RtOp::AddInt => int_result(int(next()?)?.checked_add(int(next()?)?))?,
+        RtOp::SubInt => int_result(int(next()?)?.checked_sub(int(next()?)?))?,
+        RtOp::MulInt => int_result(int(next()?)?.checked_mul(int(next()?)?))?,
+        RtOp::NegInt => int_result(int(next()?)?.checked_neg())?,
         RtOp::FloatToInt => {
             let x = float(next()?)?;
             if x.is_nan() || x >= 9223372036854775807.0 || x < -9223372036854775808.0 {
                 return Err(Stop::No);
             }
-            Val::Int(x as i64)
+            int_result(Some(x as i64))?
         }
         RtOp::Format => {
             let mut s = String::new();
@@ -322,7 +342,7 @@ pub fn op(op: RtOp, args: Vec<Val>) -> R<Option<Val>> {
             if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
                 return Err(Stop::No);
             }
-            Val::Int(s.parse::<i64>().map_err(|_| Stop::No)?)
+            int_result(s.parse::<i64>().ok())?
         }
         RtOp::CharFrom => {
             let n = int(next()?)?;

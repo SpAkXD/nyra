@@ -19,12 +19,15 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind,
-    StrId, StructInfo, Structs, Ty, UnOp,
+    visit_locals, Arg, BinOp, Expr, Func, FuncId, Local, LocalId, Module, Place, PureFn, RtOp, StdFn, Step, Stmt, StmtKind, StrId,
+    StructInfo, Structs, Ty, UnOp,
 };
 use crate::ast::{self, Span, Type};
 
+mod bounds;
 mod lambda;
+
+use bounds::{Iv, MODES};
 
 /// Lowers a type-checked program. Fails for features the backends do not support yet.
 pub fn lower(prog: &ast::Program) -> Result<Module, String> {
@@ -32,8 +35,7 @@ pub fn lower(prog: &ast::Program) -> Result<Module, String> {
     let writers: HashSet<String> =
         prog.globals.uses.iter().filter(|(_, us)| us.iter().any(|u| u.inout)).map(|(f, _)| f.clone()).collect();
     WRITERS.with(|w| *w.borrow_mut() = writers);
-    let ids: HashMap<String, FuncId> =
-        prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
+    let ids: HashMap<String, FuncId> = prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
     let structs = struct_table(prog);
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
@@ -123,6 +125,10 @@ fn const_int(e: &Expr) -> Option<i64> {
     }
 }
 
+/// A counter starts within this, so it stays within `COUNTER_MAX` (see `counters`).
+const COUNTER_START: i128 = 1 << 51;
+const COUNTER_MAX: i128 = (1 << 53) - 2;
+
 thread_local! {
     /// The functions of the program being lowered that change script variables.
     static WRITERS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
@@ -158,6 +164,170 @@ fn mutates(e: &ast::Expr) -> bool {
     }
 }
 
+/// Calls `f` on `e` and every expression inside it.
+fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
+    use ast::ExprKind as K;
+    f(e);
+    match &e.kind {
+        K::Unary(_, x) | K::Field(x, _) | K::Labeled(_, x) | K::Inout(x) | K::Lambda(_, x) => each_expr(x, f),
+        K::Binary(_, a, b) | K::Index(a, b) => {
+            each_expr(a, f);
+            each_expr(b, f);
+        }
+        K::If(c, a, b) => {
+            each_expr(c, f);
+            each_expr(a, f);
+            each_expr(b, f);
+        }
+        K::Call(_, xs) | K::Array(xs) => xs.iter().for_each(|x| each_expr(x, f)),
+        K::Method(r, _, xs) => {
+            each_expr(r, f);
+            xs.iter().for_each(|x| each_expr(x, f));
+        }
+        K::MapLit(pairs) => pairs.iter().for_each(|(k, v)| {
+            each_expr(k, f);
+            each_expr(v, f);
+        }),
+        K::Interp(parts) => parts.iter().for_each(|p| {
+            if let ast::InterpPart::Expr(x) = p {
+                each_expr(x, f)
+            }
+        }),
+        K::Comprehension(c) => {
+            match &c.src {
+                ast::CompSrc::Each(x) => each_expr(x, f),
+                ast::CompSrc::Range(a, b, k) => {
+                    each_expr(a, f);
+                    each_expr(b, f);
+                    if let Some(k) = k {
+                        each_expr(k, f);
+                    }
+                }
+            }
+            each_expr(&c.elem, f);
+            if let Some(x) = &c.cond {
+                each_expr(x, f);
+            }
+        }
+        K::Int(_) | K::Float(_) | K::Bool(_) | K::Str(_) | K::Char(_) | K::Var(_) => {}
+    }
+}
+
+/// Adds the variables that `stmts` and `exprs` may change (by assignment or as `inout`) to `names`.
+fn assigned(stmts: &[ast::Stmt], exprs: &[&ast::Expr], names: &mut HashSet<String>) {
+    let scan = |e: &ast::Expr, names: &mut HashSet<String>| {
+        each_expr(e, &mut |x| {
+            if let ast::ExprKind::Inout(p) = &x.kind {
+                if let Some(root) = crate::check::data::place_root(p) {
+                    names.insert(root.to_string());
+                }
+            }
+        })
+    };
+    for e in exprs {
+        scan(e, names);
+    }
+    for s in stmts {
+        match &s.kind {
+            ast::StmtKind::Let { value, .. } => scan(value, names),
+            ast::StmtKind::Assign { target, value, .. } => {
+                if let Some(root) = crate::check::data::place_root(target) {
+                    names.insert(root.to_string());
+                }
+                scan(target, names);
+                scan(value, names);
+            }
+            ast::StmtKind::If { cond, then, els } => {
+                scan(cond, names);
+                assigned(then, &[], names);
+                if let Some(e) = els {
+                    assigned(e, &[], names);
+                }
+            }
+            ast::StmtKind::While { cond, body } => assigned(body, &[cond], names),
+            ast::StmtKind::For { start, end, step, body, .. } => {
+                let mut es = vec![start, end];
+                es.extend(step.iter());
+                assigned(body, &es, names);
+            }
+            ast::StmtKind::ForEach { iter, body, .. } => assigned(body, &[iter], names),
+            ast::StmtKind::Arena(body) => assigned(body, &[], names),
+            ast::StmtKind::Ret(Some(e)) | ast::StmtKind::Expr(e) => scan(e, names),
+            ast::StmtKind::Ret(None) | ast::StmtKind::Break | ast::StmtKind::Continue => {}
+        }
+    }
+}
+
+/// The `var`s of a function body that are counters: every change is `x += 1` or `x -= 1` (no
+/// other assignment, no `inout x`). Started at a small value, such a variable cannot get near
+/// 2^53 in any real run time (that takes months of counting), so `x + 1` needs no check.
+fn counters(body: &[ast::Stmt], exclude: &HashSet<String>) -> HashSet<String> {
+    fn walk(ss: &[ast::Stmt], cand: &mut HashSet<String>, bad: &mut HashSet<String>) {
+        for s in ss {
+            let mut exprs: Vec<&ast::Expr> = Vec::new();
+            match &s.kind {
+                ast::StmtKind::Let { name, mutable: true, ty, value } if ty.unwrap_or(value.ty) == Type::Int => {
+                    cand.insert(name.clone());
+                    exprs.push(value);
+                }
+                ast::StmtKind::Let { value, .. } => exprs.push(value),
+                ast::StmtKind::Assign { target, op, value } => {
+                    let step = matches!(op, Some(ast::BinOp::Add | ast::BinOp::Sub)) && matches!(value.kind, ast::ExprKind::Int(1));
+                    match &target.kind {
+                        ast::ExprKind::Var(_) if step => {}
+                        ast::ExprKind::Var(x) => {
+                            bad.insert(x.clone());
+                        }
+                        _ => {
+                            if let Some(root) = crate::check::data::place_root(target) {
+                                bad.insert(root.to_string());
+                            }
+                        }
+                    }
+                    exprs.push(target);
+                    exprs.push(value);
+                }
+                ast::StmtKind::If { cond, then, els } => {
+                    exprs.push(cond);
+                    walk(then, cand, bad);
+                    if let Some(e) = els {
+                        walk(e, cand, bad);
+                    }
+                }
+                ast::StmtKind::While { cond, body } => {
+                    exprs.push(cond);
+                    walk(body, cand, bad);
+                }
+                ast::StmtKind::For { start, end, step, body, .. } => {
+                    exprs.extend([start, end]);
+                    exprs.extend(step.iter());
+                    walk(body, cand, bad);
+                }
+                ast::StmtKind::ForEach { iter, body, .. } => {
+                    exprs.push(iter);
+                    walk(body, cand, bad);
+                }
+                ast::StmtKind::Arena(body) => walk(body, cand, bad),
+                ast::StmtKind::Ret(Some(e)) | ast::StmtKind::Expr(e) => exprs.push(e),
+                ast::StmtKind::Ret(None) | ast::StmtKind::Break | ast::StmtKind::Continue => {}
+            }
+            for e in exprs {
+                each_expr(e, &mut |x| {
+                    if let ast::ExprKind::Inout(p) = &x.kind {
+                        if let Some(root) = crate::check::data::place_root(p) {
+                            bad.insert(root.to_string());
+                        }
+                    }
+                });
+            }
+        }
+    }
+    let (mut cand, mut bad) = (HashSet::new(), exclude.clone());
+    walk(body, &mut cand, &mut bad);
+    cand.retain(|c| !bad.contains(c));
+    cand
+}
+
 /// A block of the function being lowered.
 #[derive(Default)]
 struct Scope {
@@ -184,6 +354,21 @@ struct Lower<'a> {
     globals: &'a ast::Globals,
     /// The hidden parameters of the function being lowered, by script variable.
     hidden: HashMap<usize, LocalId>,
+    /// What is known about int locals at this point of the function: the bounds they always
+    /// keep (`base`), narrowed by facts: a condition that held (`if n < 2 { ret }` leaves
+    /// `n >= 2`), or an index that was checked (after `xs[j]`, `0 <= j < len`).
+    bounds: HashMap<LocalId, [Iv; MODES]>,
+    /// The bounds a local keeps for its whole life: `let`s, `for` counters, counters (see `counters`).
+    base: HashMap<LocalId, [Iv; MODES]>,
+    /// The int locals facts may be kept about: parameters (not `inout`), `let`s, loop counters,
+    /// and `var`s that only this function changes (not script variables a function changes).
+    factual: HashSet<LocalId>,
+    /// Every local whose facts were dropped, in order (see `restore`).
+    dropped: Vec<LocalId>,
+    /// The `var`s of the function that only count up or down by one.
+    counters: HashSet<String>,
+    /// Script variables that some function changes.
+    changed: HashSet<String>,
 }
 
 impl<'a> Lower<'a> {
@@ -199,7 +384,164 @@ impl<'a> Lower<'a> {
             chain_live: Vec::new(),
             globals,
             hidden: HashMap::new(),
+            bounds: HashMap::new(),
+            base: HashMap::new(),
+            factual: HashSet::new(),
+            dropped: Vec::new(),
+            counters: HashSet::new(),
+            changed: HashSet::new(),
         }
+    }
+
+    /// `l` keeps the bounds `b` for its whole life.
+    fn set_base(&mut self, l: LocalId, b: [Iv; MODES]) {
+        self.base.insert(l, b);
+        self.bounds.insert(l, b);
+        self.factual.insert(l);
+    }
+
+    /// `l` changed: only its lifelong bounds are still known.
+    fn forget(&mut self, l: LocalId) {
+        match self.base.get(&l) {
+            Some(b) => {
+                self.bounds.insert(l, *b);
+            }
+            None => {
+                self.bounds.remove(&l);
+            }
+        }
+        self.dropped.push(l);
+    }
+
+    /// The facts as they were (`saved`, when `dropped` had `mark` entries), minus those about the
+    /// locals that changed since: the code in between may not run, but what it changed stays changed.
+    fn restore(&mut self, saved: HashMap<LocalId, [Iv; MODES]>, mark: usize) {
+        self.bounds = saved;
+        let changed: Vec<LocalId> = self.dropped[mark..].to_vec();
+        self.dropped.truncate(mark);
+        for l in changed {
+            self.forget(l);
+        }
+    }
+
+    /// The facts now, to `restore` later.
+    fn save(&self) -> (HashMap<LocalId, [Iv; MODES]>, usize) {
+        (self.bounds.clone(), self.dropped.len())
+    }
+
+    /// Before a loop: forgets the facts about the variables its code changes (they hold for the
+    /// first round only).
+    fn forget_changed(&mut self, stmts: &[ast::Stmt], exprs: &[&ast::Expr]) {
+        let mut names = HashSet::new();
+        assigned(stmts, exprs, &mut names);
+        for n in names {
+            if let Some(l) = self.scopes.iter().rev().find_map(|s| s.names.get(&n).copied()) {
+                self.forget(l);
+            }
+        }
+    }
+
+    /// An index into a string or an array passed its check: `0 <= i < len` from here on.
+    fn indexed(&mut self, i: &Expr) {
+        if let Expr::Local(l) = i {
+            if self.factual.contains(l) {
+                let mut b = self.bound(i);
+                for (m, v) in b.iter_mut().enumerate() {
+                    let ix = bounds::index(m);
+                    v.lo = v.lo.max(ix.lo);
+                    v.hi = v.hi.min(ix.hi);
+                }
+                self.bounds.insert(*l, b);
+            }
+        }
+    }
+
+    /// Narrows the bounds of the locals that `c` compares, assuming it is `truth`.
+    fn assume(&mut self, c: &Expr, truth: bool) {
+        use BinOp::*;
+        match c {
+            Expr::Binary(And, a, b) if truth => {
+                self.assume(a, true);
+                self.assume(b, true);
+            }
+            Expr::Binary(Or, a, b) if !truth => {
+                self.assume(a, false);
+                self.assume(b, false);
+            }
+            Expr::Unary(UnOp::Not, x) => self.assume(x, !truth),
+            Expr::Binary(op @ (ILt | ILe | IGt | IGe | IEq), a, b) => {
+                let op = match (op, truth) {
+                    (_, true) => *op,
+                    (ILt, false) => IGe,
+                    (ILe, false) => IGt,
+                    (IGt, false) => ILe,
+                    (IGe, false) => ILt,
+                    _ => return, // `!=` says nothing about a range
+                };
+                let flip = match op {
+                    ILt => IGt,
+                    ILe => IGe,
+                    IGt => ILt,
+                    IGe => ILe,
+                    _ => IEq,
+                };
+                self.narrow(a, op, b);
+                self.narrow(b, flip, a);
+            }
+            _ => {}
+        }
+    }
+
+    /// `x op y` holds: narrows the bounds of `x` when it is a local facts are kept about.
+    fn narrow(&mut self, x: &Expr, op: BinOp, y: &Expr) {
+        let Expr::Local(l) = x else { return };
+        if !self.factual.contains(l) {
+            return;
+        }
+        let (mut xb, yb) = (self.bound(x), self.bound(y));
+        for m in 0..MODES {
+            let (v, w) = (&mut xb[m], yb[m]);
+            match op {
+                BinOp::ILt => v.hi = v.hi.min(w.hi - 1),
+                BinOp::ILe => v.hi = v.hi.min(w.hi),
+                BinOp::IGt => v.lo = v.lo.max(w.lo + 1),
+                BinOp::IGe => v.lo = v.lo.max(w.lo),
+                _ => {
+                    v.lo = v.lo.max(w.lo);
+                    v.hi = v.hi.min(w.hi);
+                }
+            }
+        }
+        self.bounds.insert(*l, xb);
+    }
+
+    /// The bounds of an int expression on every backend.
+    fn bound(&self, e: &Expr) -> [Iv; MODES] {
+        bounds::all(e, &|l| self.bounds.get(&l).copied())
+    }
+
+    /// int `a + b`, `a - b`, `a * b`: the plain operator when the result provably stays in range on
+    /// every backend, else the checked operation (an overflow is a runtime error).
+    fn int_arith(&mut self, op: BinOp, a: Expr, b: Expr, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let (x, y) = (self.bound(&a), self.bound(&b));
+        if (0..MODES).all(|m| bounds::arith(op, x[m], y[m]).fits(m)) {
+            return Expr::Binary(op, Box::new(a), Box::new(b));
+        }
+        let rop = match op {
+            BinOp::IAdd => RtOp::AddInt,
+            BinOp::ISub => RtOp::SubInt,
+            _ => RtOp::MulInt,
+        };
+        self.op(rop, vec![a, b], Ty::Int, dst, span, out)
+    }
+
+    /// int `-a`: plain unless `a` may be the smallest int (whose negation overflows).
+    fn int_neg(&mut self, a: Expr, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let x = self.bound(&a);
+        if (0..MODES).all(|m| bounds::neg(x[m]).fits(m)) {
+            return Expr::Unary(UnOp::INeg, Box::new(a));
+        }
+        self.op(RtOp::NegInt, vec![a], Ty::Int, dst, span, out)
     }
 
     fn not_yet(&mut self, what: &str) -> Expr {
@@ -219,7 +561,15 @@ impl<'a> Lower<'a> {
             let id = self.new_local(Some(p.name.clone()), p.ty);
             self.locals[id.0 as usize].inout = p.inout;
             self.scopes[0].names.insert(p.name.clone(), id);
+            if !p.inout && p.ty == Type::Int {
+                self.factual.insert(id);
+            }
         }
+        // a script variable that a function changes is no counter of the script, and no facts
+        // are kept about it (any call may change it)
+        self.changed =
+            self.globals.uses.values().flatten().filter(|u| u.inout).map(|u| self.globals.vars[u.var].name.clone()).collect();
+        self.counters = counters(&f.body, &self.changed);
         // the script variables it uses: hidden parameters after the others, `inout` when changed
         let globals = self.globals;
         let uses = globals.uses.get(&f.name).map_or(&[][..], Vec::as_slice);
@@ -235,7 +585,14 @@ impl<'a> Lower<'a> {
         let mut body = Vec::new();
         self.block(&f.body, &mut body, false);
         let ret = if f.ret == Type::Void { None } else { Some(f.ret) };
-        Func { name: f.name.clone(), params: f.params.len() + uses.len(), ret, locals: std::mem::take(&mut self.locals), body, span: f.span }
+        Func {
+            name: f.name.clone(),
+            params: f.params.len() + uses.len(),
+            ret,
+            locals: std::mem::take(&mut self.locals),
+            body,
+            span: f.span,
+        }
     }
 
     fn new_local(&mut self, name: Option<String>, t: Ty) -> LocalId {
@@ -382,12 +739,15 @@ impl<'a> Lower<'a> {
         v
     }
 
-    /// Lowers a block in a new scope; at its end the scope's variables are released.
+    /// Lowers a block in a new scope; at its end the scope's variables are released (and what
+    /// its conditions told about bounds is forgotten).
     fn block(&mut self, stmts: &[ast::Stmt], out: &mut Vec<Stmt>, loop_body: bool) {
         self.scopes.push(Scope { loop_body, ..Scope::default() });
+        let (bounds, mark) = self.save();
         for s in stmts {
             self.stmt(s, out);
         }
+        self.restore(bounds, mark);
         let scope = self.scopes.pop().expect("pushed above");
         let ends = out.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue));
         if !ends {
@@ -429,43 +789,75 @@ impl<'a> Lower<'a> {
     fn stmt(&mut self, s: &ast::Stmt, out: &mut Vec<Stmt>) {
         let span = s.span;
         match &s.kind {
-            ast::StmtKind::Let { name, ty: t, value, .. } => {
+            ast::StmtKind::Let { name, ty: t, value, mutable } => {
                 // No shadowing, so the value cannot refer to the new name.
                 let t = t.unwrap_or(value.ty);
                 let id = self.declare(name, t);
                 let v = self.expr(value, Some(id), out);
+                // an immutable int keeps the bounds of its value; a counter that starts small stays
+                // below 2^53 (see `counters`)
+                if t == Type::Int {
+                    let b = if matches!(v, Expr::Local(l) if l == id) { [Iv::full(0), Iv::full(1)] } else { self.bound(&v) };
+                    if !*mutable {
+                        self.set_base(id, b);
+                    } else if self.counters.contains(name) && b.iter().all(|iv| iv.lo >= -COUNTER_START && iv.hi <= COUNTER_START) {
+                        self.set_base(id, [Iv { lo: -COUNTER_MAX, hi: COUNTER_MAX }; MODES]);
+                    } else if !self.changed.contains(name) {
+                        self.factual.insert(id);
+                    }
+                }
                 self.init(id, v, span, out);
                 self.end_statement(span, out);
             }
             ast::StmtKind::Assign { target, op, value } => {
                 self.assign(target, *op, value, span, out);
                 self.end_statement(span, out);
+                if let ast::ExprKind::Var(x) = &target.kind {
+                    let l = self.lookup(x);
+                    self.forget(l);
+                }
             }
             ast::StmtKind::If { cond, then, els } => {
                 let cond = self.cond(cond, out);
+                let (before, mark) = self.save();
+                self.assume(&cond, true);
                 let mut t = Vec::new();
                 self.block(then, &mut t, false);
+                self.restore(before.clone(), mark);
+                self.assume(&cond, false);
                 let mut e = Vec::new();
                 if let Some(els) = els {
                     self.block(els, &mut e, false);
                 }
+                // after `if c { ...; ret }` the rest of the block knows that `c` is false
+                let leaves = |b: &[ast::Stmt]| {
+                    b.last().is_some_and(|s| matches!(s.kind, ast::StmtKind::Ret(_) | ast::StmtKind::Break | ast::StmtKind::Continue))
+                };
+                if els.is_some() || !leaves(then) {
+                    self.restore(before, mark);
+                }
                 out.push(Stmt { kind: StmtKind::If { cond, then: t, els: e }, span });
             }
             ast::StmtKind::While { cond, body } => {
+                // what the loop changes is unknown from the second round on
+                self.forget_changed(body, &[cond]);
                 let mut head = Vec::new();
                 let cond = self.cond(cond, &mut head);
+                let (before, mark) = self.save();
+                self.assume(&cond, true);
                 let mut b = Vec::new();
                 self.block(body, &mut b, true);
+                self.restore(before, mark);
                 out.push(Stmt { kind: StmtKind::Loop { head, cond, body: b, step: Vec::new() }, span });
             }
             ast::StmtKind::For { var, start, end, step, body } => {
                 self.scopes.push(Scope::default());
                 let i = self.declare(var, Ty::Int);
-                let (cond, k) = self.range(i, start, end, step.as_ref(), span, out);
+                let (cond, next) = self.range(i, start, end, step.as_ref(), span, out);
                 self.end_statement(span, out);
+                self.forget_changed(body, &[]);
                 let mut bd = Vec::new();
                 self.block(body, &mut bd, true);
-                let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(k));
                 let step = vec![Stmt { kind: StmtKind::Set(i, next), span }];
                 self.scopes.pop();
                 out.push(Stmt { kind: StmtKind::Loop { head: Vec::new(), cond, body: bd, step }, span });
@@ -497,10 +889,13 @@ impl<'a> Lower<'a> {
                 let counter = index.as_ref().map(|i| {
                     let id = self.declare(i, Ty::Int);
                     out.push(Stmt { kind: StmtKind::Set(id, Expr::Int(-1)), span });
+                    self.set_base(id, [bounds::index(0), bounds::index(1)]);
                     id
                 });
+                self.forget_changed(body, &[]);
                 self.scopes.push(Scope { loop_body: true, ..Scope::default() });
                 let x = self.declare_borrowed(var, elem);
+                let (bounds, mark) = self.save();
                 let mut bd = Vec::new();
                 if let Some(i) = counter {
                     let next = Expr::Binary(BinOp::IAdd, Box::new(Expr::Local(i)), Box::new(Expr::Int(1)));
@@ -509,6 +904,7 @@ impl<'a> Lower<'a> {
                 for st in body {
                     self.stmt(st, &mut bd);
                 }
+                self.restore(bounds, mark);
                 let inner = self.scopes.pop().expect("pushed");
                 if !bd.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue)) {
                     for l in inner.owned.into_iter().rev() {
@@ -612,11 +1008,25 @@ impl<'a> Lower<'a> {
     }
 
     /// `i` from `a` to `b` (exclusive) by `k`, for `for i in a..b step k`: the bounds and the step
-    /// are evaluated once, before the loop. Sets `i` and returns the loop condition and the step.
-    fn range(&mut self, i: LocalId, start: &ast::Expr, end: &ast::Expr, step: Option<&ast::Expr>, span: Span, out: &mut Vec<Stmt>) -> (Expr, Expr) {
+    /// are evaluated once, before the loop. Sets `i` and returns the loop condition and the value
+    /// of `i` in the next round.
+    ///
+    /// That next value never overflows: `i + 1` stays at most `b` while `i < b`; with a bigger step,
+    /// a round whose `i + k` would reach (or pass) the end sets `i` to the end instead, which ends
+    /// the loop the same way.
+    fn range(
+        &mut self,
+        i: LocalId,
+        start: &ast::Expr,
+        end: &ast::Expr,
+        step: Option<&ast::Expr>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> (Expr, Expr) {
         let a = self.expr(start, None, out);
         let b = self.expr(end, None, out);
         let k = step.map(|k| self.expr(k, None, out));
+        let (ab, bb) = (self.bound(&a), self.bound(&b));
         out.push(Stmt { kind: StmtKind::Set(i, a), span });
 
         let last = if matches!(b, Expr::Int(_)) {
@@ -639,8 +1049,8 @@ impl<'a> Lower<'a> {
         };
         let i_ = || Box::new(Expr::Local(i));
         let cond = match &k {
-            Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::ILt, i_(), Box::new(last)),
-            Expr::Int(_) => Expr::Binary(BinOp::IGt, i_(), Box::new(last)),
+            Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::ILt, i_(), Box::new(last.clone())),
+            Expr::Int(_) => Expr::Binary(BinOp::IGt, i_(), Box::new(last.clone())),
             _ => {
                 // the direction is known only at run time
                 let up = Expr::Binary(
@@ -651,12 +1061,53 @@ impl<'a> Lower<'a> {
                 let down = Expr::Binary(
                     BinOp::And,
                     Box::new(Expr::Binary(BinOp::ILt, Box::new(k.clone()), Box::new(Expr::Int(0)))),
-                    Box::new(Expr::Binary(BinOp::IGt, i_(), Box::new(last))),
+                    Box::new(Expr::Binary(BinOp::IGt, i_(), Box::new(last.clone()))),
                 );
                 Expr::Binary(BinOp::Or, Box::new(up), Box::new(down))
             }
         };
-        (cond, k)
+        // the counter stays between the start and the end (strictly before the end)
+        let iv: [Iv; MODES] = std::array::from_fn(|m| match &k {
+            Expr::Int(n) if *n > 0 => Iv { lo: ab[m].lo, hi: bb[m].hi - 1 },
+            Expr::Int(_) => Iv { lo: bb[m].lo + 1, hi: ab[m].hi },
+            _ => Iv { lo: ab[m].lo.min(bb[m].lo), hi: ab[m].hi.max(bb[m].hi) },
+        });
+        self.set_base(i, iv);
+        let add = |x: Expr, y: Expr| Expr::Binary(BinOp::IAdd, Box::new(x), Box::new(y));
+        if let Expr::Int(n @ (1 | -1)) = k {
+            return (cond, add(Expr::Local(i), Expr::Int(n)));
+        }
+        // `stop`: from there on, one more step reaches the end, so `i + k` is computed only below it
+        // (above it when counting down). It is `last - k`, kept within the ints of every backend:
+        // counting up `last < -SAFE + k ? -SAFE : last - k`, down `last > SAFE + k ? SAFE : last - k`.
+        const SAFE: i64 = (1 << 53) - 1;
+        let sub = |x: Expr, y: Expr| Expr::Binary(BinOp::ISub, Box::new(x), Box::new(y));
+        let lt = |x: Expr, y: Expr| Expr::Binary(BinOp::ILt, Box::new(x), Box::new(y));
+        let gt = |x: Expr, y: Expr| Expr::Binary(BinOp::IGt, Box::new(x), Box::new(y));
+        let select = |c: Expr, x: Expr, y: Expr| Expr::Select(Box::new(c), Box::new(x), Box::new(y));
+        let up_stop = |k: Expr| select(lt(last.clone(), add(Expr::Int(-SAFE), k.clone())), Expr::Int(-SAFE), sub(last.clone(), k));
+        let down_stop = |k: Expr| select(gt(last.clone(), add(Expr::Int(SAFE), k.clone())), Expr::Int(SAFE), sub(last.clone(), k));
+        let stop = self.temp(Ty::Int);
+        match &k {
+            Expr::Int(n) if *n > 0 => out.push(Stmt { kind: StmtKind::Set(stop, up_stop(k.clone())), span }),
+            Expr::Int(_) => out.push(Stmt { kind: StmtKind::Set(stop, down_stop(k.clone())), span }),
+            // the direction is known only at run time: compute only the right one
+            _ => {
+                let then = vec![Stmt { kind: StmtKind::Set(stop, up_stop(k.clone())), span }];
+                let els = vec![Stmt { kind: StmtKind::Set(stop, down_stop(k.clone())), span }];
+                out.push(Stmt { kind: StmtKind::If { cond: gt(k.clone(), Expr::Int(0)), then, els }, span });
+            }
+        }
+        let ends = match &k {
+            Expr::Int(n) if *n > 0 => Expr::Binary(BinOp::IGe, i_(), Box::new(Expr::Local(stop))),
+            Expr::Int(_) => Expr::Binary(BinOp::ILe, i_(), Box::new(Expr::Local(stop))),
+            _ => select(
+                gt(k.clone(), Expr::Int(0)),
+                Expr::Binary(BinOp::IGe, i_(), Box::new(Expr::Local(stop))),
+                Expr::Binary(BinOp::ILe, i_(), Box::new(Expr::Local(stop))),
+            ),
+        };
+        (cond, select(ends, last, add(Expr::Local(i), k)))
     }
 
     /// `target = value` / `target op= value`.
@@ -723,11 +1174,17 @@ impl<'a> Lower<'a> {
         }
         // an element or field: the indexes first (left to right), then the value
         let place = self.place(target, mutates(value), out);
+        // once the store ran, its indexes were valid
+        let indexes: Vec<Expr> =
+            place.path.iter().filter_map(|s| if let Step::Index(i, _) = s { Some(i.clone()) } else { None }).collect();
         match op {
             None => {
                 let v = self.expr(value, None, out);
                 let v = self.held(v, t, span, out);
                 out.push(Stmt { kind: StmtKind::Store { place, value: v }, span });
+                for i in &indexes {
+                    self.indexed(i);
+                }
             }
             Some(_) if t == Type::Str || t.elem().is_some() => {
                 let v = self.expr(value, None, out);
@@ -827,7 +1284,7 @@ impl<'a> Lower<'a> {
         let mut changed: Vec<LocalId> = hidden.iter().filter(|(_, io)| *io).map(|(l, _)| *l).collect();
         for a in args {
             if let ast::ExprKind::Inout(p) = &a.kind {
-                if let Some(root) = crate::check_v03::place_root(p) {
+                if let Some(root) = crate::check::data::place_root(p) {
                     changed.push(self.lookup(root));
                 }
             }
@@ -849,6 +1306,12 @@ impl<'a> Lower<'a> {
         }
         for (l, inout) in hidden {
             v.push(if inout { Arg::InOut(Place::local(l)) } else { Arg::Val(Expr::Local(l)) });
+        }
+        // the callee may change what it gets `inout`
+        for a in &v {
+            if let Arg::InOut(p) = a {
+                self.forget(p.root);
+            }
         }
         v
     }
@@ -890,6 +1353,7 @@ impl<'a> Lower<'a> {
     /// whatever the rest of the statement does to the array.
     fn elem(&mut self, xs: Expr, i: Expr, t: Ty, dst: Option<LocalId>, span: Span, out: &mut Vec<Stmt>) -> Expr {
         let d = dst.unwrap_or_else(|| self.temp(t));
+        self.indexed(&i);
         out.push(Stmt { kind: StmtKind::Op { dst: Some(d), op: RtOp::ArrGet, args: vec![xs, i] }, span });
         if self.managed(t) {
             out.push(Stmt { kind: StmtKind::Dup(d), span });
@@ -933,7 +1397,7 @@ impl<'a> Lower<'a> {
                 match (op, x.ty) {
                     (ast::UnOp::Not, _) => Expr::Unary(UnOp::Not, v),
                     (ast::UnOp::Neg, Type::Float) => Expr::Unary(UnOp::FNeg, v),
-                    (ast::UnOp::Neg, _) => Expr::Unary(UnOp::INeg, v),
+                    (ast::UnOp::Neg, _) => self.int_neg(*v, dst, span, out),
                 }
             }
             ast::ExprKind::Binary(op, l, r) => {
@@ -948,9 +1412,13 @@ impl<'a> Lower<'a> {
                 let c = self.expr(c, None, out);
                 let saved = std::mem::take(&mut self.pending);
                 let (mut ta, mut tb) = (Vec::new(), Vec::new());
+                // only one branch runs: neither shows anything about bounds afterwards
+                let (facts, mark) = self.save();
                 let av = self.expr(a, None, &mut ta);
+                self.restore(facts.clone(), mark);
                 let pa = std::mem::take(&mut self.pending);
                 let bv = self.expr(b, None, &mut tb);
+                self.restore(facts, mark);
                 let pb = std::mem::take(&mut self.pending);
                 if ta.is_empty() && tb.is_empty() && pa.is_empty() && pb.is_empty() {
                     self.pending = saved;
@@ -980,7 +1448,9 @@ impl<'a> Lower<'a> {
                 let v = self.operands(&[base.as_ref(), index.as_ref()], out);
                 let [xs, i]: [Expr; 2] = v.try_into().expect("two operands");
                 if base.ty == Type::Str {
-                    return self.op(RtOp::StrAt, vec![xs, i], Ty::Char, dst, span, out);
+                    let c = self.op(RtOp::StrAt, vec![xs, i.clone()], Ty::Char, dst, span, out);
+                    self.indexed(&i);
+                    return c;
                 }
                 if base.ty.map_kv().is_some() {
                     return self.map_read(RtOp::MapGet, vec![xs, i], e.ty, span, out);
@@ -1005,7 +1475,13 @@ impl<'a> Lower<'a> {
             }
             ast::ExprKind::Labeled(..) | ast::ExprKind::Inout(..) => self.not_yet("`inout` arguments"),
             ast::ExprKind::Lambda(..) => self.not_yet("lambdas outside a method call"),
-            ast::ExprKind::Comprehension(c) => self.comprehension(c, e, out),
+            ast::ExprKind::Comprehension(c) => {
+                // a loop that may run no round
+                let (facts, mark) = self.save();
+                let v = self.comprehension(c, e, out);
+                self.restore(facts, mark);
+                v
+            }
         }
     }
 
@@ -1014,7 +1490,10 @@ impl<'a> Lower<'a> {
         let a = self.expr(l, None, out);
         let saved = std::mem::take(&mut self.pending);
         let mut rhs = Vec::new();
+        // `b` may not run: what it shows about bounds is not known afterwards
+        let (facts, mark) = self.save();
         let b = self.expr(r, None, &mut rhs);
+        self.restore(facts, mark);
         let iop = if op == ast::BinOp::And { BinOp::And } else { BinOp::Or };
         if rhs.is_empty() && self.pending.is_empty() {
             self.pending = saved;
@@ -1022,11 +1501,7 @@ impl<'a> Lower<'a> {
         }
         let t = self.temp(Ty::Bool);
         out.push(Stmt { kind: StmtKind::Set(t, a), span });
-        let cond = if op == ast::BinOp::And {
-            Expr::Local(t)
-        } else {
-            Expr::Unary(UnOp::Not, Box::new(Expr::Local(t)))
-        };
+        let cond = if op == ast::BinOp::And { Expr::Local(t) } else { Expr::Unary(UnOp::Not, Box::new(Expr::Local(t))) };
         rhs.push(Stmt { kind: StmtKind::Set(t, b), span });
         self.end_statement(span, &mut rhs);
         self.pending = saved;
@@ -1040,8 +1515,8 @@ impl<'a> Lower<'a> {
         use ast::BinOp as A;
         if t == Type::Int && matches!(op, A::Div | A::Mod) {
             return match const_int(&b) {
-                // x / -1 wraps (x86 would trap on MIN / -1), x % -1 is 0
-                Some(-1) if op == A::Div => Expr::Unary(UnOp::INeg, Box::new(a)),
+                // x / -1 is -x (MIN / -1 overflows), x % -1 is 0
+                Some(-1) if op == A::Div => self.int_neg(a, dst, span, out),
                 Some(-1) => Expr::Int(0),
                 Some(k) if k != 0 => {
                     let iop = if op == A::Div { BinOp::IDiv } else { BinOp::IRem };
@@ -1062,6 +1537,14 @@ impl<'a> Lower<'a> {
         if Structs::aggregate(t) {
             let iop = if op == A::Eq { BinOp::DeepEq } else { BinOp::DeepNe };
             return Expr::Binary(iop, Box::new(a), Box::new(b));
+        }
+        if t == Type::Int && matches!(op, A::Add | A::Sub | A::Mul) {
+            let iop = match op {
+                A::Add => BinOp::IAdd,
+                A::Sub => BinOp::ISub,
+                _ => BinOp::IMul,
+            };
+            return self.int_arith(iop, a, b, dst, span, out);
         }
         let iop = match (op, t) {
             (A::Add, Type::Int) => BinOp::IAdd,
@@ -1117,7 +1600,7 @@ impl<'a> Lower<'a> {
                     if i > 0 {
                         parts.push(Expr::Str(self.strs.intern(" ")));
                     }
-                    let later = args[i + 1..].iter().chain(end).any(|x| mutates(x));
+                    let later = args[i + 1..].iter().chain(end).any(mutates);
                     match &a.kind {
                         // an interpolated string: its parts directly (a later value that changes
                         // a variable gets the string built first)
@@ -1184,7 +1667,8 @@ impl<'a> Lower<'a> {
                 if name == "abs" {
                     let x = &v[0];
                     let zero = if float { Expr::Float(0.0) } else { Expr::Int(0) };
-                    let neg = Expr::Unary(if float { UnOp::FNeg } else { UnOp::INeg }, b(x));
+                    // -x fails only for the smallest int, which is negative: abs of it overflows too
+                    let neg = if float { Expr::Unary(UnOp::FNeg, b(x)) } else { self.int_neg(x.clone(), None, span, out) };
                     return Expr::Select(Box::new(Expr::Binary(lt, b(x), Box::new(zero))), Box::new(neg), b(x));
                 }
                 let (x, y) = (&v[0], &v[1]);
@@ -1230,10 +1714,22 @@ impl<'a> Lower<'a> {
         }
     }
 
-    fn method(&mut self, recv: &ast::Expr, name: &str, args: &[ast::Expr], e: &ast::Expr, dst: Option<LocalId>, out: &mut Vec<Stmt>) -> Expr {
+    fn method(
+        &mut self,
+        recv: &ast::Expr,
+        name: &str,
+        args: &[ast::Expr],
+        e: &ast::Expr,
+        dst: Option<LocalId>,
+        out: &mut Vec<Stmt>,
+    ) -> Expr {
         let span = e.span;
         if lambda::is_chain_method(recv.ty, name) {
-            return self.chain_method(recv, name, args, e, out);
+            // a loop that may run no round
+            let (facts, mark) = self.save();
+            let v = self.chain_method(recv, name, args, e, out);
+            self.restore(facts, mark);
+            return v;
         }
         if recv.ty.elem().is_some() && matches!(name, "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse") {
             // changes the receiver: a place, fixed before the arguments run
@@ -1265,11 +1761,7 @@ impl<'a> Lower<'a> {
         if name == "reversed" {
             // a copy, reversed in place: `xs.slice(0, len)` / the characters, then `reverse`
             let v = self.expr(recv, None, out);
-            let (arr, t) = if recv.ty == Type::Str {
-                (RtOp::StrChars, Type::array(Ty::Char))
-            } else {
-                (RtOp::ArrSlice, recv.ty)
-            };
+            let (arr, t) = if recv.ty == Type::Str { (RtOp::StrChars, Type::array(Ty::Char)) } else { (RtOp::ArrSlice, recv.ty) };
             let args = if arr == RtOp::StrChars {
                 vec![v]
             } else {
@@ -1277,7 +1769,10 @@ impl<'a> Lower<'a> {
                 vec![v, Expr::Int(0), len]
             };
             let Expr::Local(copy) = self.op(arr, args, t, None, span, out) else { unreachable!() };
-            out.push(Stmt { kind: StmtKind::Mutate { dst: None, op: RtOp::ArrReverse, place: Place::local(copy), args: Vec::new() }, span });
+            out.push(Stmt {
+                kind: StmtKind::Mutate { dst: None, op: RtOp::ArrReverse, place: Place::local(copy), args: Vec::new() },
+                span,
+            });
             if recv.ty == Type::Str {
                 let sep = Expr::Str(self.strs.intern(""));
                 return self.op(RtOp::ArrJoin, vec![Expr::Local(copy), sep], Ty::Str, dst, span, out);
@@ -1366,14 +1861,14 @@ impl<'a> Lower<'a> {
 
 /// True if the statement that wrote `t` (the last one that did) made a new value.
 fn produced_owned(out: &[Stmt], t: LocalId) -> bool {
-    match out.iter().rev().find_map(|s| match &s.kind {
-        StmtKind::Op { dst: Some(d), op, .. } | StmtKind::Mutate { dst: Some(d), op, .. } if *d == t => Some(op.owned_result()),
-        StmtKind::Call { dst: Some(d), .. } if *d == t => Some(true),
-        _ => None,
-    }) {
-        Some(owned) => owned,
-        None => false,
-    }
+    out.iter()
+        .rev()
+        .find_map(|s| match &s.kind {
+            StmtKind::Op { dst: Some(d), op, .. } | StmtKind::Mutate { dst: Some(d), op, .. } if *d == t => Some(op.owned_result()),
+            StmtKind::Call { dst: Some(d), .. } if *d == t => Some(true),
+            _ => None,
+        })
+        .unwrap_or(false)
 }
 
 /// Removes temporaries that ended up unused (results written straight into variables) and

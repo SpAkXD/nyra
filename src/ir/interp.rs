@@ -5,7 +5,7 @@
 //! `Stop` (a runtime error, or a limit that was reached). `display`/`show` format a value as
 //! `print` shows it and as Nyra code, `equal` compares two values like `==`.
 //!
-//! It follows the Rust runtime (`rt/rs/runtime.rs`) operation by operation: ints wrap, floats
+//! It follows the Rust runtime (`rt/rs/runtime.rs`) operation by operation: int overflow is E0255, floats
 //! print like JavaScript, string lengths and indexes count characters, and a runtime error has
 //! the same code, message, hint and position. Reference counting (`Dup`, `Drop`, `Keep`) does
 //! nothing here: values are shared (`Rc`) and a change copies a shared value first. An `inout`
@@ -65,17 +65,42 @@ pub enum Stop {
     Bug(#[allow(dead_code)] String),
 }
 
+/// int + - * / and negation outside the 64-bit range (E0255), worded like the runtimes.
+fn overflow(a: i64, op: &str, b: i64, span: Span) -> Stop {
+    let msg = if op == "~" {
+        format!("int overflow: -({a}) does not fit in 64 bits")
+    } else {
+        format!("int overflow: {a} {op} {b} does not fit in 64 bits")
+    };
+    fail(
+        "E0255",
+        msg,
+        "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)",
+        span,
+    )
+}
+
 fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop {
     Stop::Error(RuntimeError { code, msg, hint, span, func: None })
 }
 
 fn oob(i: i64, n: usize, span: Span) -> Stop {
-    fail("E0240", format!("index {i} is out of bounds for length {n}"), "valid indexes are 0 to len - 1; compare with `.len()` first", span)
+    fail(
+        "E0240",
+        format!("index {i} is out of bounds for length {n}"),
+        "valid indexes are 0 to len - 1; compare with `.len()` first",
+        span,
+    )
 }
 
 fn check_range(a: i64, b: i64, n: usize, span: Span) -> Result<(), Stop> {
     if a < 0 || a > b || b > n as i64 {
-        return Err(fail("E0240", format!("range {a}..{b} is out of bounds for length {n}"), "a range a..b needs 0 <= a <= b <= len", span));
+        return Err(fail(
+            "E0240",
+            format!("range {a}..{b} is out of bounds for length {n}"),
+            "a range a..b needs 0 <= a <= b <= len",
+            span,
+        ));
     }
     Ok(())
 }
@@ -490,8 +515,22 @@ impl<'m> Interp<'m> {
                 if b == 0 {
                     return Err(fail("E0241", "division by zero".into(), "check the divisor first", span));
                 }
-                Some(Value::Int(if op == RtOp::DivInt { a.wrapping_div(b) } else { a.wrapping_rem(b) }))
+                if op == RtOp::DivInt {
+                    Some(Value::Int(a.checked_div(b).ok_or_else(|| overflow(a, "/", b, span))?))
+                } else {
+                    Some(Value::Int(a.wrapping_rem(b)))
+                }
             }
+            RtOp::AddInt => {
+                Some(Value::Int(i(0)?.checked_add(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "+", i(1).unwrap_or(0), span))?))
+            }
+            RtOp::SubInt => {
+                Some(Value::Int(i(0)?.checked_sub(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "-", i(1).unwrap_or(0), span))?))
+            }
+            RtOp::MulInt => {
+                Some(Value::Int(i(0)?.checked_mul(i(1)?).ok_or_else(|| overflow(i(0).unwrap_or(0), "*", i(1).unwrap_or(0), span))?))
+            }
+            RtOp::NegInt => Some(Value::Int(i(0)?.checked_neg().ok_or_else(|| overflow(i(0).unwrap_or(0), "~", 0, span))?)),
             RtOp::FloatToInt => {
                 let Some(Value::Float(x)) = args.first() else { return Err(bug("int() of a value that is not a float")) };
                 let x = *x;
@@ -527,7 +566,12 @@ impl<'m> Interp<'m> {
             RtOp::StrReplace => {
                 let (t, old, new) = (s(0)?, s(1)?, s(2)?);
                 if old.is_empty() {
-                    return Err(fail("E0243", "replace() needs a non-empty pattern".into(), "the text to replace can't be \"\"", span));
+                    return Err(fail(
+                        "E0243",
+                        "replace() needs a non-empty pattern".into(),
+                        "the text to replace can't be \"\"",
+                        span,
+                    ));
                 }
                 let r = t.replace(old, new);
                 self.tick(r.len() as u64)?;
@@ -576,7 +620,12 @@ impl<'m> Interp<'m> {
             RtOp::StrSplit => {
                 let (t, sep) = (s(0)?, s(1)?);
                 if sep.is_empty() {
-                    return Err(fail("E0243", "split() needs a non-empty separator".into(), "for the characters of a string use `s.chars()`", span));
+                    return Err(fail(
+                        "E0243",
+                        "split() needs a non-empty separator".into(),
+                        "for the characters of a string use `s.chars()`",
+                        span,
+                    ));
                 }
                 self.tick(t.len() as u64)?;
                 Some(Value::Arr(Rc::new(t.split(sep).map(|p| Value::Str(Rc::new(p.to_string()))).collect())))
@@ -603,7 +652,7 @@ impl<'m> Interp<'m> {
                     return Err(oom(Span { line: 0, col: 0 }));
                 }
                 self.tick(missing as u64)?;
-                let fill: String = std::iter::repeat(*c).take(missing as usize).collect();
+                let fill: String = std::iter::repeat_n(*c, missing as usize).collect();
                 text(if op == RtOp::StrPadLeft { fill + t } else { format!("{t}{fill}") })
             }
             RtOp::ArrNew => {
@@ -1076,6 +1125,11 @@ mod tests {
             let src = std::fs::read_to_string(&path).unwrap();
             let expect = src.lines().next().and_then(|l| l.strip_prefix("// expect: ")).unwrap();
             let (code, at) = expect.trim().split_once(" at ").unwrap();
+            // a test limited to some targets (`// only: js ts`) runs here only if Rust is one
+            let only = src.lines().nth(1).and_then(|l| l.strip_prefix("// only:"));
+            if only.is_some_and(|ts| !ts.split_whitespace().any(|t| t == "rs")) {
+                continue;
+            }
             let Some((out, err)) = run_main(&src) else { continue };
             let err = err.unwrap_or_else(|| panic!("{}: no runtime error", path.display()));
             assert_eq!(err.code, code, "{}: {}", path.display(), err.msg);
@@ -1087,7 +1141,9 @@ mod tests {
 
     #[test]
     fn floats_print_like_javascript() {
-        for (x, s) in [(0.1 + 0.2, "0.30000000000000004"), (1e21, "1e+21"), (1e-7, "1e-7"), (123.0, "123"), (-0.0, "0"), (2.5e-6, "0.0000025")] {
+        for (x, s) in
+            [(0.1 + 0.2, "0.30000000000000004"), (1e21, "1e+21"), (1e-7, "1e-7"), (123.0, "123"), (-0.0, "0"), (2.5e-6, "0.0000025")]
+        {
             assert_eq!(num(x), s);
         }
     }

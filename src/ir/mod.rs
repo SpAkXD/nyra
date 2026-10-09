@@ -179,22 +179,51 @@ impl Place {
 pub enum StmtKind {
     /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
-    Call { dst: Option<LocalId>, func: FuncId, args: Vec<Arg> },
-    Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
+    Call {
+        dst: Option<LocalId>,
+        func: FuncId,
+        args: Vec<Arg>,
+    },
+    Op {
+        dst: Option<LocalId>,
+        op: RtOp,
+        args: Vec<Expr>,
+    },
     /// `place = value` for a place below a local (a whole local is `Set`). Every array on the
     /// way is made unique first (copy on write) and every index is checked. The value is
     /// borrowed: the place becomes one more owner, and its old value has one owner less.
-    Store { place: Place, value: Expr },
+    Store {
+        place: Place,
+        value: Expr,
+    },
     /// An operation that changes a place in place: `xs.push(v)`, `xs.pop()`, `xs += ys`,
     /// `s += t`. The place is made unique first, like for a `Store`. `dst` gets the result.
-    Mutate { dst: Option<LocalId>, op: RtOp, place: Place, args: Vec<Expr> },
-    If { cond: Expr, then: Vec<Stmt>, els: Vec<Stmt> },
+    Mutate {
+        dst: Option<LocalId>,
+        op: RtOp,
+        place: Place,
+        args: Vec<Expr>,
+    },
+    If {
+        cond: Expr,
+        then: Vec<Stmt>,
+        els: Vec<Stmt>,
+    },
     /// Each round: run `head`, leave if `cond` is false, run `body`, then `step`.
     /// `continue` goes to `step`.
-    Loop { head: Vec<Stmt>, cond: Expr, body: Vec<Stmt>, step: Vec<Stmt> },
+    Loop {
+        head: Vec<Stmt>,
+        cond: Expr,
+        body: Vec<Stmt>,
+        step: Vec<Stmt>,
+    },
     /// `for var in iter`: a string gives each `char`, an array each element. `iter` is a local
     /// the loop owns, so the body may change the variable it came from; `var` borrows from it.
-    ForEach { var: LocalId, iter: Expr, body: Vec<Stmt> },
+    ForEach {
+        var: LocalId,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     Continue,
     Return(Option<Expr>),
@@ -217,10 +246,18 @@ pub enum RtOp {
     PrintNoLine,
     /// Builds a new string from the parts (interpolation, `str(x)`). `dst: str`, owned.
     Format,
-    /// int `/` whose divisor may be 0 (runtime error E0241). `dst: int`.
+    /// int `/` whose divisor may be 0 (runtime error E0241), or -1 (`MIN / -1` overflows: E0255). `dst: int`.
     DivInt,
     /// int `%` whose divisor may be 0 (runtime error E0241). `dst: int`.
     RemInt,
+    /// int `+`, `-`, `*` and negation that may overflow: a result outside the 64-bit range is runtime
+    /// error E0255. On JavaScript and TypeScript a result that is not a safe integer (beyond
+    /// 2^53 - 1) is E0256 instead: those runtimes would round it. `dst: int`. The plain operators
+    /// (`BinOp::IAdd`, ...) are used only where lowering proved that they stay in range.
+    AddInt,
+    SubInt,
+    MulInt,
+    NegInt,
     /// `int(x)` of a float: NaN or out of range is runtime error E0245. `dst: int`.
     FloatToInt,
     /// `a + b` on strings: a new string.
@@ -324,6 +361,10 @@ impl RtOp {
             RtOp::Format => "format",
             RtOp::DivInt => "div_int",
             RtOp::RemInt => "rem_int",
+            RtOp::AddInt => "add_int",
+            RtOp::SubInt => "sub_int",
+            RtOp::MulInt => "mul_int",
+            RtOp::NegInt => "neg_int",
             RtOp::FloatToInt => "float_to_int",
             RtOp::StrConcat => "str_concat",
             RtOp::StrAppend => "str_append",
@@ -379,7 +420,8 @@ impl RtOp {
         use Ty::{Char, Float, Int, Str};
         match self {
             RtOp::Print | RtOp::PrintNoLine | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
-            RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
+            RtOp::DivInt | RtOp::RemInt | RtOp::AddInt | RtOp::SubInt | RtOp::MulInt => (&[Int, Int], Some(Int)),
+            RtOp::NegInt => (&[Int], Some(Int)),
             RtOp::FloatToInt => (&[Float], Some(Int)),
             RtOp::StrConcat => (&[Str, Str], Some(Str)),
             RtOp::StrAppend => (&[Str], None),
@@ -542,7 +584,7 @@ pub enum Expr {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UnOp {
-    /// Wraps on overflow.
+    /// Only where lowering proved that the operand is not the smallest int (else `RtOp::NegInt`).
     INeg,
     FNeg,
     Not,
@@ -551,7 +593,8 @@ pub enum UnOp {
 /// Type-specific operators, so backends never need the AST's types.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BinOp {
-    // int arithmetic wraps; IDiv/IRem only appear with a constant divisor other than 0 and -1
+    // int `+ - *` only where lowering proved the result in range on every backend (else the
+    // checked `RtOp::AddInt`, ...); IDiv/IRem only appear with a constant divisor other than 0 and -1
     IAdd,
     ISub,
     IMul,

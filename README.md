@@ -5,7 +5,7 @@
 <p align="center">
   <b>A small, strict programming language designed to be written by AI agents.</b><br>
   Compact syntax, no ambiguity, and compiler errors an agent can read and fix by itself.<br>
-  One source file compiles to native code (via C) or to JavaScript.
+  One source file compiles to a native executable (via C), or to C, JavaScript, TypeScript, Python, Rust or Go source.
 </p>
 
 <p align="center">
@@ -73,29 +73,35 @@ compiler to tell the AI exactly what to fix.
 - **The compiler repairs simple mistakes itself.** An error with exactly one possible repair (`return` for
   `ret`, a `;`, `elif`, `'text'`, `xs.length()`, `string`, `Point { x: 1 }`, ...) carries a machine-applicable
   fix, and `--fix` applies them all: a slip costs no extra model call.
-- **Compact programs.** One-line functions, string interpolation, `if` as a value and built-in methods
-  on strings and arrays keep code short. A benchmark of first-try correctness and token count against
-  Python is coming in v0.4.
+- **Compact programs.** One-line functions, string interpolation, `if` as a value, lambdas and built-in
+  methods on strings and arrays keep code short. [`bench/`](bench) measures first-try correctness and
+  token count against Python, TypeScript and Rust.
 - **Values, not references.** Arrays, strings and structs are copied on assignment (cheaply, copy on
   write), so nothing changes behind your back; a function changes a caller's variable only through an
   `inout` parameter that the call names too.
 - **Same output everywhere.** Every example runs on every backend in CI and must match byte for byte.
+  The one exception is ints beyond 2^53: JavaScript and TypeScript cannot hold them exactly, so there a
+  program stops with a runtime error (E0255 for a 64-bit overflow, which every backend reports;
+  E0256 only on JavaScript) instead of printing a rounded number. Use the native, Rust, Go or Python
+  target for such programs.
 
 ## Features
 
-- **Six targets from one source:** native code through C99 (`gcc`, `clang` or `tcc`), JavaScript
-  (Node.js or the browser), and readable [Python, TypeScript, Rust and Go](#targets).
-- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays and structs, with local inference
-  and no implicit conversions.
-- **Real data (v0.3):** structs, arrays, strings and chars with methods (`split`, `replace`, `slice`,
-  `sort`, `join`, ...), `inout` parameters, `break` and `continue`. Memory is freed by reference counting,
-  with no garbage collector, and `free`, `arena` and `keep` say when if you want to.
-- **Short code (v0.2):** one-line functions, `+=` and friends, string interpolation, `if` as a value.
+- **One source, six languages:** native executables through C99 (`gcc`, `clang` or `tcc`), or readable
+  C, JavaScript (Node.js or the browser), [TypeScript, Python, Rust and Go](#targets) source.
+- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps and structs, with local
+  inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
+- **Real data:** structs, arrays, maps, strings and chars with methods (`split`, `replace`, `slice`,
+  `sort`, `join`, ...), lambdas (`xs.map(x => x * 2)`) and comprehensions, `inout` parameters, `break`
+  and `continue`. Memory is freed by reference counting, with no garbage collector, and `free`, `arena`
+  and `keep` say when if you want to.
+- **Short code:** scripts without `fn main`, one-line functions, `+=` and friends, string interpolation,
+  `if` as a value, `print(a, b)`.
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
   runtime errors with the exact position, and a build cache that skips the C compiler when the program
   has not changed.
 - **Fast and small:** the compiler takes about a millisecond per file and the C compiler 0.5 to 1.5 s
-  (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable C and JavaScript.
+  (measured on the author's PC). It is Rust with zero dependencies and writes plain, readable code.
 - **Standard library:** `use input`, `os`, `fs`, `json`, `time`, `random`, `math`, `text`, the same on every
   backend (`math` gives identical digits everywhere). Maps `[K: V]` are values like arrays. **Not yet:** modules of your own (see the [roadmap](#roadmap)). Nyra is 0.x, so the
   syntax may still change before 1.0.
@@ -137,20 +143,23 @@ highlighting for VS Code is in [`editors/vscode`](editors/vscode).
 
 ## Using Nyra with an AI
 
-Nyra is brand new, so no model has seen it in training. It does not need to: the docs are short enough
-to read in one go, and the compiler corrects what is left. **Paste this repo's URL into any AI that can
-read links** (Gemini, ChatGPT, Claude, ...) and ask for a program:
+Nyra is brand new, so no model has seen it in training. It does not need to: a model learns it from the
+docs, and the compiler corrects what is left. **Paste this repo's URL into any AI that can read links**
+(Gemini, ChatGPT, Claude, ...) and ask for a program:
 
 > Read https://github.com/SpAkXD/nyra, starting with `llms.txt` and `docs/AI_GUIDE.md`, then write me
 > a Nyra program that prints the first 20 prime numbers.
 
-| The AI reads | What it gets |
-|---|---|
-| [`llms.txt`](llms.txt) | what Nyra is, the ten most important rules, links ([llmstxt.org](https://llmstxt.org) convention) |
-| [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) | workflow, do/don't rules, what does not exist, error codes with fixes, complete programs |
-| [`docs/SPEC.md`](docs/SPEC.md) | the complete language spec |
-| [`docs/ERRORS.md`](docs/ERRORS.md) | the error database: every code, what it means, why, the usual causes, a wrong and a fixed program |
-| [`examples/`](examples) | runnable programs, each with its expected output in a `.out` file |
+| The AI reads | What it gets | Size |
+|---|---|---|
+| [`llms.txt`](llms.txt) | what Nyra is, the ten most important rules, links ([llmstxt.org](https://llmstxt.org) convention) | 10 KB, about 2,500 tokens |
+| [`docs/SPEC.md`](docs/SPEC.md) | the complete language spec | 20 KB, about 5,500 tokens |
+| [`docs/AI_GUIDE.md`](docs/AI_GUIDE.md) | workflow, do/don't rules, what does not exist, error codes with fixes, complete programs | 40 KB, about 10,000 tokens |
+| [`docs/ERRORS.md`](docs/ERRORS.md) | the error database: every code, what it means, why, the usual causes, a wrong and a fixed program | 114 KB: look codes up one at a time with `nyra explain` |
+| [`examples/`](examples) | runnable programs, each with its expected output in a `.out` file | |
+
+The token counts are estimates (about 3.7 characters per token); the spec alone is enough to write
+programs, and the guide pays off when a model writes a lot of Nyra.
 
 An agent that can run commands follows one loop: **write, check, fix, run**.
 
@@ -209,6 +218,13 @@ both backends and the error database as tools, and needs no files or shell acces
 | `nyra_edit` | `{path or code, edits, force?, fix?}` → change symbols by name ([below](#editing-by-symbol)); a path is written in place and only a summary returns |
 
 Resources: `nyra://spec`, `nyra://guide`, `nyra://errors` (the error index) and `nyra://errors/{code}`.
+
+**Limits and safety.** Each tool call runs on its own thread, so input that crashes the compiler gets
+an error reply and the server keeps going. A program started by `nyra_run` is stopped after its
+timeout and gets at most 1 GiB of memory and a CPU-time budget (a Job Object on Windows, `setrlimit`
+on Linux and macOS; macOS does not enforce the memory limit). These limits protect the machine from
+a runaway program, but they are no sandbox: the program can read and write files and use the network
+like any process of yours. For code you do not trust, run `nyra mcp` inside a container or VM.
 
 **Claude Code:**
 
@@ -341,7 +357,8 @@ every common mistake with its error code and fix.
 
 ## Targets
 
-One Nyra file compiles to six targets. All of them come from the same intermediate representation, so
+One Nyra file compiles to six languages (seven `--target` values: `native` builds an executable from the
+generated C, `c` writes that C). All of them come from the same intermediate representation, so
 the output, the order things happen in and the runtime errors (code, message, position, exit code 101)
 are the same on each; the tests run every example on every target that is installed.
 
@@ -363,12 +380,13 @@ nyra run --go scores.nyra                 # builds with `go build` (cached) and 
 
 The generated code reads like code a person would write in that language: typed signatures, variables
 declared where they are first needed, counted loops as `for` loops, structs as classes or structs, and a
-small runtime at the end of the file for what the language does differently (64-bit wrapping ints in
-Python, character-based string indexes, JavaScript's number format, checked indexes). Values keep Nyra's
+small runtime at the end of the file for what the language does differently (checked 64-bit ints,
+character-based string indexes, JavaScript's number format, checked indexes). Values keep Nyra's
 semantics: arrays and structs are copied on write (a shared mark in Python, TypeScript and Go,
 `Rc::make_mut` in Rust), and an `inout` parameter becomes a returned value in Python
 (`x, y = swap(x, y)`), a `{ v }` box in TypeScript, `&mut T` in Rust and a pointer in Go. Build the Rust
-file with overflow checks off (`rustc -O -C overflow-checks=off`, as `nyra run` does): Nyra ints wrap.
+file with overflow checks off (`rustc -O -C overflow-checks=off`, as `nyra run` does): the generated code
+checks the int operations that can overflow itself, with Nyra's error (E0255).
 See [known differences](docs/SPEC.md#known-differences-between-backends) for the few edge cases.
 
 ## CLI
@@ -379,7 +397,7 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `nyra build <file>` | compile to a native executable |
 | `nyra check <file>` | type-check only (and evaluate the `ex` examples); exit code 0 means no errors |
 | `nyra test <file>` | run the `ex` examples and report each one that fails; exit code 0 means all passed |
-| `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list all codes |
+| `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list the codes it reports (`--planned` adds those of future designs) |
 | `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
 | `nyra outline <file>` | the functions and structs with signatures, fields and line ranges (`--json` too) |
 | `nyra show <file> <name>...` | the source of functions, structs or fields (`Struct.field`) |
@@ -412,7 +430,7 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 |---|---|
 | `src/lexer.rs` | text to tokens |
 | `src/parser.rs` | tokens to syntax tree (recursive descent, recovers after errors) |
-| `src/check.rs`, `src/check_v03.rs` | type checking, collects every error in one pass |
+| `src/check.rs`, `src/check/` | type checking, collects every error in one pass |
 | `src/ir/` | the intermediate representation: evaluation order, runtime checks, reference counting, optimizations |
 | `src/codegen/` | the backends: `c.rs`, `js.rs`, `py.rs`, `ts.rs`, `rs.rs`, `go.rs`; `scope.rs` places declarations and finds counted loops for the last four |
 | `src/rt/*/` | the runtimes they embed: strings, arrays, printing, runtime errors |
@@ -425,12 +443,14 @@ source.nyra ─► lexer ─► parser ─► type checker ─► IR ───�
 | Version | Theme | Status |
 |---|---|---|
 | v0.1 | core language, C and JavaScript backends, JSON errors | done |
-| v0.2 | short code: one-line functions, `+=`, string interpolation, `if` as a value, build cache | done |
-| v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC) | done |
-| v0.4 | benchmark: first-try correctness and token count against Python | harness ready in [`bench/`](bench), results coming |
-| v0.5 | WASM backend and browser playground (the intermediate representation is done) | planned |
-| v0.6 | modules, standard library, C FFI | planned |
-| v1.0 | packages and addons, published VS Code extension, docs site | planned |
+| v0.2 | short code: one-line functions, `+=`, string interpolation, `if` as a value, build cache, runtime errors | done |
+| v0.3 | real data: structs, arrays, strings and chars with methods, `inout`, `break`/`continue`, memory model (no GC); the intermediate representation, the error database and `nyra explain` | done |
+| v0.4 | `--fix` self-repair, the `nyra mcp` server, Python, TypeScript, Rust and Go backends, scripts, `print(a, b)`, the benchmark harness and its hard tier | done |
+| v0.5 | lambdas and comprehensions, `ex` examples, `nyra outline`/`show`/`edit`, the standard library (`use math`, `fs`, `json`, ...), maps, script variables, native speed and compile-time evaluation, checked ints | in progress |
+| v0.6 | modules of your own, packages, C FFI | planned |
+| later | WASM backend and browser playground, published VS Code extension, docs site, 1.0 | planned |
+
+Nyra is pre-1.0: the syntax may still change between versions (see [CHANGELOG.md](CHANGELOG.md)).
 
 ## Contributing
 

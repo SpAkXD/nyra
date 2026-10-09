@@ -238,16 +238,43 @@ pub struct Stmt {
 
 #[derive(Debug)]
 pub enum StmtKind {
-    Let { name: String, mutable: bool, ty: Option<Type>, value: Expr },
+    Let {
+        name: String,
+        mutable: bool,
+        ty: Option<Type>,
+        value: Expr,
+    },
     /// `target = value`, or `target op= value` (the target is evaluated once).
-    Assign { target: Expr, op: Option<BinOp>, value: Expr },
-    If { cond: Expr, then: Vec<Stmt>, els: Option<Vec<Stmt>> },
-    While { cond: Expr, body: Vec<Stmt> },
+    Assign {
+        target: Expr,
+        op: Option<BinOp>,
+        value: Expr,
+    },
+    If {
+        cond: Expr,
+        then: Vec<Stmt>,
+        els: Option<Vec<Stmt>>,
+    },
+    While {
+        cond: Expr,
+        body: Vec<Stmt>,
+    },
     /// `for var in start..end`
     /// `for var in start..end` or `for var in start..end step k` (`k` may be negative)
-    For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
+    For {
+        var: String,
+        start: Expr,
+        end: Expr,
+        step: Option<Expr>,
+        body: Vec<Stmt>,
+    },
     /// `for var in iter` over an array or a string; `for index, var in iter` also counts from 0
-    ForEach { var: String, index: Option<String>, iter: Expr, body: Vec<Stmt> },
+    ForEach {
+        var: String,
+        index: Option<String>,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     Continue,
     /// `arena { ... }`: everything allocated inside is freed together at `}`.

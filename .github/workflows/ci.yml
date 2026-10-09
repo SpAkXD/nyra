@@ -1,14 +1,51 @@
 name: CI
 on: [push, pull_request]
 jobs:
+  # Every example and runtime-error test on every backend whose toolchain is installed. Linux installs
+  # all of them (C, Node.js, Python, Rust, Go) and sets NYRA_REQUIRE_ALL_TARGETS, so there a missing
+  # toolchain fails the tests instead of skipping them; Windows and macOS run what their images have.
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: cargo test
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Linux'
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        if: runner.os == 'Linux'
+        with:
+          go-version: "1.23"
+      - name: Show the toolchains
+        shell: bash
+        run: |
+          rustc --version
+          node --version
+          (gcc --version || clang --version || true) | head -1
+          (python3 --version || python --version || true)
+          (go version || true)
+      - name: Tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then export NYRA_REQUIRE_ALL_TARGETS=1; fi
+          cargo test --release
+
+  # Formatting (rustfmt.toml) and lints.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
 
   # The benchmark harness (bench/): its own tests and the check that every reference solution (Nyra on both
   # backends, Python, TypeScript, Rust) prints exactly the expected output. No network, no API key, no model call.

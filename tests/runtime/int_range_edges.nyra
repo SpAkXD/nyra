@@ -1,0 +1,18 @@
+// expect: E0255 at 17:5
+// only: native py rs go
+// `for` loops whose last step would pass the int range end normally
+fn down(from: int, to: int, k: int) {
+    for i in from..to step k {
+        print(i)
+    }
+}
+fn main() {
+    for i in 9223372036854775800..9223372036854775807 step 3 {
+        print(i)
+    }
+    down(-9223372036854775800, -9223372036854775807, -4)
+    down(9223372036854775805, 9223372036854775807, 5)
+    var x = 9223372036854775806
+    x += 1
+    x += 1
+}

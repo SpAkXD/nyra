@@ -243,7 +243,10 @@ function ny_jdec(p, d) {
             const [t, whole] = ny_jnumber(p);
             if (whole) {
                 const v = BigInt(t);
-                if (v >= -9223372036854775808n && v <= 9223372036854775807n) return Number(v) + 0;
+                if (v >= -9223372036854775808n && v <= 9223372036854775807n) {
+                    const n = Number(v) + 0;
+                    return Number.isSafeInteger(n) ? n : ny_unsafe_int("json.parse: " + t, p.line, p.col);
+                }
             }
             p.i -= t.length;
             ny_jtype(p, "an int");

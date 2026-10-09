@@ -9,8 +9,8 @@
 mod common;
 
 use std::collections::BTreeSet;
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use common::{check_json, nyra, scratch, stderr, stdout, Json};
@@ -75,7 +75,7 @@ struct Listed {
 
 /// The list printed by `nyra explain --json`.
 fn listed() -> Vec<Listed> {
-    let out = nyra().args(["explain", "--json"]).output().unwrap();
+    let out = nyra().args(["explain", "--json", "--planned"]).output().unwrap();
     assert!(out.status.success(), "`nyra explain --json` failed: {}", stderr(&out));
     let json = Json::parse(stdout(&out).trim()).expect("`nyra explain --json` must print JSON");
     json.get("codes")
@@ -137,6 +137,7 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
     } else if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         Some(&[])
     } else {
+        common::missing("no Node.js and no C compiler to run the examples of the error database");
         None
     };
     let dir = scratch("errors-db");
@@ -161,7 +162,9 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
             // ...and the wrong one compiles but stops at run time with that code
             let (ok, json) = check_json(&dir, &wrong_file);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
-            if let Some(flags) = backend {
+            // a first line `// target: js`: the error happens only on JavaScript (and TypeScript)
+            let js_only = wrong.starts_with("// target: js");
+            if let Some(flags) = backend.filter(|f| !js_only || f.contains(&"--js")) {
                 // a first line `// stdin: ...` is the program's input (`\xff`, `\n` escapes)
                 let input = wrong.lines().next().and_then(|l| l.strip_prefix("// stdin: ")).map(unescape).unwrap_or_default();
                 let mut child = nyra()
@@ -210,7 +213,8 @@ fn explain_prints_an_entry() {
     let out = nyra().args(["explain", "E0201"]).output().unwrap();
     assert!(out.status.success());
     let text = stdout(&out);
-    for part in ["E0201: undefined variable", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related:"] {
+    for part in ["E0201: undefined variable", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related:"]
+    {
         assert!(text.contains(part), "missing `{part}` in:\n{text}");
     }
     assert!(text.contains("print(cout)") && text.contains("print(count)"));
@@ -222,6 +226,7 @@ fn explain_prints_an_entry() {
     // a planned code says so
     let planned = stdout(&nyra().args(["explain", "E0310"]).output().unwrap());
     assert!(planned.contains("planned for v0.6, not in the compiler yet"), "{planned}");
+    assert!(planned.contains("PLANNED, NOT IN THE COMPILER"), "{planned}");
     // a run-time code
     let runtime = stdout(&nyra().args(["explain", "E0241"]).output().unwrap());
     assert!(runtime.contains("division by zero") && runtime.contains("runtime error"), "{runtime}");
@@ -242,18 +247,28 @@ fn explain_prints_json() {
 
     let planned = entry("E0310");
     assert_eq!(planned.get("planned").and_then(|v| v.as_bool()), Some(true));
+    assert!(planned.get("note").and_then(|v| v.as_str()).is_some_and(|n| n.contains("not in the compiler")));
     assert_eq!(planned.get("since").and_then(|v| v.as_str()), Some("planned for v0.6, not in the compiler yet"));
 }
 
 #[test]
 fn explain_lists_every_code() {
-    let text = stdout(&nyra().arg("explain").output().unwrap());
+    let text = stdout(&nyra().args(["explain", "--planned"]).output().unwrap());
     let all = listed();
     assert!(all.len() >= 60);
     for item in &all {
         assert!(text.contains(&item.code), "{} is missing from the list", item.code);
     }
     assert!(text.contains("compile errors") && text.contains("run-time errors") && text.contains("planned, not in the compiler yet"));
+    // without --planned: only the codes the compiler reports
+    let current = stdout(&nyra().arg("explain").output().unwrap());
+    for item in &all {
+        assert_eq!(current.contains(&format!("  {}  ", item.code)), !item.planned, "{} in `nyra explain`", item.code);
+    }
+    let json = Json::parse(stdout(&nyra().args(["explain", "--json"]).output().unwrap()).trim()).unwrap();
+    let codes = json.get("codes").and_then(|c| c.as_array()).unwrap();
+    assert!(codes.iter().all(|c| c.get("planned").and_then(|p| p.as_bool()) == Some(false)));
+    assert_eq!(codes.len(), all.iter().filter(|e| !e.planned).count());
     assert!(all.iter().any(|e| e.code == "E0245" && e.kind == "runtime error" && !e.planned));
     let codes: Vec<&str> = all.iter().map(|e| e.code.as_str()).collect();
     let mut sorted = codes.clone();

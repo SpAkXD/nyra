@@ -37,6 +37,34 @@ function ny_write(s: string): void {
     else console.log(s);
 }
 
+// ---- ints: every int is a safe integer (|n| <= 2^53 - 1), where JavaScript numbers are exact.
+// A result beyond 64 bits is E0255, as on every backend; one that only leaves the safe range is
+// E0256: the other backends hold it, a JavaScript number would round it.
+function ny_int_range(what: string, r: number, line: number, col: number): never {
+    if (r >= 9223372036854775808 || r < -9223372036854775808) {
+        return ny_panic("E0255", "int overflow: " + what + " does not fit in 64 bits", "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col);
+    }
+    return ny_unsafe_int(what, line, col);
+}
+function ny_unsafe_int(what: string, line: number, col: number): never {
+    return ny_panic("E0256", what + " is outside the range of ints JavaScript represents exactly (-9007199254740991 to 9007199254740991)", "JavaScript numbers hold ints exactly only up to 2^53 - 1: run this program on the native (C), Rust, Go or Python target, where an int has 64 bits, or keep the values smaller", line, col);
+}
+function ny_add(a: number, b: number, line: number, col: number): number {
+    const r = a + b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " + " + b, r, line, col);
+}
+function ny_sub(a: number, b: number, line: number, col: number): number {
+    const r = a - b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " - " + b, r, line, col);
+}
+function ny_mul(a: number, b: number, line: number, col: number): number {
+    const r = a * b + 0;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " * " + b, r, line, col);
+}
+// (the negation of a safe integer is one too)
+function ny_neg(a: number, line: number, col: number): number {
+    return 0 - a;
+}
 // ---- ints: `+ 0` turns -0 into 0 (an int never prints -0) ----
 function ny_div(a: number, b: number, line: number, col: number): number {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
@@ -60,7 +88,8 @@ function ny_f2i(x: number, line: number, col: number): number {
         ny_panic("E0245", "cannot convert " + String(x) + " to int",
             "int(x) needs a float that is not NaN and fits in an int", line, col);
     }
-    return Math.trunc(x) + 0;
+    const n = Math.trunc(x) + 0;
+    return Number.isSafeInteger(n) ? n : ny_unsafe_int("int(" + String(x) + ")", line, col);
 }
 
 // ---- strings: Nyra counts characters (code points), JavaScript counts UTF-16 units ----
@@ -156,7 +185,10 @@ function ny_shown(s: string): string {
 function ny_str_to_int(s: string, line: number, col: number): number {
     if (/^-?[0-9]+$/.test(s)) {
         const v = BigInt(s);
-        if (v >= -9223372036854775808n && v <= 9223372036854775807n) return Number(v);
+        if (v >= -9223372036854775808n && v <= 9223372036854775807n) {
+            const n = Number(v) + 0;
+            return Number.isSafeInteger(n) ? n : ny_unsafe_int(`int("${s}")`, line, col);
+        }
     }
     return ny_panic("E0244", `cannot parse "${ny_shown(s)}" as int`, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
 }

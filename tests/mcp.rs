@@ -46,10 +46,7 @@ fn call(id: u64, tool: &str, args: &str) -> String {
 }
 
 fn reply(replies: &[Json], id: u64) -> &Json {
-    replies
-        .iter()
-        .find(|r| r.get("id").and_then(Json::as_u64) == Some(id))
-        .unwrap_or_else(|| panic!("no reply with id {id}"))
+    replies.iter().find(|r| r.get("id").and_then(Json::as_u64) == Some(id)).unwrap_or_else(|| panic!("no reply with id {id}"))
 }
 
 fn result(replies: &[Json], id: u64) -> &Json {
@@ -83,7 +80,11 @@ fn tool_json(replies: &[Json], id: u64) -> (bool, Json) {
 }
 
 fn node_available() -> bool {
-    Command::new("node").arg("--version").output().is_ok()
+    let ok = Command::new("node").arg("--version").output().is_ok();
+    if !ok {
+        common::missing("no Node.js for the JavaScript backend");
+    }
+    ok
 }
 
 const HELLO: &str = "fn main() {\n    for i in 0..3 {\n        print(\"hi {i}\")\n    }\n}\n";
@@ -286,4 +287,65 @@ fn stdout_carries_only_protocol_messages() {
     assert!(common::stdout(&out).contains("claude mcp add nyra -- nyra mcp"));
     let replies = session(&[]);
     assert!(replies.is_empty());
+}
+
+#[test]
+fn deeply_nested_code_gets_an_error_and_the_server_keeps_going() {
+    let init = request(1, "initialize", r#"{"protocolVersion":"2025-06-18","capabilities":{}}"#);
+    let parens = format!("fn main() {{\n    print({}1{})\n}}\n", "(".repeat(6000), ")".repeat(6000));
+    let chain = format!("fn main() {{\n    print({})\n}}\n", vec!["1"; 10000].join(" + "));
+    let calls = format!("fn main() {{\n    print({}1{})\n}}\n", "abs(".repeat(5000), ")".repeat(5000));
+    let methods = format!("fn main() {{\n    print(\"a\"{})\n}}\n", ".trim()".repeat(5000));
+    let arrays = format!("fn main() {{\n    print({}1{})\n}}\n", "[".repeat(5000), "]".repeat(5000));
+    let unary = format!("fn main() {{\n    print({}1)\n    print({}true)\n}}\n", "-".repeat(5000), "!".repeat(5000));
+    let blocks = format!("fn main() {{\n{}print(1)\n{}}}\n", "if true {\n".repeat(3000), "}\n".repeat(3000));
+    let deep = [&parens, &chain, &calls, &methods, &arrays, &unary, &blocks];
+    let mut requests = vec![init, call(2, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(HELLO)))];
+    for (k, code) in deep.iter().enumerate() {
+        requests.push(call(10 + k as u64, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(code))));
+    }
+    requests.push(call(3, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(HELLO))));
+    let replies = session(&requests);
+    assert_eq!(tool_json(&replies, 2).1.get("ok").and_then(Json::as_bool), Some(true));
+    for k in 0..deep.len() as u64 {
+        let (_, json) = tool_json(&replies, 10 + k);
+        let errors = json.get("errors").and_then(Json::as_array).unwrap_or_else(|| panic!("request {}: {json:?}", 10 + k));
+        assert_eq!(errors.len(), 1, "request {}: {json:?}", 10 + k);
+        assert_eq!(errors[0].get("code").and_then(Json::as_str), Some("E0103"), "request {}: {json:?}", 10 + k);
+    }
+    assert_eq!(tool_json(&replies, 3).1.get("ok").and_then(Json::as_bool), Some(true));
+}
+
+#[test]
+fn a_program_that_eats_memory_stops_and_the_server_keeps_going() {
+    // macOS does not enforce memory rlimits: the program would take what the machine has
+    if cfg!(target_os = "macos") {
+        return;
+    }
+    let hog = "fn main() {\n    var xs = [1, 2, 3, 4]\n    while true {\n        xs += xs\n    }\n}\n";
+    let init = request(1, "initialize", r#"{"protocolVersion":"2025-06-18","capabilities":{}}"#);
+    let mut requests = vec![init, call(2, "nyra_run", &format!(r#"{{"code":{}}}"#, esc(hog)))];
+    if node_available() {
+        requests.push(call(3, "nyra_run", &format!(r#"{{"code":{},"backend":"js"}}"#, esc(hog))));
+    }
+    requests.push(call(4, "nyra_run", &format!(r#"{{"code":{}}}"#, esc(HELLO))));
+    let replies = session(&requests);
+    let mut ids = vec![2];
+    if node_available() {
+        ids.push(3);
+    }
+    for id in ids {
+        let (_, json) = tool_json(&replies, id);
+        // without a C compiler there is nothing to run natively
+        if json.get("error").is_some() {
+            continue;
+        }
+        assert_eq!(json.get("ok").and_then(Json::as_bool), Some(false), "{json:?}");
+        let errors = json.get("errors").and_then(Json::as_array).unwrap_or_else(|| panic!("{json:?}"));
+        assert_eq!(errors[0].get("code").and_then(Json::as_str), Some("E0249"), "{json:?}");
+    }
+    let (_, json) = tool_json(&replies, 4);
+    if json.get("error").is_none() {
+        assert_eq!(json.get("stdout").and_then(Json::as_str), Some("hi 0\nhi 1\nhi 2\n"));
+    }
 }

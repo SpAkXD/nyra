@@ -15,13 +15,87 @@ use super::scope::{self, range_for, Info};
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
-    "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func",
-    "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct",
-    "switch", "type", "var", "append", "bool", "byte", "cap", "clear", "close", "complex", "copy", "delete",
-    "error", "false", "float32", "float64", "imag", "int", "int8", "int16", "int32", "int64", "iota", "len",
-    "make", "max", "min", "new", "nil", "panic", "print", "println", "real", "recover", "rune", "string",
-    "true", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "any", "comparable", "init", "bufio",
-    "fmt", "math", "os", "slices", "strconv", "strings", "utf8", "Array", "rand", "io", "big", "time",
+    "break",
+    "case",
+    "chan",
+    "const",
+    "continue",
+    "default",
+    "defer",
+    "else",
+    "fallthrough",
+    "for",
+    "func",
+    "go",
+    "goto",
+    "if",
+    "import",
+    "interface",
+    "map",
+    "package",
+    "range",
+    "return",
+    "select",
+    "struct",
+    "switch",
+    "type",
+    "var",
+    "append",
+    "bool",
+    "byte",
+    "cap",
+    "clear",
+    "close",
+    "complex",
+    "copy",
+    "delete",
+    "error",
+    "false",
+    "float32",
+    "float64",
+    "imag",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "iota",
+    "len",
+    "make",
+    "max",
+    "min",
+    "new",
+    "nil",
+    "panic",
+    "print",
+    "println",
+    "real",
+    "recover",
+    "rune",
+    "string",
+    "true",
+    "uint",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "uintptr",
+    "any",
+    "comparable",
+    "init",
+    "bufio",
+    "fmt",
+    "math",
+    "os",
+    "slices",
+    "strconv",
+    "strings",
+    "utf8",
+    "Array",
+    "rand",
+    "io",
+    "big",
+    "time",
 ];
 
 /// The Go runtime, emitted after the program (`@FILE@` becomes the source path).
@@ -576,6 +650,10 @@ impl<'a> Gen<'a> {
             }
             RtOp::Format => self.text(args, false),
             RtOp::DivInt => format!("nyDiv({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("nyAdd({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("nySub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("nyMul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("nyNeg({}, {at})", a[0]),
             RtOp::RemInt => format!("nyRem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyF2I({}, {at})", a[0]),
             RtOp::CheckStep => format!("nyCheckStep({}, {at})", a[0]),
@@ -839,5 +917,17 @@ fn bare_s(s: &str) -> &str {
 /// True if generated text is a literal (an untyped Go constant).
 fn constant_text(s: &str) -> bool {
     let t = s.trim_start_matches(['(', '-']).trim_end_matches(')');
-    !t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || c == '.' || c == 'e' || c == '+' || c == '-' || c == ' ' || c == '*' || c == '/' || c == '(' || c == ')')
+    !t.is_empty()
+        && t.chars().all(|c| {
+            c.is_ascii_digit()
+                || c == '.'
+                || c == 'e'
+                || c == '+'
+                || c == '-'
+                || c == ' '
+                || c == '*'
+                || c == '/'
+                || c == '('
+                || c == ')'
+        })
 }

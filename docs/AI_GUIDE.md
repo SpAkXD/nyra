@@ -1,6 +1,6 @@
 # Nyra: guide for AI agents
 
-How to write correct **Nyra v0.3** programs. Read it once, top to bottom; it is short on purpose.
+How to write correct **Nyra v0.5** programs. Read it once, top to bottom; it is short on purpose.
 
 Nyra is **not in your training data** and it is **not** Rust, Go, TypeScript or Python, even though
 the tokens look familiar (code blocks here are marked `rust` only so GitHub highlights them). Use only
@@ -247,6 +247,7 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Only `var` changes | `let n = 0` then `n = 1`, `let xs = [1]` then `xs.push(2)` (E0205) | `var n = 0`, `var xs = [1]` |
 | Parameters are immutable | `n = n / 2` or `xs.push(1)` on a parameter (E0205) | `var m = n`, then change `m`; or an `inout` parameter |
 | `inout` at both ends | `swap(x, y)` for `fn swap(inout a: int, inout b: int)` (E0237) | `swap(inout x, inout y)` |
+| Two `inout` arguments, two variables | `swap(inout xs[i], inout xs[j])` (E0237) | `xs.swap(i, j)` |
 | No shadowing | `let x = 1` ... `let x = 2` in one function (E0206) | a new name, or `var` and reassign |
 | Unique names | `let str = "a"`, `for char in s`, a variable named like a function (E0206) | `let text = "a"`, `for c in s` |
 | Bool conditions | `if n {`, `if xs {` (E0209) | `if n != 0 {`, `if xs.len() > 0 {` |
@@ -285,8 +286,9 @@ Good to know:
   `['x']`, `Item(name: "pen", price: 3)`. `str(x)` gives the same text as a `str`.
 - Float math shows its rounding noise: multiplying 1000.0 by 1.05 four times prints
   `1215.5062500000001`. When you state the expected output of float math, call it approximate.
-- Ints are 64-bit and wrap on overflow natively; with `--js` they are exact only up to 2^53
-  (9007199254740991). Stay below that and both backends print the same.
+- Ints are 64-bit and never wrap: an overflow stops the program with E0255. With `--js` and `--ts` an
+  int beyond 2^53 - 1 (9007199254740991) stops it with E0256. For a hash or a random number generator,
+  keep the value small with `%` at every step: `h = (h * 31 + c.code()) % 1000000007`.
 - A name declared inside `{ }` is gone after the closing brace (you may reuse it then). Functions and
   structs can be defined in any order and functions can call each other. `ret` with no value leaves a
   function that returns nothing.
@@ -368,11 +370,11 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0101 | syntax error | `return`, `elif`, `i++`, `0..=n`, `{` on a new line, `Point { x: 1 }`, `xs[1..3]`, two statements on a line, `break` outside a loop: compare with section 2 |
 | E0102 | unknown type | `int`, `float`, `bool`, `str`, `char`, `[T]` or a declared struct (not `string`, `i32`, `Char`, `list`, `dict`) |
 | E0201 | undefined variable | typo (see `hint`), used before its `let`, or declared in another block |
-| E0202 | undefined function | not a builtin (`len`, `sqrt`...): `xs.len()`, `math.sqrt(x)` after `use math`, or define it yourself |
+| E0202 | undefined function | the builtins are `print`, `str`, `int`, `float`, `char`, `abs`, `min`, `max`; `len(xs)` is `xs.len()`, `sqrt(x)` is `math.sqrt(x)` after `use math`; else define it yourself |
 | E0300 · E0306 | module not found · module has no such item | the modules are `input os fs json time random math text`; `random.range(1, 7)`, not `randint` |
 | E0309 | `json.parse` needs a type | `let p: Point = json.parse(text)` |
 | E0203 | type mismatch | wrong argument, return or assigned type: `float(x)` / `int(x)`, write `2.0` not `2`; `int(c)` of a char: `c.code()` |
-| E0204 | wrong argument count | `print` takes exactly one argument; methods take a fixed number (`s.split(" ")`) |
+| E0204 | wrong argument count | functions and methods take a fixed number (`s.split(" ")`, `min(a, b)`); `print(a, b, end: "")` takes any number of values and an optional last `end:` |
 | E0205 | changing what is not a `var` | `let` variables, parameters and loop variables are immutable: use `var`, or an `inout` parameter |
 | E0206 | name already defined | no shadowing, no duplicate functions or structs, no variable named like a function or a struct |
 | E0207 | bad or missing `ret` | end every path of a `->` function with `ret value`; no `ret value` without `->` |
