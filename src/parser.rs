@@ -391,12 +391,13 @@ impl Parser {
                 }
             }
         }
+        let mut script = false;
         if let Some(first) = top.first() {
             let span = first.span;
             if let Some(main) = funcs.iter().find(|f| f.name == "main") {
                 let hint = match &first.kind {
                     StmtKind::Let { name, .. } => format!(
-                        "there are no global variables: a constant is a function, e.g. `fn {name}() -> int = 10`; or move the `let` into `main`"
+                        "a program with `fn main` has no script variables: move `{name}` into `main`, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use"
                     ),
                     StmtKind::Expr(e) if matches!(&e.kind, ExprKind::Call(f, _) if f == "main") => {
                         "`main` runs by itself when the program starts: do not call it".to_string()
@@ -409,10 +410,11 @@ impl Parser {
                 self.errs.push(Diag::new("E0101", "statements at the top level and a `fn main` in the same program", span).hint(hint));
             } else {
                 funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
+                script = true;
             }
         }
         funcs.append(&mut self.nested);
-        Program { funcs, structs, examples }
+        Program { funcs, structs, examples, script, globals: Default::default() }
     }
 
     /// True at `ex` followed by the start of a condition on the same line: a line of examples.
@@ -470,7 +472,7 @@ impl Parser {
         let hint = match self.peek() {
             Tok::Let | Tok::Var => {
                 let name = name_after(1).unwrap_or_else(|| "name".into());
-                format!("there are no global variables: a constant is a function, e.g. `fn {name}() -> int = 10`")
+                format!("a program with `fn main` has no script variables: move `{name}` into `main`, or drop `fn main` and write its statements at the top level")
             }
             Tok::RBrace => "this `}` closes nothing: remove it, or add the `{` it belongs to".to_string(),
             Tok::Ident(w) => {

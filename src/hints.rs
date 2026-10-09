@@ -66,7 +66,7 @@ pub fn top_level_word(w: &str) -> Option<String> {
             "Nyra has no visibility modifiers: start the definition with `fn` or `struct`"
         }
         "const" | "static" | "final" => {
-            "there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`"
+            "Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)"
         }
         _ => return word(w),
     };

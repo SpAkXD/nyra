@@ -1,0 +1,4 @@
+// expect: E0254
+var pos = 0
+fn get() -> int = pos   ex get() == 0
+print(get())

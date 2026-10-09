@@ -1,0 +1,44 @@
+// functions change script variables: elements, fields, recursion, left-to-right order
+struct P { x: int, tags: [str] }
+var grid = [[0].repeat(3)].repeat(2)
+var p = P(x: 1, tags: [])
+var count = 0
+var words: [str] = []
+fn mark(i: int, j: int) {
+    grid[i][j] = grid[i][j] + 1
+    p.x += 1
+    p.tags.push("m{i}{j}")
+}
+fn fill(n: int) {
+    if n == 0 { ret }
+    count += 1
+    fill(n - 1)
+}
+fn grow() -> [str] {
+    words.push("w" + str(words.len()))
+    ret words
+}
+fn next() -> int {
+    count += 10
+    ret count
+}
+fn same(xs: [str]) -> int {
+    words.push("z")
+    ret xs.len()
+}
+mark(0, 1)
+mark(1, 2)
+mark(1, 2)
+print(grid, p)
+fill(5)
+print(count)
+count = next()
+print(count)
+print(words, grow(), words)
+let snap = words
+print(same(words), words, snap)
+words = grow()
+print(words)
+var g2 = grid
+mark(0, 0)
+print(g2, grid)

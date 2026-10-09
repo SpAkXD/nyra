@@ -10,6 +10,7 @@ use crate::check_v03::{self as v3, StructInfo};
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
 
+mod globals;
 mod lambda;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
@@ -98,6 +99,8 @@ struct Checker {
     freed: HashMap<String, Freed>,
     /// How many lambdas enclose the current expression: inside one, nothing can be changed.
     lambda_depth: usize,
+    /// Script variables: what functions see of them and do with them (see `globals.rs`).
+    g: globals::State,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -113,6 +116,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         arena_depth: 0,
         freed: HashMap::new(),
         lambda_depth: 0,
+        g: globals::State::new(prog),
     };
 
     // structs first: functions and bodies refer to them
@@ -242,12 +246,28 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         _ => {}
     }
 
-    for f in &mut prog.funcs {
-        c.func(f);
+    // a script's `main` first: its top-level variables (and their types) are what the functions
+    // see. Its errors still come where `main` stands among the functions.
+    let script_main = if prog.script { prog.funcs.iter().position(|f| f.name == "main") } else { None };
+    let mut main_errs = Vec::new();
+    if let Some(i) = script_main {
+        let before = c.errs.len();
+        c.g.in_main = true;
+        c.func(&mut prog.funcs[i]);
+        c.g.in_main = false;
+        main_errs = c.errs.split_off(before);
+    }
+    for (i, f) in prog.funcs.iter_mut().enumerate() {
+        if Some(i) == script_main {
+            c.errs.append(&mut main_errs);
+        } else {
+            c.func(f);
+        }
     }
     for ex in &mut prog.examples {
         c.example(&mut ex.expr);
     }
+    prog.globals = c.finish_globals();
     c.errs
 }
 
@@ -442,7 +462,13 @@ fn call_text(e: &Expr) -> String {
 }
 
 impl Checker {
+    /// A variable by name: a local, or in a function, a script variable it can see.
     fn lookup(&self, name: &str) -> Option<&Var> {
+        self.local(name).or_else(|| self.global_of(name).map(|g| &self.g.vars[g].1))
+    }
+
+    /// A variable of the function being checked.
+    fn local(&self, name: &str) -> Option<&Var> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
 
@@ -482,8 +508,12 @@ impl Checker {
         if BUILTINS.contains(&name) {
             return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}(x)`"));
         }
+        // a script variable this function cannot see, or a local of `main`
+        if let Some(d) = self.global_undefined(name, span) {
+            return d;
+        }
         // declared somewhere else in this function: say where, and why it is not visible here
-        let first = self.decls.iter().filter(|(n, _)| n == name).map(|(_, s)| *s).min_by_key(|s| (s.line, s.col));
+        let first =self.decls.iter().filter(|(n, _)| n == name).map(|(_, s)| *s).min_by_key(|s| (s.line, s.col));
         if let Some(at) = first {
             return d.hint(if (at.line, at.col) < (span.line, span.col) {
                 format!(
@@ -514,7 +544,8 @@ impl Checker {
     }
 
     fn declare(&mut self, name: &str, ty: Type, decl: Decl, span: Span) {
-        let prev = self.lookup(name).map(|v| (v.decl, v.span));
+        // a script variable does not count: declaring the name hides it in this function
+        let prev = self.local(name).map(|v| (v.decl, v.span));
         if let Some((pdecl, pspan)) = prev {
             let (msg, hint) = match pdecl {
                 Decl::Let => (
@@ -784,12 +815,25 @@ impl Checker {
         self.decls.clear();
         self.freed.clear();
         collect_decls(&f.body, &mut self.decls);
+        self.g.start_func(f);
         self.scopes = vec![HashMap::new()];
         for p in &f.params {
             let ty = if self.defined(p.ty) { p.ty } else { Type::Unknown };
             self.declare(&p.name, ty, if p.inout { Decl::Inout } else { Decl::Param }, p.span);
         }
-        self.block(&mut f.body);
+        if self.g.in_main {
+            // a script: each top-level statement is numbered, so a call can be compared with the
+            // declarations of the script variables it uses
+            self.scopes.push(HashMap::new());
+            for (i, s) in f.body.iter_mut().enumerate() {
+                self.g.top_stmt = i;
+                self.stmt(s);
+            }
+            self.scopes.pop();
+        } else {
+            self.block(&mut f.body);
+        }
+        self.g.end_func(&f.name);
         if f.ret != Type::Void && !returns(&f.body) {
             let value = sample(f.ret);
             // the last line computes the value: it only lacks the `ret`
@@ -834,7 +878,9 @@ impl Checker {
         self.decls.clear();
         self.freed.clear();
         self.scopes = vec![HashMap::new()];
+        self.g.start_example();
         let t = self.expr_with(e, Some(Type::Bool));
+        self.g.end_func("");
         if t != Type::Bool && !t.is_unknown() {
             let what = show(e).map_or("this example".to_string(), |s| format!("`{s}`"));
             let hint = match (t, show(e)) {
@@ -908,6 +954,9 @@ impl Checker {
                     t = Type::Unknown;
                 }
                 self.declare(name, t, if *mutable { Decl::Var } else { Decl::Let }, span);
+                if self.g.in_main && self.scopes.len() == 2 {
+                    self.g.add_global(name, t, *mutable, span);
+                }
             }
             StmtKind::Assign { target, op, value } => self.assign(target, *op, value, span),
             StmtKind::If { cond, then, els } => {
@@ -1028,6 +1077,9 @@ impl Checker {
             ExprKind::Var(n) => Some(n.clone()),
             _ => None,
         };
+        if let Some(name) = &var_name {
+            self.note_use(name, true);
+        }
         let tt = match &var_name {
             Some(name) => match self.lookup(name).map(|v| (v.ty, v.decl, v.span, v.arena)) {
                 None => {
@@ -1137,6 +1189,7 @@ impl Checker {
             return;
         };
         let root = root.to_string();
+        self.note_use(&root, true);
         let Some((t, decl, dspan, arena)) = self.lookup(&root).map(|v| (v.ty, v.decl, v.span, v.arena)) else { return };
         let shown = show(e).unwrap_or_else(|| root.clone());
         match decl {
@@ -1215,6 +1268,7 @@ impl Checker {
                 Some(v) => {
                     let t = v.ty;
                     let name = name.clone();
+                    self.note_use(&name, false);
                     self.check_freed(&name, span);
                     t
                 }
@@ -1989,6 +2043,8 @@ impl Checker {
         });
         // which variables the `inout` arguments change: each at most once per call
         let mut roots: Vec<(String, Span)> = Vec::new();
+        // the script variables among them
+        let mut ginout: Vec<(usize, Span)> = Vec::new();
         for (i, a) in args.iter_mut().enumerate() {
             let want = params[i];
             match (&mut a.kind, inout[i]) {
@@ -2014,6 +2070,9 @@ impl Checker {
                             .hint("change one of them through a temporary: copy into a `var`, call, then assign back"),
                         );
                     } else {
+                        if let Some(g) = self.global_ref(&root) {
+                            ginout.push((g, a.span));
+                        }
                         roots.push((root, a.span));
                     }
                 }
@@ -2047,6 +2106,7 @@ impl Checker {
                 }
             }
         }
+        self.record_call(name, span, ginout);
         ret
     }
 
@@ -2282,6 +2342,10 @@ impl Checker {
         };
         let Some((decl, arena)) = self.lookup(var).map(|v| (v.decl, v.arena)) else { return };
         let problem = match decl {
+            _ if self.global_of(var).is_some() => Some((
+                format!("cannot {name} script variable `{var}` in function `{}`: the script still needs it", self.fname),
+                format!("only variables declared in this function can be freed or kept; call `{name}({var})` at the top level of the script"),
+            )),
             Decl::Param => Some((format!("cannot {name} parameter `{var}`: the caller owns it"), "only variables declared with `let` or `var` in this function can be freed or kept".to_string())),
             Decl::Inout => Some((format!("cannot {name} `inout` parameter `{var}`: the caller still needs a value"), format!("assign a new value instead: `{var} = ...`"))),
             Decl::Loop => Some((format!("cannot {name} the loop variable `{var}`"), "the loop variable is a copy of each element: there is nothing to free".to_string())),

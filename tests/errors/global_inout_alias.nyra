@@ -1,0 +1,8 @@
+// expect: E0237
+var pos = 0
+fn advance() { pos += 1 }
+fn twice(inout n: int) {
+    advance()
+    n += 1
+}
+twice(inout pos)

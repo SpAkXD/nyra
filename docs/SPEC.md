@@ -7,8 +7,8 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
 - A program is `fn` and `struct` definitions and `ex` examples in any order plus either `fn main()` or statements at
-  the top level (a script: they run in order, like the body of `main`). No global variables:
-  functions cannot see the script's variables.
+  the top level (a script: they run in order, like the body of `main`). A script's top-level `let`s
+  and `var`s are visible in every function (see Script variables).
 - Every function signature is fully typed. Local variable types are inferred.
 - One statement per line. There are no semicolons. A line may break inside `( )`, between the
   elements of `[ ]`, after a binary operator, and before a binary operator or a `.` (the next line
@@ -71,6 +71,28 @@ n += 1                  // also -= *= /= %=
 ```
 A name cannot be declared again while it is visible (parameters and loop variables included).
 A name declared inside `{ }` is gone after the `}`.
+
+## Script variables
+```nyra
+var tokens: [str] = []
+var pos = 0
+let limit = 3
+fn peek() -> str = if pos < tokens.len() { tokens[pos] } else { "" }
+fn advance() {
+    pos += 1                    // a `var` can be changed by any function
+}
+tokens = "a b c".split(" ")
+advance()
+print(peek(), limit)            // b 3
+```
+A `let` or `var` at the top level of a script (not inside a block, and not in `fn main`) is a script
+variable: every function may read it, and change it when it is a `var` (a `let` one is E0205). A
+function that declares a parameter or variable of the same name does not see it (`fn area(w: int)`
+next to `let w = 3` uses its parameter); using both in one function is E0216. A call runs the function,
+so every script variable it uses, also through the functions it calls, must be declared before the
+call (E0217). Examples cannot call a function that uses script variables (E0254). A script variable
+passed `inout` to a function that uses it is E0237; a lambda cannot call a function that changes one
+(E0214).
 
 ## Control flow
 ```nyra
@@ -245,7 +267,7 @@ like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.300000000
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 
 ## Errors
-`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0239, E0250–E0253), a `message`,
+`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0239, E0250–E0254), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
 and a fixed program; [ERRORS.md](ERRORS.md) has them all.
 

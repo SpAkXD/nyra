@@ -5,8 +5,9 @@
 //! - `docs/SPEC.md` marks them `nyra`: the spec is pasted into prompts as plain text, where `rust`
 //!   would name the wrong language.
 //!
-//! A block without `fn main` becomes a program: its top-level `fn` and `struct` definitions and its
-//! `ex` examples stay at the top level and every other line goes into an appended `fn main()`.
+//! A block is checked as written: without `fn main` it is a script, whose top-level statements run in
+//! order and whose top-level variables the functions can use. A block of definitions alone gets an
+//! empty `fn main()`.
 
 use std::process::Command;
 
@@ -29,39 +30,46 @@ fn blocks(markdown: &str, lang: &str) -> Vec<String> {
     blocks
 }
 
-/// A code block as a whole program: the lines of top-level `fn` and `struct` definitions stay at
-/// the top level, all other lines go into `fn main()`.
+/// A code block as a whole program: a script as written, or definitions only, which get an empty
+/// `fn main()`.
 fn program(code: &str) -> String {
     if code.contains("fn main") {
         return code.to_string();
     }
-    let (mut items, mut body) = (String::new(), String::new());
-    let mut in_item = false;
-    for line in code.lines() {
-        let starts_item = line.starts_with("fn ") || line.starts_with("struct ") || line.starts_with("ex ");
-        if starts_item || in_item {
-            items.push_str(line);
-            items.push('\n');
-            // a definition whose first line ends with `{` goes on until the `}` in column 0
-            let code_part = line.split("//").next().unwrap_or("").trim_end();
-            in_item = if starts_item { code_part.ends_with('{') } else { !line.starts_with('}') };
-        } else {
-            if !line.is_empty() {
-                body.push_str("    ");
-                body.push_str(line);
-            }
-            body.push('\n');
-        }
+    // a statement starts in column 0 and is not a definition, a comment or the end of one
+    let statement = |l: &str| {
+        !l.is_empty() && !l.starts_with([' ', '}', '/']) && !["fn ", "struct ", "ex "].iter().any(|k| l.starts_with(k))
+    };
+    if code.lines().any(statement) {
+        code.to_string()
+    } else {
+        format!("{code}
+fn main() {{
+}}
+")
     }
-    format!("{items}\nfn main() {{\n{body}}}\n")
 }
 
 #[test]
-fn statements_of_a_block_go_into_main() {
-    let code = "struct P {\n    x: int\n}\nfn f(p: P) -> int { // f\n    ret p.x\n}\nfn g() = print(1)\nlet p = P(x: 1)\nif true {\n    g()\n}\n";
-    let expected = "struct P {\n    x: int\n}\nfn f(p: P) -> int { // f\n    ret p.x\n}\nfn g() = print(1)\n\nfn main() {\n    let p = P(x: 1)\n    if true {\n        g()\n    }\n}\n";
-    assert_eq!(program(code), expected);
-    assert_eq!(program("fn main() {\n}\n"), "fn main() {\n}\n");
+fn definitions_alone_get_a_main() {
+    assert_eq!(program("fn g() = print(1)
+"), "fn g() = print(1)
+
+fn main() {
+}
+");
+    assert_eq!(program("let p = 1
+fn g() = print(p)
+g()
+"), "let p = 1
+fn g() = print(p)
+g()
+");
+    assert_eq!(program("fn main() {
+}
+"), "fn main() {
+}
+");
 }
 
 #[test]

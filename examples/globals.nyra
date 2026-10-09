@@ -1,0 +1,89 @@
+// script variables: functions read them, and change the `var`s (no `inout` needed)
+struct Token {
+    kind: str
+    value: str
+}
+
+var tokens: [Token] = []
+var pos = 0
+let width = 3
+
+fn tokenize(src: str) -> [Token] {
+    var out: [Token] = []
+    for w in src.split(" ") {
+        let kind = if w[0].is_digit() { "num" } else { "op" }
+        out.push(Token(kind: kind, value: w))
+    }
+    ret out
+}
+
+fn peek() -> str {
+    if pos < tokens.len() { ret tokens[pos].value }
+    ret ""
+}
+
+fn advance() -> str {
+    let v = peek()
+    pos += 1
+    ret v
+}
+
+// recursive descent over the script's tokens
+fn expr() -> int {
+    var total = int(advance())
+    while peek() == "+" || peek() == "-" {
+        let op = advance()
+        let rhs = int(advance())
+        total = if op == "+" { total + rhs } else { total - rhs }
+    }
+    ret total
+}
+
+// a function that declares its own `pos` cannot see the script's, but still calls one that does
+fn count_ops() -> int {
+    var pos = 0
+    var n = 0
+    while peek() != "" {
+        if tokens[pos].kind == "op" { n += 1 }
+        advance()
+        pos += 1
+    }
+    ret n
+}
+
+// a parameter with the name of a script variable: the function uses the parameter
+fn area(width: int) -> int = width * width
+
+fn pad(s: str) -> str = s.pad_left(width)
+
+fn bump(inout n: int) {
+    n += 1
+}
+
+var log: [str] = []
+fn note(s: str) {
+    log.push(s)
+}
+
+tokens = tokenize("1 + 2 + 10 - 4")
+print(peek())
+print(expr())
+print(pos)
+pos = 0
+print(count_ops())
+print(pos, area(5), pad("7"))
+print(pos, advance(), pos)
+var k = 1
+bump(inout k)
+print(k)
+note("a")
+note("b" + str(pos))
+print(log)
+print(tokens.map(t => t.value + str(width)))
+pos = 0
+let firsts = [advance(), advance()]
+print(firsts, pos)
+for i in 0..2 {
+    note("loop {i}")
+}
+print(log.len(), log[log.len() - 1])

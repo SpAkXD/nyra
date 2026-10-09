@@ -324,6 +324,8 @@ fn main() {                                    // every program starts here
   cannot be declared again while it is visible.
 - **Values, not references:** assigning or passing an array or a struct copies it; only an `inout`
   parameter changes the caller's variable.
+- **Scripts:** without `fn main`, the top-level statements are the program, and their `let`/`var`
+  variables are visible in every function: `var pos = 0` then `fn advance() { pos += 1 }`.
 - **Strings** are UTF-8 and count characters: `s[i]` is a `char` (`'a'`), `+` joins two strings, and
   `==` and `<` compare them by content. Arrays and structs print as Nyra code.
 - **Conditions must be `bool`:** `if n != 0`, not `if n`.

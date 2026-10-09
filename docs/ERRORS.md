@@ -23,17 +23,17 @@ design may still change.
 | E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
 | E0101-E0102 | parser | grammar and type names |
-| E0201-E0215 | type checker | names, types, `ret`, conditions, lambdas |
+| E0201-E0217 | type checker | names, types, `ret`, conditions, lambdas, script variables |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
 | E0240-E0249 | run time | the program stops with exit code 101 |
-| E0250-E0253 | examples | an `ex` example is false, stops with a runtime error, is not a `bool` or does not finish; checked while compiling |
+| E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
 | E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
 | E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
-brace that starts no `{value}` is text. Numbers that are not listed (E0216-E0219, E0248, E0254-E0259, E0309,
+brace that starts no `{value}` is text. Numbers that are not listed (E0218-E0219, E0248, E0255-E0259, E0309,
 E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
@@ -218,7 +218,7 @@ fn main() {
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
-  - code outside a function: only `fn` and `struct` definitions may be at the top level (no globals, no `import`)
+  - code outside a function in a program with `fn main`: only `fn` and `struct` definitions may then be at the top level (and there is no `import`)
   - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
   - `for (i, x) in xs`: write the two variables without parentheses, `for i, x in xs`
   - `break` or `continue` outside a loop: to leave a function write `ret`
@@ -288,6 +288,7 @@ fn main() {
   - the variable is declared later in the function: move its `let` above the use
   - the variable was declared inside an inner `{ }` block and is used after the block ended: declare it before the block
   - a function used without call parentheses: write `limit()`, not `limit`
+  - a function that uses a variable of `fn main`: functions see only a script's top-level variables, so drop `fn main` and write its statements at the top level, or pass the value as a parameter (the hint says which)
   - assigning to a variable that was never declared (`count = 1`): declare it first with `var count = 0`
   - words from other languages: `null`, `None`, `return`, `self`, `True`
 - **Wrong:**
@@ -495,7 +496,7 @@ fn main() {
 ## E0208: missing `fn main()`
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** The file defines no function called `main`. A program starts running at `fn main()`.
-- **Why Nyra has this rule:** One entry point with one shape means every program starts the same way on every backend. Top-level statements and global variables do not exist.
+- **Why Nyra has this rule:** One entry point with one shape means every program starts the same way on every backend. A program without `fn main` is a script: its top-level statements are its `main`.
 - **Common causes:**
   - an empty file, or a file with only helper functions
   - the entry function has another name, or a different capitalisation (`Main`)
@@ -656,6 +657,7 @@ fn main() {
 - **Common causes:**
   - collecting into another array from inside `map`, `ys.push(x)`: use the array that `map` or `filter` returns
   - counting with a variable from inside a lambda: use `count`, `sum` or `fold`
+  - calling a function that changes a script variable from inside a lambda: call it in a `for` loop
 - **Wrong:**
 ```rust
 fn main() {
@@ -699,6 +701,66 @@ fn main() {
 }
 ```
 - **Related:** E0213, E0204, E0203
+
+## E0216: a function uses a script variable and declares the same name
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A function uses a script variable (a `let` or `var` at the top level of a script) and also declares a parameter, variable, loop variable or lambda parameter of the same name. A function that declares a name sees only its own variable of that name, so the use of the script variable cannot be resolved: "`pos` is a script variable (line 1), but `f` declares its own `pos` (line 4)".
+- **Why Nyra has this rule:** Nyra has no shadowing: inside one function a name means one thing. A function that declares `w` keeps working when the script also has a `w` (the function simply does not see it), but a function where the same name means two things is rejected.
+- **Common causes:**
+  - reading the script variable at the start of a function and declaring a local of the same name later
+  - a lambda parameter or a loop variable named like a script variable the same function uses
+- **Wrong:**
+```rust
+var total = 0
+fn add(x: int) {
+    total += x
+    for total in 0..3 {
+        print(total)
+    }
+}
+add(5)
+print(total)
+```
+- **Fixed:**
+```rust
+var total = 0
+fn add(x: int) {
+    total += x
+    for i in 0..3 {
+        print(i)
+    }
+}
+add(5)
+print(total)
+```
+- **Related:** E0206, E0201, E0217
+
+## E0217: a function runs before a script variable it uses exists
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A statement of the script calls a function that uses a script variable (directly, or through the functions it calls) which is declared later in the script, or in this very statement (`var pos = next()` where `next` reads `pos`). The message names the function, the variable and the line of its declaration.
+- **Why Nyra has this rule:** The statements of a script run in order, and a script variable has no value before its `let` or `var` has run. Functions may be defined anywhere, but a call runs the function, so every script variable it can reach must already exist.
+- **Common causes:**
+  - the script variables declared at the end of the file, after the code that uses them
+  - a script variable whose initial value is computed by a function that uses the variable itself
+- **Wrong:**
+```rust
+fn advance() {
+    pos += 1
+}
+advance()
+var pos = 0
+print(pos)
+```
+- **Fixed:**
+```rust
+var pos = 0
+fn advance() {
+    pos += 1
+}
+advance()
+print(pos)
+```
+- **Related:** E0201, E0216, E0254
 
 ## E0220: duplicate field in a struct
 - **Kind:** compile error · **Since:** v0.3
@@ -1218,6 +1280,7 @@ fn main() {
   - `inout` forgotten at the call: `bump(x)` instead of `bump(inout x)`
   - `inout` written at a call for a parameter that is not `inout`, such as `print(inout x)`
   - two elements of one array passed to one call: copy one into a temporary variable, call, then assign it back
+  - a script variable passed `inout` to a function that uses that script variable itself (directly or through a call): the function already sees it, so change it there
 - **Wrong:**
 ```rust
 fn bump(inout n: int) {
@@ -1730,6 +1793,26 @@ fn main() {
 }
 ```
 - **Related:** E0250, E0251
+
+## E0254: example calls a function that uses script variables
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An `ex` example calls a function that uses a script variable (directly, or through the functions it calls). Examples run while the program compiles, before any statement of the script, so the variable has no value yet.
+- **Why Nyra has this rule:** An example states what a function returns for the arguments it shows. A function that also reads a script variable depends on something the example cannot show, and the compiler cannot run the script to give the variable its value.
+- **Common causes:**
+  - an example for a helper of a parser or a game loop that reads the script's state (`pos`, `tokens`, `board`)
+- **Wrong:**
+```rust
+let rate = 3
+fn cost(n: int) -> int = n * rate   ex cost(2) == 6
+print(cost(5))
+```
+- **Fixed:**
+```rust
+let rate = 3
+fn cost(n: int, r: int) -> int = n * r   ex cost(2, 3) == 6
+print(cost(5, rate))
+```
+- **Related:** E0250, E0217
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
