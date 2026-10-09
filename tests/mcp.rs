@@ -127,6 +127,11 @@ fn a_whole_session() {
         call(23, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(WRONG_SQ))),
         call(24, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(WRONG_SQ))),
         call(25, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(TYPO))),
+        call(26, "nyra_spec", r#"{"full":true}"#),
+        call(27, "nyra_spec", r#"{"part":"guide"}"#),
+        call(28, "nyra_spec", r#"{"full":"yes"}"#),
+        call(29, "nyra_spec", r#"{"part":"spec","full":false}"#),
+        request(30, "resources/read", r#"{"uri":"nyra://card"}"#),
     ];
     let replies = session(&requests);
     // one reply per request: none for the notification, one (id null) for the parse error
@@ -241,7 +246,23 @@ fn a_whole_session() {
     // nyra_spec and nyra_build
     let (is_error, spec) = tool_text(&replies, 11);
     assert!(!is_error);
-    assert_eq!(spec, std::fs::read_to_string("docs/SPEC.md").unwrap());
+    // by default the compact agent card (the file without its metadata comment), not the whole spec
+    let card_file = std::fs::read_to_string("docs/AGENT_CARD.md").unwrap().replace("\r\n", "\n");
+    let card = card_file.split_once("-->\n").expect("the card starts with a metadata comment").1;
+    assert!(card_file.starts_with("<!--") && !card.contains("<!--") && card.starts_with("# Nyra v"));
+    assert_eq!(spec, card);
+    let full_spec = std::fs::read_to_string("docs/SPEC.md").unwrap();
+    assert!(spec.len() * 4 < full_spec.len(), "the card is the compact one: {} bytes against {}", spec.len(), full_spec.len());
+    let (is_error, full) = tool_text(&replies, 26);
+    assert!(!is_error);
+    assert_eq!(full, full_spec);
+    let (is_error, guide) = tool_text(&replies, 27);
+    assert!(!is_error);
+    assert_eq!(guide, std::fs::read_to_string("docs/AI_GUIDE.md").unwrap());
+    let (is_error, bad) = tool_json(&replies, 28);
+    assert!(is_error);
+    assert!(bad.get("error").and_then(Json::as_str).unwrap().contains("full"));
+    assert_eq!(tool_text(&replies, 29), (false, card.to_string()));
     let (is_error, built) = tool_json(&replies, 12);
     assert!(!is_error);
     assert_eq!(built.get("target").and_then(Json::as_str), Some("js"));
@@ -256,10 +277,12 @@ fn a_whole_session() {
     // resources
     let resources = result(&replies, 16).get("resources").and_then(Json::as_array).unwrap();
     let uris: Vec<&str> = resources.iter().map(|r| r.get("uri").and_then(Json::as_str).unwrap()).collect();
-    assert_eq!(uris, ["nyra://spec", "nyra://guide", "nyra://errors"]);
+    assert_eq!(uris, ["nyra://card", "nyra://spec", "nyra://guide", "nyra://errors"]);
     let contents = result(&replies, 17).get("contents").and_then(Json::as_array).unwrap();
     assert_eq!(contents[0].get("mimeType").and_then(Json::as_str), Some("text/markdown"));
-    assert_eq!(contents[0].get("text").and_then(Json::as_str), Some(spec.as_str()));
+    assert_eq!(contents[0].get("text").and_then(Json::as_str), Some(full_spec.as_str()));
+    let contents = result(&replies, 30).get("contents").and_then(Json::as_array).unwrap();
+    assert_eq!(contents[0].get("text").and_then(Json::as_str), Some(card));
     let contents = result(&replies, 18).get("contents").and_then(Json::as_array).unwrap();
     let entry = Json::parse(contents[0].get("text").and_then(Json::as_str).unwrap()).unwrap();
     assert_eq!(entry.get("code").and_then(Json::as_str), Some("E0240"));

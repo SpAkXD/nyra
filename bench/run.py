@@ -50,6 +50,8 @@ TASKS_DIR = BENCH_DIR / "tasks"
 SOLUTIONS_DIR = BENCH_DIR / "solutions"
 RESULTS_DIR = BENCH_DIR / "results"
 DEFAULT_SPEC = REPO_DIR / "docs" / "SPEC.md"
+CARD_SPEC = REPO_DIR / "docs" / "AGENT_CARD.md"  # the compact agent card: --spec card
+SPEC_KINDS = {"full": DEFAULT_SPEC, "card": CARD_SPEC}
 
 SCHEMA_VERSION = 3  # 3: runtime of every passing program (result.runtime_ms, result.timing, run.timing)
 LANG_ORDER = report.LANG_ORDER  # the languages, in table-column order; the first is the baseline of comparisons
@@ -161,15 +163,31 @@ def _task_paragraph(language: str) -> str:
             "only what it prints to standard output is checked, so it must print exactly what the task describes.")
 
 
-_NYRA_SYSTEM = """\
+# The Nyra system prompt is two blocks: the head holds the language text (the full spec or the agent card), which is
+# the same for every request of a run and is what prompt caching stores; the tail is the task rule. Nothing about
+# the task itself is ever in the system prompt, so the cached prefix is byte-stable.
+_NYRA_HEAD = """\
 You write programs in Nyra, a new programming language that you have not seen before. \
 The complete language specification is below. It is the only documentation you have.
 
 <nyra_spec>
 {spec}
-</nyra_spec>
+</nyra_spec>"""
 
-""" + _task_paragraph("Nyra") + "\n\n" + _REPLY_RULE
+_NYRA_CARD_HEAD = """\
+You write programs in Nyra, a new programming language that you have not seen before. \
+The language card below is the only documentation you have.
+
+<nyra_spec>
+{spec}
+</nyra_spec>"""
+
+_NYRA_TAIL = _task_paragraph("Nyra") + "\n\n" + _REPLY_RULE
+_NYRA_SYSTEM = _NYRA_HEAD + "\n\n" + _NYRA_TAIL
+
+# --ex-examples: one more sentence in the tail (the arm "card + write examples" of research/AB-card.md)
+_EX_NOTE = ("After each non-trivial function write one or two `ex` examples (for example `ex sq(3) == 9`): the compiler "
+            "checks them, and a false one is an error.")
 
 _PYTHON_SYSTEM = ("You write programs in Python 3, using only the standard library.\n\n"
                   + _task_paragraph("Python") + "\n\n" + _REPLY_RULE)
@@ -686,7 +704,7 @@ class NyraLang(Language):
     hello_world = "fn main() {\n    print(42)\n}\n"
 
     def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0,
-                 node: str = "node", time_runs: int = 0):
+                 node: str = "node", time_runs: int = 0, ex_examples: bool = False):
         super().__init__(timeout, time_runs)
         if backend not in ("native", "js"):
             raise UsageError("--backend must be native or js")
@@ -694,18 +712,23 @@ class NyraLang(Language):
         self.node = node  # runs the JavaScript backend's output
         self.backend = backend
         self.spec_path = Path(spec_path)
+        self.ex_examples = ex_examples
         try:
-            self.spec = self.spec_path.read_text(encoding="utf-8")
+            self.spec = strip_metadata(self.spec_path.read_text(encoding="utf-8"))
         except OSError as exc:
             raise HarnessError(f"cannot read the Nyra spec {self.spec_path}: {exc}") from None
+        resolved = self.spec_path.resolve()
+        self.spec_kind = next((k for k, path in SPEC_KINDS.items() if resolved == path.resolve()), "custom")
         self.spec_sha256 = hashlib.sha256(self.spec.replace("\r\n", "\n").encode("utf-8")).hexdigest()
         m = re.search(r"^#\s*Nyra\s+v?(\d+\.\d+)", self.spec, re.M)
         self.spec_version = m.group(1) if m else None
         self._version_text: Optional[str] = None
 
     @property
-    def system_prompt(self) -> str:
-        return _NYRA_SYSTEM.format(spec=self.spec.strip())
+    def system_prompt(self) -> providers.SystemPrompt:
+        head = (_NYRA_CARD_HEAD if self.spec_kind == "card" else _NYRA_HEAD).format(spec=self.spec.strip())
+        tail = _NYRA_TAIL if not self.ex_examples else _task_paragraph("Nyra") + "\n\n" + _EX_NOTE + "\n\n" + _REPLY_RULE
+        return providers.SystemPrompt([(head, True), (tail, False)])
 
     def version_text(self) -> str:
         """Output of `nyra --version`, e.g. "nyra 0.1.0" ("" if it cannot be read)."""
@@ -1034,18 +1057,31 @@ def find_nyra(explicit: Optional[str] = None) -> Path:
                        "build --release`) or pass --nyra PATH.")
 
 
+def strip_metadata(text: str) -> str:
+    """A spec file may start with an HTML comment of metadata (docs/AGENT_CARD.md: token count, budget): not part of
+    what the model is shown."""
+    return re.sub(r"\A<!--.*?-->[ \t]*\r?\n", "", text, count=1, flags=re.S)
+
+
+def resolve_spec(arg: str) -> Path:
+    """--spec: `full` (docs/SPEC.md), `card` (docs/AGENT_CARD.md) or a path."""
+    return SPEC_KINDS.get(arg) or Path(arg)
+
+
 def canonical_lang(name: str) -> str:
     name = name.strip().lower()
     return LANG_ALIASES.get(name, name)
 
 
 def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float,
-                   node: Optional[str] = None, rustc: Optional[str] = None, time_runs: int = 0) -> dict:
+                   node: Optional[str] = None, rustc: Optional[str] = None, time_runs: int = 0,
+                   ex_examples: bool = False) -> dict:
     langs = {}
     for name in names:
         if name == "nyra":
             langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout,
-                                   node=find_node(node) if backend == "js" else "node", time_runs=time_runs)
+                                   node=find_node(node) if backend == "js" else "node", time_runs=time_runs,
+                                   ex_examples=ex_examples)
         elif name == "python":
             langs[name] = PythonLang(timeout=timeout, time_runs=time_runs)
         elif name == "typescript":
@@ -1303,7 +1339,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--nyra", help="path to the nyra binary (default: target/release, else target/debug)")
     p.add_argument("--backend", default="native", choices=("native", "js"),
                    help="Nyra backend that runs the programs (default: native, via the C compiler)")
-    p.add_argument("--spec", default=str(DEFAULT_SPEC), help="Nyra spec shown to the model (default: docs/SPEC.md)")
+    p.add_argument("--spec", default="full", metavar="full|card|PATH",
+                   help="Nyra text shown to the model: full = docs/SPEC.md (default), card = docs/AGENT_CARD.md (the "
+                        "compact agent card, about 1,400 tokens), or the path of another file")
+    p.add_argument("--ex-examples", action="store_true",
+                   help="Nyra only: add one sentence to the system prompt asking for one or two `ex` examples per "
+                        "non-trivial function (the compiler checks them)")
+    p.add_argument("--no-cache", action="store_true",
+                   help="anthropic: no prompt caching (by default the Nyra text is a system block of its own with "
+                        "cache_control, and one warm-up request per model writes the cache before the parallel jobs)")
     p.add_argument("--node", help="the node program that runs TypeScript (default: node on PATH; Node.js %d.%d or newer)"
                    % NODE_MIN_VERSION)
     p.add_argument("--rustc", help="the Rust compiler command, e.g. 'rustc +stable-x86_64-pc-windows-gnu' "
@@ -1427,6 +1471,30 @@ def estimate_cost(price: tuple, tasks: list, lang_names: list, langs: dict, samp
     return input_tokens * price[0] + runs * ASSUMED_ATTEMPTS * output_tokens * price[1]
 
 
+SYSTEM_CHARS_PER_TOKEN = 2.4  # Claude's tokenizer on a spec: docs/SPEC.md is 19.2k characters = 8,174 tokens
+TASK_CHARS_PER_TOKEN = 3.5
+
+
+def estimate_cost_anthropic(price: providers.Price, tasks: list, lang_names: list, langs: dict, samples: int,
+                            output_tokens: int, cache: bool = True) -> float:
+    """Rough dollars for one Anthropic model, with prompt caching as the run will use it: the system prompt of a
+    language is written once (the warm-up) and read by every attempt when it is a cacheable block of at least the
+    model's minimum prefix. Repair history is ignored; output is an assumption, as in `estimate_cost`."""
+    total = 0.0
+    for name in lang_names:
+        system = langs[name].system_prompt
+        system_tokens = len(system) / SYSTEM_CHARS_PER_TOKEN
+        blocks = getattr(system, "blocks", ())
+        cached = cache and any(c for _, c in blocks) and system_tokens >= price.min_cache_tokens
+        attempts = len(tasks) * samples * ASSUMED_ATTEMPTS
+        total += attempts * system_tokens * price.input * (price.cache_read if cached else 1.0) / 1e6
+        if cached:
+            total += system_tokens * price.input * price.cache_write / 1e6
+        total += sum(len(t.prompt) / TASK_CHARS_PER_TOKEN + 30 for t in tasks) * samples * ASSUMED_ATTEMPTS * price.input / 1e6
+        total += attempts * output_tokens * price.output / 1e6
+    return total
+
+
 class BudgetGuard:
     """--budget: stop the run once the providers have reported this many dollars of cost in total."""
 
@@ -1470,6 +1538,41 @@ class ModelOutcome:
     exit_code: int = 0
 
 
+def warm_up(plan: Plan, provider: providers.Provider, ctx: RunContext) -> list:
+    """Prompt caching: one request per distinct system prompt before the parallel jobs, so that every job reads the
+    cache (an entry only exists once the request that writes it has started to answer). Returns what was sent, for the
+    result file; a provider without a cache returns []. A prompt that was not cached (shorter than the model's minimum
+    cacheable prefix: 4,096 tokens on Haiku 4.5, 512 on Opus 5.5 and Sonnet 5.5) is reported, and the run goes on."""
+    done, seen = [], set()
+    for name in plan.lang_names:
+        system = plan.langs[name].system_prompt
+        if str(system) in seen:
+            continue
+        seen.add(str(system))
+        try:
+            reply = provider.warm_up(system)
+        except providers.ProviderError as exc:
+            if exc.fatal:
+                ctx.fatal.append(exc)
+                ctx.abort.set()
+            print(f"warning: cache warm-up of {provider.model} ({name}) failed: {exc}", file=sys.stderr)
+            continue
+        if reply is None:
+            continue
+        u = reply.usage
+        done.append({"lang": name, "usage": u.to_dict(), "request_id": reply.request_id})
+        if u.cache_creation_tokens:
+            print(f"cache warm-up ({provider.model}, {name}): {u.cache_creation_tokens:,} tokens written to the cache", flush=True)
+        elif u.cache_read_tokens:
+            print(f"cache warm-up ({provider.model}, {name}): {u.cache_read_tokens:,} tokens were already cached", flush=True)
+        else:
+            price = providers.ANTHROPIC_PRICES.get(provider.model)
+            print(f"warning: the {name} system prompt of {provider.model} was not cached: it is shorter than the model's "
+                  f"minimum cacheable prefix" + (f" ({price.min_cache_tokens:,} tokens)" if price else "")
+                  + f"; every request pays the full input price ({u.input_tokens:,} tokens)", file=sys.stderr)
+    return done
+
+
 def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: Optional[BudgetGuard],
               single: bool) -> ModelOutcome:
     """Run every (task, language, sample) job for one model, write its result files, return what happened."""
@@ -1479,6 +1582,7 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
                      over_budget=budget.exceeded if budget else None, self_repair=not args.no_self_repair)
     jobs = [(t, plan.langs[n], s) for t in plan.tasks for n in plan.lang_names for s in range(args.samples)]
     started = dt.datetime.now(dt.timezone.utc)
+    warmups = warm_up(plan, provider, ctx)
     records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
     finished = dt.datetime.now(dt.timezone.utc)
     outcome = ModelOutcome(model=provider.model, fatal=list(ctx.fatal), interrupted=interrupted)
@@ -1517,7 +1621,9 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
             "max_version_source": plan.max_source,
             "nyra": None if nyra is None else {"path": display_path(nyra.bin), "version": nyra.version_text()},
             "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
-                                               "sha256": nyra.spec_sha256},
+                                               "sha256": nyra.spec_sha256, "kind": nyra.spec_kind,
+                                               "ex_examples": nyra.ex_examples},
+            "cache": {"enabled": bool(getattr(provider, "cache", False)), "warmup": warmups},
             "node": plan.toolchains["node"], "rust": plan.toolchains["rust"],
             "timing": timing_info(plan),
             "python": platform.python_version(), "platform": platform.platform(),
@@ -1595,8 +1701,9 @@ def _main(args) -> int:
             raise UsageError("--extra-json must be a JSON object")
     model_ids = resolve_models(args)
 
-    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec),
-                           timeout=args.timeout, node=args.node, rustc=args.rustc, time_runs=args.time_runs)
+    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=resolve_spec(args.spec),
+                           timeout=args.timeout, node=args.node, rustc=args.rustc, time_runs=args.time_runs,
+                           ex_examples=args.ex_examples)
     warnings: list = []
     for lang in langs.values():
         warnings += lang.preflight()
@@ -1605,7 +1712,8 @@ def _main(args) -> int:
 
     options = dict(reference=lambda lang, tid: langs[lang].reference_code(tid),
                    flaky=(True if args.mock_flaky == "mix" else (args.mock_flaky or False)),
-                   max_tokens=args.max_tokens, effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens)
+                   max_tokens=args.max_tokens, effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens,
+                   cache=not args.no_cache)
     if args.base_url:
         options["base_url"] = args.base_url
     try:
@@ -1662,6 +1770,22 @@ def _main(args) -> int:
                     print(f"  {mid}: price not listed")
                     continue
                 cost = estimate_cost(price, tasks, lang_names, langs, args.samples, args.assume_output_tokens)
+                total += cost
+                print(f"  {mid}: about ${cost:,.2f}")
+            if len(model_ids) > 1:
+                print(f"  total: about ${total:,.2f}")
+            print("  (use --budget USD to stop a run that costs more than you planned)")
+        elif args.provider == "anthropic":
+            total = 0.0
+            print(f"estimated cost (about {ASSUMED_ATTEMPTS} attempts per run and {args.assume_output_tokens:,} output "
+                  "tokens per attempt, thinking included; prompt cache " + ("on" if not args.no_cache else "off") + "):")
+            for mid in model_ids:
+                price = providers.ANTHROPIC_PRICES.get(mid)
+                if price is None:
+                    print(f"  {mid}: price not known to bench/providers.py (the run cannot enforce --budget either)")
+                    continue
+                cost = estimate_cost_anthropic(price, tasks, lang_names, langs, args.samples, args.assume_output_tokens,
+                                               cache=not args.no_cache)
                 total += cost
                 print(f"  {mid}: about ${cost:,.2f}")
             if len(model_ids) > 1:

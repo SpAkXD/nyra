@@ -28,6 +28,14 @@ Tools
 - Native speed: inline array fast paths, earlier releases, loop-hoisted checks, compile-time evaluation
   of pure calls; `perf/` compares native Nyra with hand-written C and Rust.
 - The benchmark measures runtime, efficiency and self-repair too.
+- `docs/AGENT_CARD.md`: the language in 1,400 tokens or less (a hard budget, measured with
+  `tools/card_tokens.py`): one example program, the rules that differ from other languages, what is not in
+  Nyra, every method and module name. `tests/docs.rs` runs its example and checks its names against the compiler.
+  `nyra_spec` returns the card by default and the whole spec with `full: true`; the new resource is `nyra://card`.
+- The benchmark caches the prompt with the Anthropic provider (the Nyra text is a system block with
+  `cache_control`, one warm-up request per model, cache reads and writes priced and recorded), has
+  `--spec full|card`, `--ex-examples` and `--budget` for `--provider anthropic`, and the verified prices
+  of Opus 5.5, Sonnet 5.5 and Haiku 4.5. The card against the full spec: `research/AB-card.md`.
 
 ## v0.4.0 (2026-10-08)
 

@@ -40,6 +40,7 @@ hand to check one program the same way.
 | `src/fix.rs` | `--fix`: validates, applies and repeats the fixes that errors carry |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
 | `docs/SPEC.md` | the language spec (the source of truth) |
+| `docs/AGENT_CARD.md` | the agent card: the compact spec `nyra_spec` serves. **Hard token budget** (1,400 on Claude's tokenizer, measured with `python tools/card_tokens.py`): a feature that needs card text must displace something. `tests/docs.rs` runs its example, checks its name lists against the compiler and its "Not in Nyra" list against the checker |
 | `docs/AI_GUIDE.md`, `llms.txt` | what AIs read before writing Nyra |
 | `examples/` | `name.nyra` plus `name.out`, the exact expected output |
 | `tests/errors/` | one small program per error code |
