@@ -118,6 +118,15 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     })
 }
 
+/// One fix that was applied: the error it repaired, where that was in the text of its round, what
+/// the changed lines look like now, and the line as it was.
+#[derive(Debug, Clone)]
+pub struct Applied {
+    pub diag: Diag,
+    pub preview: Option<String>,
+    pub line: String,
+}
+
 /// A program that `--fix` made compile.
 pub struct Repaired<T> {
     pub text: String,
@@ -125,6 +134,8 @@ pub struct Repaired<T> {
     pub value: T,
     /// How many errors were fixed.
     pub fixed: usize,
+    /// The fixes, in the order they were applied.
+    pub applied: Vec<Applied>,
 }
 
 /// Applies the fixes of `diags` (the errors of `src`), compiles again and repeats, a few rounds
@@ -135,14 +146,17 @@ pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T
     let mut current = src.to_string();
     let mut diags = diags;
     let mut fixed = 0;
+    let mut applied = Vec::new();
     for _ in 0..ROUNDS {
         let text = Text::new(&current);
         // the fixes of all errors, in order; one that overlaps an earlier fix waits for the next round
         let mut chosen: Vec<&Edit> = Vec::new();
+        let mut round: Vec<&Diag> = Vec::new();
         for d in diags.iter().filter(|d| !d.fix.is_empty()) {
             let fresh: Vec<&Edit> = d.fix.iter().filter(|e| !chosen.contains(e)).collect();
             if fresh.is_empty() {
                 fixed += 1; // the same edit as another error's fix
+                round.push(d);
                 continue;
             }
             let mut with: Vec<&Edit> = chosen.clone();
@@ -150,14 +164,19 @@ pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T
             if text.ranges(&with).is_some() {
                 chosen = with;
                 fixed += 1;
+                round.push(d);
             }
         }
         if chosen.is_empty() {
             return None;
         }
+        for d in round {
+            let line = d.span.line.checked_sub(1).and_then(|i| current.lines().nth(i)).unwrap_or("").to_string();
+            applied.push(Applied { diag: d.clone(), preview: preview(&current, &d.fix), line });
+        }
         current = text.apply(&text.ranges(&chosen)?, newline);
         match compile(&current) {
-            Ok(value) => return Some(Repaired { text: current, value, fixed }),
+            Ok(value) => return Some(Repaired { text: current, value, fixed, applied }),
             Err(next) => diags = next,
         }
     }

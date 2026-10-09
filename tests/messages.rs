@@ -80,7 +80,7 @@ fn diagnostics_match_the_golden_file() {
     let mut failures = Vec::new();
     for (index, case) in cases.iter().enumerate() {
         std::fs::write(dir.join("case.nyra"), unescape(&case.src)).unwrap();
-        let out = nyra().current_dir(&dir).args(["check", "case.nyra"]).output().unwrap();
+        let out = nyra().current_dir(&dir).args(["check", "--strict", "case.nyra"]).output().unwrap();
         assert_eq!(out.status.code(), Some(1), "{}: should fail to compile", case.name);
         let actual = escape(&stderr(&out));
 

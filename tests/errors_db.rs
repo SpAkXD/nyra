@@ -305,7 +305,7 @@ fn explain_suggests_a_code_for_an_unknown_one() {
 fn compile_errors_point_to_explain() {
     let dir = scratch("errors-db-explain");
     std::fs::write(dir.join("a.nyra"), "fn main() {\n    let count = 1\n    print(cout)\n}\n").unwrap();
-    let out = nyra().current_dir(&dir).args(["check", "a.nyra"]).output().unwrap();
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "a.nyra"]).output().unwrap();
     let err = stderr(&out);
     assert!(err.contains("error[E0201]: undefined variable `cout`"), "{err}");
     assert!(err.contains("  = hint: did you mean `count`?\n  = explain: nyra explain E0201\n"), "{err}");

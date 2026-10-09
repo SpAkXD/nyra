@@ -35,7 +35,7 @@ pub fn stderr(out: &Output) -> String {
 
 /// `nyra check --json <file>` run in `dir`, parsed.
 pub fn check_json(dir: &Path, file: &str) -> (bool, Json) {
-    let out = nyra().current_dir(dir).args(["check", "--json", file]).output().unwrap();
+    let out = nyra().current_dir(dir).args(["check", "--strict", "--json", file]).output().unwrap();
     let text = stdout(&out);
     let json = Json::parse(text.trim()).unwrap_or_else(|e| panic!("`nyra check --json {file}` printed bad JSON ({e}):\n{text}"));
     (out.status.success(), json)

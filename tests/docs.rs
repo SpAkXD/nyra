@@ -116,7 +116,7 @@ fn nyra_code_blocks_in_the_docs_compile() {
             let path = dir.join(format!("{}-{}.nyra", file.replace(['/', '.'], "_"), i + 1));
             std::fs::write(&path, &source).unwrap();
 
-            let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--json"]).arg(&path).output().unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_nyra")).args(["check", "--strict", "--json"]).arg(&path).output().unwrap();
             assert!(
                 out.status.success(),
                 "{file}: code block {} does not compile\n{source}\n{}",

@@ -194,7 +194,7 @@ fn bad_programs_report_expected_error_codes() {
             .and_then(|l| l.strip_prefix("// expect: "))
             .unwrap_or_else(|| panic!("{} has no `// expect:` line", path.display()))
             .trim();
-        let out = nyra().args(["check", "--json"]).arg(&path).output().unwrap();
+        let out = nyra().args(["check", "--strict", "--json"]).arg(&path).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(!out.status.success(), "{} should fail to compile", path.display());
         assert!(stdout.starts_with("{\"ok\":false"), "{}: not JSON: {stdout}", path.display());
