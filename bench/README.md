@@ -118,7 +118,43 @@ can use several times more, which is what `--budget` is for.
 
 `--provider anthropic` talks to Claude directly with the official SDK (`pip install -r bench/requirements.txt`,
 key in `ANTHROPIC_API_KEY`, `--model claude-opus-5-5`). It counts code tokens with Anthropic's free token-count
-endpoint. Everything else is the same.
+endpoint. Everything else is the same, except that this provider also supports `--budget` and caches the prompt
+(next section).
+
+### The agent card and prompt caching (Anthropic provider)
+
+**`--spec full|card|PATH`** chooses what the model is shown as the language's documentation: `full` is
+`docs/SPEC.md` (the default, about 8,200 tokens on Claude's tokenizer), `card` is `docs/AGENT_CARD.md` (the agent
+card, 1,400 tokens or less: one dense example program, the rules that differ from other languages, what is not in
+Nyra, every method and module name; its metadata header comment is cut off). A path shows any other file. The
+result file records `spec.kind` (`full`, `card` or `custom`) and the file's hash. `--ex-examples` adds one sentence
+to the system prompt that asks for one or two `ex` examples per non-trivial function (the compiler checks them).
+
+**Caching.** The Nyra text is a system block of its own with `cache_control: {"type": "ephemeral"}`; the task rule
+that follows it is a second, uncached block, and the task is only ever in the user message, so the cached prefix
+is byte for byte the same in every request of a run (and across runs that use the same text: the arm with
+`--ex-examples` shares the card's cache entry). Before the parallel jobs start the runner sends **one warm-up
+request per model** and system prompt, because a cache entry exists only once the request that writes it has
+started to answer: without the warm-up the first `--jobs` requests would all pay the write. The warm-up and what
+it wrote are in the result file (`run.cache.warmup`); `--no-cache` turns all of this off.
+
+The cost of a call is computed from the token counts, because the API reports tokens and not dollars. The usage
+of a call has three parts that do not overlap: fresh input tokens, `cache_creation_input_tokens` (billed at 1.25x
+the input price, the 5-minute cache) and `cache_read_input_tokens` (0.1x, but 0.05x on Opus 5.5 and Sonnet 5.5).
+Each attempt in a result file records both cache counts next to `input_tokens` (the sum of the three), and the
+report has a row "Prompt cache: tokens read / written". `--budget` counts the warm-up too.
+
+Prices and limits, from the official pages (checked 2026-10-09, `bench/providers.py` `ANTHROPIC_PRICES`):
+
+| model | input $/M | output $/M | cache read | minimum cacheable prefix |
+|---|---:|---:|---:|---:|
+| `claude-opus-5-5` | 4 | 20 | 0.05x | 512 tokens |
+| `claude-sonnet-5-5` | 2 | 10 | 0.05x | 512 tokens |
+| `claude-haiku-4-5-20251001` | 1 | 5 | 0.1x | **4,096 tokens** |
+
+A prefix shorter than the minimum is silently not cached (no error): with `--spec card` (1,400 tokens) Haiku 4.5
+caches nothing, which the runner reports after the warm-up ("was not cached"); the full spec (6,900 tokens on
+Haiku) is cached. `--dry-run` estimates the cost of an Anthropic run with these prices and the cache.
 
 A run prints one line per finished task, then the Markdown summary (for several models: one line per model, then
 the comparison), and writes, for every model:
@@ -150,7 +186,9 @@ git-ignored: it holds every prompt and reply.
 | `--samples 1` | independent runs per task, language and model: more samples give much tighter intervals |
 | `--nyra PATH` | compiler binary (default `target/release`, else `target/debug`) |
 | `--backend native\|js` | which Nyra backend runs the programs (default native, via the C compiler) |
-| `--spec PATH` | spec shown to the model (default `docs/SPEC.md`, read at run time) |
+| `--spec full\|card\|PATH` | what the model is shown of Nyra: `full` = `docs/SPEC.md` (default), `card` = `docs/AGENT_CARD.md`, or a file |
+| `--ex-examples` | Nyra only: ask for one or two `ex` examples per non-trivial function |
+| `--no-cache` | anthropic: no prompt caching and no warm-up request |
 | `--node PATH` | the `node` that runs TypeScript (default: `node` from `PATH`) |
 | `--rustc COMMAND` | the Rust compiler command, e.g. `'rustc +stable-x86_64-pc-windows-gnu'` (default: found automatically) |
 | `--timeout 10`, `--jobs 4` | seconds per program; parallel evaluations (each waits for one API call at a time) |
@@ -161,7 +199,7 @@ git-ignored: it holds every prompt and reply.
 | `--effort LEVEL`, `--extra-json '{...}'` | extra request settings; recorded in the result file (anthropic, openrouter) |
 | `--base-url URL` | another OpenAI-compatible endpoint (https only; for tests and proxies) |
 | `--no-model-check` | do not check the model ids against OpenRouter's public list first |
-| `--budget USD` | stop the whole run once the calls so far cost this much (openrouter) |
+| `--budget USD` | stop the whole run once the calls so far cost this much (openrouter, anthropic) |
 | `--assume-output-tokens 1500` | output tokens per attempt in the `--dry-run` cost estimate |
 | `--no-count-tokens` | do not measure code tokens |
 | `--mock-flaky` | mock only: break some first attempts to exercise the repair loop |
@@ -303,8 +341,10 @@ Symmetric by construction:
 Known asymmetries (they are part of the question, but you should know them):
 
 - Nyra is given its spec on every call: the system prompt `run.py` sends is about 20,800 characters for Nyra
-  (`docs/SPEC.md` is about 20 KB) against about 360 for Python, so roughly 20,500 characters, an estimated 5,500
-  tokens, of extra input per call (the exact counts are the provider's, in each run's results). The other
+  (`docs/SPEC.md` is about 20 KB) against about 360 for Python, so roughly 20,500 characters, about 8,000 tokens on
+  Claude's tokenizer, of extra input per call (the exact counts are the provider's, in each run's results; with
+  `--spec card` it is about 1,400 tokens, and with the Anthropic provider's prompt cache most of it is billed at a
+  tenth of the input price or less). The other
   languages are not given a spec, and have
   years of pre-training behind them. That is the situation of any new language; the headline answers "how well does a
   model do with this spec", not "how good is Nyra in the abstract".
