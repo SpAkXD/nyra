@@ -190,6 +190,13 @@ fn structs(m: &Module, out: &mut String) {
             out.push_str("}\n\n");
         }
         let _ = writeln!(out, "impl NyShow for {n} {{\n    fn show_in(&self, out: &mut String) {{");
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "        out.push_str([{}][self.{} as usize]);", names.join(", "), name(&s.fields[0].0));
+            out.push_str("    }\n}\n\n");
+            continue;
+        }
         if s.option {
             // `none`, or `Some(value)`
             let _ = writeln!(out, "        if !self.{} {{ out.push_str(\"none\"); return; }}", name(&s.fields[0].0));

@@ -295,6 +295,13 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
                     stmts(body, m, own);
                 }
                 StmtKind::Arena(body) => stmts(body, m, own),
+                StmtKind::Match { scrut, arms } => {
+                    expr(scrut, m, own);
+                    for arm in arms {
+                        arm.pats.iter_mut().for_each(|p| expr(p, m, own));
+                        stmts(&mut arm.body, m, own);
+                    }
+                }
                 StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => expr(e, m, own),
                 StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
             }

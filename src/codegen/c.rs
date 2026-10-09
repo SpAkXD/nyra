@@ -232,6 +232,17 @@ fn structs(m: &Module, out: &mut String) {
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
         // `Point(x: 1, y: 2)`: the way the value is written in Nyra
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| string_lit(&format!("{}.{v}", s.name))).collect();
+            let f = field(s, 0);
+            let _ = writeln!(
+                out,
+                "    static const char *const names[] = {{ {} }};\n    nyrt_buf_lit(o, names[v->{f}], (int64_t)strlen(names[v->{f}]));\n}}",
+                names.join(", ")
+            );
+            continue;
+        }
         // (a tuple prints as `(1, "a")`: no name, no field names)
         let head = if s.tuple {
             "(".to_string()

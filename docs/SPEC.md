@@ -6,7 +6,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 
 ## Rules
 - One way to do each thing. No implicit conversions. No shadowing. No null.
-- A program is `fn` and `struct` definitions and `ex` examples in any order plus either `fn main()` or statements at
+- A program is `fn`, `struct` and `enum` definitions and `ex` examples in any order plus either `fn main()` or statements at
   the top level (a script: they run in order, like the body of `main`). A script's top-level `let`s
   and `var`s are visible in every function (see Script variables).
 - Every function signature is fully typed. Local variable types are inferred.
@@ -32,6 +32,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
 | `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
+| `Dir` | an enum you declare: one of its named cases, `Dir.N` |
 
 ## Functions
 ```nyra
@@ -310,6 +311,47 @@ count is E0272. Tuples are values like structs: they are copied, compare with `=
 `<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
 (or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
 int that stands for it) and `json` cannot read or write one (use a struct).
+
+## Enums and `match`
+```nyra
+enum Dir { N, E, S, W }                  // a fixed set of named cases; commas or new lines
+
+fn turn_right(d: Dir) -> Dir {
+    match d {                            // every case must be handled
+        Dir.N => ret Dir.E
+        Dir.E => ret Dir.S
+        Dir.S => ret Dir.W
+        Dir.W => ret Dir.N
+    }
+}
+
+fn is_vertical(d: Dir) -> bool {
+    match d {
+        Dir.N, Dir.S => ret true         // several patterns, one arm
+        _ => ret false                   // `_` takes everything else
+    }
+}
+
+let d = Dir.N                            // a value is written with its enum
+print(d, turn_right(d), is_vertical(d))  // Dir.N Dir.E true
+print(d == Dir.N, Dir.all())             // true [Dir.N, Dir.E, Dir.S, Dir.W]
+match 7 % 2 {
+    0 => print("even")
+    _ => print("odd")
+}
+```
+An enum value is one of its variants, always written `Enum.Variant` (a bare `N` is E0278). It prints as
+`Dir.N`, compares with `==` and `!=` by variant, is copied like any value, and can be stored in arrays and
+struct fields; it cannot be ordered, be a map key or go through `json`. `Enum.all()` is the array of all
+variants, in order.
+
+`match value { pattern => body }` picks the first arm whose pattern equals the value. A pattern is a variant
+of the matched enum, or a literal `int`, `str`, `char` or `bool` (a `-` literal cannot start a line:
+`4, -1 =>`); several patterns are separated by commas; `_` takes anything. The body is one statement after
+`=>`, or a block `{ ... }`. All cases must be covered (E0281): for an enum every variant or a `_` arm, for a
+`bool` both values, for an `int`, `str` or `char` a `_` arm. An arm that can never run is E0283, and a
+pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. `match` is a
+statement: to give a value, `ret` it or assign it in the arms.
 
 ## Optional values
 ```nyra

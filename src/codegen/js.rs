@@ -208,7 +208,10 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let body = if parts.is_empty() { String::new() } else { format!(" + {}", parts.join(" + \", \" + ")) };
         let head = if s.tuple { "(".to_string() } else { format!("{}(", s.name) };
-        if s.option {
+        if !s.variants.is_empty() {
+            let names: Vec<String> = s.variants.iter().map(|v| crate::diag::json_str(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "    ny_fmt() {{ return [{}][this.{}]; }}", names.join(", "), fields[0]);
+        } else if s.option {
             let (has, val) = (&fields[0], &fields[1]);
             let _ = writeln!(
                 out,

@@ -419,6 +419,13 @@ fn stmts_exprs<'a>(b: &'a [Stmt], f: &mut dyn FnMut(&'a Expr)) {
                 stmts_exprs(body, f);
             }
             StmtKind::Arena(body) => stmts_exprs(body, f),
+            StmtKind::Match { scrut, arms } => {
+                f(scrut);
+                for arm in arms {
+                    arm.pats.iter().for_each(&mut *f);
+                    stmts_exprs(&arm.body, f);
+                }
+            }
             StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => f(e),
             StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
         }

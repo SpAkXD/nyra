@@ -263,7 +263,10 @@ fn classes(m: &Module, out: &mut String) {
             pieces.push(Piece::Value(value));
         }
         pieces.push(Piece::Text(")".into()));
-        if s.option {
+        if !s.variants.is_empty() {
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return [{}][self.{}]\n\n", names.join(", "), fields[0]);
+        } else if s.option {
             // `none`, or `Some(value)`
             let (has, val) = (&fields[0], &fields[1]);
             let t = s.fields[1].1;

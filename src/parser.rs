@@ -20,7 +20,7 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
     let structs: Vec<String> = toks
         .windows(2)
         .filter_map(|w| match (&w[0].tok, &w[1].tok) {
-            (Tok::Struct, Tok::Ident(name)) => Some(name.clone()),
+            (Tok::Struct | Tok::Enum, Tok::Ident(name)) => Some(name.clone()),
             _ => None,
         })
         .collect();
@@ -423,6 +423,7 @@ impl Parser {
     fn program(&mut self) -> Program {
         let mut funcs = Vec::new();
         let mut structs = Vec::new();
+        let mut enums = Vec::new();
         let mut examples = Vec::new();
         let mut uses = Vec::new();
         let mut top: Vec<Stmt> = Vec::new();
@@ -455,6 +456,13 @@ impl Parser {
                 },
                 Tok::Struct => match self.struct_def() {
                     Ok(sd) => structs.push(sd),
+                    Err(d) => {
+                        self.errs.push(d);
+                        self.sync_top();
+                    }
+                },
+                Tok::Enum => match self.enum_def() {
+                    Ok(ed) => enums.push(ed),
                     Err(d) => {
                         self.errs.push(d);
                         self.sync_top();
@@ -506,7 +514,7 @@ impl Parser {
             }
         }
         funcs.append(&mut self.nested);
-        Program { funcs, structs, examples, uses, script, globals: Default::default() }
+        Program { funcs, structs, enums, examples, uses, script, globals: Default::default() }
     }
 
     /// True at `ex` followed by the start of a condition on the same line: a line of examples.
@@ -599,7 +607,7 @@ impl Parser {
     /// Words of other languages (`import`, `class`, `int main(`) keep their own errors.
     fn starts_script_statement(&self) -> bool {
         match self.peek() {
-            Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Arena | Tok::Ret | Tok::LParen => true,
+            Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Arena | Tok::Ret | Tok::LParen | Tok::Match => true,
             Tok::Ident(w) => {
                 let c_style = hints::is_type_word(w) && matches!(self.peek_at(1), Tok::Ident(_));
                 hints::top_level_word(w).is_none() && !c_style
@@ -654,12 +662,55 @@ impl Parser {
     }
 
     fn sync_top(&mut self) {
-        if !matches!(self.peek(), Tok::Fn | Tok::Struct) {
+        if !matches!(self.peek(), Tok::Fn | Tok::Struct | Tok::Enum) {
             self.bump();
         }
-        while !matches!(self.peek(), Tok::Fn | Tok::Struct | Tok::Eof) {
+        while !matches!(self.peek(), Tok::Fn | Tok::Struct | Tok::Enum | Tok::Eof) {
             self.bump();
         }
+    }
+
+    /// `enum Dir { N, E, S, W }` (variants separated by commas or new lines)
+    fn enum_def(&mut self) -> PResult<EnumDef> {
+        self.expect(Tok::Enum, "`enum`")?;
+        let (name, span) = self.ident("an enum name", "name the enum after `enum`: `enum Dir { N, E, S, W }`")?;
+        self.expect(Tok::LBrace, &format!("`{{` after `enum {name}`"))
+            .map_err(|d| d.or_hint(format!("an enum lists its variants in braces: `enum {name} {{ A, B, C }}`")))?;
+        let mut variants = Vec::new();
+        loop {
+            self.skip_newlines();
+            match self.peek() {
+                Tok::RBrace => {
+                    self.bump();
+                    break;
+                }
+                Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum => {
+                    return Err(self
+                        .unexpected(&format!("`}}` to close `enum {name}`"))
+                        .hint("add the missing `}` after the last variant"))
+                }
+                _ => {}
+            }
+            let (vname, vspan) = self.ident("a variant name", "variants are plain names, separated by commas or new lines: `enum Dir { N, E }`")?;
+            if self.at(&Tok::LParen) {
+                return Err(self.unexpected("`,`, a new line or `}` after a variant").hint(
+                    "a variant carries no values yet: for data, use a struct next to the enum",
+                ));
+            }
+            variants.push((vname, vspan));
+            match self.peek() {
+                Tok::Comma | Tok::Newline => {
+                    self.bump();
+                }
+                Tok::RBrace => {}
+                _ => {
+                    return Err(self
+                        .unexpected("`,`, a new line or `}` after a variant")
+                        .or_hint(format!("separate the variants with commas or new lines: `enum {name} {{ A, B }}`")))
+                }
+            }
+        }
+        Ok(EnumDef { name, variants, span })
     }
 
     /// `struct Name { field: type, ... }` (fields separated by commas or new lines)
@@ -702,7 +753,7 @@ impl Parser {
                 }
             }
         }
-        Ok(StructDef { name, fields, span })
+        Ok(StructDef { name, fields, span, variants: Vec::new() })
     }
 
     fn func(&mut self) -> PResult<Func> {
@@ -1298,6 +1349,10 @@ impl Parser {
                 self.bump();
                 StmtKind::Arena(self.block("arena")?)
             }
+            Tok::Match => {
+                self.bump();
+                return self.match_stmt(span);
+            }
             Tok::Ret => {
                 self.bump();
                 let value = if matches!(self.peek(), Tok::Newline | Tok::RBrace | Tok::Eof) { None } else { Some(self.expr()?) };
@@ -1338,6 +1393,93 @@ impl Parser {
             }
         };
         Ok(Stmt { kind, span })
+    }
+
+    /// `match value { pattern, pattern => body  _ => body }` after the word `match`.
+    fn match_stmt(&mut self, span: Span) -> PResult<Stmt> {
+        let scrut = self.expr()?;
+        self.expect(Tok::LBrace, "`{` to start the arms of this `match`")
+            .map_err(|d| d.or_hint("a match looks like `match d { Dir.N => print(\"north\") _ => print(\"other\") }`, one arm per line"))?;
+        let open = self.pos - 1;
+        let mut arms = Vec::new();
+        loop {
+            self.skip_newlines();
+            if self.at(&Tok::RBrace) {
+                self.bump();
+                break;
+            }
+            if matches!(self.peek(), Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum) {
+                return Err(self.unexpected("`}` to close the `match`").hint("add the missing `}` after the last arm"));
+            }
+            match self.match_arm() {
+                Ok(arm) => arms.push(arm),
+                Err(d) => {
+                    // one mistake, one error: skip the rest of the match
+                    self.errs.push(d);
+                    self.queue.clear();
+                    let mut depth = 0usize;
+                    let mut k = open;
+                    while k < self.toks.len() - 1 {
+                        match self.toks[k].tok {
+                            Tok::LBrace => depth += 1,
+                            Tok::RBrace => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        k += 1;
+                    }
+                    self.pos = (k + 1).min(self.toks.len() - 1);
+                    break;
+                }
+            }
+        }
+        self.end_stmt()?;
+        Ok(Stmt { kind: StmtKind::Match { scrut, arms }, span })
+    }
+
+    /// One arm of a `match`: `pattern, pattern => body`.
+    fn match_arm(&mut self) -> PResult<MatchArm> {
+        let arm_span = self.span();
+        let mut pats = Vec::new();
+        let mut wild = false;
+        loop {
+            match (self.peek().clone(), self.peek_at(1).clone()) {
+                (Tok::Ident(w), Tok::FatArrow | Tok::Comma) if w == "_" => {
+                    self.bump();
+                    wild = true;
+                }
+                // a bare name: the checker explains what to write (`Dir.N`)
+                (Tok::Ident(w), Tok::FatArrow | Tok::Comma) => {
+                    let at = self.bump().span;
+                    pats.push(Expr::new(ExprKind::Var(w), at));
+                }
+                _ => pats.push(self.expr()?),
+            }
+            if self.at(&Tok::Comma) {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        self.expect(Tok::FatArrow, "`=>` after the pattern")
+            .map_err(|d| d.or_hint("an arm looks like `Dir.N => print(\"north\")`, or `Dir.E, Dir.W => { ... }`"))?;
+        let body = if self.at(&Tok::LBrace) {
+            let b = self.block("match arm")?;
+            if !matches!(self.peek(), Tok::Newline | Tok::RBrace) {
+                return Err(self.unexpected("a new line after the arm").hint("one arm per line"));
+            }
+            b
+        } else {
+            let first = self.stmt()?;
+            let mut b = vec![first];
+            b.append(&mut self.queue);
+            b
+        };
+        Ok(MatchArm { pats, wild, body, span: arm_span })
     }
 
     /// A name no program can write, for the value a pattern takes apart.
@@ -2169,6 +2311,9 @@ impl Parser {
             Tok::LBrace if before == Some(&Tok::FatArrow) => {
                 d.hint("the body of a lambda is one expression, without braces or `ret`: `x => x * 2`")
             }
+            Tok::Match => d.hint(
+                "`match` is a statement, not a value: `ret` the value or assign it in the arms, or write `if cond { a } else { b }` for a value",
+            ),
             Tok::While | Tok::For | Tok::Let | Tok::Var | Tok::Ret => {
                 d.hint(format!("`{}` starts a statement, not a value: put it on its own line", t.text()))
             }

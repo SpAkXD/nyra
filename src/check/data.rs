@@ -243,6 +243,7 @@ pub fn place_root(e: &Expr) -> Option<&str> {
 pub fn frees_in(stmts: &[Stmt], out: &mut Vec<(String, Span)>, assigned: &mut Vec<String>) {
     for s in stmts {
         match &s.kind {
+            StmtKind::Match { arms, .. } => arms.iter().for_each(|a| frees_in(&a.body, out, assigned)),
             StmtKind::Expr(e) => {
                 if let ExprKind::Call(f, args) = &e.kind {
                     if f == "free" {

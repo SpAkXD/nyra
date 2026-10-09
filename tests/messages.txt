@@ -3996,13 +3996,13 @@ fn main() {
     }
 }
 ----
-error[E0101]: `match` is not part of Nyra: expected end of line after it, found `x`
-  --> case.nyra:3:11
+error[E0281]: this `match` does not cover every other value
+  --> case.nyra:3:5
   |
 3 |     match x {
-  |           ^
-  = hint: Nyra has no `switch` or `match`: chain `if` / `else if`
-  = explain: nyra explain E0101
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
 
 nyra: 1 error(s)
 ==== f_rust_path
@@ -5678,5 +5678,292 @@ error[E0227]: `int?` has no method `len`
   |             ^
   = hint: an optional value has `is_some()`, `is_none()` and `unwrap()`; to get the value use `x ?? default` or `if let v = x { ... }`
   = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== enum_unknown_variant
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.Q
+    print(d)
+}
+----
+error[E0278]: enum `Dir` has no variant `Q`
+  --> case.nyra:4:17
+  |
+4 |     let d = Dir.Q
+  |                 ^
+  = hint: the variants of `Dir` are `Dir.N`, `Dir.E`, `Dir.S`
+  = explain: nyra explain E0278
+
+nyra: 1 error(s)
+==== match_bare_variant
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        N => print("north")
+        _ => print("other")
+    }
+}
+----
+error[E0278]: `N` is not a variant pattern of `Dir`
+  --> case.nyra:6:9
+  |
+6 |         N => print("north")
+  |         ^
+  = hint: a variant is written with its enum: `Dir.N`
+  = explain: nyra explain E0278
+
+nyra: 1 error(s)
+==== match_not_exhaustive
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+    }
+}
+----
+error[E0281]: this `match` does not cover `Dir.S`
+  --> case.nyra:5:5
+  |
+5 |     match d {
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== match_int_no_default
+fn main() {
+    let n = 3
+    match n {
+        1 => print("one")
+        2 => print("two")
+    }
+}
+----
+error[E0281]: this `match` does not cover every other value
+  --> case.nyra:3:5
+  |
+3 |     match n {
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== match_arm_after_wild
+fn main() {
+    let n = 3
+    match n {
+        _ => print("any")
+        1 => print("one")
+    }
+}
+----
+error[E0283]: this arm can never run: the arms above already cover every case
+  --> case.nyra:5:9
+  |
+5 |         1 => print("one")
+  |         ^
+  = hint: remove it, or move it above the `_` arm
+  = explain: nyra explain E0283
+
+nyra: 1 error(s)
+==== match_duplicate_pattern
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.N => print("again")
+        _ => print("other")
+    }
+}
+----
+error[E0283]: this pattern is already covered by an arm above
+  --> case.nyra:7:13
+  |
+7 |         Dir.N => print("again")
+  |             ^
+  = hint: remove it: it can never be reached
+  = explain: nyra explain E0283
+
+nyra: 1 error(s)
+==== match_pattern_type
+fn main() {
+    let n = 3
+    match n {
+        "three" => print("three")
+        _ => print("other")
+    }
+}
+----
+error[E0279]: this pattern is a `str` but the value matched is an `int`
+  --> case.nyra:4:9
+  |
+4 |         "three" => print("three")
+  |         ^
+  = hint: the patterns of this `match` must be `int` values
+  = explain: nyra explain E0279
+
+nyra: 1 error(s)
+==== match_float
+fn main() {
+    let x = 2.5
+    match x {
+        2.5 => print("two and a half")
+        _ => print("other")
+    }
+}
+----
+error[E0279]: cannot `match` a value of type `float`
+  --> case.nyra:3:11
+  |
+3 |     match x {
+  |           ^
+  = hint: `match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if x == ...`
+  = explain: nyra explain E0279
+
+nyra: 1 error(s)
+==== enum_empty
+enum Nothing {
+}
+
+fn main() {
+    print("hi")
+}
+----
+error[E0284]: enum `Nothing` has no variants
+  --> case.nyra:1:6
+  |
+1 | enum Nothing {
+  |      ^
+  = hint: list its cases: `enum Nothing { A, B }`
+  = explain: nyra explain E0284
+
+nyra: 1 error(s)
+==== enum_duplicate_variant
+enum Dir { N, E, N }
+
+fn main() {
+    print("hi")
+}
+----
+error[E0284]: variant `N` is defined twice in enum `Dir`
+  --> case.nyra:1:18
+  |
+1 | enum Dir { N, E, N }
+  |                  ^
+  = hint: rename one of them: the variants of an enum are all different
+  = explain: nyra explain E0284
+
+nyra: 1 error(s)
+==== enum_call
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir(0)
+    print(d)
+}
+----
+error[E0235]: `Dir` is an enum: its values are its variants
+  --> case.nyra:4:13
+  |
+4 |     let d = Dir(0)
+  |             ^
+  = hint: write `Dir.N`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== enum_as_value
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir
+    print(d)
+}
+----
+error[E0235]: `Dir` is an enum, not a value
+  --> case.nyra:4:13
+  |
+4 |     let d = Dir
+  |             ^
+  = hint: pick one of its variants: `Dir.N`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== enum_field
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    print(d.tag)
+}
+----
+error[E0224]: `Dir` is an enum and has no field `tag`
+  --> case.nyra:5:13
+  |
+5 |     print(d.tag)
+  |             ^
+  = hint: compare an enum value with `==`, or take it apart with `match`
+  = explain: nyra explain E0224
+
+nyra: 1 error(s)
+==== enum_lowercase
+enum dir { N, E }
+
+fn main() {
+    print("hi")
+}
+----
+error[E0221]: enum name `dir` must start with an uppercase letter
+  --> case.nyra:1:6
+  |
+1 | enum dir { N, E }
+  |      ^
+  = hint: write `enum Dir`: type names start uppercase, variants are written `Dir.Name`
+  = explain: nyra explain E0221
+
+nyra: 1 error(s)
+==== match_missing_arrow
+fn main() {
+    let n = 3
+    match n {
+        1 print("one")
+        _ => print("other")
+    }
+}
+----
+error[E0101]: expected `=>` after the pattern, found `print`
+  --> case.nyra:4:11
+  |
+4 |         1 print("one")
+  |           ^
+  = hint: an arm looks like `Dir.N => print("north")`, or `Dir.E, Dir.W => { ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== match_in_expression
+fn main() {
+    let n = 3
+    let s = match n {
+        1 => "one"
+        _ => "other"
+    }
+    print(s)
+}
+----
+error[E0101]: expected an expression, found keyword `match`
+  --> case.nyra:3:13
+  |
+3 |     let s = match n {
+  |             ^
+  = hint: `match` is a statement, not a value: `ret` the value or assign it in the arms, or write `if cond { a } else { b }` for a value
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)

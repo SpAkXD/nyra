@@ -222,6 +222,12 @@ fn structs(m: &Module, out: &mut String) {
             let _ = writeln!(out, "func (v {n}) nyEq(o any) bool {{\n\tw := o.({n})\n\treturn {}\n}}\n", eqs.join(" && "));
         }
         let _ = writeln!(out, "func (v {n}) nyShowIn(b *strings.Builder) {{");
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "\tb.WriteString([]string{{{}}}[v.{}])\n}}\n", names.join(", "), name(&s.fields[0].0));
+            continue;
+        }
         if s.option {
             // `none`, or `Some(value)`
             let _ = writeln!(out, "\tif !v.{} {{\n\t\tb.WriteString(\"none\")\n\t\treturn\n\t}}", name(&s.fields[0].0));

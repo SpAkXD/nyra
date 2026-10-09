@@ -20,6 +20,12 @@ pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", 
 /// Builtins a program may also define itself (its own definition wins).
 pub const MATH: &[&str] = &["abs", "min", "max"];
 
+/// An `enum`: its variants, in order (a value is the number of its variant).
+struct EnumInfo {
+    variants: Vec<String>,
+    span: Span,
+}
+
 struct Sig {
     params: Vec<Type>,
     names: Vec<String>,
@@ -118,6 +124,10 @@ struct Checker {
     g: globals::State,
     /// Helper functions (see `helpers.rs`) that were asked for and are not checked yet.
     generated: Vec<Func>,
+    /// The enums of the program (each is also a struct with one field, `tag`).
+    enums: HashMap<String, EnumInfo>,
+    /// How many `match` statements were turned into `if` chains (each has a hidden variable).
+    matches: usize,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -136,6 +146,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         modules: Vec::new(),
         g: globals::State::new(prog),
         generated: Vec::new(),
+        enums: HashMap::new(),
+        matches: 0,
     };
 
     // the imported modules: their intrinsics are functions named `module.name`
@@ -153,6 +165,46 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                 c.fns.insert(f.full_name().to_string(), sig);
             }
         }
+    }
+
+    // enums first: a struct with one field, the number of the variant
+    for ed in &prog.enums {
+        if !ed.name.starts_with(|ch: char| ch.is_uppercase()) {
+            let mut fixed = ed.name.clone();
+            if let Some(first) = fixed.get(..1) {
+                fixed = first.to_uppercase() + &fixed[1..];
+            }
+            c.errs.push(
+                Diag::new("E0221", format!("enum name `{}` must start with an uppercase letter", ed.name), ed.span)
+                    .hint(format!("write `enum {fixed}`: type names start uppercase, variants are written `{fixed}.Name`")),
+            );
+        }
+        if let Some(first) = c.structs.get(&ed.name) {
+            c.errs.push(
+                Diag::new("E0206", format!("`{}` is already defined (line {})", ed.name, first.span.line), ed.span)
+                    .hint("rename one of them: a struct or enum name can be used only once"),
+            );
+            continue;
+        }
+        if ed.variants.is_empty() {
+            c.errs.push(
+                Diag::new("E0284", format!("enum `{}` has no variants", ed.name), ed.span)
+                    .hint(format!("list its cases: `enum {} {{ A, B }}`", ed.name)),
+            );
+        }
+        let mut variants: Vec<String> = Vec::new();
+        for (v, at) in &ed.variants {
+            if variants.contains(v) {
+                c.errs.push(
+                    Diag::new("E0284", format!("variant `{v}` is defined twice in enum `{}`", ed.name), *at)
+                        .hint("rename one of them: the variants of an enum are all different"),
+                );
+                continue;
+            }
+            variants.push(v.clone());
+        }
+        c.structs.insert(ed.name.clone(), StructInfo { fields: vec![("tag".to_string(), Type::Int, ed.span)], span: ed.span });
+        c.enums.insert(ed.name.clone(), EnumInfo { variants, span: ed.span });
     }
 
     // structs first: functions and bodies refer to them
@@ -305,13 +357,20 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         c.func(&mut f);
         prog.funcs.push(f);
     }
+    // an enum is a struct with one field; its variants name the values
+    let mut enums: Vec<(&String, &EnumInfo)> = c.enums.iter().collect();
+    enums.sort_by(|a, b| a.0.cmp(b.0));
+    for (name, info) in enums {
+        let fields = vec![Field { name: "tag".to_string(), ty: Type::Int, span: info.span }];
+        prog.structs.push(StructDef { name: name.clone(), fields, span: info.span, variants: info.variants.clone() });
+    }
     // the tuple types the program uses are structs
     let generated = |n: &String| n.starts_with(TUPLE_PREFIX) || n.starts_with(OPTION_PREFIX);
     let mut tuples: Vec<(&String, &StructInfo)> = c.structs.iter().filter(|(n, _)| generated(n)).collect();
     tuples.sort_by(|a, b| a.0.cmp(b.0));
     for (name, info) in tuples {
         let fields = info.fields.iter().map(|(n, t, s)| Field { name: n.clone(), ty: *t, span: *s }).collect();
-        prog.structs.push(StructDef { name: name.clone(), fields, span: info.span });
+        prog.structs.push(StructDef { name: name.clone(), fields, span: info.span, variants: Vec::new() });
     }
     prog.globals = c.finish_globals();
     c.errs
@@ -339,6 +398,7 @@ fn collect_decls(b: &[Stmt], out: &mut Vec<(String, Span)>) {
                 }
             }
             StmtKind::While { body, .. } | StmtKind::Arena(body) => collect_decls(body, out),
+            StmtKind::Match { arms, .. } => arms.iter().for_each(|a| collect_decls(&a.body, out)),
             StmtKind::For { var, body, .. } => {
                 out.push((var.clone(), s.span));
                 collect_decls(body, out);
@@ -818,6 +878,7 @@ impl Checker {
                 Type::Array(_) => t.elem().and_then(|e| go(c, e, seen)),
                 Type::Struct(_) if t.is_tuple() => Some("tuple"),
                 Type::Struct(_) if t.is_option() => Some("optional"),
+                Type::Struct(_) if t.struct_name().is_some_and(|n| c.enums.contains_key(&n)) => Some("enum"),
                 Type::Struct(_) => {
                     let n = t.struct_name()?;
                     if seen.contains(&n) {
@@ -1158,6 +1219,11 @@ impl Checker {
 
     fn stmt(&mut self, s: &mut Stmt) {
         let span = s.span;
+        if matches!(s.kind, StmtKind::Match { .. }) {
+            let StmtKind::Match { scrut, arms } = std::mem::replace(&mut s.kind, StmtKind::Break) else { unreachable!("matched above") };
+            s.kind = self.match_stmt(scrut, arms, span);
+            return;
+        }
         match &mut s.kind {
             StmtKind::Let { name, mutable, ty, value } => {
                 // a type that is not defined is reported once: the variable then has no known type
@@ -1253,6 +1319,7 @@ impl Checker {
                 }
             }
             StmtKind::Break | StmtKind::Continue => {}
+            StmtKind::Match { .. } => unreachable!("handled at the top of `stmt`"),
             StmtKind::Arena(body) => {
                 self.arena_depth += 1;
                 self.block(body);
@@ -1495,6 +1562,53 @@ impl Checker {
             e.ty = t;
             return t;
         }
+        // `Dir.N` is a variant of the enum `Dir`, `Dir.all()` are all of them
+        let variant = match &e.kind {
+            ExprKind::Field(b, v) => match &b.kind {
+                ExprKind::Var(en) if self.enums.contains_key(en.as_str()) && self.lookup(en).is_none() => Some((en.clone(), Some(v.clone()))),
+                _ => None,
+            },
+            ExprKind::Method(b, m, args) if m == "all" && args.is_empty() => match &b.kind {
+                ExprKind::Var(en) if self.enums.contains_key(en.as_str()) && self.lookup(en).is_none() => Some((en.clone(), None)),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some((en, v)) = variant {
+            let ty = Type::structure(&en);
+            let variants = self.enums[&en].variants.clone();
+            let make = |k: usize, span: Span| {
+                let mut tag = Expr::new(ExprKind::Int(k as i64), span);
+                tag.ty = Type::Int;
+                let mut value = Expr::new(ExprKind::Call(en.clone(), vec![tag]), span);
+                value.ty = ty;
+                value
+            };
+            return match v {
+                Some(name) => match variants.iter().position(|x| *x == name) {
+                    Some(k) => {
+                        e.kind = make(k, span).kind;
+                        e.ty = ty;
+                        ty
+                    }
+                    None => {
+                        let list: Vec<String> = variants.iter().map(|x| format!("`{en}.{x}`")).collect();
+                        let (hint, fix) = match suggest_fix(&name, variants.iter().map(String::as_str)) {
+                            Some((h, f)) => (h, f.map(|f| Edit::replace(span, &name, f))),
+                            None => (format!("the variants of `{en}` are {}", list.join(", ")), None),
+                        };
+                        self.errs.push(Diag::new("E0278", format!("enum `{en}` has no variant `{name}`"), span).hint(hint).fix_opt(fix));
+                        e.ty = Type::Unknown;
+                        Type::Unknown
+                    }
+                },
+                None => {
+                    e.kind = ExprKind::Array((0..variants.len()).map(|k| make(k, span)).collect());
+                    e.ty = Type::array(ty);
+                    e.ty
+                }
+            };
+        }
         // `r.area()` is `area(r)` when no built-in method is called `area`
         if matches!(&e.kind, ExprKind::Method(_, n, _) if !data::is_method_name(n) && self.fns.contains_key(n.as_str())) {
             let ExprKind::Method(recv, name, mut args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("matched above") };
@@ -1548,6 +1662,14 @@ impl Checker {
                     self.errs.push(
                         Diag::new("E0307", format!("`{name}` is a module, not a value"), span)
                             .hint(format!("use the items of the module by their names, e.g. `{name}.{first}`")),
+                    );
+                    Type::Unknown
+                }
+                None if self.enums.contains_key(name.as_str()) => {
+                    let first = self.enums[name.as_str()].variants.first().cloned().unwrap_or_else(|| "A".into());
+                    self.errs.push(
+                        Diag::new("E0235", format!("`{name}` is an enum, not a value"), span)
+                            .hint(format!("pick one of its variants: `{name}.{first}`")),
                     );
                     Type::Unknown
                 }
@@ -1995,6 +2117,8 @@ impl Checker {
         if let Some(kind) = self.json_blocker(t) {
             let hint = if kind == "map" {
                 "use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"
+            } else if kind == "enum" {
+                "write the variant as text with `str(d)`, or as an `int` that you choose"
             } else if kind == "optional" {
                 "use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there"
             } else {
@@ -2125,6 +2249,162 @@ impl Checker {
             );
         }
         Type::Bool
+    }
+
+    /// `match value { ... }`: checks the arms and returns the `if` chain that does the same.
+    fn match_stmt(&mut self, mut scrut: Expr, mut arms: Vec<MatchArm>, span: Span) -> StmtKind {
+        let st = self.expr(&mut scrut);
+        let enum_name = st.struct_name().filter(|n| self.enums.contains_key(n));
+        // 1: an enum, 2: a bool, 3: an int, str or char, 0: unknown or not matchable
+        let kind = if st.is_unknown() {
+            0
+        } else if enum_name.is_some() {
+            1
+        } else if st == Type::Bool {
+            2
+        } else if matches!(st, Type::Int | Type::Str | Type::Char) {
+            3
+        } else {
+            let shown = show(&scrut).unwrap_or_else(|| "the value".into());
+            self.errs.push(
+                Diag::new("E0279", format!("cannot `match` a value of type `{}`", st.name()), scrut.span)
+                    .hint(format!("`match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if {shown} == ...`")),
+            );
+            0
+        };
+        let variants: Vec<String> = enum_name.as_ref().map(|n| self.enums[n].variants.clone()).unwrap_or_default();
+        let mut covered: Vec<String> = Vec::new();
+        let mut wild = false;
+        let before = self.freed.clone();
+        let mut joined: Option<HashMap<String, Freed>> = None;
+        for arm in arms.iter_mut() {
+            if wild || (kind == 1 && covered.len() == variants.len()) || (kind == 2 && covered.len() == 2) {
+                self.errs.push(
+                    Diag::new("E0283", "this arm can never run: the arms above already cover every case", arm.span)
+                        .hint("remove it, or move it above the `_` arm"),
+                );
+            }
+            for pat in arm.pats.iter_mut() {
+                // a bare variant name: say what to write
+                if let (ExprKind::Var(n), Some(en)) = (&pat.kind, &enum_name) {
+                    if self.lookup(n).is_none() {
+                        let hint = if variants.contains(n) {
+                            format!("a variant is written with its enum: `{en}.{n}`")
+                        } else {
+                            format!("the variants of `{en}` are {}", variants.iter().map(|v| format!("`{en}.{v}`")).collect::<Vec<_>>().join(", "))
+                        };
+                        self.errs.push(Diag::new("E0278", format!("`{n}` is not a variant pattern of `{en}`"), pat.span).hint(hint));
+                        continue;
+                    }
+                }
+                let pt = self.expr_with(pat, Some(st));
+                if pt.is_unknown() || st.is_unknown() {
+                    continue;
+                }
+                if pt != st {
+                    self.errs.push(
+                        Diag::new("E0279", format!("this pattern is {} but the value matched is {}", article(pt), article(st)), pat.span)
+                            .hint(format!("the patterns of this `match` must be `{}` values", st.name())),
+                    );
+                    continue;
+                }
+                // what the pattern covers
+                let key = match (&pat.kind, kind) {
+                    (ExprKind::Call(n, a), 1) if Some(n) == enum_name.as_ref() => match a.first().map(|a| &a.kind) {
+                        Some(ExprKind::Int(k)) => Some(format!("{k}")),
+                        _ => None,
+                    },
+                    (ExprKind::Bool(b), 2) => Some(b.to_string()),
+                    (ExprKind::Int(_) | ExprKind::Str(_) | ExprKind::Char(_), 3) => show(pat),
+                    (ExprKind::Unary(UnOp::Neg, x), 3) if matches!(x.kind, ExprKind::Int(_)) => show(pat),
+                    _ => None,
+                };
+                match key {
+                    None if kind == 0 => {}
+                    None => {
+                        let hint = match &enum_name {
+                            Some(en) => format!("a pattern of `{en}` is one of its variants, e.g. `{en}.{}`", variants.first().cloned().unwrap_or_default()),
+                            None => "a pattern is a literal value (`1`, `\"a\"`, `'c'`, `true`) or `_`".to_string(),
+                        };
+                        self.errs.push(Diag::new("E0279", "this pattern is not a constant of the matched type", pat.span).hint(hint));
+                    }
+                    Some(k) if covered.contains(&k) => self.errs.push(
+                        Diag::new("E0283", "this pattern is already covered by an arm above", pat.span).hint("remove it: it can never be reached"),
+                    ),
+                    Some(k) => covered.push(k),
+                }
+            }
+            if arm.wild {
+                wild = true;
+            }
+            self.freed = before.clone();
+            self.block(&mut arm.body);
+            let after = std::mem::take(&mut self.freed);
+            joined = Some(match joined {
+                None => after,
+                Some(j) => join(&j, &after),
+            });
+        }
+        // every case must be covered
+        let missing: Vec<String> = match kind {
+            1 => variants
+                .iter()
+                .enumerate()
+                .filter(|(k, _)| !covered.contains(&k.to_string()))
+                .map(|(_, v)| format!("`{}.{v}`", enum_name.as_deref().unwrap_or("")))
+                .collect(),
+            2 => ["true", "false"].iter().filter(|b| !covered.contains(&b.to_string())).map(|b| format!("`{b}`")).collect(),
+            3 => vec!["every other value".to_string()],
+            _ => Vec::new(),
+        };
+        let exhaustive = wild || missing.is_empty();
+        if !exhaustive {
+            self.errs.push(
+                Diag::new("E0281", format!("this `match` does not cover {}", missing.join(", ")), span)
+                    .hint("add an arm for each, or a last arm `_ => ...` that takes everything else"),
+            );
+        }
+        self.freed = match joined {
+            Some(j) if exhaustive => j,
+            Some(j) => join(&before, &j),
+            None => before,
+        };
+        // the arms as an `if` chain on a hidden copy of the value; the last arm of an exhaustive
+        // match needs no test
+        self.matches += 1;
+        let tmp = format!("\u{b7}m{}", self.matches);
+        let var = |ty: Type, at: Span| {
+            let mut v = Expr::new(ExprKind::Var(tmp.clone()), at);
+            v.ty = ty;
+            v
+        };
+        let mut chain: Option<Vec<Stmt>> = None;
+        let n = arms.len();
+        for (i, arm) in arms.into_iter().enumerate().rev() {
+            if arm.wild || (i == n - 1 && exhaustive) {
+                chain = Some(arm.body);
+                continue;
+            }
+            let mut cond: Option<Expr> = None;
+            for pat in arm.pats {
+                let at = pat.span;
+                let mut test = Expr::new(ExprKind::Binary(BinOp::Eq, Box::new(var(st, at)), Box::new(pat)), at);
+                test.ty = Type::Bool;
+                cond = Some(match cond {
+                    None => test,
+                    Some(c) => {
+                        let mut or = Expr::new(ExprKind::Binary(BinOp::Or, Box::new(c), Box::new(test)), at);
+                        or.ty = Type::Bool;
+                        or
+                    }
+                });
+            }
+            let Some(cond) = cond else { continue };
+            chain = Some(vec![Stmt { kind: StmtKind::If { cond, then: arm.body, els: chain.take() }, span: arm.span }]);
+        }
+        let mut out = vec![Stmt { kind: StmtKind::Let { name: tmp.clone(), mutable: false, ty: None, value: scrut }, span }];
+        out.extend(chain.unwrap_or_default());
+        StmtKind::Arena(out)
     }
 
     /// `a ?? b`: the value of the optional `a`, or `b`.
@@ -2388,6 +2668,13 @@ impl Checker {
     /// `base.name`: `shown` is the base as the program wrote it, for the hint.
     fn field_type(&mut self, bt: Type, name: &str, shown: Option<String>, span: Span) -> Type {
         if bt.is_unknown() {
+            return Type::Unknown;
+        }
+        if bt.struct_name().is_some_and(|n| self.enums.contains_key(&n)) {
+            self.errs.push(
+                Diag::new("E0224", format!("`{}` is an enum and has no field `{name}`", bt.name()), span)
+                    .hint("compare an enum value with `==`, or take it apart with `match`"),
+            );
             return Type::Unknown;
         }
         if bt.is_option() {
@@ -2914,6 +3201,18 @@ impl Checker {
     }
 
     fn call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
+        // (the checker itself turns `Dir.N` into a call of `Dir` with the number: those are right)
+        if self.enums.contains_key(name) && !matches!(args, [a] if matches!(a.kind, ExprKind::Int(_)) && a.ty == Type::Int) {
+            for a in args.iter_mut() {
+                self.arg_type(a, None);
+            }
+            let first = self.enums[name].variants.first().cloned().unwrap_or_else(|| "A".into());
+            self.errs.push(
+                Diag::new("E0235", format!("`{name}` is an enum: its values are its variants"), span)
+                    .hint(format!("write `{name}.{first}`")),
+            );
+            return Type::Unknown;
+        }
         if self.structs.contains_key(name) {
             return self.construct(name, args, span);
         }

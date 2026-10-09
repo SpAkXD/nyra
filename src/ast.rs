@@ -241,6 +241,8 @@ impl Type {
 pub struct Program {
     pub funcs: Vec<Func>,
     pub structs: Vec<StructDef>,
+    /// The `enum` declarations.
+    pub enums: Vec<EnumDef>,
     /// `ex` lines: checked at compile time, never compiled into the program.
     pub examples: Vec<Example>,
     /// The `use name` lines: the standard modules the program imports.
@@ -299,6 +301,25 @@ pub struct Use {
 pub struct StructDef {
     pub name: String,
     pub fields: Vec<Field>,
+    pub span: Span,
+    /// The variants of an enum (its one field is the number of the variant); empty for a struct.
+    pub variants: Vec<String>,
+}
+
+/// `enum Dir { N, E, S, W }`
+#[derive(Debug)]
+pub struct EnumDef {
+    pub name: String,
+    pub variants: Vec<(String, Span)>,
+    pub span: Span,
+}
+
+/// One arm of a `match`: the patterns that select it (`Dir.N, Dir.S => ...`), or `_`.
+#[derive(Debug)]
+pub struct MatchArm {
+    pub pats: Vec<Expr>,
+    pub wild: bool,
+    pub body: Vec<Stmt>,
     pub span: Span,
 }
 
@@ -378,6 +399,11 @@ pub enum StmtKind {
     Continue,
     /// `arena { ... }`: everything allocated inside is freed together at `}`.
     Arena(Vec<Stmt>),
+    /// `match value { pattern => body ... }`: the checker turns it into `if` statements.
+    Match {
+        scrut: Expr,
+        arms: Vec<MatchArm>,
+    },
     Ret(Option<Expr>),
     Expr(Expr),
 }
@@ -543,6 +569,13 @@ pub fn each_stmt_mut(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut Stmt), g: &mut d
                 each_stmt_mut(body, f, g);
             }
             StmtKind::Arena(body) => each_stmt_mut(body, f, g),
+            StmtKind::Match { scrut, arms } => {
+                scrut.each_mut(g);
+                for arm in arms {
+                    arm.pats.iter_mut().for_each(|p| p.each_mut(g));
+                    each_stmt_mut(&mut arm.body, f, g);
+                }
+            }
             StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => e.each_mut(g),
             StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
         }

@@ -2134,6 +2134,150 @@ fn main() {
 ```
 - **Related:** E0276, E0203
 
+## E0278: no such enum variant
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A variant of an enum is written `Dir.N`, but the enum has no variant of that name, or a `match` arm names a variant without its enum (`N =>` instead of `Dir.N =>`). The message lists the variants.
+- **Why Nyra has this rule:** A variant is always written with its enum, so a name never means two things and a misspelled case is found at compile time, not by a `match` that silently falls through.
+- **Common causes:**
+  - a typo in the variant name
+  - a bare `N` in a `match` arm: patterns need the enum too
+- **Wrong:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.Q
+    print(d)
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    print(d)
+}
+```
+- **Related:** E0279, E0281
+
+## E0279: the pattern does not fit the matched value
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** The patterns of a `match` must be constants of the type of the matched value (the variants of an enum, or literal ints, strings, chars and bools), and the matched value must be an enum, a `bool`, an `int`, a `str` or a `char`.
+- **Why Nyra has this rule:** Each arm is a test `value == pattern`; a pattern of another type could never be true, and floats, arrays and structs have no short list of cases to cover. For those, use `if`.
+- **Common causes:**
+  - a string pattern for an int (`"3" =>`)
+  - `match` on a `float` or an array
+- **Wrong:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        "three" => print("three")
+        _ => print("other")
+    }
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        3 => print("three")
+        _ => print("other")
+    }
+}
+```
+- **Related:** E0281, E0278
+
+## E0281: the match does not cover every case
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** A `match` must handle every possible value. For an enum that is every variant (or a last arm `_`); for a `bool` both `true` and `false`; for an int, str or char a last arm `_`. The message names what is missing.
+- **Why Nyra has this rule:** This is the point of `match` over an `if` chain: adding a variant to an enum later makes every `match` that forgot it fail to compile, instead of doing nothing at run time.
+- **Common causes:**
+  - a variant has no arm
+  - matching an `int` without a `_ =>` arm
+- **Wrong:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+    }
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+        Dir.S => print("south")
+    }
+}
+```
+- **Related:** E0283, E0279
+
+## E0283: this match arm can never run
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An arm of a `match` repeats a pattern an arm above it already has, or comes after a `_` arm, or after arms that cover every case. It would never be chosen.
+- **Why Nyra has this rule:** An unreachable arm is almost always a mistake (a copy that was not edited, `_` written first), and the first arm that matches decides.
+- **Common causes:**
+  - the same variant or literal twice
+  - `_ =>` before the specific arms
+- **Wrong:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        _ => print("any")
+        1 => print("one")
+    }
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let n = 3
+    match n {
+        1 => print("one")
+        _ => print("any")
+    }
+}
+```
+- **Related:** E0281
+
+## E0284: bad enum declaration
+- **Kind:** compile error · **Since:** v0.6
+- **What it means:** An `enum` has no variants, or lists the same variant twice.
+- **Why Nyra has this rule:** An enum with no variants has no values, and two variants with one name could not be told apart.
+- **Common causes:**
+  - `enum Empty {}` while the cases are still to be written
+  - a variant copied and not renamed
+- **Wrong:**
+```rust
+enum Dir { N, E, N }
+
+fn main() {
+    print("hi")
+}
+```
+- **Fixed:**
+```rust
+enum Dir { N, E, S }
+
+fn main() {
+    print("hi")
+}
+```
+- **Related:** E0278, E0221
+
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
 - **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)

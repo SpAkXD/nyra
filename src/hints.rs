@@ -12,7 +12,7 @@ pub fn word(w: &str) -> Option<String> {
     let hint = match w {
         "return" => "Nyra spells it `ret`: replace `return` with `ret`",
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
-        "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
+        "switch" | "case" => "Nyra has no `switch`: write `match value { 1 => ..., _ => ... }`, or chain `if` / `else if`",
         "and" => "write `&&` for logical and: `a && b`",
         "or" => "write `||` for logical or: `a || b`",
         "not" => "write `!` for logical not: `!done`",
@@ -54,9 +54,9 @@ pub fn top_level_word(w: &str) -> Option<String> {
                 "Nyra has no `{w}`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`"
             ))
         }
-        "enum" | "union" | "type" | "typedef" => {
+        "union" | "type" | "typedef" => {
             return Some(format!(
-                "Nyra has no `{w}` yet: the top-level items are `fn` and `struct`; for a fixed set of cases use `int` or `str` values"
+                "Nyra has no `{w}`: the top-level items are `fn`, `struct` and `enum` (`enum Dir {{ N, E, S, W }}`)"
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {

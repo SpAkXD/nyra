@@ -246,7 +246,10 @@ fn classes(m: &Module, out: &mut String) {
             })
             .collect();
         let head = if s.tuple { String::new() } else { template_text(&s.name) };
-        if s.option {
+        if !s.variants.is_empty() {
+            let names: Vec<String> = s.variants.iter().map(|v| crate::diag::json_str(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "    ny_fmt(): string {{\n        return [{}][this.{}];\n    }}", names.join(", "), fields[0]);
+        } else if s.option {
             let _ = writeln!(
                 out,
                 "    ny_fmt(): string {{\n        return this.{0} ? `Some(${{ny_fmt(this.{1}, \"{2}\")}})` : \"none\";\n    }}",

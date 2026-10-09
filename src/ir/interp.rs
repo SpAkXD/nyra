@@ -1001,6 +1001,15 @@ fn show_in(m: &Module, v: &Value, out: &mut String) {
                 out.push('?');
                 return;
             };
+            // an enum value: its variant
+            if !info.variants.is_empty() {
+                if let Value::Int(k) = &fields[0] {
+                    if let Some(v) = info.variants.get(*k as usize) {
+                        out.push_str(&format!("{}.{v}", info.name));
+                        return;
+                    }
+                }
+            }
             // an optional: `none`, or `Some(value)`
             if info.option {
                 match (&fields[0], &fields[1]) {

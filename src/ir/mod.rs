@@ -42,6 +42,8 @@ pub struct StructInfo {
     pub tuple: bool,
     /// An optional value `T?`: the fields `has` and `val`; printed `none` or `Some(v)`.
     pub option: bool,
+    /// An enum: the names of its variants (its one field is the number of the variant); empty for a struct.
+    pub variants: Vec<String>,
 }
 
 /// The structs of a program by type id (`Ty::Struct(id)`), in an order where each struct comes

@@ -1,0 +1,16 @@
+Dir.N Dir.E Dir.S
+true true true
+true false
+careful
+30 3 0
+zero few four or minus one four or minus one many
+[Dir.N, Dir.E, Dir.E, Dir.S, Dir.W] 5 true 4
+Robot(name: "r2", facing: Dir.S)
+Dir.W Dir.S
+[Dir.N, Dir.E, Dir.S, Dir.W]
+Light.Red waits 30
+careful
+Light.Yellow waits 3
+Light.Green waits 0
+vowel space other 2 0 yes
+22

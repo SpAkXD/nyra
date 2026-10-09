@@ -10,6 +10,7 @@ Language
 - Format specifiers in strings, Python's subset: `{x:>8}`, `{n:05}`, `{f:.2}` (rounded like `text.fixed`), `{n:,}`, `{f:>10.2}`. New codes E0270, E0271.
 - Denser helpers: `xs.sorted()`, `sorted_by`, `min_by`, `max_by` (keys may be tuples), `x in xs`, `zip`, `chunks`, slices `xs[a..b]` / `s[a..b]`, `s.trim(chars)`, `m.items()`, `fn f(var n: int)`, and `r.area()` for `fn area(r: Rect)`. New code E0275.
 - Optional values: `T?`, `none`, `x ?? default`, `if let v = x { }`, `unwrap()`; `m.get(k)` now gives a `V?` (`get(k, default)` is unchanged), plus `s.to_int()`, `s.to_float()` and `xs.find(x => test)`. New codes E0276, E0277, E0350.
+- Enums and `match`: `enum Dir { N, E, S, W }`, values `Dir.N`, `Dir.all()`, and `match` on an enum (every case must be covered, `_` takes the rest), `bool`, `int`, `str` or `char`. New codes E0278, E0279, E0281, E0283, E0284.
 
 ## v0.5 (unreleased)
 

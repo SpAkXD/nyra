@@ -1,0 +1,7 @@
+// expect: E0224
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    print(d.tag)
+}

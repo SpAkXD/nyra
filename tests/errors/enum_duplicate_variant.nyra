@@ -1,0 +1,6 @@
+// expect: E0284
+enum Dir { N, E, N }
+
+fn main() {
+    print("hi")
+}

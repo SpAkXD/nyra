@@ -229,7 +229,7 @@ print(bigger + limit())                   // 107
 shout("done")
 ```
 
-Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)`, optionals `T?` and the structs you declare.
+Types: `int` (64-bit), `float` (64-bit), `bool`, `str`, `char`, arrays `[T]`, tuples `(T, U)`, optionals `T?` and the structs and enums you declare.
 Function signatures are always fully typed; local types are inferred. The builtins are `print(x)`,
 `str(x)`, `int(x)`, `float(x)`, `char(n)`, `free(x)` and `keep(x)`; everything else on strings, chars
 and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are in the spec.
@@ -300,6 +300,12 @@ Good to know:
   `x in xs` (also `c in s`, `k in m`), `zip(a, b)` (pairs `[(A, B)]`), `xs.chunks(n)`, slices `xs[1..3]`
   `s[..4]` `xs[2..]`, `s.trim("-_")`, `m.items()` (pairs), `fn f(var n: int)` (a copy the function may
   change) and `r.area()` for `fn area(r: Rect)`.
+- An enum is a fixed set of named cases, `enum Dir { N, E, S, W }`; a value is written with its enum,
+  `Dir.N`, and prints as `Dir.N`. Take it apart with `match`, which must cover every case:
+  `match d { Dir.N => ret 1  Dir.E, Dir.W => ret 2  _ => ret 3 }` (one arm per line, `_` takes the rest, an arm
+  body is one statement or a `{ }` block). `match` also works on an `int`, `str`, `char` or `bool` (an `int`
+  needs a `_` arm); it is a statement, so `ret` the value or assign it in the arms. `Dir.all()` is the array of
+  all cases.
 - A value that may be missing is an optional: `m.get(k)`, `xs.find(x => x > 3)` and `s.to_int()` give a `V?` that
   is a value or `none`. Unwrap with `m.get(k) ?? 0`, `if let v = m.get(k) { ... } else { ... }` or
   `.unwrap()` (stops with E0350 on `none`); test with `x != none` or `x.is_some()`. Declare one with
@@ -349,7 +355,7 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, enums, `Result`, generics or type aliases. Use a map
+- **Types**: no sets, `Result`, generics, enums with values or type aliases. Use a map
   `[str: bool]` or `contains` for a set. Tuples `(int, str)`, optionals `int?` (section 3) and maps `[K: V]`
   (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
@@ -357,7 +363,7 @@ that works (section 6 has the usual replacements).
   have `is_digit`). `sort()` works only on `[int]`, `[float]`, `[str]`, `[char]` and arrays of tuples
   of those, ascending; sort anything else with `sort_by(x => key)` or get a sorted copy with
   `sorted_by(x => key)` (a tuple key such as `(-w.count, w.text)` sorts by several things).
-- **Syntax**: no negative indexes, no `match`, `switch`, `?:`,
+- **Syntax**: no negative indexes, `switch`, `?:`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
   functions; in a program with `fn main` nothing is), no closures, function values, overloading, default
@@ -435,6 +441,11 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0275 | `in` cannot look for this value | `x in xs` needs `x` of the element type, `xs` an array, string or map |
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
 | E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
+| E0278 | no such enum variant | a variant is written with its enum, `Dir.N` (also in `match` arms) |
+| E0279 | bad `match` pattern or value | patterns are constants of the matched type; match an enum, `bool`, `int`, `str` or `char` |
+| E0281 | `match` does not cover every case | add the missing arms, or a last arm `_ => ...` |
+| E0283 | `match` arm can never run | a repeated pattern, or an arm after `_` |
+| E0284 | bad enum declaration | an enum needs at least one variant and no repeated names |
 | E0276 | `none` without an optional type | `var best: int? = none`; `none` cannot be a plain `int` |
 | E0277 | optional used the wrong way | `??` and `if let` need a `T?` on the left; the default must be a `T` |
 | E0272 | tuple pattern does not fit | `let (a, b) = f()` needs a tuple with exactly two parts; `_` skips one |

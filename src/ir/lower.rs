@@ -80,7 +80,7 @@ fn struct_table(prog: &ast::Program) -> Structs {
         let managed = fields.iter().any(|(_, t)| table.managed(*t));
         let tuple = Ty::Struct(id).is_tuple();
         let option = Ty::Struct(id).is_option();
-        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple, option }));
+        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple, option, variants: def.variants.clone() }));
     }
     let mut ids: Vec<u32> = defs.keys().copied().collect();
     ids.sort_unstable();
@@ -268,6 +268,7 @@ fn assigned(stmts: &[ast::Stmt], exprs: &[&ast::Expr], names: &mut HashSet<Strin
             }
             ast::StmtKind::ForEach { iter, body, .. } => assigned(body, &[iter], names),
             ast::StmtKind::Arena(body) => assigned(body, &[], names),
+            ast::StmtKind::Match { .. } => {}
             ast::StmtKind::Ret(Some(e)) | ast::StmtKind::Expr(e) => scan(e, names),
             ast::StmtKind::Ret(None) | ast::StmtKind::Break | ast::StmtKind::Continue => {}
         }
@@ -324,6 +325,7 @@ fn counters(body: &[ast::Stmt], exclude: &HashSet<String>) -> HashSet<String> {
                     walk(body, cand, bad);
                 }
                 ast::StmtKind::Arena(body) => walk(body, cand, bad),
+                ast::StmtKind::Match { .. } => {}
                 ast::StmtKind::Ret(Some(e)) | ast::StmtKind::Expr(e) => exprs.push(e),
                 ast::StmtKind::Ret(None) | ast::StmtKind::Break | ast::StmtKind::Continue => {}
             }
@@ -612,7 +614,7 @@ impl<'a> Lower<'a> {
         self.block(&f.body, &mut body, false);
         if copies {
             let scope = self.scopes.pop().expect("pushed above");
-            if !body.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_))) {
+            if !terminates(&body) {
                 let span = f.span;
                 for l in scope.owned.into_iter().rev() {
                     body.push(Stmt { kind: StmtKind::Drop(l), span });
@@ -784,8 +786,7 @@ impl<'a> Lower<'a> {
         }
         self.restore(bounds, mark);
         let scope = self.scopes.pop().expect("pushed above");
-        let ends = out.last().is_some_and(|s| matches!(s.kind, StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue));
-        if !ends {
+        if !terminates(out) {
             let span = out.last().map_or(Span { line: 0, col: 0 }, |s| s.span);
             for l in scope.owned.into_iter().rev() {
                 out.push(Stmt { kind: StmtKind::Drop(l), span });
@@ -957,6 +958,7 @@ impl<'a> Lower<'a> {
                 let kind = if matches!(s.kind, ast::StmtKind::Break) { StmtKind::Break } else { StmtKind::Continue };
                 out.push(Stmt { kind, span });
             }
+            ast::StmtKind::Match { .. } => unreachable!("the checker turns `match` into `if`"),
             ast::StmtKind::Arena(body) => {
                 // An arena only changes when memory is returned, never what a program does. The
                 // checker keeps values made inside from escaping except through `ret`; here its
@@ -2158,6 +2160,16 @@ impl<'a> Lower<'a> {
             _ => unreachable!("the checker knows every method"),
         };
         self.op(op, all, e.ty, dst, span, out)
+    }
+}
+
+/// True if control never leaves the statements by running off their end: the last one leaves the
+/// function or the loop round, or is an `if` whose branches all do (the scopes were released there).
+fn terminates(ss: &[Stmt]) -> bool {
+    match ss.last().map(|s| &s.kind) {
+        Some(StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue) => true,
+        Some(StmtKind::If { then, els, .. }) => terminates(then) && terminates(els),
+        _ => false,
     }
 }
 

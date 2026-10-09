@@ -89,14 +89,15 @@ compiler to tell the AI exactly what to fix.
 
 - **One source, six languages:** native executables through C99 (`gcc`, `clang` or `tcc`), or readable
   C, JavaScript (Node.js or the browser), [TypeScript, Python, Rust and Go](#targets) source.
-- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps and structs, with local
-  inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
+- **Strict static types:** `int`, `float`, `bool`, `str`, `char`, arrays, maps, tuples `(int, str)`, optionals
+  `int?`, enums and structs, with local inference and no implicit conversions. Ints are 64-bit and never wrap: an overflow is a runtime error.
 - **Real data:** structs, arrays, maps, strings and chars with methods (`split`, `replace`, `slice`,
   `sort`, `join`, ...), lambdas (`xs.map(x => x * 2)`) and comprehensions, `inout` parameters, `break`
   and `continue`. Memory is freed by reference counting, with no garbage collector, and `free`, `arena`
   and `keep` say when if you want to.
-- **Short code:** scripts without `fn main`, one-line functions, `+=` and friends, string interpolation,
-  `if` as a value, `print(a, b)`.
+- **Short code:** scripts without `fn main`, one-line functions, `+=` and friends, string interpolation
+  with format specifiers (`{x:>8}`, `{f:.2}`), `if` as a value, `print(a, b)`, `let (a, b) = f()`,
+  `x ?? 0`, `match` on enums, `xs.sorted_by(x => (-x.n, x.name))`.
 - **Agent-friendly tooling:** `run`, `build` and `check`, errors as JSON, `explain` for every error code,
   runtime errors with the exact position, and a build cache that skips the C compiler when the program
   has not changed.

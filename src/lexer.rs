@@ -31,6 +31,8 @@ pub enum Tok {
     Break,
     Continue,
     Arena,
+    Enum,
+    Match,
     // punctuation
     LParen,
     RParen,
@@ -105,6 +107,8 @@ impl Tok {
                 | Tok::Break
                 | Tok::Continue
                 | Tok::Arena
+                | Tok::Enum
+                | Tok::Match
         )
     }
 
@@ -126,6 +130,8 @@ impl Tok {
             Tok::Break => "break",
             Tok::Continue => "continue",
             Tok::Arena => "arena",
+            Tok::Enum => "enum",
+            Tok::Match => "match",
             Tok::LParen => "(",
             Tok::RParen => ")",
             Tok::LBrace => "{",
@@ -277,6 +283,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "break" => Tok::Break,
                 "continue" => Tok::Continue,
                 "arena" => Tok::Arena,
+                "enum" => Tok::Enum,
+                "match" => Tok::Match,
                 _ => Tok::Ident(text),
             };
             toks.push(Token { tok, span });
@@ -617,7 +625,7 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
         }
         out.push(t.clone());
         // `print("no") ret` in a one-line block: `ret`, `break` and `continue` end a line anyway
-        if !matches!(t.tok, Tok::Newline | Tok::LBrace)
+        if !matches!(t.tok, Tok::Newline | Tok::LBrace | Tok::FatArrow)
             && matches!(toks.get(i + 1).map(|n| &n.tok), Some(Tok::Ret | Tok::Break | Tok::Continue))
             && toks.get(i + 1).is_some_and(|n| n.span.line == t.span.line)
         {
