@@ -9,6 +9,12 @@ The program the model writes is compiled/run and its standard output is compared
 Many models can be compared in one run through [OpenRouter](https://openrouter.ai) (Claude, Gemini, GPT, Grok,
 DeepSeek, ...); the raw transcripts stay on your machine and only a summary is published.
 
+Beyond the original 83 input-free tasks (`--tier v1`, the default) there are three more task sets, described under "Tiers"
+below: **v2**, 42 classic problems that read stdin and are judged on hidden inputs, so that a program cannot pass by
+printing the example's answer; **edit**, changing an existing 150 to 400 line program, comparing a Nyra edit script with a
+Python rewrite and a Python diff; and **safety**, a design for tasks whose naive solution reads files or environment
+variables it should not (pending the compiler's `--allow` flag).
+
 ## What is measured
 
 | metric | meaning |
@@ -510,6 +516,14 @@ is near a tie and the reference asserts it, so no test depends on that differenc
 | `floats` | 4 | `stats_summary`, `compound_interest`, `line_fit`, `queue_wait_times`: floats with a fixed number of decimals |
 | `money` | 1 | `invoice_total`: exact decimal amounts in whole cents, tax rounded half up |
 | `aoc-style` | 5 | `calorie_groups`, `rps_tournament`, `rucksack_items`, `cleanup_ranges`, `crate_stacks`: the shapes of an advent calendar, with error handling added |
+
+**Adding a v2 task**: write `bench/tasks/v2/<id>.json` (an id that no v1 task has) with one `visible` case and at least two hidden
+ones whose `expected_output` is empty, write `bench/solutions/v2/python/<id>.py` (it reads `sys.stdin`; the Python reference
+is the oracle), run `python bench/verify.py --tier v2 --write --tasks <id>`, which fills in every case, and write the Nyra
+(and TypeScript) reference, which the same command then checks on every case. Give the hidden cases the inputs a wrong
+program would get wrong: empty input, a tie, a limit, a bad line, each rule of the statement once. For a number printed with a
+fixed number of decimals, assert in the reference that no answer is close to a rounding tie (see `stats_summary.py`). Do not
+change a task after seeing results; add a new one.
 
 Every task has a Python, a Nyra and a TypeScript reference (`bench/solutions/v2/<language>/`), all verified against the same
 expected outputs (Nyra on both backends); there are no Rust references for this tier. The tasks keep to 64-bit integers

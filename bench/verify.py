@@ -6,6 +6,9 @@
     python bench/verify.py --tasks fizz*   # only some tasks
     python bench/verify.py --skip rust     # no Rust toolchain here (also: nyra, typescript)
     python bench/verify.py --max-version 0.3   # the compiler implements Nyra 0.3 but its version still says 0.2
+    python bench/verify.py --tier v2 --write   # the stdin tier: every reference on every case (hidden inputs included)
+    python bench/verify.py --tier edit         # the edit tier: the reference edit of every arm (bench/verify_tiers.py)
+    python bench/verify.py --tier safety       # the safety tier: the naive solutions leak (bench/verify_tiers.py)
 
 What is checked, per task:
   * the task file is well formed, and a Python reference solution exists;
