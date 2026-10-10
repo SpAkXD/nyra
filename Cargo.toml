@@ -9,6 +9,12 @@ readme = "README.md"
 keywords = ["language", "compiler", "transpiler", "ai", "llm"]
 categories = ["compilers", "development-tools"]
 
+# Empty except on wasm32 (the playground: `tools/build_wasm.py`, see `src/lib.rs`).
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
 [[bin]]
 name = "nyra"
 path = "src/main.rs"
@@ -19,3 +25,10 @@ path = "src/main.rs"
 opt-level = 3
 lto = true
 codegen-units = 1
+
+# The WebAssembly build of the playground: small rather than fast (`tools/build_wasm.py`).
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
+strip = true
+panic = "abort"

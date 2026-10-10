@@ -194,6 +194,7 @@ fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Foral
 }
 
 /// Runs every example, on a thread with a large stack. `None` if that thread cannot run.
+#[cfg(not(target_arch = "wasm32"))]
 fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
     let types = ast::type_tables();
     std::thread::scope(|scope| {
@@ -209,6 +210,13 @@ fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Opt
             .join()
             .ok()
     })
+}
+
+/// Runs every example. WebAssembly has no threads: they run on the caller's stack, which the
+/// build makes large (`tools/build_wasm.py`).
+#[cfg(target_arch = "wasm32")]
+fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
+    Some(plans.iter().map(|p| one(m, p, base)).collect())
 }
 
 fn one(m: &ir::Module, plan: &Plan, base: usize) -> (Res, Option<i64>) {

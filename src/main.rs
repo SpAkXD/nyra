@@ -1,6 +1,7 @@
 mod ast;
 mod caps;
 mod check;
+mod clock;
 mod codegen;
 mod diag;
 mod edit;
@@ -21,6 +22,9 @@ mod parser;
 mod sandbox;
 mod perfwarn;
 mod stdlib;
+// the C-ABI entry points of the WebAssembly build (`src/lib.rs`); natively only for their tests
+#[cfg(any(target_arch = "wasm32", test))]
+mod wasm;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
