@@ -398,7 +398,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
     for (i, f) in prog.funcs.iter_mut().enumerate() {
         if Some(i) == script_main {
             c.errs.append(&mut main_errs);
-        } else if f.name.contains('.') {
+        } else if f.name.contains('.') && !c.files.contains_key(&f.name) {
             // a function of a bundled module (`math.exp`): an error in it is a bug of the compiler,
             // not of the program, and has no position in the user's file
             let before = c.errs.len();

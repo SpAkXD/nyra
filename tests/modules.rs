@@ -183,6 +183,8 @@ fn an_error_inside_a_module_names_that_file_and_line() {
     let out = nyra().current_dir(&dir).args(["check", "main.nyra"]).output().unwrap();
     let err = stderr(&out);
     assert!(err.contains("lib.nyra:3:") && err.contains("ret \"no\""), "{err}");
+    // it reads like any error (not as a bug of a bundled module)
+    assert!(!err.contains("standard module") && !err.contains("internal error"), "{err}");
     // a module has only definitions
     write(&dir, "lib.nyra", "print(\"hello\")\npub fn f() -> int = 1\n");
     let (codes, file, _) = errors(&dir, "main.nyra");

@@ -470,3 +470,110 @@ fn capabilities_and_the_sandbox() {
     assert_eq!(first.get("errors"), second.get("errors"), "deterministic");
     assert_eq!(first.get("steps"), second.get("steps"));
 }
+
+const SHAPES_MOD: &str = "pub struct Rect { w: int, h: int }
+pub fn area(r: Rect) -> int = r.w * r.h
+ex area(Rect(w: 2, h: 5)) == 10
+";
+const SHAPES_MAIN: &str = "use ./shapes
+let r = Rect(w: 3, h: 4)
+print(shapes.area(r))
+";
+
+fn files(entries: &[(&str, &str)]) -> String {
+    let items: Vec<String> = entries.iter().map(|(n, t)| format!("{}:{}", esc(n), esc(t))).collect();
+    format!("{{{}}}", items.join(","))
+}
+
+#[test]
+fn a_program_of_several_files_works_over_mcp() {
+    let both = files(&[("main.nyra", SHAPES_MAIN), ("shapes.nyra", SHAPES_MOD)]);
+    let bad_mod = files(&[("main.nyra", SHAPES_MAIN), ("shapes.nyra", "pub fn area(r: Rect) -> int = r.w * r.q
+pub struct Rect { w: int, h: int }
+")]);
+    let requests = vec![
+        call(1, "nyra_check", &format!(r#"{{"files":{both}}}"#)),
+        call(2, "nyra_run", &format!(r#"{{"files":{both},"sandbox":true}}"#)),
+        call(3, "nyra_test", &format!(r#"{{"files":{both}}}"#)),
+        call(4, "nyra_check", &format!(r#"{{"files":{bad_mod}}}"#)),
+        call(5, "nyra_check", &format!(r#"{{"files":{}}}"#, files(&[("main.nyra", SHAPES_MAIN)]))),
+        call(6, "nyra_check", &format!(r#"{{"files":{}}}"#, files(&[("../x.nyra", "fn main() {}")]))),
+        call(7, "nyra_check", &format!(r#"{{"files":{both},"code":"print(1)"}}"#)),
+        call(8, "nyra_build", &format!(r#"{{"files":{both},"target":"js"}}"#)),
+        call(9, "nyra_outline", &format!(r#"{{"files":{both},"file":"shapes.nyra"}}"#)),
+        call(10, "nyra_edit", &format!(r#"{{"files":{both},"edits":"fn double(n: int) -> int = n * 2\n"}}"#)),
+        call(11, "nyra_check", &format!(r#"{{"files":{},"entry":"app.nyra"}}"#, files(&[("app.nyra", SHAPES_MAIN), ("shapes.nyra", SHAPES_MOD)]))),
+    ];
+    let replies = session(&requests);
+    let (err, j) = tool_json(&replies, 1);
+    assert!(!err && j.get("ok").and_then(Json::as_bool) == Some(true), "{j:?}");
+    let (_, j) = tool_json(&replies, 2);
+    assert_eq!(j.get("stdout").and_then(Json::as_str), Some("12
+"), "{j:?}");
+    let (_, j) = tool_json(&replies, 3);
+    assert_eq!(j.get("examples").and_then(Json::as_u64), Some(1), "{j:?}");
+    // an error in the imported file names it, relative to the project, and says nothing of the temp folder
+    let (_, j) = tool_json(&replies, 4);
+    let e = &j.get("errors").and_then(Json::as_array).unwrap()[0];
+    assert_eq!(e.get("file").and_then(Json::as_str), Some("shapes.nyra"), "{j:?}");
+    assert_eq!(e.get("code").and_then(Json::as_str), Some("E0224"));
+    assert!(!e.get("message").and_then(Json::as_str).unwrap().contains("standard module"));
+    // a missing file does not leak the folder the files were written to
+    let (_, j) = tool_json(&replies, 5);
+    let msg = j.get("errors").and_then(Json::as_array).unwrap()[0].get("message").and_then(Json::as_str).unwrap().to_string();
+    assert!(msg.contains("no file `shapes.nyra`") && !msg.contains("proj-"), "{msg}");
+    let (is_error, text) = tool_text(&replies, 6);
+    assert!(is_error && text.contains("is not a file name Nyra imports"), "{text}");
+    let (is_error, text) = tool_text(&replies, 7);
+    assert!(is_error && text.contains("either `code` or `files`"), "{text}");
+    let (_, j) = tool_json(&replies, 8);
+    assert!(j.get("source").and_then(Json::as_str).unwrap().contains("area"));
+    let (_, text) = tool_text(&replies, 9);
+    assert!(text.contains("1 pub struct Rect") && text.contains("2 pub fn area(r: Rect) -> int"), "{text}");
+    let (_, j) = tool_json(&replies, 10);
+    assert!(j.get("code").and_then(Json::as_str).unwrap().ends_with("fn double(n: int) -> int = n * 2
+"), "{j:?}");
+    assert_eq!(j.get("file").and_then(Json::as_str), Some("main.nyra"));
+    let (_, j) = tool_json(&replies, 11);
+    assert_eq!(j.get("ok").and_then(Json::as_bool), Some(true), "{j:?}");
+}
+
+#[test]
+fn errors_with_one_certain_fix_are_repaired_in_memory_unless_strict() {
+    let semicolon = "fn main() {
+    let x = 1;
+    print(x)
+}
+";
+    let requests = vec![
+        call(1, "nyra_check", &format!(r#"{{"code":{}}}"#, esc(semicolon))),
+        call(2, "nyra_check", &format!(r#"{{"code":{},"strict":true}}"#, esc(semicolon))),
+        call(3, "nyra_run", &format!(r#"{{"code":{},"sandbox":true}}"#, esc(semicolon))),
+        call(4, "nyra_test", &format!(r#"{{"code":{}}}"#, esc(semicolon))),
+        call(5, "nyra_check", &format!(r#"{{"code":{}}}"#, esc("print(\"cost: ${3}\")
+"))),
+        call(6, "nyra_build", &format!(r#"{{"code":{},"target":"js"}}"#, esc(semicolon))),
+    ];
+    let replies = session(&requests);
+    let (_, j) = tool_json(&replies, 1);
+    assert_eq!(j.get("ok").and_then(Json::as_bool), Some(true), "{j:?}");
+    let w = &j.get("warnings").and_then(Json::as_array).unwrap()[0];
+    assert_eq!(w.get("code").and_then(Json::as_str), Some("E0005"));
+    assert_eq!(w.get("applied").and_then(Json::as_str), Some("`let x = 1`"));
+    assert!(w.get("fix").is_some());
+    let (_, j) = tool_json(&replies, 2);
+    assert_eq!(j.get("ok").and_then(Json::as_bool), Some(false), "{j:?}");
+    assert!(j.get("warnings").is_none());
+    let (_, j) = tool_json(&replies, 3);
+    assert_eq!(j.get("stdout").and_then(Json::as_str), Some("1
+"), "{j:?}");
+    assert_eq!(j.get("warnings").and_then(Json::as_array).unwrap().len(), 1);
+    let (_, j) = tool_json(&replies, 4);
+    assert_eq!(j.get("ok").and_then(Json::as_bool), Some(true), "{j:?}");
+    assert_eq!(j.get("warnings").and_then(Json::as_array).unwrap().len(), 1);
+    // the compiler's own warnings are listed too
+    let (_, j) = tool_json(&replies, 5);
+    assert_eq!(j.get("warnings").and_then(Json::as_array).unwrap()[0].get("code").and_then(Json::as_str), Some("E0260"), "{j:?}");
+    let (_, j) = tool_json(&replies, 6);
+    assert_eq!(j.get("warnings").and_then(Json::as_array).unwrap().len(), 1);
+}

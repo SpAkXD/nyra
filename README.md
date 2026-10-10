@@ -337,7 +337,7 @@ both backends and the error database as tools, and needs no files or shell acces
 | `nyra_test` | `{code}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
 | `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
-| `nyra_check` | `{code, allow?}` → the same JSON as `nyra check --json` (with the capabilities `nyra_run` would grant) |
+| `nyra_check` | `{code, allow?, strict?}` → the same JSON as `nyra check --json` (with the capabilities `nyra_run` would grant). `files: {"main.nyra": ..., "shapes.nyra": ...}` replaces `code` for a program of several files (`use ./shapes`); `nyra_test`, `nyra_run` and `nyra_build` take them too. An error with one certain fix is repaired in memory and listed under `warnings` unless `strict: true` |
 | `nyra_test` | `{code, allow?}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?, allow?: ["fs", "os", "input", "net"], sandbox?, fuel?, max_memory?, max_output?, args?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped; grants only `input` unless `allow` says more; `sandbox: true` runs it in the interpreter with limits, no child process) |
 | `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |

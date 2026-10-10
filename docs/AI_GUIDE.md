@@ -120,7 +120,7 @@ reports runtime errors as JSON too.
 **If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
 same loop needs no files: `nyra_check {code}` returns the JSON above (failed examples included),
 `nyra_test {code}` the result of every example, `nyra_run {code, backend}` returns
-`stdout`, `exit` and runtime `errors` (it grants only standard input: pass `allow: ["fs"]` or `["os"]` for a program that
+`stdout`, `exit` and runtime `errors`. A program of several files is `files: {"main.nyra": ..., "shapes.nyra": ...}` instead of `code` (so `use ./shapes` works; `entry` names another main file). Like the CLI, an error with exactly one certain fix is repaired in memory and listed under `warnings` (`strict: true` turns that off). It grants only standard input: pass `allow: ["fs"]` or `["os"]` for a program that
 uses those modules, or E0290 says so; `sandbox: true` runs it in the interpreter with `fuel`, `max_memory` and
 `max_output` limits), `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
 the agent card (`full: true`: the complete language spec). `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by

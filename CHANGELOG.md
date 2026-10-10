@@ -11,6 +11,8 @@ Language
 
 Tooling
 - `nyra outline`, `show` and `edit` (and the MCP tools `nyra_outline`, `nyra_show`, `nyra_edit`) know enums: the outline lists `enum Shape { Circle(float), Empty }` with its variants (`--json` has `variants`), `Enum.Variant` addresses one variant, and an edit can replace, add (`@add-variant Shape Tri(float)` / `--add-variant`), delete or rename an enum or a variant, with every reference. A rename now also follows the uses inside `ex` examples.
+- MCP: the tools `nyra_check`, `nyra_test`, `nyra_run` and `nyra_build` accept `files` (a map of file names to text) instead of `code`, so `use ./shapes` works over MCP (`entry` names the main file; `nyra_outline`, `nyra_show` and `nyra_edit` take `files` and `file`). They repair an error that has exactly one certain fix in memory, like the CLI, and return the repairs and the compiler's warnings under `warnings`; `strict: true` turns the repairs off.
+- Fixed: an error inside an imported file of your own was reworded as a bug of a bundled standard module.
 
 ## v0.6.0 (2026-10-10)
 

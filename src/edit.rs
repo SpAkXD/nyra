@@ -403,6 +403,19 @@ pub fn outline(text: &str) -> Outline {
                 out.items.push(item);
                 i = next.max(i + 1);
             }
+            // `pub fn`, `pub struct`, `pub enum` of a module: the definition starts at `pub`
+            Tok::Ident(w) if w == "pub" && matches!(scan.tok(i + 1), Tok::Fn | Tok::Struct | Tok::Enum) => {
+                let (mut item, next) = match scan.tok(i + 1) {
+                    Tok::Fn => scan.func(i + 1),
+                    Tok::Struct => scan.record(i + 1, Kind::Struct),
+                    _ => scan.record(i + 1, Kind::Enum),
+                };
+                item.start = scan.at(i);
+                item.doc = scan.doc(item.start);
+                item.sig = format!("pub {}", item.sig);
+                out.items.push(item);
+                i = next.max(i + 2);
+            }
             _ => {
                 let k = scan.line_end_tok(i);
                 let (start, end) = (scan.at(i), scan.with_comment(scan.end_before(k)));
@@ -1755,9 +1768,9 @@ fn edit_cli(file: &str, src: &str, args: Vec<String>, json: bool) -> ExitCode {
 
 /// The tool definitions `nyra mcp` adds to its list.
 pub const TOOLS: &str = r#"[
-{"name":"nyra_outline","title":"Outline a Nyra file","description":"The cheapest view of a Nyra program: one line per function (signature), struct (fields) and enum (variants) with its line range, e.g. `6-9 fn area(r: Rect) -> int`. Read this instead of the whole file, then nyra_show the symbols you need.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_show","title":"Show Nyra symbols","description":"The source of functions, structs, enums, fields (Struct.field) or variants (Enum.Variant) by name, exactly as in the file.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"name":{"type":"string","description":"one or more names separated by spaces"}},"required":["name"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_edit","title":"Edit Nyra symbols by name","description":"Change a program by symbol instead of resending it. edits: plain definitions replace the symbols of their names (or are added), or commands: `@replace NAME` + code, `@add [after|before NAME]` + code, `@delete NAME`, `@rename NAME NEW` (updates every reference), `@add-field Struct name: type`, `@add-variant Enum Name(type)`. Fields are Struct.field, variants Enum.Variant. The rest of the file stays byte-identical. The result is checked: an edit that adds errors is refused with the errors (force applies it). With path the file is written and only a summary returns; with code the new code returns.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file to edit in place"},"code":{"type":"string","description":"or the program itself"},"edits":{"type":"string","description":"the edit script"},"force":{"type":"boolean","description":"apply even if errors are added"},"fix":{"type":"boolean","description":"repair errors with a certain fix first"}},"required":["edits"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}}
+{"name":"nyra_outline","title":"Outline a Nyra file","description":"The cheapest view of a Nyra program: one line per function (signature), struct (fields) and enum (variants) with its line range, e.g. `6-9 fn area(r: Rect) -> int`. Read this instead of the whole file, then nyra_show the symbols you need.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name -> text"},"file":{"type":"string","description":"with files: the file to work on (default main.nyra)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_show","title":"Show Nyra symbols","description":"The source of functions, structs, enums, fields (Struct.field) or variants (Enum.Variant) by name, exactly as in the file.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name -> text"},"file":{"type":"string","description":"with files: the file to work on (default main.nyra)"},"name":{"type":"string","description":"one or more names separated by spaces"}},"required":["name"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_edit","title":"Edit Nyra symbols by name","description":"Change a program by symbol instead of resending it. edits: plain definitions replace the symbols of their names (or are added), or commands: `@replace NAME` + code, `@add [after|before NAME]` + code, `@delete NAME`, `@rename NAME NEW` (updates every reference), `@add-field Struct name: type`, `@add-variant Enum Name(type)`. Fields are Struct.field, variants Enum.Variant. The rest of the file stays byte-identical. The result is checked: an edit that adds errors is refused with the errors (force applies it). With path the file is written and only a summary returns; with code the new code returns.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file to edit in place"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files (so that `use ./name` is checked): file name -> text; the edit works on `file` and the new code of that file comes back"},"file":{"type":"string","description":"with files: the file to edit (default main.nyra)"},"edits":{"type":"string","description":"the edit script"},"force":{"type":"boolean","description":"apply even if errors are added"},"fix":{"type":"boolean","description":"repair errors with a certain fix first"}},"required":["edits"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}}
 ]"#;
 
 fn tool_error(msg: impl Into<String>) -> String {
@@ -1780,25 +1793,33 @@ fn arg_bool(args: &Json, key: &str) -> Result<bool, String> {
     }
 }
 
-/// The program of a tool call: (source, file name, path to write back).
-fn source(args: &Json) -> Result<(String, String, Option<String>), String> {
+/// The program of a tool call: (source, file name, path to write back, the folder of `files`).
+fn source(args: &Json, dir: &std::path::Path) -> Result<(String, String, Option<String>, Option<crate::mcp::Program>), String> {
+    let files = !matches!(args.get("files"), None | Some(Json::Null));
     match (arg_str(args, "path")?, arg_str(args, "code")?) {
+        (None, None) if files => {
+            // a program of several files: `file` says which one the tool works on
+            let program = crate::mcp::program_in(dir, args, arg_str(args, "file")?)?;
+            program.enter();
+            Ok((program.src.clone(), program.name.clone(), None, Some(program)))
+        }
+        (path, code) if files && (path.is_some() || code.is_some()) => Err(tool_error("give one of path, code or files")),
         (Some(_), Some(_)) => Err(tool_error("give either path or code, not both")),
-        (None, None) => Err(tool_error("missing argument `path` (a .nyra file) or `code`")),
-        (None, Some(code)) => Ok((code.to_string(), "main.nyra".into(), None)),
+        (None, None) => Err(tool_error("missing argument `path` (a .nyra file), `code` or `files`")),
+        (None, Some(code)) => Ok((code.to_string(), "main.nyra".into(), None, None)),
         (Some(path), None) => {
             if !path.ends_with(".nyra") {
                 return Err(tool_error(format!("path must be a .nyra file, found `{path}`")));
             }
             let text = std::fs::read_to_string(path).map_err(|e| tool_error(format!("cannot read `{path}`: {e}")))?;
-            Ok((text, path.to_string(), Some(path.to_string())))
+            Ok((text, path.to_string(), Some(path.to_string()), None))
         }
     }
 }
 
 /// `nyra_outline`, `nyra_show` and `nyra_edit`: `Ok` is a normal result, `Err` one with `isError`.
-pub fn tool(name: &str, args: &Json) -> Result<String, String> {
-    let (src, file, path) = source(args)?;
+pub fn tool(name: &str, args: &Json, dir: &std::path::Path) -> Result<String, String> {
+    let (src, file, path, _project) = source(args, dir)?;
     match name {
         "nyra_outline" => Ok(outline_text(&src, &file)),
         "nyra_show" => {
@@ -1820,7 +1841,12 @@ pub fn tool(name: &str, args: &Json) -> Result<String, String> {
                     std::fs::write(p, &out.text).map_err(|e| tool_error(format!("cannot write `{p}`: {e}")))?;
                 }
             }
-            Ok(outcome_json(&out, applied, path.is_none()).to_string())
+            let mut json = outcome_json(&out, applied, path.is_none());
+            // for `files`: which file the code is
+            if let (Some(p), Json::Obj(fields)) = (&_project, &mut json) {
+                fields.push(("file".to_string(), p.name.clone().into()));
+            }
+            Ok(json.to_string())
         }
     }
 }
