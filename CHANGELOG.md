@@ -3,8 +3,9 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
-## Unreleased
+## v0.7.0 (2026-10-10)
 
+Speed
 - **`nyra run` is automatic.** It used to wait about half a second for the C compiler before the first line of
   output, even for a ten-line program. Now a cached build of the exact source runs as it is; any other program
   starts in the interpreter with its output kept and a budget of 4,000,000 steps and 350 ms, while the C compiler starts in
@@ -14,7 +15,7 @@ version to the next; each entry says what changed. Error codes are stable: a num
   for the end of its input. Output, exit codes and runtime errors are the same in every mode. `--native` forces
   the old way; `--release` implies it. Without a C compiler `run` interprets. The MCP tool `nyra_run` does the same
   (`"mode":"interp"` in its reply when the interpreter answered). See research/SPEED-run.md for the numbers.
-## v0.7.0 (unreleased)
+- **A browser playground** (https://nyralang.dev/play/): the compiler builds to WebAssembly with no crates (`python tools/build_wasm.py`), and the page runs programs in the sandboxed interpreter in a Web Worker.
 
 Language
 - Enums that carry values (sum types): `enum Shape { Circle(float), Rect(float, float), Empty }`, built `Shape.Circle(2.0)`, taken apart with `match s { Shape.Circle(r) => ..., Shape.Rect(w, h) => ..., Shape.Empty => ... }` (every case must be covered, `_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`. New codes E0286 (a variant written without its values), E0287 (a variant pattern that does not name its values), E0288 (`all()` of an enum with values); E0222 also covers an enum that contains itself.

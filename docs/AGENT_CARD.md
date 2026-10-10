@@ -2,7 +2,7 @@
 TOKENS: 1392 on claude-sonnet-5-5, 1132 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The full language is docs/SPEC.md; this card must describe the current compiler exactly (tests/docs.rs runs its example). -->
-# Nyra v0.6 agent card
+# Nyra v0.7 agent card
 Not Rust, Go, TypeScript or Python: use only what is listed.
 
 ```nyra
