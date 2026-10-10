@@ -385,16 +385,42 @@ pub struct StructDef {
     pub name: String,
     pub fields: Vec<Field>,
     pub span: Span,
-    /// The variants of an enum (its one field is the number of the variant); empty for a struct.
+    /// The variants of an enum (its first field is the number of the variant); empty for a struct.
     pub variants: Vec<String>,
+    /// How many values each variant carries (same length as `variants`); the fields after the
+    /// number of the variant hold them: the first variant's values first.
+    pub payloads: Vec<usize>,
 }
 
-/// `enum Dir { N, E, S, W }`
+impl StructDef {
+    /// The index of the first field of each variant's values (the number of the variant is field 0).
+    pub fn slot_starts(payloads: &[usize]) -> Vec<usize> {
+        let mut next = 1;
+        payloads
+            .iter()
+            .map(|n| {
+                let at = next;
+                next += n;
+                at
+            })
+            .collect()
+    }
+}
+
+/// `enum Dir { N, E, S, W }`, or with values: `enum Shape { Circle(float), Rect(float, float), Empty }`
 #[derive(Debug)]
 pub struct EnumDef {
     pub name: String,
-    pub variants: Vec<(String, Span)>,
+    pub variants: Vec<Variant>,
     pub span: Span,
+}
+
+/// One variant of an enum, with the types of the values it carries (none for `N`).
+#[derive(Debug)]
+pub struct Variant {
+    pub name: String,
+    pub span: Span,
+    pub fields: Vec<(Type, Span)>,
 }
 
 /// One arm of a `match`: the patterns that select it (`Dir.N, Dir.S => ...`), or `_`.

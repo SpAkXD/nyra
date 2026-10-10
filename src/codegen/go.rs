@@ -225,7 +225,24 @@ fn structs(m: &Module, out: &mut String) {
         if !s.variants.is_empty() {
             // an enum value prints as its variant: `Dir.N`
             let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
-            let _ = writeln!(out, "\tb.WriteString([]string{{{}}}[v.{}])\n}}\n", names.join(", "), name(&s.fields[0].0));
+            let tag = name(&s.fields[0].0);
+            let _ = writeln!(out, "\tb.WriteString([]string{{{}}}[v.{tag}])", names.join(", "));
+            // `Shape.Circle(2)`: the values of the variant, as a struct prints its fields
+            if s.payloads.iter().any(|n| *n > 0) {
+                let _ = writeln!(out, "\tswitch v.{tag} {{");
+                for (v, _) in s.payloads.iter().enumerate().filter(|(_, n)| **n > 0) {
+                    let _ = writeln!(out, "\tcase {v}:\n\t\tb.WriteByte('(')");
+                    for (j, k) in s.slots(v).enumerate() {
+                        if j > 0 {
+                            let _ = writeln!(out, "\t\tb.WriteString(\", \")");
+                        }
+                        let _ = writeln!(out, "\t\tnyShowAny(b, v.{})", name(&s.fields[k].0));
+                    }
+                    let _ = writeln!(out, "\t\tb.WriteByte(')')");
+                }
+                out.push_str("\t}\n");
+            }
+            out.push_str("}\n\n");
             continue;
         }
         if s.option {

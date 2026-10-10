@@ -1417,6 +1417,17 @@ fn show_in(m: &Module, v: &Value, out: &mut String, depth: usize) {
                 if let Value::Int(k) = &fields[0] {
                     if let Some(v) = info.variants.get(*k as usize) {
                         out.push_str(&format!("{}.{v}", info.name));
+                        // `Shape.Circle(2)`: the values of the variant
+                        if info.payloads.get(*k as usize).is_some_and(|n| *n > 0) {
+                            out.push('(');
+                            for (j, slot) in info.slots(*k as usize).enumerate() {
+                                if j > 0 {
+                                    out.push_str(", ");
+                                }
+                                show_in(m, &fields[slot], out, depth + 1);
+                            }
+                            out.push(')');
+                        }
                         return;
                     }
                 }

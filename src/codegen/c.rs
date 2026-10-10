@@ -169,6 +169,20 @@ fn field(info: &StructInfo, k: usize) -> String {
     var(&info.fields[k].0)
 }
 
+/// The statement that writes field `f` of `v` (of type `t`) the way `print` shows it.
+fn fmt_line(t: Ty, f: &str) -> String {
+    match t {
+        Ty::Int => format!("nyrt_buf_int(o, v->{f});"),
+        Ty::Float => format!("nyrt_buf_float(o, v->{f});"),
+        Ty::Bool => format!("nyrt_buf_bool(o, v->{f});"),
+        Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
+        Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
+        Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
+        Ty::Map(_) => format!("nyrt_buf_map(o, v->{f});"),
+        _ => format!("{}_fmt(o, &v->{f});", ctype(t)),
+    }
+}
+
 /// The typedef, the reference counting, equality and printing of every struct, and the type
 /// descriptor that arrays of it use.
 fn structs(m: &Module, out: &mut String) {
@@ -238,9 +252,25 @@ fn structs(m: &Module, out: &mut String) {
             let f = field(s, 0);
             let _ = writeln!(
                 out,
-                "    static const char *const names[] = {{ {} }};\n    nyrt_buf_lit(o, names[v->{f}], (int64_t)strlen(names[v->{f}]));\n}}",
+                "    static const char *const names[] = {{ {} }};\n    nyrt_buf_lit(o, names[v->{f}], (int64_t)strlen(names[v->{f}]));",
                 names.join(", ")
             );
+            // `Shape.Circle(2)`: the values of the variant, as a struct prints its fields
+            if s.payloads.iter().any(|n| *n > 0) {
+                let _ = writeln!(out, "    switch (v->{f}) {{");
+                for (v, _) in s.payloads.iter().enumerate().filter(|(_, n)| **n > 0) {
+                    let _ = writeln!(out, "    case {v}:\n        nyrt_buf_lit(o, \"(\", 1);");
+                    for (j, k) in s.slots(v).enumerate() {
+                        if j > 0 {
+                            let _ = writeln!(out, "        nyrt_buf_lit(o, \", \", 2);");
+                        }
+                        let _ = writeln!(out, "        {}", fmt_line(s.fields[k].1, &field(s, k)));
+                    }
+                    let _ = writeln!(out, "        nyrt_buf_lit(o, \")\", 1);\n        break;");
+                }
+                let _ = writeln!(out, "    default: break;\n    }}");
+            }
+            out.push_str("}\n");
             continue;
         }
         // (a tuple prints as `(1, "a")`: no name, no field names)
@@ -271,18 +301,7 @@ fn structs(m: &Module, out: &mut String) {
             if !label.is_empty() {
                 let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
             }
-            let f = field(s, k);
-            let line = match t {
-                Ty::Int => format!("nyrt_buf_int(o, v->{f});"),
-                Ty::Float => format!("nyrt_buf_float(o, v->{f});"),
-                Ty::Bool => format!("nyrt_buf_bool(o, v->{f});"),
-                Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
-                Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
-                Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
-                Ty::Map(_) => format!("nyrt_buf_map(o, v->{f});"),
-                _ => format!("{}_fmt(o, &v->{f});", ctype(*t)),
-            };
-            let _ = writeln!(out, "    {line}");
+            let _ = writeln!(out, "    {}", fmt_line(*t, &field(s, k)));
         }
         out.push_str("    nyrt_buf_lit(o, \")\", 1);\n}\n");
     }

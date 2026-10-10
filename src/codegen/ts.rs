@@ -248,7 +248,18 @@ fn classes(m: &Module, out: &mut String) {
         let head = if s.tuple { String::new() } else { template_text(&s.name) };
         if !s.variants.is_empty() {
             let names: Vec<String> = s.variants.iter().map(|v| crate::diag::json_str(&format!("{}.{v}", s.name))).collect();
-            let _ = writeln!(out, "    ny_fmt(): string {{\n        return [{}][this.{}];\n    }}", names.join(", "), fields[0]);
+            // `Shape.Circle(2)`: the values of a variant that carries any, as a struct prints its fields
+            let mut cases = String::new();
+            for v in (0..s.variants.len()).filter(|v| s.payloads.get(*v).is_some_and(|n| *n > 0)) {
+                let vals: Vec<String> = s.slots(v).map(|k| format!("${{ny_fmt(this.{}, \"{}\")}}", fields[k], tdesc(s.fields[k].1))).collect();
+                let _ = writeln!(cases, "        if (this.{} === {v}) return `${{n}}({})`;", fields[0], vals.join(", "));
+            }
+            let _ = writeln!(
+                out,
+                "    ny_fmt(): string {{\n        const n = [{}][this.{}];\n{cases}        return n;\n    }}",
+                names.join(", "),
+                fields[0]
+            );
         } else if s.option {
             let _ = writeln!(
                 out,

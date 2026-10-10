@@ -838,12 +838,31 @@ impl Parser {
             }
             let (vname, vspan) =
                 self.ident("a variant name", "variants are plain names, separated by commas or new lines: `enum Dir { N, E }`")?;
+            // `Circle(float)`, `Rect(float, float)`: the types of the values the variant carries
+            let mut fields = Vec::new();
             if self.at(&Tok::LParen) {
-                return Err(self
-                    .unexpected("`,`, a new line or `}` after a variant")
-                    .hint("a variant carries no values yet: for data, use a struct next to the enum"));
+                let open = self.bump().span;
+                let hint = format!("a variant lists the types of its values: `enum {name} {{ Circle(float), Rect(float, float), Empty }}`");
+                loop {
+                    self.skip_newlines();
+                    if self.at(&Tok::RParen) && !fields.is_empty() {
+                        break;
+                    }
+                    let at = self.span();
+                    fields.push((self.ty(&hint)?, at));
+                    self.skip_newlines();
+                    if self.at(&Tok::Comma) {
+                        self.bump();
+                        continue;
+                    }
+                    break;
+                }
+                if fields.is_empty() || !self.at(&Tok::RParen) {
+                    return Err(self.unexpected(&format!("`)` to close the values of `{vname}` opened at {}:{}", open.line, open.col)).or_hint(hint));
+                }
+                self.bump();
             }
-            variants.push((vname, vspan));
+            variants.push(Variant { name: vname, span: vspan, fields });
             match self.peek() {
                 Tok::Comma | Tok::Newline => {
                     self.bump();
@@ -911,7 +930,7 @@ impl Parser {
                 }
             }
         }
-        Ok(StructDef { name, fields, span, variants: Vec::new() })
+        Ok(StructDef { name, fields, span, variants: Vec::new(), payloads: Vec::new() })
     }
 
     /// E0263 for the `fn` here, written inside `struct name { }`.
@@ -1682,25 +1701,7 @@ impl Parser {
             match self.match_arm() {
                 Ok(arm) => arms.push(arm),
                 Err(d) => {
-                    // one mistake, one error: skip the rest of the match
-                    self.errs.push(d);
-                    self.queue.clear();
-                    let mut depth = 0usize;
-                    let mut k = open;
-                    while k < self.toks.len() - 1 {
-                        match self.toks[k].tok {
-                            Tok::LBrace => depth += 1,
-                            Tok::RBrace => {
-                                depth -= 1;
-                                if depth == 0 {
-                                    break;
-                                }
-                            }
-                            _ => {}
-                        }
-                        k += 1;
-                    }
-                    self.pos = (k + 1).min(self.toks.len() - 1);
+                    self.skip_match(d, open);
                     break;
                 }
             }
@@ -1709,9 +1710,31 @@ impl Parser {
         Ok(Stmt { kind: StmtKind::Match { scrut, arms }, span })
     }
 
-    /// One arm of a `match`: `pattern, pattern => body`.
-    fn match_arm(&mut self) -> PResult<MatchArm> {
-        let arm_span = self.span();
+    /// After a mistake in a `match` (the `{` is token `open`): one mistake, one error, so the rest of the
+    /// `match` is skipped.
+    fn skip_match(&mut self, d: Diag, open: usize) {
+        self.errs.push(d);
+        self.queue.clear();
+        let mut depth = 0usize;
+        let mut k = open;
+        while k < self.toks.len() - 1 {
+            match self.toks[k].tok {
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            k += 1;
+        }
+        self.pos = (k + 1).min(self.toks.len() - 1);
+    }
+
+    /// The patterns of an arm, up to the `=>`: `pattern, pattern` or `_`.
+    fn match_patterns(&mut self) -> PResult<(Vec<Expr>, bool)> {
         let mut pats = Vec::new();
         let mut wild = false;
         loop {
@@ -1733,6 +1756,13 @@ impl Parser {
             }
             break;
         }
+        Ok((pats, wild))
+    }
+
+    /// One arm of a `match`: `pattern, pattern => body`.
+    fn match_arm(&mut self) -> PResult<MatchArm> {
+        let arm_span = self.span();
+        let (pats, wild) = self.match_patterns()?;
         self.expect(Tok::FatArrow, "`=>` after the pattern")
             .map_err(|d| d.or_hint("an arm looks like `Dir.N => print(\"north\")`, or `Dir.E, Dir.W => { ... }`"))?;
         let body = if self.at(&Tok::LBrace) {

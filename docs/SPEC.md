@@ -33,7 +33,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
 | `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
-| `Dir` | an enum you declare: one of its named cases, `Dir.N` |
+| `Dir` | an enum you declare: one of its named cases, `Dir.N`, which may carry values, `Shape.Circle(2.0)` |
 
 There are no optional types and no null: `int?` and `Option<int>` are E0262. Return a sentinel (`-1`, `""`) or a `bool`.
 
@@ -373,16 +373,38 @@ match 7 % 2 {
 ```
 An enum value is one of its variants, always written `Enum.Variant` (a bare `N` is E0278). It prints as
 `Dir.N`, compares with `==` and `!=` by variant, is copied like any value, and can be stored in arrays and
-struct fields; it cannot be ordered, be a map key or go through `json`. `Enum.all()` is the array of all
-variants, in order.
+struct fields; it cannot be ordered or be a map key. `Enum.all()` is the array of all variants, in order.
+
+A variant may carry values, written as types after its name. It is built by calling it, and `match` takes
+the values out by naming them:
+```nyra
+enum Shape { Circle(float), Rect(float, float), Empty }
+
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r      // `r` is the value of the variant
+        Shape.Rect(w, h) => return w * h
+        Shape.Empty => return 0.0
+    }
+}
+
+let c = Shape.Circle(2.0)
+print(c, Shape.Rect(1.0, 2.5), c == Shape.Circle(2.0), area(c))   // Shape.Circle(2) Shape.Rect(1, 2.5) true 12
+```
+A variant that carries values is always written with them (`Shape.Circle` alone is E0286), in the order and
+types it declares (a wrong count is E0204, a wrong type E0203). Values compare with `==` by variant and
+values, and print like a struct's fields: `Token.Pair(3, "x")`. A pattern names every value, `_` for one that is
+not needed (`Shape.Rect(_, h)`; a wrong count or a literal is E0287, and so are names in an arm with several
+patterns). The names are `let`s of that arm. An enum cannot contain itself (E0222): keep recursive data in an
+array, `Node([Tree])`. `Enum.all()` needs variants without values (E0288).
 
 `match value { pattern => body }` picks the first arm whose pattern equals the value. A pattern is a variant
 of the matched enum, or a literal `int`, `str`, `char` or `bool` (a `-` literal cannot start a line:
 `4, -1 =>`); several patterns are separated by commas; `_` takes anything. The body is one statement after
 `=>`, or a block `{ ... }`. All cases must be covered (E0281): for an enum every variant or a `_` arm, for a
 `bool` both values, for an `int`, `str` or `char` a `_` arm. An arm that can never run is E0283, and a
-pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. `match` is a
-statement: to give a value, `ret` it or assign it in the arms.
+pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. As a
+statement, `match` `return`s a value or assigns it in the arms.
 
 ## Optional values
 ```nyra

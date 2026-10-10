@@ -6176,3 +6176,78 @@ error[E0201]: undefined variable `local`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
+==== enum_payload_bare
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle
+    print(s)
+}
+----
+error[E0286]: the variant `Shape.Circle` carries 1 value, so it is written with them
+  --> case.nyra:4:19
+  |
+4 |     let s = Shape.Circle
+  |                   ^
+  = hint: write `Shape.Circle(float)`, e.g. `Shape.Circle(0.0)`
+  = explain: nyra explain E0286
+
+nyra: 1 error(s)
+==== enum_payload_arity
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0)
+    print(s)
+}
+----
+error[E0204]: `Shape.Rect(float, float)` takes 2 values but 1 was given
+  --> case.nyra:4:19
+  |
+4 |     let s = Shape.Rect(1.0)
+  |                   ^
+  = hint: write `Shape.Rect(float, float)`, e.g. `Shape.Rect(0.0, 0.0)`
+  = explain: nyra explain E0204
+
+nyra: 1 error(s)
+==== enum_pattern_arity
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0, 2.0)
+    match s {
+        Shape.Circle(r) => print(r)
+        Shape.Rect(w) => print(w)
+    }
+}
+----
+error[E0287]: the pattern names 1 value but `Shape.Rect(float, float)` carries 2 values
+  --> case.nyra:7:15
+  |
+7 |         Shape.Rect(w) => print(w)
+  |               ^
+  = hint: write one name for each value, `_` for one you do not need: `Shape.Rect(_, _)`
+  = explain: nyra explain E0287
+
+nyra: 1 error(s)
+==== enum_pattern_bare
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle(1.0)
+    match s {
+        Shape.Circle => print("round")
+        Shape.Empty => print("none")
+    }
+}
+----
+error[E0287]: the pattern `Shape.Circle` does not name the 1 value of the variant
+  --> case.nyra:6:15
+  |
+6 |         Shape.Circle => print("round")
+  |               ^
+  = hint: a variant that carries values is matched with a name for each, `_` for one you do not need: `Shape.Circle(_)`
+  = fix: `Shape.Circle(_) => print("round")`
+  = explain: nyra explain E0287
+
+nyra: 1 error(s)

@@ -329,8 +329,12 @@ Good to know:
   `Dir.N`, and prints as `Dir.N`. Take it apart with `match`, which must cover every case:
   `match d { Dir.N => return 1  Dir.E, Dir.W => return 2  _ => return 3 }` (one arm per line, `_` takes the rest, an arm
   body is one statement or a `{ }` block). `match` also works on an `int`, `str`, `char` or `bool` (an `int`
-  needs a `_` arm); it is a statement, so `ret` the value or assign it in the arms. `Dir.all()` is the array of
-  all cases.
+  needs a `_` arm); as a statement it `ret`urns the value or assigns it in the arms. `Dir.all()` is the array of
+  all cases. A variant may carry values: `enum Shape { Circle(float), Rect(float, float), Empty }`, built
+  `Shape.Circle(2.0)` (always with its values), taken apart by naming them,
+  `match s { Shape.Circle(r) => return 3.0 * r * r  Shape.Rect(w, h) => return w * h  Shape.Empty => return 0.0 }`
+  (`_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`; an enum cannot contain itself
+  (keep children in an array: `Node([Tree])`) and `Shape.all()` needs variants without values.
 - A value that may be missing is an optional: `m.get(k)`, `xs.find(x => x > 3)` and `s.to_int()` give a `V?` that
   is a value or `none`. Unwrap with `m.get(k) ?? 0`, `if let v = m.get(k) { ... } else { ... }` or
   `.unwrap()` (stops with E0350 on `none`); test with `x != none` or `x.is_some()`. Declare one with
@@ -385,7 +389,7 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, `Result`, generics, enums with values or type aliases. Use a map
+- **Types**: no sets, `Result`, generics or type aliases (an enum may carry values, section 3). Use a map
   `[str: bool]` or `contains` for a set. Tuples `(int, str)`, optionals `int?` (section 3) and maps `[K: V]`
   (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
@@ -482,6 +486,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
 | E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
 | E0278 | no such enum variant | a variant is written with its enum, `Dir.N` (also in `match` arms) |
+| E0286 | variant written without its values | `Shape.Circle(1.5)`, not `Shape.Circle` |
+| E0287 | variant pattern does not name the values | `Shape.Rect(w, h)`; `_` skips one; no literals, one arm per variant |
+| E0288 | `all()` of an enum with values | list the variants by hand: `[Shape.Circle(1.0), Shape.Empty]` |
 | E0279 | bad `match` pattern or value | patterns are constants of the matched type; match an enum, `bool`, `int`, `str` or `char` |
 | E0281 | `match` does not cover every case | add the missing arms, or a last arm `_ => ...` |
 | E0283 | `match` arm can never run | a repeated pattern, or an arm after `_` |

@@ -265,7 +265,24 @@ fn classes(m: &Module, out: &mut String) {
         pieces.push(Piece::Text(")".into()));
         if !s.variants.is_empty() {
             let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
-            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return [{}][self.{}]\n\n", names.join(", "), fields[0]);
+            // `Shape.Circle(2)`: the values of a variant that carries any, as a struct prints its fields
+            let mut cases = String::new();
+            for (v, vname) in s.variants.iter().enumerate().filter(|(v, _)| s.payloads.get(*v).is_some_and(|n| *n > 0)) {
+                let mut ps = vec![Piece::Text(format!("{}.{vname}(", s.name))];
+                for (j, k) in s.slots(v).enumerate() {
+                    if j > 0 {
+                        ps.push(Piece::Text(", ".into()));
+                    }
+                    let t = s.fields[k].1;
+                    ps.push(Piece::Value(match t {
+                        Ty::Char | Ty::Str => format!("ny_show(self.{}, '{}')", fields[k], tdesc(t)),
+                        _ => shown_in_fstring(t, &format!("self.{}", fields[k])),
+                    }));
+                }
+                ps.push(Piece::Text(")".into()));
+                let _ = writeln!(cases, "        if self.{} == {v}:\n            return {}", fields[0], fstring(&ps));
+            }
+            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n{cases}        return [{}][self.{}]\n\n", names.join(", "), fields[0]);
         } else if s.option {
             // `none`, or `Some(value)`
             let (has, val) = (&fields[0], &fields[1]);

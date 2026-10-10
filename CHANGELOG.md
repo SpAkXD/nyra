@@ -3,6 +3,11 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.7.0 (unreleased)
+
+Language
+- Enums that carry values (sum types): `enum Shape { Circle(float), Rect(float, float), Empty }`, built `Shape.Circle(2.0)`, taken apart with `match s { Shape.Circle(r) => ..., Shape.Rect(w, h) => ..., Shape.Empty => ... }` (every case must be covered, `_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`. New codes E0286 (a variant written without its values), E0287 (a variant pattern that does not name its values), E0288 (`all()` of an enum with values); E0222 also covers an enum that contains itself.
+
 ## v0.6.0 (2026-10-10)
 
 Language

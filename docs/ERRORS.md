@@ -29,7 +29,7 @@ design may still change.
 | E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
 | E0260-E0269 | type checker, parser (since v0.6) | warnings (E0260) and mistakes taken from other languages: negative positions, `Option<T>`, methods in structs, classes |
 | E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
-| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match`, modules of your own |
+| E0270-E0289 | type checker (v0.6) | format specifiers, tuple patterns and positions, `in`, options, enums and `match`, modules of your own; since v0.7 variants that carry values (E0286-E0288) |
 | E0290-E0293 | capabilities and properties (since v0.6) | a `use` of a module the run does not grant; a malformed or too large `ex for` property example |
 | E0300-E0316 | standard modules (since v0.5), files of your own (v0.6); FFI (planned) | `use`, `use ./name`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
@@ -908,6 +908,7 @@ fn main() {
   - a linked list written as `next: Node`
   - a tree written with direct children (`left: Tree`, `right: Tree`)
   - two structs that contain each other (`struct A { b: B }` and `struct B { a: A }`)
+  - an enum whose variant carries the enum itself (`Node(Tree, Tree)`): write `Node([Tree])`; the message then says "enum `Tree` contains itself"
 - **Wrong:**
 ```rust
 struct Node {
@@ -2449,6 +2450,92 @@ fn main() {
 }
 ```
 - **Related:** E0332, E0208
+
+## E0286: a variant that carries values is written without them
+- **Kind:** compile error · **Since:** v0.7
+- **What it means:** A variant declared with values, like `Circle(float)` in `enum Shape { Circle(float), Empty }`, is written without them (`Shape.Circle`). Such a variant is built by calling it with its values, `Shape.Circle(1.5)`.
+- **Why Nyra has this rule:** `Shape.Circle` alone would be a function or a value without its data. A value of the enum always has every value its variant declares, so there is nothing half-built to forget later.
+- **Common causes:**
+  - `Shape.Circle` instead of `Shape.Circle(1.5)`
+  - a variant first written without values, then given some, while a use was not updated
+- **Wrong:**
+```rust
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle
+    print(s)
+}
+```
+- **Fixed:**
+```rust
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle(1.5)
+    print(s)
+}
+```
+- **Related:** E0204, E0287, E0278
+
+## E0287: a variant pattern does not name the values
+- **Kind:** compile error · **Since:** v0.7
+- **What it means:** In a `match`, the pattern of a variant that carries values must name each one (`Shape.Rect(w, h)`), with `_` for a value that is not needed. The pattern here names too few or too many, names none (`Shape.Circle =>`), puts a literal where a name belongs, or sits in an arm with several patterns that names values (the values would belong to different variants).
+- **Why Nyra has this rule:** A pattern is how the values come out of the enum value. Counting them keeps a variant that gains a value from silently matching old arms, and a name always takes exactly the value in its place.
+- **Common causes:**
+  - `Shape.Circle =>` when the variant has a value (write `Shape.Circle(_) =>`)
+  - one name too few for `Shape.Rect(w, h)`
+  - `Shape.Circle(1.0) =>`: a pattern compares nothing but the variant, use an `if` in the arm for the value
+  - `Shape.Circle(x), Shape.Square(x) =>`: one arm per variant, or `_`
+- **Wrong:**
+```rust
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0, 2.0)
+    match s {
+        Shape.Circle(r) => print(r)
+        Shape.Rect(w) => print(w)
+    }
+}
+```
+- **Fixed:**
+```rust
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0, 2.0)
+    match s {
+        Shape.Circle(r) => print(r)
+        Shape.Rect(w, h) => print(w * h)
+    }
+}
+```
+- **Related:** E0286, E0272, E0281
+
+## E0288: `all()` of an enum whose variants carry values
+- **Kind:** compile error · **Since:** v0.7
+- **What it means:** `Enum.all()` lists every variant of an enum, which only makes sense when each variant is a single value. When some variant carries values, like `Circle(float)`, there are as many values as there are numbers, so there is no list of them.
+- **Why Nyra has this rule:** A list the compiler cannot finish would have to invent values for the data. Write the array of the values you mean.
+- **Common causes:**
+  - a variant that was a plain name got a value later, and a `Shape.all()` loop was left behind
+- **Wrong:**
+```rust
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    print(Shape.all())
+}
+```
+- **Fixed:**
+```rust
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    print([Shape.Circle(1.0), Shape.Empty])
+}
+```
+- **Related:** E0286, E0278
 
 ## E0290: capability not granted
 - **Kind:** compile error · **Since:** v0.6
