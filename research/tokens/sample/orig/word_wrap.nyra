@@ -1,0 +1,16 @@
+let words = "the quick brown fox jumps over the lazy dog and keeps running far away from here".split(" ")
+var lines: [str] = []
+var cur = ""
+for w in words {
+    if cur == "" {
+        cur = w
+    } else if cur.len() + 1 + w.len() <= 18 {
+        cur = cur + " " + w
+    } else {
+        lines.push(cur)
+        cur = w
+    }
+}
+if cur != "" { lines.push(cur) }
+for l in lines { print(l) }
+print("lines: {lines.len()}")

@@ -12,6 +12,8 @@
 //! the counting; JavaScript marks values that have more than one owner as shared, so that a
 //! write copies them first.
 
+pub mod eval;
+pub mod interp;
 pub mod lower;
 pub mod opt;
 pub mod print;
@@ -19,6 +21,7 @@ pub mod verify;
 
 use crate::ast::Span;
 pub use crate::ast::Type as Ty;
+pub use crate::stdlib::StdFn;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FuncId(pub u32);
@@ -50,18 +53,18 @@ impl Structs {
         }
     }
 
-    /// True for types whose values own heap memory: strings, arrays, and structs with such a field.
+    /// True for types whose values own heap memory: strings, arrays, maps, and structs with such a field.
     pub fn managed(&self, t: Ty) -> bool {
         match t {
-            Ty::Str | Ty::Array(_) => true,
+            Ty::Str | Ty::Array(_) | Ty::Map(_) => true,
             Ty::Struct(_) => self.get(t).is_some_and(|s| s.managed),
             _ => false,
         }
     }
 
-    /// True for aggregates: arrays and structs (deep equality, copy on write in JavaScript).
+    /// True for aggregates: arrays, maps and structs (deep equality, copy on write in JavaScript).
     pub fn aggregate(t: Ty) -> bool {
-        matches!(t, Ty::Array(_) | Ty::Struct(_))
+        matches!(t, Ty::Array(_) | Ty::Struct(_) | Ty::Map(_))
     }
 }
 
@@ -84,6 +87,31 @@ impl Module {
 
     pub fn managed(&self, t: Ty) -> bool {
         self.structs.managed(t)
+    }
+
+    /// True if some statement of the program runs an operation for which `f` is true (a backend
+    /// adds a part of its runtime only when the program needs it).
+    pub fn uses(&self, f: &dyn Fn(RtOp) -> bool) -> bool {
+        fn any(ss: &[Stmt], f: &dyn Fn(RtOp) -> bool) -> bool {
+            ss.iter().any(|s| match &s.kind {
+                StmtKind::Op { op, .. } | StmtKind::Mutate { op, .. } => f(*op),
+                StmtKind::If { then, els, .. } => any(then, f) || any(els, f),
+                StmtKind::Loop { head, body, step, .. } => any(head, f) || any(body, f) || any(step, f),
+                StmtKind::ForEach { body, .. } => any(body, f),
+                _ => false,
+            })
+        }
+        self.funcs.iter().any(|func| any(&func.body, f))
+    }
+
+    /// True if the program calls the standard library (`RtOp::Std`).
+    pub fn uses_std(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::Std(_)))
+    }
+
+    /// True if the program writes or reads JSON.
+    pub fn uses_json(&self) -> bool {
+        self.uses(&|op| matches!(op, RtOp::JsonStr | RtOp::JsonParse))
     }
 }
 
@@ -151,22 +179,51 @@ impl Place {
 pub enum StmtKind {
     /// Assign a local (no reference counting: `Dup`/`Drop` are separate statements).
     Set(LocalId, Expr),
-    Call { dst: Option<LocalId>, func: FuncId, args: Vec<Arg> },
-    Op { dst: Option<LocalId>, op: RtOp, args: Vec<Expr> },
+    Call {
+        dst: Option<LocalId>,
+        func: FuncId,
+        args: Vec<Arg>,
+    },
+    Op {
+        dst: Option<LocalId>,
+        op: RtOp,
+        args: Vec<Expr>,
+    },
     /// `place = value` for a place below a local (a whole local is `Set`). Every array on the
     /// way is made unique first (copy on write) and every index is checked. The value is
     /// borrowed: the place becomes one more owner, and its old value has one owner less.
-    Store { place: Place, value: Expr },
+    Store {
+        place: Place,
+        value: Expr,
+    },
     /// An operation that changes a place in place: `xs.push(v)`, `xs.pop()`, `xs += ys`,
     /// `s += t`. The place is made unique first, like for a `Store`. `dst` gets the result.
-    Mutate { dst: Option<LocalId>, op: RtOp, place: Place, args: Vec<Expr> },
-    If { cond: Expr, then: Vec<Stmt>, els: Vec<Stmt> },
+    Mutate {
+        dst: Option<LocalId>,
+        op: RtOp,
+        place: Place,
+        args: Vec<Expr>,
+    },
+    If {
+        cond: Expr,
+        then: Vec<Stmt>,
+        els: Vec<Stmt>,
+    },
     /// Each round: run `head`, leave if `cond` is false, run `body`, then `step`.
     /// `continue` goes to `step`.
-    Loop { head: Vec<Stmt>, cond: Expr, body: Vec<Stmt>, step: Vec<Stmt> },
+    Loop {
+        head: Vec<Stmt>,
+        cond: Expr,
+        body: Vec<Stmt>,
+        step: Vec<Stmt>,
+    },
     /// `for var in iter`: a string gives each `char`, an array each element. `iter` is a local
     /// the loop owns, so the body may change the variable it came from; `var` borrows from it.
-    ForEach { var: LocalId, iter: Expr, body: Vec<Stmt> },
+    ForEach {
+        var: LocalId,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     Continue,
     Return(Option<Expr>),
@@ -185,12 +242,22 @@ pub enum StmtKind {
 pub enum RtOp {
     /// Prints the parts and a newline, without building a string.
     Print,
+    /// `print(a, end: e)`: prints the parts without the newline (the last part is `e`).
+    PrintNoLine,
     /// Builds a new string from the parts (interpolation, `str(x)`). `dst: str`, owned.
     Format,
-    /// int `/` whose divisor may be 0 (runtime error E0241). `dst: int`.
+    /// int `/` whose divisor may be 0 (runtime error E0241), or -1 (`MIN / -1` overflows: E0255). `dst: int`.
     DivInt,
     /// int `%` whose divisor may be 0 (runtime error E0241). `dst: int`.
     RemInt,
+    /// int `+`, `-`, `*` and negation that may overflow: a result outside the 64-bit range is runtime
+    /// error E0255. On JavaScript and TypeScript a result that is not a safe integer (beyond
+    /// 2^53 - 1) is E0256 instead: those runtimes would round it. `dst: int`. The plain operators
+    /// (`BinOp::IAdd`, ...) are used only where lowering proved that they stay in range.
+    AddInt,
+    SubInt,
+    MulInt,
+    NegInt,
     /// `int(x)` of a float: NaN or out of range is runtime error E0245. `dst: int`.
     FloatToInt,
     /// `a + b` on strings: a new string.
@@ -247,6 +314,13 @@ pub enum RtOp {
     ArrAppend,
     /// `xs.swap(i, j)` (a `Mutate`, E0240).
     ArrSwap,
+    /// `xs.sort_by(x => key)` (a `Mutate`): the argument holds one key per element (`[int]`,
+    /// `[float]`, `[str]` or `[char]`); the elements are sorted by them like `ArrSort` sorts
+    /// values: stable, NaN after every number.
+    ArrSortBy,
+    /// `min()` / `max()`: the first argument is the number of elements seen, and 0 is runtime
+    /// error E0247; the second says which method it was (0: `min`, 1: `max`). Writes nowhere.
+    CheckNonEmpty,
     /// The `step` of a range: 0 is runtime error E0243. Writes nowhere.
     CheckStep,
     /// `s.pad_left(n, c)` / `s.pad_right(n, c)`: `c` added until `s` has `n` characters (never shorter).
@@ -255,15 +329,42 @@ pub enum RtOp {
     /// `Point(x: 1, y: 2)`: the fields in declaration order; the struct becomes one more owner
     /// of each managed field value.
     StructNew,
+    /// A standard library function (`fs.read(path)`): the runtime function `std_<module>_<name>`
+    /// of the backend, called with the operands and the position (a failure is a runtime error).
+    Std(StdFn),
+    /// `json.str(v)`: the JSON text of a value of any type (`dst: str`, owned).
+    JsonStr,
+    /// `[k: v, k2: v2]`: a new map of the destination's type; the operands are keys and values,
+    /// alternating. The map becomes one more owner of each.
+    MapNew,
+    /// `m[k]` (E0248 when the key is missing). Borrowed, like `ArrGet`.
+    MapGet,
+    /// `m.get(k, default)`: the value, or `default`. Borrowed.
+    MapGetOr,
+    /// `m.keys()`: a new array of the keys, in insertion order.
+    MapKeys,
+    /// `m.values()`: a new array of the values, in insertion order.
+    MapValues,
+    /// `m[k] = v`, `m.set(k, v)` (a `Mutate`): a new key goes last, an existing one keeps its place.
+    MapSet,
+    /// `m.remove(k)` (a `Mutate`): nothing happens when the key is missing.
+    MapRemove,
+    /// `json.parse(text)`: a value of the destination's type read from JSON text (E0345), owned.
+    JsonParse,
 }
 
 impl RtOp {
     pub fn name(self) -> &'static str {
         match self {
             RtOp::Print => "print",
+            RtOp::PrintNoLine => "print_no_line",
             RtOp::Format => "format",
             RtOp::DivInt => "div_int",
             RtOp::RemInt => "rem_int",
+            RtOp::AddInt => "add_int",
+            RtOp::SubInt => "sub_int",
+            RtOp::MulInt => "mul_int",
+            RtOp::NegInt => "neg_int",
             RtOp::FloatToInt => "float_to_int",
             RtOp::StrConcat => "str_concat",
             RtOp::StrAppend => "str_append",
@@ -294,10 +395,22 @@ impl RtOp {
             RtOp::ArrReverse => "arr_reverse",
             RtOp::ArrAppend => "arr_append",
             RtOp::ArrSwap => "arr_swap",
+            RtOp::ArrSortBy => "arr_sort_by",
+            RtOp::CheckNonEmpty => "check_non_empty",
             RtOp::CheckStep => "check_step",
             RtOp::StrPadLeft => "str_pad_left",
             RtOp::StrPadRight => "str_pad_right",
             RtOp::StructNew => "struct_new",
+            RtOp::Std(f) => f.full_name(),
+            RtOp::JsonStr => "json_str",
+            RtOp::MapNew => "map_new",
+            RtOp::MapGet => "map_get",
+            RtOp::MapGetOr => "map_get_or",
+            RtOp::MapKeys => "map_keys",
+            RtOp::MapValues => "map_values",
+            RtOp::MapSet => "map_set",
+            RtOp::MapRemove => "map_remove",
+            RtOp::JsonParse => "json_parse",
         }
     }
 
@@ -306,8 +419,9 @@ impl RtOp {
     pub fn sig(self) -> (&'static [Ty], Option<Ty>) {
         use Ty::{Char, Float, Int, Str};
         match self {
-            RtOp::Print | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
-            RtOp::DivInt | RtOp::RemInt => (&[Int, Int], Some(Int)),
+            RtOp::Print | RtOp::PrintNoLine | RtOp::Format => (&[], if self == RtOp::Format { Some(Str) } else { None }),
+            RtOp::DivInt | RtOp::RemInt | RtOp::AddInt | RtOp::SubInt | RtOp::MulInt => (&[Int, Int], Some(Int)),
+            RtOp::NegInt => (&[Int], Some(Int)),
             RtOp::FloatToInt => (&[Float], Some(Int)),
             RtOp::StrConcat => (&[Str, Str], Some(Str)),
             RtOp::StrAppend => (&[Str], None),
@@ -321,6 +435,7 @@ impl RtOp {
             RtOp::CharFrom => (&[Int], Some(Char)),
             RtOp::StrPadLeft | RtOp::StrPadRight => (&[Str, Int, Char], Some(Str)),
             RtOp::CheckStep => (&[Int], None),
+            RtOp::CheckNonEmpty => (&[Int, Int], None),
             _ => (&[], None),
         }
     }
@@ -350,7 +465,12 @@ impl RtOp {
                 | RtOp::StructNew
                 | RtOp::StrPadLeft
                 | RtOp::StrPadRight
-        )
+                | RtOp::JsonStr
+                | RtOp::JsonParse
+                | RtOp::MapNew
+                | RtOp::MapKeys
+                | RtOp::MapValues
+        ) || matches!(self, RtOp::Std(f) if f.owned())
     }
 
     /// True for the operations that change a place (`Mutate`).
@@ -366,6 +486,9 @@ impl RtOp {
                 | RtOp::ArrReverse
                 | RtOp::ArrAppend
                 | RtOp::ArrSwap
+                | RtOp::ArrSortBy
+                | RtOp::MapSet
+                | RtOp::MapRemove
         )
     }
 }
@@ -394,6 +517,10 @@ pub enum PureFn {
     ArrContains,
     /// `xs.index_of(v)`: the first index or -1
     ArrIndexOf,
+    /// entries in a map
+    MapLen,
+    /// `m.has(k)`
+    MapHas,
 }
 
 impl PureFn {
@@ -415,6 +542,8 @@ impl PureFn {
             PureFn::ArrLen => "arr_len",
             PureFn::ArrContains => "arr_contains",
             PureFn::ArrIndexOf => "arr_index_of",
+            PureFn::MapLen => "map_len",
+            PureFn::MapHas => "map_has",
         }
     }
 
@@ -427,8 +556,8 @@ impl PureFn {
             PureFn::StrIndexOf => (&[Str, Str], Int),
             PureFn::CharCode => (&[Char], Int),
             PureFn::CharUpper | PureFn::CharLower => (&[Char], Char),
-            PureFn::ArrLen | PureFn::ArrIndexOf => (&[], Int),
-            PureFn::ArrContains => (&[], Bool),
+            PureFn::ArrLen | PureFn::ArrIndexOf | PureFn::MapLen => (&[], Int),
+            PureFn::ArrContains | PureFn::MapHas => (&[], Bool),
             _ => (&[Char], Bool),
         }
     }
@@ -455,7 +584,7 @@ pub enum Expr {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UnOp {
-    /// Wraps on overflow.
+    /// Only where lowering proved that the operand is not the smallest int (else `RtOp::NegInt`).
     INeg,
     FNeg,
     Not,
@@ -464,7 +593,8 @@ pub enum UnOp {
 /// Type-specific operators, so backends never need the AST's types.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BinOp {
-    // int arithmetic wraps; IDiv/IRem only appear with a constant divisor other than 0 and -1
+    // int `+ - *` only where lowering proved the result in range on every backend (else the
+    // checked `RtOp::AddInt`, ...); IDiv/IRem only appear with a constant divisor other than 0 and -1
     IAdd,
     ISub,
     IMul,

@@ -6,7 +6,8 @@ causes, a wrong program that produces the code and a fixed one. Read an entry wi
 ```
 nyra explain E0201            # the entry, for humans
 nyra explain E0201 --json     # the same entry as JSON, for tools and AI agents
-nyra explain                  # every code with its title
+nyra explain                  # every code the compiler reports, with its title
+nyra explain --planned        # the same, with the planned codes of future designs
 ```
 
 Errors from `nyra check file.nyra --json` carry the code (`"code":"E0201"`) and a `hint` that usually contains the
@@ -20,19 +21,21 @@ design may still change.
 
 | Range | Stage | What goes wrong |
 |---|---|---|
-| E0001-E0006 | lexer | characters, numbers and strings |
+| E0001-E0005 | lexer | characters, numbers and strings |
 | E0007 | lexer | character literals |
-| E0101-E0102 | parser | grammar and type names |
-| E0201-E0212 | type checker | names, types, `ret`, conditions |
+| E0101-E0103 | parser | grammar, type names, nesting depth |
+| E0201-E0218 | type checker | names, types, `ret`, conditions, lambdas, script variables, map keys |
 | E0220-E0239 | type checker | structs, arrays, strings, methods, `inout`, `free` / `keep` / `arena` |
-| E0240-E0249 | run time | the program stops with exit code 101 |
-| E0300-E0316 | modules and FFI (planned, v0.6) | `use`, `pub`, `extern`, targets |
+| E0240-E0249, E0255-E0256 | run time | the program stops with exit code 101 |
+| E0250-E0254 | examples | an `ex` example is false, stops with a runtime error, is not a `bool`, does not finish or calls a function that uses script variables; checked while compiling |
+| E0300-E0316 | standard modules (since v0.5); files, FFI (planned) | `use`, module items, `json.parse`; `pub`, `extern`, targets |
 | E0320-E0325 | packages (planned, v0.6) | `nyra.toml`, dependencies, `nyra.lock` |
 | E0330-E0332 | declarations (planned, v0.6) | `never`, `const`, `pub` |
-| E0340-E0344 | run time (planned, v0.6) | standard library and foreign function failures |
+| E0340-E0345 | run time (since v0.5; E0343-E0344 planned) | standard library and foreign function failures |
 
-Codes are stable: a number is never reused for another error. Numbers that are not listed (E0247-E0248, E0309,
-E0317-E0319, E0326-E0329, E0333-E0339, E0345-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
+Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
+brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
+E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349) are kept free for future errors of the same kind. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -102,7 +105,7 @@ fn main() {
     print("hello")
 }
 ```
-- **Related:** E0004, E0006
+- **Related:** E0004
 
 ## E0003: number too large for `int`
 - **Kind:** compile error · **Since:** v0.1
@@ -135,7 +138,7 @@ fn main() {
 - **Common causes:**
   - a Windows path: write every backslash twice (`"C:\\Users"`)
   - `\u00e9` or `\x41`: type the character itself, as in `"é"`
-  - `\{` or `\}`: braces are doubled instead (`{{`, `}}`), see E0006
+  - `\{` or `\}`: a brace needs no escape (`"{"` is text; `{{` also prints `{`)
   - `\'`: a single quote needs no escape
 - **Wrong:**
 ```rust
@@ -149,7 +152,7 @@ fn main() {
     print("C:\\Users\\nyra")
 }
 ```
-- **Related:** E0006, E0002
+- **Related:** E0002
 
 ## E0005: semicolon
 - **Kind:** compile error · **Since:** v0.1
@@ -174,29 +177,6 @@ fn main() {
 }
 ```
 - **Related:** E0001, E0101
-
-## E0006: bad `{` or `}` in a string
-- **Kind:** compile error · **Since:** v0.2
-- **What it means:** Inside a string, `{` starts an inserted value (`"{x}"`) and `}` ends it. The error is reported for a `}` with no `{`, a `{` that is never closed, an empty `{}`, or a double quote inside the braces.
-- **Why Nyra has this rule:** Interpolation is the usual way to build text, so braces are reserved. To print a literal brace, write it twice: `{{` prints `{` and `}}` prints `}`. Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
-- **Common causes:**
-  - printing a literal brace (JSON, code, a set) without doubling it
-  - a placeholder `{}` copied from a Rust or Python format string: name the variable, `"{x}"`
-  - a string literal inside the braces, as in `"{n == "x"}"`: store the text in a variable and use `{name}`
-  - a `{` that is never closed, as in `"total: {x"`
-- **Wrong:**
-```rust
-fn main() {
-    print("{")
-}
-```
-- **Fixed:**
-```rust
-fn main() {
-    print("{{")
-}
-```
-- **Related:** E0004, E0101
 
 ## E0007: bad character literal
 - **Kind:** compile error · **Since:** v0.3
@@ -234,13 +214,14 @@ fn main() {
 - **Why Nyra has this rule:** The grammar is small and strict on purpose: `ret` is the only way to return, braces are always required and `{` stays on the line of its `fn`, `if`, `else`, `while` or `for`, and there is one statement per line. So every program has exactly one spelling, and a model that knows another language is corrected at the first deviation.
 - **Common causes:**
   - `return`, `elif`, `elseif`, `and`, `or`, `not`, `function`, `def`: Nyra spells them `ret`, `else if`, `&&`, `||`, `!`, `fn`
-  - `i++`, `i--`, `2 ** 3`, `0..=9`, `x => x * 2`, `a === b`: these operators do not exist
+  - `i++`, `i--`, `2 ** 3`, `0..=9`, `a === b`: these operators do not exist
+  - a lambda written as in another language, `lambda x: x * 2`, `|x| x * 2` or `x -> x * 2`: write `x => x * 2`
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
-  - code outside a function: only `fn` and `struct` definitions may be at the top level (no globals, no `import`)
+  - code outside a function in a program with `fn main`: only `fn` and `struct` definitions may then be at the top level (and there is no `import`)
   - a struct written with braces, `Point { x: 1, y: 2 }`: a struct is built like a call, `Point(x: 1, y: 2)`
-  - `for i, x in xs` or `enumerate(xs)`: a loop has one variable, so write `for i in 0..xs.len()` and read `xs[i]`
+  - `for (i, x) in xs`: write the two variables without parentheses, `for i, x in xs`
   - `break` or `continue` outside a loop: to leave a function write `ret`
   - `0xFF`, `1_000` and `1e5` number forms: write `255`, `1000`, `100000.0`
   - `=` where `==` was meant, as in `if x = 1 {`
@@ -265,7 +246,7 @@ fn main() {
     print(double(4))
 }
 ```
-- **Related:** E0102, E0212, E0006, E0001
+- **Related:** E0102, E0212, E0001
 
 ## E0102: unknown type
 - **Kind:** compile error · **Since:** v0.1
@@ -299,6 +280,32 @@ fn main() {
 ```
 - **Related:** E0101, E0203
 
+## E0103: code nested too deeply
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An expression or a block is nested more than 256 levels deep. Every pair of parentheses, call, `[ ]`, unary `-` or `!`, block, `else if` link, and every operator, `.method()`, `.field` or `[index]` of a chain adds a level, so `1 + 1 + ... + 1` with 260 terms is too deep as well. The parser stops at the first such place and reports only this error.
+- **Why Nyra has this rule:** The compiler works on programs as trees, and every stage walks them recursively. A fixed limit, far above what a person or a model writes, means no input can make the compiler (or `nyra mcp`, which serves many requests) run out of stack: it gets a normal error instead.
+- **Common causes:**
+  - generated code: a long sum or string concatenation built term by term, or thousands of nested parentheses
+  - a long `else if` chain (more than 250 branches): use a map or an array lookup instead
+  - deeply nested `if` blocks: return early, or move the inner part into a function
+- **Wrong:**
+```rust
+fn main() {
+    print(1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var total = 0
+    for i in 0..260 {
+        total += 1
+    }
+    print(total)
+}
+```
+- **Related:** E0101
+
 ## E0201: undefined variable
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** A name is used as a value, but no variable, parameter or loop variable with that name is visible at that point.
@@ -308,6 +315,7 @@ fn main() {
   - the variable is declared later in the function: move its `let` above the use
   - the variable was declared inside an inner `{ }` block and is used after the block ended: declare it before the block
   - a function used without call parentheses: write `limit()`, not `limit`
+  - a function that uses a variable of `fn main`: functions see only a script's top-level variables, so drop `fn main` and write its statements at the top level, or pass the value as a parameter (the hint says which)
   - assigning to a variable that was never declared (`count = 1`): declare it first with `var count = 0`
   - words from other languages: `null`, `None`, `return`, `self`, `True`
 - **Wrong:**
@@ -515,7 +523,7 @@ fn main() {
 ## E0208: missing `fn main()`
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** The file defines no function called `main`. A program starts running at `fn main()`.
-- **Why Nyra has this rule:** One entry point with one shape means every program starts the same way on every backend. Top-level statements and global variables do not exist.
+- **Why Nyra has this rule:** One entry point with one shape means every program starts the same way on every backend. A program without `fn main` is a script: its top-level statements are its `main`.
 - **Common causes:**
   - an empty file, or a file with only helper functions
   - the entry function has another name, or a different capitalisation (`Main`)
@@ -644,6 +652,167 @@ fn main() {
 }
 ```
 - **Related:** E0101, E0203, E0209
+
+## E0213: lambda used as a value
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A lambda (`x => x * 2`) appears somewhere other than as the argument of an array method that takes one: `map`, `filter`, `count`, `any`, `all`, `find_index`, `sort_by` or `fold`. It was stored in a variable, passed to a function of the program, returned or printed.
+- **Why Nyra has this rule:** Nyra has no function values. A lambda is compiled into the loop of the method it belongs to, so it costs nothing at run time and can only exist in that place.
+- **Common causes:**
+  - `let double = x => x * 2`, as a JavaScript arrow function or a Python `lambda` would be stored
+  - passing a lambda to a function you wrote, `apply(xs, x => x + 1)`
+- **Wrong:**
+```rust
+fn main() {
+    let double = x => x * 2
+    print([1, 2, 3].map(double))
+}
+```
+- **Fixed:**
+```rust
+fn double(x: int) -> int = x * 2
+
+fn main() {
+    print([1, 2, 3].map(x => double(x)))
+}
+```
+- **Related:** E0215, E0101
+
+## E0214: a lambda cannot change variables
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** Something inside a lambda (or inside the element or condition of a comprehension) would change a variable: a method that changes its receiver (`push`, `pop`, `sort`, ...) or an `inout` argument. Inside a lambda every variable is read-only.
+- **Why Nyra has this rule:** A chain such as `xs.filter(...).map(...).sum()` runs as one loop, element by element. If a lambda could change variables, the result would depend on that order and on how often each lambda runs; read-only lambdas give the same answer however the chain is written, and the result says everything the call does.
+- **Common causes:**
+  - collecting into another array from inside `map`, `ys.push(x)`: use the array that `map` or `filter` returns
+  - counting with a variable from inside a lambda: use `count`, `sum` or `fold`
+  - calling a function that changes a script variable from inside a lambda: call it in a `for` loop
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [1, 2, 3]
+    var big: [int] = []
+    let n = xs.count(x => big.pop() > x)
+    print(n)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [1, 2, 3]
+    let big = xs.filter(x => x > 1)
+    print(big, big.len())
+}
+```
+- **Related:** E0205, E0229
+
+## E0215: bad lambda argument
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A method that takes a lambda got something else, or a lambda of the wrong shape: a value or a function name instead of a lambda, the wrong number of parameters (`fold` takes two, the others one), or a body that returns nothing.
+- **Why Nyra has this rule:** The method calls the lambda once per element with fixed parameters, and uses its value: a test (`filter`, `count`, `any`, `all`, `find_index`), a new element (`map`), a key (`sort_by`) or the next value (`fold`).
+- **Common causes:**
+  - `xs.count(3)` as in Python: count with a test, `xs.count(x => x == 3)`
+  - a function name, `xs.map(double)`: call it in a lambda, `xs.map(x => double(x))`
+  - `xs.fold(0, x => ...)` with one parameter: `fold` passes the value so far and the element, `(acc, x) => acc + x`
+  - `xs.map(x => print(x))`: to do something for each element write a `for` loop
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [1, 3, 3]
+    print(xs.count(3))
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [1, 3, 3]
+    print(xs.count(x => x == 3))
+}
+```
+- **Related:** E0213, E0204, E0203
+
+## E0216: a function uses a script variable and declares the same name
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A function uses a script variable (a `let` or `var` at the top level of a script) and also declares a parameter, variable, loop variable or lambda parameter of the same name. A function that declares a name sees only its own variable of that name, so the use of the script variable cannot be resolved: "`pos` is a script variable (line 1), but `f` declares its own `pos` (line 4)".
+- **Why Nyra has this rule:** Nyra has no shadowing: inside one function a name means one thing. A function that declares `w` keeps working when the script also has a `w` (the function simply does not see it), but a function where the same name means two things is rejected.
+- **Common causes:**
+  - reading the script variable at the start of a function and declaring a local of the same name later
+  - a lambda parameter or a loop variable named like a script variable the same function uses
+- **Wrong:**
+```rust
+var total = 0
+fn add(x: int) {
+    total += x
+    for total in 0..3 {
+        print(total)
+    }
+}
+add(5)
+print(total)
+```
+- **Fixed:**
+```rust
+var total = 0
+fn add(x: int) {
+    total += x
+    for i in 0..3 {
+        print(i)
+    }
+}
+add(5)
+print(total)
+```
+- **Related:** E0206, E0201, E0217
+
+## E0217: a function runs before a script variable it uses exists
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A statement of the script calls a function that uses a script variable (directly, or through the functions it calls) which is declared later in the script, or in this very statement (`var pos = next()` where `next` reads `pos`). The message names the function, the variable and the line of its declaration.
+- **Why Nyra has this rule:** The statements of a script run in order, and a script variable has no value before its `let` or `var` has run. Functions may be defined anywhere, but a call runs the function, so every script variable it can reach must already exist.
+- **Common causes:**
+  - the script variables declared at the end of the file, after the code that uses them
+  - a script variable whose initial value is computed by a function that uses the variable itself
+- **Wrong:**
+```rust
+fn advance() {
+    pos += 1
+}
+advance()
+var pos = 0
+print(pos)
+```
+- **Fixed:**
+```rust
+var pos = 0
+fn advance() {
+    pos += 1
+}
+advance()
+print(pos)
+```
+- **Related:** E0201, E0216, E0254
+
+## E0218: map key type not allowed
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A map type `[K: V]` has a key type other than `int`, `str`, `char` or `bool`, such as `[float: str]` or `[Point: int]`.
+- **Why Nyra has this rule:** A key must compare exactly and hash the same way on every backend. Floats do not (rounding, `NaN`, `-0.0`), and arrays and structs as keys would be compared by content on some hosts and by identity on others.
+- **Common causes:**
+  - a float key, such as a price or a coordinate
+  - a struct or an array as the key, where a name or an id would do
+- **Wrong:**
+```rust
+fn main() {
+    var names: [float: str] = [:]
+    names[1.5] = "one and a half"
+    print(names)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var names: [str: str] = [:]
+    names[str(1.5)] = "one and a half"
+    print(names)
+}
+```
+- **Related:** E0248, E0102
 
 ## E0220: duplicate field in a struct
 - **Kind:** compile error · **Since:** v0.3
@@ -1163,6 +1332,7 @@ fn main() {
   - `inout` forgotten at the call: `bump(x)` instead of `bump(inout x)`
   - `inout` written at a call for a parameter that is not `inout`, such as `print(inout x)`
   - two elements of one array passed to one call: copy one into a temporary variable, call, then assign it back
+  - a script variable passed `inout` to a function that uses that script variable itself (directly or through a call): the function already sees it, so change it there
 - **Wrong:**
 ```rust
 fn bump(inout n: int) {
@@ -1479,6 +1649,62 @@ fn main() {
 ```
 - **Related:** E0244, E0245
 
+## E0247: min or max of an empty array
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `xs.min()` or `xs.max()` was called on an array with no elements (also after a `filter` or `map` in the same chain, such as `xs.filter(x => x > 100).min()` when nothing passes), so there is no smallest or largest element. The message is "min() of an empty array" or "max() of an empty array" with the position of the method, and the program exits with code 101.
+- **Why Nyra has this rule:** There is no null and no "minus infinity" for every type, so an empty array has no honest answer; the program stops with the same error on every backend.
+- **Common causes:**
+  - an array that is empty because of an earlier branch or because no line of the input matched
+  - a filter that lets nothing through
+- **Wrong:**
+```rust
+fn main() {
+    let xs = [3, 8, 5]
+    print(xs.max())
+    print(xs.filter(x => x > 10).min())
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    let xs = [3, 8, 5]
+    print(xs.max())
+    let big = xs.filter(x => x > 10)
+    if big.len() > 0 {
+        print(big.min())
+    } else {
+        print("none")
+    }
+}
+```
+- **Related:** E0242, E0240
+
+## E0248: key not in the map
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `m[k]` or `m.get(k)` read a key that the map does not have, for example `key "bob" is not in the map`.
+- **Why Nyra has this rule:** Nyra has no null, so a missing key cannot give "nothing". The program stops with a clear message instead of continuing with a made-up value. `m.has(k)` tests first, and `m.get(k, default)` gives a value for a missing key.
+- **Common causes:**
+  - counting with `m[k] += 1` before the key exists: write `m[k] = m.get(k, 0) + 1`
+  - a key with different text (case, spaces) from the one that was stored
+- **Wrong:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] += 1
+    print(counts)
+}
+```
+- **Fixed:**
+```rust
+fn main() {
+    var counts: [str: int] = [:]
+    counts["a"] = counts.get("a", 0) + 1
+    print(counts)
+}
+```
+- **Related:** E0240, E0218
+
+
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3
 - **What it means:** The program asked for more memory than a string, an array or the machine can have, and it stops with exit code 101: "out of memory", at the operation that asked, or at position 0:0 when that is not known. `repeat` has a size limit on every backend, so a result of more than 536870888 characters (strings) or 100000000 elements (arrays) is reported at once, without trying to allocate it: `"ab".repeat(1000000000000)`. Natively, the error is also reported when the system gives no more memory. On JavaScript it is also reported when the engine runs out of string or array length, for example for a string built up past 536870888 characters. A JavaScript program that fills the whole heap is stopped by Node itself ("JavaScript heap out of memory", exit code 134), which cannot be reported as E0249.
@@ -1503,15 +1729,252 @@ fn main() {
 ```
 - **Related:** E0240, E0243
 
+## E0250: example is false
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An example written with `ex` after a function evaluates to `false`. Examples are run while the program compiles (by `nyra check`, `run`, `build` and `test`), so a function whose logic is wrong for an input of its examples does not compile. For a comparison the message gives the value of each side: "example `dist(2, 7) == 5` is false: `dist(2, 7)` is -5, not 5", and `--json` adds `"actual":"-5","expected":"5"` (values as Nyra code: strings in quotes). When the left side calls a function of the program, the hint names its parameters with the arguments of the example (`a = 2, b = 7`).
+- **Why Nyra has this rule:** A function and an example state the same fact in two ways: when they disagree, one of them is wrong, and it is cheaper to learn that before the program runs than from its output. Examples cost nothing at run time: they are never compiled into the program.
+- **Common causes:**
+  - a bug in the function for one kind of input: the other branch, a negative number, an empty array, the last element
+  - an off-by-one in a loop bound or a range
+  - an example that expects the wrong value: work it out by hand once more; change the example only when it is the wrong one, never just to match what the function returns
+  - comparing floats with `==`: `0.1 + 0.2 == 0.3` is false; compare with a value the function really returns, or test a range (`x > 0.29 && x < 0.31`)
+- **Wrong:**
+```rust
+// the distance between two numbers on a line
+fn dist(a: int, b: int) -> int {
+    if a > b { ret a - b }
+    ret a - b
+}
+ex dist(7, 2) == 5, dist(2, 7) == 5
+
+fn main() {
+    print(dist(2, 7))
+}
+```
+- **Fixed:**
+```rust
+// the distance between two numbers on a line
+fn dist(a: int, b: int) -> int {
+    if a > b { ret a - b }
+    ret b - a
+}
+ex dist(7, 2) == 5, dist(2, 7) == 5
+
+fn main() {
+    print(dist(2, 7))
+}
+```
+- **Related:** E0251, E0252, E0253
+
+## E0251: example stops with a runtime error
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** Running an example stops with a runtime error (E0240-E0249): "example `mean([]) == 0` stops with runtime error E0241: division by zero (at line 4:15 in `mean`)". The position in the message is where the error happened, in the function the example calls; the error itself points at the example.
+- **Why Nyra has this rule:** An example shows what a function does for an input. If the function cannot handle that input, the program would stop the same way when it meets it, so the compiler reports it before the program runs.
+- **Common causes:**
+  - a function that divides by a count that can be 0 (an average of an empty array)
+  - an index or `slice` past the end for a short or empty input
+  - `pop()` on an empty array, `int(s)` of text that is not a number
+  - an example that gives the function an input it was never meant to take: give it a valid one
+- **Wrong:**
+```rust
+fn mean(xs: [int]) -> int {
+    var total = 0
+    for x in xs { total += x }
+    ret total / xs.len()
+}
+ex mean([2, 4, 6]) == 4, mean([]) == 0
+
+fn main() {
+    print(mean([1, 2, 3]))
+}
+```
+- **Fixed:**
+```rust
+fn mean(xs: [int]) -> int {
+    if xs.len() == 0 { ret 0 }
+    var total = 0
+    for x in xs { total += x }
+    ret total / xs.len()
+}
+ex mean([2, 4, 6]) == 4, mean([]) == 0
+
+fn main() {
+    print(mean([1, 2, 3]))
+}
+```
+- **Related:** E0250, E0240, E0241
+
+## E0252: example is not a `bool`
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An `ex` example is a condition that must be true, so it must have the type `bool`: "an example must be a `bool` condition, but `sq(3)` is an `int`". A call that returns nothing (`print(1)`) is not an example either.
+- **Why Nyra has this rule:** An example states a fact about a value. A value alone states nothing: the compiler would not know what to expect.
+- **Common causes:**
+  - only the call, without the value it should give: `ex sq(3)` instead of `ex sq(3) == 9`
+  - `print(...)` as an example
+- **Wrong:**
+```rust
+fn sq(x: int) -> int = x * x   ex sq(3)
+
+fn main() {
+    print(sq(4))
+}
+```
+- **Fixed:**
+```rust
+fn sq(x: int) -> int = x * x   ex sq(3) == 9
+
+fn main() {
+    print(sq(4))
+}
+```
+- **Related:** E0250, E0209
+
+## E0253: example does not finish
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An example ran for more than 1,000,000 steps (statements run, plus the elements and characters it made), or more than 10,000 calls were nested, and the compiler stopped it: "example `digits(1234) == 4` did not finish within 1000000 steps". Usually the function it calls loops forever for that input.
+- **Why Nyra has this rule:** Examples run while the program compiles, so each one has a budget: the compiler must always finish, and quickly. A loop that never ends is found before the program runs, with the input that shows it.
+- **Common causes:**
+  - a `while` loop whose variable never changes (the step was forgotten, or changes another variable)
+  - recursion that never reaches its base case for this input (a negative number, an empty array)
+  - an example with a very large input: examples should be small; use the program itself for big inputs
+- **Wrong:**
+```rust
+fn digits(n: int) -> int {
+    var left = n
+    var count = 1
+    while left >= 10 {
+        count += 1
+    }
+    ret count
+}
+ex digits(7) == 1, digits(1234) == 4
+
+fn main() {
+    print(digits(2026))
+}
+```
+- **Fixed:**
+```rust
+fn digits(n: int) -> int {
+    var left = n
+    var count = 1
+    while left >= 10 {
+        left /= 10
+        count += 1
+    }
+    ret count
+}
+ex digits(7) == 1, digits(1234) == 4
+
+fn main() {
+    print(digits(2026))
+}
+```
+- **Related:** E0250, E0251
+
+## E0254: example calls a function that uses script variables
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An `ex` example calls a function that uses a script variable (directly, or through the functions it calls). Examples run while the program compiles, before any statement of the script, so the variable has no value yet.
+- **Why Nyra has this rule:** An example states what a function returns for the arguments it shows. A function that also reads a script variable depends on something the example cannot show, and the compiler cannot run the script to give the variable its value.
+- **Common causes:**
+  - an example for a helper of a parser or a game loop that reads the script's state (`pos`, `tokens`, `board`)
+- **Wrong:**
+```rust
+let rate = 3
+fn cost(n: int) -> int = n * rate   ex cost(2) == 6
+print(cost(5))
+```
+- **Fixed:**
+```rust
+let rate = 3
+fn cost(n: int, r: int) -> int = n * r   ex cost(2, 3) == 6
+print(cost(5, rate))
+```
+- **Related:** E0250, E0217
+
+## E0255: int overflow
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** An int `+`, `-`, `*`, `/` (only `-9223372036854775808 / -1`) or negation (including `abs`) gave a result outside the 64-bit range, -9223372036854775808 to 9223372036854775807. The program flushes what it printed so far, reports the operation with its operands (`int overflow: 7696581397574 * 1099511628211 does not fit in 64 bits`) and its position, and exits with code 101. This happens on every backend, at the same operation.
+- **Why Nyra has this rule:** Up to v0.4 an int overflow wrapped around silently natively and lost precision in JavaScript: a wrong number that looks right, and a different one on each backend. Stopping makes the bug visible where it happens. Additions, subtractions and multiplications that the compiler can prove stay in range (constants, `for` counters, array indexes, lengths) are compiled without the check.
+- **Common causes:**
+  - a hash or a random number generator that multiplies without `%` and relied on wrapping (`h = h * 1099511628211`): keep it in range with `%`, e.g. `h = (h * 31 + c.code()) % 1000000007`
+  - a factorial, a power or a product that grows past 2^63 (20! is the largest factorial that fits)
+  - the negation or `abs` of the smallest int
+- **Wrong:**
+```rust
+fn hash(s: str) -> int {
+    var h = 7
+    for c in s {
+        h = h * 1099511628211 + c.code()
+    }
+    ret h
+}
+
+fn main() {
+    print(hash("a"))
+    print(hash("ab"))
+}
+```
+- **Fixed:**
+```rust
+fn hash(s: str) -> int {
+    var h = 7
+    for c in s {
+        h = (h * 31 + c.code()) % 1000000007
+    }
+    ret h
+}
+
+fn main() {
+    print(hash("a"))
+    print(hash("ab"))
+}
+```
+- **Related:** E0256, E0245, E0241
+
+## E0256: int too large for JavaScript
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** Only on the JavaScript and TypeScript targets: an int operation gave a result beyond ±9007199254740991 (2^53 - 1), or the program used such an int (a literal, `int(s)`, `int(x)` of a float, a number read by `json.parse`). JavaScript numbers hold ints exactly only up to there, so the program stops instead of going on with a rounded value. The native (C), Rust, Go and Python targets have 64-bit ints and run the same program without this error (they stop with E0255 only beyond 64 bits).
+- **Why Nyra has this rule:** Nyra promises the same output on every backend. A rounded int would be a silent difference (`1116302080` instead of `1116302264`); an error says exactly where the JavaScript target cannot follow, and which targets can.
+- **Common causes:**
+  - a random number generator like `seed = (seed * 1103515245 + 12345) % 2147483648`: the product is about 2^61 before the `%`; use a smaller multiplier, e.g. `seed = seed * 48271 % 2147483647`, or a native target
+  - a hash that keeps its value below a large modulus, but multiplies it by a large number first
+  - a factorial or product above 9007199254740991, or an int literal with 16 or more digits
+- **Wrong:**
+```rust
+// target: js
+fn next(seed: int) -> int = (seed * 1103515245 + 12345) % 2147483648
+
+fn main() {
+    var s = 42
+    for i in 0..3 {
+        s = next(s)
+        print(s)
+    }
+}
+```
+- **Fixed:**
+```rust
+fn next(seed: int) -> int = seed * 48271 % 2147483647
+
+fn main() {
+    var s = 42
+    for i in 0..3 {
+        s = next(s)
+        print(s)
+    }
+}
+```
+- **Related:** E0255
+
 ## E0300: module not found
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A `use` line names a module that cannot be found: a library name that is not in the standard library or the dependencies, or a quoted path to a file that does not exist (the file name must match exactly, including capital letters).
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. (Modules from files of the project and dependencies are planned.)
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
-  - a file path without `./`, or with the wrong capitalisation
-  - a dependency that is not listed in `nyra.toml`
-  - `use str`: the string helpers are in the `text` module (and `str(x)` is a builtin)
+  - a module of another language: `use io` or `use sys` (standard input is `input`, arguments and the exit code are in `os`)
+  - `use str`: string methods need no import (`s.split(",")`), and the `text` module has `text.fixed`
 - **Wrong:**
 ```rust
 use mth
@@ -1564,13 +2027,13 @@ fn main() {
 - **Related:** E0306, E0332
 
 ## E0302: bad `use` line
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A `use` line is not in one of the allowed forms or is in the wrong place. The forms are `use name`, `use "./path"` and `... as alias`; all `use` lines come first in the file, one per line.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** An import is not written `use name`: another language's `import math` or `from math import sqrt`, a quoted path, an alias, or a `use` line inside a function. A `use` line names one module and stands at the top level of the file.
 - **Why Nyra has this rule:** One import syntax in one place, so the dependencies of a file are visible at the top. Other languages' spellings (`import`, `from ... import`, `use a.{b}`) are not accepted.
 - **Common causes:**
-  - `import math` instead of `use math`
-  - a `use` line after a function
-  - an alias that is not an identifier
+  - `import math` instead of `use math` (`nyra check --fix` rewrites it)
+  - `from math import sqrt`: import the module and call `math.sqrt(x)`
+  - a `use` line inside a function, or several modules on one line
 - **Wrong:**
 ```rust
 import math
@@ -1676,8 +2139,8 @@ fn main() {
 - **Related:** E0300, E0303
 
 ## E0306: module has no such item
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** `module.name` is used, but the module defines no public function or constant called `name`.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** `module.name` is used, but the module has no function or constant called `name`. The hint suggests the closest name, or the Nyra spelling of another language's function (`random.randint` is `random.range`, `json.dumps` is `json.str`).
 - **Why Nyra has this rule:** A typo after a module name must not turn into a new meaning. The message suggests the closest name.
 - **Common causes:**
   - a typo (`math.sqroot`)
@@ -1701,8 +2164,8 @@ fn main() {
 - **Related:** E0300, E0301, E0307
 
 ## E0307: wrong kind of module item
-- **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A module item is used the wrong way: a function without a call (`math.sqrt`), a constant called like a function (`math.PI()`), or a module name used as a value.
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** A module item is used the wrong way: a function without a call (`time.now_ms`), a constant called like a function (`math.pi()`), or a module name used as a value.
 - **Why Nyra has this rule:** Functions are always called and constants are never called, so each use shows what kind of thing it is.
 - **Common causes:**
   - forgetting the parentheses on a function
@@ -1712,7 +2175,7 @@ fn main() {
 use math
 
 fn main() {
-    print(math.PI())
+    print(math.pi())
 }
 ```
 - **Fixed:**
@@ -1720,7 +2183,7 @@ fn main() {
 use math
 
 fn main() {
-    print(math.PI)
+    print(math.pi)
 }
 ```
 - **Related:** E0306, E0236
@@ -1749,6 +2212,33 @@ fn main() {
 }
 ```
 - **Related:** E0206
+
+## E0309: `json.parse` needs to know the type
+- **Kind:** compile error · **Since:** v0.5
+- **What it means:** `json.parse(text)` is used where nothing says which type to read. `json.parse` reads the type the value goes to: a `let` with a type, a parameter, a field, a `ret` value or an assignment.
+- **Why Nyra has this rule:** JSON is read into ordinary Nyra values (ints, floats, strings, arrays and structs), checked against their type, so there is no untyped "JSON value" that every use would have to inspect. The type must therefore be known where the text is read.
+- **Common causes:**
+  - `let x = json.parse(text)` without a type
+  - `print(json.parse(text))`: print takes values of any type
+- **Wrong:**
+```rust
+use json
+
+fn main() {
+    let xs = json.parse("[1, 2, 3]")
+    print(xs)
+}
+```
+- **Fixed:**
+```rust
+use json
+
+fn main() {
+    let xs: [int] = json.parse("[1, 2, 3]")
+    print(xs)
+}
+```
+- **Related:** E0230, E0345
 
 ## E0310: not available on this target
 - **Kind:** compile error · **Since:** planned for v0.6, not in the compiler yet
@@ -2076,8 +2566,8 @@ pub fn root(x: float) -> float = math.sqrt(x)
 - **Related:** E0301, E0302
 
 ## E0340: file operation failed
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** A function of the `fs` module could not do its job, for example `fs.read: cannot read "x.txt" (not found)`. The reason is one of `not found`, `permission denied`, `is a directory`, `not valid UTF-8` or `io error`. The program stops with exit code 101 and the error points at your call.
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** A function of the `fs` module could not do its job, for example `fs.read: cannot read "x.txt" (not found)`. The reason is one of `not found`, `permission denied`, `is a directory`, `not a directory`, `already exists`, `not empty`, `not valid UTF-8` or `io error`. The program stops with exit code 101 and the error points at your call.
 - **Why Nyra has this rule:** Nyra has no exceptions and no null, so a call that cannot succeed stops the program with a clear message. Where recovery is plausible there is a probe that never fails, such as `fs.exists`, so a program can check first.
 - **Common causes:**
   - a wrong path: paths are relative to the folder the program runs in and use `/` on every system
@@ -2107,34 +2597,35 @@ fn main() {
 - **Related:** E0341, E0310
 
 ## E0341: input is not valid UTF-8
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
-- **What it means:** Text that enters the program (standard input, files, command-line arguments, environment variables) is not valid UTF-8, for example `io.read_line: input is not valid UTF-8`.
-- **Why Nyra has this rule:** A `str` is UTF-8 text on every backend. Both backends check incoming text with the same rule, so a program behaves identically and never holds broken text.
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** Text that enters the program (standard input, files, command-line arguments, environment variables) is not valid UTF-8, for example `input.line: the input is not valid UTF-8`.
+- **Why Nyra has this rule:** A `str` is UTF-8 text on every backend. Every backend checks incoming text with the same rule, so a program behaves identically and never holds broken text.
 - **Common causes:**
   - binary data piped into the program
   - a text file in an old encoding such as Latin-1 or UTF-16
 - **Wrong:**
 ```rust
-use io
+// stdin: \xff\n
+use input
 
 fn main() {
     // run it as:  printf '\377\n' | nyra run main.nyra
-    print(io.read_line())
+    print(input.line())
 }
 ```
 - **Fixed:**
 ```rust
-use io
+use input
 
 fn main() {
     // run it as:  printf 'ok\n' | nyra run main.nyra
-    print(io.read_line())
+    print(input.line())
 }
 ```
 - **Related:** E0340, E0344
 
 ## E0342: bad argument value for a standard function
-- **Kind:** runtime error · **Since:** planned for v0.6, not in the compiler yet
+- **Kind:** runtime error · **Since:** v0.5
 - **What it means:** A standard library function received an argument that is valid in type but has no sensible result, such as `random.range(5, 5): need lo < hi and hi - lo <= 2^53` or `text.fixed: digits must be 0 to 100`.
 - **Why Nyra has this rule:** An empty range or a negative number of digits has no answer, and hosts disagree about what to return. A clear error beats a value that differs by backend.
 - **Common causes:**
@@ -2210,3 +2701,42 @@ fn main() {
 }
 ```
 - **Related:** E0342, E0341
+
+## E0345: JSON text does not fit
+- **Kind:** runtime error · **Since:** v0.5
+- **What it means:** `json.parse(text)` got text that is not JSON (`json.parse: invalid JSON at line 3: expected `,` or `}``), or JSON whose shape does not match the type it is read into (`json.parse: expected an int at $.items[2].count`, `json.parse: missing field "name" at $`). The path starts at `$`, the whole value.
+- **Why Nyra has this rule:** JSON is read straight into typed values, so every field a struct has must be there with the right type; fields the struct does not have are skipped. A mismatch stops the program instead of producing a value with holes, and the message says where.
+- **Common causes:**
+  - a number written as a string in the JSON (`"age": "12"` for an `int`)
+  - a float such as `1.5` where the type says `int`
+  - a missing field, or `null` (Nyra has no null)
+  - a trailing comma, single quotes or comments, which JSON does not allow
+- **Wrong:**
+```rust
+use json
+
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u: User = json.parse("{{\"name\": \"Ann\", \"age\": \"12\"}}")
+    print(u.age)
+}
+```
+- **Fixed:**
+```rust
+use json
+
+struct User {
+    name: str
+    age: int
+}
+
+fn main() {
+    let u: User = json.parse("{{\"name\": \"Ann\", \"age\": 12}}")
+    print(u.age)
+}
+```
+- **Related:** E0309, E0244

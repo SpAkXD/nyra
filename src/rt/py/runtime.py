@@ -61,9 +61,44 @@ def ny_rem(a, b):
     return -r if a < 0 else r
 
 
+def ny_overflow(a, op, b, line, col):
+    """int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255)."""
+    msg = f"int overflow: -({a}) does not fit in 64 bits" if op == "~" else f"int overflow: {a} {op} {b} does not fit in 64 bits"
+    ny_panic("E0255", msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+
+
+def ny_add(a, b, line, col):
+    r = a + b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "+", b, line, col)
+
+
+def ny_sub(a, b, line, col):
+    r = a - b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "-", b, line, col)
+
+
+def ny_mul(a, b, line, col):
+    r = a * b
+    if -9223372036854775808 <= r <= 9223372036854775807:
+        return r
+    ny_overflow(a, "*", b, line, col)
+
+
+def ny_neg(a, line, col):
+    if a == -9223372036854775808:
+        ny_overflow(a, "~", 0, line, col)
+    return -a
+
+
 def ny_div(a, b, line, col):
     if b == 0:
         ny_panic("E0241", "division by zero", "check the divisor first", line, col)
+    if b == -1 and a == -9223372036854775808:
+        ny_overflow(a, "/", b, line, col)
     return ny_quot(a, b)
 
 
@@ -71,6 +106,13 @@ def ny_mod(a, b, line, col):
     if b == 0:
         ny_panic("E0241", "division by zero", "check the divisor first", line, col)
     return ny_rem(a, b)
+
+
+def ny_check_non_empty(n, last, line, col):
+    """`xs.min()` / `xs.max()` of an empty array (`n` elements seen; `last` says which method)."""
+    if n == 0:
+        ny_panic("E0247", "max() of an empty array" if last else "min() of an empty array",
+                 "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col)
 
 
 def ny_check_step(k, line, col):
@@ -293,6 +335,18 @@ class NyList(list):
     ny_shared = False
 
 
+class NyDict(dict):
+    """A Nyra map: a dict (insertion order) that is copied before a write when it is shared."""
+    ny_shared = False
+
+
+def ny_mget(m, k, kt, line, col):
+    """`m[k]`: E0248 when the key is missing (`kt` is the key's type, for the message)."""
+    if k not in m:
+        ny_panic("E0248", f"key {ny_show(k, kt)} is not in the map", "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col)
+    return m[k]
+
+
 def ny_share(v):
     """`v` gets one more owner: a write to any of them copies it first."""
     v.ny_shared = True
@@ -311,6 +365,10 @@ def ny_copy(v):
     """A copy of one level: the copy is not shared, the values it now shares are."""
     if isinstance(v, NyList):
         return ny_share_all(NyList(v))
+    if isinstance(v, NyDict):
+        c = NyDict(v)
+        ny_share_all(list(c.values()))
+        return c
     return v.ny_copy()
 
 
@@ -400,6 +458,8 @@ def ny_eq(a, b):
     """Deep equality without Python's shortcut for the same object, so NaN never equals itself."""
     if isinstance(a, NyList):
         return len(a) == len(b) and all(ny_eq(x, y) for x, y in zip(a, b))
+    if isinstance(a, NyDict):
+        return len(a) == len(b) and all(k in b and ny_eq(v, b[k]) for k, v in a.items())
     return a == b
 
 
@@ -413,6 +473,12 @@ def ny_index_of(xs, v):
 def ny_float_key(x):
     """Sorts floats like every backend: NaN after every number, equal values keep their order."""
     return (x != x, x)
+
+
+def ny_sort_by(xs, ks, key=None):
+    """`xs.sort_by(x => key)`: a stable sort of the positions by the keys, like `sort`."""
+    idx = sorted(range(len(ks)), key=ks.__getitem__ if key is None else lambda i: key(ks[i]))
+    xs[:] = [xs[i] for i in idx]
 
 
 # ---- printing: arrays and structs as Nyra code ----
@@ -440,4 +506,10 @@ def ny_show(v, t):
     if k == "[":
         e = t[1:]
         return "[" + ", ".join(ny_show(x, e) for x in v) + "]"
+    if k == "{":
+        # a map: "{" + the key type (one letter) + the value type
+        if not v:
+            return "[:]"
+        kt, vt = t[1], t[2:]
+        return "[" + ", ".join(ny_show(a, kt) + ": " + ny_show(b, vt) for a, b in v.items()) + "]"
     return repr(v)

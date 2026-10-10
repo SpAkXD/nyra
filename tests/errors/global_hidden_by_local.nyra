@@ -1,0 +1,8 @@
+// expect: E0216
+var pos = 0
+fn f() {
+    print(pos)
+    let pos = 3
+    print(pos)
+}
+f()

@@ -1,0 +1,33 @@
+fn main() {
+    let limit = 2000000
+    var is_prime = [true].repeat(limit)
+    is_prime[0] = false
+    is_prime[1] = false
+    var i = 2
+    while i * i < limit {
+        if is_prime[i] {
+            for j in i * i..limit step i {
+                is_prime[j] = false
+            }
+        }
+        i += 1
+    }
+    var count = 0
+    var total = 0
+    var largest = 0
+    var twins = 0
+    for n in 2..limit {
+        if is_prime[n] {
+            count += 1
+            total += n
+            largest = n
+            if n + 2 < limit && is_prime[n + 2] {
+                twins += 1
+            }
+        }
+    }
+    print(count)
+    print(total)
+    print(largest)
+    print(twins)
+}

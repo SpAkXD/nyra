@@ -199,20 +199,6 @@ error[E0001]: unexpected character `.`
   = explain: nyra explain E0001
 
 nyra: 1 error(s)
-==== lex_empty_braces
-fn main() {
-    print("a {} b")
-}
-----
-error[E0006]: empty `{}` in a string: there is no expression to insert
-  --> case.nyra:2:14
-  |
-2 |     print("a {} b")
-  |              ^
-  = hint: put an expression between the braces, e.g. `{x}`, or write `{{}}` to print literal braces
-  = explain: nyra explain E0006
-
-nyra: 1 error(s)
 ==== lex_escape_brace
 fn main() {
     print("a \{ b")
@@ -238,7 +224,7 @@ error[E0004]: unknown escape `\U` in a string
   |
 2 |     print("C:\Users")
   |              ^
-  = hint: the escapes are `\n` `\t` `\r` `\\` and `\"`; to write a literal backslash, double it: `\\U`
+  = hint: the escapes are `\n` `\t` `\r` `\0` `\\` and `\"`; to write a literal backslash, double it: `\\U`
   = explain: nyra explain E0004
 
 nyra: 1 error(s)
@@ -301,34 +287,6 @@ error[E0001]: unexpected character `#`
   = explain: nyra explain E0001
 
 nyra: 1 error(s)
-==== lex_lone_close
-fn main() {
-    print("a } b")
-}
-----
-error[E0006]: unmatched `}` in a string: there is no `{` for it to close
-  --> case.nyra:2:14
-  |
-2 |     print("a } b")
-  |              ^
-  = hint: write `}}` to print a literal `}`
-  = explain: nyra explain E0006
-
-nyra: 1 error(s)
-==== lex_lone_open
-fn main() {
-    print("{")
-}
-----
-error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
-  --> case.nyra:2:12
-  |
-2 |     print("{")
-  |            ^
-  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
-  = explain: nyra explain E0006
-
-nyra: 1 error(s)
 ==== lex_math
 fn main() {
     print(Math.sqrt(4.0))
@@ -339,7 +297,7 @@ error[E0201]: undefined variable `Math`
   |
 2 |     print(Math.sqrt(4.0))
   |           ^
-  = hint: Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)
+  = hint: the math functions are in the standard module `math`: add `use math` and call `math.sqrt(x)`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -477,20 +435,6 @@ error[E0001]: unexpected character `×`
   = hint: write `*` for multiplication
   = fix: `print(2 * 3)`
   = explain: nyra explain E0001
-
-nyra: 1 error(s)
-==== lex_unclosed
-fn main() {
-    print("a {x")
-}
-----
-error[E0006]: unclosed `{` in a string: no matching `}` before the end of the string
-  --> case.nyra:2:14
-  |
-2 |     print("a {x")
-  |              ^
-  = hint: add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`
-  = explain: nyra explain E0006
 
 nyra: 1 error(s)
 ==== lex_unterminated
@@ -823,12 +767,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected an expression, found `>`
-  --> case.nyra:1:15
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `=>`
+  --> case.nyra:1:14
   |
 1 | fn f(x: int) => x * 2
-  |               ^
-  = hint: `=>` does not exist: a one-line function is written `fn f(x: int) -> int = x * 2`
+  |              ^
+  = hint: `=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -854,12 +798,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected an expression, found keyword `ret`
+error[E0101]: expected an expression, found end of line
   --> case.nyra:1:23
   |
 1 | fn f(x: int) -> int = ret x
   |                       ^
-  = hint: a one-line function returns its expression itself, so there is no `ret`: `fn f(x: int) -> int = x`
+  = hint: the expression must start on the same line as `=`: `fn f() -> int = 1`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1040,7 +984,7 @@ error[E0101]: expected `in`, found number `0`
   |
 2 |     for i 0..3 {
   |           ^
-  = hint: loops look like `for i in 0..10 { ... }` or `for x in xs { ... }`
+  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1307,7 +1251,7 @@ error[E0101]: expected an expression, found keyword `fn`
   |
 2 |     let f = fn(x) x
   |             ^
-  = hint: functions are not values (there are no lambdas or closures): define a named `fn` at the top level
+  = hint: functions are not values: an array method takes a lambda, `xs.map(x => x * 2)`; anything else needs a named `fn` at the top level
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1407,39 +1351,6 @@ error[E0101]: expected an expression, found end of line
 2 |     let x =
   |            ^
   = hint: write a value after `=`: `let x = 0`
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
-==== par_line_start_op
-fn main() {
-    let x = 1
-        + 2
-}
-----
-error[E0101]: expected an expression, found `+`
-  --> case.nyra:3:9
-  |
-3 |         + 2
-  |         ^
-  = hint: a line cannot start with `+`: end the previous line with the operator instead (a line may break after an operator, never before one)
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
-==== par_nested_fn
-fn f() {
-    fn g() {
-    }
-}
-fn main() {
-    print(1)
-}
-----
-error[E0101]: expected `}` to close the `{` of `fn f` opened at 1:8, found keyword `fn`
-  --> case.nyra:2:5
-  |
-2 |     fn g() {
-  |     ^
-  = hint: functions cannot be nested: add the missing `}` before this `fn`, or move the inner function to the top level
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1591,7 +1502,7 @@ error[E0101]: expected `fn` or `struct`, found `const`
   |
 1 | const MAX = 10
   | ^
-  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+  = hint: Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -1601,13 +1512,14 @@ fn main() {
     print(1)
 }
 ----
-error[E0101]: expected `fn` or `struct`, found `import`
+error[E0302]: `import math`: Nyra spells it `use math`
   --> case.nyra:1:1
   |
 1 | import math
   | ^
-  = hint: Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions
-  = explain: nyra explain E0101
+  = hint: write `use math`
+  = fix: `use math`
+  = explain: nyra explain E0302
 
 nyra: 1 error(s)
 ==== par_top_let
@@ -1621,7 +1533,7 @@ error[E0101]: statements at the top level and a `fn main` in the same program
   |
 1 | let max = 10
   | ^
-  = hint: there are no global variables: a constant is a function, e.g. `fn max() -> int = 10`; or move the `let` into `main`
+  = hint: a program with `fn main` has no script variables: move `max` into `main`, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -2323,12 +2235,12 @@ nyra: 1 error(s)
 fn helper() {
 }
 ----
-error[E0208]: missing `fn main()`: a program starts running at `main`
+error[E0208]: nothing to run: the program has no statements at the top level and no `fn main()`
   --> case.nyra:1:1
   |
 1 | fn helper() {
   | ^
-  = hint: add the entry point: `fn main() { print("hello") }`
+  = hint: write the program's statements at the top level, e.g. `print("hello")`: they run in order
   = explain: nyra explain E0208
 
 nyra: 1 error(s)
@@ -3243,7 +3155,7 @@ error[E0202]: undefined function `input`
   |
 2 |     let n = input()
   |             ^
-  = hint: Nyra has no input: put the values in the program, e.g. `let n = 12`
+  = hint: standard input is the module `input`: add `use input` and call `input.line()`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3314,7 +3226,7 @@ error[E0202]: undefined function `sqrt`
   |
 2 |     print(sqrt(2.0))
   |           ^
-  = hint: Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)
+  = hint: the math functions are in the standard module `math`: add `use math` and call e.g. `math.sqrt(x)`
   = explain: nyra explain E0202
 
 nyra: 1 error(s)
@@ -3403,7 +3315,7 @@ error[E0201]: undefined variable `nope`
   |
 2 |     print("{nope}")
   |             ^
-  = hint: declare it first: `let nope = ...`
+  = hint: `{nope}` inserts the value of `nope`; to keep `${nope}` as text, double the braces: `${{nope}}`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -3713,7 +3625,7 @@ error[E0101]: expected `fn` or `struct`, found `const`
   |
 1 | const LIMIT: int = 100
   | ^
-  = hint: there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`
+  = hint: Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3767,13 +3679,13 @@ fn main() {
     let f = (x) => x * 2
 }
 ----
-error[E0101]: expected end of line, found `=`
-  --> case.nyra:2:17
+error[E0213]: a lambda is not a value: it can only be the argument of an array method
+  --> case.nyra:2:13
   |
 2 |     let f = (x) => x * 2
-  |                 ^
-  = hint: `=>` does not exist: Nyra has no lambdas or closures; define a named function, e.g. `fn double(x: int) -> int = x * 2`
-  = explain: nyra explain E0101
+  |             ^
+  = hint: pass it straight to a method, e.g. `xs.map(x => x * 2)` or `xs.filter(x => x > 0)`; to name a computation, define a function: `fn double(x: int) -> int = x * 2`
+  = explain: nyra explain E0213
 
 nyra: 1 error(s)
 ==== f_js_const
@@ -4103,7 +4015,7 @@ error[E0101]: expected end of line, found `:`
   |
 2 |     let x = std::max(1, 2)
   |                ^
-  = hint: `::` paths do not exist: Nyra has no modules or namespaces, so call every function by its plain name
+  = hint: `::` paths do not exist: call a module's function with a dot, `math.sqrt(x)`, and other functions by their plain name
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -4731,17 +4643,17 @@ nyra: 1 error(s)
 ==== for_two_variables
 fn main() {
     let xs = [5, 6]
-    for i, x in xs {
+    for (i, x) in xs {
         print(i)
     }
 }
 ----
-error[E0101]: expected `in`, found `,`
-  --> case.nyra:3:10
+error[E0101]: expected a loop variable, found `(`
+  --> case.nyra:3:9
   |
-3 |     for i, x in xs {
-  |          ^
-  = hint: a loop has one variable: to get the position and the element write `for i in 0..xs.len() { let x = xs[i] ... }`
+3 |     for (i, x) in xs {
+  |         ^
+  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -4753,12 +4665,616 @@ fn main() {
     }
 }
 ----
-error[E0101]: expected `in`, found `,`
-  --> case.nyra:3:10
+error[E0202]: undefined function `enumerate`
+  --> case.nyra:3:20
   |
 3 |     for i, name in enumerate(names) {
-  |          ^
-  = hint: a loop has one variable: to get the position and the element write `for i in 0..names.len() { let name = names[i] ... }`
+  |                    ^
+  = hint: for the position and the element write `for i, x in xs { ... }`
+  = explain: nyra explain E0202
+
+nyra: 1 error(s)
+==== lambda_python
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(lambda x: x * 2))
+}
+----
+error[E0101]: `lambda` is not part of Nyra: a lambda is written `x => x * 2`
+  --> case.nyra:3:18
+  |
+3 |     print(xs.map(lambda x: x * 2))
+  |                  ^
+  = hint: write `x => ...`: the parameters, `=>`, then the body
+  = fix: `print(xs.map(x => x * 2))`
   = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_python_two
+fn main() {
+    let xs = [1, 2]
+    print(xs.fold(0, lambda a, x: a + x))
+}
+----
+error[E0101]: `lambda` is not part of Nyra: a lambda is written `x => x * 2`
+  --> case.nyra:3:22
+  |
+3 |     print(xs.fold(0, lambda a, x: a + x))
+  |                      ^
+  = hint: write `(a, x) => ...`: the parameters, `=>`, then the body
+  = fix: `print(xs.fold(0, (a, x) => a + x))`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_rust_pipes
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(|x| x * 2))
+}
+----
+error[E0001]: unexpected character `|`: a lambda is written `x => x * 2`
+  --> case.nyra:3:18
+  |
+3 |     print(xs.map(|x| x * 2))
+  |                  ^
+  = hint: write `x =>` instead of `|x|`: the parameters, `=>`, then the body
+  = fix: `print(xs.map(x => x * 2))`
+  = explain: nyra explain E0001
+
+nyra: 1 error(s)
+==== lambda_java_arrow
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(x -> x * 2))
+}
+----
+error[E0101]: expected `,` or `)` in the arguments of `map`, found `->`
+  --> case.nyra:3:20
+  |
+3 |     print(xs.map(x -> x * 2))
+  |                    ^
+  = hint: a lambda is written with `=>`: `x => x * 2`
+  = fix: `print(xs.map(x => x * 2))`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_block_body
+fn main() {
+    let xs = [1, 2]
+    print(xs.map(x => { ret x * 2 }))
+}
+----
+error[E0101]: expected an expression, found `{`
+  --> case.nyra:3:23
+  |
+3 |     print(xs.map(x => { ret x * 2 }))
+  |                       ^
+  = hint: the body of a lambda is one expression, without braces or `ret`: `x => x * 2`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== lambda_stored
+fn main() {
+    let double = (x) => x * 2
+    print(double)
+}
+----
+error[E0213]: a lambda is not a value: it can only be the argument of an array method
+  --> case.nyra:2:18
+  |
+2 |     let double = (x) => x * 2
+  |                  ^
+  = hint: pass it straight to a method, e.g. `xs.map(x => x * 2)` or `xs.filter(x => x > 0)`; to name a computation, define a function: `fn double(x: int) -> int = x * 2`
+  = explain: nyra explain E0213
+
+nyra: 1 error(s)
+==== lambda_fn_name
+fn double(x: int) -> int = x * 2
+fn main() {
+    print([1, 2].map(double))
+}
+----
+error[E0215]: `.map()` needs a lambda here, e.g. `[1, 2].map(x => x * 2)`
+  --> case.nyra:3:22
+  |
+3 |     print([1, 2].map(double))
+  |                      ^
+  = hint: call the function in a lambda: `x => double(x)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_count_value
+fn main() {
+    print([1, 3, 3].count(3))
+}
+----
+error[E0215]: `.count()` needs a lambda here, e.g. `[1, 3, 3].count(x => x > 0)`
+  --> case.nyra:2:27
+  |
+2 |     print([1, 3, 3].count(3))
+  |                           ^
+  = hint: `.count()` takes a test: to count the elements equal to `3` write `.count(x => x == 3)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_find_value
+fn main() {
+    print([1, 3, 3].find_index(3))
+}
+----
+error[E0215]: `.find_index()` needs a lambda here, e.g. `[1, 3, 3].find_index(x => x > 0)`
+  --> case.nyra:2:32
+  |
+2 |     print([1, 3, 3].find_index(3))
+  |                                ^
+  = hint: `.find_index()` takes a test; to find the value `3` itself write `.index_of(3)`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_no_value
+fn main() {
+    print([1, 2].map(x => print(x)))
+}
+----
+error[E0215]: the lambda of `.map()` gives no value: its body returns nothing
+  --> case.nyra:2:27
+  |
+2 |     print([1, 2].map(x => print(x)))
+  |                           ^
+  = hint: the body is the value the method uses, e.g. `[1, 2].map(x => x * 2)`; to do something for each element write a `for` loop
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_push_inside
+fn main() {
+    var ys: [int] = []
+    let n = [1, 2].count(x => ys.push(x) == 0)
+}
+----
+error[E0214]: a lambda cannot call `.push()` on `ys`: inside a lambda, variables are read-only
+  --> case.nyra:3:34
+  |
+3 |     let n = [1, 2].count(x => ys.push(x) == 0)
+  |                                  ^
+  = hint: let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead
+  = explain: nyra explain E0214
+
+error[E0210]: cannot use `==` on `void` and `int`: `==` needs two values of the same type
+  --> case.nyra:3:42
+  |
+3 |     let n = [1, 2].count(x => ys.push(x) == 0)
+  |                                          ^
+  = hint: `.push()` changes its receiver and returns nothing: call it on its own line, then use the value
+  = explain: nyra explain E0210
+
+nyra: 2 error(s)
+==== lambda_inout_inside
+fn bump(inout n: int) -> int {
+    n += 1
+    ret n
+}
+fn main() {
+    var k = 0
+    print([1, 2].map(x => bump(inout k)))
+}
+----
+error[E0214]: a lambda cannot pass `inout` `k`: inside a lambda, variables are read-only
+  --> case.nyra:7:32
+  |
+7 |     print([1, 2].map(x => bump(inout k)))
+  |                                ^
+  = hint: let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead
+  = explain: nyra explain E0214
+
+nyra: 1 error(s)
+==== lambda_fold_one_param
+fn main() {
+    print([1, 2].fold(0, x => x))
+}
+----
+error[E0215]: the lambda of `.fold()` takes 2 parameters, found 1
+  --> case.nyra:2:26
+  |
+2 |     print([1, 2].fold(0, x => x))
+  |                          ^
+  = hint: two parameters, the value so far and the element: `(acc, x) => ...`
+  = explain: nyra explain E0215
+
+nyra: 1 error(s)
+==== lambda_fold_float
+fn main() {
+    print([1.5, 2.0].fold(0, (acc, x) => acc + x))
+}
+----
+error[E0210]: cannot use `+` on `int` and `float`: `+` needs two `int`s, two `float`s, two `str`s or two arrays of one type
+  --> case.nyra:2:46
+  |
+2 |     print([1.5, 2.0].fold(0, (acc, x) => acc + x))
+  |                                              ^
+  = hint: use one type on both sides, e.g. `float(acc) + x` (Nyra never converts numbers implicitly)
+  = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== lambda_sort_by_bool
+fn main() {
+    var xs = [1, 2]
+    xs.sort_by(x => x > 1)
+}
+----
+error[E0228]: `sort_by` needs a key of type `int`, `float`, `str` or `char`, found `bool`
+  --> case.nyra:3:21
+  |
+3 |     xs.sort_by(x => x > 1)
+  |                     ^
+  = hint: sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== lambda_sort_by_let
+fn main() {
+    let xs = [2, 1]
+    xs.sort_by(x => x)
+}
+----
+error[E0205]: cannot call `.sort_by()` on `xs`: `xs` was declared with `let` on line 2
+  --> case.nyra:3:8
+  |
+3 |     xs.sort_by(x => x)
+  |        ^
+  = hint: declare it with `var` to make it changeable: `var xs = ...` on line 2
+  = fix: `var xs = [2, 1]`
+  = explain: nyra explain E0205
+
+nyra: 1 error(s)
+==== lambda_min_bool
+fn main() {
+    print([true].min())
+}
+----
+error[E0228]: `min` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+  --> case.nyra:2:18
+  |
+2 |     print([true].min())
+  |                  ^
+  = hint: keep the best element with `fold`, e.g. `[true].fold([true][0], (best, x) => if x.score < best.score { x } else { best })`
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== lambda_shadow
+fn main() {
+    let x = 3
+    print([1, 2].filter(x => x > 1))
+}
+----
+error[E0206]: `x` is already declared on line 2 (Nyra has no shadowing)
+  --> case.nyra:3:25
+  |
+3 |     print([1, 2].filter(x => x > 1))
+  |                         ^
+  = hint: give the lambda's parameter a name that is not used yet, e.g. `x2`
+  = explain: nyra explain E0206
+
+nyra: 1 error(s)
+==== lambda_reduce
+fn main() {
+    print([1, 2].reduce((a, b) => a + b))
+}
+----
+error[E0227]: `[int]` has no method `reduce`
+  --> case.nyra:2:18
+  |
+2 |     print([1, 2].reduce((a, b) => a + b))
+  |                  ^
+  = hint: `[1, 2].fold(start, (acc, x) => ...)` combines the elements, e.g. `[1, 2].fold(0, (acc, x) => acc + x)`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== lambda_str_map
+fn main() {
+    print("abc".map(c => c.upper()))
+}
+----
+error[E0227]: `str` has no method `map`
+  --> case.nyra:2:17
+  |
+2 |     print("abc".map(c => c.upper()))
+  |                 ^
+  = hint: strings have no `.map()`: use a comprehension over the characters, e.g. `[c.upper() for c in "abc" if c != ' ']`, or `"abc".chars().map(c => ...)`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== comp_two_for
+fn main() {
+    print([x * y for x in [1, 2] for y in [3, 4]])
+}
+----
+error[E0101]: expected `]` to close the comprehension opened at 2:11, found keyword `for`
+  --> case.nyra:2:34
+  |
+2 |     print([x * y for x in [1, 2] for y in [3, 4]])
+  |                                  ^
+  = hint: a comprehension has one `for`: for nested loops write `for` statements and `push`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== comp_over_int
+fn main() {
+    let n = 5
+    print([i * i for i in n])
+}
+----
+error[E0234]: cannot loop over `int` in a comprehension
+  --> case.nyra:3:27
+  |
+3 |     print([i * i for i in n])
+  |                           ^
+  = hint: to count, use a range: `[... for i in 0..n]`
+  = explain: nyra explain E0234
+
+nyra: 1 error(s)
+==== comp_cond_int
+fn main() {
+    print([x for x in [1, 2] if x % 2])
+}
+----
+error[E0209]: the condition of a comprehension's `if` must be `bool`, found `int`
+  --> case.nyra:2:35
+  |
+2 |     print([x for x in [1, 2] if x % 2])
+  |                                   ^
+  = hint: compare it: `x % 2 != 0`
+  = explain: nyra explain E0209
+
+nyra: 1 error(s)
+==== fn_fat_arrow_body
+fn f(x: int) -> int => x * 2
+fn main() {
+    print(f(1))
+}
+----
+error[E0101]: expected `{` or `=` to start the body of `fn f`, found `=>`
+  --> case.nyra:1:21
+  |
+1 | fn f(x: int) -> int => x * 2
+  |                     ^
+  = hint: `=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== global_declared_later
+fn advance() { pos += 1 }
+advance()
+var pos = 0
+----
+error[E0217]: `advance` uses the script variable `pos`, which is declared later (line 3)
+  --> case.nyra:2:1
+  |
+2 | advance()
+  | ^
+  = hint: a function can run only after the script variables it uses exist: move `var pos = ...` (line 3) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_declared_by_the_call
+fn next() -> int {
+    pos += 1
+    ret pos
+}
+var pos = next()
+----
+error[E0217]: `next` uses the script variable `pos`, which this statement is still declaring (line 5)
+  --> case.nyra:5:11
+  |
+5 | var pos = next()
+  |           ^
+  = hint: a function can run only after the script variables it uses exist: move `var pos = ...` (line 5) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_used_through_a_call
+fn a() -> int = b()
+fn b() -> int = n
+print(a())
+let n = 3
+----
+error[E0217]: `a` uses the script variable `n`, which is declared later (line 4)
+  --> case.nyra:3:7
+  |
+3 | print(a())
+  |       ^
+  = hint: a function can run only after the script variables it uses exist: move `let n = ...` (line 4) above this call, or the call below it
+  = explain: nyra explain E0217
+
+nyra: 1 error(s)
+==== global_let_changed
+let pos = 0
+fn advance() { pos += 1 }
+advance()
+----
+error[E0205]: cannot assign to `pos`: it was declared with `let` on line 1
+  --> case.nyra:2:16
+  |
+2 | fn advance() { pos += 1 }
+  |                ^
+  = hint: declare it with `var` to make it changeable: `var pos = ...` on line 1
+  = fix: `var pos = 0`
+  = explain: nyra explain E0205
+
+nyra: 1 error(s)
+==== global_hidden_by_local
+var pos = 0
+fn f() {
+    print(pos)
+    let pos = 3
+    print(pos)
+}
+f()
+----
+error[E0216]: `pos` is a script variable (line 1), but `f` declares its own `pos` (line 4), so it cannot see the script's
+  --> case.nyra:3:11
+  |
+3 |     print(pos)
+  |           ^
+  = hint: a name means one thing in a function: to use the script variable here, rename the function's own `pos` (e.g. `pos2`); a function that declares `pos` sees only its own
+  = explain: nyra explain E0216
+
+nyra: 1 error(s)
+==== global_in_example
+var pos = 0
+fn get() -> int = pos   ex get() == 0
+print(get())
+----
+error[E0254]: this example calls `get`, which uses the script variable `pos`
+  --> case.nyra:2:28
+  |
+2 | fn get() -> int = pos   ex get() == 0
+  |                            ^
+  = hint: examples run while the program compiles, before the script, so they cannot call a function that uses script variables: give it the value as a parameter instead, or remove this example
+  = explain: nyra explain E0254
+
+nyra: 1 error(s)
+==== global_inout_alias
+var pos = 0
+fn advance() { pos += 1 }
+fn twice(inout n: int) {
+    advance()
+    n += 1
+}
+twice(inout pos)
+----
+error[E0237]: `pos` is passed `inout` to `twice`, which also uses the script variable `pos`
+  --> case.nyra:7:7
+  |
+7 | twice(inout pos)
+  |       ^
+  = hint: `twice` sees `pos` itself: change it there instead of passing it, or pass a copy (`var t = pos`, `inout t`, then `pos = t`)
+  = explain: nyra explain E0237
+
+nyra: 1 error(s)
+==== global_changed_in_lambda
+var pos = 0
+fn next() -> int {
+    pos += 1
+    ret pos
+}
+print([1, 2].map(x => x + next()))
+----
+error[E0214]: a lambda cannot call `next`: it changes the script variable `pos`, and inside a lambda variables are read-only
+  --> case.nyra:6:27
+  |
+6 | print([1, 2].map(x => x + next()))
+  |                           ^
+  = hint: call `next` in a `for` loop instead
+  = explain: nyra explain E0214
+
+nyra: 1 error(s)
+==== global_changed_in_arena
+var xs: [str] = []
+fn add() { xs.push("a") }
+arena {
+    add()
+}
+----
+error[E0238]: `add` changes the script variable `xs`, so it cannot be called inside this `arena` block
+  --> case.nyra:4:5
+  |
+4 |     add()
+  |     ^
+  = hint: values created in an `arena` are freed at its `}`: call `add` after the block
+  = explain: nyra explain E0238
+
+nyra: 1 error(s)
+==== global_freed_before_call
+var xs = ["a"]
+fn show() = print(xs)
+free(xs)
+show()
+----
+error[E0239]: `show` uses the script variable `xs`, which was freed at line 3
+  --> case.nyra:4:1
+  |
+4 | show()
+  | ^
+  = hint: give `xs` a new value first (`xs = ...`, needs `var`), or move `free(xs)` after this call
+  = explain: nyra explain E0239
+
+nyra: 1 error(s)
+==== global_freed_in_function
+var xs = ["a"]
+fn f() { free(xs) }
+f()
+----
+error[E0238]: cannot free script variable `xs` in function `f`: the script still needs it
+  --> case.nyra:2:10
+  |
+2 | fn f() { free(xs) }
+  |          ^
+  = hint: only variables declared in this function can be freed or kept; call `free(xs)` at the top level of the script
+  = explain: nyra explain E0238
+
+nyra: 1 error(s)
+==== global_in_block_of_script
+if true {
+    var pos = 0
+    print(pos)
+}
+fn advance() { pos += 1 }
+advance()
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:5:16
+  |
+5 | fn advance() { pos += 1 }
+  |                ^
+  = hint: `pos` is declared inside a block of the script (line 2): functions see only the variables declared at the top level of the script; declare it there, before the block
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== main_local_in_function
+fn main() {
+    var pos = 0
+    advance()
+}
+fn advance() { pos += 1 }
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:5:16
+  |
+5 | fn advance() { pos += 1 }
+  |                ^
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== main_local_in_nested_function
+fn main() {
+    var pos = 1
+    fn show() {
+        print(pos)
+    }
+    show()
+}
+----
+error[E0201]: undefined variable `pos`
+  --> case.nyra:4:15
+  |
+4 |         print(pos)
+  |               ^
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== parse_too_deep
+fn main() {
+    print(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+}
+----
+error[E0103]: the code is nested more than 256 levels deep
+  --> case.nyra:2:265
+  |
+2 |     print(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+  |                                                                                                                                                                                                                                                                         ^
+  = hint: split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own
+  = explain: nyra explain E0103
 
 nyra: 1 error(s)

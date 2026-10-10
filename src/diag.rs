@@ -16,6 +16,9 @@ pub struct Diag {
     pub hint: Option<String>,
     /// Edits that repair the mistake; empty when there is no certain fix.
     pub fix: Vec<Edit>,
+    /// For a failed example (E0250): the value it got and the one it expected, as Nyra code.
+    pub actual: Option<String>,
+    pub expected: Option<String>,
 }
 
 /// One edit of a fix: the text from `start` up to (not including) `end` becomes `text`.
@@ -64,7 +67,14 @@ pub fn after(s: Span, text: &str) -> Span {
 
 impl Diag {
     pub fn new(code: &'static str, msg: impl Into<String>, span: Span) -> Self {
-        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new() }
+        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new(), actual: None, expected: None }
+    }
+
+    /// The value an example got and the one it expected (shown as `actual` and `expected` in JSON).
+    pub fn values(mut self, actual: String, expected: String) -> Self {
+        self.actual = Some(actual);
+        self.expected = Some(expected);
+        self
     }
 
     /// Sets the hint. A fix belongs to the hint it was made with, so a new hint drops it:
@@ -135,11 +145,20 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
 }
 
 pub fn render_json(diags: &[Diag], file: &str) -> String {
+    format!("{{\"ok\":{},\"errors\":{}}}", diags.is_empty(), render_json_errors(diags, file))
+}
+
+/// The `errors` array of `render_json`.
+pub fn render_json_errors(diags: &[Diag], file: &str) -> String {
     let items: Vec<String> = diags
         .iter()
         .map(|d| {
+            let values = match (&d.actual, &d.expected) {
+                (Some(a), Some(e)) => format!(",\"actual\":{},\"expected\":{}", json_str(a), json_str(e)),
+                _ => String::new(),
+            };
             format!(
-                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}{}}}",
+                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}{}{values}}}",
                 d.code,
                 json_str(&d.msg),
                 json_str(file),
@@ -150,7 +169,7 @@ pub fn render_json(diags: &[Diag], file: &str) -> String {
             )
         })
         .collect();
-    format!("{{\"ok\":{},\"errors\":[{}]}}", diags.is_empty(), items.join(","))
+    format!("[{}]", items.join(","))
 }
 
 /// `,"fix":[{"line":..,"col":..,"end_line":..,"end_col":..,"text":".."}]`, or nothing without a fix.

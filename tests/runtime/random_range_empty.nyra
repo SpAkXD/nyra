@@ -1,0 +1,7 @@
+// expect: E0342 at 6:18
+use random
+
+fn main() {
+    random.seed(1)
+    print(random.range(5, 5))
+}

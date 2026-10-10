@@ -6,9 +6,14 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::check_v03::{self as v3, StructInfo};
 use crate::diag::{after, suggest, suggest_fix, Diag, Edit};
 use crate::hints;
+use crate::stdlib;
+use data::StructInfo;
+
+pub mod data;
+mod globals;
+mod lambda;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
 /// Builtins a program may also define itself (its own definition wins).
@@ -45,6 +50,8 @@ enum Decl {
     /// an `inout` parameter: changeable, like a `var`
     Inout,
     Loop,
+    /// a parameter of a lambda (`x` in `x => x * 2`)
+    Lambda,
 }
 
 struct Var {
@@ -61,9 +68,19 @@ enum Ctx<'a> {
     Assign(&'a str),
     /// assignment to a field or an element: the target as written
     AssignTo(String),
-    Arg { f: &'a str, idx: usize, param: &'a str },
-    MethodArg { m: &'a str, idx: usize },
-    Field { s: &'a str, f: &'a str },
+    Arg {
+        f: &'a str,
+        idx: usize,
+        param: &'a str,
+    },
+    MethodArg {
+        m: &'a str,
+        idx: usize,
+    },
+    Field {
+        s: &'a str,
+        f: &'a str,
+    },
     Ret,
     Range(&'static str),
 }
@@ -92,6 +109,12 @@ struct Checker {
     arena_depth: usize,
     /// Variables that were freed with `free(x)` and not assigned since.
     freed: HashMap<String, Freed>,
+    /// How many lambdas enclose the current expression: inside one, nothing can be changed.
+    lambda_depth: usize,
+    /// The imported standard modules and where their `use` line is.
+    modules: Vec<(String, Span)>,
+    /// Script variables: what functions see of them and do with them (see `globals.rs`).
+    g: globals::State,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -106,7 +129,27 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         chain: None,
         arena_depth: 0,
         freed: HashMap::new(),
+        lambda_depth: 0,
+        modules: Vec::new(),
+        g: globals::State::new(prog),
     };
+
+    // the imported modules: their intrinsics are functions named `module.name`
+    for u in &prog.uses {
+        if stdlib::is_module(&u.module) && !c.modules.iter().any(|(m, _)| *m == u.module) {
+            c.modules.push((u.module.clone(), u.span));
+            for f in stdlib::StdFn::ALL.iter().filter(|f| f.path().0 == u.module) {
+                let sig = Sig {
+                    params: f.params().iter().map(|(_, t)| t.ty()).collect(),
+                    names: f.params().iter().map(|(n, _)| n.to_string()).collect(),
+                    inout: vec![false; f.params().len()],
+                    ret: f.ret().ty(),
+                    span: u.span,
+                };
+                c.fns.insert(f.full_name().to_string(), sig);
+            }
+        }
+    }
 
     // structs first: functions and bodies refer to them
     for sd in &prog.structs {
@@ -155,13 +198,11 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         for f in &sd.fields {
             c.check_type(f.ty, f.span);
         }
-        if c.structs.contains_key(&sd.name) && v3::contains_itself(&sd.name, &c.structs) {
+        if c.structs.contains_key(&sd.name) && data::contains_itself(&sd.name, &c.structs) {
             c.errs.push(
-                Diag::new("E0222", format!("struct `{}` contains itself, so its size would be infinite", sd.name), sd.span)
-                    .hint(format!(
-                        "store the nested values in an array instead, e.g. `children: [{}]` (an array can be empty)",
-                        sd.name
-                    )),
+                Diag::new("E0222", format!("struct `{}` contains itself, so its size would be infinite", sd.name), sd.span).hint(
+                    format!("store the nested values in an array instead, e.g. `children: [{}]` (an array can be empty)", sd.name),
+                ),
             );
         }
     }
@@ -186,17 +227,12 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
             );
         } else if let Some(sd) = c.structs.get(&f.name) {
             c.errs.push(
-                Diag::new(
-                    "E0206",
-                    format!("`{}` is already the name of a struct (line {})", f.name, sd.span.line),
-                    f.span,
-                )
-                .hint("a function cannot share a struct's name: rename the function (functions start lowercase)"),
+                Diag::new("E0206", format!("`{}` is already the name of a struct (line {})", f.name, sd.span.line), f.span)
+                    .hint("a function cannot share a struct's name: rename the function (functions start lowercase)"),
             );
         } else {
             // a type that is not defined is reported here, once: the calls then see it as unknown
-            let params: Vec<Type> =
-                f.params.iter().map(|p| if c.check_type(p.ty, p.span) { p.ty } else { Type::Unknown }).collect();
+            let params: Vec<Type> = f.params.iter().map(|p| if c.check_type(p.ty, p.span) { p.ty } else { Type::Unknown }).collect();
             let ret = if f.ret == Type::Void || c.check_type(f.ret, f.span) { f.ret } else { Type::Unknown };
             let sig = Sig {
                 params,
@@ -211,8 +247,12 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
 
     match prog.funcs.iter().find(|f| f.name == "main") {
         None => c.errs.push(
-            Diag::new("E0208", "missing `fn main()`: a program starts running at `main`", Span { line: 1, col: 1 })
-                .hint("add the entry point: `fn main() { print(\"hello\") }`"),
+            Diag::new(
+                "E0208",
+                "nothing to run: the program has no statements at the top level and no `fn main()`",
+                Span { line: 1, col: 1 },
+            )
+            .hint("write the program's statements at the top level, e.g. `print(\"hello\")`: they run in order"),
         ),
         Some(f) if !f.params.is_empty() || f.ret != Type::Void => {
             let mut problems = Vec::new();
@@ -235,9 +275,28 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         _ => {}
     }
 
-    for f in &mut prog.funcs {
-        c.func(f);
+    // a script's `main` first: its top-level variables (and their types) are what the functions
+    // see. Its errors still come where `main` stands among the functions.
+    let script_main = if prog.script { prog.funcs.iter().position(|f| f.name == "main") } else { None };
+    let mut main_errs = Vec::new();
+    if let Some(i) = script_main {
+        let before = c.errs.len();
+        c.g.in_main = true;
+        c.func(&mut prog.funcs[i]);
+        c.g.in_main = false;
+        main_errs = c.errs.split_off(before);
     }
+    for (i, f) in prog.funcs.iter_mut().enumerate() {
+        if Some(i) == script_main {
+            c.errs.append(&mut main_errs);
+        } else {
+            c.func(f);
+        }
+    }
+    for ex in &mut prog.examples {
+        c.example(&mut ex.expr);
+    }
+    prog.globals = c.finish_globals();
     c.errs
 }
 
@@ -263,7 +322,14 @@ fn collect_decls(b: &[Stmt], out: &mut Vec<(String, Span)>) {
                 }
             }
             StmtKind::While { body, .. } | StmtKind::Arena(body) => collect_decls(body, out),
-            StmtKind::For { var, body, .. } | StmtKind::ForEach { var, body, .. } => {
+            StmtKind::For { var, body, .. } => {
+                out.push((var.clone(), s.span));
+                collect_decls(body, out);
+            }
+            StmtKind::ForEach { var, index, body, .. } => {
+                if let Some(i) = index {
+                    out.push((i.clone(), s.span));
+                }
                 out.push((var.clone(), s.span));
                 collect_decls(body, out);
             }
@@ -286,9 +352,9 @@ fn show(e: &Expr) -> Option<String> {
             t
         }
         ExprKind::Bool(b) => b.to_string(),
-        ExprKind::Char(c) => v3::show_char(*c),
+        ExprKind::Char(c) => data::show_char(*c),
         ExprKind::Str(s) if s.len() <= 16 && !s.contains(['"', '\\', '\n', '\t', '\r']) => format!("\"{s}\""),
-        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) => return None,
+        ExprKind::Str(_) | ExprKind::Interp(_) | ExprKind::If(..) | ExprKind::Comprehension(_) | ExprKind::MapLit(_) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
             let a: Option<Vec<String>> = args.iter().map(show).collect();
@@ -308,6 +374,10 @@ fn show(e: &Expr) -> Option<String> {
         }
         ExprKind::Labeled(l, v) => format!("{l}: {}", show(v)?),
         ExprKind::Inout(v) => format!("inout {}", show(v)?),
+        ExprKind::Lambda(ps, body) => match ps.as_slice() {
+            [(p, _)] => format!("{p} => {}", show(body)?),
+            _ => format!("({}) => {}", ps.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>().join(", "), show(body)?),
+        },
     };
     (s.len() <= 48).then_some(s)
 }
@@ -421,8 +491,38 @@ fn call_text(e: &Expr) -> String {
 }
 
 impl Checker {
+    /// A variable by name: a local, or in a function, a script variable it can see.
     fn lookup(&self, name: &str) -> Option<&Var> {
+        self.local(name).or_else(|| self.global_of(name).map(|g| &self.g.vars[g].1))
+    }
+
+    /// A variable of the function being checked.
+    fn local(&self, name: &str) -> Option<&Var> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
+    }
+
+    /// `"${root}/logs"` where `root` is undefined: text written for a template engine (shell,
+    /// JavaScript), not a value. The fix doubles the braces so the string keeps the text.
+    fn literal_dollar_brace(&mut self, x: &Expr, before: usize) {
+        fn path(e: &Expr) -> Option<(String, Span)> {
+            match &e.kind {
+                ExprKind::Var(n) => Some((n.clone(), e.span)),
+                ExprKind::Field(b, f) => path(b).map(|(t, s)| (format!("{t}.{f}"), s)),
+                _ => None,
+            }
+        }
+        let Some((text, root)) = path(x) else { return };
+        let Some(d) = self.errs[before..].iter_mut().find(|d| d.code == "E0201" && d.span == root && d.fix.is_empty()) else {
+            return;
+        };
+        if root.col < 2 {
+            return;
+        }
+        let open = Span { line: root.line, col: root.col - 1 };
+        d.hint = Some(format!(
+            "`{{{text}}}` inserts the value of `{text}`; to keep `${{{text}}}` as text, double the braces: `${{{{{text}}}}}`"
+        ));
+        d.fix = vec![Edit::replace(open, &format!("{{{text}}}"), format!("{{{{{text}}}}}")).after("$")];
     }
 
     fn undefined_var(&self, name: &str, span: Span, assigning: bool) -> Diag {
@@ -436,6 +536,10 @@ impl Checker {
         }
         if BUILTINS.contains(&name) {
             return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}(x)`"));
+        }
+        // a script variable this function cannot see, or a local of `main`
+        if let Some(d) = self.global_undefined(name, span) {
+            return d;
         }
         // declared somewhere else in this function: say where, and why it is not visible here
         let first = self.decls.iter().filter(|(n, _)| n == name).map(|(_, s)| *s).min_by_key(|s| (s.line, s.col));
@@ -469,7 +573,8 @@ impl Checker {
     }
 
     fn declare(&mut self, name: &str, ty: Type, decl: Decl, span: Span) {
-        let prev = self.lookup(name).map(|v| (v.decl, v.span));
+        // a script variable does not count: declaring the name hides it in this function
+        let prev = self.local(name).map(|v| (v.decl, v.span));
         if let Some((pdecl, pspan)) = prev {
             let (msg, hint) = match pdecl {
                 Decl::Let => (
@@ -490,6 +595,19 @@ impl Checker {
                     format!("`{name}` is already the loop variable of an enclosing `for` (line {})", pspan.line),
                     format!("use a different name for the inner variable, e.g. `{}`", if name == "i" { "j" } else { "inner" }),
                 ),
+                Decl::Lambda => (
+                    format!("`{name}` is already the parameter of an enclosing lambda (line {})", pspan.line),
+                    "use a different name for the inner variable or parameter".to_string(),
+                ),
+            };
+            // a lambda's parameter is the easiest one to rename
+            let hint = if decl == Decl::Lambda {
+                format!(
+                    "give the lambda's parameter a name that is not used yet, e.g. `{}`",
+                    lambda::fresh_name(name, |n| self.lookup(n).is_some())
+                )
+            } else {
+                hint
             };
             self.errs.push(Diag::new("E0206", msg, span).hint(hint));
         } else if let Some(sig) = self.fns.get(name) {
@@ -502,6 +620,11 @@ impl Checker {
                 Diag::new("E0206", format!("`{name}` is already the name of a struct (line {})", sd.span.line), span)
                     .hint("variables start lowercase: rename the variable"),
             );
+        } else if let Some((_, at)) = self.modules.iter().find(|(m, _)| m == name) {
+            self.errs.push(
+                Diag::new("E0206", format!("`{name}` is already the name of a module (`use {name}` on line {})", at.line), span)
+                    .hint(format!("a variable cannot share a module's name: rename the variable, e.g. `{name}_value`")),
+            );
         }
         self.freed.remove(name);
         let arena = self.arena_depth;
@@ -512,6 +635,12 @@ impl Checker {
     fn check_type(&mut self, t: Type, span: Span) -> bool {
         match t {
             Type::Array(_) => t.elem().is_some_and(|e| self.check_type(e, span)),
+            Type::Map(_) => {
+                let Some((k, v)) = t.map_kv() else { return false };
+                // a bad key is reported, but the type stays usable (no second error for `[:]`)
+                self.map_key(k, span);
+                self.check_type(v, span)
+            }
             Type::Struct(_) => {
                 let name = t.struct_name().unwrap_or_default();
                 if self.structs.contains_key(&name) {
@@ -523,13 +652,19 @@ impl Checker {
                 } else if let Some(s) = suggest(&name, names.iter().copied()) {
                     s
                 } else if names.is_empty() {
-                    format!("define it: `struct {name} {{ field: int }}`, or use `int`, `float`, `bool`, `str`, `char` or an array `[T]`")
+                    format!(
+                        "define it: `struct {name} {{ field: int }}`, or use `int`, `float`, `bool`, `str`, `char` or an array `[T]`"
+                    )
                 } else {
                     let mut sorted = names.clone();
                     sorted.sort();
-                    format!("the structs are {}; or define `struct {name} {{ ... }}`", sorted.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", "))
+                    format!(
+                        "the structs are {}; or define `struct {name} {{ ... }}`",
+                        sorted.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")
+                    )
                 };
-                self.errs.push(Diag::new("E0102", format!("unknown type `{name}`: no struct with this name is defined"), span).hint(hint));
+                self.errs
+                    .push(Diag::new("E0102", format!("unknown type `{name}`: no struct with this name is defined"), span).hint(hint));
                 false
             }
             _ => true,
@@ -537,7 +672,42 @@ impl Checker {
     }
 
     fn managed(&self, t: Type) -> bool {
-        v3::managed(t, &self.structs)
+        data::managed(t, &self.structs)
+    }
+
+    /// True if a value of `t` holds a map (`json` does not handle maps yet).
+    fn has_map(&self, t: Type) -> bool {
+        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> bool {
+            match t {
+                Type::Map(_) => true,
+                Type::Array(_) => t.elem().is_some_and(|e| go(c, e, seen)),
+                Type::Struct(_) => {
+                    let Some(n) = t.struct_name() else { return false };
+                    if seen.contains(&n) {
+                        return false;
+                    }
+                    seen.push(n.clone());
+                    c.structs.get(&n).is_some_and(|s| s.fields.iter().any(|(_, ft, _)| go(c, *ft, seen)))
+                }
+                _ => false,
+            }
+        }
+        go(self, t, &mut Vec::new())
+    }
+
+    /// A map key must be an `int`, `str`, `char` or `bool` (E0218).
+    fn map_key(&mut self, k: Type, span: Span) -> bool {
+        if matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool) || k.is_unknown() {
+            return true;
+        }
+        let hint = match k {
+            Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
+            _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
+        };
+        self.errs.push(
+            Diag::new("E0218", format!("a map key must be `int`, `str`, `char` or `bool`, found `{}`", k.name()), span).hint(hint),
+        );
+        false
     }
 
     /// A value of type `got` is used where `want` is needed. `e` is the expression, for the hint.
@@ -573,13 +743,9 @@ impl Checker {
             _ => None,
         };
         self.errs.push(
-            Diag::new(
-                "E0203",
-                format!("type mismatch in {place}: expected `{}`, found `{}`", want.name(), got.name()),
-                e.span,
-            )
-            .hint(hint)
-            .fix_opt(fix),
+            Diag::new("E0203", format!("type mismatch in {place}: expected `{}`, found `{}`", want.name(), got.name()), e.span)
+                .hint(hint)
+                .fix_opt(fix),
         );
     }
 
@@ -626,7 +792,7 @@ impl Checker {
                 if let ExprKind::Str(text) = &e.kind {
                     if text.chars().count() == 1 {
                         let c = text.chars().next().unwrap_or(' ') as u32;
-                        return format!("a character is written in single quotes: `{}`", v3::show_char(c));
+                        return format!("a character is written in single quotes: `{}`", data::show_char(c));
                     }
                 }
                 return "a `char` is one character: take one from a string with `s[i]`".to_string();
@@ -681,12 +847,18 @@ impl Checker {
             _ => {}
         }
         match ctx {
-            Ctx::Let(name, _) => format!("change the value to {}, or change the declared type: `let {name}: {} = ...`", article(want), got.name()),
-            Ctx::Assign(name) => format!("`{name}` holds {} values: assign {}, or declare `{name}` with the type you need", want.name(), article(want)),
+            Ctx::Let(name, _) => {
+                format!("change the value to {}, or change the declared type: `let {name}: {} = ...`", article(want), got.name())
+            }
+            Ctx::Assign(name) => {
+                format!("`{name}` holds {} values: assign {}, or declare `{name}` with the type you need", want.name(), article(want))
+            }
             Ctx::AssignTo(target) => format!("`{target}` holds {} values: assign {}", want.name(), article(want)),
             Ctx::Arg { f, param, .. } => format!("pass {} for `{param}`, or change the parameter type in `fn {f}`", article(want)),
             Ctx::MethodArg { m, .. } => format!("`.{m}(...)` needs {} here", article(want)),
-            Ctx::Field { s, f } => format!("field `{f}` of `{s}` holds {}: pass one, or change the field's type in `struct {s}`", article(want)),
+            Ctx::Field { s, f } => {
+                format!("field `{f}` of `{s}` holds {}: pass one, or change the field's type in `struct {s}`", article(want))
+            }
             Ctx::Ret => format!("return {}, or change the return type of `{}` to `{}`", article(want), self.fname, got.name()),
             Ctx::Range(_) => "the bounds of a range are `int` values: `for i in 0..10`".to_string(),
         }
@@ -709,9 +881,7 @@ impl Checker {
             (Type::Array(_), Some(s)) => format!("compare its length: `{s}.len() > 0`"),
             _ => "compare explicitly, e.g. `x != 0`".to_string(),
         };
-        self.errs.push(
-            Diag::new("E0209", format!("the condition of {what} must be `bool`, found `{}`", t.name()), e.span).hint(hint),
-        );
+        self.errs.push(Diag::new("E0209", format!("the condition of {what} must be `bool`, found `{}`", t.name()), e.span).hint(hint));
     }
 
     /// False for a struct that is not defined (reported already), also inside an array type.
@@ -729,12 +899,25 @@ impl Checker {
         self.decls.clear();
         self.freed.clear();
         collect_decls(&f.body, &mut self.decls);
+        self.g.start_func(f);
         self.scopes = vec![HashMap::new()];
         for p in &f.params {
             let ty = if self.defined(p.ty) { p.ty } else { Type::Unknown };
             self.declare(&p.name, ty, if p.inout { Decl::Inout } else { Decl::Param }, p.span);
         }
-        self.block(&mut f.body);
+        if self.g.in_main {
+            // a script: each top-level statement is numbered, so a call can be compared with the
+            // declarations of the script variables it uses
+            self.scopes.push(HashMap::new());
+            for (i, s) in f.body.iter_mut().enumerate() {
+                self.g.top_stmt = i;
+                self.stmt(s);
+            }
+            self.scopes.pop();
+        } else {
+            self.block(&mut f.body);
+        }
+        self.g.end_func(&f.name);
         if f.ret != Type::Void && !returns(&f.body) {
             let value = sample(f.ret);
             // the last line computes the value: it only lacks the `ret`
@@ -772,6 +955,32 @@ impl Checker {
         }
     }
 
+    /// An `ex` condition: it sees no variables, and it must be a `bool` (it is run by `examples.rs`).
+    fn example(&mut self, e: &mut Expr) {
+        self.ret = Type::Void;
+        self.fname = String::new();
+        self.decls.clear();
+        self.freed.clear();
+        self.scopes = vec![HashMap::new()];
+        self.g.start_example();
+        let t = self.expr_with(e, Some(Type::Bool));
+        self.g.end_func("");
+        if t != Type::Bool && !t.is_unknown() {
+            let what = show(e).map_or("this example".to_string(), |s| format!("`{s}`"));
+            let hint = match (t, show(e)) {
+                (Type::Void, _) => {
+                    "an example checks a value: call a function that returns one and compare the result, e.g. `ex sq(3) == 9`"
+                        .to_string()
+                }
+                (_, Some(s)) => format!("compare it with the value you expect: `ex {s} == ...`"),
+                _ => "write a condition that must be true, e.g. `ex sq(3) == 9`".to_string(),
+            };
+            let got = if t == Type::Void { "returns nothing".to_string() } else { format!("is {}", article(t)) };
+            self.errs
+                .push(Diag::new("E0252", format!("an example must be a `bool` condition, but {what} {got}"), start(e)).hint(hint));
+        }
+    }
+
     fn block(&mut self, b: &mut [Stmt]) {
         self.scopes.push(HashMap::new());
         for s in b.iter_mut() {
@@ -782,17 +991,17 @@ impl Checker {
 
     /// A loop body. A `free(x)` inside reaches the uses of the next round, so variables freed in
     /// the body (and not assigned in it) count as maybe-freed while the body is checked.
-    fn loop_body(&mut self, body: &mut [Stmt], var: Option<(&str, Type, Span)>) {
+    fn loop_body(&mut self, body: &mut [Stmt], vars: &[(&str, Type, Span)]) {
         let before = self.freed.clone();
         let (mut frees, mut assigned) = (Vec::new(), Vec::new());
-        v3::frees_in(body, &mut frees, &mut assigned);
+        data::frees_in(body, &mut frees, &mut assigned);
         for (name, at) in frees {
             if !assigned.contains(&name) && self.lookup(&name).is_some() {
                 self.freed.entry(name).or_insert(Freed { line: at.line, maybe: true });
             }
         }
         self.scopes.push(HashMap::new());
-        if let Some((name, t, span)) = var {
+        for &(name, t, span) in vars {
             self.declare(name, t, Decl::Loop, span);
         }
         self.block(body);
@@ -831,6 +1040,9 @@ impl Checker {
                     t = Type::Unknown;
                 }
                 self.declare(name, t, if *mutable { Decl::Var } else { Decl::Let }, span);
+                if self.g.in_main && self.scopes.len() == 2 {
+                    self.g.add_global(name, t, *mutable, span);
+                }
             }
             StmtKind::Assign { target, op, value } => self.assign(target, *op, value, span),
             StmtKind::If { cond, then, els } => {
@@ -848,7 +1060,7 @@ impl Checker {
             StmtKind::While { cond, body } => {
                 let t = self.expr(cond);
                 self.cond(t, cond, "`while`");
-                self.loop_body(body, None);
+                self.loop_body(body, &[]);
             }
             StmtKind::For { var, start, end, step, body } => {
                 let a = self.expr(start);
@@ -859,14 +1071,16 @@ impl Checker {
                     let t = self.expr(k);
                     self.range_bound(t, k, "step");
                 }
-                self.loop_body(body, Some((var, Type::Int, span)));
+                self.loop_body(body, &[(var, Type::Int, span)]);
             }
-            StmtKind::ForEach { var, iter, body } => {
+            StmtKind::ForEach { var, index, iter, body } => {
                 let it = self.expr(iter);
                 let elem = match it {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => it.elem().unwrap_or(Type::Unknown),
+                    // a map gives its keys, in insertion order
+                    Type::Map(_) => it.map_kv().map_or(Type::Unknown, |(k, _)| k),
                     t => {
                         let hint = match (t, show(iter)) {
                             (Type::Int, Some(s)) => format!("to count, loop over a range: `for {var} in 0..{s}`"),
@@ -874,13 +1088,20 @@ impl Checker {
                             _ => "a `for` loop goes over a range `a..b`, an array or a string".to_string(),
                         };
                         self.errs.push(
-                            Diag::new("E0234", format!("cannot loop over `{}`: `for {var} in ...` needs an array, a string or a range", t.name()), iter.span)
-                                .hint(hint),
+                            Diag::new(
+                                "E0234",
+                                format!("cannot loop over `{}`: `for {var} in ...` needs an array, a string or a range", t.name()),
+                                iter.span,
+                            )
+                            .hint(hint),
                         );
                         Type::Unknown
                     }
                 };
-                self.loop_body(body, Some((var, elem, span)));
+                match index {
+                    Some(i) => self.loop_body(body, &[(i, Type::Int, span), (var, elem, span)]),
+                    None => self.loop_body(body, &[(var, elem, span)]),
+                }
             }
             StmtKind::Break | StmtKind::Continue => {}
             StmtKind::Arena(body) => {
@@ -913,12 +1134,8 @@ impl Checker {
                 None => {
                     if self.ret != Type::Void {
                         self.errs.push(
-                            Diag::new(
-                                "E0207",
-                                format!("`ret` needs a value: `{}` returns `{}`", self.fname, self.ret.name()),
-                                span,
-                            )
-                            .hint(format!("write `ret {}` (or any other `{}` value)", sample(self.ret), self.ret.name())),
+                            Diag::new("E0207", format!("`ret` needs a value: `{}` returns `{}`", self.fname, self.ret.name()), span)
+                                .hint(format!("write `ret {}` (or any other `{}` value)", sample(self.ret), self.ret.name())),
                         );
                     }
                 }
@@ -948,6 +1165,9 @@ impl Checker {
             ExprKind::Var(n) => Some(n.clone()),
             _ => None,
         };
+        if let Some(name) = &var_name {
+            self.note_use(name, true);
+        }
         let tt = match &var_name {
             Some(name) => match self.lookup(name).map(|v| (v.ty, v.decl, v.span, v.arena)) {
                 None => {
@@ -965,6 +1185,10 @@ impl Checker {
                             Decl::Loop => (
                                 format!("cannot assign to `{name}`: it is the loop variable of a `for`"),
                                 "loop variables cannot be changed: use a `while` loop with a `var` counter instead".to_string(),
+                            ),
+                            Decl::Lambda => (
+                                format!("cannot assign to `{name}`: it is the parameter of a lambda"),
+                                "a lambda only computes a value from its parameters".to_string(),
                             ),
                             _ => (
                                 format!("cannot assign to `{name}`: it was declared with `let` on line {}", dspan.line),
@@ -1029,26 +1253,43 @@ impl Checker {
     /// `e` is changed (assigned into, a mutating method, `inout`): it must be a place whose root
     /// variable can change.
     fn check_place(&mut self, e: &Expr, what: &str, span: Span) {
+        if self.lambda_depth > 0 {
+            self.errs.push(lambda::changes(e, what, span));
+            return;
+        }
+        // `m[k] = v` replaces a map's value; a value inside one cannot change in place
+        if map_step(e, what == "assign to") {
+            let shown = show(e).unwrap_or_else(|| "m[k]".into());
+            self.errs.push(
+                Diag::new("E0229", format!("cannot {what} `{shown}`: a value inside a map cannot change in place"), span)
+                    .hint("change a copy and store it back: `var v = m[k]`, change `v`, then `m[k] = v`"),
+            );
+            return;
+        }
         if let ExprKind::Index(b, _) = &e.kind {
             if b.ty == Type::Str {
                 self.errs.push(
-                    Diag::new("E0229", format!("cannot {what} a character of a string: strings are immutable"), span).hint(
-                        "build a new string instead, e.g. `s = s.slice(0, i) + \"x\" + s.slice(i + 1, s.len())`",
-                    ),
+                    Diag::new("E0229", format!("cannot {what} a character of a string: strings are immutable"), span)
+                        .hint("build a new string instead, e.g. `s = s.slice(0, i) + \"x\" + s.slice(i + 1, s.len())`"),
                 );
                 return;
             }
         }
-        let Some(root) = v3::place_root(e) else {
+        let Some(root) = data::place_root(e) else {
             if !e.ty.is_unknown() {
                 self.errs.push(
-                    Diag::new("E0229", format!("cannot {what} this expression: only a variable, a field or an element can change"), span)
-                        .hint("store the value in a `var` first, then change the variable"),
+                    Diag::new(
+                        "E0229",
+                        format!("cannot {what} this expression: only a variable, a field or an element can change"),
+                        span,
+                    )
+                    .hint("store the value in a `var` first, then change the variable"),
                 );
             }
             return;
         };
         let root = root.to_string();
+        self.note_use(&root, true);
         let Some((t, decl, dspan, arena)) = self.lookup(&root).map(|v| (v.ty, v.decl, v.span, v.arena)) else { return };
         let shown = show(e).unwrap_or_else(|| root.clone());
         match decl {
@@ -1071,8 +1312,9 @@ impl Checker {
             ),
             Decl::Loop => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` is the loop variable of a `for`"), span)
-                    .hint("the loop variable is a copy of each element: change the array itself, e.g. `xs[i] = ...` in `for i in 0..xs.len()`"),
+                    .hint("the loop variable is a copy of each element: change the array itself, e.g. `xs[i] = ...` in `for i, x in xs`"),
             ),
+            Decl::Lambda => {}
         }
     }
 
@@ -1084,9 +1326,10 @@ impl Checker {
         } else {
             format!("`{name}` was freed at line {} and cannot be used any more", f.line)
         };
-        self.errs.push(Diag::new("E0239", msg, span).hint(format!(
-            "give it a new value first (`{name} = ...`, needs `var`), or move `free({name})` after its last use"
-        )));
+        self.errs.push(
+            Diag::new("E0239", msg, span)
+                .hint(format!("give it a new value first (`{name} = ...`, needs `var`), or move `free({name})` after its last use")),
+        );
     }
 
     fn expr(&mut self, e: &mut Expr) -> Type {
@@ -1096,6 +1339,11 @@ impl Checker {
     /// The type of `e`. `want` is the type the context expects; only `[]` needs it.
     fn expr_with(&mut self, e: &mut Expr, want: Option<Type>) -> Type {
         let span = e.span;
+        // `math.sqrt(x)`, `math.pi`: an item of a module
+        if let Some(t) = self.module_item(e, want) {
+            e.ty = t;
+            return t;
+        }
         let t = match &mut e.kind {
             ExprKind::Int(_) => Type::Int,
             ExprKind::Float(_) => Type::Float,
@@ -1105,7 +1353,10 @@ impl Checker {
             ExprKind::Interp(parts) => {
                 for p in parts.iter_mut() {
                     if let InterpPart::Expr(x) = p {
-                        if self.expr(x) == Type::Void {
+                        let before = self.errs.len();
+                        let ty = self.expr(x);
+                        self.literal_dollar_brace(x, before);
+                        if ty == Type::Void {
                             self.errs.push(
                                 Diag::new(
                                     "E0203",
@@ -1123,12 +1374,20 @@ impl Checker {
                 Some(v) => {
                     let t = v.ty;
                     let name = name.clone();
+                    self.note_use(&name, false);
                     self.check_freed(&name, span);
                     t
                 }
+                None if self.modules.iter().any(|(m, _)| m == name) => {
+                    let first = stdlib::names(name).into_iter().next().unwrap_or_default();
+                    self.errs.push(
+                        Diag::new("E0307", format!("`{name}` is a module, not a value"), span)
+                            .hint(format!("use the items of the module by their names, e.g. `{name}.{first}`")),
+                    );
+                    Type::Unknown
+                }
                 None if self.structs.contains_key(name.as_str()) => {
-                    let fields: Vec<String> =
-                        self.structs[name.as_str()].fields.iter().map(|(f, _, _)| format!("{f}: ...")).collect();
+                    let fields: Vec<String> = self.structs[name.as_str()].fields.iter().map(|(f, _, _)| format!("{f}: ...")).collect();
                     self.errs.push(
                         Diag::new("E0235", format!("`{name}` is a type, not a value"), span)
                             .hint(format!("build a value with all its fields: `{name}({})`", fields.join(", "))),
@@ -1231,7 +1490,11 @@ impl Checker {
                             (_, Some(s)) => format!("make both branches `float`: convert the second with `float({s})`"),
                             _ => "make both branches `float`: convert the second with `float(...)`".to_string(),
                         },
-                        _ => format!("both branches must have the same type: change one so both are `{}` (or both `{}`)", ta.name(), tb.name()),
+                        _ => format!(
+                            "both branches must have the same type: change one so both are `{}` (or both `{}`)",
+                            ta.name(),
+                            tb.name()
+                        ),
                     };
                     self.errs.push(
                         Diag::new(
@@ -1248,21 +1511,44 @@ impl Checker {
                 }
             }
             ExprKind::Array(items) => self.array_lit(items, want, span),
+            ExprKind::MapLit(pairs) => self.map_lit(pairs, want, span),
             ExprKind::Index(base, index) => {
                 let bt = self.expr(base);
-                let it = self.expr(index);
-                if it != Type::Int && !it.is_unknown() {
+                let it = match bt.map_kv() {
+                    Some((k, _)) => self.expr_with(index, Some(k)),
+                    None => self.expr(index),
+                };
+                if bt.map_kv().is_none() && it != Type::Int && !it.is_unknown() {
                     let hint = match (it, show(index)) {
                         (Type::Float, Some(s)) => format!("convert it: `[int({s})]`"),
                         (Type::Char, Some(s)) => format!("an index is a position: to use the character's code write `[{s}.code()]`"),
                         _ => "an index is an `int` position: 0 is the first element".to_string(),
                     };
-                    self.errs.push(Diag::new("E0232", format!("an index must be an `int`, found `{}`", it.name()), index.span).hint(hint));
+                    self.errs
+                        .push(Diag::new("E0232", format!("an index must be an `int`, found `{}`", it.name()), index.span).hint(hint));
                 }
                 match bt {
                     t if t.is_unknown() => Type::Unknown,
                     Type::Str => Type::Char,
                     Type::Array(_) => bt.elem().unwrap_or(Type::Unknown),
+                    Type::Map(_) => {
+                        let (k, v) = bt.map_kv().unwrap_or((Type::Unknown, Type::Unknown));
+                        if it != k && !it.is_unknown() {
+                            let hint = match (k, show(index)) {
+                                (Type::Str, Some(s)) => format!("the keys are text: `[str({s})]`"),
+                                _ => format!("the keys of this map are `{}` values", k.name()),
+                            };
+                            self.errs.push(
+                                Diag::new(
+                                    "E0232",
+                                    format!("a key of `{}` must be `{}`, found `{}`", bt.name(), k.name(), it.name()),
+                                    index.span,
+                                )
+                                .hint(hint),
+                            );
+                        }
+                        v
+                    }
                     t => {
                         let shown = show(base);
                         let hint = match (t, shown) {
@@ -1301,6 +1587,11 @@ impl Checker {
                 );
                 Type::Unknown
             }
+            ExprKind::Lambda(..) => {
+                self.errs.push(lambda::misplaced(span));
+                Type::Unknown
+            }
+            ExprKind::Comprehension(c) => self.comprehension(c),
             ExprKind::Inout(v) => {
                 self.expr(v);
                 self.errs.push(
@@ -1312,6 +1603,214 @@ impl Checker {
         };
         e.ty = t;
         t
+    }
+
+    /// `module.name(args)` or `module.name`, where `module` is a standard module (and not a
+    /// variable). `None` for every other expression. A call becomes a call of the function named
+    /// `module.name`, a constant becomes its value.
+    fn module_item(&mut self, e: &mut Expr, want: Option<Type>) -> Option<Type> {
+        let (m, name, call) = match &e.kind {
+            ExprKind::Method(r, n, _) | ExprKind::Field(r, n) => match &r.kind {
+                ExprKind::Var(m) => (m.clone(), n.clone(), matches!(e.kind, ExprKind::Method(..))),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        if self.lookup(&m).is_some() || !stdlib::is_module(&m) {
+            return None;
+        }
+        let span = e.span;
+        let full = format!("{m}.{name}");
+        let check_args = |c: &mut Checker, e: &mut Expr| {
+            if let ExprKind::Method(_, _, args) = &mut e.kind {
+                for a in args.iter_mut() {
+                    c.arg_type(a, None);
+                }
+            }
+        };
+        if !self.modules.iter().any(|(x, _)| *x == m) {
+            // a function of the program that has the module's name: `fs.x` is then its own mistake
+            if self.fns.contains_key(&m) || self.decls.iter().any(|(d, _)| *d == m) {
+                return None;
+            }
+            let rspan = match &e.kind {
+                ExprKind::Method(r, ..) | ExprKind::Field(r, _) => r.span,
+                _ => span,
+            };
+            self.errs.push(
+                Diag::new("E0201", format!("undefined variable `{m}`"), rspan)
+                    .hint(format!("`{m}` is a standard module: add `use {m}` at the top of the file"))
+                    .fix(vec![Edit::insert(
+                        Span { line: 1, col: 1 },
+                        format!(
+                            "use {m}
+"
+                        ),
+                    )]),
+            );
+            check_args(self, e);
+            return Some(Type::Unknown);
+        }
+        if let Some(v) = stdlib::constant(&m, &name) {
+            if call {
+                let no_args = matches!(&e.kind, ExprKind::Method(_, _, a) if a.is_empty());
+                check_args(self, e);
+                self.errs.push(
+                    Diag::new("E0307", format!("`{full}` is a constant, not a function"), span)
+                        .hint(format!("drop the parentheses: `{full}`"))
+                        .fix_opt(no_args.then(|| Edit::replace(span, &format!("{name}()"), name.clone()))),
+                );
+                return Some(Type::Unknown);
+            }
+            e.kind = ExprKind::Float(v);
+            return Some(Type::Float);
+        }
+        let public = !name.starts_with('_');
+        let json = m == "json" && stdlib::JSON_FNS.contains(&name.as_str());
+        if !public || !(json || self.fns.contains_key(&full)) {
+            let items = stdlib::names(&m);
+            let (hint, fix) = match stdlib::renamed(&m, &name) {
+                Some(h) => (h.to_string(), None),
+                None => match suggest_fix(&name, items.iter().map(String::as_str)) {
+                    Some((h, f)) => (h, f.map(|f| Edit::replace(span, &name, f))),
+                    None => (
+                        format!("the items of `{m}` are {}", items.iter().map(|i| format!("`{i}`")).collect::<Vec<_>>().join(", ")),
+                        None,
+                    ),
+                },
+            };
+            check_args(self, e);
+            self.errs.push(Diag::new("E0306", format!("module `{m}` has no `{name}`"), span).hint(hint).fix_opt(fix));
+            return Some(Type::Unknown);
+        }
+        if !call {
+            let no_params = self.fns.get(&full).is_some_and(|s| s.params.is_empty());
+            self.errs.push(
+                Diag::new("E0307", format!("`{full}` is a function, not a value"), span)
+                    .hint(format!("call it: `{full}({})`", if no_params { "" } else { "..." }))
+                    .fix_opt(no_params.then(|| Edit::replace(span, &name, format!("{name}()")))),
+            );
+            return Some(Type::Unknown);
+        }
+        let ExprKind::Method(_, _, args) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else { unreachable!("checked above") };
+        e.kind = ExprKind::Call(full.clone(), args);
+        let ExprKind::Call(_, args) = &mut e.kind else { unreachable!("just set") };
+        if json {
+            return Some(self.json_call(&name, args, span, want));
+        }
+        Some(self.call(&full, args, span, want))
+    }
+
+    /// `json.str(value)` of any value; `json.parse(text)` gives the type the context needs.
+    fn json_call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
+        let parse = name == "parse";
+        let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, if parse { Some(Type::Str) } else { None })).collect();
+        let shown = if parse { "json.parse(text)" } else { "json.str(value)" };
+        for a in args.iter() {
+            match &a.kind {
+                ExprKind::Inout(_) => self
+                    .errs
+                    .push(Diag::new("E0237", format!("the argument of `json.{name}` is not `inout`"), a.span).hint("remove `inout`")),
+                ExprKind::Labeled(label, _) => self.errs.push(
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `json.{name}`"), a.span)
+                        .hint(format!("write the value alone: `{shown}`")),
+                ),
+                _ => {}
+            }
+        }
+        if tys.len() != 1 {
+            self.errs.push(
+                Diag::new(
+                    "E0204",
+                    format!("`json.{name}` takes exactly 1 argument but {} {} given", tys.len(), was_were(tys.len())),
+                    span,
+                )
+                .hint(format!("call it as `{shown}`")),
+            );
+            return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
+        }
+        let t = if parse { want.unwrap_or(Type::Unknown) } else { tys[0] };
+        if self.has_map(t) {
+            self.errs.push(
+                Diag::new("E0309", format!("`json.{name}` cannot handle the map type in `{}` yet", t.name()), span)
+                    .hint("use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"),
+            );
+            return if parse { t } else { Type::Str };
+        }
+        if !parse {
+            if tys[0] == Type::Void {
+                let msg = format!("`json.str` needs a value, but {} returns nothing", call_text(&args[0]));
+                self.errs.push(Diag::new("E0203", msg, args[0].span).hint(self.no_value_hint(&args[0])));
+            }
+            return Type::Str;
+        }
+        self.expect_ty(Type::Str, tys[0], &args[0], Ctx::Arg { f: "json.parse", idx: 0, param: "text" });
+        match want {
+            Some(t) if t.is_unknown() || (t != Type::Void && self.defined(t)) => t,
+            _ => {
+                self.errs.push(
+                    Diag::new("E0309", "`json.parse` needs to know the type it reads", span).hint(
+                        "give the value a type: `let p: Point = json.parse(text)`, `let xs: [int] = json.parse(text)`, or pass it where that type is expected",
+                    ),
+                );
+                Type::Unknown
+            }
+        }
+    }
+
+    /// `[k: v, k2: v2]`: the keys have one type and the values have one type; `[:]` takes its type
+    /// from the context.
+    fn map_lit(&mut self, pairs: &mut [(Expr, Expr)], want: Option<Type>, span: Span) -> Type {
+        let want_kv = want.and_then(Type::map_kv);
+        if pairs.is_empty() {
+            return match want {
+                Some(t @ Type::Map(_)) => t,
+                Some(t) if t.is_unknown() => Type::Unknown,
+                _ => {
+                    self.errs.push(
+                        Diag::new("E0230", "cannot infer the type of the empty map `[:]`", span)
+                            .hint("write its type where it is declared, e.g. `var counts: [str: int] = [:]`"),
+                    );
+                    Type::Unknown
+                }
+            };
+        }
+        let (mut kt, mut vt): (Option<Type>, Option<Type>) = (want_kv.map(|p| p.0), want_kv.map(|p| p.1));
+        let mut bad = false;
+        for (k, v) in pairs.iter_mut() {
+            let tk = self.expr_with(k, kt);
+            let tv = self.expr_with(v, vt);
+            for (t, slot, e, what) in [(tk, &mut kt, &*k, "key"), (tv, &mut vt, &*v, "value")] {
+                if t == Type::Void || t.is_unknown() {
+                    bad = true;
+                    continue;
+                }
+                match *slot {
+                    None => *slot = Some(t),
+                    Some(first) if first != t => {
+                        self.errs.push(
+                            Diag::new(
+                                "E0231",
+                                format!("the {what}s of a map must all have one type: `{}` and `{}`", first.name(), t.name()),
+                                e.span,
+                            )
+                            .hint(format!("convert this {what} to `{}`, or use a struct for values of different types", first.name())),
+                        );
+                        bad = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match (kt, vt) {
+            (Some(k), Some(v)) if !bad => {
+                if !self.map_key(k, pairs[0].0.span) {
+                    return Type::Unknown;
+                }
+                Type::map(k, v)
+            }
+            _ => Type::Unknown,
+        }
     }
 
     /// `[a, b, c]`: every element has one type. `[]` takes its type from the context.
@@ -1422,12 +1921,15 @@ impl Checker {
             let (hint, fix) = match suggest_fix(name, names.iter().copied()) {
                 Some((h, f)) => (h, f.map(|f| Edit::replace(span, name, f))),
                 None if names.is_empty() => (format!("`{sname}` has no fields"), None),
-                None => (format!("the fields of `{sname}` are {}", names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")), None),
+                None => (
+                    format!("the fields of `{sname}` are {}", names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")),
+                    None,
+                ),
             };
             self.errs.push(Diag::new("E0224", format!("`{sname}` has no field `{name}`"), span).hint(hint).fix_opt(fix));
             return Type::Unknown;
         }
-        if let Some(sig) = v3::method_sig(bt, name) {
+        if let Some(sig) = data::method_sig(bt, name) {
             // `xs.len`: with no arguments to pass, the call is certain
             let fix = sig.params.is_empty().then(|| Edit::replace(span, name, format!("{name}()")));
             self.errs.push(
@@ -1443,7 +1945,7 @@ impl Checker {
             _ => "c".into(),
         });
         // `xs.length`: what other languages write as a field is a method here
-        let renamed = hints::method_rename(bt, name).filter(|m| v3::method_sig(bt, m).is_some_and(|s| s.params.is_empty()));
+        let renamed = hints::method_rename(bt, name).filter(|m| data::method_sig(bt, m).is_some_and(|s| s.params.is_empty()));
         let hint = match hints::method(bt, name, &r) {
             Some(h) => {
                 let fix = renamed.map(|m| Edit::replace(span, name, format!("{m}()")));
@@ -1454,7 +1956,7 @@ impl Checker {
                 Type::Array(_) | Type::Str | Type::Char => format!(
                     "`{}` has methods, not fields: {}",
                     bt.name(),
-                    v3::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
+                    data::methods_of(bt).iter().map(|m| format!("`.{m}()`")).collect::<Vec<_>>().join(" ")
                 ),
                 _ => "only structs have fields: `p.x`".to_string(),
             },
@@ -1467,9 +1969,7 @@ impl Checker {
     fn method(&mut self, recv: &mut Expr, name: &str, args: &mut [Expr], span: Span) -> Type {
         // `console.log(x)`, `Math.sqrt(x)`: a library object of another language
         if let ExprKind::Var(n) = &recv.kind {
-            let unknown = self.lookup(n).is_none()
-                && !self.fns.contains_key(n.as_str())
-                && !self.decls.iter().any(|(d, _)| d == n);
+            let unknown = self.lookup(n).is_none() && !self.fns.contains_key(n.as_str()) && !self.decls.iter().any(|(d, _)| d == n);
             if let (true, Some(h)) = (unknown, hints::receiver(n)) {
                 // `console.log(x)` prints one value, like `print(x)`
                 let prints = matches!((n.as_str(), name), ("console", "log") | ("fmt", "Println") | ("Console", "WriteLine"))
@@ -1490,11 +1990,15 @@ impl Checker {
             }
             return Type::Unknown;
         }
-        let Some(sig) = v3::method_sig(rt, name) else {
-            for a in args.iter_mut() {
+        if let Some(t) = self.lambda_method(recv, rt, name, args, span) {
+            return t;
+        }
+        let Some(sig) = data::method_sig(rt, name) else {
+            // (a lambda argument is not judged: the method is the mistake)
+            for a in args.iter_mut().filter(|a| !matches!(a.kind, ExprKind::Lambda(..))) {
                 self.expr(a);
             }
-            let methods = v3::methods_of(rt);
+            let methods = data::methods_of(rt);
             let shown = show(recv).unwrap_or_else(|| match rt {
                 Type::Array(_) => "xs".into(),
                 Type::Str => "s".into(),
@@ -1502,15 +2006,16 @@ impl Checker {
                 _ => "x".into(),
             });
             // a method of another language that is the same operation under another name
-            let arity = |m: &str| v3::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
+            let arity = |m: &str| data::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
             let mut fix = None;
-            let hint = if rt == Type::Str && v3::CHAR_METHODS.contains(&name) {
+            let hint = if rt == Type::Str && data::CHAR_METHODS.contains(&name) {
                 format!("`{name}()` is a `char` method: use a character, `'A'.{name}()` or `s[0].{name}()`; all codes of a string: `s.codes()`")
             } else if let Some(h) = hints::method(rt, name, &shown) {
                 fix = hints::method_rename(rt, name).filter(|m| arity(m)).map(|m| vec![Edit::replace(span, name, m)]);
                 // `n.to_string()` is `str(n)`
                 let lower = name.to_ascii_lowercase().replace('_', "");
-                if let (ExprKind::Var(v), true, []) = (&recv.kind, matches!(lower.as_str(), "tostring" | "tostr" | "asstring"), &*args) {
+                if let (ExprKind::Var(v), true, []) = (&recv.kind, matches!(lower.as_str(), "tostring" | "tostr" | "asstring"), &*args)
+                {
                     let call = format!("{name}()");
                     fix = Some(vec![Edit::range(recv.span, after(span, &call), &format!("{v}.{call}"), format!("str({v})"))]);
                 }
@@ -1523,34 +2028,44 @@ impl Checker {
             } else if methods.is_empty() {
                 format!("`{}` has no methods", rt.name())
             } else {
-                format!("the methods of `{}` are {}", rt.name(), methods.iter().map(|m| format!("`{m}`")).collect::<Vec<_>>().join(" "))
+                format!(
+                    "the methods of `{}` are {}",
+                    rt.name(),
+                    methods.iter().map(|m| format!("`{m}`")).collect::<Vec<_>>().join(" ")
+                )
             };
-            self.errs.push(Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(hint).fix(fix.unwrap_or_default()));
+            self.errs.push(
+                Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(hint).fix(fix.unwrap_or_default()),
+            );
             return Type::Unknown;
         };
         // element types that some methods need
         if let Some(e) = rt.elem() {
             let bad = match name {
-                "sort" => (!matches!(e, Type::Int | Type::Float | Type::Str | Type::Char)).then_some("`[int]`, `[float]`, `[str]` or `[char]`"),
+                "sort" => (!matches!(e, Type::Int | Type::Float | Type::Str | Type::Char))
+                    .then_some("`[int]`, `[float]`, `[str]` or `[char]`"),
                 "join" => (!matches!(e, Type::Str | Type::Char)).then_some("`[str]` or `[char]`"),
                 _ => None,
             };
             if let Some(needs) = bad {
                 let hint = if name == "join" {
-                    let (r, sep) = (show(recv).unwrap_or_else(|| "xs".into()), args.first().and_then(show).unwrap_or_else(|| "\", \"".into()));
+                    let (r, sep) =
+                        (show(recv).unwrap_or_else(|| "xs".into()), args.first().and_then(show).unwrap_or_else(|| "\", \"".into()));
                     format!("turn the elements into text first: `var parts: [str] = []`, `for x in {r} {{ parts.push(str(x)) }}`, then `parts.join({sep})`")
                 } else {
                     "sort by a key yourself: e.g. loop and insert each element at its place".to_string()
                 };
-                self.errs.push(
-                    Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint),
-                );
+                self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
             }
         }
         // `s.pad_left(n)` fills with spaces; `s.pad_left(n, '0')` with a character
         let mut sig = sig;
         if rt == Type::Str && matches!(name, "pad_left" | "pad_right") && args.len() == 2 {
             sig.params.push(Type::Char);
+        }
+        // `m.get(k, default)`
+        if let (Some((_, v)), "get", 2) = (rt.map_kv(), name, args.len()) {
+            sig.params.push(v);
         }
         if args.len() != sig.params.len() {
             for a in args.iter_mut() {
@@ -1582,7 +2097,7 @@ impl Checker {
             }
         }
         if sig.mutates {
-            if v3::place_root(recv).is_some() {
+            if data::place_root(recv).is_some() {
                 self.check_place(recv, &format!("call `.{name}()` on"), span);
             } else {
                 self.errs.push(
@@ -1594,6 +2109,7 @@ impl Checker {
         sig.ret
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn binary(&mut self, op: BinOp, l: Type, r: Type, span: Span, le: &Expr, re: &Expr, compound: bool) -> Type {
         use Type::{Bool, Char, Float, Int, Str, Void};
         if l.is_unknown() || r.is_unknown() {
@@ -1650,7 +2166,9 @@ impl Checker {
         } else if chained {
             match (&le.kind, &ls, &rs) {
                 (ExprKind::Binary(lop, ll, lr), _, Some(rs)) => match (operand(ll), operand(lr)) {
-                    (Some(a), Some(b)) => format!("comparisons do not chain: write `{a} {} {b} && {b} {} {rs}`", lop.symbol(), op.symbol()),
+                    (Some(a), Some(b)) => {
+                        format!("comparisons do not chain: write `{a} {} {b} && {b} {} {rs}`", lop.symbol(), op.symbol())
+                    }
                     _ => "comparisons do not chain: write `a < b && b < c`".to_string(),
                 },
                 _ => "comparisons do not chain: write `a < b && b < c`".to_string(),
@@ -1683,7 +2201,8 @@ impl Checker {
                         literal_fix = float_literal(if int_left { le } else { re });
                         format!("use one type on both sides, e.g. `{a} {sym} {b}` (Nyra never converts numbers implicitly)")
                     }
-                    _ => "Nyra never converts numbers implicitly: use `float(x)` on the `int` side, or `int(x)` on the `float` side".to_string(),
+                    _ => "Nyra never converts numbers implicitly: use `float(x)` on the `int` side, or `int(x)` on the `float` side"
+                        .to_string(),
                 }
             }
         } else if op == BinOp::Add && (l == Char || r == Char) {
@@ -1698,11 +2217,15 @@ impl Checker {
         } else if op == BinOp::Add && (l == Str || r == Str) {
             let other = if l == Str { &rs } else { &ls };
             match other {
-                Some(o) if !o.contains('"') => format!("`+` joins two strings: convert the other side with `str({o})`, or use interpolation"),
+                Some(o) if !o.contains('"') => {
+                    format!("`+` joins two strings: convert the other side with `str({o})`, or use interpolation")
+                }
                 _ => {
                     let whole = self.chain.as_ref().filter(|(nodes, _)| nodes.contains(&span)).and_then(|(_, t)| t.clone());
                     match whole {
-                        Some(t) => format!("`+` joins two strings: convert the other side with `str(...)`, or use interpolation, e.g. `\"{t}\"`"),
+                        Some(t) => format!(
+                            "`+` joins two strings: convert the other side with `str(...)`, or use interpolation, e.g. `\"{t}\"`"
+                        ),
                         None => "`+` joins two strings: convert the other side with `str(...)`, or use interpolation".to_string(),
                     }
                 }
@@ -1718,7 +2241,8 @@ impl Checker {
                 format!("`+` joins two arrays of the same type: `{}` and `{}` differ", l.name(), r.name())
             }
         } else if op == BinOp::Mod && (l == Float || r == Float) {
-            "`%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`".to_string()
+            "`%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`"
+                .to_string()
         } else if matches!(op, BinOp::And | BinOp::Or) {
             let fix = |e: &Expr, t: Type, s: &Option<String>| -> Option<String> {
                 let s = s.as_ref()?;
@@ -1781,11 +2305,21 @@ impl Checker {
     fn math(&mut self, name: &str, args: &mut [Expr], span: Span) -> Type {
         let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
         let want = if name == "abs" { 1 } else { 2 };
-        let example = if name == "abs" { "abs(x)" } else if name == "min" { "min(a, b)" } else { "max(a, b)" };
+        let example = if name == "abs" {
+            "abs(x)"
+        } else if name == "min" {
+            "min(a, b)"
+        } else {
+            "max(a, b)"
+        };
         if tys.len() != want {
             self.errs.push(
-                Diag::new("E0204", format!("`{name}` takes {} but {} {} given", count(want, "argument"), tys.len(), was_were(tys.len())), span)
-                    .hint(format!("call it as `{example}`")),
+                Diag::new(
+                    "E0204",
+                    format!("`{name}` takes {} but {} {} given", count(want, "argument"), tys.len(), was_were(tys.len())),
+                    span,
+                )
+                .hint(format!("call it as `{example}`")),
             );
             return Type::Unknown;
         }
@@ -1820,7 +2354,8 @@ impl Checker {
             let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
             let d = Diag::new("E0202", format!("undefined function `{name}`"), span);
             // a struct's name too: `point(...)` after `struct Point` was renamed
-            let names = self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied()).chain(self.structs.keys().map(String::as_str));
+            let names =
+                self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied()).chain(self.structs.keys().map(String::as_str));
             let mut fix = Vec::new();
             let hint = if self.lookup(name).is_some() {
                 format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
@@ -1853,15 +2388,18 @@ impl Checker {
         };
         let _ = want;
         let (params, names, inout, ret, shown) = (sig.params.clone(), sig.names.clone(), sig.inout.clone(), sig.ret, sig.show(name));
-        let tys: Vec<Type> =
-            args.iter_mut().enumerate().map(|(i, a)| { let w = params.get(i).copied(); self.arg_type(a, w) }).collect();
+        let tys: Vec<Type> = args
+            .iter_mut()
+            .enumerate()
+            .map(|(i, a)| {
+                let w = params.get(i).copied();
+                self.arg_type(a, w)
+            })
+            .collect();
         if params.len() != tys.len() {
             let hint = if tys.len() < params.len() {
-                let missing: Vec<String> = names[tys.len()..]
-                    .iter()
-                    .zip(&params[tys.len()..])
-                    .map(|(n, t)| format!("`{n}: {}`", t.name()))
-                    .collect();
+                let missing: Vec<String> =
+                    names[tys.len()..].iter().zip(&params[tys.len()..]).map(|(n, t)| format!("`{n}: {}`", t.name())).collect();
                 format!("also pass {}: the call is `{name}({})`", missing.join(", "), names.join(", "))
             } else {
                 format!("remove the extra argument(s): the signature is `fn {shown}`")
@@ -1869,12 +2407,7 @@ impl Checker {
             self.errs.push(
                 Diag::new(
                     "E0204",
-                    format!(
-                        "`{shown}` takes {} but {} {} given",
-                        count(params.len(), "argument"),
-                        tys.len(),
-                        was_were(tys.len())
-                    ),
+                    format!("`{shown}` takes {} but {} {} given", count(params.len(), "argument"), tys.len(), was_were(tys.len())),
                     span,
                 )
                 .hint(hint),
@@ -1888,21 +2421,27 @@ impl Checker {
         });
         // which variables the `inout` arguments change: each at most once per call
         let mut roots: Vec<(String, Span)> = Vec::new();
+        // the script variables among them
+        let mut ginout: Vec<(usize, Span)> = Vec::new();
         for (i, a) in args.iter_mut().enumerate() {
             let want = params[i];
             match (&mut a.kind, inout[i]) {
                 (ExprKind::Inout(place), true) => {
                     let place: &mut Expr = place;
                     self.expect_ty(want, tys[i], place, Ctx::Arg { f: name, idx: i, param: &names[i] });
-                    if v3::place_root(place).is_none() {
+                    if data::place_root(place).is_none() {
                         self.errs.push(
-                            Diag::new("E0229", format!("`inout` needs a variable, a field or an element, but argument {} is a computed value", i + 1), a.span)
-                                .hint("store the value in a `var` first, then pass `inout` that variable"),
+                            Diag::new(
+                                "E0229",
+                                format!("`inout` needs a variable, a field or an element, but argument {} is a computed value", i + 1),
+                                a.span,
+                            )
+                            .hint("store the value in a `var` first, then pass `inout` that variable"),
                         );
                         continue;
                     }
                     self.check_place(place, "pass `inout`", a.span);
-                    let root = v3::place_root(place).unwrap_or_default().to_string();
+                    let root = data::place_root(place).unwrap_or_default().to_string();
                     if let Some((_, first)) = roots.iter().find(|(r, _)| *r == root) {
                         self.errs.push(
                             Diag::new(
@@ -1910,15 +2449,25 @@ impl Checker {
                                 format!("`inout` arguments must be different variables: `{root}` is passed twice (also at column {})", first.col),
                                 a.span,
                             )
-                            .hint("change one of them through a temporary: copy into a `var`, call, then assign back"),
+                            .hint(if matches!(place.kind, ExprKind::Index(..)) {
+                                format!("two elements of one array: to exchange them write `{root}.swap(i, j)`; else change one through a temporary (copy into a `var`, call, then assign back)")
+                            } else {
+                                "change one of them through a temporary: copy into a `var`, call, then assign back".to_string()
+                            }),
                         );
                     } else {
+                        if let Some(g) = self.global_ref(&root) {
+                            ginout.push((g, a.span));
+                        }
                         roots.push((root, a.span));
                     }
                 }
                 (ExprKind::Inout(_), false) => self.errs.push(
-                    Diag::new("E0237", format!("parameter `{}` of `{name}` is not `inout`", names[i]), a.span)
-                        .hint(format!("remove `inout` here, or declare the parameter `inout {}: {}`", names[i], want.name())),
+                    Diag::new("E0237", format!("parameter `{}` of `{name}` is not `inout`", names[i]), a.span).hint(format!(
+                        "remove `inout` here, or declare the parameter `inout {}: {}`",
+                        names[i],
+                        want.name()
+                    )),
                 ),
                 (_, true) => {
                     let s = show(a).unwrap_or_else(|| "x".into());
@@ -1931,7 +2480,9 @@ impl Checker {
                     let label = label.clone();
                     let hint = match &plain {
                         Some(call) => format!("names are only for building structs: write the values in parameter order, `{call}`"),
-                        None => format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order"),
+                        None => {
+                            format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order")
+                        }
                     };
                     // the names are already in parameter order: dropping them changes nothing else
                     let fix = in_order.then(|| Edit::range(a.span, start(v), &format!("{label}:"), ""));
@@ -1946,6 +2497,7 @@ impl Checker {
                 }
             }
         }
+        self.record_call(name, span, ginout);
         ret
     }
 
@@ -1990,7 +2542,8 @@ impl Checker {
                                 Some((h, f)) => (h, f.map(|f| Edit::replace(a_span, &label, f))),
                                 None => (format!("build it as `{}`", template()), None),
                             };
-                            self.errs.push(Diag::new("E0224", format!("`{name}` has no field `{label}`"), a_span).hint(hint).fix_opt(fix));
+                            self.errs
+                                .push(Diag::new("E0224", format!("`{name}` has no field `{label}`"), a_span).hint(hint).fix_opt(fix));
                         }
                         Some(j) => {
                             if j != i && !order_reported {
@@ -2032,7 +2585,11 @@ impl Checker {
                 self.errs.push(
                     Diag::new(
                         "E0223",
-                        format!("missing {} in `{name}(...)`: {}", if missing.len() == 1 { "field" } else { "fields" }, missing.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ")),
+                        format!(
+                            "missing {} in `{name}(...)`: {}",
+                            if missing.len() == 1 { "field" } else { "fields" },
+                            missing.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ")
+                        ),
                         span,
                     )
                     .hint(format!("every field needs a value: `{}`", template())),
@@ -2050,15 +2607,38 @@ impl Checker {
             "str" => Type::Str,
             _ => Type::Char,
         };
+        // `print(a, b, end: "")`: the last argument may replace the line end
+        if name == "print" {
+            if let Some((last, rest)) = args.split_last_mut() {
+                if matches!(&last.kind, ExprKind::Labeled(l, _) if l == "end") {
+                    let t = self.arg_type(last, Some(Type::Str));
+                    if let ExprKind::Labeled(_, v) = &last.kind {
+                        self.expect_ty(Type::Str, t, v, Ctx::Arg { f: "print", idx: rest.len(), param: "end" });
+                    }
+                    if rest.is_empty() {
+                        self.errs.push(
+                            Diag::new("E0204", "`print` needs a value before `end:`", span)
+                                .hint("give it the value to print: `print(\"text\", end: \"\")`"),
+                        );
+                        return ret;
+                    }
+                    return self.builtin("print", rest, span);
+                }
+            }
+        }
         let tys: Vec<Type> = args.iter_mut().map(|a| self.arg_type(a, None)).collect();
         for a in args.iter() {
             match &a.kind {
-                ExprKind::Inout(_) => self.errs.push(
-                    Diag::new("E0237", format!("the argument of `{name}` is not `inout`"), a.span).hint("remove `inout`"),
-                ),
+                ExprKind::Inout(_) => self
+                    .errs
+                    .push(Diag::new("E0237", format!("the argument of `{name}` is not `inout`"), a.span).hint("remove `inout`")),
                 ExprKind::Labeled(label, _) => self.errs.push(
-                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span)
-                        .hint(format!("write the value alone: `{name}(x)`")),
+                    Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span).hint(if name == "print" {
+                        "write the values alone: `print(a, b)`; the only named argument is a last `end:`, as in `print(a, end: \"\")`"
+                            .to_string()
+                    } else {
+                        format!("write the value alone: `{name}(x)`")
+                    }),
                 ),
                 _ => {}
             }
@@ -2090,12 +2670,8 @@ impl Checker {
                 _ => format!("`{name}` converts one value: `{name}(x)`"),
             };
             self.errs.push(
-                Diag::new(
-                    "E0204",
-                    format!("`{name}` takes exactly 1 argument but {} {} given", tys.len(), was_were(tys.len())),
-                    span,
-                )
-                .hint(hint),
+                Diag::new("E0204", format!("`{name}` takes exactly 1 argument but {} {} given", tys.len(), was_were(tys.len())), span)
+                    .hint(hint),
             );
             return ret;
         }
@@ -2126,13 +2702,12 @@ impl Checker {
         }
         let s = show(&args[0]);
         let (msg, hint) = match (name, t) {
-            ("int" | "float", Type::Char) => (
-                format!("`{name}(c)` is ambiguous for a `char`: the character's code, or the digit it shows?"),
-                {
+            ("int" | "float", Type::Char) => {
+                (format!("`{name}(c)` is ambiguous for a `char`: the character's code, or the digit it shows?"), {
                     let c = s.clone().unwrap_or_else(|| "c".into());
                     format!("the code: `{c}.code()`; a digit's value: `{c}.code() - '0'.code()`")
-                },
-            ),
+                })
+            }
             ("int" | "float", Type::Bool) => {
                 let (one, zero) = if name == "int" { ("1", "0") } else { ("1.0", "0.0") };
                 (
@@ -2172,18 +2747,22 @@ impl Checker {
         let ExprKind::Var(var) = &arg.kind else {
             if !t.is_unknown() {
                 self.errs.push(
-                    Diag::new("E0238", format!("`{name}` needs a local variable"), arg.span).hint(
-                        "to drop one element or field early, assign an empty value instead: `xs[i] = []`, `p.name = \"\"`",
-                    ),
+                    Diag::new("E0238", format!("`{name}` needs a local variable"), arg.span)
+                        .hint("to drop one element or field early, assign an empty value instead: `xs[i] = []`, `p.name = \"\"`"),
                 );
             }
             return;
         };
         let Some((decl, arena)) = self.lookup(var).map(|v| (v.decl, v.arena)) else { return };
         let problem = match decl {
+            _ if self.global_of(var).is_some() => Some((
+                format!("cannot {name} script variable `{var}` in function `{}`: the script still needs it", self.fname),
+                format!("only variables declared in this function can be freed or kept; call `{name}({var})` at the top level of the script"),
+            )),
             Decl::Param => Some((format!("cannot {name} parameter `{var}`: the caller owns it"), "only variables declared with `let` or `var` in this function can be freed or kept".to_string())),
             Decl::Inout => Some((format!("cannot {name} `inout` parameter `{var}`: the caller still needs a value"), format!("assign a new value instead: `{var} = ...`"))),
             Decl::Loop => Some((format!("cannot {name} the loop variable `{var}`"), "the loop variable is a copy of each element: there is nothing to free".to_string())),
+            Decl::Lambda => Some((format!("cannot {name} the lambda parameter `{var}`"), "a lambda only reads values: there is nothing to free".to_string())),
             _ if !t.is_unknown() && !self.managed(t) => Some((
                 format!("nothing to {name}: `{var}` is {}, which owns no heap memory", article(t)),
                 "only strings, arrays and structs that contain them can be freed or kept".to_string(),
@@ -2231,8 +2810,7 @@ fn without_names(name: &str, params: &[String], args: &[Expr]) -> Option<String>
         ExprKind::Labeled(_, v) => show(v),
         _ => show(a),
     };
-    let named: Option<Vec<&Expr>> =
-        params.iter().map(|p| args.iter().find(|a| label(a).as_deref() == Some(p.as_str()))).collect();
+    let named: Option<Vec<&Expr>> = params.iter().map(|p| args.iter().find(|a| label(a).as_deref() == Some(p.as_str()))).collect();
     let ordered: Vec<&Expr> = match named {
         Some(v) if v.len() == args.len() => v,
         _ => args.iter().collect(),
@@ -2266,5 +2844,15 @@ fn flatten_add<'a>(e: &'a Expr, parts: &mut Vec<&'a Expr>, nodes: &mut Vec<Span>
             flatten_add(r, parts, nodes);
         }
         _ => parts.push(e),
+    }
+}
+
+/// True if the place `e` reaches into a value inside a map: `m[k].x`, `m[k][0]`. With `top_ok`,
+/// `e` itself may be `m[k]` (an assignment replaces the value).
+fn map_step(e: &Expr, top_ok: bool) -> bool {
+    match &e.kind {
+        ExprKind::Index(b, _) if b.ty.map_kv().is_some() => !top_ok || map_step(b, false),
+        ExprKind::Index(b, _) | ExprKind::Field(b, _) => map_step(b, false),
+        _ => false,
     }
 }

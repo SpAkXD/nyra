@@ -52,11 +52,38 @@ fn ny_oom(line: u32, col: u32) -> ! {
 // ---- ints ----
 
 /// int `/`: division by zero is an error; `i64::MIN / -1` wraps.
+/// int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255).
+#[cold]
+fn ny_overflow(a: i64, op: &str, b: i64, line: u32, col: u32) -> ! {
+    let msg = if op == "~" { format!("int overflow: -({a}) does not fit in 64 bits") } else { format!("int overflow: {a} {op} {b} does not fit in 64 bits") };
+    ny_fail("E0255", &msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+}
+
+#[inline]
+fn ny_add(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_add(b).unwrap_or_else(|| ny_overflow(a, "+", b, line, col))
+}
+
+#[inline]
+fn ny_sub(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_sub(b).unwrap_or_else(|| ny_overflow(a, "-", b, line, col))
+}
+
+#[inline]
+fn ny_mul(a: i64, b: i64, line: u32, col: u32) -> i64 {
+    a.checked_mul(b).unwrap_or_else(|| ny_overflow(a, "*", b, line, col))
+}
+
+#[inline]
+fn ny_neg(a: i64, line: u32, col: u32) -> i64 {
+    a.checked_neg().unwrap_or_else(|| ny_overflow(a, "~", 0, line, col))
+}
+
 fn ny_div(a: i64, b: i64, line: u32, col: u32) -> i64 {
     if b == 0 {
         ny_fail("E0241", "division by zero", "check the divisor first", line, col);
     }
-    a.wrapping_div(b)
+    a.checked_div(b).unwrap_or_else(|| ny_overflow(a, "/", b, line, col))
 }
 
 fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
@@ -64,6 +91,13 @@ fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
         ny_fail("E0241", "division by zero", "check the divisor first", line, col);
     }
     a.wrapping_rem(b)
+}
+
+/// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+fn ny_check_non_empty(n: i64, max: i64, line: u32, col: u32) {
+    if n == 0 {
+        ny_fail("E0247", if max != 0 { "max() of an empty array" } else { "min() of an empty array" }, "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+    }
 }
 
 /// `for i in a..b step k`: a step of 0 would never end.
@@ -93,8 +127,16 @@ fn ny_num(x: f64) -> String {
         return if x > 0.0 { "Infinity" } else { "-Infinity" }.into();
     }
     let sign = if x < 0.0 { "-" } else { "" };
-    // `{:e}` gives the shortest digits: "1.2345e-7"
-    let e = format!("{:e}", x.abs());
+    // the fewest digits that read back as x; between two such numbers the even one (the
+    // exact decimal rounding of `{:.N$e}`, like the C runtime's printf)
+    let mut e = format!("{:e}", x.abs());
+    for p in 0..17 {
+        let t = format!("{:.*e}", p, x.abs());
+        if t.parse::<f64>() == Ok(x.abs()) {
+            e = t;
+            break;
+        }
+    }
     let (mant, exp) = e.split_once('e').unwrap_or((&e, "0"));
     let digits: String = mant.chars().filter(|c| *c != '.').collect();
     let k = digits.len() as i32;
@@ -372,7 +414,132 @@ fn ny_sort_floats(xs: &mut Rc<Vec<f64>>) {
     Rc::make_mut(xs).sort_by(|a, b| if lt(*a, *b) { Ordering::Less } else if lt(*b, *a) { Ordering::Greater } else { Ordering::Equal });
 }
 
+/// `xs.sort_by(x => key)`: a stable sort of the positions by the keys (floats: NaN after every
+/// number), then the elements move to their places.
+fn ny_sort_by<T: Clone, K>(xs: &mut Rc<Vec<T>>, ks: &[K], lt: fn(&K, &K) -> bool) {
+    use std::cmp::Ordering;
+    let mut idx: Vec<usize> = (0..ks.len()).collect();
+    idx.sort_by(|&i, &j| if lt(&ks[i], &ks[j]) { Ordering::Less } else if lt(&ks[j], &ks[i]) { Ordering::Greater } else { Ordering::Equal });
+    let v = Rc::make_mut(xs);
+    let mut old: Vec<Option<T>> = std::mem::take(v).into_iter().map(Some).collect();
+    *v = idx.iter().map(|&i| old[i].take().expect("each position once")).collect();
+}
+
+fn ny_lt_ord<K: PartialOrd>(x: &K, y: &K) -> bool {
+    x < y
+}
+
+fn ny_lt_float(x: &f64, y: &f64) -> bool {
+    x < y || (y.is_nan() && !x.is_nan())
+}
+
 // ---- printing: arrays and structs as Nyra code ----
+
+// ---- maps: entries in insertion order (a removed one is a gap until the next compaction) and an
+// index from key to position; `Rc<NyMap>` is copied on write like an array ----
+
+#[derive(Clone)]
+struct NyMap<K, V> {
+    ents: Vec<Option<(K, V)>>,
+    index: std::collections::HashMap<K, usize>,
+    live: usize,
+}
+
+impl<K: Clone + Eq + std::hash::Hash, V: Clone> NyMap<K, V> {
+    fn len(&self) -> usize {
+        self.live
+    }
+    fn has(&self, k: &K) -> bool {
+        self.index.contains_key(k)
+    }
+    fn set(&mut self, k: K, v: V) {
+        if let Some(&i) = self.index.get(&k) {
+            self.ents[i] = Some((k, v));
+            return;
+        }
+        self.index.insert(k.clone(), self.ents.len());
+        self.ents.push(Some((k, v)));
+        self.live += 1;
+    }
+    fn remove(&mut self, k: &K) {
+        let Some(i) = self.index.remove(k) else { return };
+        self.ents[i] = None;
+        self.live -= 1;
+        if self.ents.len() > 8 && self.live < self.ents.len() / 2 {
+            let ents: Vec<(K, V)> = self.ents.drain(..).flatten().collect();
+            self.index.clear();
+            self.live = 0;
+            for (k, v) in ents {
+                self.set(k, v);
+            }
+        }
+    }
+    fn iter(&self) -> impl Iterator<Item = &(K, V)> {
+        self.ents.iter().flatten()
+    }
+}
+
+impl<K, V> Default for NyMap<K, V> {
+    fn default() -> Self {
+        NyMap { ents: Vec::new(), index: std::collections::HashMap::new(), live: 0 }
+    }
+}
+
+impl<K: Clone + Eq + std::hash::Hash, V: Clone + PartialEq> PartialEq for NyMap<K, V> {
+    fn eq(&self, o: &Self) -> bool {
+        self.live == o.live && self.iter().all(|(k, v)| o.index.get(k).is_some_and(|&j| o.ents[j].as_ref().is_some_and(|e| e.1 == *v)))
+    }
+}
+
+fn ny_mnew<K: Clone + Eq + std::hash::Hash, V: Clone>(kv: Vec<(K, V)>) -> Rc<NyMap<K, V>> {
+    let mut m = NyMap::default();
+    for (k, v) in kv {
+        m.set(k, v);
+    }
+    Rc::new(m)
+}
+
+/// `m[k]`: E0248 when the key is missing.
+fn ny_mget<'a, K: Clone + Eq + std::hash::Hash + NyShow, V: Clone>(m: &'a NyMap<K, V>, k: &K, line: u32, col: u32) -> &'a V {
+    match m.index.get(k) {
+        Some(&i) => &m.ents[i].as_ref().expect("an entry the index names").1,
+        None => ny_fail("E0248", &format!("key {} is not in the map", ny_show(k)), "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col),
+    }
+}
+
+fn ny_mget_or<'a, K: Clone + Eq + std::hash::Hash, V: Clone>(m: &'a NyMap<K, V>, k: &K, d: &'a V) -> &'a V {
+    match m.index.get(k) {
+        Some(&i) => &m.ents[i].as_ref().expect("an entry the index names").1,
+        None => d,
+    }
+}
+
+fn ny_mkeys<K: Clone + Eq + std::hash::Hash, V: Clone>(m: &NyMap<K, V>) -> Rc<Vec<K>> {
+    Rc::new(m.iter().map(|(k, _)| k.clone()).collect())
+}
+
+fn ny_mvalues<K: Clone + Eq + std::hash::Hash, V: Clone>(m: &NyMap<K, V>) -> Rc<Vec<V>> {
+    Rc::new(m.iter().map(|(_, v)| v.clone()).collect())
+}
+
+impl<K: Clone + Eq + std::hash::Hash + NyShow, V: Clone + NyShow> NyShow for Rc<NyMap<K, V>> {
+    fn show_in(&self, out: &mut String) {
+        if self.live == 0 {
+            out.push_str("[:]");
+            return;
+        }
+        out.push('[');
+        for (i, (k, v)) in self.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            k.show_in(out);
+            out.push_str(": ");
+            v.show_in(out);
+        }
+        out.push(']');
+    }
+}
 
 trait NyShow {
     fn show_in(&self, out: &mut String);

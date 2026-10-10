@@ -1,0 +1,79 @@
+struct Team { name: str, p: int, w: int, d: int, l: int, gf: int, ga: int, pts: int }
+
+fn rec(inout t: Team, f: int, a: int):
+    t.p += 1
+    t.gf += f
+    t.ga += a
+    if f > a:
+        t.w += 1
+        t.pts += 3
+    elif f == a:
+        t.d += 1
+        t.pts += 1
+    else:
+        t.l += 1
+
+fn gd(t: Team) = t.gf - t.ga
+
+fn better(a: Team, b: Team):
+    if a.pts != b.pts: ret a.pts > b.pts
+    if gd(a) != gd(b): ret gd(a) > gd(b)
+    if a.gf != b.gf: ret a.gf > b.gf
+    a.name < b.name
+
+fn same(a: Team, b: Team) = a.pts == b.pts && gd(a) == gd(b) && a.gf == b.gf
+
+fn sign(n: int) = "+{n}" if n > 0 else str(n)
+
+let res = "Ash 2-1 Bay; Cove 2-0 Ash; Dale 2-2 Ash; Ash 0-2 Elm; Fir 0-0 Ash; Bay 3-2 Cove; Dale 0-2 Bay; Elm 1-2 Bay; Bay 2-2 Fir; Cove 1-3 Dale; Cove 2-0 Elm; Fir 1-0 Cove; Elm 0-0 Dale; Dale 2-2 Fir; Elm 3-2 Fir"
+var ms = []
+var idx = [:]
+var ts = []
+for part in res.split("; "):
+    let h, sc, a = part.trim().split(" ")
+    let hg, ag = sc.split("-").map(int)
+    ms.push((h, a, hg, ag))
+    for nm in [h, a]:
+        if nm not in idx:
+            idx[nm] = ts.len()
+            ts.push(Team(name: nm, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0))
+    rec(inout ts[idx[h]], hg, ag)
+    rec(inout ts[idx[a]], ag, hg)
+let n = ts.len()
+for i in 1..n:
+    var j = i
+    while j > 0 && better(ts[j], ts[j - 1]):
+        ts.swap(j, j - 1)
+        j -= 1
+var i = 0
+while i < n:
+    var j = i
+    while j + 1 < n && same(ts[j + 1], ts[i]): j += 1
+    if j > i:
+        let names = [ts[k].name for k in i..j + 1]
+        var h = [:]
+        for nm in names: h[nm] = 0
+        for hn, an, hg, ag in ms:
+            if hn in names && an in names:
+                if hg > ag:
+                    h[hn] += 3
+                elif hg == ag:
+                    h[hn] += 1
+                    h[an] += 1
+                else:
+                    h[an] += 3
+        for k in i + 1..j + 1:
+            var q = k
+            while q > i:
+                let a = ts[q]
+                let b = ts[q - 1]
+                let ha = h[a.name]
+                let hb = h[b.name]
+                let bt = ha > hb if ha != hb else a.name < b.name
+                if !bt: break
+                ts.swap(q, q - 1)
+                q -= 1
+    i = j + 1
+print("{"Pos":>3} {"Team":<6} {"P":>2} {"W":>2} {"D":>2} {"L":>2} {"GF":>3} {"GA":>3} {"GD":>3} {"Pts":>3}")
+for k, t in ts:
+    print("{k + 1:>3} {t.name:<6} {t.p:>2} {t.w:>2} {t.d:>2} {t.l:>2} {t.gf:>3} {t.ga:>3} {sign(gd(t)):>3} {t.pts:>3}")

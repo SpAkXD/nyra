@@ -1,0 +1,8 @@
+{"id":7,"items":[{"name":"pen \"blue\"","tags":["office","ü"],"price":1.5,"count":3},{"name":"x","tags":[],"price":0.30000000000000004,"count":-1}],"paid":true,"code":"Z"}
+true 4.2
+[[1, 2], [], [-3]] [[1,2],[],[-3]]
+10
+Item(name: "second", tags: ["t"], price: 25, count: 5)
+café 😀 \ / 	 "café 😀 \\ / \t"
+"line\nbreak" null 0 1e+21 "\u0001"
+[true, false] ["a","é"]

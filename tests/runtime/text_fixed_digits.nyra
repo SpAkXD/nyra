@@ -1,0 +1,4 @@
+// expect: E0342 at 4:24
+use text
+
+fn main() = print(text.fixed(1.5, -1))

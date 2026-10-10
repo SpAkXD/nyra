@@ -1,0 +1,12 @@
+// expect: E0255 at 5:15
+fn hash(s: str) -> int {
+    var h = 7
+    for c in s {
+        h = h * 1099511628211 + c.code()
+    }
+    ret h
+}
+fn main() {
+    print(hash("a"))
+    print(hash("ab"))
+}

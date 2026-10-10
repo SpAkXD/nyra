@@ -1,0 +1,28 @@
+fn gen(start):
+    xs = []
+    x = start
+    for i in 0..1000:
+        x = (x * 75 + 74) % 65537
+        xs.push(x % 4)
+    xs
+
+a = gen(1)
+b = gen(2)
+n = 1000
+prev = [0].repeat(n + 1)
+cur = [0].repeat(n + 1)
+for i in 1..n + 1:
+    ai = a[i - 1]
+    cur[0] = 0
+    for j in 1..n + 1:
+        if ai == b[j - 1]:
+            cur[j] = prev[j - 1] + 1
+        else:
+            u = prev[j]
+            l = cur[j - 1]
+            cur[j] = u if u > l else l
+    if i % 250 == 0:
+        print(cur[i])
+    t = prev
+    prev = cur
+    cur = t

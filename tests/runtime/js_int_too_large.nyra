@@ -1,0 +1,10 @@
+// expect: E0256 at 3:35
+// only: js ts
+fn next(seed: int) -> int = (seed * 1103515245 + 12345) % 2147483648
+fn main() {
+    var s = 42
+    for i in 0..3 {
+        s = next(s)
+        print(s)
+    }
+}

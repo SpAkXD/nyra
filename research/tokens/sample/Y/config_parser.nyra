@@ -1,0 +1,100 @@
+data = [:]
+
+fn has_val(s, k) = s in data && k in data[s]
+
+fn expand(v, sec):
+    out = ""
+    i = 0
+    n = v.len()
+    while i < n:
+        if v[i] == '$' && i + 1 < n && v[i + 1] == '{':
+            j = i + 2
+            while j < n && v[j] != '}': j += 1
+            if j < n:
+                r = v.slice(i + 2, j)
+                d = r.index_of('.')
+                s, k = sec, r
+                if d >= 0:
+                    s, k = r.slice(0, d), r.slice(d + 1, r.len())
+                if !has_val(s, k):
+                    ret (false, r)
+                out += data[s][k]
+                i = j + 1
+                continue
+        out += str(v[i])
+        i += 1
+    (true, out)
+
+lines = [
+    "; settings",
+    "title = demo",
+    "[server]",
+    "host = example.org",
+    "port = 8080",
+    "name = \"  main  \"",
+    "port = 9090",
+    "[paths]",
+    "root = /srv",
+    "logs = ${{paths.root}}/logs",
+    "data = ${{root}}/data",
+    "bad line here",
+    "[ server ]",
+    "url = http://${{host}}:${{port}}/",
+    "alias = ${{missing}}",
+    "= value",
+    "   # indented comment",
+    "",
+    "[paths]",
+    "tags += web",
+    "tags += api",
+    "root = /var",
+    "quoted = \"${{root}}\"",
+    "[extra]",
+    "formula = x=y+1",
+    "mirror = ${{server.url}}${{paths.root}}",
+    "broken = ${{paths.data}}${{server.nope}}",
+    "half = \"open"
+]
+
+cur = ""
+has_sec = false
+for idx, raw in lines:
+    n = idx + 1
+    t = raw.trim()
+    if t == "" || t.starts_with(";") || t.starts_with("#"): continue
+    if t.starts_with("[") && t.ends_with("]") && t.len() >= 2:
+        cur = t.slice(1, t.len() - 1).trim()
+        has_sec = true
+        continue
+    e = raw.index_of('=')
+    if e < 0:
+        print("line {n}: syntax error")
+        continue
+    append = e > 0 && raw[e - 1] == '+'
+    key = raw.slice(0, e - 1 if append else e).trim()
+    value = raw.slice(e + 1, raw.len()).trim()
+    if key == "":
+        print("line {n}: empty key")
+        continue
+    if !has_sec:
+        print("line {n}: no section")
+        continue
+    final = ""
+    if value.len() >= 2 && value.starts_with("\"") && value.ends_with("\""):
+        final = value.slice(1, value.len() - 1)
+    else:
+        ok, r = expand(value, cur)
+        if !ok:
+            print("line {n}: unknown reference {r}")
+            continue
+        final = r
+    if cur not in data: data[cur] = [:]
+    if append && key in data[cur]:
+        data[cur][key] += ",{final}"
+    else:
+        data[cur][key] = final
+
+print("---")
+for s in data.keys().sorted():
+    for k in data[s].keys().sorted():
+        print("{s}.{k} = [{data[s][k]}]")

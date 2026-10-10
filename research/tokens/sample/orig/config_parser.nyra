@@ -1,0 +1,141 @@
+struct Res {
+    ok: bool
+    val: str
+}
+
+var data: [str: [str: str]] = [:]
+
+fn has_val(s: str, k: str) -> bool {
+    if !data.has(s) { ret false }
+    ret data[s].has(k)
+}
+
+fn set_val(s: str, k: str, v: str) {
+    var m: [str: str] = [:]
+    if data.has(s) { m = data[s] }
+    m[k] = v
+    data[s] = m
+}
+
+fn expand(v: str, sec: str) -> Res {
+    var out = ""
+    var i = 0
+    let n = v.len()
+    while i < n {
+        if v[i] == '$' && i + 1 < n && v[i + 1] == '{' {
+            var j = i + 2
+            while j < n && v[j] != '}' { j += 1 }
+            if j < n {
+                let r = v.slice(i + 2, j)
+                let d = r.index_of('.')
+                var s = sec
+                var k = r
+                if d >= 0 {
+                    s = r.slice(0, d)
+                    k = r.slice(d + 1, r.len())
+                }
+                if !has_val(s, k) {
+                    ret Res(ok: false, val: r)
+                }
+                out += data[s][k]
+                i = j + 1
+                continue
+            }
+        }
+        out += str(v[i])
+        i += 1
+    }
+    ret Res(ok: true, val: out)
+}
+
+let lines = [
+    "; settings",
+    "title = demo",
+    "[server]",
+    "host = example.org",
+    "port = 8080",
+    "name = \"  main  \"",
+    "port = 9090",
+    "[paths]",
+    "root = /srv",
+    "logs = ${{paths.root}}/logs",
+    "data = ${{root}}/data",
+    "bad line here",
+    "[ server ]",
+    "url = http://${{host}}:${{port}}/",
+    "alias = ${{missing}}",
+    "= value",
+    "   # indented comment",
+    "",
+    "[paths]",
+    "tags += web",
+    "tags += api",
+    "root = /var",
+    "quoted = \"${{root}}\"",
+    "[extra]",
+    "formula = x=y+1",
+    "mirror = ${{server.url}}${{paths.root}}",
+    "broken = ${{paths.data}}${{server.nope}}",
+    "half = \"open"
+]
+
+var cur = ""
+var has_sec = false
+for idx, raw in lines {
+    let n = idx + 1
+    let t = raw.trim()
+    if t == "" || t.starts_with(";") || t.starts_with("#") { continue }
+    if t.starts_with("[") && t.ends_with("]") && t.len() >= 2 {
+        cur = t.slice(1, t.len() - 1).trim()
+        has_sec = true
+        continue
+    }
+    let e = raw.index_of('=')
+    if e < 0 {
+        print("line {n}: syntax error")
+        continue
+    }
+    var append = false
+    var kend = e
+    if e > 0 && raw[e - 1] == '+' {
+        append = true
+        kend = e - 1
+    }
+    let key = raw.slice(0, kend).trim()
+    let value = raw.slice(e + 1, raw.len()).trim()
+    if key == "" {
+        print("line {n}: empty key")
+        continue
+    }
+    if !has_sec {
+        print("line {n}: no section")
+        continue
+    }
+    var final = ""
+    if value.len() >= 2 && value.starts_with("\"") && value.ends_with("\"") {
+        final = value.slice(1, value.len() - 1)
+    } else {
+        let r = expand(value, cur)
+        if !r.ok {
+            print("line {n}: unknown reference {r.val}")
+            continue
+        }
+        final = r.val
+    }
+    if append && has_val(cur, key) {
+        set_val(cur, key, data[cur][key] + "," + final)
+    } else {
+        set_val(cur, key, final)
+    }
+}
+
+print("---")
+var secs = data.keys()
+secs.sort()
+for s in secs {
+    var ks = data[s].keys()
+    ks.sort()
+    for k in ks {
+        print("{s}.{k} = [{data[s][k]}]")
+    }
+}

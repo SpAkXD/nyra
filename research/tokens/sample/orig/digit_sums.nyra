@@ -1,0 +1,13 @@
+fn digit_sum(n: int) -> int {
+    var x = n
+    var s = 0
+    while x > 0 {
+        s += x % 10
+        x = x / 10
+    }
+    ret s
+}
+
+for n in [12345, 9999, 100000, 987654321] {
+    print(digit_sum(n))
+}

@@ -1,0 +1,14 @@
+// expect: E0250
+fn last(xs: [int]) -> int = xs[xs.len() - 1]
+fn largest(xs: [int]) -> int {
+    var best = xs[0]
+    for i in 1..xs.len() - 1 {
+        if xs[i] > best { best = xs[i] }
+    }
+    ret best
+}
+ex largest([3, 9, 4]) == 9, largest([1, 2, 7]) == 7, last([5]) == 5
+
+fn main() {
+    print(largest([4, 8, 1]))
+}

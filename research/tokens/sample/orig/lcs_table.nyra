@@ -1,0 +1,36 @@
+fn gen(start: int) -> [int] {
+    var xs: [int] = []
+    var x = start
+    for i in 0..1000 {
+        x = (x * 75 + 74) % 65537
+        xs.push(x % 4)
+    }
+    ret xs
+}
+
+fn main() {
+    let a = gen(1)
+    let b = gen(2)
+    let n = 1000
+    var prev = [0].repeat(n + 1)
+    var cur = [0].repeat(n + 1)
+    for i in 1..n + 1 {
+        let ai = a[i - 1]
+        cur[0] = 0
+        for j in 1..n + 1 {
+            if ai == b[j - 1] {
+                cur[j] = prev[j - 1] + 1
+            } else {
+                let u = prev[j]
+                let l = cur[j - 1]
+                cur[j] = if u > l { u } else { l }
+            }
+        }
+        if i % 250 == 0 {
+            print(cur[i])
+        }
+        let t = prev
+        prev = cur
+        cur = t
+    }
+}

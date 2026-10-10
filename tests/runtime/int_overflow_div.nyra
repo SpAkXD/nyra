@@ -1,0 +1,7 @@
+// expect: E0255 at 3:36
+// only: native py rs go
+fn quot(a: int, b: int) -> int = a / b
+fn main() {
+    print(quot(-9223372036854775807, -1))
+    print(quot(-9223372036854775807 - 1, -1))
+}

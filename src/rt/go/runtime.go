@@ -67,11 +67,54 @@ func nyF64(x float64) float64 { return x }
 
 // ---- ints ----
 
+// int + - * / and negation: a result outside the 64-bit range is a runtime error (E0255).
+func nyOverflow(a int64, op string, b int64, line, col int) {
+	msg := fmt.Sprintf("int overflow: %d %s %d does not fit in 64 bits", a, op, b)
+	if op == "~" {
+		msg = fmt.Sprintf("int overflow: -(%d) does not fit in 64 bits", a)
+	}
+	nyFail("E0255", msg, "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col)
+}
+
+func nyAdd(a, b int64, line, col int) int64 {
+	r := a + b
+	if (a >= 0) == (b >= 0) && (r >= 0) != (a >= 0) {
+		nyOverflow(a, "+", b, line, col)
+	}
+	return r
+}
+
+func nySub(a, b int64, line, col int) int64 {
+	r := a - b
+	if (a >= 0) != (b >= 0) && (r >= 0) != (a >= 0) {
+		nyOverflow(a, "-", b, line, col)
+	}
+	return r
+}
+
+func nyMul(a, b int64, line, col int) int64 {
+	r := a * b
+	if a != 0 && (r/a != b || (a == -1 && b == math.MinInt64) || (b == -1 && a == math.MinInt64)) {
+		nyOverflow(a, "*", b, line, col)
+	}
+	return r
+}
+
+func nyNeg(a int64, line, col int) int64 {
+	if a == math.MinInt64 {
+		nyOverflow(a, "~", 0, line, col)
+	}
+	return -a
+}
+
 func nyDiv(a, b int64, line, col int) int64 {
 	if b == 0 {
 		nyFail("E0241", "division by zero", "check the divisor first", line, col)
 	}
-	return a / b // MinInt64 / -1 wraps in Go
+	if b == -1 && a == math.MinInt64 {
+		nyOverflow(a, "/", b, line, col)
+	}
+	return a / b
 }
 
 func nyRem(a, b int64, line, col int) int64 {
@@ -82,6 +125,17 @@ func nyRem(a, b int64, line, col int) int64 {
 }
 
 // `for i in a..b step k`: a step of 0 would never end.
+// nyCheckNonEmpty is `xs.min()` / `xs.max()` of an empty array (`n` elements seen).
+func nyCheckNonEmpty(n, max int64, line, col int) {
+	if n == 0 {
+		msg := "min() of an empty array"
+		if max != 0 {
+			msg = "max() of an empty array"
+		}
+		nyFail("E0247", msg, "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col)
+	}
+}
+
 func nyCheckStep(k int64, line, col int) {
 	if k == 0 {
 		nyFail("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col)
@@ -406,6 +460,157 @@ func nyUnique[T any](a *Array[T]) *Array[T] {
 	return &Array[T]{items: nyShareAll(slices.Clone(a.items))}
 }
 
+// Map is a Nyra map: entries in insertion order (a removed one is a gap until the next
+// compaction), an index from key to position, and the mark for a shared map.
+type Map[K comparable, V any] struct {
+	keys   []K
+	vals   []V
+	alive  []bool
+	index  map[K]int
+	live   int
+	shared bool
+}
+
+func (m *Map[K, V]) nyShare() { m.shared = true }
+
+// nyMOf makes a map of the keys and values, in order (a repeated key keeps its first place).
+func nyMOf[K comparable, V any](keys []K, vals []V) *Map[K, V] {
+	m := &Map[K, V]{index: map[K]int{}}
+	for i := range keys {
+		m.set(keys[i], vals[i])
+	}
+	return m
+}
+
+func (m *Map[K, V]) has(k K) bool {
+	_, ok := m.index[k]
+	return ok
+}
+
+func (m *Map[K, V]) set(k K, v V) {
+	if i, ok := m.index[k]; ok {
+		m.vals[i] = v
+		return
+	}
+	m.index[k] = len(m.keys)
+	m.keys = append(m.keys, k)
+	m.vals = append(m.vals, v)
+	m.alive = append(m.alive, true)
+	m.live++
+}
+
+func (m *Map[K, V]) remove(k K) {
+	i, ok := m.index[k]
+	if !ok {
+		return
+	}
+	delete(m.index, k)
+	var zk K
+	var zv V
+	m.keys[i], m.vals[i], m.alive[i] = zk, zv, false
+	m.live--
+	if len(m.keys) > 8 && m.live < len(m.keys)/2 {
+		c := nyMCopy(m)
+		*m = *c
+	}
+}
+
+// nyMCopy is a compact copy; the values it shares are marked shared.
+func nyMCopy[K comparable, V any](m *Map[K, V]) *Map[K, V] {
+	c := &Map[K, V]{index: make(map[K]int, m.live)}
+	for i, k := range m.keys {
+		if m.alive[i] {
+			c.set(k, nyShare(m.vals[i]))
+		}
+	}
+	return c
+}
+
+// nyMUnique is `m` itself when it has one owner, else a copy: what a write needs.
+func nyMUnique[K comparable, V any](m *Map[K, V]) *Map[K, V] {
+	if !m.shared {
+		return m
+	}
+	return nyMCopy(m)
+}
+
+// nyMGet is m[k]: E0248 when the key is missing.
+func nyMGet[K comparable, V any](m *Map[K, V], k K, line, col int) V {
+	i, ok := m.index[k]
+	if !ok {
+		var b strings.Builder
+		nyShowAny(&b, k)
+		nyFail("E0248", "key "+b.String()+" is not in the map", "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col)
+	}
+	return m.vals[i]
+}
+
+func nyMGetOr[K comparable, V any](m *Map[K, V], k K, d V) V {
+	if i, ok := m.index[k]; ok {
+		return m.vals[i]
+	}
+	return d
+}
+
+func nyMKeys[K comparable, V any](m *Map[K, V]) *Array[K] {
+	out := make([]K, 0, m.live)
+	for i, k := range m.keys {
+		if m.alive[i] {
+			out = append(out, k)
+		}
+	}
+	return &Array[K]{items: out}
+}
+
+func nyMValues[K comparable, V any](m *Map[K, V]) *Array[V] {
+	out := make([]V, 0, m.live)
+	for i, v := range m.vals {
+		if m.alive[i] {
+			out = append(out, nyShare(v))
+		}
+	}
+	return &Array[V]{items: out}
+}
+
+func (m *Map[K, V]) nyEq(o any) bool {
+	n := o.(*Map[K, V])
+	if m.live != n.live {
+		return false
+	}
+	for i, k := range m.keys {
+		if !m.alive[i] {
+			continue
+		}
+		j, ok := n.index[k]
+		if !ok || !nyEqual(m.vals[i], n.vals[j]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Map[K, V]) nyShowIn(b *strings.Builder) {
+	if m.live == 0 {
+		b.WriteString("[:]")
+		return
+	}
+	b.WriteByte('[')
+	first := true
+	for i, k := range m.keys {
+		if !m.alive[i] {
+			continue
+		}
+		if !first {
+			b.WriteString(", ")
+		}
+		first = false
+		nyShowAny(b, k)
+		b.WriteString(": ")
+		nyShowAny(b, m.vals[i])
+	}
+	b.WriteByte(']')
+}
+
 // nyCheck is an index that must be in bounds (E0240).
 func nyCheck[T any](a *Array[T], i int64, line, col int) int64 {
 	if i < 0 || i >= int64(len(a.items)) {
@@ -514,6 +719,31 @@ func nyCmpFloat(x, y float64) int {
 		return -1
 	}
 	if lt(y, x) {
+		return 1
+	}
+	return 0
+}
+
+// nySortBy is `xs.sort_by(x => key)`: a stable sort of the positions by the keys, then the
+// elements move to their places.
+func nySortBy[T any, K any](a *Array[T], ks *Array[K], c func(K, K) int) {
+	idx := make([]int, len(ks.items))
+	for i := range idx {
+		idx[i] = i
+	}
+	slices.SortStableFunc(idx, func(i, j int) int { return c(ks.items[i], ks.items[j]) })
+	old := slices.Clone(a.items)
+	for k, i := range idx {
+		a.items[k] = old[i]
+	}
+}
+
+// nyCmpOrd orders ints, chars and strings (strings by code points: UTF-8 bytes keep that order).
+func nyCmpOrd[K int64 | rune | string](x, y K) int {
+	if x < y {
+		return -1
+	}
+	if y < x {
 		return 1
 	}
 	return 0

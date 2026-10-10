@@ -1,0 +1,44 @@
+cmds = [
+    "add rent 1 900", "add food 1 250", "add food 2 -40", "move rent 1 food 2 100",
+    "move food 2 rent 3 200", "add fun 12 75", "clear fun 12", "clear fun 12",
+    "add rent 3 1300", "move rent 3 rent 3 50", "add zoo 5 0", "add tax 4 -1300",
+    "move rent 3 tax 4 1300", "add food 1 -250", "add car 7 15", "move car 7 car 8 15",
+    "add tax 10 -75", "add food 10 12000", "move food 10 rent 10 2500"
+]
+acc = [:]
+fn touch(k):
+    if k not in acc: acc[k] = [0].repeat(13)
+
+for line in cmds:
+    p = line.split(" ")
+    touch(p[1])
+    if p[0] == "add":
+        name, m, n = p[1], int(p[2]), int(p[3])
+        acc[name][m] += n
+        print("{name} {m} = {acc[name][m]}")
+    elif p[0] == "move":
+        a, ma, b, mb, n = p[1], int(p[2]), p[3], int(p[4]), int(p[5])
+        touch(b)
+        if acc[a][ma] < n:
+            print("move rejected")
+        else:
+            acc[a][ma] -= n
+            acc[b][mb] += n
+            print("{a} {ma} = {acc[a][ma]}, {b} {mb} = {acc[b][mb]}")
+    else:
+        name, m = p[1], int(p[2])
+        old = acc[name][m]
+        if old == 0:
+            print("{name} {m} already empty")
+        else:
+            acc[name][m] = 0
+            print("{name} {m} cleared (was {old})")
+names = [k for k in acc.keys().sorted() if acc[k].any(v => v != 0)]
+months = [m for m in 1..13 if names.any(k => acc[k][m] != 0)]
+rows = [["account"] + months.map(m => str(m)) + ["total"]]
+for k in names:
+    rows.push([k] + months.map(m => "-" if acc[k][m] == 0 else str(acc[k][m])) + [str(acc[k].sum())])
+rows.push(["total"] + months.map(m => str(names.map(k => acc[k][m]).sum())) + [str(names.map(k => acc[k].sum()).sum())])
+widths = [rows.map(r => r[i].len()).max() for i in 0..rows[0].len()]
+for r in rows:
+    print([c.pad_right(widths[i]) if i == 0 else c.pad_left(widths[i]) for i, c in r].join("  "))

@@ -1,0 +1,5 @@
+// expect: E0217
+fn advance() { pos += 1 }
+advance()
+var pos = 0
+print(pos)

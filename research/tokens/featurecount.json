@@ -1,0 +1,90 @@
+[
+ {
+  "feature": "var parameters (`fn f(var n: int)`)",
+  "micro_id": "var_param",
+  "uses": 10,
+  "programs": 5,
+  "per_use": 5.0,
+  "est_saved": 50.0
+ },
+ {
+  "feature": "tuple swap / multi-assign (`a, b = b, a % b`)",
+  "micro_id": "swap_tuple",
+  "uses": 7,
+  "programs": 5,
+  "per_use": 5,
+  "est_saved": 35
+ },
+ {
+  "feature": "multi-declare from a literal (`var lo, hi = 0, n - 1`)",
+  "micro_id": "multi_decl",
+  "uses": 2,
+  "programs": 6,
+  "per_use": 1.5,
+  "est_saved": 3.0
+ },
+ {
+  "feature": "array/tuple destructuring (`let a, b = s.split(\" \")`, `let ok, t = f()`)",
+  "micro_id": "destructure_split",
+  "uses": 13,
+  "programs": 9,
+  "per_use": 7,
+  "est_saved": 91
+ },
+ {
+  "feature": "list of tuples iterated with unpacking (`for v, s in [(1, \"M\"), ...]`)",
+  "micro_id": "tuple_table",
+  "uses": 5,
+  "programs": 5,
+  "per_use": 30,
+  "est_saved": 150
+ },
+ {
+  "feature": "tuple return values (`ret (false, \"\")`)",
+  "micro_id": "tuple_return",
+  "uses": 3,
+  "programs": 2,
+  "per_use": 10,
+  "est_saved": 30
+ },
+ {
+  "feature": "`sorted_by` / `sorted` with tuple key",
+  "micro_id": "sorted_by_tuple",
+  "uses": 5,
+  "programs": 3,
+  "per_use": 60,
+  "est_saved": 300
+ },
+ {
+  "feature": "in-place update through a map element (`data[a][b] = v`)",
+  "micro_id": "nested_mut",
+  "uses": 17,
+  "programs": 5,
+  "per_use": 20,
+  "est_saved": 340
+ },
+ {
+  "feature": "`.trim(chars)`",
+  "micro_id": "trim_chars",
+  "uses": 1,
+  "programs": 1,
+  "per_use": 80,
+  "est_saved": 80
+ },
+ {
+  "feature": "format spec `{x:,}`",
+  "micro_id": "fmt_thousands",
+  "uses": 3,
+  "programs": 1,
+  "per_use": 85,
+  "est_saved": 255
+ },
+ {
+  "feature": "conditional expression in a slice / index (`s.slice(0, e - 1 if append else e)`)",
+  "micro_id": "ternary",
+  "uses": 0,
+  "programs": 0,
+  "per_use": 4,
+  "est_saved": 0
+ }
+]

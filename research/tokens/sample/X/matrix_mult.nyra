@@ -1,0 +1,8 @@
+let n = 120
+let a = [[(31 * i + 17 * j + 7) % 100 for j in 0..n] for i in 0..n]
+let b = [[(13 * i + 29 * j + 3) % 100 for j in 0..n] for i in 0..n]
+let c = [[[a[i][k] * b[k][j] for k in 0..n].sum() for j in 0..n] for i in 0..n]
+print([c[i][i] for i in 0..n].sum())
+print([r.sum() for r in c].sum())
+print(c[0][119])
+print(c[119][0])

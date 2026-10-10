@@ -231,6 +231,14 @@ class MockProvider(Provider):
 _ANTHROPIC_FIRST_CLASS = ("thinking", "output_config", "cache_control")
 
 
+# US dollars per million tokens (input, output), for the cost the API does not report itself.
+ANTHROPIC_PRICES = {
+    "claude-opus-5-5": (5.0, 25.0),
+    "claude-sonnet-5-5": (3.0, 15.0),
+    "claude-haiku-4-5-20251001": (1.0, 5.0),
+}
+
+
 class AnthropicProvider(Provider):
     """Claude through the official `anthropic` SDK (non-streaming Messages API).
 
@@ -252,6 +260,8 @@ class AnthropicProvider(Provider):
         self._count_enabled = count_tokens
         self._count_baseline: Optional[int] = None
         self._count_lock = threading.Lock()
+        self._spent_lock = threading.Lock()
+        self._spent = 0.0
         self.client = client  # created by ensure_ready() when not injected
 
     def ensure_ready(self) -> None:
@@ -270,7 +280,11 @@ class AnthropicProvider(Provider):
             raise ProviderError("the `anthropic` package is not installed: pip install -r bench/requirements.txt",
                                 fatal=True) from None
         # More retries than the default: a benchmark run is long and a single 429/529 should not end it.
-        return anthropic.Anthropic(api_key=key, max_retries=6, timeout=600.0)
+        # A key that is not scoped to a workspace needs the workspace id (not a secret) in a header.
+        headers = {}
+        if os.environ.get("ANTHROPIC_WORKSPACE_ID"):
+            headers["anthropic-workspace-id"] = os.environ["ANTHROPIC_WORKSPACE_ID"].strip()
+        return anthropic.Anthropic(api_key=key, max_retries=6, timeout=600.0, default_headers=headers or None)
 
     def describe(self) -> dict:
         return {"name": self.name, "model": self.model, "max_tokens": self.max_tokens, "effort": self.effort,
@@ -310,8 +324,16 @@ class AnthropicProvider(Provider):
         input_tokens = sum(int(getattr(u, f, 0) or 0)
                            for f in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
         usage = Usage(input_tokens=input_tokens, output_tokens=int(getattr(u, "output_tokens", 0) or 0))
+        price = ANTHROPIC_PRICES.get(self.model)
+        if price is not None:  # computed from the token counts at list price (no caching is used)
+            usage.cost = (input_tokens * price[0] + usage.output_tokens * price[1]) / 1e6
+            with self._spent_lock:
+                self._spent += usage.cost
         return Reply(text=text, usage=usage, stop_reason=getattr(resp, "stop_reason", None), latency_s=latency,
                      request_id=getattr(resp, "_request_id", None), model=getattr(resp, "model", None))
+
+    def spent(self) -> Optional[float]:
+        return self._spent if self.model in ANTHROPIC_PRICES else None
 
     def _count_raw(self, text: str) -> int:
         self.ensure_ready()

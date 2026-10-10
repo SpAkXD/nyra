@@ -2,22 +2,90 @@
 
 use std::fmt::Write;
 
-use super::{bare, names};
+use super::{bare, names, scope::mentions};
+use crate::ast::Span;
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, StructInfo, Ty, UnOp};
 
 /// The C runtime, emitted before every program (`@FILE@` becomes the source path).
 const PRELUDE: &str = include_str!("../rt/c/core.c");
 const STRINGS: &str = include_str!("../rt/c/str.c");
 const ARRAYS: &str = include_str!("../rt/c/arr.c");
+const STD: &str = include_str!("../rt/c/std.c");
+const MAPS: &str = include_str!("../rt/c/map.c");
+const JSON: &str = include_str!("../rt/c/json.c");
 
 const RESERVED: &[&str] = &[
-    "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
-    "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return",
-    "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void",
-    "volatile", "while", "bool", "true", "false", "NULL", "EOF", "errno", "stdin", "stdout", "stderr",
-    "main", "printf", "puts", "putchar", "fwrite", "fputs", "snprintf", "sprintf", "strcmp", "strcpy", "strtod",
-    "memcpy", "memmove", "memcmp", "strlen", "atoi", "malloc", "realloc", "free", "exit", "getenv", "int64_t",
-    "uint32_t", "uint64_t", "size_t", "DBL_MAX", "INT64_MAX", "INT64_MIN",
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "bool",
+    "true",
+    "false",
+    "NULL",
+    "EOF",
+    "errno",
+    "stdin",
+    "stdout",
+    "stderr",
+    "main",
+    "printf",
+    "puts",
+    "putchar",
+    "fwrite",
+    "fputs",
+    "snprintf",
+    "sprintf",
+    "strcmp",
+    "strcpy",
+    "strtod",
+    "memcpy",
+    "memmove",
+    "memcmp",
+    "strlen",
+    "atoi",
+    "malloc",
+    "realloc",
+    "free",
+    "exit",
+    "getenv",
+    "int64_t",
+    "uint32_t",
+    "uint64_t",
+    "size_t",
+    "DBL_MAX",
+    "INT64_MAX",
+    "INT64_MIN",
 ];
 
 /// More C words a user name must not be: keywords of newer C and compilers, common macros.
@@ -27,8 +95,8 @@ fn var(name: &str) -> String {
     // `ny...` names belong to nyra (user functions are `ny_<name>`, the runtime is `nyrt_*`).
     // Names starting with `_` are reserved in C, and an all-caps name may be a macro of the
     // C library (`INT32_MAX`, `WIN32`, `BUFSIZ`): both get a suffix too.
-    let macro_like = name.chars().any(|c| c.is_ascii_uppercase())
-        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    let macro_like =
+        name.chars().any(|c| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
     if RESERVED.contains(&name) || RESERVED_MORE.contains(&name) || name.starts_with("ny") || name.starts_with('_') || macro_like {
         format!("{name}_")
     } else {
@@ -44,6 +112,7 @@ fn ctype(t: Ty) -> String {
         Ty::Char => "nyrt_char".into(),
         Ty::Str => "nyrt_str*".into(),
         Ty::Array(_) => "nyrt_arr*".into(),
+        Ty::Map(_) => "nyrt_map*".into(),
         Ty::Struct(_) => format!("nyS_{}", t.struct_name().expect("a struct")),
         other => unreachable!("the C backend got the type `{}`", other.name()),
     }
@@ -82,6 +151,7 @@ fn rt_name(t: Ty) -> &'static str {
         Ty::Char => "char",
         Ty::Str => "str",
         Ty::Array(_) => "arr",
+        Ty::Map(_) => "map",
         other => unreachable!("no runtime functions for `{}` yet", other.name()),
     }
 }
@@ -118,7 +188,8 @@ fn structs(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
         let n = format!("nyS_{}", s.name);
         if s.managed {
-            let _ = writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);\nstatic void {n}_keep(void *p);");
+            let _ =
+                writeln!(out, "static void {n}_retain(void *p);\nstatic void {n}_release(void *p);\nstatic void {n}_keep(void *p);");
         }
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b);");
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p);");
@@ -151,6 +222,7 @@ fn structs(m: &Module, out: &mut String) {
                 match t {
                     Ty::Str => format!("nyrt_str_eq(x->{f}, y->{f})"),
                     Ty::Array(_) => format!("nyrt_arr_eq(x->{f}, y->{f})"),
+                    Ty::Map(_) => format!("nyrt_map_eq(x->{f}, y->{f})"),
                     Ty::Struct(_) => format!("{}_eq(&x->{f}, &y->{f})", ctype(*t)),
                     _ => format!("x->{f} == y->{f}"),
                 }
@@ -173,6 +245,7 @@ fn structs(m: &Module, out: &mut String) {
                 Ty::Char => format!("nyrt_buf_repr_char(o, v->{f});"),
                 Ty::Str => format!("nyrt_buf_repr_str(o, v->{f});"),
                 Ty::Array(_) => format!("nyrt_buf_arr(o, v->{f});"),
+                Ty::Map(_) => format!("nyrt_buf_map(o, v->{f});"),
                 _ => format!("{}_fmt(o, &v->{f});", ctype(*t)),
             };
             let _ = writeln!(out, "    {line}");
@@ -180,6 +253,131 @@ fn structs(m: &Module, out: &mut String) {
         out.push_str("    nyrt_buf_lit(o, \")\", 1);\n}\n");
     }
     out.push('\n');
+}
+
+/// The arrays and structs whose values `json.str` writes or `json.parse` reads, with the ones
+/// inside them: each gets a generated encoder `nyJE_<k>` and decoder `nyJD_<k>`.
+fn json_types(m: &Module) -> Vec<Ty> {
+    fn add(m: &Module, t: Ty, v: &mut Vec<Ty>) {
+        if !matches!(t, Ty::Array(_) | Ty::Struct(_)) || v.contains(&t) {
+            return;
+        }
+        v.push(t);
+        match t {
+            Ty::Array(_) => add(m, t.elem().expect("an array"), v),
+            _ => {
+                for (_, ft) in &m.structs.get(t).expect("a struct").fields {
+                    add(m, *ft, v);
+                }
+            }
+        }
+    }
+    fn walk(m: &Module, f: &Func, ss: &[Stmt], v: &mut Vec<Ty>) {
+        for s in ss {
+            match &s.kind {
+                StmtKind::Op { op: RtOp::JsonStr, args, .. } => add(m, args[0].ty(f), v),
+                StmtKind::Op { op: RtOp::JsonParse, dst: Some(d), .. } => add(m, f.local(*d).ty, v),
+                StmtKind::If { then, els, .. } => {
+                    walk(m, f, then, v);
+                    walk(m, f, els, v);
+                }
+                StmtKind::Loop { head, body, step, .. } => {
+                    walk(m, f, head, v);
+                    walk(m, f, body, v);
+                    walk(m, f, step, v);
+                }
+                StmtKind::ForEach { body, .. } => walk(m, f, body, v),
+                _ => {}
+            }
+        }
+    }
+    let mut v = Vec::new();
+    for f in &m.funcs {
+        walk(m, f, &f.body, &mut v);
+    }
+    v
+}
+
+/// The JSON encoder (`enc`) or decoder of a type.
+fn jfn(json: &[Ty], t: Ty, enc: bool) -> String {
+    let (rt, gen) = if enc { ("nyrt_jenc", "nyJE") } else { ("nyrt_jdec", "nyJD") };
+    match t {
+        Ty::Array(_) | Ty::Struct(_) => format!("{gen}_{}", json.iter().position(|x| *x == t).expect("collected by json_types")),
+        _ => format!("{rt}_{}", rt_name(t)),
+    }
+}
+
+/// The encoders and decoders of the arrays and structs in `json`.
+fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
+    for k in 0..json.len() {
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *v);\nstatic void nyJD_{k}(nyrt_jp *p, void *out);");
+    }
+    for (k, t) in json.iter().enumerate() {
+        if let Some(elem) = t.elem() {
+            let _ = writeln!(
+                out,
+                "static void nyJE_{k}(nyrt_buf *b, const void *v) {{ nyrt_jenc_arr(b, v, {}); }}\nstatic void nyJD_{k}(nyrt_jp *p, void *out) {{ nyrt_jdec_arr(p, out, {}, {}); }}",
+                jfn(json, elem, true),
+                desc(elem),
+                jfn(json, elem, false)
+            );
+            continue;
+        }
+        let info = m.structs.get(*t).expect("a struct");
+        let n = ctype(*t);
+        let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let key = format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
+            let _ = writeln!(
+                out,
+                "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});",
+                string_lit(&key),
+                key.len(),
+                jfn(json, *ft, true),
+                field(info, i)
+            );
+        }
+        if info.fields.is_empty() {
+            out.push_str("    nyrt_buf_lit(b, \"{\", 1);\n");
+        }
+        out.push_str("    nyrt_buf_lit(b, \"}\", 1);\n}\n");
+        let _ = writeln!(
+            out,
+            "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};\n    bool seen[{}] = {{0}};",
+            info.fields.len().max(1)
+        );
+        out.push_str(
+            "    if (nyrt_jopen(p, '{', \"an object\")) {\n        do {\n            nyrt_str *k = nyrt_jkey(p);\n            ",
+        );
+        for (i, (fname, ft)) in info.fields.iter().enumerate() {
+            let f = field(info, i);
+            let again = if m.managed(*ft) { format!("if (seen[{i}]) {} ", release(*ft, &format!("v.{f}"))) } else { String::new() };
+            let _ = write!(
+                out,
+                "if (k->len == {} && memcmp(k->data, {}, {}) == 0) {{\n                {again}nyrt_jpush_key(p, {});\n                {}(p, &v.{f});\n                nyrt_jpop(p);\n                seen[{i}] = true;\n            }} else ",
+                fname.len(),
+                string_lit(fname),
+                fname.len(),
+                string_lit(fname),
+                jfn(json, *ft, false)
+            );
+        }
+        out.push_str("nyrt_jskip(p);\n            nyrt_str_release(k);\n        } while (nyrt_jnext(p, '}'));\n    }\n");
+        for (i, (fname, _)) in info.fields.iter().enumerate() {
+            let _ = writeln!(out, "    if (!seen[{i}]) nyrt_jmissing(p, {});", string_lit(fname));
+        }
+        let _ = writeln!(out, "    *({n} *)out = v;\n}}");
+    }
+    out.push('\n');
+}
+
+/// The C name of a function: `ny_<name>` for the program's own, `nyM_<module>_<name>` for the
+/// standard library's functions written in Nyra (named `module.name`).
+fn fn_name(name: &str) -> String {
+    match name.split_once('.') {
+        Some((m, n)) => format!("nyM_{m}_{n}"),
+        None => format!("ny_{name}"),
+    }
 }
 
 /// `names` are the plain names; an `inout` parameter is a pointer.
@@ -195,7 +393,7 @@ fn signature(f: &Func, names: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    format!("static {} ny_{}({params})", f.ret.map_or("void".to_string(), ctype), f.name)
+    format!("static {} {}({params})", f.ret.map_or("void".to_string(), ctype), fn_name(&f.name))
 }
 
 /// `file` is the source path as given to nyra; runtime errors report it.
@@ -205,7 +403,20 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     out.push_str(ARRAYS);
     out.push('\n');
+    out.push_str(MAPS);
+    out.push('\n');
+    let std = m.uses_std();
+    if std {
+        out.push_str(STD);
+        out.push('\n');
+    }
     structs(m, &mut out);
+    let json = json_types(m);
+    if m.uses_json() {
+        out.push_str(JSON);
+        out.push('\n');
+        json_funcs(m, &json, &mut out);
+    }
     // string literals: read-only objects that are never freed (reference count 0); `const` also
     // lets the C compiler see that releasing one never reaches free()
     for (i, s) in m.strs.iter().enumerate() {
@@ -240,15 +451,28 @@ pub fn gen(m: &Module, file: &str) -> String {
         // an `inout` parameter is used through its pointer: `(*p)`
         let uses: Vec<String> =
             n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("(*{x})") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0 };
+        let mut g = Gen {
+            m,
+            f,
+            names: &uses,
+            out: String::new(),
+            indent: 1,
+            tmp: 0,
+            moving: false,
+            unique: Vec::new(),
+            lens: Vec::new(),
+            json: &json,
+        };
         g.stmts(&f.body);
         out.push_str(&g.out);
         out.push_str("}\n\n");
     }
+    // the standard library reads the program's arguments
+    let (params, args) = if std { ("int argc, char **argv", "\n    nyrt_argc = argc;\n    nyrt_argv = argv;") } else { ("void", "") };
     let _ = write!(
         out,
-        "int main(void) {{\n    nyrt_init();\n    ny_{}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
-        m.func(m.main).name
+        "int main({params}) {{{args}\n    nyrt_init();\n    {}();\n    nyrt_leak_check();\n    return 0;\n}}\n",
+        fn_name(&m.func(m.main).name)
     );
     out
 }
@@ -261,6 +485,15 @@ struct Gen<'a> {
     indent: usize,
     /// Counter for helper names (loop cursors, element pointers).
     tmp: usize,
+    /// The statement being generated gives its value away (`push`/store of a temporary that is
+    /// released right after): no retain, and the release is skipped.
+    moving: bool,
+    /// Arrays that an enclosing loop made unique before it started (see `hoist`).
+    unique: Vec<LocalId>,
+    /// Arrays whose length an enclosing loop cannot change, with the C local holding it.
+    lens: Vec<(LocalId, String)>,
+    /// The arrays and structs that are written as or read from JSON (see `json_types`).
+    json: &'a [Ty],
 }
 
 impl Gen<'_> {
@@ -279,8 +512,136 @@ impl Gen<'_> {
     }
 
     fn stmts(&mut self, ss: &[Stmt]) {
-        for s in ss {
-            self.stmt(s);
+        let mut k = 0;
+        while k < ss.len() {
+            if self.format_append(&ss[k..]) {
+                k += 3;
+                continue;
+            }
+            if self.moves(&ss[k..]) {
+                self.moving = true;
+                self.stmt(&ss[k]);
+                self.moving = false;
+                k += 2;
+                continue;
+            }
+            self.stmt(&ss[k]);
+            k += 1;
+        }
+    }
+
+    /// `s += "{x}"` (also `s += str(x)`): the parts go straight into `s` when it has no other
+    /// owner, instead of into a new string that is appended and freed. The IR is
+    /// `t = format(..); s += t; drop t`, with parts that do not read `s`.
+    fn format_append(&mut self, ss: &[Stmt]) -> bool {
+        let [a, b, c, ..] = ss else { return false };
+        let StmtKind::Op { dst: Some(t), op: RtOp::Format, args: parts } = &a.kind else { return false };
+        let StmtKind::Mutate { dst: None, op: RtOp::StrAppend, place, args } = &b.kind else { return false };
+        if !place.path.is_empty() || !matches!(args.as_slice(), [Expr::Local(x)] if x == t) || place.root == *t {
+            return false;
+        }
+        if !matches!(c.kind, StmtKind::Drop(d) if d == *t) || parts.iter().any(|p| mentions(p, place.root)) {
+            return false;
+        }
+        let s = self.local(place.root).to_string();
+        self.line("{");
+        self.indent += 1;
+        self.line(&format!("nyrt_buf nyrt_b = nyrt_buf_on(&{s});"));
+        for p in parts {
+            let line = self.put("nyrt_buf", p);
+            self.line(&line);
+        }
+        self.line(&format!("nyrt_buf_back(&nyrt_b, &{s});"));
+        self.indent -= 1;
+        self.line("}");
+        true
+    }
+
+    /// True for `xs.push(t)` or `xs[i] = t` of a temporary `t` followed by `drop t`: the value
+    /// moves into the array instead of getting one more owner and losing one.
+    fn moves(&self, ss: &[Stmt]) -> bool {
+        let [a, b, ..] = ss else { return false };
+        let (place, value) = match &a.kind {
+            StmtKind::Mutate { dst: None, op: RtOp::ArrPush, place, args } if args.len() == 1 => (place, &args[0]),
+            StmtKind::Store { place, value } if !place.path.is_empty() => (place, value),
+            _ => return false,
+        };
+        let Expr::Local(t) = value else { return false };
+        self.f.local(*t).name.is_none()
+            && place.root != *t
+            && matches!(b.kind, StmtKind::Drop(d) if d == *t)
+            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) if mentions(i, *t)))
+    }
+
+    /// `NYRT_ELEMS(T, xs)[nyrt_ix(xs, i, line, col)]`: element `i` of the array `xs` (an
+    /// expression without effects), its index checked (E0240). `root`: the local `xs` is, if
+    /// it is one (a loop may hold its length in a C local).
+    fn elem(&self, xs: &str, root: Option<LocalId>, elem: Ty, i: &Expr, span: Span) -> String {
+        let (i, line, col) = (self.arg(i), span.line, span.col);
+        let ix = match root.and_then(|r| self.cached_len(r)) {
+            Some(n) => format!("nyrt_ixn({xs}, {i}, {n}, {line}, {col})"),
+            None => format!("nyrt_ix({xs}, {i}, {line}, {col})"),
+        };
+        format!("NYRT_ELEMS({}, {xs})[{ix}]", ctype(elem))
+    }
+
+    /// A pointer to element `i` of the array at the lvalue `xs`: returns `(*p)`.
+    fn elem_slot(&mut self, xs: &str, root: Option<LocalId>, elem: Ty, i: &Expr, span: Span) -> String {
+        let p = self.fresh("p");
+        let line = format!("{} *{p} = &{};", ctype(elem), self.elem(xs, root, elem, i, span));
+        self.line(&line);
+        format!("(*{p})")
+    }
+
+    fn cached_len(&self, l: LocalId) -> Option<&str> {
+        self.lens.iter().rev().find(|(x, _)| *x == l).map(|(_, n)| n.as_str())
+    }
+
+    /// Before a loop: every array local that the loop only indexes, measures and writes
+    /// elements of (no new value, no other owner, no call that sees it) is made unique once,
+    /// before the loop, instead of before every write (when the loop writes it), and its length
+    /// is read once (when the loop cannot change it). Copy on write still happens: at most once,
+    /// on the way into the loop. Returns how many entries to drop afterwards, and whether a C
+    /// block was opened.
+    fn hoist(&mut self, s: &Stmt) -> (usize, usize, bool) {
+        let (u0, l0) = (self.unique.len(), self.lens.len());
+        let mut opened = false;
+        for (k, local) in self.f.locals.iter().enumerate() {
+            let x = LocalId(k as u32);
+            if !matches!(local.ty, Ty::Array(_)) {
+                continue;
+            }
+            let mut u = ArrUse::default();
+            if !stmt_ok(s, x, &mut u) || !u.mentioned {
+                continue;
+            }
+            let lv = self.local(x).to_string();
+            let unique = u.writes && !self.unique.contains(&x);
+            let len = !u.resizes && self.cached_len(x).is_none();
+            if (unique || len) && !opened {
+                self.line("{");
+                self.indent += 1;
+                opened = true;
+            }
+            if unique {
+                self.line(&format!("nyrt_arr_mut(&{lv});"));
+                self.unique.push(x);
+            }
+            if len {
+                let n = self.fresh("n");
+                self.line(&format!("int64_t {n} = {lv}->len;"));
+                self.lens.push((x, n));
+            }
+        }
+        (self.unique.len() - u0, self.lens.len() - l0, opened)
+    }
+
+    fn unhoist(&mut self, (u, l, opened): (usize, usize, bool)) {
+        self.unique.truncate(self.unique.len() - u);
+        self.lens.truncate(self.lens.len() - l);
+        if opened {
+            self.indent -= 1;
+            self.line("}");
         }
     }
 
@@ -352,40 +713,31 @@ impl Gen<'_> {
                         }
                     }
                 }
-                let line = self.assign(*dst, format!("ny_{}({})", self.m.func(*func).name, parts.join(", ")));
+                let line = self.assign(*dst, format!("{}({})", fn_name(&self.m.func(*func).name), parts.join(", ")));
                 self.line(&line);
                 if inout {
                     self.indent -= 1;
                     self.line("}");
                 }
             }
-            StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at),
+            StmtKind::Op { dst, op, args } => self.op(*dst, *op, args, &at, s.span),
             StmtKind::Store { place, value } => {
                 self.line("{");
                 self.indent += 1;
                 let (parent, last) = self.place_parent(place);
                 let t = self.ty(value);
+                let root = if place.path.len() == 1 { Some(place.root) } else { None };
                 let slot = match last {
-                    Some((i, span)) => {
-                        let p = self.fresh("p");
-                        let line = format!(
-                            "{} *{p} = ({}*)nyrt_arr_at({parent}, {}, {}, {});",
-                            ctype(t),
-                            ctype(t),
-                            self.arg(&i),
-                            span.line,
-                            span.col
-                        );
-                        self.line(&line);
-                        format!("(*{p})")
-                    }
+                    Some((i, span)) => self.elem_slot(&parent, root, t, &i, span),
                     None => parent,
                 };
                 let v = self.arg(value);
                 if self.m.managed(t) {
                     // the new value gets its owner before the old one loses its own (`xs[0] = xs[0]`)
-                    let line = self.retain_value(t, value);
-                    self.line(&line);
+                    if !self.moving {
+                        let line = self.retain_value(t, value);
+                        self.line(&line);
+                    }
                     self.line(&release(t, &slot));
                 }
                 self.line(&format!("{slot} = {v};"));
@@ -394,8 +746,13 @@ impl Gen<'_> {
             }
             StmtKind::Mutate { dst, op, place, args } => self.mutate(*dst, *op, place, args, &at),
             StmtKind::If { .. } => self.if_chain(s),
-            StmtKind::Loop { head, cond, body, step } => self.lp(head, cond, body, step),
+            StmtKind::Loop { head, cond, body, step } => {
+                let h = self.hoist(s);
+                self.lp(head, cond, body, step);
+                self.unhoist(h);
+            }
             StmtKind::ForEach { var, iter, body } => {
+                let h = self.hoist(s);
                 let it = self.expr(iter);
                 let v = self.local(*var).to_string();
                 match self.ty(iter) {
@@ -418,6 +775,7 @@ impl Gen<'_> {
                 self.stmts(body);
                 self.indent -= 1;
                 self.line("}");
+                self.unhoist(h);
             }
             StmtKind::Break => self.line("break;"),
             StmtKind::Continue => self.line("continue;"),
@@ -463,23 +821,17 @@ impl Gen<'_> {
         for (k, step) in p.path.iter().enumerate() {
             match step {
                 Step::Index(i, span) => {
-                    // this array is about to change below this point
-                    self.line(&format!("nyrt_arr_unique(&{lv});"));
+                    // this array is about to change below this point (unless a loop made the
+                    // local unique already)
+                    if !(k == 0 && self.unique.contains(&p.root)) {
+                        self.line(&format!("nyrt_arr_mut(&{lv});"));
+                    }
                     if k + 1 == n {
                         return (lv, Some((i.clone(), *span)));
                     }
                     let elem = t.elem().expect("verified: an array");
-                    let ptr = self.fresh("p");
-                    let line = format!(
-                        "{} *{ptr} = ({}*)nyrt_arr_at({lv}, {}, {}, {});",
-                        ctype(elem),
-                        ctype(elem),
-                        self.arg(i),
-                        span.line,
-                        span.col
-                    );
-                    self.line(&line);
-                    lv = format!("(*{ptr})");
+                    let root = if k == 0 { Some(p.root) } else { None };
+                    lv = self.elem_slot(&lv, root, elem, i, *span);
                     t = elem;
                 }
                 Step::Field(k) => {
@@ -499,17 +851,8 @@ impl Gen<'_> {
             None => parent,
             Some((i, span)) => {
                 let t = self.place_ty(p);
-                let ptr = self.fresh("p");
-                let line = format!(
-                    "{} *{ptr} = ({}*)nyrt_arr_at({parent}, {}, {}, {});",
-                    ctype(t),
-                    ctype(t),
-                    self.arg(&i),
-                    span.line,
-                    span.col
-                );
-                self.line(&line);
-                format!("(*{ptr})")
+                let root = if p.path.len() == 1 { Some(p.root) } else { None };
+                self.elem_slot(&parent, root, t, &i, span)
             }
         }
     }
@@ -528,18 +871,48 @@ impl Gen<'_> {
     fn mutate(&mut self, dst: Option<LocalId>, op: RtOp, place: &Place, args: &[Expr], at: &str) {
         self.line("{");
         self.indent += 1;
-        let lv = self.place(place);
         let t = self.place_ty(place);
+        let elem = t.elem();
+        if op == RtOp::ArrPush {
+            // the value first: it may read the array's length
+            let e = elem.expect("verified: an array");
+            let line = format!("{} nyrt_v = {};", ctype(e), self.arg(&args[0]));
+            self.line(&line);
+        }
+        let lv = self.place(place);
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let d = dst.map(|d| self.local(d).to_string());
-        let elem = t.elem();
-        if elem.is_some() && op != RtOp::ArrAppend {
-            self.line(&format!("nyrt_arr_unique(&{lv});"));
+        let hoisted = place.path.is_empty() && self.unique.contains(&place.root);
+        if elem.is_some() && op != RtOp::ArrAppend && !hoisted {
+            self.line(&format!("nyrt_arr_mut(&{lv});"));
         }
         let call = match op {
             RtOp::StrAppend => format!("nyrt_str_append(&{lv}, {});", a[0]),
             RtOp::ArrAppend => format!("nyrt_arr_append(&{lv}, {});", a[0]),
-            RtOp::ArrPush => format!("nyrt_arr_push(&{lv}, {});", self.addr(&args[0], elem.expect("an array"))),
+            RtOp::ArrPush => {
+                // in place while there is room; the new element gets its owner from the array
+                let e = elem.expect("verified: an array");
+                let slot = format!("NYRT_ELEMS({}, {lv})[{lv}->len]", ctype(e));
+                self.line(&format!("if (NYRT_UNLIKELY({lv}->len == {lv}->cap)) nyrt_arr_grow(&{lv}, 1);"));
+                self.line(&format!("{slot} = nyrt_v;"));
+                if self.m.managed(e) && !self.moving {
+                    self.line(&retain(e, &slot));
+                }
+                format!("{lv}->len++;")
+            }
+            RtOp::ArrPop if d.is_some() => {
+                let e = elem.expect("verified: an array");
+                self.line(&format!("if (NYRT_UNLIKELY({lv}->len == 0)) nyrt_pop_empty({at});"));
+                format!("{} = NYRT_ELEMS({}, {lv})[--{lv}->len];", d.as_deref().unwrap_or_default(), ctype(e))
+            }
+            RtOp::ArrSwap => {
+                let e = elem.expect("verified: an array");
+                let ct = ctype(e);
+                self.line(&format!("int64_t nyrt_i = nyrt_ix({lv}, {}, {at}), nyrt_j = nyrt_ix({lv}, {}, {at});", a[0], a[1]));
+                self.line(&format!("{ct} nyrt_x = NYRT_ELEMS({ct}, {lv})[nyrt_i];"));
+                self.line(&format!("NYRT_ELEMS({ct}, {lv})[nyrt_i] = NYRT_ELEMS({ct}, {lv})[nyrt_j];"));
+                format!("NYRT_ELEMS({ct}, {lv})[nyrt_j] = nyrt_x;")
+            }
             RtOp::ArrInsert => {
                 format!("nyrt_arr_insert(&{lv}, {}, {}, {at});", a[0], self.addr(&args[1], elem.expect("an array")))
             }
@@ -556,7 +929,15 @@ impl Gen<'_> {
                 }
             }
             RtOp::ArrSort => format!("nyrt_arr_sort(&{lv});"),
-            RtOp::ArrSwap => format!("nyrt_arr_swap(&{lv}, {}, {}, {at});", a[0], a[1]),
+            RtOp::ArrSortBy => format!("nyrt_arr_sort_by(&{lv}, {});", a[0]),
+            RtOp::MapSet | RtOp::MapRemove => {
+                let (k, v) = t.map_kv().expect("verified: a map");
+                if op == RtOp::MapSet {
+                    format!("nyrt_map_set(&{lv}, {}, {});", self.addr(&args[0], k), self.addr(&args[1], v))
+                } else {
+                    format!("nyrt_map_remove(&{lv}, {});", self.addr(&args[0], k))
+                }
+            }
             RtOp::ArrReverse => format!("nyrt_arr_reverse(&{lv});"),
             other => unreachable!("{} does not change a place", other.name()),
         };
@@ -565,7 +946,7 @@ impl Gen<'_> {
         self.line("}");
     }
 
-    fn op(&mut self, dst: Option<LocalId>, op: RtOp, args: &[Expr], at: &str) {
+    fn op(&mut self, dst: Option<LocalId>, op: RtOp, args: &[Expr], at: &str, span: Span) {
         let a: Vec<String> = args.iter().map(|x| self.arg(x)).collect();
         let call = match op {
             RtOp::Print => {
@@ -575,6 +956,18 @@ impl Gen<'_> {
                     self.line(&line);
                 }
                 self.line("putchar('\\n');");
+                return;
+            }
+            // `str(n)`, `str(c)`: small ints and ASCII chars are immortal strings, made once
+            RtOp::Format if dst.is_some() && args.len() == 1 && matches!(self.ty(&args[0]), Ty::Int | Ty::Char) => {
+                let f = if self.ty(&args[0]) == Ty::Int { "nyrt_int_str" } else { "nyrt_char_str" };
+                format!("{f}({})", a[0])
+            }
+            RtOp::PrintNoLine => {
+                for p in args {
+                    let line = self.put("nyrt_put", p);
+                    self.line(&line);
+                }
                 return;
             }
             RtOp::Format => {
@@ -596,9 +989,27 @@ impl Gen<'_> {
                 let t = self.f.local(dst.expect("checked")).ty;
                 let elem = t.elem().expect("verified: an array");
                 self.line(&format!("{d} = nyrt_arr_new({}, {});", desc(elem), args.len()));
-                for x in args {
+                for (k, x) in args.iter().enumerate() {
                     // the array becomes one more owner of each element
-                    let line = format!("nyrt_arr_push(&{d}, {});", self.addr(x, elem));
+                    let slot = format!("NYRT_ELEMS({}, {d})[{k}]", ctype(elem));
+                    let line = format!("{slot} = {};", self.arg(x));
+                    self.line(&line);
+                    if self.m.managed(elem) {
+                        self.line(&retain(elem, &slot));
+                    }
+                }
+                if !args.is_empty() {
+                    self.line(&format!("{d}->len = {};", args.len()));
+                }
+                return;
+            }
+            RtOp::MapNew => {
+                let d = dst.map(|d| self.local(d).to_string()).expect("verified: a destination");
+                let t = self.f.local(dst.expect("checked")).ty;
+                let (k, v) = t.map_kv().expect("verified: a map");
+                self.line(&format!("{d} = nyrt_map_new({}, {});", desc(k), desc(v)));
+                for pair in args.chunks(2) {
+                    let line = format!("nyrt_map_set(&{d}, {}, {});", self.addr(&pair[0], k), self.addr(&pair[1], v));
                     self.line(&line);
                 }
                 return;
@@ -616,9 +1027,24 @@ impl Gen<'_> {
             }
             RtOp::ArrGet => {
                 let elem = self.ty(&args[0]).elem().expect("verified: an array");
-                format!("*({}*)nyrt_arr_at({}, {}, {at})", ctype(elem), a[0], a[1])
+                let root = if let Expr::Local(l) = args[0] { Some(l) } else { None };
+                self.elem(&a[0], root, elem, &args[1], span)
             }
+            RtOp::MapGet | RtOp::MapGetOr => {
+                let (k, v) = self.ty(&args[0]).map_kv().expect("verified: a map");
+                if op == RtOp::MapGet {
+                    format!("*({}*)nyrt_map_at({}, {}, {at})", ctype(v), a[0], self.addr(&args[1], k))
+                } else {
+                    format!("*({}*)nyrt_map_or({}, {}, {})", ctype(v), a[0], self.addr(&args[1], k), self.addr(&args[2], v))
+                }
+            }
+            RtOp::MapKeys => format!("nyrt_map_list({}, false)", a[0]),
+            RtOp::MapValues => format!("nyrt_map_list({}, true)", a[0]),
             RtOp::DivInt => format!("nyrt_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("nyrt_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("nyrt_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("nyrt_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("nyrt_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("nyrt_mod({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyrt_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("nyrt_str_concat({}, {})", a[0], a[1]),
@@ -636,12 +1062,38 @@ impl Gen<'_> {
             RtOp::StrCodes => format!("nyrt_str_codes({})", a[0]),
             RtOp::StrSplit => format!("nyrt_str_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("nyrt_check_step({}, {at})", a[0]),
+            RtOp::CheckNonEmpty => format!("nyrt_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("nyrt_str_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("nyrt_str_pad({}, {}, {}, false)", a[0], a[1], a[2]),
             RtOp::ArrSlice => format!("nyrt_arr_slice({}, {}, {}, {at})", a[0], a[1], a[2]),
             RtOp::ArrRepeat => format!("nyrt_arr_repeat({}, {}, {at})", a[0], a[1]),
             RtOp::ArrConcat => format!("nyrt_arr_concat({}, {})", a[0], a[1]),
             RtOp::ArrJoin => format!("nyrt_arr_join({}, {})", a[0], a[1]),
+            RtOp::Std(f) => {
+                let mut parts = a.clone();
+                parts.push(at.to_string());
+                format!("nyrt_std_{}({})", f.rt_name(), parts.join(", "))
+            }
+            RtOp::JsonStr => {
+                let d = self.local(dst.expect("verified: a destination")).to_string();
+                let t = self.ty(&args[0]);
+                let line = format!("{}(&nyrt_b, {});", jfn(self.json, t, true), self.addr(&args[0], t));
+                self.line("{");
+                self.indent += 1;
+                self.line("nyrt_buf nyrt_b = nyrt_buf_new();");
+                self.line(&line);
+                self.line(&format!("{d} = nyrt_buf_done(&nyrt_b);"));
+                self.indent -= 1;
+                self.line("}");
+                return;
+            }
+            RtOp::JsonParse => {
+                let d = dst.expect("verified: a destination");
+                let t = self.f.local(d).ty;
+                let line = format!("nyrt_jparse({}, {}, &{}, {at});", a[0], jfn(self.json, t, false), self.local(d));
+                self.line(&line);
+                return;
+            }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
         let line = self.assign(dst, call);
@@ -768,6 +1220,7 @@ impl Gen<'_> {
                         let t = x.ty(self.f);
                         let eq = match t {
                             Ty::Struct(_) => format!("{}_eq({}, {})", ctype(t), self.addr(x, t), self.addr(y, t)),
+                            Ty::Map(_) => format!("nyrt_map_eq({}, {})", bare(&a), bare(&b)),
                             _ => format!("nyrt_arr_eq({}, {})", bare(&a), bare(&b)),
                         };
                         if *op == BinOp::DeepEq {
@@ -801,7 +1254,15 @@ impl Gen<'_> {
                     PureFn::CharIsUpper => format!("nyrt_char_is_upper({})", a[0]),
                     PureFn::CharIsLower => format!("nyrt_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("nyrt_is_space({})", a[0]),
-                    PureFn::ArrLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::ArrLen => match &args[0] {
+                        Expr::Local(l) if self.cached_len(*l).is_some() => self.cached_len(*l).unwrap_or_default().to_string(),
+                        x => format!("{}->len", self.expr(x)),
+                    },
+                    PureFn::MapLen => format!("{}->len", self.expr(&args[0])),
+                    PureFn::MapHas => {
+                        let k = self.ty(&args[0]).map_kv().expect("verified: a map").0;
+                        format!("nyrt_map_has({}, {})", a[0], self.addr(&args[1], k))
+                    }
                     PureFn::ArrContains | PureFn::ArrIndexOf => {
                         let elem = self.ty(&args[0]).elem().expect("verified: an array");
                         let f = if *p == PureFn::ArrContains { "contains" } else { "index_of" };
@@ -831,4 +1292,87 @@ fn string_lit(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// How a loop uses an array local (see `Gen::hoist`).
+#[derive(Default)]
+struct ArrUse {
+    mentioned: bool,
+    /// It writes elements (or changes the array in place).
+    writes: bool,
+    /// It changes the length (`push`, `pop`, `insert`, `remove`, `+=`).
+    resizes: bool,
+}
+
+/// True if every mention of `x` in `e` is its length or a search in it.
+fn expr_ok(e: &Expr, x: LocalId, u: &mut ArrUse) -> bool {
+    match e {
+        Expr::Local(l) => *l != x,
+        Expr::Pure(PureFn::ArrLen | PureFn::ArrContains | PureFn::ArrIndexOf, args) if matches!(args[0], Expr::Local(l) if l == x) => {
+            u.mentioned = true;
+            args[1..].iter().all(|a| expr_ok(a, x, u))
+        }
+        Expr::Unary(_, a) | Expr::IntToFloat(a) | Expr::Field(a, _, _) => expr_ok(a, x, u),
+        Expr::Binary(_, a, b) => expr_ok(a, x, u) && expr_ok(b, x, u),
+        Expr::Select(c, a, b) => expr_ok(c, x, u) && expr_ok(a, x, u) && expr_ok(b, x, u),
+        Expr::Pure(_, args) => args.iter().all(|a| expr_ok(a, x, u)),
+        Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => true,
+    }
+}
+
+fn place_ok(p: &Place, x: LocalId, u: &mut ArrUse) -> bool {
+    p.path.iter().all(|s| match s {
+        Step::Index(i, _) => expr_ok(i, x, u),
+        Step::Field(_) => true,
+    })
+}
+
+/// True if `s` uses the array local `x` only by reading elements, its length or searching it,
+/// and by writing elements or changing it in place: never a new value for `x`, another owner
+/// of its array, or a call that sees it. `u` collects how.
+fn stmt_ok(s: &Stmt, x: LocalId, u: &mut ArrUse) -> bool {
+    let all = |ss: &[Stmt], u: &mut ArrUse| ss.iter().all(|s| stmt_ok(s, x, u));
+    match &s.kind {
+        StmtKind::Set(d, e) => *d != x && expr_ok(e, x, u),
+        StmtKind::Call { dst, args, .. } => {
+            *dst != Some(x)
+                && args.iter().all(|a| match a {
+                    Arg::Val(e) => expr_ok(e, x, u),
+                    Arg::InOut(p) => p.root != x && place_ok(p, x, u),
+                })
+        }
+        StmtKind::Op { dst, op, args } => {
+            *dst != Some(x)
+                && args.iter().enumerate().all(|(k, a)| {
+                    if k == 0 && *op == RtOp::ArrGet && matches!(a, Expr::Local(l) if *l == x) {
+                        u.mentioned = true;
+                        true
+                    } else {
+                        expr_ok(a, x, u)
+                    }
+                })
+        }
+        StmtKind::Store { place, value } => {
+            if place.root == x {
+                u.mentioned = true;
+                u.writes = true;
+            }
+            place_ok(place, x, u) && expr_ok(value, x, u)
+        }
+        StmtKind::Mutate { dst, op, place, args } => {
+            if place.root == x {
+                u.mentioned = true;
+                u.writes = true;
+                let resize = matches!(op, RtOp::ArrPush | RtOp::ArrPop | RtOp::ArrInsert | RtOp::ArrRemove | RtOp::ArrAppend);
+                u.resizes |= place.path.is_empty() && resize;
+            }
+            *dst != Some(x) && place_ok(place, x, u) && args.iter().all(|a| expr_ok(a, x, u))
+        }
+        StmtKind::If { cond, then, els } => expr_ok(cond, x, u) && all(then, u) && all(els, u),
+        StmtKind::Loop { head, cond, body, step } => expr_ok(cond, x, u) && all(head, u) && all(body, u) && all(step, u),
+        StmtKind::ForEach { var, iter, body } => *var != x && expr_ok(iter, x, u) && all(body, u),
+        StmtKind::Return(Some(e)) => expr_ok(e, x, u),
+        StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => *l != x,
+        StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => true,
+    }
 }

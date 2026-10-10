@@ -1,0 +1,4 @@
+fn is_pal(s: str) = s.reversed() == s
+
+for w in ["level", "hello", "racecar", "robot", "a", "abba"]:
+    print("yes" if is_pal(w) else "no")

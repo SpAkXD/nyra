@@ -1,0 +1,4 @@
+// expect: E0205
+let pos = 0
+fn advance() { pos += 1 }
+advance()

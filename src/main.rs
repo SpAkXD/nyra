@@ -1,16 +1,19 @@
 mod ast;
 mod check;
-mod check_v03;
 mod codegen;
 mod diag;
+mod edit;
+mod examples;
 mod explain;
 mod fix;
 mod hints;
 mod ir;
 mod json;
 mod lexer;
+mod limits;
 mod mcp;
 mod parser;
+mod stdlib;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -20,11 +23,15 @@ const USAGE: &str = "\
 nyra - a language for AI agents
 
 usage:
-  nyra run   <file.nyra>    compile and run
+  nyra run   <file.nyra> [-- args]   compile and run (args after `--` go to the program)
   nyra build <file.nyra>    compile to a native executable
-  nyra check <file.nyra>    only check for errors
-  nyra explain [CODE]       explain an error code (without CODE: list all codes)
+  nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
+  nyra test  <file.nyra>    run the `ex` examples and report each one that fails
+  nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
+  nyra outline <file.nyra>  list the functions and structs with their lines
+  nyra show <file.nyra> <name>    print one function, struct or Struct.field
+  nyra edit <file.nyra>     change symbols by name (`nyra edit --help`)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -99,15 +106,29 @@ struct Opts {
     json: bool,
     time: bool,
     fix: bool,
+    /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
+    prog_args: Vec<String>,
 }
 
 fn parse_args() -> Result<Opts, String> {
     let mut args = std::env::args().skip(1);
     let mut positional = Vec::new();
-    let mut opts =
-        Opts { cmd: String::new(), file: String::new(), target: Target::Native, out: None, json: false, time: false, fix: false };
+    let mut opts = Opts {
+        cmd: String::new(),
+        file: String::new(),
+        target: Target::Native,
+        out: None,
+        json: false,
+        time: false,
+        fix: false,
+        prog_args: Vec::new(),
+    };
     while let Some(a) = args.next() {
         match a.as_str() {
+            "--" => {
+                opts.prog_args = args.by_ref().collect();
+                break;
+            }
             "-h" | "--help" | "help" => return Err(USAGE.to_string()),
             "-V" | "--version" | "version" => return Err(format!("nyra {}", env!("CARGO_PKG_VERSION"))),
             "--js" => opts.target = Target::Js,
@@ -132,7 +153,7 @@ fn parse_args() -> Result<Opts, String> {
         positional.insert(0, "run".into());
     }
     match positional.as_slice() {
-        [cmd, file] if ["run", "build", "check"].contains(&cmd.as_str()) => {
+        [cmd, file] if ["run", "build", "check", "test"].contains(&cmd.as_str()) => {
             opts.cmd = cmd.clone();
             opts.file = file.clone();
             Ok(opts)
@@ -141,7 +162,18 @@ fn parse_args() -> Result<Opts, String> {
     }
 }
 
+/// Lexes, parses, type-checks and runs the examples: a program that passes can be generated.
 fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    let mut prog = front(src)?;
+    let errs = examples::run(&mut prog).errors;
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    Ok(prog)
+}
+
+/// Lexes, parses and type-checks, without running the examples.
+fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
         fix::validate(&mut errs, src);
@@ -152,6 +184,10 @@ fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
         return Err(checked(errs));
     }
     let (mut prog, errs) = parser::parse(toks);
+    if !errs.is_empty() {
+        return Err(checked(errs));
+    }
+    let errs = stdlib::link(&mut prog);
     if !errs.is_empty() {
         return Err(checked(errs));
     }
@@ -171,13 +207,29 @@ fn fail(msg: impl std::fmt::Display) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// The stack of the threads that compile. The parser limits nesting (E0103), so the stages that
+/// recurse over a program (parser, checker, lowering, backends) stay far below this; the size is a
+/// second safety net. Only address space is reserved: memory is used as the stack grows.
+pub const STACK: usize = 256 << 20;
+
 fn main() -> ExitCode {
+    // everything runs on a thread with a big stack (see `STACK`)
+    match std::thread::Builder::new().name("nyra".into()).stack_size(STACK).spawn(real_main) {
+        Ok(t) => t.join().unwrap_or(ExitCode::from(101)),
+        Err(_) => real_main(),
+    }
+}
+
+fn real_main() -> ExitCode {
     // `nyra explain [CODE] [--json]` needs no source file
     if std::env::args().nth(1).as_deref() == Some("explain") {
         return explain::run(std::env::args().skip(2).collect());
     }
     if std::env::args().nth(1).as_deref() == Some("mcp") {
         return mcp::run(std::env::args().skip(2).collect());
+    }
+    if let Some(cmd @ ("outline" | "show" | "edit")) = std::env::args().nth(1).as_deref() {
+        return edit::run(cmd, std::env::args().skip(2).collect());
     }
     let opts = match parse_args() {
         Ok(o) => o,
@@ -191,6 +243,10 @@ fn main() -> ExitCode {
         Err(e) => return fail(format!("cannot read `{}`: {e}", opts.file)),
     };
 
+    if opts.cmd == "test" {
+        return test(&opts, &src);
+    }
+
     let start = Instant::now();
     let mut fixed = 0;
     let prog = match compile(&src) {
@@ -203,8 +259,13 @@ fn main() -> ExitCode {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {
                         return fail(format!("cannot write `{}`: {e}", opts.file));
                     }
-                    eprint!("nyra: fixed {} error(s) in {}:
-{}", r.fixed, opts.file, fix::diff(&src, &r.text));
+                    eprint!(
+                        "nyra: fixed {} error(s) in {}:
+{}",
+                        r.fixed,
+                        opts.file,
+                        fix::diff(&src, &r.text)
+                    );
                     fixed = r.fixed;
                     r.value
                 }
@@ -248,6 +309,35 @@ fn main() -> ExitCode {
         build(&opts, &code, &stem, nyra_time)
     } else {
         run(&opts, &code, &stem, nyra_time)
+    }
+}
+
+/// `nyra test`: runs every example and reports each one that fails; exit code 1 if any does.
+fn test(opts: &Opts, src: &str) -> ExitCode {
+    let start = Instant::now();
+    let mut prog = match front(src) {
+        Ok(p) => p,
+        Err(diags) => {
+            if opts.json {
+                println!("{}", diag::render_json(&diags, &opts.file));
+            } else {
+                eprint!("{}", diag::render_human(&diags, &opts.file, src));
+                eprintln!("nyra: {} error(s)", diags.len());
+            }
+            return ExitCode::from(1);
+        }
+    };
+    let out = examples::run(&mut prog);
+    if opts.json {
+        println!("{}", examples::json(&out, &opts.file));
+    } else {
+        eprint!("{}", diag::render_human(&out.errors, &opts.file, src));
+        eprintln!("nyra: {} ({})", examples::summary(&out, &opts.file), ms(start.elapsed()));
+    }
+    if out.errors.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
 
@@ -364,6 +454,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         // the program's runtime errors are then printed as JSON too
         cmd.env("NYRA_JSON", "1");
     }
+    cmd.args(&opts.prog_args);
     let t = Instant::now();
     let status = cmd.status();
     let run_time = t.elapsed();
@@ -456,7 +547,8 @@ fn cc_cached(
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
-const RUSTC_FLAGS: &[&str] = &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
+const RUSTC_FLAGS: &[&str] =
+    &["--edition", "2021", "-C", "opt-level=2", "-C", "overflow-checks=off", "-C", "debuginfo=0", "--cap-lints", "allow"];
 
 /// Compiles generated Rust with rustc (NYRA_RUSTC, else `rustc`), cached like C.
 fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), String> {
@@ -559,6 +651,9 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, St
     }
     let t = Instant::now();
     cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
+    // the math library (`math.sqrt`, `math.floor`) is separate outside Windows; it goes after the source
+    #[cfg(not(windows))]
+    cmd.arg("-lm");
     let failed = format!("`{cc}` failed to compile the generated C (this is a nyra bug)");
     if !capture {
         return match cmd.status() {
@@ -589,8 +684,5 @@ fn find_cc() -> Option<String> {
             return Some(cc.to_string());
         }
     }
-    ["gcc", "clang", "cc", "tcc"]
-        .into_iter()
-        .find(|cc| Command::new(cc).arg("--version").output().is_ok())
-        .map(String::from)
+    ["gcc", "clang", "cc", "tcc"].into_iter().find(|cc| Command::new(cc).arg("--version").output().is_ok()).map(String::from)
 }

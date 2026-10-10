@@ -1,7 +1,8 @@
 # Nyra benchmark
 
-How often does a model write a correct program in Nyra on the first try, and how many tokens does it spend,
-compared with Python, TypeScript and Rust on the same tasks? And how does that differ between models?
+How often does a model write a correct program in Nyra on the first try, how many tokens does it spend, and how
+fast does the program run, compared with Python, TypeScript and Rust on the same tasks? And how does that differ
+between models?
 
 Every task is given to each model once per language, with the same task prompt and the same repair budget.
 The program the model writes is compiled/run and its standard output is compared with the expected output.
@@ -13,9 +14,13 @@ DeepSeek, ...); the raw transcripts stay on your machine and only a summary is p
 | metric | meaning |
 |---|---|
 | **pass@1** | share of runs whose **first** program printed exactly the expected output |
+| **pass@1 with self-repair** (Nyra) | pass@1 when a first attempt that does not compile is passed once through `nyra check --fix`, which repairs the mistakes whose fix is unambiguous, without a model call and at zero tokens. Measured on the side (it changes no other number) and shown next to plain pass@1; the other languages have no such tool and show `-`. `--no-self-repair` turns it off |
 | **pass within N repairs** | the same, when a failed attempt is followed by feedback (the compiler's JSON errors, the interpreter's or compiler's messages, or the model's own wrong output) and up to N retries (default 3) |
 | **code tokens** | tokens of the extracted program alone, counted with the model's own tokenizer. It does not depend on thinking or on prose around the code, so it is the cleanest "how compact is the language" number. **This is the headline token metric** |
 | **billed output tokens** | what the API charged for the whole reply, per attempt, for the first attempt, and per run (all attempts). It **includes any thinking** the model did, and is what the headline shows next to the code tokens. When the API says how much of it was thinking, that is shown too |
+| **no program: token limit** | replies without a code block that stopped at the output-token limit (`--max-tokens`), usually because the model spent it all thinking: first attempts / all attempts, per language. A visible reasoning cost of an unfamiliar language |
+| **runtime** | how long the program that passed runs: the median of `--time-runs` extra runs (default 3) minus the language's start-up time, compile time excluded (see "Runtime" below). Summarized over the `speed` tasks |
+| **efficiency** | (median code tokens / Python's) x (median runtime on the speed tasks / Python's): one number per language, Python = 1.00, lower is better (see "Runtime" below) |
 | **input tokens** | the whole prompt per attempt. For Nyra it contains the language spec, which the other languages do not need |
 | **size** | characters and non-blank lines of the extracted program (first attempt) |
 | **cost** | what OpenRouter charged (`usage.cost`), per run and in total |
@@ -35,6 +40,7 @@ python bench/verify.py                 # check every reference solution: Nyra (t
 python bench/test_bench.py             # tests of the harness itself (no network, no API)
 python bench/run.py --provider mock    # run the whole pipeline with the reference solutions
 python bench/run.py --provider mock --models mock,mock-flaky,mock-wrong    # three "models": a comparison table
+python bench/speed.py                  # time the reference solutions of the speed tasks in every language (no model)
 ```
 
 You need Python 3.9 or newer (standard library only), a C compiler for the native Nyra backend, Node.js 22.6 or
@@ -148,6 +154,8 @@ git-ignored: it holds every prompt and reply.
 | `--node PATH` | the `node` that runs TypeScript (default: `node` from `PATH`) |
 | `--rustc COMMAND` | the Rust compiler command, e.g. `'rustc +stable-x86_64-pc-windows-gnu'` (default: found automatically) |
 | `--timeout 10`, `--jobs 4` | seconds per program; parallel evaluations (each waits for one API call at a time) |
+| `--time-runs 3` | extra runs of every passing program whose median is its runtime (0: no timing) |
+| `--no-self-repair` | do not try `nyra check --fix` on Nyra first attempts that do not compile |
 | `--out DIR` | where the result files go (default `bench/results`) |
 | `--max-tokens 16000` | per reply, thinking included (anthropic, openrouter) |
 | `--effort LEVEL`, `--extra-json '{...}'` | extra request settings; recorded in the result file (anthropic, openrouter) |
@@ -184,6 +192,73 @@ command and the version). On this project's Windows development machine that is 
 For every language: 10 s wall-clock limit per program, output capped at 1 MB (runaway loops are killed), no
 stdin, a private temp directory per evaluation, secrets (`*KEY*`, `*TOKEN*`, ...) removed from the environment.
 Scratch paths are removed from the messages the model sees (`main.py`, `main.ts`, `main.rs`, `main.nyra`).
+
+## Runtime
+
+Every program that passed is run `--time-runs` more times (default 3), one after the other, in the directory it was
+built in. Its **runtime** is the median wall clock of those runs minus the language's **start-up time**, which is the
+median run time of the language's hello-world program measured the same way before the run starts (Python and Node.js
+start an interpreter, the native programs start a process). What is timed:
+
+| language | timed command | compile time (reported separately as `compile_ms`, never in the runtime) |
+|---|---|---|
+| Nyra | the native executable that `nyra build` produced (C compiled with `-O2`); `--backend js`: `node main.js` | `nyra check` + `nyra build`, C compiler included |
+| Python | `python -I -X utf8 main.py` | none |
+| TypeScript | `node --experimental-transform-types main.ts` (type stripping happens while loading, so it is runtime) | none |
+| Rust | the executable from `rustc -O --edition 2021` | `rustc` |
+
+The run that judged the program is not one of the timed runs: it is the warm-up (on Windows the first start of a fresh
+executable can take a second while it is scanned). A timed run that fails or prints something else does not count, and
+that program gets no runtime (`timing.error` in the result file says why). Timed runs never overlap each other, but
+with `--jobs` above 1 other jobs may be compiling meanwhile, so these numbers are indicative; `bench/speed.py` (below)
+runs nothing else at the same time. Every attempt result stores `runtime_ms` and `timing` (`runs_ms`, `median_ms`,
+`startup_ms`); the run metadata stores `timing` (runs, start-up per language).
+
+Most tasks finish in well under a millisecond, where only start-up noise would be measured, so runtimes are
+summarized over the **`speed`** category: six tasks with a heavier computation (0.5 to 2 s in CPython) and a
+deterministic answer. Their prompts say that the running time is measured, the same sentence in every language.
+
+The **medians** table of a report (per model) takes the runs that every language got right on the first try: the
+median code tokens and billed output tokens over all of them, and the median runtime over the ones that are speed
+tasks. The **efficiency** is
+
+```
+efficiency(L) = (median code tokens of L / median code tokens of Python)
+              x (median runtime of L on speed tasks / median runtime of Python on speed tasks)
+```
+
+Python is 1.00 (without Python in `--langs`, the first language is) and lower is better: 0.5 means half the tokens at the
+same speed, or the same tokens at twice the speed. Both factors are shown next to it, so it is clear which one drives
+it. A median runtime below 1 ms counts as 1 ms, because start-up varies by more than that between runs. It is a ratio
+of medians, deliberately simple: it says nothing about tasks that are not in the set, and the token factor comes from
+all tasks while the runtime factor comes from the speed tasks.
+
+### Timing the reference solutions (no model, no key)
+
+```
+python bench/speed.py                              # the speed tasks, all four languages, 5 timed runs each
+python bench/speed.py --runs 10 --tasks big_sieve,sort_numbers
+python bench/speed.py --all                        # every task
+python bench/speed.py --langs nyra,python --backend js
+```
+
+It builds each reference solution once, checks it, times it with the same code as a benchmark run (`--runs` timed
+runs, median, start-up subtracted) and prints a task x language table with the medians and each language relative to
+Python, plus the start-up and compile times. Nothing runs in parallel. The result is also written to
+`bench/results/<date>-speed-references.md` and `.json` (`--out DIR`, or `--no-files`). The references use the same
+algorithm in every language, written plainly (no hand optimization), so this is the runtime half of the comparison
+for free; what a model writes may be faster or slower, which is what the benchmark's runtime numbers measure.
+
+## Self-repair (Nyra)
+
+Nyra's compiler can fix some mistakes itself: `nyra check --fix` applies the fixes whose error hints are unambiguous
+(for example `return` for `ret`) and writes the file back if it then compiles. When a Nyra first attempt fails with a
+compile error, the harness runs that once on the model's program, at no token cost; if the program changes and
+compiles, it is built, run and judged like any other (`self_repair` in the first attempt's record: `tried`, `fixed`,
+`changed`, `remaining` error codes, `result`, the repaired `code`). **pass@1 with self-repair** counts a run when its
+first attempt passed, or its self-repaired version did. It is reported next to plain pass@1 and labelled as such; the
+model's own repair loop is unaffected (it still sees the compiler's errors and repairs the original program), so every
+other number means what it meant before. The other languages have no comparable tool and show `-`.
 
 ## How a run works
 
@@ -227,13 +302,16 @@ Symmetric by construction:
 
 Known asymmetries (they are part of the question, but you should know them):
 
-- Nyra is given its spec (about 1,300 tokens of extra input on every call); the other languages are not, and have
+- Nyra is given its spec on every call: the system prompt `run.py` sends is about 20,800 characters for Nyra
+  (`docs/SPEC.md` is about 20 KB) against about 360 for Python, so roughly 20,500 characters, an estimated 5,500
+  tokens, of extra input per call (the exact counts are the provider's, in each run's results). The other
+  languages are not given a spec, and have
   years of pre-training behind them. That is the situation of any new language; the headline answers "how well does a
   model do with this spec", not "how good is Nyra in the abstract".
 - Python and TypeScript have large standard libraries and Nyra has almost none yet. Where a library call would
   trivialize a task (`gcd`, `pow(a, b, m)`, `sorted`), the prompt asks for the algorithm to be written out. Nothing
   checks that request (only the output is compared), so a program that uses the library call anyway passes and is
-  shorter. Some tasks are still shorter in Python for that reason; Nyra's own standard library (v0.6) will change this.
+  shorter. Some tasks are still shorter in Python for that reason; Nyra's standard library (v0.5) narrows this.
   In the hard tier the prompts forbid nothing, so the libraries help where they apply: Python's `fractions` for
   `fraction_total`, sorting with a key function for `league_table` and `word_frequency`, dictionaries everywhere
   (Nyra has no map type and models it as an array of structs).
@@ -257,8 +335,11 @@ Known asymmetries (they are part of the question, but you should know them):
 - A run has one sample per task by default and a model's output varies from run to run. `--samples 5` (or more)
   averages that noise out of each task's result, so use it before putting a number in a README. The 95% intervals
   deliberately use the number of **tasks** as their sample size, because repeating a task does not add a new task.
-  With 77 tasks the interval is roughly 5 to 11 points either way. Quote the count (`70/77`), not only the
+  With 83 tasks the interval is roughly 5 to 11 points either way. Quote the count (`70/83`), not only the
   percentage. The paired sign test compares the languages task by task for the same reason.
+- The `speed` tasks (6) add runtime to the comparison; their first-try results count in the headline like any other
+  task. Runtime is wall clock on the machine that ran the benchmark, with other jobs running: compare languages within
+  one run, not numbers across machines.
 - The first 49 tasks are mostly classic exercises. Three cheap models (`--effort low`) solved 96 to 100% of them on
   the first try in every language, so at that ceiling a first-try rate cannot separate the languages and the token
   numbers carry the comparison. The `hard` category (28 tasks; the references have a median of 50 lines in Python and
@@ -285,8 +366,9 @@ python bench/publish.py bench/results/*-openrouter-*.json --name 2026-10-v0.4 --
 ```
 
 This writes `bench/published/<name>.md` and `<name>.json`: the headline per model x language (first-try success,
-success within the repairs, **code tokens with the billed output tokens in brackets**, cost), Nyra's token use relative
-to the other languages, a per-category breakdown for every model, and a few notable failures (runs that never
+Nyra's first-try success with self-repair, success within the repairs, replies that hit the token limit, **code tokens
+with the billed output tokens in brackets**, cost, the runtime on the speed tasks and the efficiency), Nyra's token use
+relative to the other languages, the medians and efficiency per model, a per-category breakdown for every model, and a few notable failures (runs that never
 passed, compiler bugs, the Nyra compiler errors models hit most, the tasks hardest for Nyra on the first try). No
 prompt, reply or program is copied; each source file is named with its SHA-256 so the summary can be tied to the
 raw files. `publish.py` refuses mock runs, incomplete runs, and result files that were not measured the same way
@@ -304,7 +386,7 @@ raw files. `publish.py` refuses mock runs, incomplete runs, and result files tha
 
 `min_version` is the first Nyra version in which a natural solution can be written (0.1: functions, ints, loops,
 one value per `print`; 0.2: string interpolation and compact syntax; 0.3: arrays, structs, strings with methods and
-`+`). There are 77 tasks: 22 for 0.1, 14 for 0.2, 41 for 0.3. Every task has a reference solution in all four
+`+`). There are 83 tasks: 22 for 0.1, 14 for 0.2, 47 for 0.3. Every task has a reference solution in all four
 languages; each Nyra reference uses only the features of its task's `min_version`.
 
 | category | tasks | what they exercise |
@@ -318,6 +400,7 @@ languages; each Nyra reference uses only the features of its task's `min_version
 | `arrays` | 4 | searching, sorting and marking in arrays |
 | `structs` | 1 | a record type with functions that take it |
 | `rules` | 6 | several stated rules and an exact output format, with edge cases spelled out in the prompt: `bank_ledger`, `receipt`, `calendar_month`, `word_wrap`, `prime_factorization`, `twisted_fizzbuzz`. The tier where first-try failures start |
+| `speed` | 6 | heavier computations whose running time is measured (0.5 to 2 s in CPython, milliseconds natively), with a deterministic answer: `big_sieve` (sieve to two million), `int_nbody` (integer n-body steps), `lcs_table` (dynamic programming table), `sort_numbers` (sorting 500,000 generated numbers; a built-in sort is allowed), `look_and_say` (building long strings), `matrix_mult` (120 x 120 integer matrix product). Results need 64 bits, and the prompts say so |
 | `hard` | 28 | the hard tier (`"difficulty": "hard"`): programs of about 25 to 230 lines (median 50 in Python, 85 in Rust and Nyra) with many interacting rules, tie-breaks and exact formatting, all stated in the prompt. Simulations: `inventory_ledger`, `text_adventure`, `round_robin`, `vending_machine`, `snake_game`, `bank_tellers`, `library_loans`, `seat_booking`, `aging_life`, `four_in_row`, `meeting_slots`, `savings_interest` (tiered interest, round half to even). Parsers and interpreters: `expr_eval` (precedence, right-associative `^`), `stack_vm`, `spreadsheet_eval` (cycles and error propagation), `config_parser`, `polynomial_ops`, `indent_check`, `rle_codec`. Algorithms with a defined tie-break: `line_diff` (LCS edit script), `maze_keys` (BFS over keys, alphabetically first shortest path), `league_table` (head-to-head), `orbit_calendar` (date arithmetic in an invented calendar, so no date library helps), `fraction_total`, `matrix_report`, `sparse_ledger`, `table_format`, `word_frequency` |
 
 ### Adding a task
@@ -334,7 +417,8 @@ languages; each Nyra reference uses only the features of its task's `min_version
 6. `python bench/test_bench.py`.
 
 Rules for a good task: all data is in the prompt and the prompt says exactly what to print and in what format; no
-input; deterministic; runs well under a second in CPython; no language names in the prompt; no floats (Nyra prints
+input; deterministic; runs well under a second in CPython (a `speed` task: 0.5 to 2 s, and it ends with the same
+sentence about the running time as the others); no language names in the prompt; no floats (Nyra prints
 `3.0` as `3`); integers stay below 2^53 (the JS backend and TypeScript); no `%` or `/` on negative numbers (Python
 floors, C, JS and Rust truncate); recursion depth below about 900 (Python's limit); booleans are printed as explicit
 lowercase words. **Do not edit a task after seeing results**; add a new one (and the task-set hash will show that the
@@ -369,6 +453,7 @@ bench/
   report.py         metrics, intervals, paired comparison, Markdown tables, model x language comparison
   publish.py        raw results -> the summary that is committed (bench/published/)
   verify.py         checks the reference solutions; --write generates expected outputs
+  speed.py          times the reference solutions of every language (the runtime half, no model)
   test_bench.py     tests of the harness itself (no network, no API)
   tasks/            one JSON file per task
   solutions/python/ solutions/typescript/ solutions/rust/   a reference solution for every task
@@ -406,6 +491,8 @@ identical. `RustLang` and `TypeScriptLang` are the examples.
 - A task whose `min_version` is above the compiler's version number does not run, for any language, unless
   `--max-version` raises the limit (without Nyra in `--langs` every task runs).
 - Single-turn tasks, small programs; nothing here measures reading or fixing existing code.
-- Native Nyra runs need a C compiler (gcc/clang) and `--backend js` needs Node; tasks run in parallel, so timing
-  numbers are indicative only.
+- Native Nyra runs need a C compiler (gcc/clang) and `--backend js` needs Node; tasks run in parallel, so the runtimes
+  of a benchmark run are indicative only (`bench/speed.py` times the references alone).
+- The start-up time that is subtracted is measured once per run; when the machine is busy it varies, which matters only
+  for programs that run for a few milliseconds.
 - TypeScript is not type-checked; there is no `tsc` step.

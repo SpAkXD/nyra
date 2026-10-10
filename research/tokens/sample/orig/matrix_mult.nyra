@@ -1,0 +1,34 @@
+fn main() {
+    let n = 120
+    var a = [[0].repeat(n)].repeat(n)
+    var b = [[0].repeat(n)].repeat(n)
+    for i in 0..n {
+        for j in 0..n {
+            a[i][j] = (31 * i + 17 * j + 7) % 100
+            b[i][j] = (13 * i + 29 * j + 3) % 100
+        }
+    }
+    var c = [[0].repeat(n)].repeat(n)
+    for i in 0..n {
+        var row = [0].repeat(n)
+        let ai = a[i]
+        for k in 0..n {
+            let x = ai[k]
+            let bk = b[k]
+            for j in 0..n {
+                row[j] += x * bk[j]
+            }
+        }
+        c[i] = row
+    }
+    var tr = 0
+    var total = 0
+    for i in 0..n {
+        tr += c[i][i]
+        total += c[i].sum()
+    }
+    print(tr)
+    print(total)
+    print(c[0][119])
+    print(c[119][0])
+}

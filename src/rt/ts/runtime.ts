@@ -31,6 +31,40 @@ function ny_rescue(e: unknown): Error {
     throw e;
 }
 
+// `print(x, end: "")`: text without a newline (a browser has no stdout: the console gets a line).
+function ny_write(s: string): void {
+    if (ny_process !== undefined) ny_process.stdout.write(s);
+    else console.log(s);
+}
+
+// ---- ints: every int is a safe integer (|n| <= 2^53 - 1), where JavaScript numbers are exact.
+// A result beyond 64 bits is E0255, as on every backend; one that only leaves the safe range is
+// E0256: the other backends hold it, a JavaScript number would round it.
+function ny_int_range(what: string, r: number, line: number, col: number): never {
+    if (r >= 9223372036854775808 || r < -9223372036854775808) {
+        return ny_panic("E0255", "int overflow: " + what + " does not fit in 64 bits", "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col);
+    }
+    return ny_unsafe_int(what, line, col);
+}
+function ny_unsafe_int(what: string, line: number, col: number): never {
+    return ny_panic("E0256", what + " is outside the range of ints JavaScript represents exactly (-9007199254740991 to 9007199254740991)", "JavaScript numbers hold ints exactly only up to 2^53 - 1: run this program on the native (C), Rust, Go or Python target, where an int has 64 bits, or keep the values smaller", line, col);
+}
+function ny_add(a: number, b: number, line: number, col: number): number {
+    const r = a + b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " + " + b, r, line, col);
+}
+function ny_sub(a: number, b: number, line: number, col: number): number {
+    const r = a - b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " - " + b, r, line, col);
+}
+function ny_mul(a: number, b: number, line: number, col: number): number {
+    const r = a * b + 0;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " * " + b, r, line, col);
+}
+// (the negation of a safe integer is one too)
+function ny_neg(a: number, line: number, col: number): number {
+    return 0 - a;
+}
 // ---- ints: `+ 0` turns -0 into 0 (an int never prints -0) ----
 function ny_div(a: number, b: number, line: number, col: number): number {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
@@ -44,13 +78,18 @@ function ny_mod(a: number, b: number, line: number, col: number): number {
 function ny_check_step(k: number, line: number, col: number): void {
     if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+function ny_check_non_empty(n: number, max: number, line: number, col: number): void {
+    if (n === 0) ny_panic("E0247", max ? "max() of an empty array" : "min() of an empty array", "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 function ny_f2i(x: number, line: number, col: number): number {
     if (Number.isNaN(x) || x >= 9223372036854775807 || x < -9223372036854775808) {
         ny_panic("E0245", "cannot convert " + String(x) + " to int",
             "int(x) needs a float that is not NaN and fits in an int", line, col);
     }
-    return Math.trunc(x) + 0;
+    const n = Math.trunc(x) + 0;
+    return Number.isSafeInteger(n) ? n : ny_unsafe_int("int(" + String(x) + ")", line, col);
 }
 
 // ---- strings: Nyra counts characters (code points), JavaScript counts UTF-16 units ----
@@ -146,7 +185,10 @@ function ny_shown(s: string): string {
 function ny_str_to_int(s: string, line: number, col: number): number {
     if (/^-?[0-9]+$/.test(s)) {
         const v = BigInt(s);
-        if (v >= -9223372036854775808n && v <= 9223372036854775807n) return Number(v);
+        if (v >= -9223372036854775808n && v <= 9223372036854775807n) {
+            const n = Number(v) + 0;
+            return Number.isSafeInteger(n) ? n : ny_unsafe_int(`int("${s}")`, line, col);
+        }
     }
     return ny_panic("E0244", `cannot parse "${ny_shown(s)}" as int`, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
 }
@@ -191,7 +233,13 @@ function ny_share_all<T>(a: T[]): T[] {
 }
 // A copy of one level: the copy is not shared, the values it now shares are.
 function ny_copy<T>(v: T): T {
-    return Array.isArray(v) ? (ny_share_all(v.slice()) as T) : (v as any).ny_cp();
+    if (Array.isArray(v)) return ny_share_all(v.slice()) as T;
+    if (v instanceof Map) {
+        const m = new Map();
+        for (const [k, x] of v) m.set(k, ny_share(x));
+        return m as T;
+    }
+    return (v as any).ny_cp();
 }
 // `v` itself when it has one owner, else a copy: what a write needs.
 function ny_unique<T>(v: T): T {
@@ -262,8 +310,26 @@ function ny_eq(a: any, b: any): boolean {
         for (let i = 0; i < a.length; i++) if (!ny_eq(a[i], b[i])) return false;
         return true;
     }
+    if (a instanceof Map) {
+        if (a.size !== b.size) return false;
+        for (const [k, v] of a) if (!b.has(k) || !ny_eq(v, b.get(k))) return false;
+        return true;
+    }
     return a.ny_eq(b);
 }
+// ---- maps: JavaScript Maps (insertion order), copied on write like arrays ----
+// `[k: v, ...]`: the keys and values alternate.
+function ny_mnew<K, V>(kv: any[]): Map<K, V> {
+    const m = new Map<K, V>();
+    for (let i = 0; i < kv.length; i += 2) m.set(kv[i], kv[i + 1]);
+    return m;
+}
+// `m[k]`: E0248 when the key is missing (`kt` is the key's type, for the message).
+function ny_mget<K, V>(m: Map<K, V>, k: K, kt: string, line: number, col: number): V {
+    if (!m.has(k)) ny_panic("E0248", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
+    return m.get(k) as V;
+}
+function ny_mgetor<K, V>(m: Map<K, V>, k: K, d: V): V { return m.has(k) ? (m.get(k) as V) : d; }
 function ny_index_of<T>(a: T[], v: T): number {
     for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
     return -1;
@@ -283,6 +349,13 @@ function ny_sort<T>(a: T[], lt: (x: T, y: T) => boolean): void {
         for (let k = lo; k < hi; k++) a[k] = tmp[k];
     };
     sort(0, a.length);
+}
+// `xs.sort_by(x => key)`: the same merge sort on the positions, ordered by the keys
+function ny_sort_by<T, K>(a: T[], ks: K[], lt: (x: K, y: K) => boolean): void {
+    const idx = Array.from(ks, (_, i) => i);
+    ny_sort(idx, (i: number, j: number) => lt(ks[i], ks[j]));
+    const old = a.slice();
+    for (let i = 0; i < idx.length; i++) a[i] = old[idx[i]];
 }
 function ny_lt_num(x: number, y: number): boolean { return x < y; }
 // NaN sorts after every number (and NaNs keep their order)
@@ -311,6 +384,17 @@ function ny_fmt(v: any, t: string): string {
             return s + "]";
         }
         case "S": return v.ny_fmt();
+        case "{": {
+            // a map: "{" + the key type (one letter) + the value type
+            if (v.size === 0) return "[:]";
+            const kt = t[1], vt = t.slice(2);
+            let s = "[";
+            for (const [k, x] of v) {
+                if (s.length > 1) s += ", ";
+                s += ny_fmt(k, kt) + ": " + ny_fmt(x, vt);
+            }
+            return s + "]";
+        }
         default: return String(v);
     }
 }

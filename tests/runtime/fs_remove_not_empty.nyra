@@ -1,0 +1,9 @@
+// expect: E0340 at 8:8
+use fs
+
+fn main() {
+    fs.mkdir("full")
+    fs.write("full/x.txt", "x")
+    print("made")
+    fs.remove("full")
+}

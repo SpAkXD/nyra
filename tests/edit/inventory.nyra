@@ -1,0 +1,209 @@
+// A small warehouse: items, orders, restocking and a report.
+// tests/edit.rs edits this file by symbol and measures what that saves.
+
+struct Item {
+    sku: str
+    name: str
+    price: int
+    stock: int
+    tags: [str]
+}
+
+struct Line {
+    sku: str
+    qty: int
+}
+
+struct Order {
+    id: int
+    customer: str
+    lines: [Line]
+}
+
+struct Result {
+    ok: bool
+    total: int
+    missing: [str]
+}
+
+fn item(sku: str, name: str, price: int, stock: int) -> Item = Item(sku: sku, name: name, price: price, stock: stock, tags: [])
+
+fn catalog() -> [Item] {
+    var items: [Item] = []
+    items.push(item("A1", "bolt", 12, 400))
+    items.push(item("A2", "nut", 5, 900))
+    items.push(item("B1", "hinge", 240, 35))
+    items.push(item("B2", "bracket", 180, 12))
+    items.push(item("C1", "panel", 1250, 8))
+    items.push(item("C2", "frame", 3100, 3))
+    items.push(item("D1", "glue", 450, 60))
+    items.push(item("D2", "tape", 320, 0))
+    ret items
+}
+
+// The index of the item with this SKU, or -1.
+fn find(items: [Item], sku: str) -> int {
+    for i in 0..items.len() {
+        if items[i].sku == sku {
+            ret i
+        }
+    }
+    ret 0 - 1
+}
+
+fn line_price(items: [Item], l: Line) -> int {
+    let i = find(items, l.sku)
+    if i < 0 {
+        ret 0
+    }
+    ret items[i].price * l.qty
+}
+
+fn order_total(items: [Item], o: Order) -> int {
+    var total = 0
+    for l in o.lines {
+        total += line_price(items, l)
+    }
+    ret total
+}
+
+// Volume discount in cents: 5% above 10000, 10% above 50000.
+fn discount(total: int) -> int {
+    if total > 50000 {
+        ret total / 10
+    }
+    if total > 10000 {
+        ret total / 20
+    }
+    ret 0
+}
+
+fn can_ship(items: [Item], o: Order) -> Result {
+    var missing: [str] = []
+    for l in o.lines {
+        let i = find(items, l.sku)
+        if i < 0 {
+            missing.push(l.sku)
+        } else if items[i].stock < l.qty {
+            missing.push(items[i].name)
+        }
+    }
+    let total = order_total(items, o)
+    ret Result(ok: missing.len() == 0, total: total - discount(total), missing: missing)
+}
+
+fn ship(inout items: [Item], o: Order) {
+    for l in o.lines {
+        let i = find(items, l.sku)
+        if i >= 0 {
+            items[i].stock -= l.qty
+        }
+    }
+}
+
+fn restock(inout items: [Item], sku: str, qty: int) {
+    let i = find(items, sku)
+    if i >= 0 {
+        items[i].stock += qty
+    }
+}
+
+fn low_stock(items: [Item], limit: int) -> [str] {
+    var out: [str] = []
+    for it in items {
+        if it.stock <= limit {
+            out.push(it.sku)
+        }
+    }
+    ret out
+}
+
+fn stock_value(items: [Item]) -> int {
+    var total = 0
+    for it in items {
+        total += it.price * it.stock
+    }
+    ret total
+}
+
+fn money(cents: int) -> str {
+    let whole = cents / 100
+    let rest = cents % 100
+    let pad = if rest < 10 { "0" } else { "" }
+    ret "{whole}.{pad}{rest}"
+}
+
+fn tag(inout items: [Item], sku: str, t: str) {
+    let i = find(items, sku)
+    if i >= 0 && !items[i].tags.contains(t) {
+        items[i].tags.push(t)
+    }
+}
+
+fn tagged(items: [Item], t: str) -> [str] {
+    var out: [str] = []
+    for it in items {
+        if it.tags.contains(t) {
+            out.push(it.name)
+        }
+    }
+    ret out
+}
+
+fn orders() -> [Order] {
+    var out: [Order] = []
+    out.push(Order(id: 1, customer: "ann", lines: [Line(sku: "A1", qty: 100), Line(sku: "A2", qty: 100)]))
+    out.push(Order(id: 2, customer: "bo", lines: [Line(sku: "C2", qty: 2), Line(sku: "B1", qty: 10)]))
+    out.push(Order(id: 3, customer: "cy", lines: [Line(sku: "D2", qty: 5)]))
+    out.push(Order(id: 4, customer: "dee", lines: [Line(sku: "Z9", qty: 1), Line(sku: "D1", qty: 3)]))
+    out.push(Order(id: 5, customer: "eli", lines: [Line(sku: "C1", qty: 8), Line(sku: "C2", qty: 1)]))
+    ret out
+}
+
+fn report_line(o: Order, r: Result) -> str {
+    if r.ok {
+        ret "order {o.id} for {o.customer}: shipped, {money(r.total)}"
+    }
+    ret "order {o.id} for {o.customer}: waiting for {r.missing.join(", ")}"
+}
+
+fn process(inout items: [Item], all: [Order]) -> int {
+    var shipped = 0
+    for o in all {
+        let r = can_ship(items, o)
+        print(report_line(o, r))
+        if r.ok {
+            ship(inout items, o)
+            shipped += 1
+        }
+    }
+    ret shipped
+}
+
+fn summary(items: [Item]) {
+    print("stock value: {money(stock_value(items))}")
+    let low = low_stock(items, 10)
+    if low.len() > 0 {
+        print("low stock: {low.join(" ")}")
+    }
+    for it in items {
+        if it.stock == 0 {
+            print("out of stock: {it.name}")
+        }
+    }
+}
+
+fn main() {
+    var items = catalog()
+    tag(inout items, "A1", "small")
+    tag(inout items, "A2", "small")
+    tag(inout items, "C2", "bulky")
+    print("small parts: {tagged(items, "small").join(", ")}")
+    let first = process(inout items, orders())
+    print("shipped {first} of {orders().len()}")
+    restock(inout items, "D2", 50)
+    restock(inout items, "C2", 4)
+    let second = process(inout items, orders())
+    print("shipped {second} on the second run")
+    summary(items)
+}

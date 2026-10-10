@@ -4,7 +4,8 @@
 //! Transport: stdio, one JSON-RPC 2.0 message per line. Requests are answered in order. Nothing
 //! but protocol messages is ever written to stdout (the C compiler's output is captured).
 //!
-//!     tools       nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build
+//!     tools       nyra_spec, nyra_check, nyra_test, nyra_run, nyra_explain, nyra_build,
+//!                 nyra_outline, nyra_show, nyra_edit (symbol-addressed editing, see edit.rs)
 //!     resources   nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}
 //!
 //! Programs are compiled in-process with the same pipeline as the CLI. Generated files and cached
@@ -17,7 +18,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::json::{obj, Json};
-use crate::{diag, explain, Target};
+use crate::{diag, examples, explain, Target};
 
 /// The name programs get in diagnostics and runtime errors.
 const FILE: &str = "main.nyra";
@@ -34,14 +35,15 @@ const MAX_TIMEOUT_MS: u64 = 60_000;
 
 const INSTRUCTIONS: &str = "Nyra is a small, strictly typed language that is not in your training data. \
 Before writing Nyra, call nyra_spec once (part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
-Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code.";
+Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code. After each non-trivial function write 1-2 examples (`ex f(3) == 9`): nyra_check runs them and reports a false one as E0250 with the actual value. To change an existing program, do not resend it: nyra_outline it, nyra_show the symbols you need, and nyra_edit them by name.";
 
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
 {"name":"nyra_spec","title":"Nyra language spec","description":"The complete Nyra language spec (Markdown). Nyra is not in your training data: read it once before writing Nyra. part \"guide\" returns the AI guide instead: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"part":{"type":"string","enum":["spec","guide"],"description":"default spec"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
-{"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code with its title.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
+{"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
 
@@ -53,7 +55,7 @@ agents can check, run and learn Nyra. Add it to Claude Code with:
 
   claude mcp add nyra -- nyra mcp
 
-Tools: nyra_spec, nyra_check, nyra_run, nyra_explain, nyra_build.
+Tools: nyra_spec, nyra_check, nyra_test, nyra_run, nyra_explain, nyra_build, nyra_outline, nyra_show, nyra_edit.
 Resources: nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
 ";
 
@@ -241,14 +243,18 @@ impl Server {
                     Some(a @ Json::Obj(_)) => a,
                     Some(_) => return Err(rpc_err(INVALID_PARAMS, "Invalid params: arguments must be an object")),
                 };
-                let out = match name {
+                if !TOOL_NAMES.contains(&name) {
+                    return Err(rpc_err(INVALID_PARAMS, format!("Unknown tool: {name}")));
+                }
+                let out = self.isolated(|server| match name {
                     "nyra_spec" => spec(args),
                     "nyra_check" => check(args),
-                    "nyra_run" => self.run_tool(args),
+                    "nyra_test" => test(args),
+                    "nyra_run" => server.run_tool(args),
                     "nyra_explain" => explain_tool(args),
                     "nyra_build" => build(args),
-                    _ => return Err(rpc_err(INVALID_PARAMS, format!("Unknown tool: {name}"))),
-                };
+                    _ => crate::edit::tool(name, args),
+                });
                 let (text, is_error) = match out {
                     Ok(text) => (text, false),
                     Err(text) => (text, true),
@@ -286,6 +292,26 @@ impl Server {
         }
     }
 
+    /// Runs one tool call on a worker thread with a big stack (see `crate::STACK`). A panic (a bug
+    /// in nyra, or input that finds one) becomes the call's error: one bad request never stops the
+    /// server.
+    fn isolated(&mut self, call: impl FnOnce(&mut Server) -> Result<String, String> + Send) -> Result<String, String> {
+        std::thread::scope(|s| {
+            let worker = std::thread::Builder::new().name("nyra-tool".into()).stack_size(crate::STACK).spawn_scoped(s, || call(self));
+            match worker {
+                Ok(h) => h.join().unwrap_or_else(|panic| {
+                    let what = panic
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| panic.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    Err(tool_error(format!("internal error in nyra ({what}); the server is still running: please report this input")))
+                }),
+                Err(e) => Err(tool_error(format!("cannot start a worker thread: {e}"))),
+            }
+        })
+    }
+
     // ---- nyra_run ---------------------------------------------------------------------------------
 
     fn run_tool(&mut self, args: &Json) -> Result<String, String> {
@@ -321,13 +347,12 @@ impl Server {
             let compiler = self.cc.get_or_insert_with(crate::find_cc).clone().ok_or_else(|| {
                 tool_error("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use backend \"js\"")
             })?;
-            let (exe, t) =
-                crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
+            let (exe, t) = crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
             cc_ms = Some(t);
             Command::new(exe)
         };
         cmd.current_dir(&self.dir).env("NYRA_JSON", "1");
-        let ran = execute(cmd, stdin, Duration::from_millis(timeout)).map_err(|e| {
+        let ran = execute(cmd, stdin, Duration::from_millis(timeout), target == Target::Js).map_err(|e| {
             let hint = if target == Target::Js { " (is Node.js installed? or use backend \"native\")" } else { "" };
             tool_error(format!("failed to start the program: {e}{hint}"))
         })?;
@@ -346,6 +371,21 @@ impl Server {
             }
         }
 
+        // Node.js ends a program that hits the memory limit with a dump of its heap: report the
+        // out-of-memory error that the native runtime reports
+        if errors.is_empty() && ran.exit != Some(0) && rest.to_ascii_lowercase().contains("out of memory") {
+            let msg = format!("out of memory: the program needs more than the {} MiB nyra_run gives it", crate::limits::MEMORY >> 20);
+            errors.push(obj([
+                ("code", "E0249".into()),
+                ("message", msg.into()),
+                ("file", FILE.into()),
+                ("line", Json::from(0)),
+                ("col", Json::from(0)),
+                ("hint", "the program needs more memory than the system gave it".into()),
+                ("runtime", true.into()),
+            ]));
+            rest.clear();
+        }
         let mut fields = vec![
             ("ok", Json::from(ran.exit == Some(0))),
             ("exit", ran.exit.map(|c| Json::from(c as i64)).unwrap_or(Json::Null)),
@@ -378,8 +418,16 @@ impl Server {
     }
 }
 
+/// The names of the tools (as in `TOOLS`).
+const TOOL_NAMES: &[&str] =
+    &["nyra_spec", "nyra_check", "nyra_test", "nyra_run", "nyra_explain", "nyra_build", "nyra_outline", "nyra_show", "nyra_edit"];
+
 fn tools() -> Json {
-    Json::parse(TOOLS).expect("TOOLS is valid JSON")
+    let mut tools = Json::parse(TOOLS).expect("TOOLS is valid JSON");
+    if let (Json::Arr(all), Ok(Json::Arr(more))) = (&mut tools, Json::parse(crate::edit::TOOLS)) {
+        all.extend(more);
+    }
+    tools
 }
 
 fn resources() -> Json {
@@ -397,9 +445,30 @@ fn resources() -> Json {
         Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
     };
     vec![
-        res("nyra://spec", "spec", "Nyra language spec", "The complete language: types, operators, builtins, methods, structs, memory, runtime errors", "text/markdown", Some(SPEC.len())),
-        res("nyra://guide", "guide", "Nyra guide for AI agents", "Workflow, do/don't rules, what does not exist yet, error codes with fixes, recipes, complete programs", "text/markdown", Some(GUIDE.len())),
-        res("nyra://errors", "errors", "Nyra error index", "Every error code with its title, kind and version (JSON); nyra://errors/E0201 reads one entry", "application/json", None),
+        res(
+            "nyra://spec",
+            "spec",
+            "Nyra language spec",
+            "The complete language: types, operators, builtins, methods, structs, memory, runtime errors",
+            "text/markdown",
+            Some(SPEC.len()),
+        ),
+        res(
+            "nyra://guide",
+            "guide",
+            "Nyra guide for AI agents",
+            "Workflow, do/don't rules, what does not exist yet, error codes with fixes, recipes, complete programs",
+            "text/markdown",
+            Some(GUIDE.len()),
+        ),
+        res(
+            "nyra://errors",
+            "errors",
+            "Nyra error index",
+            "Every error code with its title, kind and version (JSON); nyra://errors/E0201 reads one entry",
+            "application/json",
+            None,
+        ),
     ]
     .into()
 }
@@ -408,7 +477,7 @@ fn read_resource(uri: &str) -> Option<(&'static str, String)> {
     match uri {
         "nyra://spec" => Some(("text/markdown", SPEC.to_string())),
         "nyra://guide" => Some(("text/markdown", GUIDE.to_string())),
-        "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?))),
+        "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?, false))),
         _ => {
             let code = explain::normalize(uri.strip_prefix("nyra://errors/")?);
             let all = explain::database().ok()?;
@@ -454,6 +523,15 @@ fn check(args: &Json) -> Result<String, String> {
     })
 }
 
+/// The examples of a program: the JSON of `nyra test --json`.
+fn test(args: &Json) -> Result<String, String> {
+    let code = required_str(args, "code")?;
+    Ok(match crate::front(code) {
+        Ok(mut prog) => examples::json(&examples::run(&mut prog), FILE),
+        Err(diags) => diag::render_json(&diags, FILE),
+    })
+}
+
 /// Compiles to C or JS. The inner `Err` is the diagnostics JSON (a normal tool result);
 /// the outer one is a failure of the compiler itself.
 fn generate(code: &str, target: Target) -> Result<Result<String, String>, String> {
@@ -480,7 +558,8 @@ fn build(args: &Json) -> Result<String, String> {
 fn explain_tool(args: &Json) -> Result<String, String> {
     let all = explain::database().map_err(tool_error)?;
     let Some(arg) = optional_str(args, "code")? else {
-        return Ok(explain::list_json(&all));
+        let planned = matches!(args.get("planned"), Some(Json::Bool(true)));
+        return Ok(explain::list_json(&all, planned));
     };
     let code = explain::normalize(arg);
     match all.iter().find(|e| e.code == code) {
@@ -506,10 +585,15 @@ struct Ran {
 }
 
 /// Runs `cmd` with `stdin` as its input, captures its output (capped) and kills it after `timeout`.
-fn execute(mut cmd: Command, stdin: &str, timeout: Duration) -> std::io::Result<Ran> {
+/// The program gets at most `limits::MEMORY` of memory and a CPU-time budget (`node`: it runs
+/// on Node.js, see `limits`).
+fn execute(mut cmd: Command, stdin: &str, timeout: Duration, node: bool) -> std::io::Result<Ran> {
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let cpu = crate::limits::cpu_seconds(timeout.as_millis() as u64);
+    crate::limits::before_spawn(&mut cmd, cpu, node);
     let start = Instant::now();
     let mut child = cmd.spawn()?;
+    let limited = crate::limits::after_spawn(&child, cpu);
     if let Some(mut pipe) = child.stdin.take() {
         let input = stdin.as_bytes().to_vec();
         // a thread, so a program that never reads cannot block us; dropping the pipe sends EOF
@@ -535,6 +619,10 @@ fn execute(mut cmd: Command, stdin: &str, timeout: Duration) -> std::io::Result<
         thread::sleep(pause);
         pause = (pause * 2).min(Duration::from_millis(5));
     };
+    // Windows: closing the job here kills anything the program left running. Elsewhere `Limited`
+    // holds nothing, so the drop does nothing there.
+    #[allow(clippy::drop_non_drop)]
+    drop(limited);
     let elapsed = start.elapsed();
     let collect = |h: Option<JoinHandle<(Vec<u8>, bool)>>| h.and_then(|h| h.join().ok()).unwrap_or_default();
     let (out, out_cut) = collect(out);
@@ -601,9 +689,21 @@ mod tests {
     #[test]
     fn tool_definitions_are_valid() {
         let tools = tools();
-        let names: Vec<&str> =
-            tools.as_array().unwrap().iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
-        assert_eq!(names, ["nyra_spec", "nyra_check", "nyra_run", "nyra_explain", "nyra_build"]);
+        let names: Vec<&str> = tools.as_array().unwrap().iter().map(|t| t.get("name").and_then(Json::as_str).unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                "nyra_spec",
+                "nyra_check",
+                "nyra_test",
+                "nyra_run",
+                "nyra_explain",
+                "nyra_build",
+                "nyra_outline",
+                "nyra_show",
+                "nyra_edit"
+            ]
+        );
         for t in tools.as_array().unwrap() {
             assert_eq!(t.get("inputSchema").and_then(|s| s.get("type")).and_then(Json::as_str), Some("object"));
         }

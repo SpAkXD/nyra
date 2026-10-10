@@ -1,0 +1,6 @@
+// expect: E0256 at 5:5
+// only: js ts
+fn main() {
+    print(9007199254740991)
+    print(9007199254740993)
+}

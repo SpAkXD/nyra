@@ -2,7 +2,8 @@
 //!
 //!     nyra explain E0201          what the error means, why the rule exists, causes, a wrong and a fixed program
 //!     nyra explain E0201 --json   the same entry as JSON
-//!     nyra explain                every code with its title
+//!     nyra explain                every code the compiler reports, with its title
+//!     nyra explain --planned      also the codes that are only planned (designs, not in the compiler)
 //!
 //! The database is embedded at build time and parsed on demand, so there is one source of truth: the
 //! Markdown file people read on GitHub is exactly what the command prints. The parser is strict (every
@@ -19,15 +20,7 @@ const DB: &str = include_str!("../docs/ERRORS.md");
 /// Width of the text printed for humans.
 const WIDTH: usize = 96;
 
-const FIELDS: [&str; 7] = [
-    "Kind",
-    "What it means",
-    "Why Nyra has this rule",
-    "Common causes",
-    "Wrong",
-    "Fixed",
-    "Related",
-];
+const FIELDS: [&str; 7] = ["Kind", "What it means", "Why Nyra has this rule", "Common causes", "Wrong", "Fixed", "Related"];
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -118,7 +111,9 @@ pub fn parse(db: &str) -> Result<Vec<Entry>, String> {
 
 fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) -> Result<Entry, String> {
     // fields: `- **Label:** text`, then continuation lines until the next field
-    let mut fields: Vec<(usize, &str, String, Vec<(usize, &str)>)> = Vec::new();
+    // (line, label, text, the lines of a code block)
+    type Field<'a> = (usize, &'a str, String, Vec<(usize, &'a str)>);
+    let mut fields: Vec<Field> = Vec::new();
     let mut in_fence = false;
     for &(no, line) in body {
         let starts_field = !in_fence && line.starts_with("- **") && line.contains(":**");
@@ -148,19 +143,16 @@ fn parse_entry(head_no: usize, code: &str, title: &str, body: &[(usize, &str)]) 
         return Err(format!("{code} (line {kind_no}): the kind is `compile error` or `runtime error`, found `{kind}`"));
     }
     let planned = since.starts_with("planned for ");
-    let version_ok = |v: &str| {
-        v.strip_prefix("v0.").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
-    };
+    let version_ok = |v: &str| v.strip_prefix("v0.").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
     let since_ok = if planned {
-        since
-            .strip_prefix("planned for ")
-            .and_then(|r| r.strip_suffix(", not in the compiler yet"))
-            .is_some_and(version_ok)
+        since.strip_prefix("planned for ").and_then(|r| r.strip_suffix(", not in the compiler yet")).is_some_and(version_ok)
     } else {
         version_ok(since)
     };
     if !since_ok {
-        return Err(format!("{code} (line {kind_no}): Since is `v0.2` or `planned for v0.6, not in the compiler yet`, found `{since}`"));
+        return Err(format!(
+            "{code} (line {kind_no}): Since is `v0.2` or `planned for v0.6, not in the compiler yet`, found `{since}`"
+        ));
     }
 
     let text = |i: usize| -> Result<String, String> {
@@ -305,7 +297,10 @@ fn indented(code: &str) -> String {
 fn render_entry(e: &Entry, all: &[Entry]) -> String {
     let mut out = format!("{}: {}\n", e.code, e.title);
     if e.planned {
-        out += &format!("{}, {} (this entry describes the design)\n", e.kind, e.since);
+        out += &format!(
+            "PLANNED, NOT IN THE COMPILER: no version of nyra reports this code yet.\n{}, {} (this entry describes the design)\n",
+            e.kind, e.since
+        );
     } else {
         out += &format!("{}, since {}\n", e.kind, e.since);
     }
@@ -334,15 +329,22 @@ fn render_entry(e: &Entry, all: &[Entry]) -> String {
     out
 }
 
-fn render_list(all: &[Entry]) -> String {
+/// The list of codes; the planned ones (designs, not in the compiler) only with `planned`.
+fn render_list(all: &[Entry], planned: bool) -> String {
     let mut out = String::from("Nyra error codes. `nyra explain CODE` shows an entry; add --json for JSON.\n\n");
     let width = all.iter().map(|e| e.title.chars().count()).max().unwrap_or(0).min(56);
-    let sections: [(&str, fn(&Entry) -> bool); 3] = [
+    type Section = (&'static str, fn(&Entry) -> bool);
+    let sections: [Section; 3] = [
         ("compile errors", |e| !e.planned && e.kind == "compile error"),
         ("run-time errors (the program stops with exit code 101)", |e| !e.planned && e.kind == "runtime error"),
         ("planned, not in the compiler yet", |e| e.planned),
     ];
     for (heading, pick) in sections {
+        if heading.starts_with("planned") && !planned {
+            let n = all.iter().filter(|e| e.planned).count();
+            out += &format!("({n} planned codes of future designs are not shown: `nyra explain --planned`)\n");
+            continue;
+        }
         out += &format!("{heading}\n");
         for e in all.iter().filter(|e| pick(e)) {
             let version = e.since.strip_prefix("planned for ").and_then(|s| s.split(',').next());
@@ -355,9 +357,11 @@ fn render_list(all: &[Entry]) -> String {
     out.trim_end().to_string() + "\n"
 }
 
-pub fn list_json(all: &[Entry]) -> String {
+/// The list of codes as JSON; the planned ones only with `planned`.
+pub fn list_json(all: &[Entry], planned: bool) -> String {
     let items: Vec<String> = all
         .iter()
+        .filter(|e| planned || !e.planned)
         .map(|e| {
             format!(
                 "{{\"code\":{},\"title\":{},\"kind\":{},\"since\":{},\"planned\":{}}}",
@@ -374,8 +378,9 @@ pub fn list_json(all: &[Entry]) -> String {
 
 pub fn entry_json(e: &Entry) -> String {
     let strs = |v: &[String]| v.iter().map(|s| json_str(s)).collect::<Vec<_>>().join(",");
+    let note = if e.planned { ",\"note\":\"planned, not in the compiler: no version of nyra reports this code yet\"" } else { "" };
     format!(
-        "{{\"code\":{},\"title\":{},\"kind\":{},\"since\":{},\"planned\":{},\"what\":{},\"why\":{},\"causes\":[{}],\"wrong\":{},\"fixed\":{},\"related\":[{}]}}",
+        "{{\"code\":{},\"title\":{},\"kind\":{},\"since\":{},\"planned\":{}{note},\"what\":{},\"why\":{},\"causes\":[{}],\"wrong\":{},\"fixed\":{},\"related\":[{}]}}",
         json_str(&e.code),
         json_str(&e.title),
         json_str(&e.kind),
@@ -397,7 +402,8 @@ usage: nyra explain [CODE] [--json]
 
   nyra explain E0201         what an error code means, why the rule exists, the usual causes,
                              and a wrong and a fixed program
-  nyra explain               list every code with its title
+  nyra explain               list every code the compiler reports, with its title
+  nyra explain --planned     the list with the planned codes too (designs, not in the compiler)
   --json                     print JSON instead of text (for tools and AI agents)
 
 The same text is in docs/ERRORS.md.
@@ -436,6 +442,7 @@ pub fn unknown_json(arg: &str, close: Option<&Entry>) -> String {
 
 pub fn run(args: Vec<String>) -> ExitCode {
     let mut json = false;
+    let mut planned = false;
     let mut codes: Vec<String> = Vec::new();
     for a in args {
         match a.as_str() {
@@ -444,6 +451,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             "--json" => json = true,
+            "--planned" => planned = true,
             _ if a.starts_with('-') => {
                 eprintln!("nyra: unknown option `{a}`\n\n{USAGE}");
                 return ExitCode::from(2);
@@ -464,7 +472,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
     };
 
     let Some(arg) = codes.first() else {
-        print!("{}", if json { list_json(&all) + "\n" } else { render_list(&all) });
+        print!("{}", if json { list_json(&all, planned) + "\n" } else { render_list(&all, planned) });
         return ExitCode::SUCCESS;
     };
     let code = normalize(arg);
@@ -506,7 +514,7 @@ mod tests {
         assert!(e.wrong.contains("cout") && e.fixed.contains("count"));
         assert_eq!(e.related, ["E0202", "E0206", "E0205"]);
         assert!(!all.iter().find(|e| e.code == "E0220").unwrap().planned);
-        assert!(all.iter().find(|e| e.code == "E0300").unwrap().planned);
+        assert!(all.iter().find(|e| e.code == "E0310").unwrap().planned);
         assert_eq!(all.iter().find(|e| e.code == "E0241").unwrap().kind, "runtime error");
     }
 

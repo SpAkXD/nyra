@@ -60,13 +60,13 @@ pub fn top_level_word(w: &str) -> Option<String> {
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
-            "Nyra has no imports or modules yet: one file is one program, and it contains `fn` and `struct` definitions"
+            "a program is one file; it imports standard modules with `use name` on a line of its own, e.g. `use math`"
         }
         "pub" | "public" | "private" | "protected" | "extern" | "export" => {
             "Nyra has no visibility modifiers: start the definition with `fn` or `struct`"
         }
         "const" | "static" | "final" => {
-            "there are no global variables or constants: a constant is a function, e.g. `fn limit() -> int = 100`"
+            "Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)"
         }
         _ => return word(w),
     };
@@ -88,7 +88,7 @@ pub fn receiver(w: &str) -> Option<String> {
         "console" | "fmt" | "System" | "sys" | "io" | "Console" | "std" | "process" => {
             "print with `print(x)`: it takes one value and ends the line"
         }
-        "Math" | "math" => "Nyra has no `Math`: write the function you need yourself (see docs/AI_GUIDE.md section 6)",
+        "Math" | "math" => "the math functions are in the standard module `math`: add `use math` and call `math.sqrt(x)`",
         "Integer" | "Number" | "Float" | "Double" | "String" | "Str" | "Char" | "Character" => {
             "convert with the builtins `int(x)`, `float(x)`, `str(x)` and `char(n)`; methods belong to values, e.g. `s.len()`"
         }
@@ -96,7 +96,7 @@ pub fn receiver(w: &str) -> Option<String> {
             "arrays are written `[1, 2, 3]` and their methods are called on a value, e.g. `xs.push(4)`"
         }
         "random" | "Random" | "rand" | "time" | "Date" | "os" | "fs" | "File" => {
-            "Nyra programs are closed for now: there is no random, clock, file or system access"
+            "use the standard modules: `use random` (`random.range(1, 7)`), `use time` (`time.now_ms()`), `use fs` (`fs.read(path)`), `use os` (`os.args()`)"
         }
         _ => return None,
     };
@@ -109,14 +109,12 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "abs" => "Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`",
         "min" => "Nyra has no `min`: define it, e.g. `fn min(a: int, b: int) -> int = if a < b { a } else { b }`",
         "max" => "Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`",
-        "pow" | "power" | "powi" => {
-            "Nyra has no `pow`: write it with a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)"
-        }
+        "pow" | "power" | "powi" => "`pow` is in the standard module `math`: add `use math` and call `math.pow(x, y)`",
         "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" => {
-            "Nyra has no math functions yet: write the one you need yourself (see the `sqrt` recipe in docs/AI_GUIDE.md section 6)"
+            "the math functions are in the standard module `math`: add `use math` and call e.g. `math.sqrt(x)`"
         }
         "floor" | "ceil" | "round" | "trunc" => {
-            "Nyra has no `floor`/`ceil`/`round`: `int(x)` truncates a float toward zero"
+            "these are in the standard module `math` (`math.floor(x)` gives a float); `int(x)` truncates a float to an int"
         }
         "return" => return word(w),
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
@@ -129,23 +127,28 @@ pub fn undefined_function(w: &str) -> Option<String> {
         }
         "chr" | "fromCharCode" | "char_from" => "turn a code into a character with `char(n)`",
         "ord" | "charCodeAt" | "codePointAt" => "a character's code is `c.code()`; all codes of a string: `s.codes()`",
-        "sorted" | "sort" => "sort an array in place with `xs.sort()`",
-        "reversed" | "reverse" => "reverse an array in place with `xs.reverse()`; for a string: `s.chars()`, reverse, then `join(\"\")`",
+        "sorted" | "sort" => "sort an array in place with `xs.sort()`, or by a key with `xs.sort_by(x => key)`",
+        "reversed" | "reverse" => "`xs.reversed()` gives a reversed copy of an array or a string; `xs.reverse()` reverses an array in place",
+        "enumerate" => "for the position and the element write `for i, x in xs { ... }`",
+        "sum" | "any" | "all" => return Some(format!("`{w}` is a method: `xs.{w}()`{}", if w == "sum" { "" } else { " with a test, e.g. `xs.any(x => x > 0)`" })),
+        "map" | "filter" => return Some(format!("`{w}` is a method that takes a lambda: `xs.{w}(x => ...)`, or write a comprehension: `[x * 2 for x in xs if x > 0]`")),
+        "reduce" | "fold" => "`xs.fold(start, (acc, x) => ...)` combines the elements, e.g. `xs.fold(0, (acc, x) => acc + x)`",
         "split" | "join" | "trim" | "strip" | "upper" | "lower" | "replace" | "contains" | "startswith" | "endswith"
         | "push" | "append" | "pop" | "insert" | "remove" => {
             return Some(format!("`{w}` is a method: call it on the value, e.g. `x.{}(...)`", method_spelling(w)))
         }
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         "input" | "readline" | "read_line" | "scanf" | "gets" | "getline" => {
-            "Nyra has no input: put the values in the program, e.g. `let n = 12`"
+            "standard input is the module `input`: add `use input` and call `input.line()`"
         }
-        "exit" | "panic" | "assert" | "abort" | "quit" => {
-            "Nyra has no `exit`, `panic` or `assert`: the program ends when `main` ends"
+        "exit" | "quit" => "add `use os` and call `os.exit(code)`",
+        "panic" | "assert" | "abort" => {
+            "Nyra has no `panic` or `assert`: print a message and stop with `os.exit(1)` (add `use os`)"
         }
         "range" => "a range is written `a..b` in a loop: `for i in 0..10 { ... }`",
         "bool" => "Nyra has no `bool(x)`: compare instead, e.g. `x != 0`",
         "random" | "rand" | "randint" | "clock" | "sleep" => {
-            "Nyra programs are closed for now: there is no random, clock or sleep"
+            "use the standard modules: `use random` (`random.range(1, 7)`, `random.random()`), `use time` (`time.mono_ms()`, `time.sleep_ms(ms)`)"
         }
         _ => return None,
     };
@@ -170,7 +173,7 @@ pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
     let w: String = name.chars().filter(|c| *c != '_').map(|c| c.to_ascii_lowercase()).collect();
     let r = recv;
     let own = match t {
-        Type::Array(_) => array_method(&w, name, r),
+        Type::Array(_) => array_method(&w, r),
         Type::Str => str_method(&w, r),
         Type::Char => char_method(&w, r),
         _ => None,
@@ -191,7 +194,7 @@ pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
     })
 }
 
-fn array_method(w: &str, name: &str, r: &str) -> Option<String> {
+fn array_method(w: &str, r: &str) -> Option<String> {
     Some(match w {
         "length" | "size" => format!("the length is `{r}.len()`"),
         "isempty" | "empty" => format!("compare the length: `{r}.len() == 0`"),
@@ -202,16 +205,31 @@ fn array_method(w: &str, name: &str, r: &str) -> Option<String> {
         "includes" | "has" | "contain" => format!("write `{r}.contains(x)`"),
         "indexof" | "find" | "position" => format!("`{r}.index_of(x)` gives the position of the first match, or -1"),
         "removeat" | "delete" | "erase" => format!("`{r}.remove(i)` removes the element at position `i` and gives it back"),
-        "first" | "front" => format!("the first element is `{r}[0]` (check `{r}.len() > 0` first)"),
+        "first" | "front" => format!(
+            "the first element is `{r}[0]` (check `{r}.len() > 0` first); the first that passes a test: `{r}.find_index(x => test)`"
+        ),
         "last" | "back" => format!("the last element is `{r}[{r}.len() - 1]` (check `{r}.len() > 0` first)"),
-        "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`)"),
-        "reversed" => format!("`{r}.reverse()` reverses in place (`{r}` must be a `var`)"),
-        "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
-        "sublist" | "subarray" | "take" => format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`"),
-        "concat" | "extend" | "addall" => format!("join arrays with `+`: `{r} + other`, or append in place with `{r} += other`"),
-        "map" | "filter" | "reduce" | "fold" | "foreach" | "any" | "all" | "sum" | "min" | "max" | "flatten" | "zip" => {
-            format!("arrays have no `.{name}()`: write a loop, `for x in {r} {{ ... }}` (Nyra has no closures)")
+        "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`); `{r}.sort_by(x => key)` sorts by a key"),
+        "rev" | "toreversed" => format!("`{r}.reversed()` gives a reversed copy; `{r}.reverse()` reverses in place"),
+        "sortby" | "sortbykey" | "sortedby" => format!("`{r}.sort_by(x => key)` sorts in place by a key (`{r}` must be a `var`)"),
+        "reduce" | "inject" | "aggregate" => {
+            format!("`{r}.fold(start, (acc, x) => ...)` combines the elements, e.g. `{r}.fold(0, (acc, x) => acc + x)`")
         }
+        "findindex" | "indexwhere" => format!("`{r}.find_index(x => test)` gives the position of the first match, or -1"),
+        "some" | "anymatch" | "exists" => format!("`{r}.any(x => test)` is true if one element passes"),
+        "every" | "allmatch" | "forall" => format!("`{r}.all(x => test)` is true if every element passes"),
+        "select" | "where" => format!("`{r}.filter(x => test)` keeps the elements that pass"),
+        "collect" | "transform" => format!("`{r}.map(x => ...)` gives a new array of the results"),
+        "foreach" | "each" => format!("loop over the elements: `for x in {r} {{ ... }}` (`for i, x in {r}` also gives the position)"),
+        "enumerate" | "withindex" | "indexed" => format!("`for i, x in {r} {{ ... }}` gives each position and element"),
+        "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
+        "sublist" | "subarray" | "take" => {
+            format!("`{r}.slice(a, b)` gives the elements from position `a` up to, but not including, `b`")
+        }
+        "concat" | "extend" | "addall" => format!("join arrays with `+`: `{r} + other`, or append in place with `{r} += other`"),
+        "flatten" | "flat" => format!("join the inner arrays: `{r}.fold(empty, (acc, x) => acc + x)` or a loop with `+=`"),
+        "zip" => format!("loop over the positions: `for i, x in {r} {{ ... other[i] ... }}`"),
+        "average" | "mean" | "avg" => format!("divide the sum by the length: `float({r}.sum()) / float({r}.len())`"),
         _ => return None,
     })
 }
@@ -242,7 +260,8 @@ fn str_method(w: &str, r: &str) -> Option<String> {
         "padstart" | "padend" | "ljust" | "rjust" | "center" | "zfill" => {
             format!("pad with `repeat`, e.g. `\" \".repeat(width - {r}.len()) + {r}` (the count must not be negative)")
         }
-        "reverse" | "reversed" => format!("reverse the characters: `var cs = {r}.chars()`, `cs.reverse()`, then `cs.join(\"\")`"),
+        "reverse" | "rev" => format!("`{r}.reversed()` gives the characters in reverse order"),
+        "map" | "filter" => format!("strings have no `.{w}()`: use a comprehension over the characters, e.g. `[c.upper() for c in {r} if c != ' ']`, or `{r}.chars().{w}(c => ...)`"),
         "isdigit" | "isnumeric" | "isdecimal" | "isalpha" | "isalnum" | "isupper" | "islower" | "isspace" => {
             format!("these are `char` methods (`c.is_digit()`, `c.is_letter()`, ...): test each character, `for c in {r} {{ ... }}`")
         }
@@ -285,6 +304,11 @@ pub fn method_rename(t: Type, name: &str) -> Option<&'static str> {
         (Type::Array(_) | Type::Str, "length" | "size") => "len",
         (Type::Array(_) | Type::Str, "includes" | "has" | "contain") => "contains",
         (Type::Array(_) | Type::Str, "indexof") => "index_of",
+        (Type::Array(_) | Type::Str, "rev" | "toreversed") => "reversed",
+        (Type::Array(_) | Type::Str, "findindex") => "find_index",
+        (Type::Array(_) | Type::Str, "every") => "all",
+        (Type::Array(_) | Type::Str, "some") => "any",
+        (Type::Array(_), "sortby" | "sortbykey") => "sort_by",
         (Type::Array(_), "append" | "add" | "pushback" | "addlast") => "push",
         (Type::Array(_), "popback" | "poplast" | "removelast") => "pop",
         (Type::Array(_), "removeat") => "remove",
@@ -311,9 +335,34 @@ pub fn method_rename(t: Type, name: &str) -> Option<&'static str> {
 pub fn is_type_word(w: &str) -> bool {
     matches!(
         w.to_ascii_lowercase().as_str(),
-        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "i8" | "i16" | "i32"
-            | "i64" | "u8" | "u16" | "u32" | "u64" | "float" | "double" | "real" | "f32" | "f64" | "bool" | "boolean"
-            | "str" | "string" | "char" | "void"
+        "int"
+            | "integer"
+            | "long"
+            | "short"
+            | "number"
+            | "byte"
+            | "uint"
+            | "usize"
+            | "isize"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "float"
+            | "double"
+            | "real"
+            | "f32"
+            | "f64"
+            | "bool"
+            | "boolean"
+            | "str"
+            | "string"
+            | "char"
+            | "void"
     )
 }
 
@@ -321,8 +370,8 @@ pub fn is_type_word(w: &str) -> bool {
 pub fn nyra_type(w: &str) -> Option<&'static str> {
     Some(match w.to_ascii_lowercase().as_str() {
         "string" | "text" | "cstring" | "varchar" | "str" => "str",
-        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16"
-        | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
+        "int" | "integer" | "long" | "short" | "number" | "byte" | "uint" | "usize" | "isize" | "size_t" | "i8" | "i16" | "i32"
+        | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "int32_t" | "int64_t" => "int",
         "float" | "double" | "real" | "decimal" | "single" | "f32" | "f64" | "float32" | "float64" => "float",
         "bool" | "boolean" => "bool",
         "char" | "character" | "rune" => "char",
@@ -353,10 +402,12 @@ pub fn type_name(name: &str) -> String {
             "an array type is written `[T]`, e.g. `[int]` or `[str]`".to_string()
         }
         "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
-            "Nyra has no maps yet: use an array of structs, e.g. `[Entry]` with `struct Entry { key: str, value: int }`".to_string()
+            "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
-        "set" | "hashset" => "Nyra has no sets yet: use an array and `xs.contains(x)`".to_string(),
-        "tuple" | "pair" => "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string(),
+        "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
+        "tuple" | "pair" => {
+            "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
+        }
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()
         }

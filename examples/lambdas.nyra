@@ -1,0 +1,49 @@
+// v0.5: lambdas, collection methods and comprehensions. Each is lowered to a plain loop.
+struct Player {
+    name: str
+    score: int
+}
+
+fn loud(x: int) -> int {
+    print("  visit", x)
+    ret x
+}
+
+let xs = [3, -1, 4, -1, 5, 9, -2, 6]
+print(xs.filter(x => x > 0).map(x => x * x).sum())
+print(xs.map(x => x * 2), xs.filter(x => x < 0))
+print(xs.count(x => x < 0), xs.any(x => x > 8), xs.all(x => x > -5), xs.find_index(x => x == 9))
+print(xs.sum(), xs.min(), xs.max(), xs.reversed())
+print([1.5, 2.25].sum(), [2.5, -0.5].min(), ["pear", "fig"].max(), ['q', 'b'].min())
+print(xs.fold(0, (acc, x) => acc * 2 + x), xs.fold("", (s, x) => s + str(x)))
+
+// comprehensions: over an array, a string or a range
+print([x * x for x in xs if x > 0])
+print([i * i for i in 0..6], [i for i in 10..0 step -3])
+print([c.upper() for c in "hello" if c != 'l'])
+
+// strings: count, any, all and find_index test each character
+let text = "Hello, World 42"
+print(text.count(c => "aeiou".contains(c.lower())), text.any(c => c.is_digit()), text.find_index(c => c == ','))
+print(text.reversed(), text.all(c => c != '?'))
+
+// sort_by is stable: equal keys keep their order
+var team = [Player(name: "ann", score: 7), Player(name: "bo", score: 3), Player(name: "cy", score: 7), Player(name: "di", score: 1)]
+team.sort_by(p => -p.score)
+print(team.map(p => p.name).join(" "))
+team.sort_by(p => p.name.len())
+print(team.map(p => "{p.name}:{p.score}"))
+print(team.filter(p => p.score > 2).map(p => p.name).min())
+
+// lambdas read variables (never change them) and nest
+let limit = 4
+let grid = [[1, 5], [7, 2, 9], []]
+print(grid.map(row => row.count(v => v > limit)), grid.filter(row => row.len() > 0).map(row => row.max()))
+
+// a chain is one loop: each element goes through every step, and `any` stops at the answer
+print([1, 2, 3, 4].map(x => loud(x)).filter(x => x % 2 == 0).any(x => x > 1))
+
+// the position and the element
+for i, p in team {
+    print(i, p.name)
+}

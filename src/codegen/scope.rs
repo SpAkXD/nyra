@@ -66,7 +66,7 @@ pub fn range_for<'a>(ss: &'a [Stmt], k: usize, info: &Info) -> Option<RangeFor<'
             // the body cannot change what that value reads; else it stays, before the loop
             if info.reads[ti] != 1 || info.writes[ti] != 1 || writes_any(body, value) {
                 pre = Some(&ss[k + 1]);
-                &**bound
+                bound
             } else {
                 value
             }
@@ -218,11 +218,7 @@ fn writes(ss: &[Stmt], info: &mut Info) {
                     info.writes[d.0 as usize] += 1;
                 }
             }
-            StmtKind::Op { dst, .. } => {
-                if let Some(d) = dst {
-                    info.writes[d.0 as usize] += 1;
-                }
-            }
+            StmtKind::Op { dst: Some(d), .. } => info.writes[d.0 as usize] += 1,
             StmtKind::Store { place, .. } => info.changed[place.root.0 as usize] = true,
             StmtKind::Mutate { dst, place, .. } => {
                 info.changed[place.root.0 as usize] = true;
@@ -334,9 +330,7 @@ pub fn writes_in(ss: &[Stmt], l: LocalId) -> bool {
     ss.iter().any(|s| {
         let direct = match &s.kind {
             StmtKind::Set(d, _) | StmtKind::Free(d) => *d == l,
-            StmtKind::Call { dst, args, .. } => {
-                *dst == Some(l) || args.iter().any(|a| matches!(a, Arg::InOut(p) if p.root == l))
-            }
+            StmtKind::Call { dst, args, .. } => *dst == Some(l) || args.iter().any(|a| matches!(a, Arg::InOut(p) if p.root == l)),
             StmtKind::Op { dst, .. } => *dst == Some(l),
             StmtKind::Store { place, .. } => place.root == l,
             StmtKind::Mutate { dst, place, .. } => *dst == Some(l) || place.root == l,

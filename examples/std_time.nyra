@@ -1,0 +1,17 @@
+// The wall clock and a monotonic clock for timing code (only facts that hold in every run).
+use time
+use text
+
+fn main() {
+    let start = time.mono_ms()
+    var sum = 0
+    for i in 0..100000 {
+        sum += i % 7
+    }
+    time.sleep_ms(30)
+    let took = time.mono_ms() - start
+    print("sum {sum}, waited at least 25 ms: {took >= 25.0}")
+    print("after 2023: {time.now_ms() > 1700000000000}")
+    print("never backwards: {time.mono_ms() >= start}")
+    print(text.fixed(took, 2).contains("."))
+}

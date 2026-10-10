@@ -1,6 +1,7 @@
 //! Syntax tree produced by the parser and annotated by the type checker.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
@@ -24,11 +25,14 @@ pub enum Type {
     Array(u32),
     /// A struct; the id indexes the interned struct names.
     Struct(u32),
+    /// `[K: V]`; the id indexes the interned (key, value) pairs.
+    Map(u32),
 }
 
 thread_local! {
     static ELEMS: RefCell<Vec<Type>> = const { RefCell::new(Vec::new()) };
     static STRUCTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static MAPS: RefCell<Vec<(Type, Type)>> = const { RefCell::new(Vec::new()) };
 }
 
 impl Type {
@@ -48,6 +52,32 @@ impl Type {
             };
             Type::Array(id as u32)
         })
+    }
+
+    /// `[key: value]`. A map with an unknown part is unknown.
+    pub fn map(key: Type, value: Type) -> Type {
+        if key == Type::Unknown || value == Type::Unknown {
+            return Type::Unknown;
+        }
+        MAPS.with(|m| {
+            let mut m = m.borrow_mut();
+            let id = match m.iter().position(|p| *p == (key, value)) {
+                Some(i) => i,
+                None => {
+                    m.push((key, value));
+                    m.len() - 1
+                }
+            };
+            Type::Map(id as u32)
+        })
+    }
+
+    /// The key and value types of a map.
+    pub fn map_kv(self) -> Option<(Type, Type)> {
+        match self {
+            Type::Map(id) => Some(MAPS.with(|m| m.borrow()[id as usize])),
+            _ => None,
+        }
     }
 
     /// The struct type named `name` (whether or not it is defined: the checker says so).
@@ -92,6 +122,10 @@ impl Type {
             Type::Unknown => "?".into(),
             Type::Array(_) => format!("[{}]", self.elem().map(Type::name).unwrap_or_default()),
             Type::Struct(_) => self.struct_name().unwrap_or_default(),
+            Type::Map(_) => match self.map_kv() {
+                Some((k, v)) => format!("[{}: {}]", k.name(), v.name()),
+                None => String::new(),
+            },
         }
     }
 
@@ -100,6 +134,7 @@ impl Type {
         match self {
             Type::Unknown => true,
             Type::Array(_) => self.elem().is_some_and(Type::is_unknown),
+            Type::Map(_) => self.map_kv().is_some_and(|(k, v)| k.is_unknown() || v.is_unknown()),
             _ => false,
         }
     }
@@ -109,6 +144,58 @@ impl Type {
 pub struct Program {
     pub funcs: Vec<Func>,
     pub structs: Vec<StructDef>,
+    /// `ex` lines: checked at compile time, never compiled into the program.
+    pub examples: Vec<Example>,
+    /// The `use name` lines: the standard modules the program imports.
+    pub uses: Vec<Use>,
+    /// The program is a script: `main` is made of its top-level statements.
+    pub script: bool,
+    /// The script's top-level variables and the functions that use them (filled by the checker).
+    pub globals: Globals,
+}
+
+/// A `let` or `var` at the top level of a script: every function may read it (and change it,
+/// when it is a `var`).
+#[derive(Debug, Clone)]
+pub struct Global {
+    pub name: String,
+    pub ty: Type,
+    pub mutable: bool,
+    pub span: Span,
+    /// The index of its statement among the script's top-level statements.
+    pub stmt: usize,
+}
+
+/// One script variable a function uses, directly or through the functions it calls. Lowering
+/// passes it as a hidden parameter: `inout` when the function (or a callee) changes it.
+#[derive(Debug, Clone)]
+pub struct GlobalUse {
+    /// Index into `Globals::vars`.
+    pub var: usize,
+    pub inout: bool,
+    /// The hidden parameter's name: the variable's own name, unless the function declares a
+    /// variable of that name itself (it then cannot see the script variable, only pass it on).
+    pub name: String,
+}
+
+#[derive(Debug, Default)]
+pub struct Globals {
+    pub vars: Vec<Global>,
+    /// For each function that uses script variables: what it uses, in declaration order.
+    pub uses: HashMap<String, Vec<GlobalUse>>,
+}
+
+/// One example of `ex f(3) == 9, f(-2) == 4`: a `bool` condition that must be true.
+#[derive(Debug)]
+pub struct Example {
+    pub expr: Expr,
+}
+
+/// `use math`: the module's functions are then called as `math.sqrt(x)`.
+#[derive(Debug, Clone)]
+pub struct Use {
+    pub module: String,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -151,16 +238,43 @@ pub struct Stmt {
 
 #[derive(Debug)]
 pub enum StmtKind {
-    Let { name: String, mutable: bool, ty: Option<Type>, value: Expr },
+    Let {
+        name: String,
+        mutable: bool,
+        ty: Option<Type>,
+        value: Expr,
+    },
     /// `target = value`, or `target op= value` (the target is evaluated once).
-    Assign { target: Expr, op: Option<BinOp>, value: Expr },
-    If { cond: Expr, then: Vec<Stmt>, els: Option<Vec<Stmt>> },
-    While { cond: Expr, body: Vec<Stmt> },
+    Assign {
+        target: Expr,
+        op: Option<BinOp>,
+        value: Expr,
+    },
+    If {
+        cond: Expr,
+        then: Vec<Stmt>,
+        els: Option<Vec<Stmt>>,
+    },
+    While {
+        cond: Expr,
+        body: Vec<Stmt>,
+    },
     /// `for var in start..end`
     /// `for var in start..end` or `for var in start..end step k` (`k` may be negative)
-    For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
-    /// `for var in iter` over an array or a string
-    ForEach { var: String, iter: Expr, body: Vec<Stmt> },
+    For {
+        var: String,
+        start: Expr,
+        end: Expr,
+        step: Option<Expr>,
+        body: Vec<Stmt>,
+    },
+    /// `for var in iter` over an array or a string; `for index, var in iter` also counts from 0
+    ForEach {
+        var: String,
+        index: Option<String>,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     Continue,
     /// `arena { ... }`: everything allocated inside is freed together at `}`.
@@ -251,6 +365,8 @@ pub enum ExprKind {
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     /// `[a, b, c]`
     Array(Vec<Expr>),
+    /// `["a": 1, "b": 2]`, `[:]`
+    MapLit(Vec<(Expr, Expr)>),
     /// `base[index]`
     Index(Box<Expr>, Box<Expr>),
     /// `base.name`
@@ -261,4 +377,27 @@ pub enum ExprKind {
     Labeled(String, Box<Expr>),
     /// `inout place`: only as an argument
     Inout(Box<Expr>),
+    /// `x => body` or `(a, b) => body`: only as an argument of the array methods that take one
+    /// (`map`, `filter`, ...). Lowering turns it into a loop, so it never exists at run time.
+    Lambda(Vec<(String, Span)>, Box<Expr>),
+    /// `[elem for var in src if cond]`: a new array, built by a loop like `map` and `filter`
+    Comprehension(Box<Comp>),
+}
+
+/// `[elem for var in src if cond]`. Like a lambda's body, `elem` and `cond` only read variables.
+#[derive(Debug)]
+pub struct Comp {
+    pub elem: Expr,
+    /// The loop variable (one-element slice, so it reads like a lambda's parameters).
+    pub var: [(String, Span); 1],
+    pub src: CompSrc,
+    pub cond: Option<Expr>,
+}
+
+#[derive(Debug)]
+pub enum CompSrc {
+    /// an array or a string
+    Each(Expr),
+    /// `a..b` or `a..b step k`
+    Range(Expr, Expr, Option<Expr>),
 }

@@ -1,0 +1,28 @@
+struct Item { name: str, price: int, qty: int }
+
+fn money(c: int) -> str {
+    let d = c / 100
+    let r = c % 100
+    ret "{d}." + str(r).pad_left(2, '0')
+}
+
+fn line(label: str, cents: int) {
+    print(label.pad_right(8) + money(cents).pad_left(8))
+}
+
+let items = [
+    Item(name: "apple", price: 125, qty: 3),
+    Item(name: "bread", price: 399, qty: 1),
+    Item(name: "milk", price: 89, qty: 12),
+    Item(name: "cheese", price: 1450, qty: 2)
+]
+var sub = 0
+for it in items {
+    let t = it.price * it.qty
+    sub += t
+    line(it.name, t)
+}
+let tax = (sub * 825 + 5000) / 10000
+line("subtotal", sub)
+line("tax", tax)
+line("total", sub + tax)

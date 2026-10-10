@@ -24,6 +24,39 @@ function ny_rescue(e) {
     }
     throw e;
 }
+// `print(x, end: "")`: text without a newline (a browser has no stdout: the console gets a line).
+function ny_write(s) {
+    if (typeof process !== "undefined") process.stdout.write(s);
+    else console.log(s);
+}
+// ---- ints: every int is a safe integer (|n| <= 2^53 - 1), where JavaScript numbers are exact.
+// A result beyond 64 bits is E0255, as on every backend; one that only leaves the safe range is
+// E0256: the other backends hold it, a JavaScript number would round it.
+function ny_int_range(what, r, line, col) {
+    if (r >= 9223372036854775808 || r < -9223372036854775808) {
+        ny_panic("E0255", "int overflow: " + what + " does not fit in 64 bits", "an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)", line, col);
+    }
+    ny_unsafe_int(what, line, col);
+}
+function ny_unsafe_int(what, line, col) {
+    ny_panic("E0256", what + " is outside the range of ints JavaScript represents exactly (-9007199254740991 to 9007199254740991)", "JavaScript numbers hold ints exactly only up to 2^53 - 1: run this program on the native (C), Rust, Go or Python target, where an int has 64 bits, or keep the values smaller", line, col);
+}
+function ny_add(a, b, line, col) {
+    const r = a + b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " + " + b, r, line, col);
+}
+function ny_sub(a, b, line, col) {
+    const r = a - b;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " - " + b, r, line, col);
+}
+function ny_mul(a, b, line, col) {
+    const r = a * b + 0;
+    return Number.isSafeInteger(r) ? r : ny_int_range(a + " * " + b, r, line, col);
+}
+// (the negation of a safe integer is one too)
+function ny_neg(a, line, col) {
+    return 0 - a;
+}
 // int / and %: division by zero is a runtime error; `+ 0` avoids -0.
 function ny_div(a, b, line, col) {
     if (b === 0) ny_panic("E0241", "division by zero", "check the divisor first", line, col);
@@ -37,12 +70,17 @@ function ny_mod(a, b, line, col) {
 function ny_check_step(k, line, col) {
     if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// `xs.min()` / `xs.max()` of an empty array (`n` elements seen; `max` says which method).
+function ny_check_non_empty(n, max, line, col) {
+    if (n === 0) ny_panic("E0247", max ? "max() of an empty array" : "min() of an empty array", "an empty array has no smallest or largest element: check `xs.len() > 0` first, or start from a value of your own with `fold`", line, col);
+}
 // int(x) of a float: truncates toward zero; NaN or a value outside the int range is an error.
 function ny_f2i(x, line, col) {
     if (Number.isNaN(x) || x >= 9223372036854775807 || x < -9223372036854775808) {
         ny_panic("E0245", "cannot convert " + String(x) + " to int",
             "int(x) needs a float that is not NaN and fits in an int", line, col);
     }
-    return Math.trunc(x) + 0;
+    const n = Math.trunc(x) + 0;
+    return Number.isSafeInteger(n) ? n : ny_unsafe_int("int(" + String(x) + ")", line, col);
 }
 

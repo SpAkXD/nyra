@@ -1,14 +1,18 @@
-//! Keeps the docs honest: every Nyra code block in them must type-check.
+//! Keeps the docs honest: every Nyra code block in them must type-check, and run without a
+//! runtime error (on JavaScript when Node.js is installed, else natively when a C compiler is).
 //!
 //! - `README.md` and `docs/AI_GUIDE.md` mark Nyra blocks `rust` (GitHub has no Nyra grammar, so
 //!   Rust highlighting is borrowed).
 //! - `docs/SPEC.md` marks them `nyra`: the spec is pasted into prompts as plain text, where `rust`
 //!   would name the wrong language.
 //!
-//! A block without `fn main` becomes a program: its top-level `fn` and `struct` definitions stay
-//! at the top level and every other line goes into an appended `fn main()`.
+//! A block is checked as written (`use` lines included): without `fn main` it is a script, whose top-level statements run in
+//! order and whose top-level variables the functions can use. A block of definitions alone gets an
+//! empty `fn main()`.
 
-use std::process::Command;
+mod common;
+
+use std::process::{Command, Stdio};
 
 /// The contents of every fenced block marked `lang` in a markdown file.
 fn blocks(markdown: &str, lang: &str) -> Vec<String> {
@@ -29,45 +33,78 @@ fn blocks(markdown: &str, lang: &str) -> Vec<String> {
     blocks
 }
 
-/// A code block as a whole program: the lines of top-level `fn` and `struct` definitions stay at
-/// the top level, all other lines go into `fn main()`.
+/// A code block as a whole program: a script as written, or definitions only, which get an empty
+/// `fn main()`.
 fn program(code: &str) -> String {
     if code.contains("fn main") {
         return code.to_string();
     }
-    let (mut items, mut body) = (String::new(), String::new());
-    let mut in_item = false;
-    for line in code.lines() {
-        let starts_item = line.starts_with("fn ") || line.starts_with("struct ");
-        if starts_item || in_item {
-            items.push_str(line);
-            items.push('\n');
-            // a definition whose first line ends with `{` goes on until the `}` in column 0
-            let code_part = line.split("//").next().unwrap_or("").trim_end();
-            in_item = if starts_item { code_part.ends_with('{') } else { !line.starts_with('}') };
-        } else {
-            if !line.is_empty() {
-                body.push_str("    ");
-                body.push_str(line);
-            }
-            body.push('\n');
-        }
+    // a statement starts in column 0 and is not a definition, a comment or the end of one
+    let statement = |l: &str| {
+        !l.is_empty() && !l.starts_with([' ', '}', '/']) && !["fn ", "struct ", "ex ", "use "].iter().any(|k| l.starts_with(k))
+    };
+    if code.lines().any(statement) {
+        code.to_string()
+    } else {
+        format!(
+            "{code}
+fn main() {{
+}}
+"
+        )
     }
-    format!("{items}\nfn main() {{\n{body}}}\n")
 }
 
 #[test]
-fn statements_of_a_block_go_into_main() {
-    let code = "struct P {\n    x: int\n}\nfn f(p: P) -> int { // f\n    ret p.x\n}\nfn g() = print(1)\nlet p = P(x: 1)\nif true {\n    g()\n}\n";
-    let expected = "struct P {\n    x: int\n}\nfn f(p: P) -> int { // f\n    ret p.x\n}\nfn g() = print(1)\n\nfn main() {\n    let p = P(x: 1)\n    if true {\n        g()\n    }\n}\n";
-    assert_eq!(program(code), expected);
-    assert_eq!(program("fn main() {\n}\n"), "fn main() {\n}\n");
+fn definitions_alone_get_a_main() {
+    assert_eq!(
+        program(
+            "fn g() = print(1)
+"
+        ),
+        "fn g() = print(1)
+
+fn main() {
+}
+"
+    );
+    assert_eq!(
+        program(
+            "let p = 1
+fn g() = print(p)
+g()
+"
+        ),
+        "let p = 1
+fn g() = print(p)
+g()
+"
+    );
+    assert_eq!(
+        program(
+            "fn main() {
+}
+"
+        ),
+        "fn main() {
+}
+"
+    );
 }
 
 #[test]
 fn nyra_code_blocks_in_the_docs_compile() {
     let dir = std::env::temp_dir().join("nyra-docs-test");
     std::fs::create_dir_all(&dir).unwrap();
+    let works = |cmd: &str| Command::new(cmd).arg("--version").output().is_ok();
+    let backend: Option<&[&str]> = if works("node") {
+        Some(&["--js"])
+    } else if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| works(c)) {
+        Some(&[])
+    } else {
+        common::missing("no Node.js and no C compiler to run the code blocks");
+        None
+    };
 
     for (file, lang) in [("README.md", "rust"), ("docs/AI_GUIDE.md", "rust"), ("docs/SPEC.md", "nyra")] {
         let markdown = std::fs::read_to_string(file).unwrap();
@@ -86,6 +123,24 @@ fn nyra_code_blocks_in_the_docs_compile() {
                 i + 1,
                 String::from_utf8_lossy(&out.stdout)
             );
+
+            // ... and runs, in a folder of its own (it may write files), without arguments or input
+            let Some(flags) = backend else { continue };
+            let run_dir = dir.join(format!("run-{}-{}", file.replace(['/', '.'], "_"), i + 1));
+            let _ = std::fs::remove_dir_all(&run_dir);
+            std::fs::create_dir_all(&run_dir).unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_nyra"))
+                .current_dir(&run_dir)
+                .arg("run")
+                .arg(&path)
+                .args(flags)
+                .stdin(Stdio::null())
+                .output()
+                .unwrap();
+            let _ = std::fs::remove_dir_all(&run_dir);
+            // a program may end itself with `os.exit(n)` (a usage message without arguments)
+            let ok = out.status.success() || (source.contains("os.exit(") && out.status.code() != Some(101));
+            assert!(ok, "{file}: code block {} fails when it runs\n{source}\n{}", i + 1, String::from_utf8_lossy(&out.stderr));
         }
     }
 

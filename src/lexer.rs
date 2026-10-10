@@ -42,6 +42,8 @@ pub enum Tok {
     Colon,
     Dot,
     Arrow,
+    /// `=>` of a lambda: `x => x * 2`
+    FatArrow,
     DotDot,
     Plus,
     Minus,
@@ -130,6 +132,7 @@ impl Tok {
             Tok::Colon => ":",
             Tok::Dot => ".",
             Tok::Arrow => "->",
+            Tok::FatArrow => "=>",
             Tok::DotDot => "..",
             Tok::Plus => "+",
             Tok::Minus => "-",
@@ -288,7 +291,6 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             let mut closed = false;
             while i < cs.len() && cs[i] != '\n' {
                 let ch = cs[i];
-                let here = Span { line, col };
                 if ch == '"' {
                     i += 1;
                     col += 1;
@@ -308,15 +310,16 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         'r' => s.push('\r'),
                         '\\' => s.push('\\'),
                         '"' => s.push('"'),
+                        '0' => s.push('\0'),
                         _ => {
                             let hint = match esc {
                                 '{' | '}' => "braces are doubled, not escaped: write `{{` or `}}` for a literal brace".to_string(),
                                 '\'' => "a single quote needs no escape: write `'`".to_string(),
-                                'u' | 'x' | '0' => format!(
+                                'u' | 'x' => format!(
                                     "Nyra has no `\\{esc}` escape: type the character itself (strings are UTF-8), e.g. \"\u{e9}\""
                                 ),
                                 _ => format!(
-                                    "the escapes are `\\n` `\\t` `\\r` `\\\\` and `\\\"`; to write a literal backslash, double it: `\\\\{esc}`"
+                                    "the escapes are `\\n` `\\t` `\\r` `\\0` `\\\\` and `\\\"`; to write a literal backslash, double it: `\\\\{esc}`"
                                 ),
                             };
                             // `\{` and `\'` have one meaning: a literal brace, a quote
@@ -345,10 +348,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                     continue;
                 }
                 if ch == '}' {
-                    errs.push(
-                        Diag::new("E0006", "unmatched `}` in a string: there is no `{` for it to close", here)
-                            .hint("write `}}` to print a literal `}`"),
-                    );
+                    // a `}` that closes nothing is text: `"expected } here"`
+                    s.push(ch);
                     i += 1;
                     col += 1;
                     continue;
@@ -383,31 +384,30 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         }
                         j += 1;
                     }
+                    // `{x}` inserts x. A `{` that cannot start one is text: it is never closed on the
+                    // line (`"fn main() {"`), closes nothing (`"{}"`), or is followed by the string's own
+                    // closing quote (`s == "{"`, `"{" + x`)
+                    let code: String = end.map(|e| cs[start..e].iter().collect()).unwrap_or_default();
+                    // code that starts with a string literal is one only when it is used: `{"q".upper()}`
+                    let quoted = |c: &str| {
+                        let t = c.trim_start();
+                        let Some(rest) = t.strip_prefix('"') else { return false };
+                        let after = rest.find('"').map(|k| rest[k + 1..].trim_start());
+                        !after.is_some_and(|a| a.starts_with('.') || a.starts_with('['))
+                    };
                     match end {
-                        Some(e) => {
-                            let code: String = cs[start..e].iter().collect();
-                            if code.trim().is_empty() {
-                                errs.push(
-                                    Diag::new("E0006", "empty `{}` in a string: there is no expression to insert", here)
-                                        .hint("put an expression between the braces, e.g. `{x}`, or write `{{}}` to print literal braces"),
-                                );
-                            } else {
-                                if !s.is_empty() {
-                                    parts.push(StrPart::Lit(std::mem::take(&mut s)));
-                                }
-                                parts.push(StrPart::Code(code, Span { line, col: col + 1 }));
+                        Some(e) if !code.trim().is_empty() && !quoted(&code) => {
+                            if !s.is_empty() {
+                                parts.push(StrPart::Lit(std::mem::take(&mut s)));
                             }
+                            parts.push(StrPart::Code(code, Span { line, col: col + 1 }));
                             col += e + 1 - i;
                             i = e + 1;
                         }
-                        None => {
-                            // the string (or the line) ends before a `}`: a `{` that is never closed
-                            errs.push(
-                                Diag::new("E0006", "unclosed `{` in a string: no matching `}` before the end of the string", here)
-                                    .hint("add the closing `}`, as in `{x}`, or write `{{` to print a literal `{`"),
-                            );
-                            col += j - i;
-                            i = j;
+                        _ => {
+                            s.push('{');
+                            i += 1;
+                            col += 1;
                         }
                     }
                     continue;
@@ -418,8 +418,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             }
             if !closed {
                 errs.push(
-                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span)
-                        .hint("add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)"),
+                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span).hint(
+                        "add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)",
+                    ),
                 );
             }
             let tok = if parts.is_empty() {
@@ -436,6 +437,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
         let two = match (c, next) {
             ('-', '>') => Some(Tok::Arrow),
+            ('=', '>') => Some(Tok::FatArrow),
             ('.', '.') => Some(Tok::DotDot),
             ('=', '=') => Some(Tok::Eq),
             ('!', '=') => Some(Tok::Ne),
@@ -460,8 +462,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
         if c == '.' {
             let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
-            let before_digit = next.is_ascii_digit()
-                && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
+            let before_digit =
+                next.is_ascii_digit() && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
             if !after_digit && !before_digit {
                 toks.push(Token { tok: Tok::Dot, span });
                 i += 1;
@@ -513,6 +515,20 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 }
                 continue;
             }
+            None if c == '|' && closure_params(&cs, i).is_some() => {
+                // `|x| x * 2` (Rust, Ruby): one error for the parameter list, which is skipped
+                let (len, params) = closure_params(&cs, i).unwrap_or_default();
+                let old: String = cs[i..i + len].iter().collect();
+                let new = if params.len() == 1 { format!("{} =>", params[0]) } else { format!("({}) =>", params.join(", ")) };
+                errs.push(
+                    Diag::new("E0001", "unexpected character `|`: a lambda is written `x => x * 2`", span)
+                        .hint(format!("write `{new}` instead of `{old}`: the parameters, `=>`, then the body"))
+                        .fix(vec![Edit::replace(span, &old, new)]),
+                );
+                i += len;
+                col += len;
+                continue;
+            }
             None => {
                 // a quote from another language: report the whole literal once, not each quote
                 if let Some(close) = hints::quote_close(c) {
@@ -544,7 +560,73 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         toks.push(Token { tok: Tok::Newline, span: end });
     }
     toks.push(Token { tok: Tok::Eof, span: end });
-    (toks, errs)
+    (continue_lines(toks), errs)
+}
+
+/// A line that starts with a binary operator or `.` continues the line before it, and so does a
+/// line after one that ends with a binary operator: no statement can start or end with one.
+///     let det = a * x
+///             - b * y
+///     let n = xs.filter(x => x > 0)
+///               .len()
+fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
+    let binary = |t: &Tok| {
+        matches!(
+            t,
+            Tok::Plus
+                | Tok::Star
+                | Tok::Slash
+                | Tok::Percent
+                | Tok::Eq
+                | Tok::Ne
+                | Tok::Lt
+                | Tok::Le
+                | Tok::Gt
+                | Tok::Ge
+                | Tok::And
+                | Tok::Or
+        )
+    };
+    // `-` too: a statement cannot start with a negation. Not `++` or `--` (`i--`, `--i`), which
+    // the parser explains.
+    let op = |t: Option<&Token>, after: Option<&Token>| {
+        t.is_some_and(|t| (binary(&t.tok) || t.tok == Tok::Minus) && after.is_none_or(|a| a.tok != t.tok))
+    };
+    let mut out: Vec<Token> = Vec::with_capacity(toks.len());
+    for (i, t) in toks.iter().enumerate() {
+        if t.tok == Tok::Newline && i > 0 {
+            let starts = op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| n.tok == Tok::Dot);
+            let ends = op(toks.get(i - 1), i.checked_sub(2).map(|k| &toks[k]));
+            if starts || ends {
+                continue;
+            }
+        }
+        out.push(t.clone());
+        // `print("no") ret` in a one-line block: `ret`, `break` and `continue` end a line anyway
+        if !matches!(t.tok, Tok::Newline | Tok::LBrace)
+            && matches!(toks.get(i + 1).map(|n| &n.tok), Some(Tok::Ret | Tok::Break | Tok::Continue))
+            && toks.get(i + 1).is_some_and(|n| n.span.line == t.span.line)
+        {
+            out.push(Token { tok: Tok::Newline, span: toks[i + 1].span });
+        }
+    }
+    out
+}
+
+/// `|a, b|` at `cs[i]`: the length of the parameter list of a closure (Rust, Ruby) and its names.
+fn closure_params(cs: &[char], i: usize) -> Option<(usize, Vec<String>)> {
+    // only where a value starts (`map(|x| ...`, `f(a, |x| ...`, `= |x| ...`), not in `a | b | c`
+    let before = cs[..i].iter().rev().find(|c| **c != ' ' && **c != '\t');
+    if !matches!(before, Some('(' | ',' | '=')) {
+        return None;
+    }
+    let close = cs[i + 1..].iter().take_while(|c| **c != '\n').position(|c| *c == '|')? + i + 1;
+    let inside: String = cs[i + 1..close].iter().collect();
+    let names: Vec<String> = inside.split(',').map(|n| n.trim().to_string()).collect();
+    let word = |n: &String| {
+        n.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && n.chars().all(|c| c.is_alphanumeric() || c == '_')
+    };
+    names.iter().all(word).then_some((close + 1 - i, names))
 }
 
 /// E0001 for the character at `cs[i]`, with a hint about what was probably meant.
@@ -568,9 +650,7 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         }
         let digits: String = cs[start..i].iter().collect();
         // `5.len()` is not a float either
-        let fix = after
-            .is_none_or(|a| !(a.is_alphanumeric() || a == '_' || a == '.'))
-            .then(|| Edit::replace(span, ".", ".0"));
+        let fix = after.is_none_or(|a| !(a.is_alphanumeric() || a == '_' || a == '.')).then(|| Edit::replace(span, ".", ".0"));
         (format!("a float needs digits on both sides of the dot: write `{digits}.0`"), fix)
     } else {
         (hints::bad_char(c), hints::char_fix(c).map(|to| Edit::replace(span, &c.to_string(), to)))
@@ -663,12 +743,13 @@ fn char_lit(cs: &[char], i: usize, span: Span, errs: &mut Vec<Diag>) -> (Tok, us
                     '\\' => '\\',
                     '"' => '"',
                     '\'' => '\'',
+                    '0' => '\0',
                     '\n' => break,
                     _ => {
                         let at = Span { line: span.line, col: span.col + (j - i) };
                         errs.push(
                             Diag::new("E0004", format!(r"unknown escape `\{esc}` in a character"), at)
-                                .hint(r#"the escapes are `\n` `\t` `\r` `\\` `\"` and `\'`"#),
+                                .hint(r#"the escapes are `\n` `\t` `\r` `\0` `\\` `\"` and `\'`"#),
                         );
                         esc
                     }

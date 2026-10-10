@@ -1,0 +1,7 @@
+// expect: E0253
+fn halvings(n: int) -> int = if n <= 1 { 0 } else { 1 + halvings(n / 1) }
+ex halvings(1) == 0, halvings(8) == 3
+
+fn main() {
+    print(halvings(64))
+}

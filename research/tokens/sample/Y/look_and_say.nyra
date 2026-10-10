@@ -1,0 +1,22 @@
+cur = [2, 3, 3, 3, 1, 1, 1]
+for step in 1..41:
+    nxt = []
+    i = 0
+    n = cur.len()
+    while i < n:
+        d = cur[i]
+        j = i + 1
+        while j < n && cur[j] == d:
+            j += 1
+        c = j - i
+        if c < 10:
+            nxt.push(c)
+        else:
+            for ch in str(c):
+                nxt.push(ch.code() - 48)
+        nxt.push(d)
+        i = j
+    cur = nxt
+    if step % 5 == 0:
+        print(step, cur.len())
+print(cur.count(x => x == 1), cur.count(x => x == 2), cur.count(x => x == 3))

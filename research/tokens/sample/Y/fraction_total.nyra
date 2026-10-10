@@ -1,0 +1,50 @@
+struct Frac { n: int, d: int }
+
+fn gcd(var a, var b):
+    a, b = abs(a), abs(b)
+    while b != 0:
+        a, b = b, a % b
+    a
+
+fn mk(var n, var d):
+    if d < 0:
+        n, d = -n, -d
+    g = gcd(n, d)
+    Frac(n / g, d / g)
+
+fn fmt(f):
+    if f.d == 1: ret str(f.n)
+    if abs(f.n) < f.d: ret "{f.n}/{f.d}"
+    sign = "-" if f.n < 0 else ""
+    a = abs(f.n)
+    "{sign}{a / f.d} {a % f.d}/{f.d}"
+
+fn greater(a, b) = a.n * b.d > b.n * a.d
+
+ops = ["add 1/2", "sub 3/4", "mul -2/3", "div 5/6", "add 7/3", "div 0/5", "mul 4/-6", "add 10/4", "sub -1/12", "mul 0/7", "add -9/4", "div -3/2", "sub 5/3", "add 2/3", "div 1/-4"]
+
+total = Frac(0, 1)
+best = Frac(0, 1)
+best_k = 0
+
+for i, op in ops:
+    word, fr = op.split(" ")
+    a, b = fr.split("/")
+    f = mk(int(a), int(b))
+    if word == "div" && f.n == 0:
+        print("{op}: cannot divide by zero, total {fmt(total)}")
+        continue
+    if word == "add":
+        total = mk(total.n * f.d + f.n * total.d, total.d * f.d)
+    elif word == "sub":
+        total = mk(total.n * f.d - f.n * total.d, total.d * f.d)
+    elif word == "mul":
+        total = mk(total.n * f.n, total.d * f.d)
+    else:
+        total = mk(total.n * f.d, total.d * f.n)
+    print("{op}: total {fmt(total)}")
+    if best_k == 0 || greater(total, best):
+        best = total
+        best_k = i + 1
+
+print("largest total {fmt(best)} after operation {best_k}")

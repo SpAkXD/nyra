@@ -1,0 +1,6 @@
+// expect: E0203
+use fs
+
+fn main() {
+    fs.write("a.txt", 42)
+}

@@ -1,0 +1,35 @@
+{
+ "ref": {
+  "current": 1.4929850347407803,
+  "P0 docs-only (script)": 1.449458845537146,
+  "P1 lite (script + respell + library idioms)": 1.4165553180117585,
+  "P2 0.6-X mechanical": 1.303413949759487,
+  "P2 0.6-X projected (mechanical x hand factor)": 1.1619972351314733,
+  "P2 0.6-X projected, half the hand factor": 1.23270559244548,
+  "P3 0.6-Y mechanical": 1.2306587386424372,
+  "P3 0.6-Y projected": 1.1086405491459432,
+  "P3 0.6-Y projected, half the hand factor": 1.1696496438941901
+ },
+ "opus": {
+  "current": 1.2830521108626414,
+  "P0 docs-only (script)": 1.2665175848749746,
+  "P1 lite (script + respell + library idioms)": 1.2378532221996341,
+  "P2 0.6-X mechanical": 1.1381378328928644,
+  "P2 0.6-X projected (mechanical x hand factor)": 1.0146531079125494,
+  "P2 0.6-X projected, half the hand factor": 1.076395470402707,
+  "P3 0.6-Y mechanical": 1.0893474283390934,
+  "P3 0.6-Y projected": 0.9813400687316486,
+  "P3 0.6-Y projected, half the hand factor": 1.035343748535371
+ },
+ "sonnet": {
+  "current": 1.2172196198366303,
+  "P0 docs-only (script)": 1.2085478688397662,
+  "P1 lite (script + respell + library idioms)": 1.1827261817196393,
+  "P2 0.6-X mechanical": 1.0861368123572452,
+  "P2 0.6-X projected (mechanical x hand factor)": 0.9682940505328471,
+  "P2 0.6-X projected, half the hand factor": 1.0272154314450461,
+  "P3 0.6-Y mechanical": 1.0453718400371645,
+  "P3 0.6-Y projected": 0.9417246019631385,
+  "P3 0.6-Y projected, half the hand factor": 0.9935482210001515
+ }
+}

@@ -1,0 +1,6 @@
+// expect: E0340 at 5:14
+use fs
+
+fn main() {
+    print(fs.read("no such file.txt"))
+}

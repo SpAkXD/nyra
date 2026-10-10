@@ -176,7 +176,7 @@ fn apply_json(src: &str, edits: &[Json]) -> String {
         .map(|e| (at(e, "line", "col"), at(e, "end_line", "end_col"), e.get("text").and_then(|t| t.as_str()).unwrap().to_string()))
         .collect();
     // from the last edit to the first, so the earlier positions stay valid
-    ranges.sort_by(|a, b| b.0.cmp(&a.0));
+    ranges.sort_by_key(|a| std::cmp::Reverse(a.0));
     let mut out = chars;
     for (a, b, text) in ranges {
         out.splice(a..b, text.chars());
@@ -228,7 +228,11 @@ fn check_json_fix_reports_how_many_errors_were_fixed() {
     assert_eq!(json.get("ok").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(json.get("fixed").and_then(|v| v.as_u64()), Some(2));
     // the summary of the edits goes to stderr, a unified diff without context lines
-    assert!(stderr(&out).contains("@@ -2,2 +2,2 @@\n-    let x = 1;\n-    print(x);\n+    let x = 1\n+    print(x)\n"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("@@ -2,2 +2,2 @@\n-    let x = 1;\n-    print(x);\n+    let x = 1\n+    print(x)\n"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]

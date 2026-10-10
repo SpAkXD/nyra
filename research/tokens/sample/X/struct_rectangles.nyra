@@ -1,0 +1,9 @@
+struct Rect:
+    width: int
+    height: int
+
+fn area(r: Rect) = r.width * r.height
+fn perimeter(r: Rect) = 2 * (r.width + r.height)
+
+for r in [Rect(width: 3, height: 4), Rect(width: 10, height: 2), Rect(width: 7, height: 7)]:
+    print(area(r), perimeter(r))

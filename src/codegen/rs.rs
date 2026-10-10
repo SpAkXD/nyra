@@ -15,17 +15,96 @@ use super::scope::{self, mentions, range_for, Info};
 use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
 
 const RESERVED: &[&str] = &[
-    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for", "if", "impl",
-    "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
-    "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn",
-    "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual",
-    "yield", "try", "union", "gen", "Rc", "Vec", "String", "Str", "Option", "Some", "None", "Ok", "Err",
-    "Result", "Default", "Clone", "Copy", "PartialEq", "std", "core", "drop", "print", "println", "eprintln",
-    "format", "vec", "char", "i64", "f64", "bool", "str", "u32", "usize", "i32", "Box",
+    "as",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+    "async",
+    "await",
+    "dyn",
+    "abstract",
+    "become",
+    "box",
+    "do",
+    "final",
+    "macro",
+    "override",
+    "priv",
+    "typeof",
+    "unsized",
+    "virtual",
+    "yield",
+    "try",
+    "union",
+    "gen",
+    "Rc",
+    "Vec",
+    "String",
+    "Str",
+    "Option",
+    "Some",
+    "None",
+    "Ok",
+    "Err",
+    "Result",
+    "Default",
+    "Clone",
+    "Copy",
+    "PartialEq",
+    "std",
+    "core",
+    "drop",
+    "print",
+    "println",
+    "eprintln",
+    "format",
+    "vec",
+    "char",
+    "i64",
+    "f64",
+    "bool",
+    "str",
+    "u32",
+    "usize",
+    "i32",
+    "Box",
 ];
 
 /// The Rust runtime, emitted after the program (`@FILE@` becomes the source path).
 const RUNTIME: &str = include_str!("../rt/rs/runtime.rs");
+const STD: &str = include_str!("../rt/rs/std.rs");
+const JSON: &str = include_str!("../rt/rs/json.rs");
 
 /// A Nyra name as a Rust identifier: `ny...` names belong to the runtime, and Rust's own words get a `_`.
 fn name(n: &str) -> String {
@@ -45,6 +124,10 @@ fn rstype(t: Ty) -> String {
         Ty::Char => "char".into(),
         Ty::Str => "Str".into(),
         Ty::Array(_) => format!("Rc<Vec<{}>>", rstype(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("Rc<NyMap<{}, {}>>", rstype(k), rstype(v))
+        }
         Ty::Struct(_) => name(&t.struct_name().expect("a struct")),
         other => unreachable!("the Rust backend got the type `{}`", other.name()),
     }
@@ -117,6 +200,43 @@ fn structs(m: &Module, out: &mut String) {
     }
 }
 
+/// How each struct is written as JSON and read from it (`json.str`, `json.parse`).
+fn json_impls(m: &Module, out: &mut String) {
+    for (_, s) in &m.structs.0 {
+        let n = name(&s.name);
+        let _ = writeln!(out, "impl NyJson for {n} {{\n    fn ny_jenc(&self, out: &mut String) {{");
+        for (k, (f, _)) in s.fields.iter().enumerate() {
+            let key = format!("{}{}:", if k == 0 { "{" } else { "," }, crate::diag::json_str(f));
+            let _ = writeln!(out, "        out.push_str({});\n        self.{}.ny_jenc(out);", lit(&key), name(f));
+        }
+        if s.fields.is_empty() {
+            out.push_str("        out.push('{');\n");
+        }
+        out.push_str("        out.push('}');\n    }\n    fn ny_jdec(p: &mut NyJP) -> Self {\n");
+        for (k, (_, t)) in s.fields.iter().enumerate() {
+            let _ = writeln!(out, "        let mut f{k}: Option<{}> = None;", rstype(*t));
+        }
+        out.push_str("        if p.open(b'{', \"an object\") {\n            loop {\n                let k = p.key();\n                match k.as_str() {\n");
+        for (k, (f, t)) in s.fields.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "                    {} => {{\n                        p.path.push({}.to_string());\n                        f{k} = Some(<{} as NyJson>::ny_jdec(p));\n                        p.path.pop();\n                    }}",
+                lit(f),
+                lit(&format!(".{f}")),
+                rstype(*t)
+            );
+        }
+        out.push_str("                    _ => p.skip(),\n                }\n                if !p.next(b'}') {\n                    break;\n                }\n            }\n        }\n");
+        let fields: Vec<String> = s
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(k, (f, _))| format!("{}: f{k}.unwrap_or_else(|| p.missing({}))", name(f), lit(f)))
+            .collect();
+        let _ = writeln!(out, "        {n} {{ {} }}\n    }}\n}}\n", fields.join(", "));
+    }
+}
+
 /// `file` is the source path as given to nyra; runtime errors report it.
 pub fn gen(m: &Module, file: &str) -> String {
     let mut out = String::from(concat!(
@@ -125,6 +245,10 @@ pub fn gen(m: &Module, file: &str) -> String {
         "use std::rc::Rc;\n\n",
     ));
     structs(m, &mut out);
+    let json = m.uses_json();
+    if json {
+        json_impls(m, &mut out);
+    }
     for f in &m.funcs {
         let info = Info::new(f);
         let n = names::scoped(f, name, "ny_", &info.loop_var);
@@ -156,6 +280,12 @@ pub fn gen(m: &Module, file: &str) -> String {
         out.push_str("}\n\n");
     }
     out.push_str(&RUNTIME.replace("@FILE@", &lit(file)));
+    if m.uses_std() {
+        out.push_str(STD);
+    }
+    if json {
+        out.push_str(JSON);
+    }
     out
 }
 
@@ -182,7 +312,6 @@ impl Pos {
         }
     }
 }
-
 
 /// How an operand of a change in place is used.
 #[derive(Clone, Copy)]
@@ -421,7 +550,8 @@ impl<'a> Gen<'a> {
             }
             StmtKind::Call { dst, func, args } => {
                 // the variables passed `inout` are borrowed mutably for the whole call
-                let roots: Vec<LocalId> = args.iter().filter_map(|a| if let Arg::InOut(p) = a { Some(p.root) } else { None }).collect();
+                let roots: Vec<LocalId> =
+                    args.iter().filter_map(|a| if let Arg::InOut(p) = a { Some(p.root) } else { None }).collect();
                 let mut parts = Vec::with_capacity(args.len());
                 for a in args {
                     match a {
@@ -473,6 +603,11 @@ impl<'a> Gen<'a> {
                         }
                     }
                     RtOp::ArrReverse => format!("Rc::make_mut({}).reverse()", self.place(place, &[root]).mut_ref()),
+                    RtOp::ArrSortBy => {
+                        let keys = self.operand(&args[0], root, Use::Borrow);
+                        let lt = if self.ty(&args[0]).elem() == Some(Ty::Float) { "ny_lt_float" } else { "ny_lt_ord" };
+                        format!("ny_sort_by({}, {keys}, {lt})", self.place(place, &[root]).mut_ref())
+                    }
                     RtOp::ArrSwap => {
                         let i = self.operand(&args[0], root, Use::Value);
                         let j = self.operand(&args[1], root, Use::Value);
@@ -481,6 +616,15 @@ impl<'a> Gen<'a> {
                     RtOp::ArrAppend => {
                         let ys = self.operand(&args[0], root, Use::Borrow);
                         format!("ny_append({}, {ys})", self.place(place, &[root]).mut_ref())
+                    }
+                    RtOp::MapSet => {
+                        let k = self.operand(&args[0], root, Use::Owned);
+                        let v = self.operand(&args[1], root, Use::Owned);
+                        format!("Rc::make_mut({}).set({k}, {v})", self.place(place, &[root]).mut_ref())
+                    }
+                    RtOp::MapRemove => {
+                        let k = self.operand(&args[0], root, Use::Owned);
+                        format!("Rc::make_mut({}).remove(&{k})", self.place(place, &[root]).mut_ref())
                     }
                     other => unreachable!("{} does not change a place", other.name()),
                 };
@@ -580,7 +724,21 @@ impl<'a> Gen<'a> {
         let code = match op {
             RtOp::Print => {
                 let (fmt, values) = self.format_parts(args);
-                let line = if values.is_empty() { format!("println!(\"{fmt}\");") } else { format!("println!(\"{fmt}\", {});", values.join(", ")) };
+                let line = if values.is_empty() {
+                    format!("println!(\"{fmt}\");")
+                } else {
+                    format!("println!(\"{fmt}\", {});", values.join(", "))
+                };
+                self.line(&line);
+                return;
+            }
+            RtOp::PrintNoLine => {
+                let (fmt, values) = self.format_parts(args);
+                let line = if values.is_empty() {
+                    format!("print!(\"{fmt}\");")
+                } else {
+                    format!("print!(\"{fmt}\", {});", values.join(", "))
+                };
                 self.line(&line);
                 return;
             }
@@ -602,6 +760,10 @@ impl<'a> Gen<'a> {
                 }
             }
             RtOp::DivInt => format!("ny_div({}, {}, {at})", a[0], a[1]),
+            RtOp::AddInt => format!("ny_add({}, {}, {at})", a[0], a[1]),
+            RtOp::SubInt => format!("ny_sub({}, {}, {at})", a[0], a[1]),
+            RtOp::MulInt => format!("ny_mul({}, {}, {at})", a[0], a[1]),
+            RtOp::NegInt => format!("ny_neg({}, {at})", a[0]),
             RtOp::RemInt => format!("ny_rem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("ny_f2i({}, {at})", a[0]),
             RtOp::StrConcat => format!("Rc::new(format!(\"{{}}{{}}\", {}, {}))", a[0], a[1]),
@@ -621,6 +783,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("Rc::new({}.chars().map(|c| c as i64).collect())", self.str_ref(&args[0])),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", self.str_ref(&args[0]), self.str_ref(&args[1])),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::ArrNew => {
@@ -655,12 +818,34 @@ impl<'a> Gen<'a> {
                     format!("{r}.clone()")
                 }
             }
+            RtOp::MapNew => {
+                let items: Vec<String> = args.chunks(2).map(|p| format!("({}, {})", self.owned(&p[0]), self.owned(&p[1]))).collect();
+                format!("ny_mnew(vec![{}])", items.join(", "))
+            }
+            RtOp::MapGet => format!("ny_mget(&{}, &{}, {at}).clone()", self.expr(&args[0]), self.owned(&args[1])),
+            RtOp::MapGetOr => {
+                format!("ny_mget_or(&{}, &{}, &{}).clone()", self.expr(&args[0]), self.owned(&args[1]), self.owned(&args[2]))
+            }
+            RtOp::MapKeys => format!("ny_mkeys(&{})", self.expr(&args[0])),
+            RtOp::MapValues => format!("ny_mvalues(&{})", self.expr(&args[0])),
             RtOp::ArrSlice => format!("ny_slice({}, {}, {}, {at})", self.borrow(&args[0]), a[1], a[2]),
             RtOp::ArrRepeat => format!("ny_repeat({}, {}, {at})", self.borrow(&args[0]), a[1]),
             RtOp::ArrConcat => format!("ny_concat({}, {})", self.borrow(&args[0]), self.borrow(&args[1])),
             RtOp::ArrJoin => {
                 let f = if self.ty(&args[0]).elem() == Some(Ty::Char) { "ny_join_chars" } else { "ny_join" };
                 format!("{f}({}, {})", self.borrow(&args[0]), self.str_ref(&args[1]))
+            }
+            RtOp::JsonStr => format!("ny_jstr(&{})", self.expr(&args[0])),
+            RtOp::JsonParse => {
+                let t = self.f.local(dst.expect("verified: a destination")).ty;
+                format!("ny_jparse::<{}>({}, {at})", rstype(t), self.str_ref(&args[0]))
+            }
+            RtOp::Std(f) => {
+                // strings are passed as `&str`
+                let mut parts: Vec<String> =
+                    args.iter().map(|x| if self.ty(x) == Ty::Str { self.str_ref(x) } else { self.arg(x) }).collect();
+                parts.push(at.to_string());
+                format!("ny_std_{}({})", f.rt_name(), parts.join(", "))
             }
             other => unreachable!("{} is a `Mutate`", other.name()),
         };
@@ -680,7 +865,7 @@ impl<'a> Gen<'a> {
                     let x = self.arg(p);
                     values.push(match self.ty(p) {
                         Ty::Float => format!("ny_num({x})"),
-                        Ty::Array(_) | Ty::Struct(_) => format!("ny_show(&{})", self.expr(p)),
+                        Ty::Array(_) | Ty::Struct(_) | Ty::Map(_) => format!("ny_show(&{})", self.expr(p)),
                         _ => x,
                     });
                 }
@@ -795,7 +980,8 @@ impl<'a> Gen<'a> {
                     PureFn::CharIsUpper => format!("{}.is_ascii_uppercase()", self.expr(&args[0])),
                     PureFn::CharIsLower => format!("{}.is_ascii_lowercase()", self.expr(&args[0])),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
-                    PureFn::ArrLen => format!("({}.len() as i64)", self.expr(&args[0])),
+                    PureFn::ArrLen | PureFn::MapLen => format!("({}.len() as i64)", self.expr(&args[0])),
+                    PureFn::MapHas => format!("{}.has(&{})", self.expr(&args[0]), self.owned(&args[1])),
                     PureFn::ArrContains => format!("{}.contains(&{})", self.expr(&args[0]), self.expr(&args[1])),
                     PureFn::ArrIndexOf => format!("ny_index_of({}, &{})", self.borrow(&args[0]), self.expr(&args[1])),
                 }

@@ -91,7 +91,10 @@ function ny_shown(s) {
 function ny_str_to_int(s, line, col) {
     if (/^-?[0-9]+$/.test(s)) {
         const v = BigInt(s);
-        if (v >= -9223372036854775808n && v <= 9223372036854775807n) return Number(v);
+        if (v >= -9223372036854775808n && v <= 9223372036854775807n) {
+            const n = Number(v) + 0;
+            return Number.isSafeInteger(n) ? n : ny_unsafe_int(`int("${s}")`, line, col);
+        }
     }
     ny_panic("E0244", `cannot parse "${ny_shown(s)}" as int`, "int(s) accepts only digits with an optional `-`, e.g. \"-42\"", line, col);
 }

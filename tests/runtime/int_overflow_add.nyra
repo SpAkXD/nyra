@@ -1,0 +1,9 @@
+// expect: E0255 at 6:15
+// only: native py rs go
+fn main() {
+    var x = 9223372036854775806
+    for i in 0..3 {
+        x = x + 1
+        print(x)
+    }
+}

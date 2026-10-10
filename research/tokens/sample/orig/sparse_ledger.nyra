@@ -1,0 +1,106 @@
+fn main() {
+    let cmds = [
+        "add rent 1 900", "add food 1 250", "add food 2 -40", "move rent 1 food 2 100",
+        "move food 2 rent 3 200", "add fun 12 75", "clear fun 12", "clear fun 12",
+        "add rent 3 1300", "move rent 3 rent 3 50", "add zoo 5 0", "add tax 4 -1300",
+        "move rent 3 tax 4 1300", "add food 1 -250", "add car 7 15", "move car 7 car 8 15",
+        "add tax 10 -75", "add food 10 12000", "move food 10 rent 10 2500"
+    ]
+    var acc: [str: [int]] = [:]
+    for line in cmds {
+        let p = line.split(" ")
+        if p[0] == "add" {
+            let name = p[1]
+            let m = int(p[2])
+            let n = int(p[3])
+            var row = acc.get(name, [0].repeat(13))
+            row[m] += n
+            acc[name] = row
+            print("{name} {m} = {row[m]}")
+        } else if p[0] == "move" {
+            let a = p[1]
+            let ma = int(p[2])
+            let b = p[3]
+            let mb = int(p[4])
+            let n = int(p[5])
+            var ra = acc.get(a, [0].repeat(13))
+            if ra[ma] < n {
+                print("move rejected")
+            } else {
+                ra[ma] -= n
+                acc[a] = ra
+                var rb = acc.get(b, [0].repeat(13))
+                rb[mb] += n
+                acc[b] = rb
+                let va = acc[a][ma]
+                let vb = acc[b][mb]
+                print("{a} {ma} = {va}, {b} {mb} = {vb}")
+            }
+        } else {
+            let name = p[1]
+            let m = int(p[2])
+            var row = acc.get(name, [0].repeat(13))
+            if row[m] == 0 {
+                print("{name} {m} already empty")
+            } else {
+                let old = row[m]
+                row[m] = 0
+                acc[name] = row
+                print("{name} {m} cleared (was {old})")
+            }
+        }
+    }
+    var names: [str] = []
+    for k in acc {
+        if acc[k].any(v => v != 0) {
+            names.push(k)
+        }
+    }
+    names.sort()
+    var months: [int] = []
+    for m in 1..13 {
+        var nz = false
+        for k in names {
+            if acc[k][m] != 0 { nz = true }
+        }
+        if nz { months.push(m) }
+    }
+    var rows: [[str]] = []
+    var header = ["account"]
+    for m in months { header.push(str(m)) }
+    header.push("total")
+    rows.push(header)
+    for k in names {
+        let r = acc[k]
+        var line = [k]
+        for m in months {
+            if r[m] == 0 { line.push("-") } else { line.push(str(r[m])) }
+        }
+        line.push(str(r.sum()))
+        rows.push(line)
+    }
+    var trow = ["total"]
+    var grand = 0
+    for m in months {
+        var s = 0
+        for k in names { s += acc[k][m] }
+        trow.push(str(s))
+    }
+    for k in names { grand += acc[k].sum() }
+    trow.push(str(grand))
+    rows.push(trow)
+    let ncol = header.len()
+    var widths = [0].repeat(ncol)
+    for r in rows {
+        for i, c in r {
+            if c.len() > widths[i] { widths[i] = c.len() }
+        }
+    }
+    for r in rows {
+        var parts: [str] = []
+        for i, c in r {
+            if i == 0 { parts.push(c.pad_right(widths[i])) } else { parts.push(c.pad_left(widths[i])) }
+        }
+        print(parts.join("  "))
+    }
+}

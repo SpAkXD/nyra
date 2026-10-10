@@ -1,0 +1,9 @@
+5 arguments: ["one", "two words", "", "--flag", "ünïcode"]
+[one]
+[two words]
+[]
+[--flag]
+[ünïcode]
+false []
+false false
+stopping with code 3

@@ -1,0 +1,9 @@
+fn digit_sum(var n):
+    s = 0
+    while n > 0:
+        s += n % 10
+        n /= 10
+    s
+
+for n in [12345, 9999, 100000, 987654321]:
+    print(digit_sum(n))
