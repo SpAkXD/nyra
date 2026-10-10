@@ -128,7 +128,7 @@ symbol, as described next.
 
 **Changing a program that already exists: edit by symbol, do not resend the file.** Rewriting a whole
 file to change one function costs the whole file in output tokens on every turn. Nyra addresses
-functions, structs and fields (`Struct.field`) by name:
+functions, structs, enums, struct fields (`Struct.field`) and enum variants (`Enum.Variant`) by name:
 
 ```
 nyra outline prog.nyra             # one line per symbol: `45-52 fn find(items: [Item], sku: str) -> int`
@@ -151,6 +151,8 @@ fn tax(total: int) -> int = total / 5
 @delete old_helper
 @rename Item.stock in_stock
 @add-field Order note: str after customer
+@add-variant Shape Tri(float, float, float) after Rect
+@rename Shape.Circle Disc
 ```
 
 - Each edit replaces the exact source range of its symbol; every other byte of the file stays as it

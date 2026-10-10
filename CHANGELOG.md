@@ -9,6 +9,9 @@ Language
 - Enums that carry values (sum types): `enum Shape { Circle(float), Rect(float, float), Empty }`, built `Shape.Circle(2.0)`, taken apart with `match s { Shape.Circle(r) => ..., Shape.Rect(w, h) => ..., Shape.Empty => ... }` (every case must be covered, `_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`. New codes E0286 (a variant written without its values), E0287 (a variant pattern that does not name its values), E0288 (`all()` of an enum with values); E0222 also covers an enum that contains itself.
 - `match` and `if let` are values: `let area = match s { Shape.Circle(r) => 3.14 * r * r, _ => 0.0 }`, `return match d { ... }`, `let n = if let v = m.get(k) { v + 1 } else { 0 }`. Each arm is one expression (arms on lines of their own or separated by commas) and all arms have one type (E0212); the statement forms are unchanged.
 
+Tooling
+- `nyra outline`, `show` and `edit` (and the MCP tools `nyra_outline`, `nyra_show`, `nyra_edit`) know enums: the outline lists `enum Shape { Circle(float), Empty }` with its variants (`--json` has `variants`), `Enum.Variant` addresses one variant, and an edit can replace, add (`@add-variant Shape Tri(float)` / `--add-variant`), delete or rename an enum or a variant, with every reference. A rename now also follows the uses inside `ex` examples.
+
 ## v0.6.0 (2026-10-10)
 
 Language

@@ -409,7 +409,7 @@ fn edit_script_errors() {
     let (_, _, err) = edit("script-unknown", SHAPES, &[], Some("@move area\n"));
     assert!(err.contains("unknown command `@move area`"), "{err}");
     let (_, _, err) = edit("script-statement", SHAPES, &[], Some("fn f() = print(1)\nprint(2)\n"));
-    assert!(err.contains("only hold `fn` and `struct` definitions"), "{err}");
+    assert!(err.contains("only hold `fn`, `struct` and `enum` definitions"), "{err}");
     let (_, _, err) = edit("script-main", "print(1)\n", &["--set", "main", "fn main() {\n}"], None);
     assert!(err.contains("this file is a script"), "{err}");
 }
@@ -492,7 +492,7 @@ fn mcp_tools() {
     // with code the new code comes back
     let j = Json::parse(&replies[4].1).unwrap();
     assert_eq!(j.get("code").and_then(Json::as_str), Some("struct Point { x: int }\nfn main() {\n}\n"));
-    assert!(replies[5].0 && replies[5].1.contains("no function or struct `nothing`"));
+    assert!(replies[5].0 && replies[5].1.contains("no function, struct or enum `nothing`"));
     assert_eq!(replies[6], (false, "main.nyra: 2 lines\n1-2 fn main()\n".to_string()));
     assert!(replies[7].0 && replies[7].1.contains("must be a .nyra file"));
 }
@@ -537,4 +537,174 @@ fn one_edit_costs_a_fraction_of_the_whole_file() {
     assert!(edit_turn * 10 < whole, "an edit of one function must cost under a tenth of the file");
     assert!(outline.len() * 3 < whole, "the outline must cost under a third of the file");
     assert!(compiles(&after));
+}
+
+// ---- enums ---------------------------------------------------------------------------------------------------
+
+const SOLIDS_OK: &str = "// shapes with values
+enum Shape {
+    Circle(float)
+    Rect(float, float) // a rectangle
+    Empty
+}
+
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r
+        Shape.Rect(w, h) => return w * h
+        Shape.Empty => return 0.0
+    }
+}
+
+fn main() {
+    print(area(Shape.Rect(2.0, 3.0)), Shape.Empty)
+}
+";
+
+#[test]
+fn enums_are_symbols() {
+    assert!(compiles(SOLIDS_OK));
+    let path = file("enum-outline", SOLIDS_OK);
+    let out = stdout(&run(&["outline"], &path, None));
+    let lines: Vec<&str> = out.lines().skip(1).collect();
+    assert_eq!(lines, ["2-6 enum Shape { Circle(float), Rect(float, float), Empty }", "8-14 fn area(s: Shape) -> float", "16-18 fn main()"]);
+    let json = Json::parse(stdout(&run(&["outline", "--json"], &path, None)).trim()).unwrap();
+    let syms = json.get("symbols").and_then(Json::as_array).unwrap();
+    assert_eq!(syms[0].get("kind").and_then(Json::as_str), Some("enum"));
+    let variants = syms[0].get("variants").and_then(Json::as_array).unwrap();
+    assert_eq!(variants.len(), 3);
+    assert_eq!(variants[1].get("name").and_then(Json::as_str), Some("Rect"));
+    assert_eq!(variants[1].get("values").and_then(Json::as_str), Some("(float, float)"));
+    assert_eq!(variants[2].get("values").and_then(Json::as_str), Some(""));
+    // the whole enum, with its comment line, and one variant
+    let shown = stdout(&run(&["show", "Shape"], &path, None));
+    assert!(shown.starts_with("// shapes with values
+enum Shape {
+    Circle(float)
+") && shown.trim_end().ends_with("Empty
+}"));
+    assert_eq!(stdout(&run(&["show", "Shape.Rect"], &path, None)), "Rect(float, float)
+");
+    let out = run(&["show", "Shape.Nope"], &path, None);
+    assert!(!out.status.success() && stderr(&out).contains("enum `Shape` has no variant `Nope`; its variants: Circle, Rect, Empty"));
+}
+
+#[test]
+fn a_variant_is_added_replaced_and_deleted_with_the_code_that_uses_it() {
+    // a variant and the arm that matches it, in one batch
+    let script = "@add-variant Shape Tri(float, float, float) after Rect
+@replace area
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r
+        Shape.Rect(w, h) => return w * h
+        Shape.Tri(a, b, c) => return a + b + c
+        Shape.Empty => return 0.0
+    }
+}
+";
+    let (ok, text, err) = edit("enum-add-variant", SOLIDS_OK, &[], Some(script));
+    assert!(ok, "{err}");
+    assert!(text.contains("    Rect(float, float) // a rectangle
+    Tri(float, float, float)
+    Empty
+}"), "{text}");
+    assert!(compiles(&text));
+    // alone it breaks the match: refused, the file stays
+    let (ok, text, err) = edit("enum-add-variant-refused", SOLIDS_OK, &["--add-variant", "Shape", "Tri(float)"], None);
+    assert!(!ok && text == SOLIDS_OK && err.contains("E0281"), "{err}");
+    // a variant of a one-line enum
+    let (ok, text, _) = edit("enum-add-one-line", "enum Dir { N, E }
+print(Dir.all())
+", &["--add-variant", "Dir", "S"], None);
+    assert!(ok);
+    assert_eq!(text, "enum Dir { N, E, S }
+print(Dir.all())
+");
+    // replacing a variant: one line
+    let (ok, text, err) = edit("enum-replace-variant", SOLIDS_OK, &["--set", "Shape.Circle", "Circle(float)", "--force"], None);
+    assert!(ok, "{err}");
+    assert_eq!(text, SOLIDS_OK);
+    let (ok, _, err) = edit("enum-replace-variant-bad", SOLIDS_OK, &["--set", "Shape.Circle", "radius: float"], None);
+    assert!(!ok && err.contains("a variant is replaced by one line"), "{err}");
+    // deleting: the variant and its arm
+    let script = "@delete Shape.Empty
+@replace area
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r
+        Shape.Rect(w, h) => return w * h
+    }
+}
+@replace main
+fn main() {
+    print(area(Shape.Rect(2.0, 3.0)))
+}
+";
+    let (ok, text, err) = edit("enum-delete-variant", SOLIDS_OK, &[], Some(script));
+    assert!(ok, "{err}");
+    assert!(text.contains("    Rect(float, float) // a rectangle
+}
+") && !text.contains("Empty"), "{text}");
+    assert!(compiles(&text));
+}
+
+#[test]
+fn renaming_an_enum_or_a_variant_changes_every_use() {
+    let (ok, text, err) = edit("enum-rename-variant", SOLIDS_OK, &["--rename", "Shape.Rect", "Box"], None);
+    assert!(ok, "{err}");
+    assert_eq!(text, SOLIDS_OK.replace("Rect(", "Box(").replace("Shape.Rect", "Shape.Box"));
+    assert!(compiles(&text));
+    let (ok, text, err) = edit("enum-rename", SOLIDS_OK, &["--rename", "Shape", "Solid"], None);
+    assert!(ok, "{err}");
+    assert!(text.contains("enum Solid {") && text.contains("fn area(s: Solid)") && text.contains("Solid.Circle(r)") && text.contains("print(area(Solid.Rect(2.0, 3.0)), Solid.Empty)"), "{text}");
+    assert!(!text.contains("Shape"));
+    assert!(compiles(&text));
+    let (ok, _, err) = edit("enum-rename-taken", SOLIDS_OK, &["--rename", "Shape.Rect", "Circle"], None);
+    assert!(!ok && err.contains("already has a variant `Circle`"), "{err}");
+    // a rename also changes the examples that use the name
+    let with_example = SOLIDS_OK.replace("fn main()", "ex area(Shape.Rect(2.0, 3.0)) == 6.0
+
+fn main()");
+    let (ok, text, err) = edit("enum-rename-example", &with_example, &["--rename", "Shape.Rect", "Box"], None);
+    assert!(ok, "{err}");
+    assert!(text.contains("ex area(Shape.Box(2.0, 3.0)) == 6.0"), "{text}");
+}
+
+#[test]
+fn an_enum_in_new_code_is_a_definition() {
+    let code = "enum Shape {
+    Circle(float)
+    Square(float)
+    Empty
+}
+";
+    let (ok, text, err) = edit("enum-upsert", SOLIDS_OK, &["--force"], Some(code));
+    assert!(ok, "{err}");
+    assert!(text.contains("    Square(float)
+    Empty
+}") && !text.contains("Rect(float, float)
+    Empty"), "{text}");
+    let (ok, text, err) = edit("enum-add", "fn main() {
+    print(1)
+}
+", &["--add", "enum Dir { N, E }"], None);
+    assert!(ok, "{err}");
+    assert_eq!(text, "fn main() {
+    print(1)
+}
+
+enum Dir { N, E }
+");
+    // an enum next to an enum that is cut short does not swallow it
+    let outline = nyra_outline_of("enum A {
+    X
+enum B { Y }
+");
+    assert!(outline.contains("enum B { Y }"), "{outline}");
+}
+
+/// `nyra outline` of a program given as text.
+fn nyra_outline_of(text: &str) -> String {
+    stdout(&run(&["outline"], &file("enum-text", text), None))
 }

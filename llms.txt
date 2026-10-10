@@ -29,7 +29,7 @@ Let the compiler repair simple mistakes first: `nyra check prog.nyra --json --fi
 
 MCP: `nyra mcp` is a Model Context Protocol server (stdio) built into the compiler; add it with `claude mcp add nyra -- nyra mcp` or `{"command":"nyra","args":["mcp"]}`. Its tools are `nyra_spec` (the agent card, about 1,400 tokens; `full: true` returns the complete spec), `nyra_check`, `nyra_test`, `nyra_run` (native or JS, or `sandbox: true` for the interpreter with limits; it grants only standard input unless `allow: ["fs", "os"]` says more), `nyra_explain` and `nyra_build`, so an agent needs no files or shell.
 
-Editing: to change a program that exists, do not resend it. `nyra outline prog.nyra` lists its functions and structs with line ranges, `nyra show prog.nyra name` prints one, and `nyra edit prog.nyra` takes new definitions on stdin (each replaces the symbol of its name) or commands (`@replace NAME`, `@add after NAME`, `@delete NAME`, `@rename NAME NEW`, `@add-field Struct name: type`). The rest of the file stays byte-identical, and an edit that adds errors is refused. The MCP tools `nyra_outline`, `nyra_show` and `nyra_edit` do the same.
+Editing: to change a program that exists, do not resend it. `nyra outline prog.nyra` lists its functions, structs and enums with line ranges, `nyra show prog.nyra name` prints one, and `nyra edit prog.nyra` takes new definitions on stdin (each replaces the symbol of its name) or commands (`@replace NAME`, `@add after NAME`, `@delete NAME`, `@rename NAME NEW`, `@add-field Struct name: type`, `@add-variant Enum Name(type)`). The rest of the file stays byte-identical, and an edit that adds errors is refused. The MCP tools `nyra_outline`, `nyra_show` and `nyra_edit` do the same.
 
 ## Docs
 
