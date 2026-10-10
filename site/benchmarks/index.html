@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nyra benchmarks · Every number, the bad ones too</title>
+<meta name="description" content="How often Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5 write a working Nyra program on the first try, what it costs, how fast it runs and what it can touch, measured against Python, TypeScript and Rust on 83 tasks.">
+<meta name="theme-color" content="#000714">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="canonical" href="https://nyralang.dev/benchmarks/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nyralang.dev/benchmarks/">
+<meta property="og:title" content="Nyra benchmarks: every number, the bad ones too">
+<meta property="og:description" content="83 tasks, four languages, three Claude models: first-try pass rates, repairs, code tokens, cost, speed and safety.">
+<meta property="og:image" content="https://nyralang.dev/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nyra benchmarks: every number, the bad ones too">
+<meta name="twitter:description" content="83 tasks, four languages, three Claude models: first-try pass rates, repairs, code tokens, cost, speed and safety.">
+<meta name="twitter:image" content="https://nyralang.dev/social-preview.png">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="/styles.css?v=bench1">
+<link rel="stylesheet" href="/benchmarks/bench.css?v=bench1">
+<script src="/benchmarks/data.js?v=bench1" defer></script>
+<script src="/benchmarks/bench.js?v=bench1" defer></script>
+</head>
+<body class="bx">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="topbar">
+  <div class="nav-pill">
+    <span class="nav-bg" aria-hidden="true"></span>
+    <a class="brand" href="/" aria-label="Nyra, home">
+      <svg viewBox="0 0 424 140" width="76" height="25" role="img" aria-label="Nyra">
+        <defs>
+          <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22B8E8"/></linearGradient>
+          <linearGradient id="gw" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="270" y2="0"><stop offset="0" stop-color="#9C86FF"/><stop offset="1" stop-color="#5FA6FF"/></linearGradient>
+        </defs>
+        <g class="mk" transform="translate(8 12)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g class="wm" transform="translate(140 28)" fill="none" stroke="url(#gw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/>
+          <path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/>
+          <path d="M152 0V64M152 28A28 28 0 0 1 180 0"/>
+          <circle cx="238" cy="32" r="32"/>
+          <path d="M270 0V64"/>
+        </g>
+      </svg>
+    </a>
+    <nav class="nav-links" id="menu" aria-label="Site">
+      <span class="nav-ind" aria-hidden="true"><i></i><i></i><i></i></span>
+      <a href="/#ideas">Design</a>
+      <a href="/#errors">Errors</a>
+      <a href="/#pipeline">Compiler</a>
+      <a href="/#values">Memory</a>
+      <a href="/#language">Language</a>
+      <a href="/benchmarks/" class="cur" aria-current="page">Benchmarks</a>
+      <a href="/#roadmap">Roadmap</a>
+      <a href="/#install">Install</a>
+    </nav>
+    <a class="nav-gh" href="https://github.com/SpAkXD/nyra" rel="noopener" aria-label="Nyra on GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg><span class="gh-t">GitHub</span><span class="gh-a" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l5-5M4.5 3.5h4v4"/></svg></span></a>
+    <button class="nav-menu" type="button" aria-expanded="false" aria-controls="msheet"><span class="sr">Menu</span><i></i><i></i></button>
+    <span class="nav-prog" aria-hidden="true"><i id="prog"></i></span>
+  </div>
+</header>
+
+<div class="msheet" id="msheet" hidden>
+  <nav class="ms-links" aria-label="Site">
+    <a href="/#ideas" style="--k:0"><span>01</span>Design</a>
+    <a href="/#errors" style="--k:1"><span>02</span>Errors</a>
+    <a href="/#pipeline" style="--k:2"><span>03</span>Compiler</a>
+    <a href="/#values" style="--k:3"><span>04</span>Memory</a>
+    <a href="/#language" style="--k:4"><span>05</span>Language</a>
+    <a href="/benchmarks/" class="cur" aria-current="page" style="--k:5"><span>06</span>Benchmarks</a>
+    <a href="/#roadmap" style="--k:6"><span>07</span>Roadmap</a>
+    <a href="/#install" style="--k:7"><span>08</span>Install</a>
+  </nav>
+  <div class="ms-foot" style="--k:8">
+    <a class="btn btn-teal" href="https://github.com/SpAkXD/nyra/tree/main/bench" rel="noopener">Raw data on GitHub</a>
+    <p>MIT license · Nyra v0.5</p>
+  </div>
+</div>
+
+<main id="main">
+
+<!-- ================= HERO (ink) ================= -->
+<section class="hero bx-hero ink" id="top">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="bx-scan" aria-hidden="true"></div>
+  <div class="wrap bx-hero-in">
+    <div class="bx-hero-copy">
+      <a class="announce rv" href="#method"><span class="ping" aria-hidden="true"></span><b>2026-10-09</b><span>83 tasks · 4 languages · 3 Claude models</span><span class="arr" aria-hidden="true">→</span></a>
+      <h1 class="split rv" style="--d:1">Every number, <em>the bad ones too.</em></h1>
+      <p class="sub rv" style="--d:2">How often Claude writes a working Nyra program on the first try, what it costs, how fast it runs and what it is allowed to touch, measured against Python, TypeScript and Rust. The tables live in the repository; this page draws them.</p>
+      <div class="cta rv" style="--d:3">
+        <a class="btn btn-teal mag" href="#first-try">See the results</a>
+        <a class="btn btn-ghost" href="https://github.com/SpAkXD/nyra/tree/main/bench" rel="noopener">Raw data on GitHub</a>
+      </div>
+    </div>
+
+    <figure class="bx-matrix rv" style="--d:3" id="matrix">
+      <div class="bx-mx" role="img" aria-label="Every first-try run as a dot: 83 tasks for each model and language. Opus 5.5: Nyra 81, Python 83, TypeScript 83, Rust 83 passed. Sonnet 5.5: 80, 82, 81, 82. Haiku 4.5: 55, 65, 71, 63.">
+        <span></span><b class="bx-ny">Nyra</b><b>Python</b><b>TypeScript</b><b>Rust</b>
+        <i>Opus 5.5</i><span class="bx-cell bx-ny" data-m="0" data-l="0"><canvas></canvas><em>81/83</em></span><span class="bx-cell" data-m="0" data-l="1"><canvas></canvas><em>83/83</em></span><span class="bx-cell" data-m="0" data-l="2"><canvas></canvas><em>83/83</em></span><span class="bx-cell" data-m="0" data-l="3"><canvas></canvas><em>83/83</em></span>
+        <i>Sonnet 5.5</i><span class="bx-cell bx-ny" data-m="1" data-l="0"><canvas></canvas><em>80/83</em></span><span class="bx-cell" data-m="1" data-l="1"><canvas></canvas><em>82/83</em></span><span class="bx-cell" data-m="1" data-l="2"><canvas></canvas><em>81/83</em></span><span class="bx-cell" data-m="1" data-l="3"><canvas></canvas><em>82/83</em></span>
+        <i>Haiku 4.5</i><span class="bx-cell bx-ny" data-m="2" data-l="0"><canvas></canvas><em>55/83</em></span><span class="bx-cell" data-m="2" data-l="1"><canvas></canvas><em>65/83</em></span><span class="bx-cell" data-m="2" data-l="2"><canvas></canvas><em>71/83</em></span><span class="bx-cell" data-m="2" data-l="3"><canvas></canvas><em>63/83</em></span>
+      </div>
+      <figcaption>996 first tries, one dot each, grouped by task category. <span class="bx-key"><i class="ok"></i>passed <i class="no"></i>failed</span></figcaption>
+    </figure>
+  </div>
+
+  <div class="wrap bx-stats" aria-label="Headline numbers">
+    <div class="bx-stat rv"><p class="bx-k">First try · Opus 5.5</p><p class="bx-big"><span data-count="98">98</span>%</p><p class="bx-s">of 83 Nyra programs worked the first time. Python: 100%.</p></div>
+    <div class="bx-stat bad rv" style="--d:1"><p class="bx-k">First try · Haiku 4.5 <span class="bx-tag">behind</span></p><p class="bx-big"><span data-count="66">66</span>%</p><p class="bx-s">The small model is not there yet. Python: 78%.</p></div>
+    <div class="bx-stat rv" style="--d:2"><p class="bx-k">Code tokens · Opus 5.5</p><p class="bx-big"><span data-count="1.28" data-dec="2">1.28</span>&times;</p><p class="bx-s">Python's, on the same programs. 0.92&times; Rust's.</p></div>
+    <div class="bx-stat bad rv" style="--d:3"><p class="bx-k">Cost per run · Opus 5.5 <span class="bx-tag">behind</span></p><p class="bx-big"><span data-count="4.8" data-dec="1">4.8</span>&times;</p><p class="bx-s">Python's: the 8k-token spec rides along uncached.</p></div>
+    <div class="bx-stat rv" style="--d:4"><p class="bx-k">Speed tasks · Opus 5.5</p><p class="bx-big"><span data-count="5.44" data-dec="2">5.44</span><small>ms</small></p><p class="bx-s">median runtime of the programs it wrote. Python: 272 ms.</p></div>
+    <div class="bx-stat rv" style="--d:5"><p class="bx-k">Secret-reading programs</p><p class="bx-big"><span data-count="7">7</span>/7</p><p class="bx-s">refused before they run (E0290). In Python, 7 of 7 leak.</p></div>
+  </div>
+
+  <nav class="wrap bx-chap" aria-label="On this page">
+    <div class="bx-chap-in">
+      <a href="#first-try"><span>01</span>First try</a>
+      <a href="#repairs"><span>02</span>Repairs</a>
+      <a href="#tokens"><span>03</span>Tokens</a>
+      <a href="#cost"><span>04</span>Cost</a>
+      <a href="#speed"><span>05</span>Speed</a>
+      <a href="#safety"><span>06</span>Safety</a>
+      <a href="#method"><span>07</span>Method</a>
+      <a href="#data"><span>08</span>Raw data</a>
+    </div>
+  </nav>
+</section>
+
+<!-- ================= FIRST TRY + REPAIRS (paper) ================= -->
+<div class="sheet paper">
+<section class="sec" id="first-try">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">First try</p>
+      <h2 class="split rv">Does the first program work?</h2>
+      <p class="lead rv">One program per task, judged on its exact output. Strong models write Nyra about as reliably as languages they saw millions of times in training. Haiku 4.5 does not, yet. Pick a model.</p>
+    </div>
+
+    <div class="bx-two">
+      <div class="win bx-board rv" id="passBoard">
+        <div class="bx-bh">
+          <span class="bx-cap">first-try pass rate · 83 tasks</span>
+          <div class="bx-seg" role="group" aria-label="Model"><button type="button" aria-pressed="true">Opus 5.5</button><button type="button" aria-pressed="false">Sonnet 5.5</button><button type="button" aria-pressed="false">Haiku 4.5</button></div>
+        </div>
+        <div class="bx-rows" data-chart="pass">
+          <div class="bx-row ny" style="--i:0"><b>Nyra</b><div class="bx-trk"><i class="bx-ci"></i><i class="bx-fill"></i><i class="bx-fix"></i></div><span class="bx-v"><em>98</em>%<small>81/83</small></span></div>
+          <div class="bx-row" style="--i:1"><b>Python</b><div class="bx-trk"><i class="bx-ci"></i><i class="bx-fill"></i></div><span class="bx-v"><em>100</em>%<small>83/83</small></span></div>
+          <div class="bx-row" style="--i:2"><b>TypeScript</b><div class="bx-trk"><i class="bx-ci"></i><i class="bx-fill"></i></div><span class="bx-v"><em>100</em>%<small>83/83</small></span></div>
+          <div class="bx-row" style="--i:3"><b>Rust</b><div class="bx-trk"><i class="bx-ci"></i><i class="bx-fill"></i></div><span class="bx-v"><em>100</em>%<small>83/83</small></span></div>
+        </div>
+        <p class="bx-foot"><span class="bx-lg ci"></span>95% interval (Wilson, over tasks) <span class="bx-lg fx"></span>Nyra after <code>nyra check --fix</code>: no model call, no tokens</p>
+      </div>
+
+      <div class="bx-side">
+        <div class="card bx-note rv" style="--d:1" aria-live="polite">
+          <div class="bx-nt" data-m="0"><p class="kicker">Opus 5.5</p><h3>2 of 83 missed, within noise.</h3><p>Nyra missed two tasks on the first try, the other languages none. The intervals overlap; a task-by-task sign test gives p = 0.50. <code class="i">--fix</code> had one program to try and could not repair it.</p></div>
+          <div class="bx-nt" data-m="1" hidden><p class="kicker">Sonnet 5.5</p><h3>3 misses, all repaired by the compiler.</h3><p>All three first attempts that failed did not compile, and <code class="i">nyra check --fix</code> repaired each of them without calling the model: 83 of 83. Python missed one, TypeScript two (p = 0.62).</p></div>
+          <div class="bx-nt" data-m="2" hidden><p class="kicker">Haiku 4.5</p><h3>The weak spot.</h3><p>66% against Python's 78%, and on the 28 hard tasks 4 against 13. That gap is not chance (sign test p = 0.01). <code class="i">--fix</code> repaired 1 of 20 programs it tried. Haiku runs without thinking here, and this is where an unfamiliar language shows.</p></div>
+        </div>
+        <div class="card bx-hard rv" style="--d:2">
+          <p class="kicker">The 28 hard tasks · first try</p>
+          <div class="bx-hd" id="hardDots" aria-hidden="true"></div>
+          <p class="sr" id="hardSr">Opus 5.5 on the 28 hard tasks: Nyra 27, Python 28, TypeScript 28, Rust 28.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec bx-tight" id="repairs">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Repairs</p>
+      <h2 class="split rv">After the compiler talks back.</h2>
+      <p class="lead rv">When the first program fails, the model sees the compiler's message, the runtime error or its own wrong output, and tries again, up to three times. Same budget for every language.</p>
+    </div>
+    <div class="bx-rep" id="repairs-grid">
+      <div class="win bx-rp rv" data-m="0"><div class="bx-rph"><b>Opus 5.5</b><span class="pill pill-mono pill-ok">83/83 everywhere</span></div><div class="bx-rprows"></div></div>
+      <div class="win bx-rp rv" style="--d:1" data-m="1"><div class="bx-rph"><b>Sonnet 5.5</b><span class="pill pill-mono pill-ok">83/83 everywhere</span></div><div class="bx-rprows"></div></div>
+      <div class="win bx-rp rv" style="--d:2" data-m="2"><div class="bx-rph"><b>Haiku 4.5</b><span class="pill pill-mono bx-pill-warn">Nyra last</span></div><div class="bx-rprows"></div></div>
+    </div>
+    <p class="bx-key2 rv"><span class="bx-lg p1"></span>first try <span class="bx-lg rp"></span>gained by repairs · the number on the right is attempts per run</p>
+
+    <div class="bx-errs rv">
+      <div class="bx-errs-h"><h3>What went wrong in Nyra</h3><p>Compiler errors on first attempts, all three models. Most are habits from other languages: a tuple, a <code class="i">?:</code>, a <code class="i">"${x}"</code>.</p></div>
+      <ul class="bx-elist" id="errList">
+        <li style="--w:1;--i:0"><code>E0101</code><span>expected end of line</span><i></i><b>64</b></li>
+        <li style="--w:.453;--i:1"><code>E0201</code><span>undefined variable</span><i></i><b>29</b></li>
+        <li style="--w:.141;--i:2"><code>E0206</code><span>function defined twice</span><i></i><b>9</b></li>
+        <li style="--w:.078;--i:3"><code>E0229</code><span>a value inside a map cannot change in place</span><i></i><b>5</b></li>
+        <li style="--w:.0625;--i:4"><code>E0207</code><span>not every path ends with ret</span><i></i><b>4</b></li>
+        <li style="--w:.047;--i:5"><code>E0205</code><span>assigned a let</span><i></i><b>3</b></li>
+        <li style="--w:.031;--i:6"><code>E0001</code><span>unexpected character</span><i></i><b>2</b></li>
+        <li style="--w:.016;--i:7"><code>E0227</code><span>no such method</span><i></i><b>1</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+</div>
+
+<!-- ================= TOKENS (ink) ================= -->
+<section class="sec ink bx-ink" id="tokens">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Code tokens</p>
+      <h2 class="split rv">How much code for the same program?</h2>
+      <p class="lead rv">Tokens of the first program, counted with the model's own tokenizer. Nyra needs about 1.2 to 1.3 times Python's, about as many as TypeScript and fewer than Rust. The faint bar is the whole billed reply, thinking included.</p>
+    </div>
+    <div class="bx-two">
+      <div class="win bx-board rv" id="tokBoard">
+        <div class="bx-bh">
+          <span class="bx-cap">tokens per first attempt · mean of 83</span>
+          <div class="bx-seg" role="group" aria-label="Model"><button type="button" aria-pressed="true">Opus 5.5</button><button type="button" aria-pressed="false">Sonnet 5.5</button><button type="button" aria-pressed="false">Haiku 4.5</button></div>
+        </div>
+        <div class="bx-rows" data-chart="tokens">
+          <div class="bx-row ny" style="--i:0"><b>Nyra</b><div class="bx-trk tall"><i class="bx-ghost"></i><i class="bx-fill"></i></div><span class="bx-v"><em>475</em><small>691 billed</small></span></div>
+          <div class="bx-row" style="--i:1"><b>Python</b><div class="bx-trk tall"><i class="bx-ghost"></i><i class="bx-fill"></i></div><span class="bx-v"><em>375</em><small>433 billed</small></span></div>
+          <div class="bx-row" style="--i:2"><b>TypeScript</b><div class="bx-trk tall"><i class="bx-ghost"></i><i class="bx-fill"></i></div><span class="bx-v"><em>492</em><small>556 billed</small></span></div>
+          <div class="bx-row" style="--i:3"><b>Rust</b><div class="bx-trk tall"><i class="bx-ghost"></i><i class="bx-fill"></i></div><span class="bx-v"><em>523</em><small>605 billed</small></span></div>
+        </div>
+        <p class="bx-foot"><span class="bx-lg cd"></span>code tokens <span class="bx-lg gh"></span>billed output tokens (reply and thinking)</p>
+      </div>
+      <div class="bx-side">
+        <div class="card bx-ratio rv" style="--d:1">
+          <p class="kicker">Nyra &divide; other, same programs</p>
+          <p class="bx-rt-sub">On the runs both languages got right on the first try.</p>
+          <ul class="bx-rt" id="ratioList">
+            <li><span>Python</span><b><em>1.28</em>&times;</b><i style="--r:1.28"></i></li>
+            <li><span>TypeScript</span><b><em>0.97</em>&times;</b><i style="--r:.97"></i></li>
+            <li><span>Rust</span><b><em>0.92</em>&times;</b><i style="--r:.92"></i></li>
+          </ul>
+          <p class="bx-rt-sub">Below 1.00&times; Nyra used fewer tokens. Billed output (thinking included) is 1.61&times; Python's on Opus: the model thinks longer about a language it learned from the prompt.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bx-floor rv" id="floor">
+      <div class="bx-floor-h">
+        <h3>How low can it go?</h3>
+        <p>Even a program with no syntax at all, only its names and literals, costs 0.65&times; Python: Python is already the cheapest mainstream syntax. The realistic floor is about 1.0&times;. The v0.6 language changes are projected near parity; that is a projection on rewritten programs, not a measurement.</p>
+      </div>
+      <div class="bx-ruler" role="img" aria-label="Code tokens relative to Python, Opus programs: no syntax at all 0.65, realistic floor about 0.94 to 1.10, Python 1.00, projected v0.6 1.015, Nyra today 1.28; Sonnet programs 1.22; hand-written reference solutions 1.49.">
+        <div class="bx-axis"><span style="--x:0">0.6&times;</span><span style="--x:.2">0.8&times;</span><span style="--x:.4">1.0&times;</span><span style="--x:.6">1.2&times;</span><span style="--x:.8">1.4&times;</span><span style="--x:1">1.6&times;</span></div>
+        <div class="bx-band" style="--a:.34;--b:.5"></div>
+        <div class="bx-mk dim" style="--x:.05;--y:0px;--i:0"><b>0.65&times;</b><span>no syntax</span></div>
+        <div class="bx-mk py" style="--x:.4;--y:0px;--i:1"><b>1.00&times;</b><span>Python</span></div>
+        <div class="bx-mk proj" style="--x:.415;--y:88px;--i:2"><b>1.02&times;</b><span>v0.6 projected</span></div>
+        <div class="bx-mk now" style="--x:.617;--y:44px;--i:3"><b>1.22&times;</b><span>Sonnet today</span></div>
+        <div class="bx-mk now" style="--x:.683;--y:132px;--i:4"><b>1.28&times;</b><span>Opus today</span></div>
+        <div class="bx-mk dim r" style="--x:.893;--y:0px;--i:5"><b>1.49&times;</b><span>reference</span></div>
+      </div>
+      <p class="bx-src"><span class="bx-lg rp"></span>the realistic floor, about 0.94 to 1.10&times; · "no syntax": only the names and literals of the Python programs · "reference": the hand-written solutions in the repository · research/TOKENS-v2.md, Claude tokenizer, sum of Nyra tokens &divide; sum of Python tokens</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COST (paper) ================= -->
+<div class="sheet paper">
+<section class="sec" id="cost">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Cost</p>
+      <h2 class="split rv">What a working program costs.</h2>
+      <p class="lead rv">Here Nyra loses, and the reason is the prompt: every Nyra request carries the 8,174-token spec, a Python request about 250 tokens in all. This run did not cache it.</p>
+    </div>
+    <div class="bx-two">
+      <div class="win bx-board rv" id="costBoard">
+        <div class="bx-bh">
+          <span class="bx-cap">USD per working program</span>
+          <div class="bx-seg" role="group" aria-label="Model"><button type="button" aria-pressed="true">Opus 5.5</button><button type="button" aria-pressed="false">Sonnet 5.5</button><button type="button" aria-pressed="false">Haiku 4.5</button></div>
+        </div>
+        <div class="bx-rows" data-chart="cost">
+          <div class="bx-row ny" style="--i:0"><b>Nyra</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v">$<em>0.0624</em><small>4.8&times; Python</small></span></div>
+          <div class="bx-row" style="--i:1"><b>Python</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v">$<em>0.0130</em><small>&nbsp;</small></span></div>
+          <div class="bx-row" style="--i:2"><b>TypeScript</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v">$<em>0.0163</em><small>&nbsp;</small></span></div>
+          <div class="bx-row" style="--i:3"><b>Rust</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v">$<em>0.0175</em><small>&nbsp;</small></span></div>
+        </div>
+        <p class="bx-foot">Everything the language's runs were billed, repairs included, divided by the programs that passed within 3 repairs. The harness's own accounting at its price table.</p>
+      </div>
+      <div class="bx-side">
+        <div class="card bx-req rv" style="--d:1">
+          <p class="kicker">One request, input tokens</p>
+          <div class="bx-reqv" aria-hidden="true">
+            <div class="bx-rq ny"><i style="--r:1"></i><span>Nyra <b>8,471</b></span></div>
+            <div class="bx-rq"><i style="--r:.0296"></i><span>Python <b>251</b></span></div>
+          </div>
+          <p class="sr">Input tokens of one request: Nyra 8,471, Python 251.</p>
+          <p>The spec is 96% of a Nyra request's input and about 70% of its cost on Opus. Code tokens are not the main cost; the prompt is.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bx-cache rv" id="cacheBoard">
+      <div class="bx-cache-h">
+        <div><h3>The prompt is the lever.</h3><p>The Nyra part of this run, re-priced with the same requests and outputs: once with the spec cached, once also with a 3.5k-token compressed spec. An estimate, not a new run.</p></div>
+        <div class="bx-seg bx-steps" role="group" aria-label="Pricing"><button type="button" aria-pressed="true">As run</button><button type="button" aria-pressed="false">Spec cached</button><button type="button" aria-pressed="false">+ short spec</button></div>
+      </div>
+      <div class="bx-cgrid" id="cacheRows"></div>
+      <p class="bx-src">research/TOKENS-v2.md, section 7.3 · USD for the whole run (83 tasks) · Haiku 4.5 caches nothing under 4,096 tokens, so its short spec is not cached and costs more than the cached full one</p>
+    </div>
+
+    <div class="bx-ab">
+      <div class="card bx-abc rv">
+        <p class="kicker">Measured · research/AB-card.md</p>
+        <h3>A 1,387-token agent card instead of the 8,174-token spec</h3>
+        <ul class="bx-abl" id="abList"></ul>
+        <p class="small">38 Nyra tasks, first try, no repairs. On Sonnet the card matches the spec at a quarter of the input; on Haiku it is worse (not significant on 38 tasks, p = 0.29). The card was revised after seeing its first version fail on these same tasks.</p>
+      </div>
+      <div class="card bx-abc rv" style="--d:1">
+        <p class="kicker">Measured · real API calls</p>
+        <h3>Prompt caching, same requests</h3>
+        <div class="bx-stk" id="stack"></div>
+        <button class="btn btn-sm bx-tgl" type="button" id="cacheTgl" aria-pressed="true">Cache on</button>
+        <p class="small">Input is the spec; output is the program and the thinking, and caching cannot touch it. With caching the full spec costs about 3 cents more than the card on Sonnet.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+
+<!-- ================= SPEED + SAFETY (ink) ================= -->
+<section class="sec ink bx-ink" id="speed">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Speed</p>
+      <h2 class="split rv">Fast where it runs, slow where it compiles.</h2>
+      <p class="lead rv">Native Nyra goes through C. Hand-written programs run within a small factor of C and Rust with every index and overflow check on, and far ahead of Python. What it pays is the first run: gcc.</p>
+    </div>
+
+    <div class="win bx-race rv" id="race">
+      <div class="bx-bh">
+        <span class="bx-cap">same program, five languages · wall clock</span>
+        <div class="bx-seg bx-progs" role="group" aria-label="Program"></div>
+      </div>
+      <div class="bx-lanes" id="lanes"></div>
+      <div class="bx-race-f">
+        <p id="raceNote">dp: Nyra 1.27&times; C, 0.01&times; Python.</p>
+        <button class="btn btn-sm btn-ghost" type="button" id="replay"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Run again</button>
+      </div>
+      <p class="bx-src">perf/README.md · best of 5 runs (Python: one), whole process, a laptop other jobs shared: differences under ~15% are noise. The animation keeps the real ratios. fib: gcc folds the recursion, which says more about gcc than about Nyra.</p>
+    </div>
+
+    <div class="bx-two bx-sp2">
+      <div class="win bx-board rv" id="rtBoard">
+        <div class="bx-bh">
+          <span class="bx-cap">programs the models wrote · speed tasks, median ms</span>
+          <div class="bx-seg" role="group" aria-label="Model"><button type="button" aria-pressed="true">Opus 5.5</button><button type="button" aria-pressed="false">Sonnet 5.5</button><button type="button" aria-pressed="false">Haiku 4.5</button></div>
+        </div>
+        <div class="bx-rows" data-chart="runtime">
+          <div class="bx-row ny" style="--i:0"><b>Nyra</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v"><em>5.44</em><small>ms</small></span></div>
+          <div class="bx-row" style="--i:1"><b>Python</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v"><em>272</em><small>ms</small></span></div>
+          <div class="bx-row" style="--i:2"><b>TypeScript</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v"><em>63.2</em><small>ms</small></span></div>
+          <div class="bx-row" style="--i:3"><b>Rust</b><div class="bx-trk tall"><i class="bx-fill"></i></div><span class="bx-v"><em>2.88</em><small>ms</small></span></div>
+        </div>
+        <p class="bx-foot">The 6 speed tasks of the benchmark; start-up time subtracted, compile time not included. Six jobs ran in parallel, so the timings are indicative.</p>
+      </div>
+      <div class="win bx-board rv" style="--d:1" id="foBoard">
+        <div class="bx-bh"><span class="bx-cap">time to first output · whole command, ms</span></div>
+        <div class="bx-fo" id="foRows"></div>
+        <p class="bx-foot"><span class="nw"><span class="bx-lg c1"></span>nyra run, cold (gcc runs)</span> <span class="nw"><span class="bx-lg c2"></span>cached</span> <span class="nw"><span class="bx-lg c3"></span>Python</span> <span class="nw"><span class="bx-lg c4"></span>Node.js</span><br>A cold run is slower than Python; a cached one takes 36 to 48 ms. Best of 5 on a loaded laptop.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec ink bx-ink2" id="safety">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Safety · v0.6</p>
+      <h2 class="split rv">Asked for a secret. Refused before it runs.</h2>
+      <p class="lead rv">Seven tasks whose easiest solution reads something the program was never given: a token in <code class="i">.env</code>, an API key, an SSH key. The harness plants canaries with made-up values and grants Nyra standard input only.</p>
+    </div>
+
+    <div class="duo-3d rv">
+      <div class="duo bx-duo" id="safeDemo" role="group" aria-label="Demo: the Python program prints the planted deploy token; the Nyra program is rejected at compile time with error E0290 and never runs.">
+        <div class="win bx-t bx-leak">
+          <div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>python</span><span class="badge" id="pyBadge">ready</span></div>
+          <pre class="o" aria-hidden="true"><span class="row cmd">$ cat token.py</span>
+<span class="row"><span class="k">with</span> open(<span class="s">".env"</span>) <span class="k">as</span> f:
+    <span class="k">for</span> line <span class="k">in</span> f.read().splitlines():
+        <span class="k">if</span> line.startswith(<span class="s">"DEPLOY_TOKEN="</span>):
+            print(<span class="s">"token: "</span> + line[<span class="n">13</span>:])</span>
+<span class="row cmd">$ python token.py</span>
+<span class="row bx-secret">token: cnry-4f9a21c07b</span></pre>
+        </div>
+        <div class="win bx-t bx-block">
+          <div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>nyra</span><span class="badge" id="nyBadge">ready</span></div>
+          <pre class="o" aria-hidden="true"><span class="row cmd">$ cat token.nyra</span>
+<span class="row"><span class="k">use</span> fs
+
+<span class="k">for</span> line <span class="k">in</span> fs.read(<span class="s">".env"</span>).split(<span class="s">"\n"</span>) {
+    <span class="k">if</span> line.starts_with(<span class="s">"DEPLOY_TOKEN="</span>) {
+        print(<span class="s">"token: "</span> + line.slice(<span class="n">13</span>, line.len()))
+    }
+}</span>
+<span class="row cmd">$ nyra run token.nyra --allow input</span>
+<span class="row bx-e0290"><b>error[E0290]</b>: module `fs` needs the capability `fs` (read, write, list and remove files and folders), which is not granted: this run grants input
+  --&gt; token.nyra:1:5
+  |
+1 | use fs
+  |     ^
+<span class="bx-hint">  = hint: grant it by running with `--allow fs` (`nyra run main.nyra --allow fs`), or remove `use fs` and the code that calls it; the capabilities are `fs`, `input`, `net` and `os`</span></span>
+<span class="row bx-norun">nothing ran · exit 1</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="win bx-sgrid rv" id="safeGrid">
+      <div class="bx-sg-h"><span>task</span><span>needs</span><span>Python</span><span>Nyra</span></div>
+      <ul id="safeRows"></ul>
+      <p class="bx-src">bench/tasks/safety · naive solutions in bench/solutions/safety · verdicts from <code>python bench/verify.py --tier safety</code> with nyra 0.6.0</p>
+    </div>
+
+    <div class="card bx-caveat rv">
+      <p class="kicker">Read this before quoting it</p>
+      <p>These are the reference solutions written to take the bait, not programs a model wrote. Nyra refuses them because a <code class="i">use fs</code> or <code class="i">use os</code> that the run did not grant is a compile error. That holds when the run asks for it (<code class="i">--allow</code>, <code class="i">--sandbox</code>, the MCP tool); a plain <code class="i">nyra run</code> still grants everything. Capabilities are new in v0.6. An eighth task in the tier can be solved without any capability; there the right answer is a program that runs and touches nothing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= METHOD + DATA (paper) ================= -->
+<div class="sheet paper">
+<section class="sec" id="method">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Method</p>
+      <h2 class="split rv">How it was measured, and what to doubt.</h2>
+      <p class="lead rv">Run on 2026-10-09 between 09:02 and 09:15 UTC with <code class="i">bench/run.py</code>, published with <code class="i">bench/publish.py</code>. Prompts, replies and programs stay on the machine that ran it; the summary lists a checksum of every raw file.</p>
+    </div>
+    <div class="bx-meth">
+      <article class="card rv"><span class="num" aria-hidden="true">01</span><h3>Same tasks, same budget</h3><p>83 deterministic programs with an exact expected output. One sample per task and language, up to 3 repairs, 10 s per program. Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5 through the Anthropic API.</p></article>
+      <article class="card rv" style="--d:1"><span class="num" aria-hidden="true">02</span><h3>The spec asymmetry</h3><p>Nyra's prompt includes its spec; the other languages rely on what the model already knows. It helps Nyra's correctness and costs it tokens and money. Stated up front, not corrected for.</p></article>
+      <article class="card rv" style="--d:2"><span class="num" aria-hidden="true">03</span><h3>Our own tasks</h3><p>The tasks were written by the people who build Nyra: small programs without input. A task that is hard in every language may be badly worded; one that is hard in only one says something about that language.</p></article>
+      <article class="card rv"><span class="num" aria-hidden="true">04</span><h3>Small samples</h3><p>One run varies from the next, and with one sample a difference of a few points is noise. Intervals are 95% Wilson intervals over tasks; comparisons are paired sign tests.</p></article>
+      <article class="card rv" style="--d:1"><span class="num" aria-hidden="true">05</span><h3>Timings are indicative</h3><p>Benchmark runtimes come from 6 parallel jobs; the perf programs from a laptop that other builds shared. Python runs with <code class="i">python -I</code>, TypeScript on Node.js with types stripped (not type-checked), Rust with <code class="i">rustc -O</code>.</p></article>
+      <article class="card rv" style="--d:2"><span class="num" aria-hidden="true">06</span><h3>Dollars are the harness's</h3><p>Costs are token counts times the harness's price table at the time. A later check found the table may not match today's list prices, so read dollars as approximate; the ratios between languages do not depend on them.</p></article>
+    </div>
+    <p class="bx-tools rv">Tools as recorded: nyra 0.4.0 (native backend), Node.js 25.2.1, rustc 1.99.0, Python 3.14.2. Start-up times subtracted from runtimes: Nyra 13.7 ms, Python 49.0 ms, TypeScript 171 ms, Rust 14.9 ms.</p>
+  </div>
+</section>
+
+<section class="sec bx-tight" id="data">
+  <div class="wrap">
+    <div class="sec-h">
+      <p class="eyebrow rv">Raw data</p>
+      <h2 class="split rv">Check every number.</h2>
+      <p class="lead rv">Every figure on this page comes from one of these files. The page's own copy of the numbers is <a class="bx-inl" href="/benchmarks/data.js">data.js</a>, with the source of each block.</p>
+    </div>
+    <ul class="bx-files">
+      <li class="rv"><a href="https://github.com/SpAkXD/nyra/blob/main/bench/published/2026-10-v0.5-anthropic.md" rel="noopener"><code>bench/published/2026-10-v0.5-anthropic.md</code><span>The Claude run: pass rates, repairs, tokens, cost, runtime, per category, failures.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv" style="--d:1"><a href="https://github.com/SpAkXD/nyra/blob/main/bench/published/2026-10-v0.5-anthropic.json" rel="noopener"><code>2026-10-v0.5-anthropic.json</code><span>The same, for tools, with checksums of the raw files.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv"><a href="https://github.com/SpAkXD/nyra/blob/main/bench/published/results.json" rel="noopener"><code>bench/published/results.json</code><span>The leaderboard data, with confidence intervals.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv" style="--d:1"><a href="https://github.com/SpAkXD/nyra/blob/main/research/AB-card.md" rel="noopener"><code>research/AB-card.md</code><span>Agent card against full spec, and what prompt caching saves.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv"><a href="https://github.com/SpAkXD/nyra/blob/main/research/TOKENS-v2.md" rel="noopener"><code>research/TOKENS-v2.md</code><span>Where the token gap comes from, and where the floor is.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv" style="--d:1"><a href="https://github.com/SpAkXD/nyra/blob/main/perf/README.md" rel="noopener"><code>perf/README.md</code><span>Nyra against C, Rust, Node.js and Python; time to first output.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv"><a href="https://github.com/SpAkXD/nyra/blob/main/research/SPEED-run.md" rel="noopener"><code>research/SPEED-run.md</code><span>Compile flags, compile time and what an agent waits for.</span><i aria-hidden="true">→</i></a></li>
+      <li class="rv" style="--d:1"><a href="https://github.com/SpAkXD/nyra/tree/main/bench/tasks/safety" rel="noopener"><code>bench/tasks/safety</code><span>The safety tier: tasks, canaries, leak markers.</span><i aria-hidden="true">→</i></a></li>
+    </ul>
+    <div class="cta rv"><a class="btn btn-teal mag" href="https://github.com/SpAkXD/nyra/tree/main/bench" rel="noopener">Browse bench/ on GitHub</a><a class="btn bx-btn-ink" href="/#bench">Back to the summary</a></div>
+  </div>
+</section>
+</div>
+
+</main>
+
+<footer class="foot-bar ink">
+  <div class="wrap">
+    <div class="fb-top">
+      <div class="fb-brand">
+        <svg viewBox="0 0 112 112" width="40" height="40" role="img" aria-label="Nyra"><g transform="translate(8 8)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+        <p>A small, strict programming language designed to be written by AI agents.</p>
+      </div>
+      <nav class="fb-cols" aria-label="Project links">
+        <div><p class="fb-h">Project</p><a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a><a href="/benchmarks/">Benchmarks</a><a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></div>
+        <div><p class="fb-h">Docs</p><a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a><a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a></div>
+      </nav>
+      <a class="totop" href="#top"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
+    </div>
+    <div class="fb-word" id="fbword" aria-hidden="true"><svg viewBox="-8 -8 288 122"><defs><linearGradient id="gfw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g fill="none" stroke="url(#gfw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/><path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/><path d="M152 0V64M152 28A28 28 0 0 1 180 0"/><circle cx="238" cy="32" r="32"/><path d="M270 0V64"/></g></svg></div>
+    <div class="fb-bot"><p>MIT license · Nyra v0.5</p><p>Built in the open.</p></div>
+  </div>
+</footer>
+</body>
+</html>
