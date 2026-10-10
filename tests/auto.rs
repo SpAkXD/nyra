@@ -49,16 +49,14 @@ fn run(cache: &Path, work: &Path, file: &Path, flags: &[&str], args: &[String], 
     if !args.is_empty() {
         cmd.arg("--").args(args);
     }
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
-    let mut pipe = child.stdin.take().unwrap();
-    // (a thread: the program may not read it all, or the input may be longer than a pipe holds)
-    let input = stdin.to_vec();
-    let writer = std::thread::spawn(move || {
-        let _ = pipe.write_all(&input);
-    });
-    let out = child.wait_with_output().unwrap();
-    let _ = writer.join();
-    out
+    // The input comes from a file, as with `nyra run prog.nyra < input.txt`: its end is there from the
+    // start. (A pipe written by this test can be late on a busy machine, and auto mode then rightly
+    // treats the program as one that talks to a live pipe and runs it natively; the test of that
+    // behaviour is `a_program_that_answers_a_pipe_as_it_goes_does_not_wait_for_its_end`.)
+    let input = work.join("stdin.txt");
+    std::fs::write(&input, stdin).unwrap();
+    let file_in = std::fs::File::open(&input).unwrap();
+    cmd.stdin(Stdio::from(file_in)).stdout(Stdio::piped()).stderr(Stdio::piped()).output().unwrap()
 }
 
 /// A program in its own folder.
