@@ -133,6 +133,33 @@ print(Dir.all())
 `,
   },
   {
+    id: "shapes",
+    label: "Shapes",
+    note: "enums that carry values, and `match` as a value",
+    code: `// Enums that carry values, and match as a value.
+enum Shape { Circle(float), Rect(float, float), Empty }
+
+fn area(s: Shape) -> float = match s {
+    Shape.Circle(r) => 3.14159 * r * r,
+    Shape.Rect(w, h) => w * h,
+    Shape.Empty => 0.0,
+}
+
+fn name(s: Shape) -> str = match s {
+    Shape.Circle(_) => "circle",
+    Shape.Rect(w, h) => w == h ? "square" : "rectangle",
+    Shape.Empty => "nothing",
+}
+
+let shapes = [Shape.Circle(1.5), Shape.Rect(2.0, 3.0), Shape.Rect(4.0, 4.0), Shape.Empty]
+for s in shapes {
+    print("{name(s):<10} {area(s):>8.2}")
+}
+let total = shapes.map(s => area(s)).sum()
+print("total {total:.1}, largest {shapes.max_by(s => area(s))}")
+`,
+  },
+  {
     id: "format",
     label: "Format specs",
     note: "width, alignment, decimals and thousands, the same on every backend",

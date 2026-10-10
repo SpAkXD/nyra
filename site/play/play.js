@@ -1,7 +1,7 @@
 /* Nyra playground. Vanilla JS, no dependencies.
    The compiler runs as WebAssembly in two workers (worker.js): one checks as you type, the other
    runs programs and can be stopped and replaced at any time, so the page never freezes. */
-import { EXAMPLES } from "./examples.js?v=play4";
+import { EXAMPLES } from "./examples.js?v=play5";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -59,7 +59,7 @@ class Compiler {
   constructor() { this.seq = 0; this.start(); }
   start() {
     this.pending = new Map();
-    this.w = new Worker(new URL("./worker.js?v=play4", import.meta.url), { type: "module" });
+    this.w = new Worker(new URL("./worker.js?v=play5", import.meta.url), { type: "module" });
     this.ready = new Promise((res, rej) => { this._ok = res; this._no = rej; });
     this.ready.catch(() => {});
     this.w.onmessage = ({ data }) => {
@@ -552,7 +552,7 @@ async function main() {
     const info = await checker.ready;
     $("#ver").textContent = `v${info.version} · WebAssembly · loaded in ${info.ms} ms`;
     runBtn.disabled = false;
-    fetch("nyra.wasm?v=play4", { method: "HEAD" }).then((r) => {
+    fetch("nyra.wasm?v=play5", { method: "HEAD" }).then((r) => {
       const n = +r.headers.get("content-length");
       if (n) $("#wasmSize").textContent = `${(n / 1048576).toFixed(2)} MB`;
     }).catch(() => {});

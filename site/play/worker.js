@@ -2,11 +2,11 @@
 // Messages: {id, op, args} -> {id, result} | {id, crash}. The first message out is {ready}.
 // A trap (a bug of the compiler, or a recursion deeper than the engine's stack) leaves the
 // instance in an unknown state, so the worker makes a new one from the compiled module.
-import { compileNyra, instantiateNyra } from "./nyra.js?v=play4";
+import { compileNyra, instantiateNyra } from "./nyra.js?v=play5";
 
 const t0 = performance.now();
 let mod = null, nyra = null;
-const ready = compileNyra(fetch("nyra.wasm?v=play4")).then((m) => {
+const ready = compileNyra(fetch("nyra.wasm?v=play5")).then((m) => {
   mod = m;
   nyra = instantiateNyra(m);
   postMessage({ ready: true, version: nyra.version(), ms: Math.round(performance.now() - t0) });
