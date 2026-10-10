@@ -1,0 +1,37 @@
+{
+  "id": "top_words",
+  "title": "Most frequent words",
+  "category": "strings",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line with a number K (a positive integer), then free text on the remaining lines. A word is a maximal run of ASCII letters; everything else (digits, punctuation, spaces, apostrophes, hyphens) separates words. Words are compared ignoring case and printed in lowercase. Print the K most frequent words, one per line as `word count`, ordered by count (highest first) and, for equal counts, alphabetically. If the text has fewer than K different words, print all of them. If the text has no word print `no words`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "3\nThe quick brown fox jumps over the lazy dog.\nThe dog barks; the fox runs away. Quick, quick!\n",
+      "expected_output": "the 4\nquick 3\ndog 2\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "2\na b a b c\n",
+      "expected_output": "a 2\nb 2\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "5\nIt's a dog-eat-dog world: dog, DOG, Dog.\nDon't stop -- don't!\n",
+      "expected_output": "dog 5\ndon 2\nt 2\na 1\neat 1\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "1\n\n   \n123 456\n",
+      "expected_output": "no words\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "4\nto be or not to be that is the question\nwhether tis nobler in the mind to suffer\n",
+      "expected_output": "to 3\nbe 2\nthe 2\nin 1\n"
+    }
+  ]
+}

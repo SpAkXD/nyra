@@ -1,0 +1,37 @@
+{
+  "id": "langton_ant",
+  "title": "Langton's ant",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Langton's ant lives on an infinite grid of white cells. It starts on cell (0, 0) facing up (toward negative y; x grows to the right and y grows downward). Each step: if the ant is on a white cell it turns 90 degrees clockwise, if it is on a black cell it turns 90 degrees counter-clockwise; then it flips the colour of that cell it just left (white becomes black and black becomes white) and moves one cell forward.\n\nRead the number of steps from standard input (the first line; one integer). Print one line `black=B x=X y=Y facing=D` after that many steps: the number of black cells, the ant's position and its direction (`U`, `R`, `D` or `L`).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "11\n",
+      "expected_output": "black=7 x=-2 y=1 facing=L\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0\n",
+      "expected_output": "black=0 x=0 y=0 facing=U\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1\n",
+      "expected_output": "black=1 x=1 y=0 facing=R\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "200\n",
+      "expected_output": "black=40 x=-4 y=2 facing=U\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "11000\n",
+      "expected_output": "black=834 x=-34 y=14 facing=D\n"
+    }
+  ]
+}

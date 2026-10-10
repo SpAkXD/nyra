@@ -1,0 +1,105 @@
+// Enums: a fixed set of named cases, and `match` that must cover all of them.
+enum Dir {
+    N
+    E
+    S
+    W
+}
+
+enum Light { Red, Yellow, Green }
+
+struct Robot {
+    name: str
+    facing: Dir
+}
+
+fn turn_right(d: Dir) -> Dir {
+    match d {
+        Dir.N => ret Dir.E
+        Dir.E => ret Dir.S
+        Dir.S => ret Dir.W
+        Dir.W => ret Dir.N
+    }
+}
+
+fn is_vertical(d: Dir) -> bool {
+    match d {
+        Dir.N, Dir.S => ret true
+        _ => ret false
+    }
+}
+
+fn delay(l: Light) -> int {
+    var wait = 0
+    match l {
+        Light.Red => wait = 30
+        Light.Yellow => {
+            wait = 3
+            print("careful")
+        }
+        Light.Green => wait = 0
+    }
+    ret wait
+}
+
+fn name_of(n: int) -> str {
+    match n {
+        0 => ret "zero"
+        1, 2, 3 => ret "few"
+        4, -1 => ret "four or minus one"
+        _ => ret "many"
+    }
+}
+
+let d = Dir.N
+print(d, turn_right(d), turn_right(turn_right(d)))
+print(d == Dir.N, d != Dir.S, turn_right(Dir.W) == Dir.N)
+print(is_vertical(Dir.S), is_vertical(Dir.E))
+print(delay(Light.Red), delay(Light.Yellow), delay(Light.Green))
+print(name_of(0), name_of(2), name_of(-1), name_of(4), name_of(99))
+
+// enums are values: store them in arrays and structs
+var path = [Dir.N, Dir.E, Dir.E, Dir.S]
+path.push(Dir.W)
+print(path, path.len(), path.contains(Dir.S), path.index_of(Dir.W))
+let r = Robot(name: "r2", facing: Dir.S)
+print(r)
+var bot = r
+bot.facing = turn_right(bot.facing)
+print(bot.facing, r.facing)
+print(Dir.all())
+for l in Light.all() {
+    print("{l} waits {delay(l)}")
+}
+
+// matching text, chars and bools
+fn kind(c: char) -> str {
+    match c {
+        'a', 'e', 'i', 'o', 'u' => ret "vowel"
+        ' ' => ret "space"
+        _ => ret "other"
+    }
+}
+fn word(s: str) -> int {
+    match s {
+        "one" => ret 1
+        "two" => ret 2
+        _ => ret 0
+    }
+}
+fn yes_no(b: bool) -> str {
+    match b {
+        true => ret "yes"
+        false => ret "no"
+    }
+}
+print(kind('e'), kind(' '), kind('z'), word("two"), word("ten"), yes_no(3 > 2))
+var count = 0
+for step in 0..6 {
+    match step % 3 {
+        0 => count += 10
+        1 => count += 1
+        _ => {}
+    }
+}
+print(count)

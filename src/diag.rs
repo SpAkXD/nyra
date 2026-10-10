@@ -19,6 +19,8 @@ pub struct Diag {
     /// For a failed example (E0250): the value it got and the one it expected, as Nyra code.
     pub actual: Option<String>,
     pub expected: Option<String>,
+    /// The imported file the mistake is in (`None`: the file being compiled).
+    pub file: Option<String>,
 }
 
 /// One edit of a fix: the text from `start` up to (not including) `end` becomes `text`.
@@ -67,7 +69,7 @@ pub fn after(s: Span, text: &str) -> Span {
 
 impl Diag {
     pub fn new(code: &'static str, msg: impl Into<String>, span: Span) -> Self {
-        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new(), actual: None, expected: None }
+        Diag { code, msg: msg.into(), span, hint: None, fix: Vec::new(), actual: None, expected: None, file: None }
     }
 
     /// The value an example got and the one it expected (shown as `actual` and `expected` in JSON).
@@ -118,11 +120,52 @@ impl Diag {
     }
 }
 
+thread_local! {
+    /// The warnings of the program being compiled (see `warn`).
+    static WARNINGS: std::cell::RefCell<Vec<Diag>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Records a warning: a mistake that is probably there but that the language allows, so the build
+/// goes on (`"${x}"` prints a `$`). Warnings are printed to stderr and listed in `--json`.
+pub fn warn(d: Diag) {
+    WARNINGS.with(|w| {
+        let mut w = w.borrow_mut();
+        if !w.iter().any(|o| o.code == d.code && o.span == d.span) {
+            w.push(d);
+        }
+    });
+}
+
+/// Forgets the warnings of the last compilation.
+pub fn clear_warnings() {
+    WARNINGS.with(|w| w.borrow_mut().clear());
+}
+
+/// The warnings of the last compilation, in the order of the source.
+pub fn warnings() -> Vec<Diag> {
+    let mut v = WARNINGS.with(|w| w.borrow().clone());
+    v.sort_by_key(|d| (d.span.line, d.span.col));
+    v
+}
+
 pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
-    let lines: Vec<&str> = src.lines().collect();
+    render(diags, file, src, "error")
+}
+
+/// The warnings of the last compilation for humans (empty when there are none).
+pub fn render_warnings(file: &str, src: &str) -> String {
+    render(&warnings(), file, src, "warning")
+}
+
+fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
     let mut out = String::new();
     for d in diags {
-        out += &format!("error[{}]: {}\n", d.code, d.msg);
+        // a mistake in an imported file shows that file's line
+        let other = d.file.as_ref().and_then(|f| std::fs::read_to_string(f).ok());
+        let text = other.as_deref().unwrap_or(src);
+        let lines: Vec<&str> = text.lines().collect();
+        let file = d.file.as_deref().unwrap_or(file);
+        out += &format!("{label}[{}]: {}\n", d.code, d.msg);
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
         if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
             let num = d.span.line.to_string();
@@ -135,7 +178,7 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
         if let Some(h) = &d.hint {
             out += &format!("  = hint: {h}\n");
         }
-        if let Some(f) = crate::fix::preview(src, &d.fix) {
+        if let Some(f) = crate::fix::preview(text, &d.fix) {
             out += &format!("  = fix: {f}\n");
         }
         out += &format!("  = explain: nyra explain {}\n", d.code);
@@ -144,8 +187,57 @@ pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
     out
 }
 
+/// The fixes that were applied automatically, for people: one warning each.
+pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> String {
+    let mut out = String::new();
+    for a in applied {
+        let d = &a.diag;
+        out += &format!("warning[{}]: fixed automatically: {}\n", d.code, d.msg);
+        out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
+        let num = d.span.line.to_string();
+        let pad = " ".repeat(num.len());
+        out += &format!("{pad} |\n{num} | {}\n", a.line);
+        if let Some(p) = &a.preview {
+            out += &format!("{pad} = applied: {p}\n");
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// The `warnings` array: one object per applied fix, with the `code`, `message`, position, the
+/// `applied` text (what the changed lines look like now) and the `fix` edits.
+pub fn render_json_warnings(applied: &[crate::fix::Applied], file: &str) -> String {
+    let items: Vec<String> = applied
+        .iter()
+        .map(|a| {
+            let d = &a.diag;
+            format!(
+                "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"applied\":{}{}}}",
+                d.code,
+                json_str(&d.msg),
+                json_str(file),
+                d.span.line,
+                d.span.col,
+                a.preview.as_deref().map(json_str).unwrap_or_else(|| "null".into()),
+                fix_json(&d.fix)
+            )
+        })
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
 pub fn render_json(diags: &[Diag], file: &str) -> String {
-    format!("{{\"ok\":{},\"errors\":{}}}", diags.is_empty(), render_json_errors(diags, file))
+    format!("{{\"ok\":{},\"errors\":{}{}}}", diags.is_empty(), render_json_errors(diags, file), warnings_json(file))
+}
+
+/// `,"warnings":[..]` with the warnings of the last compilation, or nothing when there are none.
+pub fn warnings_json(file: &str) -> String {
+    let w = warnings();
+    if w.is_empty() {
+        return String::new();
+    }
+    format!(",\"warnings\":{}", render_json_errors(&w, file))
 }
 
 /// The `errors` array of `render_json`.
@@ -161,7 +253,7 @@ pub fn render_json_errors(diags: &[Diag], file: &str) -> String {
                 "{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{}{}{values}}}",
                 d.code,
                 json_str(&d.msg),
-                json_str(file),
+                json_str(d.file.as_deref().unwrap_or(file)),
                 d.span.line,
                 d.span.col,
                 d.hint.as_deref().map(json_str).unwrap_or_else(|| "null".into()),

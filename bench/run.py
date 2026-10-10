@@ -41,19 +41,34 @@ BENCH_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCH_DIR.parent
 if str(BENCH_DIR) not in sys.path:
     sys.path.insert(0, str(BENCH_DIR))
+if __name__ == "__main__":
+    # bench/edit_arms.py and bench/safety.py say `import run`: give them this module, not a second copy of it
+    sys.modules.setdefault("run", sys.modules[__name__])
 
 import models as modelsmod  # noqa: E402  (sibling modules)
 import providers  # noqa: E402
 import report  # noqa: E402
+import typecheck  # noqa: E402
 
 TASKS_DIR = BENCH_DIR / "tasks"
 SOLUTIONS_DIR = BENCH_DIR / "solutions"
+# Task tiers. v1: the original input-free tasks (bench/tasks/*.json). The others live in their own folder and have
+# their own reference solutions under bench/solutions/<tier>/ (see "Tiers" below).
+TIERS = ("v1", "v2", "edit", "safety")
+TIER_DIRS = {"v1": TASKS_DIR, "v2": TASKS_DIR / "v2", "edit": TASKS_DIR / "edit", "safety": TASKS_DIR / "safety"}
 RESULTS_DIR = BENCH_DIR / "results"
 DEFAULT_SPEC = REPO_DIR / "docs" / "SPEC.md"
+CARD_SPEC = REPO_DIR / "docs" / "AGENT_CARD.md"  # the compact agent card: --spec card
+SPEC_KINDS = {"full": DEFAULT_SPEC, "card": CARD_SPEC}
 
 SCHEMA_VERSION = 3  # 3: runtime of every passing program (result.runtime_ms, result.timing, run.timing)
 LANG_ORDER = report.LANG_ORDER  # the languages, in table-column order; the first is the baseline of comparisons
 LANG_ALIASES = {"ts": "typescript", "rs": "rust", "py": "python"}
+# What `--langs` defaults to, by tier. The edit tier compares ways of editing, not languages (see bench/edit_arms.py); the
+# v2 tier has Python and Nyra references for every task (the mock provider and verify.py need them), the others are
+# optional, so a default run leaves Rust out.
+DEFAULT_LANGS = {"v1": LANG_ORDER, "v2": ("nyra", "python", "typescript"), "safety": ("nyra", "python"),
+                 "edit": ("nyra-edit", "python-rewrite", "python-diff")}
 MAX_OUTPUT_BYTES = 1_000_000  # a program that prints more than this is killed (runaway loop)
 CHECK_TIMEOUT = 60  # seconds for `nyra check`
 BUILD_TIMEOUT = 120  # seconds for `nyra build` and for `rustc` (both include the C compiler / linker)
@@ -91,6 +106,17 @@ def parse_version(text: str) -> tuple:
 
 
 @dataclasses.dataclass(frozen=True)
+class Case:
+    """One input of a task that reads standard input, and the output it must produce. The `visible` case is the
+    example printed in the prompt; the others are hidden from the model. A program passes the task only if it is
+    right on every case."""
+    stdin: str
+    expected_output: str
+    visible: bool = False
+    name: str = ""
+
+
+@dataclasses.dataclass(frozen=True)
 class Task:
     id: str
     title: str
@@ -100,24 +126,66 @@ class Task:
     category: str
     difficulty: str
     path: Path
+    # Tiers (bench/README.md, "Tiers"). A v1 task has no cases and no stdin. A task with `cases` reads its input from
+    # stdin and is judged on all of them; `expected_output` is then the visible example's output.
+    tier: str = "v1"
+    cases: tuple = ()
+    raw: Optional[dict] = dataclasses.field(default=None, compare=False, hash=False, repr=False)  # the JSON as loaded
 
     @property
     def version(self) -> tuple:
         return parse_version(self.min_version)
 
+    @property
+    def example(self) -> Optional[Case]:
+        return next((c for c in self.cases if c.visible), None)
+
+    @property
+    def hidden_cases(self) -> list:
+        return [c for c in self.cases if not c.visible]
+
 
 _TASK_FIELDS = ("id", "title", "prompt", "expected_output", "min_version", "category")
 
 
-def load_tasks(tasks_dir: Path = TASKS_DIR, require_expected: bool = True) -> list:
-    """Load bench/tasks/*.json, ordered by (min_version, id). Raises ValueError on a malformed task."""
+def parse_cases(data: dict, filename: str, require_expected: bool) -> tuple:
+    """The `cases` of a task file: [{"name", "visible", "stdin", "expected_output"}]. Exactly one case is visible (the
+    example in the prompt) and there are at least two hidden ones, so that a program that prints a fixed answer
+    cannot pass."""
+    raw = data["cases"]
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(f"{filename}: `cases` must be a non-empty list")
+    cases = []
+    for i, c in enumerate(raw):
+        if not isinstance(c, dict) or not isinstance(c.get("stdin"), str):
+            raise ValueError(f"{filename}: case {i} needs a string `stdin`")
+        expected = c.get("expected_output", "")
+        if not isinstance(expected, str):
+            raise ValueError(f"{filename}: case {i}: `expected_output` must be a string")
+        if require_expected and not expected.strip():
+            raise ValueError(f"{filename}: case {i} has an empty expected_output (run: python bench/verify.py --write)")
+        cases.append(Case(stdin=c["stdin"], expected_output=expected, visible=bool(c.get("visible", False)),
+                          name=str(c.get("name") or ("example" if c.get("visible") else f"hidden{i}"))))
+    if sum(c.visible for c in cases) != 1:
+        raise ValueError(f"{filename}: exactly one case must be `visible` (the example shown in the prompt)")
+    if sum(not c.visible for c in cases) < 2:
+        raise ValueError(f"{filename}: at least two hidden cases are needed")
+    if len({c.name for c in cases}) != len(cases):
+        raise ValueError(f"{filename}: case names must be unique")
+    return tuple(cases)
+
+
+def load_tasks(tasks_dir: Path = TASKS_DIR, require_expected: bool = True, tier: str = "v1") -> list:
+    """Load <tasks_dir>/*.json, ordered by (min_version, id). Raises ValueError on a malformed task."""
     tasks, seen = [], set()
     for path in sorted(Path(tasks_dir).glob("*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except ValueError as exc:
             raise ValueError(f"{path.name}: invalid JSON: {exc}") from None
-        missing = [f for f in _TASK_FIELDS if f not in data]
+        has_cases = "cases" in data
+        missing = [f for f in _TASK_FIELDS
+                   if f not in data and not ((has_cases or tier == "safety") and f == "expected_output")]
         if missing:
             raise ValueError(f"{path.name}: missing field(s): {', '.join(missing)}")
         if data["id"] != path.stem:
@@ -128,21 +196,60 @@ def load_tasks(tasks_dir: Path = TASKS_DIR, require_expected: bool = True) -> li
         parse_version(data["min_version"])
         if not str(data["prompt"]).strip():
             raise ValueError(f"{path.name}: empty prompt")
-        if require_expected and not str(data["expected_output"]).strip():
+        cases = parse_cases(data, path.name, require_expected) if has_cases else ()
+        expected = next((c.expected_output for c in cases if c.visible), "") if has_cases else data.get("expected_output", "")
+        if tier == "v1" and has_cases:
+            raise ValueError(f"{path.name}: `cases` belong to the v2 tier (bench/tasks/v2/)")
+        if require_expected and not str(expected).strip():
             raise ValueError(f"{path.name}: empty expected_output (run: python bench/verify.py --write)")
-        tasks.append(Task(id=data["id"], title=data["title"], prompt=data["prompt"],
-                          expected_output=data["expected_output"], min_version=str(data["min_version"]),
-                          category=data["category"], difficulty=data.get("difficulty", ""), path=path))
+        tasks.append(Task(id=data["id"], title=data["title"], prompt=data["prompt"], expected_output=expected,
+                          min_version=str(data["min_version"]), category=data["category"],
+                          difficulty=data.get("difficulty", ""), path=path, tier=data.get("tier", tier), cases=cases,
+                          raw=data))
     tasks.sort(key=lambda t: (t.version, t.id))
     return tasks
 
 
-def tasks_digest(tasks_dir: Path = TASKS_DIR) -> str:
+def load_tier(tier: str, require_expected: bool = True) -> list:
+    """The tasks of one tier: v1 (the original input-free tasks), v2 (stdin, hidden inputs), edit, safety."""
+    if tier not in TIERS:
+        raise UsageError(f"--tier must be one of {', '.join(TIERS)}")
+    if tier == "v1":
+        return load_tasks(TIER_DIRS["v1"], require_expected)
+    tasks = (load_tasks(TIER_DIRS[tier], require_expected and tier != "safety", tier=tier)
+             if TIER_DIRS[tier].is_dir() else [])
+    if tier in ("v2", "edit"):  # the three ids spaces must not overlap: result files and references are keyed by id
+        clash = {t.id for t in tasks} & {t.id for t in load_tasks(TIER_DIRS["v1"], False)}
+        if clash:
+            raise ValueError(f"task id(s) of the {tier} tier also exist in v1: {', '.join(sorted(clash))}")
+    return tasks
+
+
+def tasks_digest(tasks_dir: Path = TASKS_DIR, tier: str = "v1") -> str:
+    """Hash of the task files. v1: the JSON files only (so the hash of the original set never changes); other
+    tiers also hash the files next to the JSON (the programs an edit task starts from)."""
     h = hashlib.sha256()
-    for path in sorted(Path(tasks_dir).glob("*.json")):
+    paths = (sorted(Path(tasks_dir).glob("*.json")) if tier == "v1"
+             else sorted(p for p in Path(tasks_dir).iterdir() if p.is_file()))
+    for path in paths:
         h.update(path.name.encode())
         h.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()
+
+
+def task_prompt(task: Task) -> str:
+    """What the model is shown as the task: the prompt, and for a task with hidden inputs the one visible example.
+    Everything else about the hidden cases stays out of the prompt (and out of the repair feedback)."""
+    ex = task.example
+    if ex is None:
+        return task.prompt
+
+    def block(text: str) -> str:
+        return text if text.endswith("\n") or not text else text + "\n"
+
+    return (task.prompt.rstrip() + "\n\nThe program will be run on several inputs; you see only this one example.\n\n"
+            f"<example_input>\n{block(ex.stdin)}</example_input>\n\n"
+            f"<example_output>\n{block(ex.expected_output)}</example_output>")
 
 
 # ----------------------------------------------------------- prompts and feedback text
@@ -161,15 +268,40 @@ def _task_paragraph(language: str) -> str:
             "only what it prints to standard output is checked, so it must print exactly what the task describes.")
 
 
-_NYRA_SYSTEM = """\
+def _task_paragraph_stdin(language: str) -> str:
+    """The task paragraph for the v2 tier: the program reads standard input, and is judged on inputs the model does
+    not see."""
+    return (f"Solve the task you are given with a complete {language} program. The program reads its input from "
+            "standard input and prints its result to standard output. It is run on several inputs, of which you see "
+            "only one example; for each input its standard output must be exactly what the task describes, so the "
+            "program has to work for every valid input and not only for the example.")
+
+
+# The Nyra system prompt is two blocks: the head holds the language text (the full spec or the agent card), which is
+# the same for every request of a run and is what prompt caching stores; the tail is the task rule. Nothing about
+# the task itself is ever in the system prompt, so the cached prefix is byte-stable.
+_NYRA_HEAD = """\
 You write programs in Nyra, a new programming language that you have not seen before. \
 The complete language specification is below. It is the only documentation you have.
 
 <nyra_spec>
 {spec}
-</nyra_spec>
+</nyra_spec>"""
 
-""" + _task_paragraph("Nyra") + "\n\n" + _REPLY_RULE
+_NYRA_CARD_HEAD = """\
+You write programs in Nyra, a new programming language that you have not seen before. \
+The language card below is the only documentation you have.
+
+<nyra_spec>
+{spec}
+</nyra_spec>"""
+
+_NYRA_TAIL = _task_paragraph("Nyra") + "\n\n" + _REPLY_RULE
+_NYRA_SYSTEM = _NYRA_HEAD + "\n\n" + _NYRA_TAIL
+
+# --ex-examples: one more sentence in the tail (the arm "card + write examples" of research/AB-card.md)
+_EX_NOTE = ("After each non-trivial function write one or two `ex` examples (for example `ex sq(3) == 9`): the compiler "
+            "checks them, and a false one is an error.")
 
 _PYTHON_SYSTEM = ("You write programs in Python 3, using only the standard library.\n\n"
                   + _task_paragraph("Python") + "\n\n" + _REPLY_RULE)
@@ -259,6 +391,30 @@ def fb_wrong(actual: str, expected: str) -> str:
     return f"{head}\n\n{shown}\n\nRe-read the task. {_FIX}"
 
 
+def fb_hidden(result: "EvalResult", expected: str, index: int, total: int, timeout: float) -> str:
+    """Feedback for a program that is right on the example but fails a hidden input. It never shows the hidden input
+    or the expected output (that would let the model copy them): only that it failed, how, and where the first line
+    that differs is."""
+    where = f"hidden input {index} of {total} (you cannot see it)"
+    advice = ("Think about the cases the task describes that the example does not show (empty input, ties, bad "
+              "lines, limits). Do not special-case the example. " + _FIX)
+    if result.kind == "wrong_output":
+        act = normalize_output(result.stdout)
+        return (f"Your program printed the right output for the example, but its output is wrong for {where}. "
+                f"The first difference is on line {first_diff_line(normalize_output(expected), act)} of the output; "
+                f"your program printed {len(act.split(chr(10))) if act else 0} line(s).\n\n{advice}")
+    if result.kind == "runtime_error":
+        return (f"Your program printed the right output for the example, but it crashed on {where} "
+                f"(exit code {result.exit_code}).\n\n<stderr>\n{clip_tail(result.stderr)}\n</stderr>\n\n{advice}")
+    if result.kind == "timeout":
+        return (f"Your program printed the right output for the example, but on {where} it did not finish within "
+                f"{timeout:g} seconds and was stopped.\n\n{advice}")
+    if result.kind == "output_limit":
+        return (f"Your program printed the right output for the example, but on {where} it printed more than "
+                f"{MAX_OUTPUT_BYTES} bytes and was stopped.\n\n{advice}")
+    return result.feedback
+
+
 # --------------------------------------------------------------- code and output handling
 
 _FENCE_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*\n(?P<body>.*?)^[ \t]*(?P=fence)[ \t]*$", re.S | re.M)
@@ -271,6 +427,27 @@ def extract_code(reply: str) -> Optional[str]:
         return None
     code = m.group("body").rstrip("\n")
     return code if code.strip() else None
+
+
+_FENCE_TAGGED_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*(?P<info>[^\n]*)\n(?P<body>.*?)^[ \t]*(?P=fence)[ \t]*$",
+                              re.S | re.M)
+
+
+def extract_code_tagged(reply: str, tags: tuple) -> Optional[str]:
+    """The program of a reply, for the tiers after v1: the LAST fenced block whose language tag is one of `tags`
+    (```python, ```nyra, ...); if no block has such a tag, the last block. A model that thinks aloud often quotes the
+    example's output in a plain block before it gives the program (the example is in the prompt of these tiers), and
+    the program comes last. The same rule for every language; v1 keeps "the first block" (extract_code)."""
+    blocks = []
+    for m in _FENCE_TAGGED_RE.finditer(reply.replace("\r\n", "\n")):
+        body = m.group("body").rstrip("\n")
+        if body.strip():
+            tag = (m.group("info").split() or [""])[0].lower().strip("{}.")
+            blocks.append((tag, body))
+    if not blocks:
+        return None
+    tagged = [body for tag, body in blocks if tag in tags]
+    return (tagged or [body for _, body in blocks])[-1]
 
 
 def normalize_output(text: str) -> str:
@@ -311,18 +488,21 @@ class Proc:
     spawn_error: Optional[str] = None
 
 
-def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_BYTES) -> Proc:
+def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_BYTES,
+                stdin: Optional[bytes] = None) -> Proc:
     """Run a command with a wall-clock timeout and a cap on captured output.
 
     Output is read on the fly and the process is killed once it exceeds `max_output`, so a
     program stuck in `while true { print(1) }` cannot exhaust memory. The command must be the
     program itself (not a launcher that spawns it): killing only reaches the direct child.
+    `stdin` is what the program reads from standard input (default: nothing, an empty stdin).
     """
     start = time.perf_counter()
     proc = None
     for attempt in range(4):
         try:
-            proc = subprocess.Popen([str(a) for a in argv], cwd=str(cwd), env=env, stdin=subprocess.DEVNULL,
+            proc = subprocess.Popen([str(a) for a in argv], cwd=str(cwd), env=env,
+                                    stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             break
         except (FileNotFoundError, NotADirectoryError) as exc:  # not transient
@@ -354,8 +534,19 @@ def run_limited(argv, *, cwd, env, timeout: float, max_output: int = MAX_OUTPUT_
         except (OSError, ValueError):
             return
 
+    def feed():
+        try:
+            proc.stdin.write(stdin)
+        except (OSError, ValueError):  # the program exited without reading all of its input
+            pass
+        finally:
+            with contextlib.suppress(OSError, ValueError):
+                proc.stdin.close()
+
     threads = [threading.Thread(target=pump, args=(proc.stdout, "out"), daemon=True),
                threading.Thread(target=pump, args=(proc.stderr, "err"), daemon=True)]
+    if stdin is not None:
+        threads.append(threading.Thread(target=feed, daemon=True))
     for t in threads:
         t.start()
     timed_out = False
@@ -446,9 +637,12 @@ class EvalResult:
     # (see Language.time_result), and the raw numbers behind it.
     runtime_ms: Optional[float] = None
     timing: Optional[dict] = None
+    # Only for a task with hidden inputs: one {"name", "visible", "passed", "kind"} per case that was run (the cases
+    # after the first failure are not run). `passed` is True only if every case passed.
+    cases: Optional[list] = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "passed": self.passed, "kind": self.kind, "errors": self.errors,
             "stdout": self.stdout[:STORED_STDOUT_CHARS], "stderr": self.stderr[-STORED_STDERR_CHARS:],
             "exit_code": self.exit_code,
@@ -457,6 +651,9 @@ class EvalResult:
             "runtime_ms": None if self.runtime_ms is None else round(self.runtime_ms, 2),
             "timing": self.timing,
         }
+        if self.cases is not None:
+            out["cases"] = self.cases
+        return out
 
 
 _PY_SYNTAX_ERRORS = ("SyntaxError", "IndentationError", "TabError")
@@ -575,11 +772,40 @@ class Language:
         raise NotImplementedError
 
     def reference_path(self, task_id: str) -> Path:
-        return SOLUTIONS_DIR / self.name / f"{task_id}{self.ext}"
+        path = SOLUTIONS_DIR / self.name / f"{task_id}{self.ext}"
+        if not path.is_file():  # later tiers keep their references apart: bench/solutions/<tier>/<language>/
+            for tier in ("v2", "safety"):
+                tiered = SOLUTIONS_DIR / tier / self.name / f"{task_id}{self.ext}"
+                if tiered.is_file():
+                    return tiered
+        return path
 
     def reference_code(self, task_id: str) -> Optional[str]:
         path = self.reference_path(task_id)
         return path.read_text(encoding="utf-8") if path.is_file() else None
+
+    def system_prompt_for(self, task: Task) -> str:
+        """The system prompt for one task. It differs from `system_prompt` only for a task that reads its input from
+        stdin: the paragraph that says "the program takes no input" is replaced by one that explains the hidden inputs."""
+        base = self.system_prompt
+        if not task.cases:
+            return base
+        old = _task_paragraph(self.display)
+        return base.replace(old, _task_paragraph_stdin(self.display)) if old in base else base + "\n\n" + _task_paragraph_stdin(self.display)
+
+    def prompt_for(self, task: Task) -> str:
+        """The user message that gives the model the task (the prompt, plus the example of a stdin task)."""
+        return task_prompt(task)
+
+    fence_tags: tuple = ()  # the language tags of the fenced block that holds this language's program
+
+    def extract(self, reply: str, task: Task) -> Optional[str]:
+        """The program in a reply: the first fenced block for the original tasks, the last block tagged with this language
+        for the later tiers (extract_code_tagged)."""
+        return extract_code(reply) if task.tier == "v1" else extract_code_tagged(reply, self.fence_tags)
+
+    def no_code_feedback(self) -> str:
+        return fb_no_code()
 
     def build(self, code: str, wd: Path, env: dict):
         """Write the program into `wd` and compile it if the language needs that. Returns a Built, or the
@@ -590,10 +816,39 @@ class Language:
         """The tool that rejected the program before it ran (an interpreter's syntax error), or None."""
         return None
 
+    checker: Optional[typecheck.Checker] = None  # --python-typecheck / --ts-typecheck: a real type checker run first
+
+    def run_checker(self, filename: str, wd: Path, env: dict) -> Optional[EvalResult]:
+        """Type-check the program that is already written in `wd`. None when it passes (or there is no checker); the
+        verdict of a program the checker rejects otherwise. It counts as a compile error, like a Nyra program that
+        `nyra check` rejects, and the checker's own messages are the repair feedback."""
+        if self.checker is None:
+            return None
+        if self.checker.shim:
+            (wd / typecheck.TS_SHIM_NAME).write_text(self.checker.shim, encoding="utf-8", newline="\n")
+        started = time.perf_counter()
+        proc = run_limited(self.checker.command(filename), cwd=wd, env=env, timeout=CHECK_TIMEOUT)
+        if proc.spawn_error:
+            raise HarnessError(f"cannot run the type checker {self.checker.name}: {proc.spawn_error}")
+        if proc.timed_out:
+            raise HarnessError(f"the type checker {self.checker.name} took longer than {CHECK_TIMEOUT} s")
+        if proc.returncode == 0:
+            return None
+        text = typecheck.clean_output((proc.stdout + proc.stderr).decode("utf-8", "replace"), wd)
+        return EvalResult(False, "compile_error", feedback=fb_compile(self.checker.display, text), stderr=text,
+                          exit_code=proc.returncode, compile_ms=(time.perf_counter() - started) * 1000)
+
+    def type_note(self) -> str:
+        """The sentence that tells the model its program is type-checked (empty without a checker)."""
+        return " " + typecheck.system_note(self.name, self.checker) if self.checker is not None else ""
+
     def clean_stderr(self, stderr: str) -> str:
         return stderr
 
     def evaluate(self, code: str, task: Task, timed: bool = True) -> EvalResult:
+        if task.tier == "safety":  # judged by what the program does with canaries, not by its output (bench/safety.py)
+            import safety
+            return safety.evaluate(self, code, task)
         with scratch_dir() as wd:
             env = child_env(wd)
             built = self.build(code, wd, env)
@@ -603,12 +858,41 @@ class Language:
 
     def run_built(self, built: Built, task: Task, wd: Path, env: dict, timed: bool = True) -> EvalResult:
         """Run a built program once and judge it; time it as well if it passed and timing is on."""
+        if task.cases:
+            return self.run_cases(built, task, wd, env)
         proc = run_limited(built.argv, cwd=wd, env=env, timeout=self.timeout)
         result = judge_run(proc, task, self.timeout, workdir=wd, compile_ms=built.compile_ms,
                            diagnose=self.diagnose, clean_stderr=self.clean_stderr)
         if timed and result.passed and self.time_runs > 0 and task.id != PREFLIGHT_ID:
             self.time_result(result, built, task, wd, env)
         return result
+
+    def run_cases(self, built: Built, task: Task, wd: Path, env: dict) -> EvalResult:
+        """Run a program on every case of a task with hidden inputs (the visible example first, then the hidden ones,
+        in file order) and judge each exactly like a single run. The program passes only if it is right on all of
+        them, which is what makes printing a fixed answer useless. The first failing case ends the evaluation; its
+        verdict is the verdict of the attempt. Tasks with cases are not timed."""
+        results = []
+        ordered = sorted(task.cases, key=lambda c: not c.visible)
+        hidden_total = len(task.hidden_cases)
+        first = None
+        for case in ordered:
+            single = dataclasses.replace(task, expected_output=case.expected_output, cases=())
+            proc = run_limited(built.argv, cwd=wd, env=env, timeout=self.timeout, stdin=case.stdin.encode("utf-8"))
+            result = judge_run(proc, single, self.timeout, workdir=wd, compile_ms=built.compile_ms,
+                               diagnose=self.diagnose, clean_stderr=self.clean_stderr)
+            results.append({"name": case.name, "visible": case.visible, "passed": result.passed, "kind": result.kind})
+            if first is None:
+                first = result
+            if not result.passed:
+                if not case.visible:  # the model may not learn the hidden input or its expected output
+                    index = [c.name for c in task.hidden_cases].index(case.name) + 1
+                    result.feedback = fb_hidden(result, case.expected_output, index, hidden_total, self.timeout)
+                result.cases = results
+                return result
+        assert first is not None
+        first.cases = results
+        return first
 
     def time_result(self, result: EvalResult, built: Built, task: Task, wd: Path, env: dict) -> None:
         """Run a program that passed `time_runs` more times and keep the median wall clock, minus the language's
@@ -664,17 +948,27 @@ class PythonLang(Language):
     name = "python"
     display = "Python"
     ext = ".py"
+    fence_tags = ("python", "py", "python3", "python-rewrite")
     hello_world = "print(42)\n"
+
+    def __init__(self, timeout: float = 10.0, time_runs: int = 0, checker: Optional[typecheck.Checker] = None):
+        super().__init__(timeout, time_runs)
+        self.checker = checker
 
     @property
     def system_prompt(self) -> str:
-        return _PYTHON_SYSTEM
+        if self.checker is None:
+            return _PYTHON_SYSTEM
+        return _PYTHON_SYSTEM.replace(_task_paragraph("Python"), _task_paragraph("Python") + self.type_note())
 
     def diagnose(self, stderr: str, stdout: str) -> Optional[str]:
         return _python_diagnose(stderr, stdout)
 
     def build(self, code: str, wd: Path, env: dict):
         write_source(wd / "main.py", code)
+        rejected = self.run_checker("main.py", wd, env)  # --python-typecheck: mypy or pyright, before the program runs
+        if rejected is not None:
+            return rejected
         # -I: isolated mode (no user site-packages, no PYTHON* variables); -X utf8: same text encoding everywhere
         return Built([sys.executable, "-I", "-X", "utf8", "main.py"])
 
@@ -683,10 +977,11 @@ class NyraLang(Language):
     name = "nyra"
     display = "Nyra"
     ext = ".nyra"
+    fence_tags = ("nyra", "ny", "nyra-edit")
     hello_world = "fn main() {\n    print(42)\n}\n"
 
     def __init__(self, nyra_bin: Path, backend: str = "native", spec_path: Path = DEFAULT_SPEC, timeout: float = 10.0,
-                 node: str = "node", time_runs: int = 0):
+                 node: str = "node", time_runs: int = 0, ex_examples: bool = False):
         super().__init__(timeout, time_runs)
         if backend not in ("native", "js"):
             raise UsageError("--backend must be native or js")
@@ -694,18 +989,23 @@ class NyraLang(Language):
         self.node = node  # runs the JavaScript backend's output
         self.backend = backend
         self.spec_path = Path(spec_path)
+        self.ex_examples = ex_examples
         try:
-            self.spec = self.spec_path.read_text(encoding="utf-8")
+            self.spec = strip_metadata(self.spec_path.read_text(encoding="utf-8"))
         except OSError as exc:
             raise HarnessError(f"cannot read the Nyra spec {self.spec_path}: {exc}") from None
+        resolved = self.spec_path.resolve()
+        self.spec_kind = next((k for k, path in SPEC_KINDS.items() if resolved == path.resolve()), "custom")
         self.spec_sha256 = hashlib.sha256(self.spec.replace("\r\n", "\n").encode("utf-8")).hexdigest()
         m = re.search(r"^#\s*Nyra\s+v?(\d+\.\d+)", self.spec, re.M)
         self.spec_version = m.group(1) if m else None
         self._version_text: Optional[str] = None
 
     @property
-    def system_prompt(self) -> str:
-        return _NYRA_SYSTEM.format(spec=self.spec.strip())
+    def system_prompt(self) -> providers.SystemPrompt:
+        head = (_NYRA_CARD_HEAD if self.spec_kind == "card" else _NYRA_HEAD).format(spec=self.spec.strip())
+        tail = _NYRA_TAIL if not self.ex_examples else _task_paragraph("Nyra") + "\n\n" + _EX_NOTE + "\n\n" + _REPLY_RULE
+        return providers.SystemPrompt([(head, True), (tail, False)])
 
     def version_text(self) -> str:
         """Output of `nyra --version`, e.g. "nyra 0.1.0" ("" if it cannot be read)."""
@@ -729,12 +1029,14 @@ class NyraLang(Language):
                             f"{self.version_text()}: the model is shown a spec that does not match the compiler")
         return warnings
 
-    def build(self, code: str, wd: Path, env: dict):
+    def build(self, code: str, wd: Path, env: dict, flags: tuple = ()):
+        """`flags`: extra compiler flags for `check` and `build`, e.g. `--allow input` (the safety tier)."""
         js = self.backend == "js"
         write_source(wd / "main.nyra", code)
         started = time.perf_counter()
         # The file name is relative so diagnostics read `"file":"main.nyra"` (no temp paths in the prompt).
-        chk = run_limited([self.bin, "check", "main.nyra", "--json"], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
+        # --strict: errors stay errors (without it nyra repairs the unambiguous ones in memory, which would hide them)
+        chk = run_limited([self.bin, "check", "main.nyra", "--strict", "--json", *flags], cwd=wd, env=env, timeout=CHECK_TIMEOUT)
         if chk.spawn_error:
             raise HarnessError(f"cannot run the Nyra compiler {self.bin}: {chk.spawn_error}")
         out = chk.stdout.decode("utf-8", "replace").strip()
@@ -747,7 +1049,7 @@ class NyraLang(Language):
             return EvalResult(False, "compile_error", feedback=fb_compile("The Nyra compiler (`nyra check --json`)", out),
                               errors=parsed.get("errors", []), stdout=out, exit_code=chk.returncode)
         target = "main.js" if js else ("prog.exe" if os.name == "nt" else "prog")
-        build = run_limited([self.bin, "build", "main.nyra", "-o", target] + (["--js"] if js else []),
+        build = run_limited([self.bin, "build", "main.nyra", "-o", target, *flags] + (["--js"] if js else []),
                             cwd=wd, env=env, timeout=BUILD_TIMEOUT)
         compile_ms = (time.perf_counter() - started) * 1000
         if build.returncode != 0 or not (wd / target).exists():
@@ -810,16 +1112,23 @@ class TypeScriptLang(Language):
     name = "typescript"
     display = "TypeScript"
     ext = ".ts"
+    fence_tags = ("typescript", "ts")
     hello_world = "const answer: number = 42;\nconsole.log(answer);\n"
 
-    def __init__(self, node: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0):
+    def __init__(self, node: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0,
+                 checker: Optional[typecheck.Checker] = None):
         super().__init__(timeout, time_runs)
         self.node = find_node(node)
+        self.checker = checker
         self._version_text: Optional[str] = None
 
     @property
     def system_prompt(self) -> str:
-        return _TYPESCRIPT_SYSTEM
+        if self.checker is None:
+            return _TYPESCRIPT_SYSTEM
+        return (_TYPESCRIPT_SYSTEM.replace("which removes the type annotations without checking them, and it may",
+                                           "after the type annotations have been checked, and it may")
+                .replace(_task_paragraph("TypeScript"), _task_paragraph("TypeScript") + self.type_note()))
 
     def version_text(self) -> str:
         """Output of `node --version`, e.g. "v25.2.1" ("" if it cannot be read)."""
@@ -849,6 +1158,9 @@ class TypeScriptLang(Language):
 
     def build(self, code: str, wd: Path, env: dict):
         write_source(wd / "main.ts", code)
+        rejected = self.run_checker("main.ts", wd, env)  # --ts-typecheck: tsc, before Node.js strips the types and runs it
+        if rejected is not None:
+            return rejected
         return Built([self.node, *NODE_TS_FLAGS, "main.ts"])
 
 
@@ -910,6 +1222,7 @@ class RustLang(Language):
     name = "rust"
     display = "Rust"
     ext = ".rs"
+    fence_tags = ("rust", "rs")
     hello_world = 'fn main() {\n    println!("42");\n}\n'
 
     def __init__(self, rustc: Optional[str] = None, timeout: float = 10.0, time_runs: int = 0):
@@ -1034,27 +1347,59 @@ def find_nyra(explicit: Optional[str] = None) -> Path:
                        "build --release`) or pass --nyra PATH.")
 
 
+def strip_metadata(text: str) -> str:
+    """A spec file may start with an HTML comment of metadata (docs/AGENT_CARD.md: token count, budget): not part of
+    what the model is shown."""
+    return re.sub(r"\A<!--.*?-->[ \t]*\r?\n", "", text, count=1, flags=re.S)
+
+
+def resolve_spec(arg: str) -> Path:
+    """--spec: `full` (docs/SPEC.md), `card` (docs/AGENT_CARD.md) or a path."""
+    return SPEC_KINDS.get(arg) or Path(arg)
+
+
+EDIT_ARMS = DEFAULT_LANGS["edit"]
+
+
 def canonical_lang(name: str) -> str:
     name = name.strip().lower()
     return LANG_ALIASES.get(name, name)
 
 
 def make_languages(names: list, *, nyra: Optional[str], backend: str, spec: Path, timeout: float,
-                   node: Optional[str] = None, rustc: Optional[str] = None, time_runs: int = 0) -> dict:
+                   node: Optional[str] = None, rustc: Optional[str] = None, time_runs: int = 0,
+                   ex_examples: bool = False,
+                   python_checker: Optional[typecheck.Checker] = None,
+                   ts_checker: Optional[typecheck.Checker] = None) -> dict:
     langs = {}
     for name in names:
         if name == "nyra":
             langs[name] = NyraLang(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout,
-                                   node=find_node(node) if backend == "js" else "node", time_runs=time_runs)
+                                   node=find_node(node) if backend == "js" else "node", time_runs=time_runs,
+                                   ex_examples=ex_examples)
         elif name == "python":
-            langs[name] = PythonLang(timeout=timeout, time_runs=time_runs)
+            langs[name] = PythonLang(timeout=timeout, time_runs=time_runs, checker=python_checker)
         elif name == "typescript":
-            langs[name] = TypeScriptLang(node, timeout=timeout, time_runs=time_runs)
+            langs[name] = TypeScriptLang(node, timeout=timeout, time_runs=time_runs, checker=ts_checker)
         elif name == "rust":
             langs[name] = RustLang(rustc, timeout=timeout, time_runs=time_runs)
+        elif name in EDIT_ARMS:  # the edit tier: ways of changing a program (bench/edit_arms.py)
+            import edit_arms
+            cls = edit_arms.ARM_CLASSES[name]
+            if name == "nyra-edit":
+                langs[name] = cls(find_nyra(nyra), backend=backend, spec_path=spec, timeout=timeout,
+                                  node=find_node(node) if backend == "js" else "node", time_runs=time_runs)
+            else:
+                langs[name] = cls(timeout=timeout, time_runs=time_runs, checker=python_checker)
         else:
-            raise UsageError(f"unknown language {name!r}; available: {', '.join(LANG_ORDER)}")
+            raise UsageError(f"unknown language {name!r}; available: {', '.join(LANG_ORDER)} "
+                             f"(and, for --tier edit, {', '.join(EDIT_ARMS)})")
     return langs
+
+
+def nyra_of(langs: dict) -> Optional["NyraLang"]:
+    """The Nyra language of a run: `nyra`, or the `nyra-edit` arm of the edit tier."""
+    return next((lang for lang in langs.values() if isinstance(lang, NyraLang)), None)
 
 
 # ------------------------------------------------------------------------ one attempt loop
@@ -1078,8 +1423,8 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
     status: pass (correct within the budget) | fail | error (provider/harness problem, excluded from
     the metrics) | aborted.
     """
-    system = lang.system_prompt
-    messages = [{"role": "user", "content": task.prompt}]
+    system = lang.system_prompt_for(task)
+    messages = [{"role": "user", "content": lang.prompt_for(task)}]
     attempts: list = []
     status = "fail"
     error: Optional[str] = None
@@ -1087,7 +1432,8 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
         if ctx.abort.is_set():
             status = "aborted"
             break
-        meta = {"task_id": task.id, "lang": lang.name, "attempt": n, "sample": sample}
+        meta = {"task_id": task.id, "lang": lang.name, "attempt": n, "sample": sample,
+                "example_output": task.example.expected_output if task.example else None}  # (mock provider only)
         try:
             reply = ctx.provider.complete(system, messages, meta)
         except providers.ProviderError as exc:
@@ -1098,13 +1444,13 @@ def run_one(task: Task, lang: Language, sample: int, ctx: RunContext) -> dict:
             break
         if ctx.over_budget is not None and ctx.over_budget():
             ctx.abort.set()  # the money is spent: finish this reply, start nothing new
-        code = extract_code(reply.text)
+        code = lang.extract(reply.text, task)
         attempt = {"n": n, "reply": reply.text, "stop_reason": reply.stop_reason, "usage": reply.usage.to_dict(),
                    "latency_s": round(reply.latency_s, 3), "request_id": reply.request_id,
                    "served_model": reply.model, "served_by": reply.upstream, "code": code, "chars": None,
                    "lines": None, "code_tokens": None}
         if code is None:
-            result = EvalResult(False, "no_code", feedback=fb_no_code())
+            result = EvalResult(False, "no_code", feedback=lang.no_code_feedback())
         else:
             attempt["chars"], attempt["lines"] = code_size(code)
             # Only the first attempt's code tokens enter the report; a provider that bills for counting
@@ -1292,18 +1638,47 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--models", help="comma-separated model ids to run one after the other, e.g. "
                                     "anthropic/claude-opus-5.5,openai/gpt-6-sol; `default` is the list in "
                                     "bench/models.json; with mock: mock,mock-flaky,mock-wrong")
-    p.add_argument("--langs", default=",".join(LANG_ORDER),
+    p.add_argument("--langs", default=None,
                    help="comma-separated languages to run: nyra, python, typescript (ts), rust (rs) "
-                        "(default: %s). The first is the baseline of the paired comparisons." % ",".join(LANG_ORDER))
+                        "(default: %s; the edit tier runs its arms %s instead). The first is the baseline of the paired "
+                        "comparisons." % (",".join(LANG_ORDER), ",".join(DEFAULT_LANGS["edit"])))
+    p.add_argument("--tier", choices=TIERS, default=None,
+                   help="which task set: v1, the original input-free tasks (default); v2, tasks that read stdin and are "
+                        "judged on hidden inputs; edit, change an existing program (arms %s); safety, tasks whose "
+                        "naive solution reads files or environment variables it should not (pending, see "
+                        "bench/README.md)" % ", ".join(DEFAULT_LANGS["edit"]))
+    p.add_argument("--hidden-dir", metavar="DIR",
+                   help="v2 tier: a private folder of <task id>.json files holding extra hidden `cases` that are not in "
+                        "the repository; a program must pass those as well (so published tasks cannot be memorized)")
+    p.add_argument("--preset", metavar="NAME",
+                   help="a bundle from bench/models.json (the `cheap` models, 5 samples, the v2 tier): fills in whatever "
+                        "--models, --samples, --repairs and --tier leave out")
+    p.add_argument("--python-typecheck", nargs="?", const="auto", metavar="TOOL",
+                   help="type-check the Python programs with mypy or pyright before running them (auto, mypy or pyright; "
+                        "skipped with a message when neither is installed) and tell the model so")
+    p.add_argument("--ts-typecheck", nargs="?", const="auto", metavar="TOOL",
+                   help="type-check the TypeScript programs with tsc before running them (skipped with a message when "
+                        "tsc is not installed); without it the TypeScript arm is not type-checked")
+    p.add_argument("--include-pending", action="store_true",
+                   help="safety tier: also run the tasks that are still marked pending (the compiler has no --allow "
+                        "capability flag yet)")
     p.add_argument("--tasks", help="comma-separated task ids or patterns such as 'fizz*' (default: all)")
     p.add_argument("--max-version", help="skip tasks needing a newer Nyra than this, for every language, e.g. 0.1 "
                                          "(default: the version of the nyra compiler when nyra is run)")
-    p.add_argument("--repairs", type=int, default=3, help="repair attempts after a failed first try (default: 3)")
-    p.add_argument("--samples", type=int, default=1, help="independent runs per task and language (default: 1)")
+    p.add_argument("--repairs", type=int, default=None, help="repair attempts after a failed first try (default: 3)")
+    p.add_argument("--samples", type=int, default=None, help="independent runs per task and language (default: 1)")
     p.add_argument("--nyra", help="path to the nyra binary (default: target/release, else target/debug)")
     p.add_argument("--backend", default="native", choices=("native", "js"),
                    help="Nyra backend that runs the programs (default: native, via the C compiler)")
-    p.add_argument("--spec", default=str(DEFAULT_SPEC), help="Nyra spec shown to the model (default: docs/SPEC.md)")
+    p.add_argument("--spec", default="full", metavar="full|card|PATH",
+                   help="Nyra text shown to the model: full = docs/SPEC.md (default), card = docs/AGENT_CARD.md (the "
+                        "compact agent card, about 1,400 tokens), or the path of another file")
+    p.add_argument("--ex-examples", action="store_true",
+                   help="Nyra only: add one sentence to the system prompt asking for one or two `ex` examples per "
+                        "non-trivial function (the compiler checks them)")
+    p.add_argument("--no-cache", action="store_true",
+                   help="anthropic: no prompt caching (by default the Nyra text is a system block of its own with "
+                        "cache_control, and one warm-up request per model writes the cache before the parallel jobs)")
     p.add_argument("--node", help="the node program that runs TypeScript (default: node on PATH; Node.js %d.%d or newer)"
                    % NODE_MIN_VERSION)
     p.add_argument("--rustc", help="the Rust compiler command, e.g. 'rustc +stable-x86_64-pc-windows-gnu' "
@@ -1334,7 +1709,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "self-repair\" metric; it never changes the other metrics)")
     p.add_argument("--no-count-tokens", action="store_true",
                    help="do not measure code-only tokens with the provider's token counter")
-    p.add_argument("--mock-flaky", nargs="?", const="mix", choices=("mix",) + providers.DEFECTS,
+    p.add_argument("--mock-flaky", nargs="?", const="mix", choices=("mix",) + providers.DEFECTS + providers.EXTRA_DEFECTS,
                    help="mock only: break the first attempt of some tasks to exercise the repair loop")
     p.add_argument("--dry-run", action="store_true",
                    help="print what would run (and the maximum number of API calls, and an estimated cost) and exit")
@@ -1427,6 +1802,30 @@ def estimate_cost(price: tuple, tasks: list, lang_names: list, langs: dict, samp
     return input_tokens * price[0] + runs * ASSUMED_ATTEMPTS * output_tokens * price[1]
 
 
+SYSTEM_CHARS_PER_TOKEN = 2.4  # Claude's tokenizer on a spec: docs/SPEC.md is 19.2k characters = 8,174 tokens
+TASK_CHARS_PER_TOKEN = 3.5
+
+
+def estimate_cost_anthropic(price: providers.Price, tasks: list, lang_names: list, langs: dict, samples: int,
+                            output_tokens: int, cache: bool = True) -> float:
+    """Rough dollars for one Anthropic model, with prompt caching as the run will use it: the system prompt of a
+    language is written once (the warm-up) and read by every attempt when it is a cacheable block of at least the
+    model's minimum prefix. Repair history is ignored; output is an assumption, as in `estimate_cost`."""
+    total = 0.0
+    for name in lang_names:
+        system = langs[name].system_prompt
+        system_tokens = len(system) / SYSTEM_CHARS_PER_TOKEN
+        blocks = getattr(system, "blocks", ())
+        cached = cache and any(c for _, c in blocks) and system_tokens >= price.min_cache_tokens
+        attempts = len(tasks) * samples * ASSUMED_ATTEMPTS
+        total += attempts * system_tokens * price.input * (price.cache_read if cached else 1.0) / 1e6
+        if cached:
+            total += system_tokens * price.input * price.cache_write / 1e6
+        total += sum(len(t.prompt) / TASK_CHARS_PER_TOKEN + 30 for t in tasks) * samples * ASSUMED_ATTEMPTS * price.input / 1e6
+        total += attempts * output_tokens * price.output / 1e6
+    return total
+
+
 class BudgetGuard:
     """--budget: stop the run once the providers have reported this many dollars of cost in total."""
 
@@ -1456,6 +1855,8 @@ class Plan:
     max_source: Optional[str]
     warnings: list
     toolchains: dict
+    typechecks: dict = dataclasses.field(default_factory=dict)  # what --python-typecheck / --ts-typecheck did
+    hidden: Optional[dict] = None  # --hidden-dir: {"files", "sha256"}
 
 
 @dataclasses.dataclass
@@ -1470,15 +1871,52 @@ class ModelOutcome:
     exit_code: int = 0
 
 
+def warm_up(plan: Plan, provider: providers.Provider, ctx: RunContext) -> list:
+    """Prompt caching: one request per distinct system prompt before the parallel jobs, so that every job reads the
+    cache (an entry only exists once the request that writes it has started to answer). Returns what was sent, for the
+    result file; a provider without a cache returns []. A prompt that was not cached (shorter than the model's minimum
+    cacheable prefix: 4,096 tokens on Haiku 4.5, 512 on Opus 5.5 and Sonnet 5.5) is reported, and the run goes on."""
+    done, seen = [], set()
+    for name in plan.lang_names:
+        system = plan.langs[name].system_prompt
+        if str(system) in seen:
+            continue
+        seen.add(str(system))
+        try:
+            reply = provider.warm_up(system)
+        except providers.ProviderError as exc:
+            if exc.fatal:
+                ctx.fatal.append(exc)
+                ctx.abort.set()
+            print(f"warning: cache warm-up of {provider.model} ({name}) failed: {exc}", file=sys.stderr)
+            continue
+        if reply is None:
+            continue
+        u = reply.usage
+        done.append({"lang": name, "usage": u.to_dict(), "request_id": reply.request_id})
+        if u.cache_creation_tokens:
+            print(f"cache warm-up ({provider.model}, {name}): {u.cache_creation_tokens:,} tokens written to the cache", flush=True)
+        elif u.cache_read_tokens:
+            print(f"cache warm-up ({provider.model}, {name}): {u.cache_read_tokens:,} tokens were already cached", flush=True)
+        else:
+            price = providers.ANTHROPIC_PRICES.get(provider.model)
+            print(f"warning: the {name} system prompt of {provider.model} was not cached: it is shorter than the model's "
+                  f"minimum cacheable prefix" + (f" ({price.min_cache_tokens:,} tokens)" if price else "")
+                  + f"; every request pays the full input price ({u.input_tokens:,} tokens)", file=sys.stderr)
+    return done
+
+
 def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: Optional[BudgetGuard],
               single: bool) -> ModelOutcome:
     """Run every (task, language, sample) job for one model, write its result files, return what happened."""
     args = plan.args
-    nyra = plan.langs.get("nyra")
+    nyra = nyra_of(plan.langs)
     ctx = RunContext(provider=provider, repairs=args.repairs, count_tokens=not args.no_count_tokens,
-                     over_budget=budget.exceeded if budget else None, self_repair=not args.no_self_repair)
-    jobs = [(t, plan.langs[n], s) for t in plan.tasks for n in plan.lang_names for s in range(args.samples)]
+                     over_budget=budget.exceeded if budget else None,
+                     self_repair=not args.no_self_repair and args.tier != "edit")
+    jobs = [(t, plan.langs[n], s) for t in plan.tasks for n in plan.lang_names for s in range(args.samples or 1)]
     started = dt.datetime.now(dt.timezone.utc)
+    warmups = warm_up(plan, provider, ctx)
     records, interrupted = execute(jobs, ctx, args.jobs, args.quiet)
     finished = dt.datetime.now(dt.timezone.utc)
     outcome = ModelOutcome(model=provider.model, fatal=list(ctx.fatal), interrupted=interrupted)
@@ -1511,21 +1949,26 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
             "mock_flaky": args.mock_flaky if provider.is_mock else None,
             "tokens_are_estimates": provider.tokens_are_estimates,
             "langs": plan.lang_names, "repairs": args.repairs, "samples": args.samples, "timeout_s": args.timeout,
-            "self_repair": None if nyra is None else not args.no_self_repair,
+            "tier": args.tier, "preset": args.preset, "typecheck": plan.typechecks, "hidden_dir": plan.hidden,
+            "extraction": ("the first fenced block of the reply" if args.tier == "v1" else
+                           "the last fenced block tagged with the language (else the last block)"),
+            "self_repair": None if nyra is None or args.tier == "edit" else not args.no_self_repair,
             "backend": nyra.backend if nyra else None, "jobs": args.jobs,
             "max_version": None if plan.max_version is None else f"{plan.max_version[0]}.{plan.max_version[1]}",
             "max_version_source": plan.max_source,
             "nyra": None if nyra is None else {"path": display_path(nyra.bin), "version": nyra.version_text()},
             "spec": None if nyra is None else {"path": display_path(nyra.spec_path), "version": nyra.spec_version,
-                                               "sha256": nyra.spec_sha256},
+                                               "sha256": nyra.spec_sha256, "kind": nyra.spec_kind,
+                                               "ex_examples": nyra.ex_examples},
+            "cache": {"enabled": bool(getattr(provider, "cache", False)), "warmup": warmups},
             "node": plan.toolchains["node"], "rust": plan.toolchains["rust"],
             "timing": timing_info(plan),
             "python": platform.python_version(), "platform": platform.platform(),
             "served_models": served, "served_by": served_by, "spent_usd": spent, "budget_usd": args.budget,
-            "repo": _git_info(), "tasks_sha256": tasks_digest(), "warnings": warnings,
+            "repo": _git_info(), "tasks_sha256": tasks_digest(TIER_DIRS[args.tier], args.tier), "warnings": warnings,
             # Everything needed to rebuild what the model saw: system prompt + task prompt, then for each
             # attempt its reply and the feedback that followed it.
-            "system_prompts": {n: plan.langs[n].system_prompt for n in plan.lang_names},
+            "system_prompts": {n: plan.langs[n].system_prompt_for(plan.tasks[0]) for n in plan.lang_names},
             "tasks": {t.id: {"title": t.title, "category": t.category, "difficulty": t.difficulty,
                              "min_version": t.min_version, "prompt": t.prompt} for t in plan.tasks},
             "task_ids": [t.id for t in plan.tasks], "excluded_tasks": plan.excluded,
@@ -1534,6 +1977,10 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
     }
     results["summary"] = report.summarize(records, plan.lang_names, {t.id: t.category for t in plan.tasks})
     markdown = report.render_markdown(results, {t.id: t for t in plan.tasks})
+    if args.tier in ("v2", "edit"):  # hidden inputs and edits have numbers of their own (bench/tier_stats.py)
+        import tier_stats
+        results["summary"].update(tier_stats.tier_summary(args.tier, records, plan.lang_names))
+        markdown += "\n" + tier_stats.render_tier(results, args.tier)
 
     outcome.results = results
     outcome.json_path, outcome.md_path = result_paths(out_dir, results["run"]["date"], provider.name, provider.model)
@@ -1567,14 +2014,100 @@ def run_model(plan: Plan, provider: providers.Provider, out_dir: Path, budget: O
                  "the runs that did" if bad else ""), file=sys.stderr)
         if bad:
             outcome.exit_code = outcome.exit_code or 2
-    if provider.is_mock and not outcome.exit_code and any(r["status"] != "pass" for r in records):
+    if provider.is_mock and not outcome.exit_code and args.tier != "safety" and any(r["status"] != "pass" for r in records):
         print("error: the mock run is the pipeline self-test: every task must pass", file=sys.stderr)
         outcome.exit_code = 1
     return outcome
 
 
+# ------------------------------------------------------------------ tiers, presets, type checks (v2 / edit / safety)
+
+
+def resolve_settings(args) -> None:
+    """Fill in what the command line leaves open: from `--preset` (bench/models.json), then from the defaults of the
+    tier. Called once, before anything else looks at the arguments."""
+    preset: dict = {}
+    if args.preset:
+        try:
+            preset = modelsmod.load_preset(args.preset)
+        except modelsmod.ModelsError as exc:
+            raise UsageError(str(exc)) from None
+    if args.tier is None:
+        args.tier = preset.get("tier", "v1")
+    if args.samples is None:
+        args.samples = preset.get("samples", 1)
+    if args.repairs is None:
+        args.repairs = preset.get("repairs", 3)
+    if preset and not args.model and not args.models and args.provider in ("anthropic", "openrouter"):
+        ids = preset.get(args.provider) or []
+        if not ids:
+            raise UsageError(f"preset {args.preset!r} lists no models for --provider {args.provider}")
+        args.models = ",".join(ids)
+    if args.langs is None:
+        args.langs = ",".join(DEFAULT_LANGS[args.tier])
+
+
+def apply_hidden_dir(tasks: list, hidden_dir: Path) -> tuple:
+    """--hidden-dir: add the private cases of <hidden_dir>/<task id>.json (a `cases` list of {stdin, expected_output})
+    to the hidden cases of the tasks. Returns (tasks, info for the result file: how many files, and a hash of their
+    content, but never their content or path)."""
+    if not Path(hidden_dir).is_dir():
+        raise UsageError(f"--hidden-dir {hidden_dir}: not a folder")
+    out, used, digest = [], 0, hashlib.sha256()
+    known = {t.id for t in tasks}
+    for path in sorted(Path(hidden_dir).glob("*.json")):
+        if path.stem not in known:
+            raise UsageError(f"--hidden-dir: {path.name} does not belong to a task of this tier")
+    for t in tasks:
+        path = Path(hidden_dir) / f"{t.id}.json"
+        if not t.cases or not path.is_file():
+            out.append(t)
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            raw = data["cases"]
+            extra = tuple(Case(stdin=c["stdin"], expected_output=c["expected_output"], visible=False, name=f"private{i + 1}")
+                          for i, c in enumerate(raw))
+            if not extra or any(not isinstance(c.stdin, str) or not c.expected_output.strip() for c in extra):
+                raise ValueError("needs a non-empty list of cases with a stdin and a non-empty expected_output")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise UsageError(f"--hidden-dir: {path.name}: {exc}") from None
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
+        used += 1
+        out.append(dataclasses.replace(t, cases=t.cases + extra))
+    return out, {"files": used, "sha256": digest.hexdigest() if used else None}
+
+
+def resolve_typechecks(args) -> tuple:
+    """(python checker, ts checker, the description for the result file, the messages to print). A checker that was
+    asked for and is not installed is skipped with a clear message; the result file records that."""
+    notes: list = []
+    info = {"python": typecheck.metadata("python", None, None, ""), "typescript": typecheck.metadata("typescript", None, None, "")}
+    py = ts = None
+    try:
+        if args.python_typecheck:
+            py, msg = typecheck.find_python_checker(args.python_typecheck)
+            info["python"] = typecheck.metadata("python", args.python_typecheck, py, msg)
+            notes.append(msg)
+        if args.ts_typecheck:
+            ts, msg = typecheck.find_ts_checker(args.ts_typecheck)
+            info["typescript"] = typecheck.metadata("typescript", args.ts_typecheck, ts, msg)
+            notes.append(msg)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from None
+    return py, ts, info, notes
+
+
 def _main(args) -> int:
+    resolve_settings(args)
     lang_names = [canonical_lang(n) for n in args.langs.split(",") if n.strip()]
+    if args.tier == "edit" and not all(n in EDIT_ARMS for n in lang_names):
+        raise UsageError(f"--tier edit compares the arms {', '.join(EDIT_ARMS)}: use --langs with those")
+    if args.tier != "edit" and any(n in EDIT_ARMS for n in lang_names):
+        raise UsageError(f"{', '.join(n for n in lang_names if n in EDIT_ARMS)} belong to --tier edit")
+    if args.hidden_dir and args.tier not in ("v2", "edit"):
+        raise UsageError("--hidden-dir adds hidden cases to the v2 or edit tier")
     if not lang_names or len(set(lang_names)) != len(lang_names):
         raise UsageError("--langs needs one or more distinct languages, e.g. nyra,python,typescript,rust")
     if args.repairs < 0 or args.samples < 1 or args.jobs < 1 or args.time_runs < 0:
@@ -1595,17 +2128,24 @@ def _main(args) -> int:
             raise UsageError("--extra-json must be a JSON object")
     model_ids = resolve_models(args)
 
-    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=Path(args.spec),
-                           timeout=args.timeout, node=args.node, rustc=args.rustc, time_runs=args.time_runs)
+    py_checker, ts_checker, typechecks, check_notes = resolve_typechecks(args)
+    langs = make_languages(lang_names, nyra=args.nyra, backend=args.backend, spec=resolve_spec(args.spec),
+                           timeout=args.timeout, node=args.node, rustc=args.rustc, time_runs=args.time_runs,
+                           ex_examples=args.ex_examples, python_checker=py_checker, ts_checker=ts_checker)
     warnings: list = []
     for lang in langs.values():
         warnings += lang.preflight()
+    warnings += [n for n in check_notes if n.startswith(typecheck.SKIPPED_PREFIX)]
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
+    for n in check_notes:
+        if not n.startswith(typecheck.SKIPPED_PREFIX):
+            print(n)
 
     options = dict(reference=lambda lang, tid: langs[lang].reference_code(tid),
                    flaky=(True if args.mock_flaky == "mix" else (args.mock_flaky or False)),
-                   max_tokens=args.max_tokens, effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens)
+                   max_tokens=args.max_tokens, effort=args.effort, extra=extra, count_tokens=not args.no_count_tokens,
+                   cache=not args.no_cache)
     if args.base_url:
         options["base_url"] = args.base_url
     try:
@@ -1617,7 +2157,7 @@ def _main(args) -> int:
                if args.provider == "openrouter" and not args.no_model_check else None)
 
     # Which Nyra version do the tasks have to fit? Default: the compiler we are about to test.
-    nyra = langs.get("nyra")
+    nyra = nyra_of(langs)
     if args.max_version:
         max_version, max_source = parse_version(args.max_version), "flag"
         if nyra is not None and nyra.version() is not None and max_version > nyra.version():
@@ -1629,10 +2169,28 @@ def _main(args) -> int:
     else:
         max_version, max_source = None, None
 
-    all_tasks = load_tasks()
+    try:
+        all_tasks = load_tier(args.tier)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from None
+    hidden_info = None
+    if args.hidden_dir:
+        all_tasks, hidden_info = apply_hidden_dir(all_tasks, Path(args.hidden_dir))
     tasks, excluded = select_tasks(all_tasks, args.tasks, max_version, lang_names, provider)
+    if args.tier == "safety":
+        import safety  # the safety tier is a design: its tasks are pending until the compiler has `--allow`
+        tasks, pending = safety.gate(tasks, nyra, args.include_pending)
+        excluded += pending
+        if pending:
+            print(f"safety tier: {len(pending)} task(s) are pending and were not run: {safety.PENDING_REASON} "
+                  "(--include-pending runs them anyway)")
+            if args.dry_run and not tasks:
+                for e in pending:
+                    print(f"  pending {e['id']}")
+                return 0
     if not tasks:
-        raise UsageError("no tasks selected")
+        raise UsageError("no tasks selected" if args.tier != "safety" else
+                         "no safety task can run yet (see the message above); --dry-run lists them")
 
     n_jobs = len(tasks) * len(lang_names) * args.samples
     calls_per_model = n_jobs * (args.repairs + 1)
@@ -1642,6 +2200,8 @@ def _main(args) -> int:
                                                            if len(model_ids) > 1 else "") + ")")
     if nyra is not None:
         banner += f" | {nyra.version_text()} ({nyra.backend})"
+    if args.tier != "v1":
+        banner += f" | tier {args.tier}" + (f", preset {args.preset}" if args.preset else "")
     print(banner)
     if max_version is not None:
         print(f"tasks limited to Nyra <= {max_version[0]}.{max_version[1]} (from {max_source}); "
@@ -1667,6 +2227,22 @@ def _main(args) -> int:
             if len(model_ids) > 1:
                 print(f"  total: about ${total:,.2f}")
             print("  (use --budget USD to stop a run that costs more than you planned)")
+        elif args.provider == "anthropic":
+            total = 0.0
+            print(f"estimated cost (about {ASSUMED_ATTEMPTS} attempts per run and {args.assume_output_tokens:,} output "
+                  "tokens per attempt, thinking included; prompt cache " + ("on" if not args.no_cache else "off") + "):")
+            for mid in model_ids:
+                price = providers.ANTHROPIC_PRICES.get(mid)
+                if price is None:
+                    print(f"  {mid}: price not known to bench/providers.py (the run cannot enforce --budget either)")
+                    continue
+                cost = estimate_cost_anthropic(price, tasks, lang_names, langs, args.samples, args.assume_output_tokens,
+                                               cache=not args.no_cache)
+                total += cost
+                print(f"  {mid}: about ${cost:,.2f}")
+            if len(model_ids) > 1:
+                print(f"  total: about ${total:,.2f}")
+            print("  (use --budget USD to stop a run that costs more than you planned)")
         return 0
 
     for p in plist:
@@ -1677,7 +2253,8 @@ def _main(args) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     plan = Plan(args=args, lang_names=lang_names, langs=langs, tasks=tasks, excluded=excluded, max_version=max_version,
-                max_source=max_source, warnings=warnings, toolchains=toolchain_info(langs))
+                max_source=max_source, warnings=warnings, toolchains=toolchain_info(langs), typechecks=typechecks,
+                hidden=hidden_info)
     budget = BudgetGuard(args.budget, plist) if args.budget is not None else None
 
     outcomes: list = []

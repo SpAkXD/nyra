@@ -1,0 +1,37 @@
+{
+  "id": "rps_tournament",
+  "title": "Rock paper scissors strategy guide",
+  "category": "aoc-style",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read a strategy guide from standard input: each line is `O Y`, the opponent's move `O` (`A` rock, `B` paper, `C` scissors) and a second letter `Y` (`X`, `Y` or `Z`). A round scores the shape you play (1 for rock, 2 for paper, 3 for scissors) plus the outcome (0 for a loss, 3 for a draw, 6 for a win; rock beats scissors, scissors beats paper, paper beats rock).\n\nThere are two readings of the second letter. In the first one `X`, `Y`, `Z` are the shape you play (rock, paper, scissors). In the second one they are the wanted outcome (`X` lose, `Y` draw, `Z` win) and you play whatever shape gives that outcome against the opponent's move. Print `part1=P1 part2=P2`: the total score of the whole guide under each reading. Blank lines are skipped; any other line that is not exactly two valid letters separated by one space prints `line N: invalid` (N counts from 1) and is ignored.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "A Y\nB X\nC Z\n",
+      "expected_output": "part1=15 part2=12\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "A X\nA Y\nA Z\nB X\nB Y\nB Z\nC X\nC Y\nC Z\n",
+      "expected_output": "part1=45 part2=45\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "C C\nA  Y\n\nb x\nA Y \nD X\nB Y\n",
+      "expected_output": "line 1: invalid\nline 2: invalid\nline 4: invalid\nline 5: invalid\nline 6: invalid\npart1=5 part2=5\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "",
+      "expected_output": "part1=0 part2=0\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "C Z\nC Z\nC Z\nB Y\nA X\n",
+      "expected_output": "part1=27 part2=29\n"
+    }
+  ]
+}

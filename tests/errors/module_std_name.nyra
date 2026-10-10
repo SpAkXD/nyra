@@ -1,0 +1,6 @@
+// expect: E0304
+use ./modules/math
+
+fn main() {
+    print(math.double(2))
+}

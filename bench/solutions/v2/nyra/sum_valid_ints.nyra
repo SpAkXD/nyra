@@ -1,0 +1,18 @@
+use input
+use text
+
+var total = 0
+var count = 0
+var n = 0
+for raw in input.lines() {
+    n += 1
+    let s = raw.trim()
+    if s == "" { continue }
+    if text.is_int(s) {
+        total += int(s)
+        count += 1
+    } else {
+        print("line {n}: invalid")
+    }
+}
+print("sum={total} count={count}")

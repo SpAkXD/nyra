@@ -37,7 +37,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, NamedTuple, Optional
 
 
 class ProviderError(Exception):
@@ -62,9 +62,17 @@ class Usage:
     estimated: bool = False  # True when the numbers are guesses (mock provider), not API usage
     reasoning_tokens: Optional[int] = None  # the part of output_tokens spent thinking, when the API says so
     cost: Optional[float] = None  # what the API charged for this call in US dollars, when it says so
+    # Prompt caching (Anthropic): input_tokens is the whole prompt, and these two are parts of it, written to the
+    # cache (billed at 1.25x) and read from it (billed at 0.1x, 0.05x on the newest models). None: not reported.
+    cache_creation_tokens: Optional[int] = None
+    cache_read_tokens: Optional[int] = None
 
     def to_dict(self) -> dict:
         out = {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens, "estimated": self.estimated}
+        if self.cache_creation_tokens is not None:
+            out["cache_creation_input_tokens"] = self.cache_creation_tokens
+        if self.cache_read_tokens is not None:
+            out["cache_read_input_tokens"] = self.cache_read_tokens
         if self.reasoning_tokens is not None:
             out["reasoning_tokens"] = self.reasoning_tokens
         if self.cost is not None:
@@ -81,6 +89,23 @@ class Reply:
     request_id: Optional[str] = None
     model: Optional[str] = None  # the model id the provider says it served (may differ from the requested alias)
     upstream: Optional[str] = None  # who actually ran the model, when a router says so (OpenRouter: "Anthropic")
+
+
+class SystemPrompt(str):
+    """A system prompt that is also a list of blocks, so that a provider with prompt caching can put the long, fixed
+    part (the language spec) in a block of its own. As a plain `str` it is the blocks joined by a blank line, which is
+    what every other provider sends, what the result files record and what the token estimates count.
+
+        SystemPrompt([("intro + spec", True), ("task rule", False)])   # (text, cache this block and all before it)
+    """
+
+    blocks: tuple
+
+    def __new__(cls, blocks):
+        blocks = tuple((str(text).strip(), bool(cache)) for text, cache in blocks)
+        obj = super().__new__(cls, "\n\n".join(text for text, _ in blocks))
+        obj.blocks = blocks
+        return obj
 
 
 class Provider:
@@ -103,6 +128,12 @@ class Provider:
     def count_tokens(self, text: str) -> Optional[int]:
         return None
 
+    def warm_up(self, system: str) -> Optional["Reply"]:
+        """Send one tiny request so that `system` is in the provider's prompt cache before the parallel jobs start
+        (a cache entry only exists once the request that writes it has started to answer, so the first requests of a
+        parallel run would all write it themselves). None: this provider has no cache to warm."""
+        return None
+
     def spent(self) -> Optional[float]:
         """Dollars charged so far by this provider instance, if the API reports costs (else None)."""
         return None
@@ -114,6 +145,9 @@ class Provider:
 # --------------------------------------------------------------------------- mock
 
 DEFECTS = ("no_code", "syntax", "runtime", "wrong")
+# Not part of the "mix": `hardcode` replies with a program that ignores its input and prints the example's answer. It only
+# makes sense for tasks with hidden inputs (the v2 tier), where it must pass the example and fail the hidden inputs.
+EXTRA_DEFECTS = ("hardcode",)
 
 
 def _estimate_tokens(text: str) -> int:
@@ -122,6 +156,19 @@ def _estimate_tokens(text: str) -> int:
 
 def _fence(lang: str, code: str) -> str:
     return f"```{lang}\n{code.rstrip()}\n```"
+
+
+def hardcoded_program(lang: str, text: str) -> str:
+    """A program that ignores its input and prints `text`: what a model that memorizes the example would write."""
+    if lang == "python":
+        return "import sys\nsys.stdout.write(" + repr(text) + ")\n"
+    if lang == "typescript":
+        return "process.stdout.write(" + json.dumps(text) + ");\n"
+    if lang == "rust":
+        return "fn main() {\n    print!(\"{}\", " + json.dumps(text) + ");\n}\n"
+    quoted = (text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+              .replace("{", "{{").replace("}", "}}"))
+    return 'fn main() {\n    print("' + quoted + '", end: "")\n}\n'
 
 
 class MockProvider(Provider):
@@ -157,11 +204,11 @@ class MockProvider(Provider):
             variant = self.model[len("mock-"):] if self.model.startswith("mock-") else None
             if variant == "flaky":
                 flaky = True
-            elif variant in DEFECTS:
+            elif variant in DEFECTS or variant in EXTRA_DEFECTS:
                 flaky = variant
             else:
                 raise ValueError(f"unknown mock model {self.model!r}; use mock, mock-flaky or "
-                                 f"mock-<{'|'.join(DEFECTS)}>")
+                                 f"mock-<{'|'.join(DEFECTS + EXTRA_DEFECTS)}>")
         self.flaky = flaky
 
     def has_reference(self, lang: str, task_id: str) -> bool:
@@ -170,7 +217,7 @@ class MockProvider(Provider):
     def defect_for(self, lang: str, task_id: str) -> Optional[str]:
         if not self.flaky:
             return None
-        if self.flaky in DEFECTS:
+        if self.flaky in DEFECTS or self.flaky in EXTRA_DEFECTS:
             return self.flaky
         h = int(hashlib.sha256(f"{lang}/{task_id}".encode()).hexdigest(), 16) % 7
         return DEFECTS[h] if h < len(DEFECTS) else None
@@ -181,7 +228,13 @@ class MockProvider(Provider):
         if code is None:
             raise ProviderError(f"mock provider has no reference solution for {lang}/{task_id}")
         defect = self.defect_for(lang, task_id) if attempt == 1 else None
-        text = _fence(lang, code) if defect is None else self._broken_reply(lang, code, defect)
+        example = meta.get("example_output")
+        if defect == "hardcode" and example is None:
+            defect = None  # a task without hidden inputs has nothing to hard-code
+        if defect == "hardcode":
+            text = _fence(lang, hardcoded_program(lang, example))
+        else:
+            text = _fence(lang, code) if defect is None else self._broken_reply(lang, code, defect)
         prompt_chars = len(system) + sum(len(m["content"]) for m in messages)
         usage = Usage(_estimate_tokens("x" * prompt_chars), _estimate_tokens(text), estimated=True)
         return Reply(text=text, usage=usage, stop_reason="end_turn", latency_s=0.0, model=self.model)
@@ -194,12 +247,14 @@ class MockProvider(Provider):
         if defect == "no_code":
             return "Here is my solution: I would loop over the numbers and print the results."
         if lang == "nyra":
+            # the references are scripts (statements at the top level); a program may still use `fn main`
             if defect == "wrong":
-                broken = code.replace("fn main() {", "fn main() {\n    print(12345)", 1)
+                broken = code.replace("fn main() {", "fn main() {\n    print(12345)", 1) if "fn main() {" in code \
+                    else "print(12345)\n" + code
             elif defect == "syntax":
                 broken = "@\n" + code
-            else:  # runtime: Nyra has no portable crash, use another compile error (missing `main`)
-                broken = code.replace("fn main()", "fn mian()", 1)
+            else:  # runtime: Nyra has no portable crash, use another compile error (an undefined variable)
+                broken = code + "print(mock_undefined_variable)\n"
         elif lang == "rust":
             if defect == "wrong":
                 broken = code.replace("fn main() {", 'fn main() {\n    println!("12345");', 1)
@@ -231,12 +286,37 @@ class MockProvider(Provider):
 _ANTHROPIC_FIRST_CLASS = ("thinking", "output_config", "cache_control")
 
 
-# US dollars per million tokens (input, output), for the cost the API does not report itself.
+class Price(NamedTuple):
+    """US dollars per million tokens, plus how prompt caching is billed. The first two fields come first so that
+    `price[0]` / `price[1]` (input, output) keep working."""
+
+    input: float
+    output: float
+    cache_read: float = 0.1  # reads cost this multiple of `input`
+    cache_write: float = 1.25  # 5-minute cache writes cost this multiple of `input`
+    min_cache_tokens: int = 1024  # a shorter prefix is silently not cached
+
+
+# The API does not report costs, so they are computed from the token counts. Verified 2026-10-09 against the
+# pricing page (https://platform.claude.com/docs/en/about-claude/pricing) and the prompt caching page
+# (https://platform.claude.com/docs/en/build-with-claude/prompt-caching): reads cost 0.1x the input price, except on
+# Opus 5.5 and Sonnet 5.5 (0.05x); 5-minute writes 1.25x; the minimum cacheable prefix is 512 tokens on Opus 5.5 and
+# Sonnet 5.5 and 4,096 on Haiku 4.5 (a Nyra spec card of about 1,400 tokens is below it: Haiku 4.5 never caches it).
 ANTHROPIC_PRICES = {
-    "claude-opus-5-5": (5.0, 25.0),
-    "claude-sonnet-5-5": (3.0, 15.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
+    "claude-opus-5-5": Price(4.0, 20.0, cache_read=0.05, min_cache_tokens=512),
+    "claude-sonnet-5-5": Price(2.0, 10.0, cache_read=0.05, min_cache_tokens=512),
+    "claude-haiku-4-5-20251001": Price(1.0, 5.0, min_cache_tokens=4096),
 }
+ANTHROPIC_PRICES["claude-haiku-4-5"] = ANTHROPIC_PRICES["claude-haiku-4-5-20251001"]
+
+
+def anthropic_cost(price: Price, input_tokens: int, output_tokens: int, cache_creation: int = 0,
+                   cache_read: int = 0) -> float:
+    """Dollars for one call. `input_tokens` is the whole prompt (fresh + cache_creation + cache_read tokens, as
+    `Usage.input_tokens` is); written tokens cost `cache_write` x the input price and read tokens `cache_read` x."""
+    fresh = max(0, input_tokens - cache_creation - cache_read)
+    return (fresh * price.input + cache_creation * price.input * price.cache_write
+            + cache_read * price.input * price.cache_read + output_tokens * price.output) / 1e6
 
 
 class AnthropicProvider(Provider):
@@ -252,11 +332,12 @@ class AnthropicProvider(Provider):
     default_model = "claude-opus-5-5"
 
     def __init__(self, model: Optional[str] = None, *, max_tokens: int = 16000, effort: Optional[str] = None,
-                 extra: Optional[dict] = None, count_tokens: bool = True, client=None, **_options):
+                 extra: Optional[dict] = None, count_tokens: bool = True, client=None, cache: bool = True, **_options):
         super().__init__(model)
         self.max_tokens = max_tokens
         self.effort = effort
         self.extra = dict(extra or {})
+        self.cache = cache  # put cache_control on the system blocks that a SystemPrompt marks as cacheable
         self._count_enabled = count_tokens
         self._count_baseline: Optional[int] = None
         self._count_lock = threading.Lock()
@@ -288,10 +369,22 @@ class AnthropicProvider(Provider):
 
     def describe(self) -> dict:
         return {"name": self.name, "model": self.model, "max_tokens": self.max_tokens, "effort": self.effort,
-                "extra": self.extra}
+                "extra": self.extra, "prompt_cache": self.cache}
+
+    def _system_param(self, system):
+        """A plain string stays one; a SystemPrompt becomes a list of text blocks, with `cache_control` on the last
+        block marked cacheable: everything before and including it is the cached prefix. The blocks are the same text
+        for every request (the task is only ever in the user message), so the prefix is byte-stable."""
+        blocks = getattr(system, "blocks", None)
+        if not self.cache or not blocks or not any(cache for _, cache in blocks):
+            return str(system)
+        last = max(i for i, (_, cache) in enumerate(blocks) if cache)
+        return [{"type": "text", "text": text, **({"cache_control": {"type": "ephemeral"}} if i == last else {})}
+                for i, (text, _) in enumerate(blocks)]
 
     def _request(self, system: str, messages: list) -> dict:
-        req = {"model": self.model, "max_tokens": self.max_tokens, "system": system, "messages": messages}
+        req = {"model": self.model, "max_tokens": self.max_tokens, "system": self._system_param(system),
+               "messages": messages}
         output_config = dict(self.extra.get("output_config") or {})
         if self.effort:
             output_config["effort"] = self.effort
@@ -320,17 +413,43 @@ class AnthropicProvider(Provider):
             raise _map_error(exc) from exc
         latency = time.monotonic() - start
         text = "".join(getattr(b, "text", "") or "" for b in resp.content if getattr(b, "type", None) == "text")
-        u = resp.usage
-        input_tokens = sum(int(getattr(u, f, 0) or 0)
-                           for f in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
-        usage = Usage(input_tokens=input_tokens, output_tokens=int(getattr(u, "output_tokens", 0) or 0))
+        return Reply(text=text, usage=self._usage(resp.usage), stop_reason=getattr(resp, "stop_reason", None),
+                     latency_s=latency, request_id=getattr(resp, "_request_id", None), model=getattr(resp, "model", None))
+
+    def _usage(self, u) -> Usage:
+        """The API reports the fresh input tokens, the tokens written to the cache and the tokens read from it as three
+        separate numbers; `Usage.input_tokens` is their sum, and the cost counts each part at its own price."""
+        fresh, created, read = (int(getattr(u, f, 0) or 0)
+                                for f in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+        input_tokens = fresh + created + read
+        usage = Usage(input_tokens=input_tokens, output_tokens=int(getattr(u, "output_tokens", 0) or 0),
+                      cache_creation_tokens=created, cache_read_tokens=read)
         price = ANTHROPIC_PRICES.get(self.model)
-        if price is not None:  # computed from the token counts at list price (no caching is used)
-            usage.cost = (input_tokens * price[0] + usage.output_tokens * price[1]) / 1e6
+        if price is not None:  # computed from the token counts: the API does not report dollars
+            usage.cost = anthropic_cost(price, input_tokens, usage.output_tokens, created, read)
             with self._spent_lock:
                 self._spent += usage.cost
-        return Reply(text=text, usage=usage, stop_reason=getattr(resp, "stop_reason", None), latency_s=latency,
-                     request_id=getattr(resp, "_request_id", None), model=getattr(resp, "model", None))
+        return usage
+
+    def warm_up(self, system: str) -> Optional[Reply]:
+        """One request with the same system blocks as the real ones and a one-word answer, so the cache holds the
+        spec before the parallel jobs start. Nothing to do (None) when caching is off or no block is cacheable."""
+        if not self.cache or not any(c for _, c in (getattr(system, "blocks", None) or ())):
+            return None
+        self.ensure_ready()
+        req = self._request(system, [{"role": "user", "content": "Reply with the single word: ready"}])
+        req["max_tokens"] = 16
+        start = time.monotonic()
+        try:
+            resp = self.client.messages.create(**req)
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise _map_error(exc) from exc
+        text = "".join(getattr(b, "text", "") or "" for b in resp.content if getattr(b, "type", None) == "text")
+        return Reply(text=text, usage=self._usage(resp.usage), stop_reason=getattr(resp, "stop_reason", None),
+                     latency_s=time.monotonic() - start, request_id=getattr(resp, "_request_id", None),
+                     model=getattr(resp, "model", None))
 
     def spent(self) -> Optional[float]:
         return self._spent if self.model in ANTHROPIC_PRICES else None

@@ -6,120 +6,81 @@ struct Book {
     waiting: [str]
 }
 
-struct Member {
-    name: str
-    balance: int
-}
+var books = [Book(name: n, holder: "", due: 0, held: "", waiting: []) for n in ["B1", "B2", "B3"]]
+var owed = ["ann": 0, "bob": 0, "cat": 0]
 
-fn money(cents: int) -> str {
-    let rest = cents % 100
-    let two = if rest < 10 { "0{rest}" } else { "{rest}" }
-    ret "{cents / 100}.{two}"
-}
+fn money(cents: int) -> str = "{cents / 100}.{str(cents % 100).pad_left(2, '0')}"
+fn loans_of(member: str) -> [str] = books.filter(b => b.holder == member).map(b => b.name)
 
-fn book_index(books: [Book], name: str) -> int {
-    for i in 0..books.len() {
-        if books[i].name == name { ret i }
-    }
-    ret -1
-}
-
-fn member_index(members: [Member], name: str) -> int {
-    for i in 0..members.len() {
-        if members[i].name == name { ret i }
-    }
-    ret -1
-}
-
-fn loans_of(books: [Book], m: str) -> [str] {
-    var out: [str] = []
-    for b in books {
-        if b.holder == m { out.push(b.name) }
-    }
-    ret out
-}
-
-fn main() {
-    let events = "1 borrow ann B1; 1 borrow bob B1; 2 hold bob B1; 2 hold cat B1; 3 hold bob B1; 3 hold ann B1; 4 hold cat B2; 5 borrow ann B2; 6 borrow ann B3; 6 borrow bob B3; 15 return ann B1; 16 borrow ann B1; 17 borrow bob B1; 18 hold ann B1; 20 return ann B2; 45 return bob B3; 46 borrow bob B2; 47 pay bob 250; 47 borrow bob B2; 48 return cat B1; 50 return bob B1; 51 hold cat B1; 52 borrow ann B1; 53 borrow cat B1; 54 pay ann 100; 55 hold ann B1; 56 return cat B1; 57 borrow ann B1; 58 pay bob 700"
-    var books: [Book] = []
-    for name in ["B1", "B2", "B3"] {
-        books.push(Book(name: name, holder: "", due: 0, held: "", waiting: []))
-    }
-    var members: [Member] = []
-    for name in ["ann", "bob", "cat"] {
-        members.push(Member(name: name, balance: 0))
-    }
-    for event in events.split("; ") {
-        let w = event.split(" ")
-        let day = int(w[0])
-        let op = w[1]
-        let m = w[2]
-        let mi = member_index(members, m)
-        if op == "pay" {
-            let x = int(w[3])
-            let old = members[mi].balance
-            if x > old {
-                members[mi].balance = 0
-                print("{m} paid {money(old)}, change {money(x - old)}")
-            } else {
-                members[mi].balance -= x
-                print("{m} paid {money(x)}, owes {money(members[mi].balance)}")
-            }
-            continue
+let events = "1 borrow ann B1; 1 borrow bob B1; 2 hold bob B1; 2 hold cat B1; 3 hold bob B1; 3 hold ann B1; 4 hold cat B2; 5 borrow ann B2; 6 borrow ann B3; 6 borrow bob B3; 15 return ann B1; 16 borrow ann B1; 17 borrow bob B1; 18 hold ann B1; 20 return ann B2; 45 return bob B3; 46 borrow bob B2; 47 pay bob 250; 47 borrow bob B2; 48 return cat B1; 50 return bob B1; 51 hold cat B1; 52 borrow ann B1; 53 borrow cat B1; 54 pay ann 100; 55 hold ann B1; 56 return cat B1; 57 borrow ann B1; 58 pay bob 700"
+for event in events.split("; ") {
+    let w = event.split(" ")
+    let day = int(w[0])
+    let op = w[1]
+    let m = w[2]
+    if op == "pay" {
+        let x = int(w[3])
+        let old = owed[m]
+        if x > old {
+            owed[m] = 0
+            print("{m} paid {money(old)}, change {money(x - old)}")
+        } else {
+            owed[m] -= x
+            print("{m} paid {money(x)}, owes {money(owed[m])}")
         }
-        let b = w[3]
-        let bi = book_index(books, b)
-        if op == "borrow" {
-            if members[mi].balance >= 300 {
-                print("{m} blocked (owes {money(members[mi].balance)})")
-            } else if loans_of(books, m).len() >= 2 {
-                print("{m} at limit")
-            } else if books[bi].holder != "" {
-                print("{b} on loan until day {books[bi].due}")
-            } else if books[bi].held != "" && books[bi].held != m {
-                print("{b} held for {books[bi].held}")
+        continue
+    }
+    let b = w[3]
+    let bi = books.find_index(k => k.name == b)
+    if op == "borrow" {
+        if owed[m] >= 300 {
+            print("{m} blocked (owes {money(owed[m])})")
+        } else if loans_of(m).len() >= 2 {
+            print("{m} at limit")
+        } else if books[bi].holder != "" {
+            print("{b} on loan until day {books[bi].due}")
+        } else if books[bi].held != "" && books[bi].held != m {
+            print("{b} held for {books[bi].held}")
+        } else {
+            books[bi].holder = m
+            books[bi].due = day + 14
+            books[bi].held = ""
+            print("{m} borrowed {b}, due day {books[bi].due}")
+        }
+    } else if op == "return" {
+        if books[bi].holder != m {
+            print("{m} does not have {b}")
+        } else {
+            books[bi].holder = ""
+            if day > books[bi].due {
+                let late = day - books[bi].due
+                let fee = min(late * 25, 500)
+                owed[m] += fee
+                print("{m} returned {b}, {late} days late, fee {money(fee)}")
             } else {
-                books[bi].holder = m
-                books[bi].due = day + 14
-                books[bi].held = ""
-                print("{m} borrowed {b}, due day {books[bi].due}")
+                print("{m} returned {b}")
             }
-        } else if op == "return" {
-            if books[bi].holder != m {
-                print("{m} does not have {b}")
-            } else {
-                books[bi].holder = ""
-                if day > books[bi].due {
-                    let late = day - books[bi].due
-                    var fee = late * 25
-                    if fee > 500 { fee = 500 }
-                    members[mi].balance += fee
-                    print("{m} returned {b}, {late} days late, fee {money(fee)}")
-                } else {
-                    print("{m} returned {b}")
-                }
-                if books[bi].waiting.len() > 0 {
-                    let h = books[bi].waiting.remove(0)
-                    books[bi].held = h
-                    print("{b} held for {h}")
-                }
-            }
-        } else if op == "hold" {
-            if books[bi].holder == m {
-                print("{m} already has {b}")
-            } else if books[bi].holder == "" && books[bi].held == "" {
-                print("{b} is available")
-            } else if books[bi].waiting.contains(m) || books[bi].held == m {
-                print("{m} already waiting for {b}")
-            } else {
-                books[bi].waiting.push(m)
-                print("{m} waiting for {b}, position {books[bi].waiting.len()}")
+            if books[bi].waiting.len() > 0 {
+                let h = books[bi].waiting.remove(0)
+                books[bi].held = h
+                print("{b} held for {h}")
             }
         }
+    } else if op == "hold" {
+        if books[bi].holder == m {
+            print("{m} already has {b}")
+        } else if books[bi].holder == "" && books[bi].held == "" {
+            print("{b} is available")
+        } else if books[bi].waiting.contains(m) || books[bi].held == m {
+            print("{m} already waiting for {b}")
+        } else {
+            books[bi].waiting.push(m)
+            print("{m} waiting for {b}, position {books[bi].waiting.len()}")
+        }
     }
-    for mem in members {
-        let list = loans_of(books, mem.name)
-        let shown = if list.len() == 0 { "none" } else { list.join(", ") }
-        print("{mem.name} owes {money(mem.balance)}, has {shown}")
-    }
+}
+for m in owed {
+    let list = loans_of(m)
+    let shown = if list.len() == 0 { "none" } else { list.join(", ") }
+    print("{m} owes {money(owed[m])}, has {shown}")
 }

@@ -6,7 +6,7 @@ fn digit_sum(n: int) -> int {
         total = total + x % 10
         x = x / 10
     }
-    ret total
+    return total
 }
 
 fn reverse(n: int) -> int {
@@ -16,23 +16,21 @@ fn reverse(n: int) -> int {
         r = r * 10 + x % 10
         x = x / 10
     }
-    ret r
+    return r
 }
 
 fn is_palindrome(n: int) -> bool {
-    ret n == reverse(n)
+    return n == reverse(n)
 }
 
-fn main() {
-    print(digit_sum(12345))
-    print(reverse(12345))
-    print(is_palindrome(12321))
-    print(is_palindrome(12345))
+print(digit_sum(12345))
+print(reverse(12345))
+print(is_palindrome(12321))
+print(is_palindrome(12345))
 
-    // palindromes from 1 to 999
-    var count = 0
-    for n in 1..1000 {
-        if is_palindrome(n) { count = count + 1 }
-    }
-    print(count)
+// palindromes from 1 to 999
+var count = 0
+for n in 1..1000 {
+    if is_palindrome(n) { count = count + 1 }
 }
+print(count)

@@ -76,6 +76,10 @@ enum Sink<'e> {
         acc: LocalId,
         lambda: &'e ast::Expr,
     },
+    /// `find`: the first element that passes, as an optional (`acc` starts as `none`)
+    Find {
+        acc: LocalId,
+    },
 }
 
 /// The parameters and the body of a lambda argument (the checker allows nothing else).
@@ -121,11 +125,14 @@ impl Lower<'_> {
         if name == "sort_by" {
             return self.sort_by(recv, &args[0], e.span, out);
         }
+        if matches!(name, "sorted_by" | "min_by" | "max_by") {
+            return self.keyed(recv, name, &args[0], e, out);
+        }
         let (src, mut steps) = peel(recv);
         let span = e.span;
         let lambda = args.last();
         match name {
-            "map" | "filter" | "count" | "any" => steps.push(Step::of(&args[0], name != "map", false)),
+            "map" | "filter" | "count" | "any" | "find" => steps.push(Step::of(&args[0], name != "map", false)),
             "all" => steps.push(Step::of(&args[0], true, true)),
             _ => {}
         }
@@ -167,6 +174,14 @@ impl Lower<'_> {
                         Sink::FindIndex { acc, pos, lambda: &args[0] }
                     }
                 }
+            }
+            "find" => {
+                let inner = e.ty.option_inner().expect("`find` gives an optional");
+                let none = self.default_value(inner, span, out);
+                let Expr::Local(acc) = self.op(RtOp::StructNew, vec![Expr::Bool(false), none], e.ty, None, span, out) else {
+                    unreachable!()
+                };
+                Sink::Find { acc }
             }
             "any" | "all" => {
                 let acc = self.temp(Ty::Bool);
@@ -220,6 +235,7 @@ impl Lower<'_> {
             | Sink::Sum { acc, .. }
             | Sink::Count { acc }
             | Sink::Stop { acc, .. }
+            | Sink::Find { acc }
             | Sink::FindIndex { acc, .. } => Expr::Local(acc),
             Sink::Best { m, n, max, elem } => {
                 let which = int(i64::from(max));
@@ -386,6 +402,14 @@ impl Lower<'_> {
                 out.push(st(StmtKind::Set(acc, Expr::Bool(value)), span));
                 self.stop(span, out);
             }
+            Sink::Find { acc } => {
+                // the first element that passed: the optional now holds it (`none` held a default to release)
+                if self.managed(self.ty_of(acc)) {
+                    out.push(st(StmtKind::Drop(acc), span));
+                }
+                out.push(st(StmtKind::Op { dst: Some(acc), op: RtOp::StructNew, args: vec![Expr::Bool(true), cur] }, span));
+                self.stop(span, out);
+            }
             Sink::FindIndex { acc, pos, lambda } => {
                 let (ps, body) = parts(lambda);
                 let c = self.test(ps, body, (cur, t), out);
@@ -448,22 +472,40 @@ impl Lower<'_> {
         }
     }
 
-    /// `xs.sort_by(x => key)`: the keys are computed first, once per element and in order, then
-    /// the runtime sorts the array by them (stable, the same merge sort as `sort`).
-    fn sort_by(&mut self, recv: &ast::Expr, lambda: &ast::Expr, span: Span, out: &mut Vec<Stmt>) -> Expr {
-        let place = self.place(recv, true, out);
-        let cur = self.read(&place, recv.ty, out);
-        let elem = recv.ty.elem().expect("the checker allows arrays");
+    /// `xs.sorted_by(x => key)`, `xs.min_by(..)`, `xs.max_by(..)`: the keys are computed first, once
+    /// per element and in order; then a sorted copy is made, or a generated helper function picks
+    /// the element with the smallest or largest key.
+    fn keyed(&mut self, recv: &ast::Expr, name: &str, lambda: &ast::Expr, e: &ast::Expr, out: &mut Vec<Stmt>) -> Expr {
+        let span = e.span;
         let key = parts(lambda).1.ty;
-        let Expr::Local(ks) = self.op(RtOp::ArrNew, Vec::new(), Type::array(key), None, span, out) else { unreachable!() };
-        let it = match cur {
-            Expr::Local(_) => cur,
+        let v = self.expr(recv, None, out);
+        if name == "sorted_by" {
+            let len = Expr::Pure(super::PureFn::ArrLen, vec![v.clone()]);
+            let Expr::Local(copy) = self.op(RtOp::ArrSlice, vec![v, Expr::Int(0), len], recv.ty, None, span, out) else {
+                unreachable!()
+            };
+            let ks = self.keys_of(Expr::Local(copy), recv.ty, lambda, span, out);
+            self.sort_with_keys(Place::local(copy), recv.ty, key, ks, span, out);
+            return Expr::Local(copy);
+        }
+        let it = match v {
+            Expr::Local(_) => v,
             v => {
                 let t = self.temp(recv.ty);
                 out.push(st(StmtKind::Set(t, v), span));
                 Expr::Local(t)
             }
         };
+        let ks = self.keys_of(it.clone(), recv.ty, lambda, span, out);
+        let h = super::H::Best(name == "max_by", recv.ty, key);
+        self.call_helper(h, vec![super::Arg::Val(it), super::Arg::Val(Expr::Local(ks))], e.ty, None, span, out)
+    }
+
+    /// The array of the keys `lambda` gives for the elements of the array `it`.
+    fn keys_of(&mut self, it: Expr, arr: Ty, lambda: &ast::Expr, span: Span, out: &mut Vec<Stmt>) -> LocalId {
+        let elem = arr.elem().expect("the checker allows arrays");
+        let key = parts(lambda).1.ty;
+        let Expr::Local(ks) = self.op(RtOp::ArrNew, Vec::new(), Type::array(key), None, span, out) else { unreachable!() };
         let saved = std::mem::take(&mut self.pending);
         let live = std::mem::take(&mut self.chain_live);
         let ps = parts(lambda).0;
@@ -475,7 +517,42 @@ impl Lower<'_> {
         out.push(st(StmtKind::ForEach { var: x, iter: it, body }, span));
         self.chain_live = live;
         self.pending = saved;
-        out.push(st(StmtKind::Mutate { dst: None, op: RtOp::ArrSortBy, place, args: vec![Expr::Local(ks)] }, span));
+        ks
+    }
+
+    /// Sorts the array in `place` by `ks`, the keys of its elements.
+    fn sort_with_keys(&mut self, place: Place, arr: Ty, key: Ty, ks: LocalId, span: Span, out: &mut Vec<Stmt>) {
+        if key.is_tuple() {
+            self.forget(place.root);
+            self.call_helper(
+                super::H::SortKeyed(arr, key),
+                vec![super::Arg::InOut(place), super::Arg::Val(Expr::Local(ks))],
+                Ty::Void,
+                None,
+                span,
+                out,
+            );
+        } else {
+            out.push(st(StmtKind::Mutate { dst: None, op: RtOp::ArrSortBy, place, args: vec![Expr::Local(ks)] }, span));
+        }
+    }
+
+    /// `xs.sort_by(x => key)`: the keys are computed first, once per element and in order, then
+    /// the runtime sorts the array by them (stable, the same merge sort as `sort`).
+    fn sort_by(&mut self, recv: &ast::Expr, lambda: &ast::Expr, span: Span, out: &mut Vec<Stmt>) -> Expr {
+        let place = self.place(recv, true, out);
+        let cur = self.read(&place, recv.ty, out);
+        let key = parts(lambda).1.ty;
+        let it = match cur {
+            Expr::Local(_) => cur,
+            v => {
+                let t = self.temp(recv.ty);
+                out.push(st(StmtKind::Set(t, v), span));
+                Expr::Local(t)
+            }
+        };
+        let ks = self.keys_of(it, recv.ty, lambda, span, out);
+        self.sort_with_keys(place, recv.ty, key, ks, span, out);
         Expr::Bool(false)
     }
 }

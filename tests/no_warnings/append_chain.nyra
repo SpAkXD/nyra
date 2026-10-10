@@ -1,0 +1,9 @@
+fn main() {
+    var s = ""
+    var i = 0
+    while i < 3000 {
+        s = s + str(i) + ","
+        i += 1
+    }
+    print(s.len())
+}

@@ -28,8 +28,6 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("escaped brace", "fn main() {\n    print(\"\\{x\\}\")\n}\n", "fn main() {\n    print(\"{{x}}\")\n}\n"),
     ("hex, separators, exponents", "fn main() {\n    print(0xFF + 1_000)\n    print(2.5e3)\n}\n", "fn main() {\n    print(255 + 1000)\n    print(2500.0)\n}\n"),
     // ---- words and syntax of other languages
-    ("return", "fn f(x: int) -> int {\n    return x * 2\n}\nfn main() {\n    print(f(1))\n}\n", "fn f(x: int) -> int {\n    ret x * 2\n}\nfn main() {\n    print(f(1))\n}\n"),
-    ("bare return", "fn main() {\n    if true {\n        return\n    }\n}\n", "fn main() {\n    if true {\n        ret\n    }\n}\n"),
     ("elif and, or, not", "fn main() {\n    let x = 3\n    if x > 1 and x < 5 or not true {\n        print(1)\n    } elif x == 0 {\n        print(0)\n    }\n}\n", "fn main() {\n    let x = 3\n    if x > 1 && x < 5 || !true {\n        print(1)\n    } else if x == 0 {\n        print(0)\n    }\n}\n"),
     ("strict equality", "fn main() {\n    let n = 1\n    print(n === 1 || n !== 2)\n}\n", "fn main() {\n    let n = 1\n    print(n == 1 || n != 2)\n}\n"),
     ("assignment in a condition", "fn main() {\n    let x = 1\n    if x = 1 {\n        print(x)\n    }\n}\n", "fn main() {\n    let x = 1\n    if x == 1 {\n        print(x)\n    }\n}\n"),
@@ -51,7 +49,7 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("let that changes", "fn main() {\n    let n = 0\n    n = 1\n    let xs = [1]\n    xs.push(2)\n    print(n + xs.len())\n}\n", "fn main() {\n    var n = 0\n    n = 1\n    var xs = [1]\n    xs.push(2)\n    print(n + xs.len())\n}\n"),
     ("int literals where floats are needed", "fn half(x: float) -> float {\n    ret x / 2\n}\nfn main() {\n    let f: float = 2\n    var t = half(3) * 2\n    t += 1\n    let xs = [1, 2, 2.5]\n    let y = if t > 1.0 { 1 } else { 0.5 }\n    print(t + y + xs[0] + f)\n}\n", "fn half(x: float) -> float {\n    ret x / 2.0\n}\nfn main() {\n    let f: float = 2.0\n    var t = half(3.0) * 2.0\n    t += 1.0\n    let xs = [1.0, 2.0, 2.5]\n    let y = if t > 1.0 { 1.0 } else { 0.5 }\n    print(t + y + xs[0] + f)\n}\n"),
     ("one character in double quotes", "fn main() {\n    let c: char = \"a\"\n    print(c == \"a\")\n}\n", "fn main() {\n    let c: char = 'a'\n    print(c == 'a')\n}\n"),
-    ("implicit return", "fn add(a: int, b: int) -> int {\n    a + b\n}\nfn main() {\n    print(add(1, 2))\n}\n", "fn add(a: int, b: int) -> int {\n    ret a + b\n}\nfn main() {\n    print(add(1, 2))\n}\n"),
+    ("implicit return", "fn add(a: int, b: int) -> int {\n    a + b\n}\nfn main() {\n    print(add(1, 2))\n}\n", "fn add(a: int, b: int) -> int {\n    return a + b\n}\nfn main() {\n    print(add(1, 2))\n}\n"),
     ("struct fields by position", "struct Point { x: int, y: int }\nfn main() {\n    let p = Point(1, y: 2)\n    let q = Point(3, 4)\n    print(p.x + q.y)\n}\n", "struct Point { x: int, y: int }\nfn main() {\n    let p = Point(x: 1, y: 2)\n    let q = Point(x: 3, y: 4)\n    print(p.x + q.y)\n}\n"),
     ("named arguments of a function", "fn area(width: int, height: int) -> int = width * height\nfn main() {\n    print(area(width: 3, height: 4))\n}\n", "fn area(width: int, height: int) -> int = width * height\nfn main() {\n    print(area(3, 4))\n}\n"),
     // ---- methods and library functions of other languages
@@ -59,7 +57,7 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("print functions of other languages", "fn main() {\n    console.log(1)\n    println(2)\n    fmt.Println(3)\n    puts(4)\n}\n", "fn main() {\n    print(1)\n    print(2)\n    print(3)\n    print(4)\n}\n"),
     ("len()", "fn main() {\n    let xs = [1, 2]\n    let s = \"abc\"\n    print(len(xs) + len(s))\n}\n", "fn main() {\n    let xs = [1, 2]\n    let s = \"abc\"\n    print(xs.len() + s.len())\n}\n"),
     // ---- several stages at once: characters, then syntax, then types
-    ("python and javascript habits together", "fn add(a: int, b: int) -> int {\n    return a + b;\n}\n\nfn main() {\n    let total = add(1, 2);\n    if total > 2 and True {\n        print \"big\"\n    } elif total == 0 {\n        print(total)\n    }\n    let xs = [1, 2, 3]\n    xs.append(4)\n    print(xs.length())\n}\n", "fn add(a: int, b: int) -> int {\n    ret a + b\n}\n\nfn main() {\n    let total = add(1, 2)\n    if total > 2 && true {\n        print(\"big\")\n    } else if total == 0 {\n        print(total)\n    }\n    var xs = [1, 2, 3]\n    xs.push(4)\n    print(xs.len())\n}\n"),
+    ("python and javascript habits together", "fn add(a: int, b: int) -> int {\n    return a + b;\n}\n\nfn main() {\n    let total = add(1, 2);\n    if total > 2 and True {\n        print \"big\"\n    } elif total == 0 {\n        print(total)\n    }\n    let xs = [1, 2, 3]\n    xs.append(4)\n    print(xs.length())\n}\n", "fn add(a: int, b: int) -> int {\n    return a + b\n}\n\nfn main() {\n    let total = add(1, 2)\n    if total > 2 && true {\n        print(\"big\")\n    } else if total == 0 {\n        print(total)\n    }\n    var xs = [1, 2, 3]\n    xs.push(4)\n    print(xs.len())\n}\n"),
 ];
 
 /// Mistakes with more than one possible repair (or none that is certain): the error has a hint but
@@ -254,11 +252,147 @@ fn run_and_build_continue_with_the_fixed_program() {
         assert_eq!(stdout(&out), "fixed\n");
         assert!(stderr(&out).contains("nyra: fixed 2 error(s) in prog.nyra:"), "{}", stderr(&out));
     }
-    // without --fix nothing is written
+    // with --strict the errors stay errors, and nothing is written
     write(&dir, "prog.nyra", bad);
-    let out = nyra().current_dir(&dir).args(["build", "--c", "-o", "prog.c", "prog.nyra"]).output().unwrap();
+    let out = nyra().current_dir(&dir).args(["build", "--strict", "--c", "-o", "prog.c", "prog.nyra"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(read(&dir, "prog.nyra"), bad);
+    // without --fix or --strict the fixes are applied in memory: it builds, the file stays as it was
+    let _ = std::fs::remove_file(dir.join("prog.c"));
+    let out = nyra().current_dir(&dir).args(["build", "--c", "-o", "prog.c", "prog.nyra"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(read(&dir, "prog.c").contains("fixed"));
+    assert_eq!(read(&dir, "prog.nyra"), bad);
+}
+
+#[test]
+fn single_safe_fixes_are_applied_in_memory_and_reported_as_warnings() {
+    let dir = scratch("fix-auto");
+    let bad = "fn main() {\n    let n = 1\n    n += 2;\n    print(n)\n}\n";
+    write(&dir, "prog.nyra", bad);
+
+    // `check` succeeds, says what it applied, and does not write the file
+    let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains("warning[E0005]: fixed automatically") && err.contains("warning[E0205]: fixed automatically"), "{err}");
+    assert!(err.contains("2 fix(es) applied in memory"), "{err}");
+    assert_eq!(read(&dir, "prog.nyra"), bad);
+
+    // --json: `warnings` with the code, the position and the applied text
+    let out = nyra().current_dir(&dir).args(["check", "--json", "prog.nyra"]).output().unwrap();
+    assert!(out.status.success());
+    let json = Json::parse(stdout(&out).trim()).unwrap();
+    assert_eq!(json.get("ok").and_then(|v| v.as_bool()), Some(true));
+    let warnings = json.get("warnings").and_then(|w| w.as_array()).expect("a `warnings` array");
+    let codes: Vec<&str> = warnings.iter().map(|w| w.get("code").and_then(|c| c.as_str()).unwrap()).collect();
+    assert_eq!(codes, ["E0005", "E0205"]);
+    let semi = &warnings[0];
+    assert_eq!(semi.get("line").and_then(|v| v.as_u64()), Some(3));
+    assert_eq!(semi.get("applied").and_then(|v| v.as_str()), Some("`n += 2`"));
+    assert!(semi.get("fix").and_then(|f| f.as_array()).is_some_and(|f| !f.is_empty()));
+    assert_eq!(read(&dir, "prog.nyra"), bad);
+
+    // --strict: the old behaviour, the errors stay errors
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "--json", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let json = Json::parse(stdout(&out).trim()).unwrap();
+    assert_eq!(json.get("ok").and_then(|v| v.as_bool()), Some(false));
+    assert!(json.get("warnings").is_none());
+
+    // `run` goes on with the repaired program
+    let out = nyra().current_dir(&dir).args(["run", "--js", "prog.nyra"]).output().unwrap();
+    if std::process::Command::new("node").arg("--version").output().is_ok() {
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(stdout(&out), "3\n");
+        assert!(stderr(&out).contains("warning[E0205]"), "{}", stderr(&out));
+    }
+    assert_eq!(read(&dir, "prog.nyra"), bad);
+
+    // an error without a fix is still an error, and the report is about the file as it is
+    let bad = "fn main() {\n    let x = 1;\n    let y = null\n}\n";
+    write(&dir, "prog.nyra", bad);
+    let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("error[E0005]") && !stderr(&out).contains("warning["), "{}", stderr(&out));
+    assert_eq!(read(&dir, "prog.nyra"), bad);
+    let bad = "fn main() {\n    let y = null\n}\n";
+    write(&dir, "prog.nyra", bad);
+    let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("error[E0201]"), "{}", stderr(&out));
+
+    // a program that compiles has no warnings
+    write(&dir, "prog.nyra", "fn main() {\n    print(1)\n}\n");
+    let out = nyra().current_dir(&dir).args(["check", "--json", "prog.nyra"]).output().unwrap();
+    assert_eq!(stdout(&out).trim(), "{\"ok\":true,\"errors\":[]}");
+}
+
+#[test]
+fn fmt_rewrites_a_program_into_canonical_form() {
+    let dir = scratch("fmt");
+    let sloppy = "fn f(x: int) -> int {\n  if x > 0 {\n\t\tret 1;\n    }\n  ret 0   \n}\n\n\nfn main() {\nlet n = f(2)\nprint(n)\n}\n";
+    write(&dir, "prog.nyra", sloppy);
+    let out = nyra().current_dir(&dir).args(["fmt", "prog.nyra"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        read(&dir, "prog.nyra"),
+        "fn f(x: int) -> int {\n    if x > 0 {\n        return 1\n    }\n    return 0\n}\n\nfn main() {\n    let n = f(2)\n    print(n)\n}\n"
+    );
+    // already canonical: nothing changes
+    let before = read(&dir, "prog.nyra");
+    let out = nyra().current_dir(&dir).args(["fmt", "prog.nyra"]).output().unwrap();
+    assert!(out.status.success() && stderr(&out).contains("already formatted"), "{}", stderr(&out));
+    assert_eq!(read(&dir, "prog.nyra"), before);
+    // `-o -` prints instead of writing
+    write(&dir, "prog.nyra", "fn main() {\nprint(1)\n}\n");
+    let out = nyra().current_dir(&dir).args(["fmt", "-o", "-", "prog.nyra"]).output().unwrap();
+    assert_eq!(stdout(&out), "fn main() {\n    print(1)\n}\n");
+    assert_eq!(read(&dir, "prog.nyra"), "fn main() {\nprint(1)\n}\n");
+    // a program with errors that have no fix is not formatted
+    write(&dir, "prog.nyra", "fn main() {\nlet x = null\n}\n");
+    let out = nyra().current_dir(&dir).args(["fmt", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(read(&dir, "prog.nyra"), "fn main() {\nlet x = null\n}\n");
+}
+
+/// What `nyra run` prints for a file (JavaScript when Node is there, else the native backend).
+fn output_of(dir: &Path, file: &str) -> String {
+    let flags: &[&str] = if std::process::Command::new("node").arg("--version").output().is_ok() { &["--js"] } else { &[] };
+    let out = nyra().current_dir(dir).arg("run").arg(file).args(flags).stdin(std::process::Stdio::null()).output().unwrap();
+    format!("{}\n{}", out.status.code().unwrap_or(-1), stdout(&out))
+}
+
+#[test]
+fn formatting_never_changes_what_a_program_prints() {
+    let dir = scratch("fmt-examples");
+    let mut seen = 0;
+    for entry in std::fs::read_dir("examples").unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "nyra") {
+            continue;
+        }
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        // the library programs that depend on input, files, time or chance print other things each time
+        if name.starts_with("std_") && !["std_json.nyra", "std_math.nyra", "std_text.nyra"].contains(&name.as_str()) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        write(&dir, "before.nyra", &text);
+        let out = nyra().current_dir(&dir).args(["fmt", "-o", "after.nyra", "before.nyra"]).output().unwrap();
+        assert!(out.status.success(), "{name}: fmt failed: {}", stderr(&out));
+        let formatted = read(&dir, "after.nyra");
+        // the output is canonical: formatting it again changes nothing
+        write(&dir, "again.nyra", &formatted);
+        let again = nyra().current_dir(&dir).args(["fmt", "-o", "-", "again.nyra"]).output().unwrap();
+        assert_eq!(stdout(&again), formatted, "{name}: formatting is not idempotent");
+        // it compiles and prints the same
+        let (ok, json) = check_json(&dir, "after.nyra");
+        assert!(ok, "{name}: the formatted program does not compile: {json:?}");
+        assert_eq!(output_of(&dir, "after.nyra"), output_of(&dir, "before.nyra"), "{name}: output changed");
+        seen += 1;
+    }
+    assert!(seen >= 20, "only {seen} examples");
 }
 
 #[test]

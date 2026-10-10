@@ -1,0 +1,23 @@
+use input
+
+let lines = input.lines()
+let head = lines[0].split(" ")
+let rows = int(head[0])
+let cols = int(head[1])
+let modulus = 1000000007
+var ways = [0].repeat(rows * cols)
+for r in 0..rows {
+    for c in 0..cols {
+        if lines[1 + r][c] == '#' { continue }
+        if r == 0 && c == 0 {
+            ways[0] = 1
+        } else {
+            var up = 0
+            var left = 0
+            if r > 0 { up = ways[(r - 1) * cols + c] }
+            if c > 0 { left = ways[r * cols + c - 1] }
+            ways[r * cols + c] = (up + left) % modulus
+        }
+    }
+}
+print(ways[rows * cols - 1])

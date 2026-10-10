@@ -1,0 +1,45 @@
+use input
+
+let lines = input.lines()
+let size = lines[0].split(" ")
+let w = int(size[0])
+let h = int(size[1])
+var x = 0
+var y = 0
+for row in 0..h {
+    for col in 0..w {
+        if lines[1 + row][col] == 'R' {
+            x = col
+            y = row
+        }
+    }
+}
+var commands = ""
+for i in 1 + h..lines.len() {
+    commands += lines[i]
+}
+let dx = [0, 1, 0, -1]
+let dy = [-1, 0, 1, 0]
+var facing = 0
+var blocked = 0
+var seen: [int: bool] = [:]
+seen[y * 1000 + x] = true
+for c in commands {
+    if c == 'L' {
+        facing = (facing + 3) % 4
+    } else if c == 'R' {
+        facing = (facing + 1) % 4
+    } else if c == 'F' {
+        let nx = x + dx[facing]
+        let ny = y + dy[facing]
+        if nx >= 0 && nx < w && ny >= 0 && ny < h && lines[1 + ny][nx] != '#' {
+            x = nx
+            y = ny
+            seen[y * 1000 + x] = true
+        } else {
+            blocked += 1
+        }
+    }
+}
+let names = "NESW"
+print("x={x} y={y} facing={names[facing]} blocked={blocked} visited={seen.len()}")

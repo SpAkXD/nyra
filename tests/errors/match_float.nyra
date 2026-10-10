@@ -1,0 +1,8 @@
+// expect: E0279
+fn main() {
+    let x = 2.5
+    match x {
+        2.5 => print("two and a half")
+        _ => print("other")
+    }
+}

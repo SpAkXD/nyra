@@ -1,16 +1,8 @@
-fn main() {
-    var xs = [64, 34, 25, 12, 22, 11, 90]
-    let n = xs.len()
-    for i in 0..n {
-        for j in 0..n - 1 - i {
-            if xs[j] > xs[j + 1] {
-                let t = xs[j]
-                xs[j] = xs[j + 1]
-                xs[j + 1] = t
-            }
-        }
-    }
-    for x in xs {
-        print(x)
+var xs = [64, 34, 25, 12, 22, 11, 90]
+let n = xs.len()
+for i in 0..n {
+    for j in 0..n - 1 - i {
+        if xs[j] > xs[j + 1] { xs.swap(j, j + 1) }
     }
 }
+for x in xs { print(x) }

@@ -1,0 +1,8 @@
+// expect: E0263
+struct P {
+    x: int
+    fn area(p: P) -> int = p.x
+}
+fn main() {
+    print(1)
+}

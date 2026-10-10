@@ -1,0 +1,10 @@
+// expect: E0229
+fn bump(inout n: int) {
+    n += 1
+}
+
+fn main() {
+    var m = ["a": 1]
+    bump(inout m["a"])
+    print(m)
+}

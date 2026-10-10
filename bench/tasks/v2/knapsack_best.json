@@ -1,0 +1,37 @@
+{
+  "id": "knapsack_best",
+  "title": "Best value for the backpack",
+  "category": "dynamic-programming",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line `N CAPACITY`, then N lines `WEIGHT VALUE`, all positive integers. Each item can be taken at most once, and the weights of the items taken must add up to at most CAPACITY. Print `best=V`, the largest total value that can be reached, then `taken=K`, the smallest number of items with which that value can be reached.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "4 10\n5 10\n4 40\n6 30\n3 50\n",
+      "expected_output": "best=90\ntaken=2\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1 5\n6 100\n",
+      "expected_output": "best=0\ntaken=0\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "5 50\n10 60\n20 100\n30 120\n10 60\n20 100\n",
+      "expected_output": "best=260\ntaken=3\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "6 15\n1 1\n1 1\n1 1\n5 7\n5 7\n9 10\n",
+      "expected_output": "best=18\ntaken=3\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "8 1000\n250 90\n300 100\n400 150\n100 20\n500 200\n350 130\n50 10\n600 300\n",
+      "expected_output": "best=450\ntaken=2\n"
+    }
+  ]
+}

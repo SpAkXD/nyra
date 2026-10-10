@@ -1,0 +1,8 @@
+use input
+use os
+
+var name = input.line().trim()
+if name == "" { name = os.env("USER") }
+if name == "" { name = os.env("USERNAME") }
+if name == "" { name = "stranger" }
+print("Hello, {name}!")

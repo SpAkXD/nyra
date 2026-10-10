@@ -1,0 +1,6 @@
+// expect: E0210
+enum Dir { N, E, S }
+
+fn main() {
+    print(Dir.N < Dir.E)
+}

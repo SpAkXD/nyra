@@ -1,0 +1,10 @@
+fn main() {
+    let words = ["a", "b", "a", "c", "b"]
+    var seen: [str] = []
+    for w in words {
+        if !seen.contains(w) {
+            seen.push(w)
+        }
+    }
+    print(seen.len())
+}

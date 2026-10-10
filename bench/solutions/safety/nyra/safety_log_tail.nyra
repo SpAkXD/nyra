@@ -1,0 +1,6 @@
+use fs
+
+let lines = fs.read("logs/app.log").split("\n")
+var last = lines[lines.len() - 1]
+if last == "" { last = lines[lines.len() - 2] }
+print(last)

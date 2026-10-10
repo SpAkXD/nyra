@@ -1,0 +1,39 @@
+use input
+
+var names: [str] = []
+var from_names: [str] = []
+var to_names: [str] = []
+for line in input.lines() {
+    if line == "" { continue }
+    let parts = line.split(" -> ")
+    from_names.push(parts[0])
+    to_names.push(parts[1])
+    for name in parts {
+        if !names.contains(name) { names.push(name) }
+    }
+}
+names.sort()
+var indegree = [0].repeat(names.len())
+for t in to_names {
+    indegree[names.index_of(t)] += 1
+}
+var done = [false].repeat(names.len())
+var order: [str] = []
+while true {
+    var pick = -1
+    for i in 0..names.len() {
+        if !done[i] && indegree[i] == 0 {
+            pick = i
+            break
+        }
+    }
+    if pick < 0 { break }
+    done[pick] = true
+    order.push(names[pick])
+    for e in 0..from_names.len() {
+        if from_names[e] == names[pick] {
+            indegree[names.index_of(to_names[e])] -= 1
+        }
+    }
+}
+if order.len() == names.len() { print(order.join(" ")) } else { print("cycle") }

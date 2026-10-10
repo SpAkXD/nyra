@@ -1,0 +1,13 @@
+// expect: E0360
+fn main() {
+    var names: [str] = []
+    var i = 0
+    while i < 5000 {
+        let name = "n{i % 7}"
+        if names.index_of(name) < 0 {
+            names.push(name)
+        }
+        i += 1
+    }
+    print(names.len())
+}

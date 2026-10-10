@@ -1,0 +1,32 @@
+{
+  "id": "base_convert",
+  "title": "Convert between number bases",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each should hold `NUMBER FROM TO`, three fields separated by single spaces. FROM and TO are bases written as decimal integers (digits only) from 2 to 36. NUMBER is written in base FROM: an optional minus sign followed by one or more digits, where the digits are `0`-`9` then `a`-`z` (uppercase letters are accepted and mean the same), each below FROM. For every line (empty lines included) print NUMBER converted to base TO, with lowercase letters, no leading zeros (zero is `0`) and a leading `-` for a negative value (so `-0` prints `0`). Print `invalid` if the line does not have this form or any field is not valid. Every valid NUMBER fits in 48 bits.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "255 10 16\nff 16 2\n-101 2 10\nz 36 10\n12 2 10\n10 10 37\n10 10\n",
+      "expected_output": "ff\n11111111\n-5\n35\ninvalid\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0 10 2\n-0 10 2\n000 8 10\n1 2 2\n100 10 10\nzzzz 36 10\nZZZZ 36 2\n",
+      "expected_output": "0\n0\n0\n1\n100\n1679615\n110011010000011111111\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "123456789 10 36\n2s 36 10\n7fffffffffff 16 10\n-7fffffffffff 16 2\n11111111 2 16\n",
+      "expected_output": "21i3v9\n100\n140737488355327\n-11111111111111111111111111111111111111111111111\nff\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "a 10 2\n9 8 2\n- 10 2\n5 1 2\n5 10 0\n5 10 02\n5 10 +2\n5  10 2\n 5 10 2\n5 10 2 \n1_0 10 2\n\n",
+      "expected_output": "invalid\ninvalid\ninvalid\ninvalid\ninvalid\n101\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\n"
+    }
+  ]
+}

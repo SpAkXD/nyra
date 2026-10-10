@@ -1,0 +1,9 @@
+fn main() {
+    var seen: [int] = []
+    for i in 0..50 {
+        if !seen.contains(i % 7) {
+            seen.push(i % 7)
+        }
+    }
+    print(seen.len())
+}

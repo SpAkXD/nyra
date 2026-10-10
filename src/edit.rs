@@ -20,8 +20,8 @@ use std::process::ExitCode;
 use crate::ast::{Expr, ExprKind, InterpPart, Program, Span, Stmt, StmtKind, Type};
 use crate::diag::{self, Diag};
 use crate::json::{obj, Json};
-use crate::lexer::{self, Tok, Token};
-use crate::{check, fix, parser};
+use crate::lexer::{self, StrPart, Tok, Token};
+use crate::{caps, check, fix, parser};
 
 // ---- the source and its lines ---------------------------------------------------------------------
 
@@ -782,6 +782,13 @@ fn walk_stmts(stmts: &[Stmt], f: &mut dyn FnMut(&Expr)) {
                 walk_stmts(body, f);
             }
             StmtKind::Arena(body) => walk_stmts(body, f),
+            StmtKind::Match { scrut, arms } => {
+                walk(scrut, f);
+                for arm in arms {
+                    arm.pats.iter().for_each(|p| walk(p, f));
+                    walk_stmts(&arm.body, f);
+                }
+            }
             StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => walk(e, f),
             _ => {}
         }
@@ -1125,17 +1132,102 @@ fn range(a: usize, b: usize) -> String {
     }
 }
 
-/// One line per symbol: `6-9 fn area(r: Rect) -> int`.
+/// The capabilities (see `caps.rs`) that each function needs, directly or through the functions it
+/// calls: one entry per item of the outline, and a last one for the script's statements. Found
+/// from the tokens, like the outline itself, so a file with errors has them too. A module counts
+/// when the file has a `use` line for it.
+fn effects(text: &str, o: &Outline) -> Vec<Vec<&'static str>> {
+    fn scan(
+        toks: &[Token],
+        who: &dyn Fn(&Token) -> usize,
+        modules: &[String],
+        o: &Outline,
+        direct: &mut [Vec<&'static str>],
+        calls: &mut [Vec<usize>],
+    ) {
+        for (k, t) in toks.iter().enumerate() {
+            match &t.tok {
+                // `fs.read(...)`: a module of the file, not a field (`p.fs`)
+                Tok::Ident(name) if !(k > 0 && matches!(toks[k - 1].tok, Tok::Dot)) => {
+                    let next = toks.get(k + 1).map(|t| &t.tok);
+                    if matches!(next, Some(Tok::Dot)) && modules.contains(name) {
+                        if let Some(cap) = caps::needed(name) {
+                            direct[who(t)].push(cap);
+                        }
+                    } else if matches!(next, Some(Tok::LParen)) && !(k > 0 && matches!(toks[k - 1].tok, Tok::Fn)) {
+                        for (i, item) in o.items.iter().enumerate() {
+                            if item.kind == Kind::Fn && item.name == *name {
+                                calls[who(t)].push(i);
+                            }
+                        }
+                    }
+                }
+                // `"{fs.read(p)}"`: the parts of a string are code
+                Tok::Interp(parts) => {
+                    let owner = who(t);
+                    for part in parts {
+                        if let StrPart::Code(src, _) = part {
+                            let (inner, _) = lexer::lex(src);
+                            scan(&inner, &|_| owner, modules, o, direct, calls);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let modules = caps::used_modules(text);
+    let n = o.items.len();
+    let mut direct: Vec<Vec<&'static str>> = vec![Vec::new(); n + 1];
+    let mut calls: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
+    if !modules.is_empty() {
+        let lines = Lines::new(text);
+        let (toks, _) = lexer::lex(text);
+        let who = |t: &Token| {
+            let at = lines.offset(t.span);
+            o.items.iter().position(|i| i.kind == Kind::Fn && at >= i.start && at < i.end).unwrap_or(n)
+        };
+        scan(&toks, &who, &modules, o, &mut direct, &mut calls);
+    }
+    // through the calls, until nothing new is found
+    loop {
+        let mut changed = false;
+        for i in 0..=n {
+            for c in calls[i].clone() {
+                for e in direct[c].clone() {
+                    if !direct[i].contains(&e) {
+                        direct[i].push(e);
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    for d in &mut direct {
+        d.sort();
+        d.dedup();
+    }
+    direct
+}
+
+/// One line per symbol: `6-9 fn area(r: Rect) -> int`. A function that needs capabilities (files,
+/// input, ...) says which: `3-8 fn load(path: str) -> str  [needs fs]`.
 pub fn outline_text(text: &str, file: &str) -> String {
     let o = outline(text);
     let lines = Lines::new(text);
     let n = text.lines().count();
+    let eff = effects(text, &o);
+    let needs = |e: &[&str]| if e.is_empty() { String::new() } else { format!("  [needs {}]", e.join(", ")) };
     let mut out = format!("{file}: {n} lines\n");
-    for i in o.items.iter().filter(|i| !i.name.is_empty()) {
-        out += &format!("{} {}\n", range(lines.line(i.start), lines.line(i.end)), i.sig);
+    for (k, i) in o.items.iter().enumerate().filter(|(_, i)| !i.name.is_empty()) {
+        out += &format!("{} {}{}\n", range(lines.line(i.start), lines.line(i.end)), i.sig, needs(&eff[k]));
     }
     if !o.script.is_empty() {
-        out += &format!("{} script ({} statements)\n", script_ranges(&o, &lines).join(","), o.script.len());
+        out +=
+            &format!("{} script ({} statements){}\n", script_ranges(&o, &lines).join(","), o.script.len(), needs(&eff[o.items.len()]));
     }
     out
 }
@@ -1156,8 +1248,10 @@ fn script_ranges(o: &Outline, lines: &Lines) -> Vec<String> {
 pub fn outline_json(text: &str, file: &str) -> Json {
     let o = outline(text);
     let lines = Lines::new(text);
+    let eff = effects(text, &o);
+    let names = |e: &[&str]| -> Json { e.iter().map(|c| Json::from(*c)).collect::<Vec<_>>().into() };
     let mut syms: Vec<Json> = Vec::new();
-    for i in o.items.iter().filter(|i| !i.name.is_empty()) {
+    for (k, i) in o.items.iter().enumerate().filter(|(_, i)| !i.name.is_empty()) {
         let mut f: Vec<(&str, Json)> = vec![
             ("kind", i.kind.word().into()),
             ("name", i.name.clone().into()),
@@ -1165,7 +1259,11 @@ pub fn outline_json(text: &str, file: &str) -> Json {
             ("end_line", (lines.line(i.end) as i64).into()),
         ];
         match i.kind {
-            Kind::Fn => f.push(("sig", i.sig.clone().into())),
+            Kind::Fn => {
+                f.push(("sig", i.sig.clone().into()));
+                // the capabilities it needs, also through the functions it calls
+                f.push(("effects", names(&eff[k])));
+            }
             Kind::Struct => f.push((
                 "fields",
                 i.fields
@@ -1188,9 +1286,19 @@ pub fn outline_json(text: &str, file: &str) -> Json {
             ("kind", "script".into()),
             ("lines", script_ranges(&o, &lines).into_iter().map(Json::from).collect::<Vec<_>>().into()),
             ("statements", (o.script.len() as i64).into()),
+            ("effects", names(&eff[o.items.len()])),
         ]));
     }
-    obj([("file", file.into()), ("lines", (text.lines().count() as i64).into()), ("symbols", syms.into())])
+    // what the whole program needs (`nyra run --allow ...`)
+    let mut needed: Vec<&'static str> = caps::used_modules(text).iter().filter_map(|m| caps::needed(m)).collect();
+    needed.sort();
+    needed.dedup();
+    obj([
+        ("file", file.into()),
+        ("lines", (text.lines().count() as i64).into()),
+        ("capabilities", names(&needed)),
+        ("symbols", syms.into()),
+    ])
 }
 
 /// A symbol's source as it is in the file: (name, kind, first line, last line, text).

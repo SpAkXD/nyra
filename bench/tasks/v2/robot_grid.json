@@ -1,0 +1,37 @@
+{
+  "id": "robot_grid",
+  "title": "Robot on a grid",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line `W H` (the width and height of a grid), then H lines of W characters each describing the grid: `.` is a free cell, `#` is an obstacle and `R` is the robot's start (exactly one, on a free cell). All the remaining lines together form the command string, read in order, made of the letters `L`, `R`, `F`; any other character in it (including spaces) is ignored.\n\nThe robot starts facing north (up, toward the first row of the grid). `L` turns it 90 degrees to the left, `R` 90 degrees to the right, and `F` moves it one cell forward unless the next cell is outside the grid or an obstacle, in which case it stays where it is and the move counts as blocked.\n\nPrint one line: `x=X y=Y facing=D blocked=B visited=V`, where X is the robot's column and Y its row (both counted from 0, row 0 at the top), D is `N`, `E`, `S` or `W`, B is the number of blocked moves, and V is the number of different cells the robot has stood on, the start included.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "5 4\n.....\n.#...\n..R#.\n.....\n FFRFF\nLFFFF\n",
+      "expected_output": "x=4 y=0 facing=N blocked=4 visited=5\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "3 3\n...\n.R.\n...\nFFFFRFFFFRFFFFRFFFF\n",
+      "expected_output": "x=0 y=2 facing=W blocked=10 visited=7\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "1 1\nR\nFFFFRRLL\n",
+      "expected_output": "x=0 y=0 facing=N blocked=4 visited=1\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "6 3\nR.#...\n......\n#.....\nRFFFLFFRF\nxx FFLLF-FF\n",
+      "expected_output": "x=0 y=0 facing=W blocked=9 visited=2\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "4 4\n....\n....\n....\n...R\nLLFFF\nRFFF\nF\n",
+      "expected_output": "x=0 y=3 facing=W blocked=4 visited=4\n"
+    }
+  ]
+}

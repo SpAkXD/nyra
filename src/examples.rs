@@ -15,13 +15,16 @@
 //! what every backend compiles, so an example computes exactly what the program would.
 
 use crate::ast;
-use crate::ast::{BinOp, Expr, ExprKind, Func, InterpPart, Program, Span, Stmt, StmtKind, Type, UnOp};
+use crate::ast::{BinOp, Expr, ExprKind, Forall, Func, InterpPart, Param, Program, Span, Stmt, StmtKind, Type, UnOp};
 use crate::diag::{json_str, render_json_errors, Diag};
 use crate::ir::interp::{self, Interp, Limits, RuntimeError, Stop, Value};
 use crate::ir::{self, FuncId};
 
 /// What one example may cost. Examples run while the program compiles, so they must be quick.
-pub const LIMITS: Limits = Limits { steps: 1_000_000, depth: 10_000 };
+pub const LIMITS: Limits = Limits::new(1_000_000, 10_000).memory(256 << 20);
+
+/// A property example (`ex for n in 0..200: ...`) runs up to 100,000 inputs: it gets ten times the steps.
+const PROPERTY_LIMITS: Limits = Limits::new(10_000_000, 10_000).memory(256 << 20);
 
 /// The stack of the thread that runs the examples (deep recursion needs room).
 const STACK: usize = 512 << 20;
@@ -55,6 +58,8 @@ struct Plan {
     call: Option<(String, Vec<String>, Vec<String>)>,
     /// The index of its (first) function in the module.
     func: usize,
+    /// A property example: the variable and the range of its inputs.
+    forall: Option<Forall>,
 }
 
 enum Res {
@@ -65,6 +70,7 @@ enum Res {
     Error(RuntimeError, Option<String>),
     Steps,
     Depth,
+    Memory,
     Skipped,
 }
 
@@ -81,6 +87,7 @@ pub fn run(prog: &mut Program) -> Outcome {
     let mut split: Vec<Option<(BinOp, Span, Type)>> = Vec::with_capacity(total);
     for (i, ex) in prog.examples.iter_mut().enumerate() {
         let e = std::mem::replace(&mut ex.expr, Expr::new(ExprKind::Bool(true), Span { line: 0, col: 0 }));
+        let forall = ex.forall.clone();
         let text = source(&e);
         let span = start(&e);
         let func = prog.funcs.len() - base;
@@ -108,18 +115,29 @@ pub fn run(prog: &mut Program) -> Outcome {
                     right_literal,
                     call: call_of(&l, &prog.funcs),
                     func,
+                    forall: forall.clone(),
                 });
                 split.push(Some((op, op_span, ty)));
                 let (lt, rt) = (l.ty, r.ty);
-                prog.funcs.push(synthetic(format!("ex#{i}.l"), *l, lt, span));
-                prog.funcs.push(synthetic(format!("ex#{i}.r"), *r, rt, span));
+                prog.funcs.push(synthetic(format!("ex#{i}.l"), *l, lt, span, &forall));
+                prog.funcs.push(synthetic(format!("ex#{i}.r"), *r, rt, span, &forall));
             }
             kind => {
                 let e = Expr { kind, span: op_span, ty };
                 let call = call_of(&e, &prog.funcs);
-                plans.push(Plan { text, span, suspect, builtins_only, cmp: None, right_literal: false, call, func });
+                plans.push(Plan {
+                    text,
+                    span,
+                    suspect,
+                    builtins_only,
+                    cmp: None,
+                    right_literal: false,
+                    call,
+                    func,
+                    forall: forall.clone(),
+                });
                 split.push(None);
-                prog.funcs.push(synthetic(format!("ex#{i}"), e, Type::Bool, span));
+                prog.funcs.push(synthetic(format!("ex#{i}"), e, Type::Bool, span, &forall));
             }
         }
     }
@@ -150,62 +168,94 @@ pub fn run(prog: &mut Program) -> Outcome {
         return Outcome { total, skipped: total, ..Outcome::default() };
     };
     let mut out = Outcome { total, ..Outcome::default() };
-    for (plan, res) in plans.iter().zip(results) {
+    for (i, (plan, (res, input))) in plans.iter().zip(results).enumerate() {
         match res {
             Res::Pass => out.passed += 1,
             Res::Skipped => out.skipped += 1,
-            res => out.errors.push(report(plan, res)),
+            res => {
+                // an example of an imported file is reported with that file
+                let mut d = report(plan, res, input);
+                d.file = prog.examples.get(i).and_then(|e| e.file.clone());
+                out.errors.push(d);
+            }
         }
     }
     out
 }
 
-/// `fn ex#3() -> T = expr`
-fn synthetic(name: String, e: Expr, ret: Type, span: Span) -> Func {
+/// `fn ex#3() -> T = expr`; for a property example `fn ex#3(n: int) -> T = expr`
+fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Forall>) -> Func {
     let s = e.span;
-    Func { name, params: Vec::new(), ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span }
+    let params = match forall {
+        Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, mutable: false, span: f.span }],
+        None => Vec::new(),
+    };
+    Func { name, params, ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span }
 }
 
 /// Runs every example, on a thread with a large stack. `None` if that thread cannot run.
-fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<Res>> {
+fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
+    let types = ast::type_tables();
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .name("nyra-examples".into())
             .stack_size(STACK)
-            .spawn_scoped(scope, || plans.iter().map(|p| one(m, p, base)).collect())
+            .spawn_scoped(scope, || {
+                // (array and struct types are numbered per thread: `json.parse` needs them)
+                ast::install_type_tables(types);
+                plans.iter().map(|p| one(m, p, base)).collect()
+            })
             .ok()?
             .join()
             .ok()
     })
 }
 
-fn one(m: &ir::Module, plan: &Plan, base: usize) -> Res {
-    let mut it = Interp::new(m, LIMITS);
+fn one(m: &ir::Module, plan: &Plan, base: usize) -> (Res, Option<i64>) {
     let id = FuncId((base + plan.func) as u32);
-    let run = |it: &mut Interp, id: FuncId| match it.call(id, Vec::new()) {
+    let Some(f) = &plan.forall else {
+        return (check(m, plan, &mut Interp::new(m, LIMITS), id, None), None);
+    };
+    // a property: every input in turn, the first one that fails is reported
+    let mut it = Interp::new(m, PROPERTY_LIMITS);
+    for k in 0..f.count() {
+        let n = f.value(k);
+        match check(m, plan, &mut it, id, Some(n)) {
+            Res::Pass => {}
+            other => return (other, Some(n)),
+        }
+    }
+    (Res::Pass, None)
+}
+
+/// One run of an example (for a property: with one input).
+fn check(m: &ir::Module, plan: &Plan, it: &mut Interp, id: FuncId, input: Option<i64>) -> Res {
+    let args = || input.map(|n| vec![Value::Int(n)]).unwrap_or_default();
+    let run = |it: &mut Interp, id: FuncId| match it.call(id, args()) {
         Ok(Some(v)) => Ok(v),
         Ok(None) => Err(Res::Skipped),
         Err(Stop::Error(e)) => {
             let name = e.func.map(|f| m.func(f).name.clone()).filter(|n| !n.starts_with("ex#"));
-            Err(Res::Error(e, name))
+            Err(Res::Error(*e, name))
         }
         Err(Stop::Steps) => Err(Res::Steps),
         Err(Stop::Depth) => Err(Res::Depth),
-        Err(Stop::Bug(_)) => Err(Res::Skipped),
+        Err(Stop::Memory) => Err(Res::Memory),
+        Err(Stop::Bug(_) | Stop::Output | Stop::Time | Stop::Exit(_)) => Err(Res::Skipped),
     };
     let Some((op, ..)) = &plan.cmp else {
-        return match run(&mut it, id) {
+        return match run(it, id) {
             Ok(Value::Bool(true)) => Res::Pass,
             Ok(Value::Bool(false)) => Res::False(None),
             Ok(_) => Res::Skipped,
             Err(r) => r,
         };
     };
-    let l = match run(&mut it, id) {
+    let l = match run(it, id) {
         Ok(v) => v,
         Err(r) => return r,
     };
-    let r = match run(&mut it, FuncId(id.0 + 1)) {
+    let r = match run(it, FuncId(id.0 + 1)) {
         Ok(v) => v,
         Err(r) => return r,
     };
@@ -227,8 +277,13 @@ fn one(m: &ir::Module, plan: &Plan, base: usize) -> Res {
 }
 
 /// The error for an example that did not pass.
-fn report(p: &Plan, res: Res) -> Diag {
+fn report(p: &Plan, res: Res, input: Option<i64>) -> Diag {
     let text = &p.text;
+    // a property example says which input failed
+    let at = match (&p.forall, input) {
+        (Some(f), Some(n)) => format!(" for {} = {n}", f.var),
+        _ => String::new(),
+    };
     let suspect = p.suspect.clone();
     let named = |what: &str| match &suspect {
         Some(f) => format!("`{f}`"),
@@ -239,9 +294,9 @@ fn report(p: &Plan, res: Res) -> Diag {
             let (msg, actual, expected) = match (&p.cmp, values) {
                 (Some((op, l, r)), Some((lv, rv))) => {
                     let msg = match op {
-                        BinOp::Eq => format!("example `{text}` is false: `{l}` is {lv}, not {rv}"),
-                        _ if p.right_literal => format!("example `{text}` is false: `{l}` is {lv}"),
-                        _ => format!("example `{text}` is false: `{l}` is {lv} and `{r}` is {rv}"),
+                        BinOp::Eq => format!("example `{text}` is false{at}: `{l}` is {lv}, not {rv}"),
+                        _ if p.right_literal => format!("example `{text}` is false{at}: `{l}` is {lv}"),
+                        _ => format!("example `{text}` is false{at}: `{l}` is {lv} and `{r}` is {rv}"),
                     };
                     let expected = match op {
                         BinOp::Eq => rv,
@@ -250,9 +305,12 @@ fn report(p: &Plan, res: Res) -> Diag {
                     };
                     (msg, lv, expected)
                 }
-                _ => (format!("example `{text}` is false"), "false".to_string(), "true".to_string()),
+                _ => (format!("example `{text}` is false{at}"), "false".to_string(), "true".to_string()),
             };
             let hint = match &p.call {
+                Some((f, ..)) if p.forall.is_some() => format!(
+                    "if the property is right, `{f}` is wrong{at}: trace it with that value and fix it; change the example only if it expects the wrong thing"
+                ),
                 Some((f, params, args)) if !params.is_empty() && params.len() == args.len() => {
                     let with: Vec<String> = params.iter().zip(args).map(|(p, a)| format!("{p} = {a}")).collect();
                     format!(
@@ -275,6 +333,8 @@ fn report(p: &Plan, res: Res) -> Diag {
         }
         Res::Error(e, func) => {
             let place = match &func {
+                // the standard library is not part of the program's file: it has no line to show
+                Some(f) if f.contains('.') => format!("`{f}`, a function of the standard library"),
                 Some(f) => format!("line {}:{} in `{f}`", e.span.line, e.span.col),
                 None => format!("line {}:{}", e.span.line, e.span.col),
             };
@@ -282,12 +342,12 @@ fn report(p: &Plan, res: Res) -> Diag {
                 Some(f) => format!("fix `{f}`, or give it arguments it accepts"),
                 None => "change the example so that it runs without errors".to_string(),
             };
-            Diag::new("E0251", format!("example `{text}` stops with runtime error {}: {} (at {place})", e.code, e.msg), p.span)
+            Diag::new("E0251", format!("example `{text}` stops with runtime error {}{at}: {} (at {place})", e.code, e.msg), p.span)
                 .hint(format!("{}; an example must run without errors: {fix}", e.hint))
         }
         Res::Steps => Diag::new(
             "E0253",
-            format!("example `{text}` did not finish within {} steps", LIMITS.steps),
+            format!("example `{text}` did not finish{at} within {} steps", if p.forall.is_some() { PROPERTY_LIMITS.steps } else { LIMITS.steps }),
             p.span,
         )
         .hint(format!(
@@ -296,11 +356,20 @@ fn report(p: &Plan, res: Res) -> Diag {
         )),
         Res::Depth => Diag::new(
             "E0253",
-            format!("example `{text}` did not finish: more than {} calls were nested", LIMITS.depth),
+            format!("example `{text}` did not finish{at}: more than {} calls were nested", LIMITS.depth),
             p.span,
         )
         .hint(format!(
             "look for a recursive call in {} that never reaches its base case, or use smaller inputs",
+            named("the functions it calls")
+        )),
+        Res::Memory => Diag::new(
+            "E0253",
+            format!("example `{text}` used more than {} MiB of memory{at}", LIMITS.memory >> 20),
+            p.span,
+        )
+        .hint(format!(
+            "examples run while the program compiles, so they must be small: look for a value that grows without end in {}, or use smaller inputs",
             named("the functions it calls")
         )),
         Res::Pass | Res::Skipped => unreachable!("not an error"),
@@ -311,13 +380,14 @@ fn report(p: &Plan, res: Res) -> Diag {
 pub fn json(out: &Outcome, file: &str) -> String {
     let skipped = if out.skipped > 0 { format!(",\"skipped\":{}", out.skipped) } else { String::new() };
     format!(
-        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped},\"errors\":{}}}",
+        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped},\"errors\":{}{}}}",
         out.errors.is_empty(),
         json_str(file),
         out.total,
         out.passed,
         out.errors.len(),
-        render_json_errors(&out.errors, file)
+        render_json_errors(&out.errors, file),
+        crate::diag::warnings_json(file)
     )
 }
 
@@ -341,11 +411,20 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
     let all = |xs: &[Expr]| xs.iter().find_map(|x| first_call(x, fns));
     match &e.kind {
         ExprKind::Call(name, args) => all(args).or_else(|| fns.contains(&name.as_str()).then(|| name.clone())),
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => first_call(x, fns),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => first_call(a, fns).or_else(|| first_call(b, fns)),
+        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+            first_call(x, fns)
+        }
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
+            first_call(a, fns).or_else(|| first_call(b, fns))
+        }
+        ExprKind::Some(x) => first_call(x, fns),
+        ExprKind::None => None,
+        ExprKind::Slice(b, lo, hi) => first_call(b, fns)
+            .or_else(|| lo.as_ref().and_then(|x| first_call(x, fns)))
+            .or_else(|| hi.as_ref().and_then(|x| first_call(x, fns))),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
-        ExprKind::Array(xs) => all(xs),
+        ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
         ExprKind::MapLit(kvs) => kvs.iter().find_map(|(k, v)| first_call(k, fns).or_else(|| first_call(v, fns))),
         ExprKind::Interp(parts) => parts.iter().find_map(|p| match p {
             InterpPart::Expr(x) => first_call(x, fns),
@@ -451,13 +530,23 @@ pub fn source(e: &Expr) -> String {
         ExprKind::Call(n, args) => format!("{n}({})", list(args)),
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
+        ExprKind::Tuple(xs) => format!("({})", list(xs)),
+        ExprKind::Fmt(x, spec) => format!("{}:{}", source(x), spec.text),
         ExprKind::MapLit(kvs) if kvs.is_empty() => "[:]".to_string(),
         ExprKind::MapLit(kvs) => {
             let items: Vec<String> = kvs.iter().map(|(k, v)| format!("{}: {}", source(k), source(v))).collect();
             format!("[{}]", items.join(", "))
         }
         ExprKind::Index(b, i) => format!("{}[{}]", tight(b), source(i)),
-        ExprKind::Field(b, f) => format!("{}.{f}", tight(b)),
+        ExprKind::In(a, b) => format!("{} in {}", tight(a), tight(b)),
+        ExprKind::None => "none".to_string(),
+        ExprKind::Some(x) => source(x),
+        ExprKind::Coalesce(a, b) => format!("{} ?? {}", tight(a), tight(b)),
+        ExprKind::Slice(b, lo, hi) => {
+            let bound = |x: &Option<Box<Expr>>| x.as_ref().map(|x| source(x)).unwrap_or_default();
+            format!("{}[{}..{}]", tight(b), bound(lo), bound(hi))
+        }
+        ExprKind::Field(b, f) => format!("{}.{}", tight(b), f.strip_prefix('_').filter(|n| n.parse::<usize>().is_ok()).unwrap_or(f)),
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),
         ExprKind::Inout(v) => format!("inout {}", source(v)),

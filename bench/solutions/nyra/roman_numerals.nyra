@@ -1,54 +1,15 @@
-// the largest Roman value (including subtractive pairs) that fits in x
-fn step(x: int) -> int {
-    if x >= 1000 { ret 1000 }
-    if x >= 900 { ret 900 }
-    if x >= 500 { ret 500 }
-    if x >= 400 { ret 400 }
-    if x >= 100 { ret 100 }
-    if x >= 90 { ret 90 }
-    if x >= 50 { ret 50 }
-    if x >= 40 { ret 40 }
-    if x >= 10 { ret 10 }
-    if x >= 9 { ret 9 }
-    if x >= 5 { ret 5 }
-    if x >= 4 { ret 4 }
-    ret 1
-}
-
-fn symbol(v: int) -> str {
-    if v == 1000 { ret "M" }
-    if v == 900 { ret "CM" }
-    if v == 500 { ret "D" }
-    if v == 400 { ret "CD" }
-    if v == 100 { ret "C" }
-    if v == 90 { ret "XC" }
-    if v == 50 { ret "L" }
-    if v == 40 { ret "XL" }
-    if v == 10 { ret "X" }
-    if v == 9 { ret "IX" }
-    if v == 5 { ret "V" }
-    if v == 4 { ret "IV" }
-    ret "I"
-}
-
 fn roman(n: int) -> str {
+    let values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    let symbols = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
     var s = ""
     var x = n
-    while x > 0 {
-        let v = step(x)
-        s = "{s}{symbol(v)}"
-        x -= v
+    for i, v in values {
+        while x >= v {
+            s += symbols[i]
+            x -= v
+        }
     }
     ret s
 }
 
-fn main() {
-    print(roman(4))
-    print(roman(9))
-    print(roman(14))
-    print(roman(40))
-    print(roman(90))
-    print(roman(400))
-    print(roman(1994))
-    print(roman(2024))
-}
+for n in [4, 9, 14, 40, 90, 400, 1994, 2024] { print(roman(n)) }

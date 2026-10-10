@@ -317,18 +317,18 @@ error[E0227]: `str` has no method `length`
   = explain: nyra explain E0227
 
 nyra: 1 error(s)
-==== lex_question
+==== lex_question_no_colon
 fn main() {
-    let x = 1 > 0 ? 1 : 2
+    let x = 1 > 0 ? 1
 }
 ----
-error[E0001]: unexpected character `?`
-  --> case.nyra:2:19
+error[E0101]: expected `:` in the `? :` expression, found end of line
+  --> case.nyra:2:22
   |
-2 |     let x = 1 > 0 ? 1 : 2
-  |                   ^
-  = hint: Nyra has no `?`: for a conditional value write `if cond { a } else { b }`
-  = explain: nyra explain E0001
+2 |     let x = 1 > 0 ? 1
+  |                      ^
+  = hint: a conditional value is written `cond ? a : b`, or `if cond { a } else { b }`
+  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== lex_quote_in_braces
@@ -1184,31 +1184,31 @@ nyra: 1 error(s)
 ==== par_interp_fmt
 fn main() {
     let x = 1.5
-    print("{x:.2f}")
+    print("{x:e}")
 }
 ----
-error[E0001]: unexpected character `.`
-  --> case.nyra:3:15
+error[E0270]: invalid format specifier `e` in a string: `e` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
   |
-3 |     print("{x:.2f}")
-  |               ^
-  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
-  = explain: nyra explain E0001
+3 |     print("{x:e}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
 
 nyra: 1 error(s)
 ==== par_interp_fmt2
 fn main() {
     let x = 1
-    print("{x:5}")
+    print("{x:5q}")
 }
 ----
-error[E0101]: expected `}` after the expression, found `:`
-  --> case.nyra:3:14
+error[E0270]: invalid format specifier `5q` in a string: `q` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
   |
-3 |     print("{x:5}")
-  |              ^
-  = hint: format specifiers like `{x:.2f}` do not exist: a float always prints in its shortest form
-  = explain: nyra explain E0101
+3 |     print("{x:5q}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
 
 nyra: 1 error(s)
 ==== par_interp_missing
@@ -1413,24 +1413,6 @@ error[E0101]: expected an expression, found `=`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== par_return
-fn f() -> int {
-    return 1
-}
-fn main() {
-    print(1)
-}
-----
-error[E0101]: `return` is not part of Nyra: expected end of line after it, found number `1`
-  --> case.nyra:2:12
-  |
-2 |     return 1
-  |            ^
-  = hint: Nyra spells it `ret`: replace `return` with `ret`
-  = fix: `ret 1`
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
 ==== par_top_block_comment
 /* hi */
 fn main() {
@@ -1476,21 +1458,6 @@ error[E0101]: expected `fn` or `struct`, found `void`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== par_script_and_main
-fn main() {
-    print(1)
-}
-print(2)
-----
-error[E0101]: statements at the top level and a `fn main` in the same program
-  --> case.nyra:4:1
-  |
-4 | print(2)
-  | ^
-  = hint: a program is either a script (statements at the top level) or has `fn main` (line 1): move these statements into `main`
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
 ==== par_top_const
 const MAX = 10
 fn main() {
@@ -1520,36 +1487,6 @@ error[E0302]: `import math`: Nyra spells it `use math`
   = hint: write `use math`
   = fix: `use math`
   = explain: nyra explain E0302
-
-nyra: 1 error(s)
-==== par_top_let
-let max = 10
-fn main() {
-    print(1)
-}
-----
-error[E0101]: statements at the top level and a `fn main` in the same program
-  --> case.nyra:1:1
-  |
-1 | let max = 10
-  | ^
-  = hint: a program with `fn main` has no script variables: move `max` into `main`, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
-  = explain: nyra explain E0101
-
-nyra: 1 error(s)
-==== par_top_main_call
-fn main() {
-    print(1)
-}
-main()
-----
-error[E0101]: statements at the top level and a `fn main` in the same program
-  --> case.nyra:4:1
-  |
-4 | main()
-  | ^
-  = hint: `main` runs by itself when the program starts: do not call it
-  = explain: nyra explain E0101
 
 nyra: 1 error(s)
 ==== par_top_rbrace
@@ -1736,7 +1673,7 @@ error[E0203]: `print` needs a value to show, but `log()` returns nothing
   |
 5 |     print("a", log())
   |                ^
-  = hint: `log` has no return type, so it returns nothing: call it on its own line, or declare `fn log(...) -> int` and `ret` a value
+  = hint: `log` has no return type, so it returns nothing: call it on its own line, or declare `fn log(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -1827,7 +1764,7 @@ error[E0203]: type mismatch in the assignment to `x`: expected `int`, but `hello
   |
 4 |     x = hello()
   |         ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -1836,7 +1773,7 @@ fn main() {
     let x = if 1 { 1 } else { 2 }
 }
 ----
-error[E0209]: the condition of an `if` value must be `bool`, found `int`
+error[E0209]: the condition of a conditional value (`if` or `? :`) must be `bool`, found `int`
   --> case.nyra:2:16
   |
 2 |     let x = if 1 { 1 } else { 2 }
@@ -1904,7 +1841,7 @@ error[E0209]: the condition of `if` must be `bool`, found `void`
   |
 3 |     if hello() {
   |        ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0209
 
 nyra: 1 error(s)
@@ -2060,7 +1997,7 @@ fn main() {
     let x = if true { 1 } else { 2.5 }
 }
 ----
-error[E0212]: the branches of this `if` value have different types: `int` and `float`
+error[E0212]: the branches of this conditional value (`if` or `? :`) have different types: `int` and `float`
   --> case.nyra:2:13
   |
 2 |     let x = if true { 1 } else { 2.5 }
@@ -2075,7 +2012,7 @@ fn main() {
     let x = if true { 2.5 } else { 1 }
 }
 ----
-error[E0212]: the branches of this `if` value have different types: `float` and `int`
+error[E0212]: the branches of this conditional value (`if` or `? :`) have different types: `float` and `int`
   --> case.nyra:2:13
   |
 2 |     let x = if true { 2.5 } else { 1 }
@@ -2090,7 +2027,7 @@ fn main() {
     let x = if true { 1 } else { "a" }
 }
 ----
-error[E0212]: the branches of this `if` value have different types: `int` and `str`
+error[E0212]: the branches of this conditional value (`if` or `? :`) have different types: `int` and `str`
   --> case.nyra:2:13
   |
 2 |     let x = if true { 1 } else { "a" }
@@ -2104,7 +2041,7 @@ fn main() {
     let x = if true { print(1) } else { print(2) }
 }
 ----
-error[E0212]: the first branch of this `if` value produces no value: `print(1)` returns nothing
+error[E0212]: the first branch of this conditional value (`if` or `? :`) produces no value: `print(1)` returns nothing
   --> case.nyra:2:13
   |
 2 |     let x = if true { print(1) } else { print(2) }
@@ -2138,7 +2075,7 @@ error[E0203]: `int` needs a number, but `hello()` returns nothing
   |
 3 |     print(int(hello()))
   |               ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2200,7 +2137,7 @@ error[E0211]: `main` must take no parameters and return nothing, but it takes `a
   |
 1 | fn main(a: int, b: str) -> int {
   |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
   = explain: nyra explain E0211
 
 nyra: 1 error(s)
@@ -2213,7 +2150,7 @@ error[E0211]: `main` must take no parameters and return nothing, but it takes `x
   |
 1 | fn main(x: int) {
   |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
   = explain: nyra explain E0211
 
 nyra: 1 error(s)
@@ -2227,7 +2164,7 @@ error[E0211]: `main` must take no parameters and return nothing, but it returns 
   |
 1 | fn main() -> int {
   |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `ret`
+  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
   = explain: nyra explain E0211
 
 nyra: 1 error(s)
@@ -2255,7 +2192,7 @@ error[E0210]: cannot apply `!` to `void`: `!` needs a `bool`
   |
 3 |     print(!hello())
   |           ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -2298,7 +2235,7 @@ fn main() {
     print(a < b < c)
 }
 ----
-error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s, two `float`s, two `str`s or two `char`s
+error[E0210]: cannot use `<` on `bool` and `int`: `<` needs two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those
   --> case.nyra:5:17
   |
 5 |     print(a < b < c)
@@ -2586,7 +2523,7 @@ error[E0210]: cannot use `+` on `void` and `int`: `+` needs two `int`s, two `flo
   |
 3 |     print(hello() + 1)
   |                   ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
@@ -2616,13 +2553,13 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: function `add` is declared `-> int` but not every path ends with `ret`
+error[E0207]: function `add` is declared `-> int` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn add(a: int, b: int) -> int {
   |    ^
-  = hint: the last line computes a value, but Nyra does not return it by itself: write `ret a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
-  = fix: `ret a + b`
+  = hint: the last line computes a value, but Nyra does not return it by itself: write `return a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
+  = fix: `return a + b`
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2636,12 +2573,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: function `f` is declared `-> str` but not every path ends with `ret`
+error[E0207]: function `f` is declared `-> str` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn f(x: int) -> str {
   |    ^
-  = hint: a loop may run zero times: add `ret ""` after the loop
+  = hint: a loop may run zero times: add `return ""` after the loop
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2653,12 +2590,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+error[E0207]: function `f` is declared `-> int` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn f(x: int) -> int {
   |    ^
-  = hint: the last `if` has no `else`: add `ret 0` after it, or an `else { ret 0 }` branch
+  = hint: the last `if` has no `else`: add `return 0` after it, or an `else { return 0 }` branch
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2674,12 +2611,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+error[E0207]: function `f` is declared `-> int` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn f(x: int) -> int {
   |    ^
-  = hint: every branch of the last `if`/`else` must end with `ret`
+  = hint: every branch of the last `if`/`else` must end with `return`
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2690,12 +2627,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: function `f` is declared `-> int` but not every path ends with `ret`
+error[E0207]: function `f` is declared `-> int` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn f() -> int {
   |    ^
-  = hint: end the function with `ret`, e.g. `ret 0`
+  = hint: end the function with `return`, e.g. `return 0`
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2707,12 +2644,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: `ret` needs a value: `f` returns `int`
+error[E0207]: `return` needs a value: `f` returns `int`
   --> case.nyra:2:5
   |
 2 |     ret
   |     ^
-  = hint: write `ret 0` (or any other `int` value)
+  = hint: write `return 0` (or any other `int` value)
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2724,12 +2661,12 @@ fn main() {
     print(1)
 }
 ----
-error[E0207]: `ret` returns a value, but `f` has no return type (it returns nothing)
+error[E0207]: `return` returns a value, but `f` has no return type (it returns nothing)
   --> case.nyra:2:9
   |
 2 |     ret 1
   |         ^
-  = hint: add the return type to the signature: `fn f(...) -> int`, or write `ret` without a value
+  = hint: add the return type to the signature: `fn f(...) -> int`, or write `return` without a value
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -2821,7 +2758,7 @@ error[E0203]: `print` needs a value to show, but `hello()` returns nothing
   |
 3 |     print(hello())
   |           ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2938,7 +2875,7 @@ error[E0203]: `hello()` returns nothing, so there is no value to store in `x`
   |
 3 |     let x = hello()
   |             ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -2953,7 +2890,7 @@ error[E0203]: `hello()` returns nothing, so there is no value to store in `x`
   |
 3 |     let x: int = hello()
   |                  ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -3055,7 +2992,7 @@ error[E0203]: type mismatch in the return value of `f`: expected `int`, but `hel
   |
 2 | fn f() -> int = hello()
   |                 ^
-  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `ret` a value
+  = hint: `hello` has no return type, so it returns nothing: call it on its own line, or declare `fn hello(...) -> int` and `return` a value
   = explain: nyra explain E0203
 
 nyra: 1 error(s)
@@ -3099,7 +3036,7 @@ error[E0101]: `break` must be inside a loop
   |
 3 |     break
   |     ^
-  = hint: `break` and `continue` work in `while` and `for` loops; to leave a function early write `ret`
+  = hint: `break` and `continue` work in `while` and `for` loops; to leave a function early write `return`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -3360,7 +3297,7 @@ error[E0201]: undefined variable `null`
   |
 2 |     let x = null
   |             ^
-  = hint: Nyra has no null: every variable always holds a value of its type
+  = hint: Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -3377,21 +3314,6 @@ error[E0201]: undefined variable `a`
 2 | fn g() -> int = a
   |                 ^
   = hint: declare it first: `let a = ...`
-  = explain: nyra explain E0201
-
-nyra: 1 error(s)
-==== chk_undef_return
-fn main() {
-    return
-}
-----
-error[E0201]: undefined variable `return`
-  --> case.nyra:2:5
-  |
-2 |     return
-  |     ^
-  = hint: Nyra spells it `ret`: replace `return` with `ret`
-  = fix: `ret`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -3872,7 +3794,7 @@ error[E0201]: undefined variable `None`
   |
 2 |     let x = None
   |             ^
-  = hint: Nyra has no null: every variable always holds a value of its type
+  = hint: Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -3946,13 +3868,13 @@ fn main() {
     print(add(1, 2))
 }
 ----
-error[E0207]: function `add` is declared `-> int` but not every path ends with `ret`
+error[E0207]: function `add` is declared `-> int` but not every path ends with `return`
   --> case.nyra:1:4
   |
 1 | fn add(a: int, b: int) -> int {
   |    ^
-  = hint: the last line computes a value, but Nyra does not return it by itself: write `ret a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
-  = fix: `ret a + b`
+  = hint: the last line computes a value, but Nyra does not return it by itself: write `return a + b` (or make this a one-line function: `fn add(...) -> int = a + b`)
+  = fix: `return a + b`
   = explain: nyra explain E0207
 
 nyra: 1 error(s)
@@ -3996,13 +3918,13 @@ fn main() {
     }
 }
 ----
-error[E0101]: `match` is not part of Nyra: expected end of line after it, found `x`
-  --> case.nyra:3:11
+error[E0281]: this `match` does not cover every other value
+  --> case.nyra:3:5
   |
 3 |     match x {
-  |           ^
-  = hint: Nyra has no `switch` or `match`: chain `if` / `else if`
-  = explain: nyra explain E0101
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
 
 nyra: 1 error(s)
 ==== f_rust_path
@@ -4075,13 +3997,13 @@ impl P {
 fn main() {
 }
 ----
-error[E0101]: expected `fn` or `struct`, found `impl`
+error[E0263]: `impl P`: Nyra has no `impl` blocks, functions are written outside the struct
   --> case.nyra:4:1
   |
 4 | impl P {
   | ^
-  = hint: Nyra has no `impl`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`
-  = explain: nyra explain E0101
+  = hint: remove the `impl P { }` wrapper and write `fn area(p: P)` on its own, with the struct as a parameter; call it as `area(p)`
+  = explain: nyra explain E0263
 
 nyra: 1 error(s)
 ==== f_string_index_assign
@@ -4631,7 +4553,7 @@ fn main() {
     flags.sort()
 }
 ----
-error[E0228]: `sort` needs `[int]`, `[float]`, `[str]` or `[char]`, found `[bool]`
+error[E0228]: `sort` needs `[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those, found `[bool]`
   --> case.nyra:3:11
   |
 3 |     flags.sort()
@@ -4648,13 +4570,13 @@ fn main() {
     }
 }
 ----
-error[E0101]: expected a loop variable, found `(`
-  --> case.nyra:3:9
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:3:5
   |
 3 |     for (i, x) in xs {
-  |         ^
-  = hint: loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`
-  = explain: nyra explain E0101
+  |     ^
+  = hint: `for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`
+  = explain: nyra explain E0272
 
 nyra: 1 error(s)
 ==== for_enumerate
@@ -4749,7 +4671,7 @@ error[E0101]: expected an expression, found `{`
   |
 3 |     print(xs.map(x => { ret x * 2 }))
   |                       ^
-  = hint: the body of a lambda is one expression, without braces or `ret`: `x => x * 2`
+  = hint: the body of a lambda is one expression, without braces or `return`: `x => x * 2`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -4901,7 +4823,7 @@ fn main() {
     xs.sort_by(x => x > 1)
 }
 ----
-error[E0228]: `sort_by` needs a key of type `int`, `float`, `str` or `char`, found `bool`
+error[E0228]: `sort_by` needs a key of type `int`, `float`, `str`, `char` or a tuple of those, found `bool`
   --> case.nyra:3:21
   |
 3 |     xs.sort_by(x => x > 1)
@@ -5242,7 +5164,7 @@ error[E0201]: undefined variable `pos`
   |
 5 | fn advance() { pos += 1 }
   |                ^
-  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or declare it at the top level of the file (a script variable), which every function can use
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -5260,7 +5182,7 @@ error[E0201]: undefined variable `pos`
   |
 4 |         print(pos)
   |               ^
-  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or drop `fn main` and write its statements at the top level (a script), whose variables every function can use
+  = hint: `pos` is a variable of `fn main` (line 2), and functions cannot see it: pass it as a parameter, or declare it at the top level of the file (a script variable), which every function can use
   = explain: nyra explain E0201
 
 nyra: 1 error(s)
@@ -5276,5 +5198,981 @@ error[E0103]: the code is nested more than 256 levels deep
   |                                                                                                                                                                                                                                                                         ^
   = hint: split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own
   = explain: nyra explain E0103
+
+nyra: 1 error(s)
+==== tuple_pattern_not_tuple
+fn main() {
+    let (a, b) = 5
+    print(a, b)
+}
+----
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:2:5
+  |
+2 |     let (a, b) = 5
+  |     ^
+  = hint: a pattern takes a tuple apart, e.g. the result of `fn f() -> (int, str)`; for a single value write `let a = ...`
+  = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== tuple_pattern_arity
+fn pair() -> (int, int) = (1, 2)
+
+fn main() {
+    let (a, b, c) = pair()
+    print(a, b, c)
+}
+----
+error[E0272]: the pattern has 3 names but the tuple `(int, int)` has 2 elements
+  --> case.nyra:4:5
+  |
+4 |     let (a, b, c) = pair()
+  |     ^
+  = hint: write one name for each element, `_` for one you do not need: `(_, _)`
+  = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== tuple_position
+fn main() {
+    let t = (1, "a")
+    print(t.2)
+}
+----
+error[E0273]: the tuple `(int, str)` has 2 elements, so `.2` does not exist
+  --> case.nyra:3:13
+  |
+3 |     print(t.2)
+  |             ^
+  = hint: the positions are `.0` to `.1`
+  = explain: nyra explain E0273
+
+nyra: 1 error(s)
+==== tuple_unordered
+fn main() {
+    print(([1], 2) < ([2], 3))
+}
+----
+error[E0210]: cannot use `<` on `([int], int)` and `([int], int)`: `<` needs two `int`s, two `float`s, two `str`s, two `char`s or two tuples of those
+  --> case.nyra:2:20
+  |
+2 |     print(([1], 2) < ([2], 3))
+  |                    ^
+  = hint: tuples are ordered when every element is a number, text, a char or a bool (or such a tuple): compare the other parts one by one
+  = explain: nyra explain E0210
+
+nyra: 1 error(s)
+==== tuple_map_key
+fn main() {
+    var seen: [(int, int): bool] = [:]
+    seen[(1, 2)] = true
+}
+----
+error[E0218]: a map key must be `int`, `str`, `char` or `bool`, found `(int, int)`
+  --> case.nyra:2:5
+  |
+2 |     var seen: [(int, int): bool] = [:]
+  |     ^
+  = hint: a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `"{x},{y}"`
+  = explain: nyra explain E0218
+
+nyra: 1 error(s)
+==== tuple_json
+use json
+
+fn main() {
+    print(json.str((1, 2)))
+}
+----
+error[E0309]: `json.str` cannot handle the tuple type in `(int, int)` yet
+  --> case.nyra:4:16
+  |
+4 |     print(json.str((1, 2)))
+  |                ^
+  = hint: use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`
+  = explain: nyra explain E0309
+
+nyra: 1 error(s)
+==== format_spec_syntax
+fn main() {
+    let x = 5
+    print("{x:q}")
+}
+----
+error[E0270]: invalid format specifier `q` in a string: `q` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)
+  --> case.nyra:3:13
+  |
+3 |     print("{x:q}")
+  |             ^
+  = hint: a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`
+  = explain: nyra explain E0270
+
+nyra: 1 error(s)
+==== format_spec_text_decimals
+fn main() {
+    let name = "ann"
+    print("{name:.2}")
+}
+----
+error[E0271]: the format specifier `.2` does not fit a `str`: `.N` rounds a float to N decimals
+  --> case.nyra:3:13
+  |
+3 |     print("{name:.2}")
+  |             ^
+  = hint: only a float has decimals: `{x:.2}`; to cut a text use `s.slice(0, n)`
+  = explain: nyra explain E0271
+
+nyra: 1 error(s)
+==== format_spec_int_decimals
+fn main() {
+    let n = 7
+    print("{n:.2f}")
+}
+----
+error[E0271]: the format specifier `.2f` does not fit an `int`: `.N` rounds a float to N decimals
+  --> case.nyra:3:13
+  |
+3 |     print("{n:.2f}")
+  |             ^
+  = hint: decimals are for floats: convert with `float(x)`, as in `{float(x):.2}`
+  = explain: nyra explain E0271
+
+nyra: 1 error(s)
+==== in_wrong_type
+fn main() {
+    print("a" in [1, 2])
+}
+----
+error[E0275]: cannot look for a `str` in `[int]`: it holds `int` values, and the left side is a `str`
+  --> case.nyra:2:15
+  |
+2 |     print("a" in [1, 2])
+  |               ^
+  = hint: `"a" in [1, 2]` needs an element of type `int` on the left
+  = explain: nyra explain E0275
+
+nyra: 1 error(s)
+==== in_not_container
+fn main() {
+    let n = 5
+    print(3 in n)
+}
+----
+error[E0275]: `in` needs an array, a string or a map on its right, found `int`
+  --> case.nyra:3:13
+  |
+3 |     print(3 in n)
+  |             ^
+  = hint: to test a number against a range write `x >= a && x < b`
+  = explain: nyra explain E0275
+
+nyra: 1 error(s)
+==== slice_not_sliceable
+fn main() {
+    let n = 12345
+    print(n[1..3])
+}
+----
+error[E0233]: cannot slice a value of type `int`
+  --> case.nyra:3:12
+  |
+3 |     print(n[1..3])
+  |            ^
+  = hint: only arrays (`xs[1..3]`) and strings (`s[1..3]`) can be sliced
+  = explain: nyra explain E0233
+
+nyra: 1 error(s)
+==== zip_not_arrays
+fn main() {
+    print(zip(1, 2))
+}
+----
+error[E0203]: `zip` needs arrays or strings, found `int`
+  --> case.nyra:2:15
+  |
+2 |     print(zip(1, 2))
+  |               ^
+  = hint: `zip(xs, ys)` pairs the elements of two arrays (or the characters of strings)
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== zip_one_array
+fn main() {
+    print(zip([1, 2]))
+}
+----
+error[E0204]: `zip` takes 2 or 3 arguments but 1 was given
+  --> case.nyra:2:11
+  |
+2 |     print(zip([1, 2]))
+  |           ^
+  = hint: call it as `zip(xs, ys)`: it gives an array of pairs `[(x, y)]`
+  = explain: nyra explain E0204
+
+nyra: 1 error(s)
+==== sorted_unorderable
+fn main() {
+    print([[1], [0]].sorted())
+}
+----
+error[E0228]: `sorted` needs `[int]`, `[float]`, `[str]`, `[char]` or an array of tuples of those, found `[[int]]`
+  --> case.nyra:2:22
+  |
+2 |     print([[1], [0]].sorted())
+  |                      ^
+  = hint: sort by a key yourself: e.g. loop and insert each element at its place
+  = explain: nyra explain E0228
+
+nyra: 1 error(s)
+==== var_param_inout
+fn f(inout var n: int) {
+    n += 1
+}
+
+fn main() {
+    var k = 1
+    f(inout k)
+}
+----
+error[E0101]: expected a parameter name, found keyword `var`
+  --> case.nyra:1:12
+  |
+1 | fn f(inout var n: int) {
+  |            ^
+  = hint: `inout` changes the caller's variable and `var` is a copy the function may change: use one of them
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== for_pattern_not_tuple
+fn main() {
+    let xs = [1, 2]
+    for (a, b) in xs {
+        print(a, b)
+    }
+}
+----
+error[E0272]: cannot take apart an `int`: a pattern like `(a, b)` needs a tuple
+  --> case.nyra:3:5
+  |
+3 |     for (a, b) in xs {
+  |     ^
+  = hint: `for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`
+  = explain: nyra explain E0272
+
+nyra: 1 error(s)
+==== none_without_type
+fn main() {
+    let a = none
+    print(a)
+}
+----
+error[E0276]: cannot infer the type of `none`
+  --> case.nyra:2:13
+  |
+2 |     let a = none
+  |             ^
+  = hint: say which optional type it is where it is declared: `var best: int? = none`, or compare it with a value: `x == none`
+  = explain: nyra explain E0276
+
+nyra: 1 error(s)
+==== none_not_optional
+fn main() {
+    let a: int = none
+    print(a)
+}
+----
+error[E0276]: `none` is not a value of type `int`
+  --> case.nyra:2:18
+  |
+2 |     let a: int = none
+  |                  ^
+  = hint: only an optional type can be `none`: declare it `int?`
+  = explain: nyra explain E0276
+
+nyra: 1 error(s)
+==== coalesce_not_optional
+fn main() {
+    let n = 5
+    print(n ?? 3)
+}
+----
+error[E0277]: `??` needs an optional value on its left, found an `int`
+  --> case.nyra:3:13
+  |
+3 |     print(n ?? 3)
+  |             ^
+  = hint: `n` always has a value; `??` is for an optional `T?` such as `m.get(k) ?? 0`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== coalesce_default_type
+fn main() {
+    let m = ["a": 1]
+    print(m.get("a") ?? "none")
+}
+----
+error[E0277]: the default of `??` must be an `int` or `int?`, found a `str`
+  --> case.nyra:3:25
+  |
+3 |     print(m.get("a") ?? "none")
+  |                         ^
+  = hint: `"none"` does not fit: write a default of type `int`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== if_let_not_optional
+fn main() {
+    let n = 5
+    if let v = n {
+        print(v)
+    }
+}
+----
+error[E0277]: `if let` needs an optional value, found an `int`
+  --> case.nyra:3:5
+  |
+3 |     if let v = n {
+  |     ^
+  = hint: the value must be an optional `T?`, such as `m.get(k)`, `xs.find(x => ...)` or `s.to_int()`: `if let v = m.get(k) { ... }`
+  = explain: nyra explain E0277
+
+nyra: 1 error(s)
+==== option_field
+struct P {
+    x: int
+}
+
+fn main() {
+    let p: P? = P(x: 1)
+    print(p.x)
+}
+----
+error[E0224]: `P?` is an optional value and has no field `x`
+  --> case.nyra:7:13
+  |
+7 |     print(p.x)
+  |             ^
+  = hint: take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`
+  = explain: nyra explain E0224
+
+nyra: 1 error(s)
+==== option_json
+use json
+
+fn main() {
+    let x: int? = 5
+    print(json.str(x))
+}
+----
+error[E0309]: `json.str` cannot handle the optional type in `int?` yet
+  --> case.nyra:5:16
+  |
+5 |     print(json.str(x))
+  |                ^
+  = hint: use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there
+  = explain: nyra explain E0309
+
+nyra: 1 error(s)
+==== option_wrong_type
+fn main() {
+    let t: int? = "x"
+    print(t)
+}
+----
+error[E0203]: type mismatch in `let t: int?`: expected `int?`, found `str`
+  --> case.nyra:2:19
+  |
+2 |     let t: int? = "x"
+  |                   ^
+  = hint: change the value to an `int?`, or change the declared type: `let t: str = ...`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== option_unknown_method
+fn main() {
+    let t: int? = 3
+    print(t.len())
+}
+----
+error[E0227]: `int?` has no method `len`
+  --> case.nyra:3:13
+  |
+3 |     print(t.len())
+  |             ^
+  = hint: an optional value has `is_some()`, `is_none()` and `unwrap()`; to get the value use `x ?? default` or `if let v = x { ... }`
+  = explain: nyra explain E0227
+
+nyra: 1 error(s)
+==== enum_unknown_variant
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.Q
+    print(d)
+}
+----
+error[E0278]: enum `Dir` has no variant `Q`
+  --> case.nyra:4:17
+  |
+4 |     let d = Dir.Q
+  |                 ^
+  = hint: the variants of `Dir` are `Dir.N`, `Dir.E`, `Dir.S`
+  = explain: nyra explain E0278
+
+nyra: 1 error(s)
+==== match_bare_variant
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        N => print("north")
+        _ => print("other")
+    }
+}
+----
+error[E0278]: `N` is not a variant pattern of `Dir`
+  --> case.nyra:6:9
+  |
+6 |         N => print("north")
+  |         ^
+  = hint: a variant is written with its enum: `Dir.N`
+  = explain: nyra explain E0278
+
+nyra: 1 error(s)
+==== match_not_exhaustive
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.E => print("east")
+    }
+}
+----
+error[E0281]: this `match` does not cover `Dir.S`
+  --> case.nyra:5:5
+  |
+5 |     match d {
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== match_int_no_default
+fn main() {
+    let n = 3
+    match n {
+        1 => print("one")
+        2 => print("two")
+    }
+}
+----
+error[E0281]: this `match` does not cover every other value
+  --> case.nyra:3:5
+  |
+3 |     match n {
+  |     ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== match_arm_after_wild
+fn main() {
+    let n = 3
+    match n {
+        _ => print("any")
+        1 => print("one")
+    }
+}
+----
+error[E0283]: this arm can never run: the arms above already cover every case
+  --> case.nyra:5:9
+  |
+5 |         1 => print("one")
+  |         ^
+  = hint: remove it, or move it above the `_` arm
+  = explain: nyra explain E0283
+
+nyra: 1 error(s)
+==== match_duplicate_pattern
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    match d {
+        Dir.N => print("north")
+        Dir.N => print("again")
+        _ => print("other")
+    }
+}
+----
+error[E0283]: this pattern is already covered by an arm above
+  --> case.nyra:7:13
+  |
+7 |         Dir.N => print("again")
+  |             ^
+  = hint: remove it: it can never be reached
+  = explain: nyra explain E0283
+
+nyra: 1 error(s)
+==== match_pattern_type
+fn main() {
+    let n = 3
+    match n {
+        "three" => print("three")
+        _ => print("other")
+    }
+}
+----
+error[E0279]: this pattern is a `str` but the value matched is an `int`
+  --> case.nyra:4:9
+  |
+4 |         "three" => print("three")
+  |         ^
+  = hint: the patterns of this `match` must be `int` values
+  = explain: nyra explain E0279
+
+nyra: 1 error(s)
+==== match_float
+fn main() {
+    let x = 2.5
+    match x {
+        2.5 => print("two and a half")
+        _ => print("other")
+    }
+}
+----
+error[E0279]: cannot `match` a value of type `float`
+  --> case.nyra:3:11
+  |
+3 |     match x {
+  |           ^
+  = hint: `match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if x == ...`
+  = explain: nyra explain E0279
+
+nyra: 1 error(s)
+==== enum_empty
+enum Nothing {
+}
+
+fn main() {
+    print("hi")
+}
+----
+error[E0284]: enum `Nothing` has no variants
+  --> case.nyra:1:6
+  |
+1 | enum Nothing {
+  |      ^
+  = hint: list its cases: `enum Nothing { A, B }`
+  = explain: nyra explain E0284
+
+nyra: 1 error(s)
+==== enum_duplicate_variant
+enum Dir { N, E, N }
+
+fn main() {
+    print("hi")
+}
+----
+error[E0284]: variant `N` is defined twice in enum `Dir`
+  --> case.nyra:1:18
+  |
+1 | enum Dir { N, E, N }
+  |                  ^
+  = hint: rename one of them: the variants of an enum are all different
+  = explain: nyra explain E0284
+
+nyra: 1 error(s)
+==== enum_call
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir(0)
+    print(d)
+}
+----
+error[E0235]: `Dir` is an enum: its values are its variants
+  --> case.nyra:4:13
+  |
+4 |     let d = Dir(0)
+  |             ^
+  = hint: write `Dir.N`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== enum_as_value
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir
+    print(d)
+}
+----
+error[E0235]: `Dir` is an enum, not a value
+  --> case.nyra:4:13
+  |
+4 |     let d = Dir
+  |             ^
+  = hint: pick one of its variants: `Dir.N`
+  = explain: nyra explain E0235
+
+nyra: 1 error(s)
+==== enum_field
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    print(d.tag)
+}
+----
+error[E0224]: `Dir` is an enum and has no field `tag`
+  --> case.nyra:5:13
+  |
+5 |     print(d.tag)
+  |             ^
+  = hint: compare an enum value with `==`, or take it apart with `match`
+  = explain: nyra explain E0224
+
+nyra: 1 error(s)
+==== enum_lowercase
+enum dir { N, E }
+
+fn main() {
+    print("hi")
+}
+----
+error[E0221]: enum name `dir` must start with an uppercase letter
+  --> case.nyra:1:6
+  |
+1 | enum dir { N, E }
+  |      ^
+  = hint: write `enum Dir`: type names start uppercase, variants are written `Dir.Name`
+  = explain: nyra explain E0221
+
+nyra: 1 error(s)
+==== match_missing_arrow
+fn main() {
+    let n = 3
+    match n {
+        1 print("one")
+        _ => print("other")
+    }
+}
+----
+error[E0101]: expected `=>` after the pattern, found `print`
+  --> case.nyra:4:11
+  |
+4 |         1 print("one")
+  |           ^
+  = hint: an arm looks like `Dir.N => print("north")`, or `Dir.E, Dir.W => { ... }`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== match_in_expression
+fn main() {
+    let n = 3
+    let s = match n {
+        1 => "one"
+        _ => "other"
+    }
+    print(s)
+}
+----
+error[E0101]: expected an expression, found keyword `match`
+  --> case.nyra:3:13
+  |
+3 |     let s = match n {
+  |             ^
+  = hint: `match` is a statement, not a value: `ret` the value or assign it in the arms, or write `if cond { a } else { b }` for a value
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== negative_index_last
+let xs = [1, 2, 3]
+print(xs[-1])
+----
+error[E0261]: an index cannot be negative: -1 is always out of bounds
+  --> case.nyra:2:10
+  |
+2 | print(xs[-1])
+  |          ^
+  = hint: Nyra has no positions counted from the end: write `xs[xs.len() - 1]` for the element 1 from the end
+  = fix: `print(xs[xs.len() - 1])`
+  = explain: nyra explain E0261
+
+nyra: 1 error(s)
+==== negative_index_string_computed_base
+fn main() {
+    let s = "abc"
+    print(s[-2])
+    print("abc"[-1])
+}
+----
+error[E0261]: an index cannot be negative: -2 is always out of bounds
+  --> case.nyra:3:13
+  |
+3 |     print(s[-2])
+  |             ^
+  = hint: Nyra has no positions counted from the end: write `s[s.len() - 2]` for the element 2 from the end
+  = fix: `print(s[s.len() - 2])`
+  = explain: nyra explain E0261
+
+error[E0261]: an index cannot be negative: -1 is always out of bounds
+  --> case.nyra:4:17
+  |
+4 |     print("abc"[-1])
+  |                 ^
+  = hint: Nyra has no positions counted from the end: write the length minus n, e.g. `xs[xs.len() - 1]` is the last element
+  = explain: nyra explain E0261
+
+nyra: 2 error(s)
+==== negative_slice_start
+let xs = [1, 2, 3]
+print(xs.slice(-2, 3))
+----
+error[E0261]: a slice position cannot be negative: -2 is always out of bounds
+  --> case.nyra:2:16
+  |
+2 | print(xs.slice(-2, 3))
+  |                ^
+  = hint: Nyra has no positions counted from the end: write `xs.len() - 2` (the length minus 2)
+  = fix: `print(xs.slice(xs.len() - 2, 3))`
+  = explain: nyra explain E0261
+
+nyra: 1 error(s)
+==== method_inside_struct
+struct Rect {
+    w: int
+    h: int
+    fn area(r: Rect) -> int = r.w * r.h
+}
+print(1)
+----
+error[E0263]: functions cannot be written inside `struct Rect`: a struct holds only fields
+  --> case.nyra:4:5
+  |
+4 |     fn area(r: Rect) -> int = r.w * r.h
+  |     ^
+  = hint: Nyra has no methods: write `fn area` after the struct and pass the struct as a parameter, `fn area(r: Rect)`; call it as `area(r)`
+  = explain: nyra explain E0263
+
+nyra: 1 error(s)
+==== impl_block
+struct Rect { w: int, h: int }
+impl Rect {
+    fn area(self) -> int {
+        ret self.w * self.h
+    }
+}
+print(1)
+----
+error[E0263]: `impl Rect`: Nyra has no `impl` blocks, functions are written outside the struct
+  --> case.nyra:2:1
+  |
+2 | impl Rect {
+  | ^
+  = hint: remove the `impl Rect { }` wrapper and write `fn area(r: Rect)` on its own, with the struct as a parameter; call it as `area(r)`
+  = explain: nyra explain E0263
+
+nyra: 1 error(s)
+==== class_with_fields
+class Rect {
+    w: int
+    h: int
+}
+print(1)
+----
+error[E0264]: `class Rect`: Nyra has no classes, only structs
+  --> case.nyra:1:1
+  |
+1 | class Rect {
+  | ^
+  = hint: write `struct Rect { field: int }` for the data, and its functions after it as plain functions that take the struct: `fn area(r: Rect)`
+  = fix: `struct Rect {`
+  = explain: nyra explain E0264
+
+nyra: 1 error(s)
+==== class_with_methods
+class Rect {
+    w: int
+    fn area(self) -> int {
+        ret self.w
+    }
+}
+print(1)
+----
+error[E0264]: `class Rect`: Nyra has no classes, only structs
+  --> case.nyra:1:1
+  |
+1 | class Rect {
+  | ^
+  = hint: write `struct Rect { field: int }` for the data, and its functions after it as plain functions that take the struct: `fn area(r: Rect)`
+  = explain: nyra explain E0264
+
+nyra: 1 error(s)
+==== dollar_brace_undefined
+print("${root}/logs")
+----
+warning[E0260]: `${root}` in a string prints a `$` and then the value of `root`
+  --> case.nyra:1:8
+  |
+1 | print("${root}/logs")
+  |        ^
+  = hint: `{root}` alone inserts the value, so drop the `$` if you did not mean to print one; to print a dollar sign before a value write `"$" + str(...)`, to print `${root}` as text double the braces: `${{root}}`
+  = explain: nyra explain E0260
+
+error[E0201]: undefined variable `root`
+  --> case.nyra:1:10
+  |
+1 | print("${root}/logs")
+  |          ^
+  = hint: `{root}` inserts the value of `root`; to keep `${root}` as text, double the braces: `${{root}}`
+  = fix: `print("${{root}}/logs")`
+  = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== math_name_clash_is_one_error
+use math
+let math = 3
+print(1)
+----
+error[E0206]: `math` is already the name of a module (`use math` on line 1)
+  --> case.nyra:2:1
+  |
+2 | let math = 3
+  | ^
+  = hint: a variable cannot share a module's name: rename the variable, e.g. `math_value`
+  = explain: nyra explain E0206
+
+nyra: 1 error(s)
+==== option_generic_word
+fn f(x: int) -> Option<int> {
+    ret x
+}
+print(f(1))
+----
+error[E0262]: `Option<T>` is not a Nyra type: an optional type is written `T?`, e.g. `int?`
+  --> case.nyra:1:17
+  |
+1 | fn f(x: int) -> Option<int> {
+  |                 ^
+  = hint: an optional type is written with a `?` after the type, `int?`; a missing value is `none`, `x ?? d` gives a default and `if let v = x { ... }` takes the value out
+  = explain: nyra explain E0262
+
+nyra: 1 error(s)
+==== property_range_not_literal
+fn double(x: int) -> int = x * 2
+ex for n in 0..count: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0292]: the range of a property example is made of whole-number literals
+  --> case.nyra:2:16
+  |
+2 | ex for n in 0..count: double(n) >= 0
+  |                ^
+  = hint: write a property as `ex for n in 0..200: f(n) >= 0`: a variable, a range of whole-number literals (an optional `step k`), a colon and the conditions
+  = explain: nyra explain E0292
+
+nyra: 1 error(s)
+==== property_too_many_inputs
+fn double(x: int) -> int = x * 2
+ex for n in 0..1000000: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0293]: the property example `for n in 0..1000000` has 1000000 inputs; at most 100000 are run
+  --> case.nyra:2:4
+  |
+2 | ex for n in 0..1000000: double(n) >= 0
+  |    ^
+  = hint: use a smaller range, or a `step`, so the property finishes while the program compiles
+  = explain: nyra explain E0293
+
+nyra: 1 error(s)
+==== property_false_for_one_input
+fn double(x: int) -> int = x * 2 - 1
+ex for n in 0..200: double(n) >= 0
+
+fn main() {
+    print(double(4))
+}
+----
+error[E0250]: example `double(n) >= 0` is false for n = 0: `double(n)` is -1
+  --> case.nyra:2:21
+  |
+2 | ex for n in 0..200: double(n) >= 0
+  |                     ^
+  = hint: if the property is right, `double` is wrong for n = 0: trace it with that value and fix it; change the example only if it expects the wrong thing
+  = explain: nyra explain E0250
+
+nyra: 1 error(s)
+==== chk_ternary_types
+fn main() {
+    let x = 1 > 0 ? 1 : "no"
+}
+----
+error[E0212]: the branches of this conditional value (`if` or `? :`) have different types: `int` and `str`
+  --> case.nyra:2:19
+  |
+2 |     let x = 1 > 0 ? 1 : "no"
+  |                   ^
+  = hint: both branches must have the same type: change one so both are `int` (or both `str`)
+  = explain: nyra explain E0212
+
+nyra: 1 error(s)
+==== chk_inout_map_value
+fn bump(inout n: int) {
+    n += 1
+}
+fn main() {
+    var m = ["a": 1]
+    bump(inout m["a"])
+}
+----
+error[E0229]: cannot pass `inout` `m["a"]`: a value inside a map cannot be passed `inout`
+  --> case.nyra:6:10
+  |
+6 |     bump(inout m["a"])
+  |          ^
+  = hint: change a copy and store it back: `var v = m[k]`, `f(inout v)`, then `m[k] = v`
+  = explain: nyra explain E0229
+
+nyra: 1 error(s)
+==== par_ternary_missing_value
+fn main() {
+    let x = 1 > 0 ? : 2
+}
+----
+error[E0101]: expected an expression, found `:`
+  --> case.nyra:2:21
+  |
+2 |     let x = 1 > 0 ? : 2
+  |                     ^
+  = hint: an expression is a value such as `5`, `x + 1` or `f(x)`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== chk_script_main_variable
+var total = 0
+fn main() {
+    let local = 1
+    total += local
+}
+print(local)
+----
+error[E0201]: undefined variable `local`
+  --> case.nyra:6:7
+  |
+6 | print(local)
+  |       ^
+  = hint: declare it first: `let local = ...`
+  = explain: nyra explain E0201
 
 nyra: 1 error(s)

@@ -2,17 +2,15 @@
 // this example prints only facts that hold for every outcome.
 use random
 
-fn main() {
-    var ok = true
-    var distinct: [int] = []
-    for i in 0..1000 {
-        let r = random.range(-5, 1000000000)
-        let x = random.random()
-        ok = ok && r >= -5 && r < 1000000000 && x >= 0.0 && x < 1.0
-        if distinct.len() < 3 && !distinct.contains(r) {
-            distinct.push(r)
-        }
+var ok = true
+var distinct: [int] = []
+for i in 0..1000 {
+    let r = random.range(-5, 1000000000)
+    let x = random.random()
+    ok = ok && r >= -5 && r < 1000000000 && x >= 0.0 && x < 1.0
+    if distinct.len() < 3 && !distinct.contains(r) {
+        distinct.push(r)
     }
-    print("all in range: {ok}")
-    print("more than one value: {distinct.len() > 1}")
 }
+print("all in range: {ok}")
+print("more than one value: {distinct.len() > 1}")

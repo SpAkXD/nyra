@@ -4,7 +4,7 @@ fn sum(xs: [int]) -> int {
     for x in xs {
         total += x
     }
-    ret total
+    return total
 }
 
 fn squares(n: int) -> [int] {
@@ -12,62 +12,60 @@ fn squares(n: int) -> [int] {
     for i in 0..n {
         out.push(i * i)
     }
-    ret out
+    return out
 }
 
-fn main() {
-    let xs = [3, 1, 2]
-    print(xs)
-    print(xs.len())
-    print(xs[0] + xs[2])
-    print(sum(xs))
-    print(squares(5))
-    var ys = xs
-    ys.push(10)
-    print(xs)
-    print(ys)
-    ys[0] = 7
-    print(ys)
-    ys.sort()
-    print(ys)
-    ys.reverse()
-    print(ys)
-    print(ys.pop())
-    print(ys)
-    ys.insert(1, 99)
-    print(ys)
-    print(ys.remove(0))
-    print(ys)
-    print(xs + [4, 5])
-    print([1, 2] == [1, 2])
-    print([1, 2] != [2, 1])
-    print(xs.contains(2))
-    print(xs.index_of(2))
-    print(xs.index_of(9))
-    print(xs.slice(1, 3))
-    print([0].repeat(4))
-    var names: [str] = []
-    names.push("bo")
-    names.push("ann")
-    names += ["cy"]
-    names.sort()
-    print(names)
-    print(names.join(", "))
-    print("a-b-c".split("-"))
-    print("héllo".chars())
-    print("hi".codes())
-    print("abc".chars().join("."))
-    var grid = [[0].repeat(3)].repeat(2)
-    grid[1][2] = 5
-    print(grid)
-    print(grid[1])
-    let fl = [1.5, 2.0, -0.0]
-    print(fl)
-    print(['a', '\n'])
-    print(["quote\"d", "tab\t"])
-    print([true, false])
-    let empty: [int] = []
-    print(empty)
-    print("{xs} and {names}")
-    print(str(grid))
-}
+let xs = [3, 1, 2]
+print(xs)
+print(xs.len())
+print(xs[0] + xs[2])
+print(sum(xs))
+print(squares(5))
+var ys = xs
+ys.push(10)
+print(xs)
+print(ys)
+ys[0] = 7
+print(ys)
+ys.sort()
+print(ys)
+ys.reverse()
+print(ys)
+print(ys.pop())
+print(ys)
+ys.insert(1, 99)
+print(ys)
+print(ys.remove(0))
+print(ys)
+print(xs + [4, 5])
+print([1, 2] == [1, 2])
+print([1, 2] != [2, 1])
+print(xs.contains(2))
+print(xs.index_of(2))
+print(xs.index_of(9))
+print(xs.slice(1, 3))
+print([0].repeat(4))
+var names: [str] = []
+names.push("bo")
+names.push("ann")
+names += ["cy"]
+names.sort()
+print(names)
+print(names.join(", "))
+print("a-b-c".split("-"))
+print("héllo".chars())
+print("hi".codes())
+print("abc".chars().join("."))
+var grid = [[0].repeat(3)].repeat(2)
+grid[1][2] = 5
+print(grid)
+print(grid[1])
+let fl = [1.5, 2.0, -0.0]
+print(fl)
+print(['a', '\n'])
+print(["quote\"d", "tab\t"])
+print([true, false])
+let empty: [int] = []
+print(empty)
+print("{xs} and {names}")
+print(str(grid))

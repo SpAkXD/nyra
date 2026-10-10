@@ -1,0 +1,10 @@
+// expect: E0356 at 8:12
+// only: interp
+// flags: --interp --max-memory 16M
+fn main() {
+    print("start")
+    var xs: [int] = []
+    while true {
+        xs.push(1)
+    }
+}

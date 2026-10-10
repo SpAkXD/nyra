@@ -1,0 +1,50 @@
+use input
+
+let lines = input.lines()
+let head = lines[0].split(" ")
+let n = int(head[0])
+let m = int(head[1])
+var parent: [int] = []
+for i in 0..n + 1 {
+    parent.push(i)
+}
+
+fn find(inout p: [int], x: int) -> int {
+    var cur = x
+    while p[cur] != cur {
+        p[cur] = p[p[cur]]
+        cur = p[cur]
+    }
+    ret cur
+}
+
+for i in 0..m {
+    let ends = lines[1 + i].split(" ")
+    let ra = find(inout parent, int(ends[0]))
+    let rb = find(inout parent, int(ends[1]))
+    parent[ra] = rb
+}
+var size = [0].repeat(n + 1)
+var smallest = [0].repeat(n + 1)
+for node in 1..n + 1 {
+    let root = find(inout parent, node)
+    size[root] += 1
+    if smallest[root] == 0 { smallest[root] = node }
+}
+var roots: [int] = []
+for node in 1..n + 1 {
+    if size[node] > 0 { roots.push(node) }
+}
+// order by size (largest first), then by smallest node: encode as one key and sort ascending
+var keys: [int] = []
+for r in roots {
+    keys.push((100000 - size[r]) * 1000000 + smallest[r])
+}
+keys.sort()
+var sizes_text: [str] = []
+for k in keys {
+    sizes_text.push(str(100000 - k / 1000000))
+}
+print("components={roots.len()}")
+print("sizes: " + sizes_text.join(" "))
+print("largest contains node {keys[0] % 1000000}")

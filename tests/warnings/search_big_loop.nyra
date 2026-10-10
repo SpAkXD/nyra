@@ -1,0 +1,14 @@
+// expect: E0360 at 9:19
+fn main() {
+    var primes: [int] = []
+    for n in 2..200 {
+        primes.push(n)
+    }
+    var hits = 0
+    for i in 0..100000 {
+        if primes.contains(i % 300) {
+            hits += 1
+        }
+    }
+    print(hits)
+}

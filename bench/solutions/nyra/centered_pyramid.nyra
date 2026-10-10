@@ -1,16 +1,4 @@
-fn repeat(text: str, n: int) -> str {
-    var s = ""
-    for i in 0..n {
-        s = "{s}{text}"
-    }
-    ret s
-}
-
-fn main() {
-    let height = 5
-    let space = " "
-    let star = "*"
-    for k in 1..height + 1 {
-        print("{repeat(space, height - k)}{repeat(star, 2 * k - 1)}")
-    }
+let height = 5
+for k in 1..height + 1 {
+    print(" ".repeat(height - k) + "*".repeat(2 * k - 1))
 }

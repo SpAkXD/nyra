@@ -1,6 +1,6 @@
 [package]
 name = "nyra"
-version = "0.5.0-dev"
+version = "0.6.0"
 edition = "2021"
 description = "A compact, strictly-typed programming language designed to be written by AI agents. Compiles to C, JavaScript, Python, TypeScript, Rust and Go."
 license = "MIT"

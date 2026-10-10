@@ -252,10 +252,10 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let eq = if eqs.is_empty() { "True".to_string() } else { eqs.join(" and ") };
         let _ = writeln!(out, "\n    def __eq__(self, other) -> bool:\n        return {eq}");
-        let mut pieces = vec![Piece::Text(format!("{}(", s.name))];
+        let mut pieces = vec![Piece::Text(if s.tuple { "(".to_string() } else { format!("{}(", s.name) })];
         for (k, ((fname, t), f)) in s.fields.iter().zip(&fields).enumerate() {
             let sep = if k > 0 { ", " } else { "" };
-            pieces.push(Piece::Text(format!("{sep}{fname}: ")));
+            pieces.push(Piece::Text(if s.tuple { sep.to_string() } else { format!("{sep}{fname}: ") }));
             let value = match t {
                 Ty::Char | Ty::Str => format!("ny_show(self.{f}, '{}')", tdesc(*t)),
                 _ => shown_in_fstring(*t, &format!("self.{f}")),
@@ -263,7 +263,26 @@ fn classes(m: &Module, out: &mut String) {
             pieces.push(Piece::Value(value));
         }
         pieces.push(Piece::Text(")".into()));
-        let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return {}\n\n", fstring(&pieces));
+        if !s.variants.is_empty() {
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return [{}][self.{}]\n\n", names.join(", "), fields[0]);
+        } else if s.option {
+            // `none`, or `Some(value)`
+            let (has, val) = (&fields[0], &fields[1]);
+            let t = s.fields[1].1;
+            let value = match t {
+                Ty::Char | Ty::Str => format!("ny_show(self.{val}, '{}')", tdesc(t)),
+                _ => shown_in_fstring(t, &format!("self.{val}")),
+            };
+            let some = [Piece::Text("Some(".into()), Piece::Value(value), Piece::Text(")".into())];
+            let _ = writeln!(
+                out,
+                "\n    def __repr__(self) -> str:\n        if not self.{has}:\n            return \"none\"\n        return {}\n\n",
+                fstring(&some)
+            );
+        } else {
+            let _ = writeln!(out, "\n    def __repr__(self) -> str:\n        return {}\n\n", fstring(&pieces));
+        }
     }
 }
 
@@ -637,6 +656,20 @@ impl<'a> Gen<'a> {
         for (k, step) in p.path.iter().enumerate() {
             let last = k + 1 == n && !unique;
             match step {
+                Step::Key(key, span) => {
+                    // `m[k]`: the value under the key, unique (a missing key is E0248)
+                    let (kt, vt) = t.map_kv().expect("verified: a map");
+                    t = vt;
+                    let r = self.fresh("p");
+                    self.line(&format!(
+                        "{r} = ny_unique_key({lv}, {}, \"{}\", {}, {})",
+                        self.arg(key),
+                        tdesc(kt),
+                        span.line,
+                        span.col
+                    ));
+                    lv = r;
+                }
                 Step::Index(i, span) => {
                     t = t.elem().expect("verified: an array");
                     let key = format!("ny_ck({lv}, {}, {}, {})", self.arg(i), span.line, span.col);
@@ -668,6 +701,7 @@ impl<'a> Gen<'a> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
@@ -702,6 +736,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("NyList(map(ord, {}))", a[0]),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, True)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, False)", a[0], a[1], a[2]),

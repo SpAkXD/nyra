@@ -1,0 +1,227 @@
+// A small bank: reads commands from standard input, one per line. Amounts are written in dollars (`12`, `12.5`, `12.50`).
+//
+//     open NAME                    open an account with a zero balance
+//     deposit NAME AMOUNT          put money on an account
+//     withdraw NAME AMOUNT         take money out (never below zero)
+//     transfer FROM TO AMOUNT      move money between two accounts
+//     balance NAME                 show one balance
+//     statement NAME               list the transactions of one account
+//     summary                      all accounts and the total
+
+use input
+
+struct Account {
+    name: str
+    balance: int
+    history: [str]
+}
+
+struct Bank {
+    accounts: [Account]
+}
+
+fn money(cents: int) -> str {
+    var sign = ""
+    var c = cents
+    if c < 0 {
+        sign = "-"
+        c = 0 - c
+    }
+    ret "{sign}${c / 100}." + str(c % 100).pad_left(2, '0')
+}
+
+fn is_digits(s: str) -> bool = s.len() > 0 && s.all(c => c.is_digit())
+
+// an amount of money with at most two decimals, in cents, or -1
+fn parse_amount(text: str) -> int {
+    let parts = text.split(".")
+    if parts.len() > 2 || !is_digits(parts[0]) || parts[0].len() > 9 { ret -1 }
+    var cents = 0
+    if parts.len() == 2 {
+        if parts[1].len() < 1 || parts[1].len() > 2 || !is_digits(parts[1]) { ret -1 }
+        cents = int(parts[1])
+        if parts[1].len() == 1 { cents = cents * 10 }
+    }
+    ret int(parts[0]) * 100 + cents
+}
+
+fn find_account(bank: Bank, name: str) -> int {
+    for i in 0..bank.accounts.len() {
+        if bank.accounts[i].name == name { ret i }
+    }
+    ret -1
+}
+
+fn cmd_open(inout bank: Bank, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: open NAME")
+        ret
+    }
+    if find_account(bank, args[1]) >= 0 {
+        print("error: {args[1]} already exists")
+        ret
+    }
+    bank.accounts.push(Account(name: args[1], balance: 0, history: []))
+    print("opened {args[1]}")
+}
+
+fn cmd_deposit(inout bank: Bank, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: deposit NAME AMOUNT")
+        ret
+    }
+    let amount = parse_amount(args[2])
+    if amount <= 0 {
+        print("error: bad amount")
+        ret
+    }
+    let at = find_account(bank, args[1])
+    if at < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    bank.accounts[at].balance += amount
+    bank.accounts[at].history.push("deposit +{money(amount)}")
+    print("deposited {money(amount)} to {args[1]}, balance {money(bank.accounts[at].balance)}")
+}
+
+fn cmd_withdraw(inout bank: Bank, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: withdraw NAME AMOUNT")
+        ret
+    }
+    let amount = parse_amount(args[2])
+    if amount <= 0 {
+        print("error: bad amount")
+        ret
+    }
+    let at = find_account(bank, args[1])
+    if at < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    if bank.accounts[at].balance < amount {
+        print("error: insufficient funds in {args[1]} (balance {money(bank.accounts[at].balance)})")
+        ret
+    }
+    bank.accounts[at].balance -= amount
+    bank.accounts[at].history.push("withdraw -{money(amount)}")
+    print("withdrew {money(amount)} from {args[1]}, balance {money(bank.accounts[at].balance)}")
+}
+
+fn cmd_transfer(inout bank: Bank, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: transfer FROM TO AMOUNT")
+        ret
+    }
+    let amount = parse_amount(args[3])
+    if amount <= 0 {
+        print("error: bad amount")
+        ret
+    }
+    let source = find_account(bank, args[1])
+    let target = find_account(bank, args[2])
+    if source < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    if target < 0 {
+        print("error: unknown account {args[2]}")
+        ret
+    }
+    if source == target {
+        print("error: cannot transfer to the same account")
+        ret
+    }
+    if bank.accounts[source].balance < amount {
+        print("error: insufficient funds in {args[1]} (balance {money(bank.accounts[source].balance)})")
+        ret
+    }
+    bank.accounts[source].balance -= amount
+    bank.accounts[target].balance += amount
+    bank.accounts[source].history.push("transfer to {args[2]} -{money(amount)}")
+    bank.accounts[target].history.push("transfer from {args[1]} +{money(amount)}")
+    print("transferred {money(amount)} from {args[1]} to {args[2]}")
+}
+
+fn cmd_balance(bank: Bank, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: balance NAME")
+        ret
+    }
+    let at = find_account(bank, args[1])
+    if at < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    print("{args[1]}: {money(bank.accounts[at].balance)}")
+}
+
+fn cmd_statement(bank: Bank, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: statement NAME")
+        ret
+    }
+    let at = find_account(bank, args[1])
+    if at < 0 {
+        print("error: unknown account {args[1]}")
+        ret
+    }
+    let account = bank.accounts[at]
+    print("{account.name} statement:")
+    if account.history.len() == 0 {
+        print("  (no transactions)")
+    }
+    for i, entry in account.history {
+        print("  {i + 1}. {entry}")
+    }
+    print("  balance {money(account.balance)}")
+}
+
+fn cmd_summary(bank: Bank, args: [str]) {
+    if bank.accounts.len() == 0 {
+        print("no accounts")
+        ret
+    }
+    var total = 0
+    var sorted = bank.accounts
+    sorted.sort_by(a => a.name)
+    for account in sorted {
+        total += account.balance
+        print("{account.name} {money(account.balance)}")
+    }
+    print("accounts={bank.accounts.len()} total={money(total)}")
+}
+
+fn execute(inout bank: Bank, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "open" {
+        cmd_open(inout bank, args)
+    } else if command == "deposit" {
+        cmd_deposit(inout bank, args)
+    } else if command == "withdraw" {
+        cmd_withdraw(inout bank, args)
+    } else if command == "transfer" {
+        cmd_transfer(inout bank, args)
+    } else if command == "balance" {
+        cmd_balance(bank, args)
+    } else if command == "statement" {
+        cmd_statement(bank, args)
+    } else if command == "summary" {
+        cmd_summary(bank, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var bank = Bank(accounts: [])
+    for line in input.lines() {
+        execute(inout bank, line)
+    }
+}

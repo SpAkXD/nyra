@@ -1,7 +1,1 @@
-fn main() {
-    var total = 0
-    for n in 1..1000 {
-        if n % 4 == 0 || n % 7 == 0 { total = total + n }
-    }
-    print(total)
-}
+print([n for n in 1..1000 if n % 4 == 0 || n % 7 == 0].sum())

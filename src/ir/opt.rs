@@ -12,6 +12,8 @@
 //!   is pure and finishes within a step budget (`eval::Calls`); its result replaces the call.
 //! - `branches`: an `if` or loop with a constant condition keeps only what can run.
 //! - `dead`: statements after `return`, and empty `if`s (conditions are pure).
+//! - `append_in_place`: `s = s + x` (and `xs = xs + ys`) becomes `s += x`, which appends in place
+//!   with amortized growth while `s` has no other owner, instead of copying `s` every time.
 //! - reference counting: earlier releases and fewer `dup`/`drop` pairs (see below).
 //! - `unused_fns`: functions that `main` can never reach.
 
@@ -39,6 +41,7 @@ pub fn optimize(m: &mut Module) {
     for f in &mut m.funcs {
         let temp: Vec<bool> = f.locals.iter().map(|l| l.name.is_none()).collect();
         let managed: Vec<bool> = f.locals.iter().map(|l| m.structs.managed(l.ty)).collect();
+        append_in_place(&mut f.body, &temp);
         early_drops(&mut f.body, &temp);
         dup_drop_pairs(&mut f.body, &managed);
     }
@@ -81,7 +84,7 @@ fn stmt_locals(s: &Stmt, f: &mut dyn FnMut(LocalId)) {
     fn place(p: &Place, f: &mut dyn FnMut(LocalId)) {
         f(p.root);
         for s in &p.path {
-            if let Step::Index(i, _) = s {
+            if let Step::Index(i, _) | Step::Key(i, _) = s {
                 expr(i, f);
             }
         }
@@ -136,6 +139,117 @@ fn stmt_mentions(s: &Stmt, l: LocalId) -> bool {
     let mut found = false;
     stmt_locals(s, &mut |x| found |= x == l);
     found
+}
+
+fn expr_mentions(e: &Expr, l: LocalId) -> bool {
+    match e {
+        Expr::Local(x) => *x == l,
+        Expr::Unary(_, x) | Expr::IntToFloat(x) | Expr::Field(x, _, _) => expr_mentions(x, l),
+        Expr::Binary(_, a, b) => expr_mentions(a, l) || expr_mentions(b, l),
+        Expr::Select(c, a, b) => expr_mentions(c, l) || expr_mentions(a, l) || expr_mentions(b, l),
+        Expr::Pure(_, args) => args.iter().any(|a| expr_mentions(a, l)),
+        Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Str(_) => false,
+    }
+}
+
+// ---- `s = s + x` ------------------------------------------------------------------------------
+//
+// Lowering turns `s = s + a + b` into `t1 = concat(s, a); t2 = concat(t1, b); drop s; s = t2; drop t1`:
+// two copies of the whole string per round, so a loop that builds a string this way is quadratic.
+// `s += a; s += b` appends in place (amortized growth) whenever `s` has no other owner, and it
+// means the same: nothing between the first concat and the final assignment may read or change
+// `s` or the partial results (statements in between only compute other temporaries, and none of
+// them mentions `s`; a call can only see `s` if it is passed to it, which counts as a mention).
+
+/// `xs = xs + ys` and `s = s + t` in a block (nested blocks too) become appends.
+fn append_in_place(ss: &mut Vec<Stmt>, temp: &[bool]) {
+    for s in ss.iter_mut() {
+        for b in blocks_mut(s) {
+            append_in_place(b, temp);
+        }
+    }
+    let mut i = 0;
+    while i < ss.len() {
+        if let Some((root, op, appends, gone)) = concat_chain(ss, i, temp) {
+            for (k, x) in appends {
+                ss[k].kind = StmtKind::Mutate { dst: None, op, place: Place::local(root), args: vec![x] };
+            }
+            for k in gone.into_iter().rev() {
+                ss.remove(k);
+            }
+        }
+        i += 1;
+    }
+}
+
+/// If the statement `i` starts `s = s + a + b ...` (see above): the variable `s`, the append
+/// operation, the operand of each concat (and the statement it is at) and the statements to remove.
+#[allow(clippy::type_complexity)]
+fn concat_chain(ss: &[Stmt], i: usize, temp: &[bool]) -> Option<(LocalId, RtOp, Vec<(usize, Expr)>, Vec<usize>)> {
+    let StmtKind::Op { dst: Some(first), op: cat @ (RtOp::StrConcat | RtOp::ArrConcat), args } = &ss[i].kind else { return None };
+    let append = if *cat == RtOp::StrConcat { RtOp::StrAppend } else { RtOp::ArrAppend };
+    let [Expr::Local(root), x] = args.as_slice() else { return None };
+    let root = *root;
+    if temp[root.0 as usize] || !temp[first.0 as usize] || expr_mentions(x, root) {
+        return None;
+    }
+    let mut chain = vec![*first];
+    let mut appends = vec![(i, x.clone())];
+    let mut gone = Vec::new();
+    let mut dropped = 0;
+    let mut k = i + 1;
+    while k < ss.len() {
+        let last = *chain.last()?;
+        match &ss[k].kind {
+            // the end: `drop s; s = last`
+            StmtKind::Drop(d) if *d == root => {
+                let StmtKind::Set(t, Expr::Local(l)) = &ss.get(k + 1)?.kind else { return None };
+                if *t != root || *l != last {
+                    return None;
+                }
+                gone.extend([k, k + 1]);
+                // the partial results are released after the assignment (with other temporaries)
+                let mut m = k + 2;
+                while let Some(StmtKind::Drop(d)) = ss.get(m).map(|s| &s.kind) {
+                    if chain[..chain.len() - 1].contains(d) {
+                        gone.push(m);
+                        dropped += 1;
+                    }
+                    m += 1;
+                }
+                if dropped + 1 != chain.len() {
+                    return None;
+                }
+                gone.sort_unstable();
+                return Some((root, append, appends, gone));
+            }
+            // an earlier partial result is released once (the next concat has used it)
+            StmtKind::Drop(d) if chain[..chain.len() - 1].contains(d) => {
+                gone.push(k);
+                dropped += 1;
+            }
+            StmtKind::Op { dst: Some(b), op, args }
+                if op == cat && temp[b.0 as usize] && matches!(&args[..], [Expr::Local(l), _] if *l == last) =>
+            {
+                let y = &args[1];
+                if expr_mentions(y, root) || chain.iter().any(|c| expr_mentions(y, *c)) || chain.contains(b) {
+                    return None;
+                }
+                chain.push(*b);
+                appends.push((k, y.clone()));
+            }
+            // other work on temporaries that has nothing to do with `s` or the partial results
+            StmtKind::Set(d, _) | StmtKind::Op { dst: Some(d), .. } | StmtKind::Dup(d) | StmtKind::Drop(d)
+                if temp[d.0 as usize] && !stmt_mentions(&ss[k], root) && !chain.iter().any(|c| stmt_mentions(&ss[k], *c)) => {}
+            StmtKind::Call { dst, .. }
+                if dst.is_none_or(|d| temp[d.0 as usize])
+                    && !stmt_mentions(&ss[k], root)
+                    && !chain.iter().any(|c| stmt_mentions(&ss[k], *c)) => {}
+            _ => return None,
+        }
+        k += 1;
+    }
+    None
 }
 
 /// The blocks nested in a statement.
@@ -437,7 +551,7 @@ fn fold_op(op: RtOp, args: &[Expr], dst: Option<LocalId>, strs: &mut Interner) -
 fn exprs_mut(ss: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
     fn place(p: &mut Place, f: &mut dyn FnMut(&mut Expr)) {
         for s in &mut p.path {
-            if let Step::Index(i, _) = s {
+            if let Step::Index(i, _) | Step::Key(i, _) = s {
                 f(i);
             }
         }
@@ -684,7 +798,7 @@ fn text_parts(parts: &mut Vec<Expr>, strs: &mut Interner) {
 
 fn fold_place(p: &mut Place, strs: &mut Interner) {
     for s in &mut p.path {
-        if let Step::Index(i, _) = s {
+        if let Step::Index(i, _) | Step::Key(i, _) = s {
             fold(i, strs);
         }
     }

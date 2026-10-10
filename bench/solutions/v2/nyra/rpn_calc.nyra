@@ -1,0 +1,45 @@
+use input
+use text
+
+for raw in input.lines() {
+    var stack: [int] = []
+    var error = ""
+    var seen = 0
+    for token in raw.split(" ") {
+        if token == "" { continue }
+        seen += 1
+        if text.is_int(token) {
+            stack.push(int(token))
+        } else if token == "+" || token == "-" || token == "*" || token == "/" {
+            if stack.len() < 2 {
+                error = "stack underflow"
+                break
+            }
+            let b = stack.pop()
+            let a = stack.pop()
+            if token == "+" {
+                stack.push(a + b)
+            } else if token == "-" {
+                stack.push(a - b)
+            } else if token == "*" {
+                stack.push(a * b)
+            } else {
+                if b == 0 {
+                    error = "division by zero"
+                    break
+                }
+                stack.push(a / b)
+            }
+        } else {
+            error = "bad token {token}"
+            break
+        }
+    }
+    if seen == 0 { continue }
+    if error == "" && stack.len() != 1 { error = "leftover values" }
+    if error != "" {
+        print("error: {error}")
+    } else {
+        print(stack[0])
+    }
+}

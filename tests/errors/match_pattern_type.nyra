@@ -1,0 +1,8 @@
+// expect: E0279
+fn main() {
+    let n = 3
+    match n {
+        "three" => print("three")
+        _ => print("other")
+    }
+}

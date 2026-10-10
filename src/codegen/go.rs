@@ -222,10 +222,39 @@ fn structs(m: &Module, out: &mut String) {
             let _ = writeln!(out, "func (v {n}) nyEq(o any) bool {{\n\tw := o.({n})\n\treturn {}\n}}\n", eqs.join(" && "));
         }
         let _ = writeln!(out, "func (v {n}) nyShowIn(b *strings.Builder) {{");
-        let _ = writeln!(out, "\tb.WriteString({})", lit(&format!("{}(", s.name)));
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "\tb.WriteString([]string{{{}}}[v.{}])\n}}\n", names.join(", "), name(&s.fields[0].0));
+            continue;
+        }
+        if s.option {
+            // `none`, or `Some(value)`
+            let _ = writeln!(out, "\tif !v.{} {{\n\t\tb.WriteString(\"none\")\n\t\treturn\n\t}}", name(&s.fields[0].0));
+        }
+        let head = if s.tuple {
+            "(".to_string()
+        } else if s.option {
+            "Some(".to_string()
+        } else {
+            format!("{}(", s.name)
+        };
+        let _ = writeln!(out, "\tb.WriteString({})", lit(&head));
         for (k, (f, _)) in s.fields.iter().enumerate() {
-            let label = format!("{}{f}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "\tb.WriteString({})", lit(&label));
+            if s.option && k == 0 {
+                continue;
+            }
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple {
+                sep.to_string()
+            } else if s.option {
+                String::new()
+            } else {
+                format!("{sep}{f}: ")
+            };
+            if !label.is_empty() {
+                let _ = writeln!(out, "\tb.WriteString({})", lit(&label));
+            }
             let _ = writeln!(out, "\tnyShowAny(b, v.{})", name(f));
         }
         out.push_str("\tb.WriteByte(')')\n}\n\n");
@@ -585,12 +614,29 @@ impl<'a> Gen<'a> {
         let n = p.path.len();
         if t.elem().is_some() && (n > 0 || unique) {
             self.line(&format!("{lv} = nyUnique({lv})"));
-        } else if t.map_kv().is_some() && n == 0 && unique {
+        } else if t.map_kv().is_some() && (n > 0 || unique) {
             self.line(&format!("{lv} = nyMUnique({lv})"));
         }
         for (k, step) in p.path.iter().enumerate() {
             let last = k + 1 == n;
             match step {
+                Step::Key(key, span) => {
+                    // `m[k]`: a pointer to the value under the key (E0248 when it is missing)
+                    t = t.map_kv().expect("verified: a map").1;
+                    let array = t.elem().is_some();
+                    let map = t.map_kv().is_some();
+                    let ptr = self.fresh("p");
+                    self.line(&format!("{ptr} := nyMSlot({lv}, {}, {}, {})", self.arg(key), span.line, span.col));
+                    if last && !(unique && (array || map)) {
+                        return format!("(*{ptr})");
+                    }
+                    if array {
+                        self.line(&format!("*{ptr} = nyUnique(*{ptr})"));
+                    } else if map {
+                        self.line(&format!("*{ptr} = nyMUnique(*{ptr})"));
+                    }
+                    lv = format!("(*{ptr})");
+                }
                 Step::Index(i, span) => {
                     t = t.elem().expect("verified: an array");
                     let elem = format!("{lv}.items[nyCheck({lv}, {}, {}, {})]", self.arg(i), span.line, span.col);
@@ -629,6 +675,7 @@ impl<'a> Gen<'a> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
@@ -657,6 +704,7 @@ impl<'a> Gen<'a> {
             RtOp::RemInt => format!("nyRem({}, {}, {at})", a[0], a[1]),
             RtOp::FloatToInt => format!("nyF2I({}, {at})", a[0]),
             RtOp::CheckStep => format!("nyCheckStep({}, {at})", a[0]),
+            RtOp::CheckSome => format!("nyCheckSome({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("nyCheckNonEmpty({}, {}, {at})", a[0], a[1]),
             RtOp::StrConcat => format!("{} + {}", self.expr(&args[0]), self.expr(&args[1])),
             RtOp::StrAt => format!("nyCharAt({}, {}, {at})", a[0], a[1]),

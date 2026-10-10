@@ -1,0 +1,55 @@
+{
+  "id": "payroll",
+  "title": "Rename and add overtime pay in a payroll program",
+  "category": "edit",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Two changes to the payroll program.\n\n1. Rename. The function `gross_pay` becomes `pay_before_tax`, and the field `rate` of the employee record becomes `hourly_rate`. The old names must not remain anywhere in the program (every use of them is renamed too).\n2. Overtime. Hours above 40 in a pay period are paid at one and a half times the wage: the pay before tax is `hourly_rate * min(hours, 40)` plus `hourly_rate * (hours - 40) * 3 / 2` for the hours above 40 (whole numbers, the division by 2 discards the remainder, and the multiplication comes first). This changes every place that shows or adds up pay, such as pay slips, the payroll total, the top earner and the budget check.\n\nEverything else must behave as it does now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "hire ann 1000\nhours ann 40\nslip ann\nhours ann 5\nslip ann\npayroll\nbudget 50000\n",
+      "expected_output": "hired ann at $10.00/h\nann worked 40 hours (total 40)\nann: 40 hours at $10.00/h = $400.00\nann worked 5 hours (total 45)\nann: 45 hours at $10.00/h = $475.00\nann: 45 hours at $10.00/h = $475.00\ntotal payroll $475.00\ntop earner: ann ($475.00)\nwithin budget, $25.00 left\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "hire bob 1999\nhours bob 41\nslip bob\nhours bob 39\nslip bob\nraise bob 10\nslip bob\n",
+      "expected_output": "hired bob at $19.99/h\nbob worked 41 hours (total 41)\nbob: 41 hours at $19.99/h = $829.58\nbob worked 39 hours (total 80)\nbob: 80 hours at $19.99/h = $1999.00\nbob now earns $21.98/h\nbob: 80 hours at $21.98/h = $2198.00\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "hire c 1000\nhire d 1001\nhours c 168\nhours d 40\npayroll\nbudget 200000\nbudget 10\nreset\npayroll\n",
+      "expected_output": "hired c at $10.00/h\nhired d at $10.01/h\nc worked 168 hours (total 168)\nd worked 40 hours (total 40)\nc: 168 hours at $10.00/h = $2320.00\nd: 40 hours at $10.01/h = $400.40\ntotal payroll $2720.40\ntop earner: c ($2320.00)\nover budget by $720.40\nover budget by $2720.30\nnew pay period\nc: 0 hours at $10.00/h = $0.00\nd: 0 hours at $10.01/h = $0.00\ntotal payroll $0.00\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "payroll\nhire e 333\nhours e 45\nhire f 7\nhours f 100\nhours f 100\npayroll\nfire e\npayroll\nbudget x\nfire e\n",
+      "expected_output": "nobody works here\nhired e at $3.33/h\ne worked 45 hours (total 45)\nhired f at $0.07/h\nf worked 100 hours (total 100)\nf worked 100 hours (total 200)\ne: 45 hours at $3.33/h = $158.17\nf: 200 hours at $0.07/h = $19.60\ntotal payroll $177.77\ntop earner: e ($158.17)\nfired e\nf: 200 hours at $0.07/h = $19.60\ntotal payroll $19.60\ntop earner: f ($19.60)\nerror: bad budget\nerror: unknown person e\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "hire g 1\nhours g 41\nslip g\nhours g 1\nslip g\nhours g 0\nhours g 169\nraise g 50\nslip g\nbogus\nhire g 5\n",
+      "expected_output": "hired g at $0.01/h\ng worked 41 hours (total 41)\ng: 41 hours at $0.01/h = $0.41\ng worked 1 hours (total 42)\ng: 42 hours at $0.01/h = $0.43\nerror: bad hours\nerror: bad hours\ng now earns $0.01/h\ng: 42 hours at $0.01/h = $0.43\nerror: unknown command bogus\nerror: g already works here\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "hire ann 1000\nhire bob 2500\nhire ann 3\nhours ann 12\nhours bob 40\nhours zed 1\nraise ann 15\nslip ann\nslip bob\npayroll\nbudget 100000\nbudget 1000\nreset\npayroll\nfire bob\nfire bob\nbogus\n",
+      "expected_output": "hired ann at $10.00/h\nhired bob at $25.00/h\nerror: ann already works here\nann worked 12 hours (total 12)\nbob worked 40 hours (total 40)\nerror: unknown person zed\nann now earns $11.50/h\nann: 12 hours at $11.50/h = $138.00\nbob: 40 hours at $25.00/h = $1000.00\nann: 12 hours at $11.50/h = $138.00\nbob: 40 hours at $25.00/h = $1000.00\ntotal payroll $1138.00\ntop earner: bob ($1000.00)\nover budget by $138.00\nover budget by $1128.00\nnew pay period\nann: 0 hours at $11.50/h = $0.00\nbob: 0 hours at $25.00/h = $0.00\ntotal payroll $0.00\nfired bob\nerror: unknown person bob\nerror: unknown command bogus\n"
+    },
+    {
+      "stdin": "payroll\nhire x 0\nhire x 100\nhours x 169\nhours x 168\nslip x\nraise x 0\nraise x 1\nbudget 12\nslip\n",
+      "expected_output": "nobody works here\nerror: bad wage\nhired x at $1.00/h\nerror: bad hours\nx worked 168 hours (total 168)\nx: 168 hours at $1.00/h = $168.00\nerror: bad percentage\nx now earns $1.01/h\nover budget by $169.56\nerror: usage: slip NAME\n"
+    }
+  ],
+  "must_contain": [
+    "pay_before_tax",
+    "hourly_rate"
+  ],
+  "must_not_match": [
+    "gross_pay",
+    "\\brate\\b"
+  ]
+}

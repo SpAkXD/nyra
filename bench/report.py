@@ -23,8 +23,10 @@ from typing import Optional
 
 FAILURE_KINDS = ("no_code", "compile_error", "toolchain_error", "runtime_error", "timeout", "output_limit",
                  "wrong_output")
-DISPLAY = {"nyra": "Nyra", "python": "Python", "typescript": "TypeScript", "rust": "Rust"}
+DISPLAY = {"nyra": "Nyra", "python": "Python", "typescript": "TypeScript", "rust": "Rust",
+           "nyra-edit": "Nyra (symbol edit)", "python-rewrite": "Python (rewrite)", "python-diff": "Python (diff)"}
 LANG_ORDER = ("nyra", "python", "typescript", "rust")  # the languages, in table-column order (run.py uses it too)
+ARM_ORDER = ("nyra-edit", "python-rewrite", "python-diff")  # the arms of the edit tier (bench/edit_arms.py)
 SPEED_CATEGORY = "speed"  # the tasks whose runtime is summarized (the others finish in well under a millisecond)
 EFFICIENCY_REFERENCE = "python"  # the language the efficiency view is relative to (when it was run)
 RUNTIME_FLOOR_MS = 1.0  # a median runtime below this counts as this much in a ratio: start-up varies by more
@@ -37,7 +39,8 @@ def display(lang: str) -> str:
 def ordered_langs(langs) -> list:
     """Known languages in the standard column order, then any others alphabetically."""
     langs = set(langs)
-    return [lang for lang in LANG_ORDER if lang in langs] + sorted(langs - set(LANG_ORDER))
+    known = LANG_ORDER + ARM_ORDER
+    return [lang for lang in known if lang in langs] + sorted(langs - set(known))
 
 
 # ---------------------------------------------------------------------------- statistics
@@ -145,6 +148,14 @@ def _reply_tokens(attempt: dict) -> Optional[int]:
     return out - thinking if out is not None and thinking is not None else None
 
 
+def _cache_cell(stats: dict) -> str:
+    read, written = stats.get("total_cache_read_tokens") or 0, stats.get("total_cache_creation_tokens") or 0
+    total = stats.get("total_input_tokens") or 0
+    if not (read or written):
+        return "-"
+    return f"{read:,} / {written:,} ({read / total:.0%})" if total else f"{read:,} / {written:,}"
+
+
 def _lang_stats(recs: list, categories: Optional[dict] = None) -> dict:
     n = len(recs)
     first = [r["attempts"][0] for r in recs if r["attempts"]]
@@ -196,6 +207,8 @@ def _lang_stats(recs: list, categories: Optional[dict] = None) -> dict:
         "avg_lines_first_attempt": mean(a.get("lines") for a in first),
         "total_input_tokens": sum(_usage(a, "input_tokens") or 0 for a in every),
         "total_output_tokens": sum(_usage(a, "output_tokens") or 0 for a in every),
+        "total_cache_read_tokens": sum(_usage(a, "cache_read_input_tokens") or 0 for a in every),
+        "total_cache_creation_tokens": sum(_usage(a, "cache_creation_input_tokens") or 0 for a in every),
         "total_cost_usd": total_cost,
         "avg_cost_per_run_usd": total_cost / n if total_cost is not None and n else None,
         "attempts_total": len(every),
@@ -474,6 +487,8 @@ def headline_rows(stats: dict, langs: list, repairs: int, full: bool = True) -> 
         rows.append(row("Input tokens per attempt", lambda s: _num(s["avg_input_tokens_per_attempt"])))
     rows += [row("Characters, first attempt", lambda s: _num(s["avg_chars_first_attempt"])),
              row("Non-blank lines, first attempt", lambda s: _num(s["avg_lines_first_attempt"], 1))]
+    if any(stats[lang].get("total_cache_read_tokens") or stats[lang].get("total_cache_creation_tokens") for lang in langs):
+        rows.append(row("Prompt cache: tokens read / written (share of all input)", lambda s: _cache_cell(s)))
     if any(stats[lang]["total_cost_usd"] is not None for lang in langs):
         rows.append(row("Cost per run (as billed)", lambda s: _usd(s["avg_cost_per_run_usd"])))
     return rows
@@ -531,7 +546,7 @@ def render_markdown(results: dict, tasks_by_id: dict) -> str:
         lines += _render_paired(paired, langs, names, summary["runs"])
 
     # ---- medians and the efficiency view
-    if summary.get("efficiency"):
+    if summary.get("efficiency") and run.get("tier") not in ("v2", "edit"):  # those tiers have no speed tasks
         lines += render_efficiency(summary["efficiency"], langs, timing=run.get("timing"))
 
     # ---- how first attempts failed

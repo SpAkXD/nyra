@@ -1,23 +1,21 @@
 // left to right: every operand sees the program as it is at its turn
 fn show(a: [int], b: int) -> str = "{a}/{b}"
 
-fn main() {
-    var xs = [1, 2, 3]
-    print(xs.len() + xs.pop())
-    print([xs.len(), xs.pop(), xs.len()])
-    var ys = [10, 20]
-    print("{ys} {ys.pop()} {ys}")
-    var ws = [4, 5]
-    print(show(ws, ws.pop()))
-    print(ws)
-    var zs = [5, 6, 7]
-    zs[0] = zs.pop()
-    print(zs)
-    var vs = [1, 2]
-    vs[0] += vs.pop()
-    print(vs)
-    let a = "x"
-    let b = "y"
-    let joined = "{a}{b}"
-    print(joined)
-}
+var xs = [1, 2, 3]
+print(xs.len() + xs.pop())
+print([xs.len(), xs.pop(), xs.len()])
+var ys = [10, 20]
+print("{ys} {ys.pop()} {ys}")
+var ws = [4, 5]
+print(show(ws, ws.pop()))
+print(ws)
+var zs = [5, 6, 7]
+zs[0] = zs.pop()
+print(zs)
+var vs = [1, 2]
+vs[0] += vs.pop()
+print(vs)
+let a = "x"
+let b = "y"
+let joined = "{a}{b}"
+print(joined)

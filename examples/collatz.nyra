@@ -6,22 +6,20 @@ fn steps(n: int) -> int {
         if x % 2 == 0 { x = x / 2 } else { x = 3 * x + 1 }
         count = count + 1
     }
-    ret count
+    return count
 }
 
-fn main() {
-    print(steps(27))
+print(steps(27))
 
-    // which start below 1000 takes the most steps?
-    var best = 1
-    var best_steps = 0
-    for n in 1..1000 {
-        let s = steps(n)
-        if s > best_steps {
-            best = n
-            best_steps = s
-        }
+// which start below 1000 takes the most steps?
+var best = 1
+var best_steps = 0
+for n in 1..1000 {
+    let s = steps(n)
+    if s > best_steps {
+        best = n
+        best_steps = s
     }
-    print(best)
-    print(best_steps)
 }
+print(best)
+print(best_steps)

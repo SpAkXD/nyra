@@ -1,0 +1,47 @@
+{
+  "id": "grade_book",
+  "title": "Drop the lowest score and stricter letter grades",
+  "category": "edit",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "edit",
+  "prompt": "Change two rules of the grade book.\n\n1. Dropping the lowest score. A student who has 4 or more recorded scores has the single lowest one dropped: it does not count anywhere (average, number of scores, letter grade, per-course averages, ranking and report all use only the scores that count). If several scores are equally low, the one recorded first is dropped. A student with fewer than 4 scores loses nothing. The drop is recomputed from all the recorded scores every time (a fifth score may change which one is dropped). The `(N scores)` and `(N)` counts show the number of scores that count.\n2. Stricter letter grades. A is an average of 92 or more, B 84 or more, C 74 or more, D 62 or more, F anything lower (it used to be 90, 80, 70 and 60). As before the letter is decided from the exact average, not from the rounded one printed.\n\nEverything else must behave as it does now.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "student ann\nscore ann math 90\nscore ann art 100\nscore ann math 50\naverage ann\nscore ann bio 80\naverage ann\ngrade ann\ncourses ann\nreport\n",
+      "expected_output": "registered ann\nrecorded 90 for ann in math\nrecorded 100 for ann in art\nrecorded 50 for ann in math\nann: 80.0 (3 scores)\nrecorded 80 for ann in bio\nann: 90.0 (3 scores)\nann: B\nann courses:\n  art: 100.0 (1)\n  bio: 80.0 (1)\n  math: 90.0 (1)\nann 90.0 B (3)\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "student zoe\nscore zoe a 92\ngrade zoe\nscore zoe a 91\ngrade zoe\nscore zoe b 84\ngrade zoe\nscore zoe b 100\naverage zoe\ngrade zoe\nranking\n",
+      "expected_output": "registered zoe\nrecorded 92 for zoe in a\nzoe: A\nrecorded 91 for zoe in a\nzoe: B\nrecorded 84 for zoe in b\nzoe: B\nrecorded 100 for zoe in b\nzoe: 94.3 (3 scores)\nzoe: A\n1. zoe 94.3 A\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "student x\nstudent y\nscore x m 70\nscore x m 70\nscore x m 70\nscore x m 70\nscore y m 50\nscore y m 100\nscore y m 100\nscore y m 100\nscore y m 10\ncourses y\ncourses x\nranking\nreport\n",
+      "expected_output": "registered x\nregistered y\nrecorded 70 for x in m\nrecorded 70 for x in m\nrecorded 70 for x in m\nrecorded 70 for x in m\nrecorded 50 for y in m\nrecorded 100 for y in m\nrecorded 100 for y in m\nrecorded 100 for y in m\nrecorded 10 for y in m\ny courses:\n  m: 87.5 (4)\nx courses:\n  m: 70.0 (3)\n1. y 87.5 B\n2. x 70.0 D\nx 70.0 D (3)\ny 87.5 B (4)\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "student q\nscore q a 0\nscore q b 0\nscore q c 0\nscore q d 0\naverage q\ngrade q\ncourses q\nscore q e 61\ngrade q\nscore q e 62\nscore nobody a 5\nscore q a 101\nscore q a x\nreport\n",
+      "expected_output": "registered q\nrecorded 0 for q in a\nrecorded 0 for q in b\nrecorded 0 for q in c\nrecorded 0 for q in d\nq: 0.0 (3 scores)\nq: F\nq courses:\n  b: 0.0 (1)\n  c: 0.0 (1)\n  d: 0.0 (1)\nrecorded 61 for q in e\nq: F\nrecorded 62 for q in e\nerror: unknown student nobody\nerror: bad points\nerror: bad points\nq 24.6 F (5)\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "report\nranking\nstudent m\nstudent n\nstudent o\nscore n k 74\nscore n k 73\nscore n j 75\nscore n j 75\nscore m k 84\nscore o k 83\nscore o k 85\nranking\nreport\n",
+      "expected_output": "no students\nno ranking yet\nregistered m\nregistered n\nregistered o\nrecorded 74 for n in k\nrecorded 73 for n in k\nrecorded 75 for n in j\nrecorded 75 for n in j\nrecorded 84 for m in k\nrecorded 83 for o in k\nrecorded 85 for o in k\n1. m 84.0 B\n2. o 84.0 B\n3. n 74.7 C\nm 84.0 B (1)\nn 74.7 C (3)\no 84.0 B (2)\n"
+    }
+  ],
+  "base_check": [
+    {
+      "stdin": "student ann\nstudent bob\nstudent ann\nscore ann math 90\nscore ann art 100\nscore ann math 50\nscore bob math 95\nscore bob math 96\nscore bob art 97\nscore carl x 5\nscore ann math 101\nscore ann math 5x\naverage ann\ngrade ann\ncourses ann\ncourses bob\nranking\nreport\naverage carl\nbogus\n",
+      "expected_output": "registered ann\nregistered bob\nerror: ann is already registered\nrecorded 90 for ann in math\nrecorded 100 for ann in art\nrecorded 50 for ann in math\nrecorded 95 for bob in math\nrecorded 96 for bob in math\nrecorded 97 for bob in art\nerror: unknown student carl\nerror: bad points\nerror: bad points\nann: 80.0 (3 scores)\nann: B\nann courses:\n  art: 100.0 (1)\n  math: 70.0 (2)\nbob courses:\n  art: 97.0 (1)\n  math: 95.5 (2)\n1. bob 96.0 A\n2. ann 80.0 B\nann 80.0 B (3)\nbob 96.0 A (3)\nerror: unknown student carl\nerror: unknown command bogus\n"
+    },
+    {
+      "stdin": "report\nranking\nstudent z\naverage z\ngrade z\ncourses z\nreport\nranking\nscore z a 89\ngrade z\nscore z a 90\ngrade z\naverage z\n",
+      "expected_output": "no students\nno ranking yet\nregistered z\nz has no scores\nz has no scores\nz has no scores\nz -\nno ranking yet\nrecorded 89 for z in a\nz: B\nrecorded 90 for z in a\nz: B\nz: 89.5 (2 scores)\n"
+    }
+  ]
+}

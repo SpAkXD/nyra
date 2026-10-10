@@ -3,21 +3,19 @@
 use input
 use text
 
-fn main() {
-    var total = 0
-    var words: [str] = []
-    var n = 0
-    while !input.eof() {
-        let line = input.line()
-        n += 1
-        if text.is_int(line) {
-            total += int(line)
-        } else if line != "" {
-            words.push(line)
-        }
-        print("{n}: [{line}] ({line.len()} characters)")
+var total = 0
+var words: [str] = []
+var n = 0
+while !input.eof() {
+    let line = input.line()
+    n += 1
+    if text.is_int(line) {
+        total += int(line)
+    } else if line != "" {
+        words.push(line)
     }
-    print("sum of the numbers: {total}")
-    print("words: {words.join(", ")}")
-    print("after the end: [{input.line()}] {input.eof()}")
+    print("{n}: [{line}] ({line.len()} characters)")
 }
+print("sum of the numbers: {total}")
+print("words: {words.join(", ")}")
+print("after the end: [{input.line()}] {input.eof()}")

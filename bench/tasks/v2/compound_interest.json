@@ -1,0 +1,37 @@
+{
+  "id": "compound_interest",
+  "title": "Compound interest table",
+  "category": "floats",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read one line from standard input: `PRINCIPAL RATE YEARS PERIODS`, four numbers separated by single spaces: the starting amount and the yearly interest rate in percent (decimal numbers such as `1000.00` and `4.5`), then the number of years and the number of compounding periods per year (positive whole numbers). Starting from the principal, repeat for every period of every year: multiply the balance by (1 + RATE / 100 / PERIODS), computed in that order, keeping full precision (do not round between periods).\n\nPrint one line per year, `Year k: B`, with the balance at the end of year k written with exactly 2 digits after the decimal point (rounded to the nearest), then a last line `interest earned: I` where I is the final balance minus the principal, also with 2 digits. Every answer in the tests is well away from a rounding tie.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1000.00 6 3 1\n",
+      "expected_output": "Year 1: 1060.00\nYear 2: 1123.60\nYear 3: 1191.02\ninterest earned: 191.02\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1500 4.5 5 12\n",
+      "expected_output": "Year 1: 1568.91\nYear 2: 1640.99\nYear 3: 1716.37\nYear 4: 1795.22\nYear 5: 1877.69\ninterest earned: 377.69\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "250.75 0 2 4\n",
+      "expected_output": "Year 1: 250.75\nYear 2: 250.75\ninterest earned: 0.00\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "20000 7.25 10 2\n",
+      "expected_output": "Year 1: 21476.28\nYear 2: 23061.53\nYear 3: 24763.80\nYear 4: 26591.71\nYear 5: 28554.56\nYear 6: 30662.29\nYear 7: 32925.59\nYear 8: 35355.96\nYear 9: 37965.73\nYear 10: 40768.14\ninterest earned: 20768.14\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "99.99 12 1 365\n",
+      "expected_output": "Year 1: 112.74\ninterest earned: 12.75\n"
+    }
+  ]
+}

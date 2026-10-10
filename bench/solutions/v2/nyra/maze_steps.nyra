@@ -1,0 +1,60 @@
+use input
+
+fn solve(grid: [str]) -> int {
+    let h = grid.len()
+    let w = grid[0].len()
+    var sr = 0
+    var sc = 0
+    var er = 0
+    var ec = 0
+    for r in 0..h {
+        for c in 0..w {
+            if grid[r][c] == 'S' {
+                sr = r
+                sc = c
+            } else if grid[r][c] == 'E' {
+                er = r
+                ec = c
+            }
+        }
+    }
+    var dist = [-1].repeat(h * w)
+    var queue: [int] = [sr * w + sc]
+    dist[sr * w + sc] = 0
+    var head = 0
+    let dr = [1, -1, 0, 0]
+    let dc = [0, 0, 1, -1]
+    while head < queue.len() {
+        let cur = queue[head]
+        head += 1
+        let r = cur / w
+        let c = cur % w
+        for k in 0..4 {
+            let nr = r + dr[k]
+            let nc = c + dc[k]
+            if nr >= 0 && nr < h && nc >= 0 && nc < w && grid[nr][nc] != '#' && dist[nr * w + nc] < 0 {
+                dist[nr * w + nc] = dist[cur] + 1
+                queue.push(nr * w + nc)
+            }
+        }
+    }
+    ret dist[er * w + ec]
+}
+
+var blocks: [[str]] = []
+var current: [str] = []
+for line in input.lines() {
+    if line == "" {
+        if current.len() > 0 {
+            blocks.push(current)
+            current = []
+        }
+    } else {
+        current.push(line)
+    }
+}
+if current.len() > 0 { blocks.push(current) }
+for k, grid in blocks {
+    let d = solve(grid)
+    if d >= 0 { print("Maze {k + 1}: {d}") } else { print("Maze {k + 1}: no path") }
+}

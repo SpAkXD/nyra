@@ -1,0 +1,30 @@
+// `return` is the keyword; `ret` is an accepted short spelling, so older programs still run
+fn gcd(a: int, b: int) -> int {
+    if b == 0 { return a }
+    return gcd(b, a % b)
+}
+
+fn sign(x: int) -> int {
+    if x > 0 {
+        ret 1
+    }
+    if x < 0 { ret -1 }
+    return 0
+}
+
+fn greet(name: str) {
+    if name == "" { return }
+    print("hello {name}")
+}
+
+fn main() {
+    print(gcd(48, 18), sign(-4), sign(0), sign(9))
+    greet("")
+    greet("ann")
+    var n = 0
+    while true {
+        n += 1
+        if n > 3 { break }
+    }
+    print(n)
+}

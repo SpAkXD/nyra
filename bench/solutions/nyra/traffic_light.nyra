@@ -1,8 +1,4 @@
-fn main() {
-    for t in 0..15 {
-        let phase = t % 6
-        if phase < 3 { print("green") }
-        else if phase == 3 { print("yellow") }
-        else { print("red") }
-    }
+for t in 0..15 {
+    let phase = t % 6
+    print(if phase < 3 { "green" } else if phase == 3 { "yellow" } else { "red" })
 }

@@ -1,0 +1,8 @@
+// expect: E0290
+// flags: --allow fs
+use fs
+use os
+
+fn main() {
+    print(fs.exists("a.txt"), os.args())
+}

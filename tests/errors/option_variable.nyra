@@ -1,0 +1,4 @@
+// expect: E0262
+struct P { x: int }
+let p: Optional[P] = P(x: 1)
+print(p)

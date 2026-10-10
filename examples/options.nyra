@@ -1,0 +1,83 @@
+// Optional values: `T?` holds a `T` or `none`.
+struct Item {
+    name: str
+    price: int
+}
+
+fn find_item(items: [Item], name: str) -> Item? {
+    for it in items {
+        if it.name == name {
+            ret it
+        }
+    }
+    ret none
+}
+
+fn half(n: int) -> int? = if n % 2 == 0 { n / 2 } else { none }
+
+let stock = ["pen": 3, "ink": 0]
+print(stock.get("pen"), stock.get("cup"))
+print(stock.get("pen") ?? -1, stock.get("cup") ?? -1)
+print(stock.get("pen") == 3, stock.get("cup") == none, stock.get("ink") != none)
+
+// take the value out: `??`, `if let`, `unwrap`
+let words = ["apple", "fig", "banana"]
+let long = words.find(w => w.len() > 4)
+let huge = words.find(w => w.len() > 10)
+print(long, huge)
+print(long ?? "none found", huge ?? "none found")
+if let w = long {
+    print("found {w} with {w.len()} letters")
+} else {
+    print("nothing")
+}
+if let w = huge {
+    print("found {w}")
+} else if let n = "42".to_int() {
+    print("no word, but the number {n + 1}")
+}
+print(long.unwrap().upper(), long.is_some(), huge.is_none())
+
+// numbers from text
+print("12".to_int(), "x".to_int(), "2.5".to_float(), "".to_float())
+let total = ("10".to_int() ?? 0) + ("oops".to_int() ?? 5)
+print(total)
+
+// your own functions
+let items = [Item(name: "pen", price: 3), Item(name: "ink", price: 9)]
+let ink = find_item(items, "ink")
+print(ink, find_item(items, "cup"))
+print((find_item(items, "pen") ?? Item(name: "?", price: 0)).price)
+if let it = find_item(items, "ink") {
+    print(it.name, it.price)
+}
+print(half(8), half(7), half(8) ?? 0, half(7) ?? 0)
+
+// optionals are values: compare, store, pass
+var best: int? = none
+for n in [4, 9, 2, 7] {
+    if best == none || n > (best ?? 0) {
+        best = n
+    }
+}
+print(best)
+var names: [str?] = ["a", none, "c"]
+names.push("d")
+print(names, names.len())
+var counts: [str: int?] = ["a": 1, "b": none]
+print(counts)
+let nested: (int, str)? = (1, "x")
+print(nested, nested ?? (0, "-"))
+let nothing: (int, str)? = none
+print(nothing, nothing ?? (0, "-"))
+let lists: [int]? = [1, 2]
+print(lists ?? [], (lists ?? []).len())
+let first_big = [3, 8, 12].find(x => x > 5)
+print(first_big, [3, 1].find(x => x > 5))
+fn describe(x: float?) -> str {
+    if let v = x {
+        ret "value {v}"
+    }
+    ret "empty"
+}
+print(describe(2.5), describe(none))

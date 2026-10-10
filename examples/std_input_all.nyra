@@ -1,10 +1,8 @@
 // `input.lines()` reads all of standard input as lines; `input.all()` is the rest as it is.
 use input
 
-fn main() {
-    let first = input.line()
-    let rest = input.lines()
-    print("first: {first}")
-    print("then {rest.len()} lines: {rest}")
-    print("nothing left: [{input.all()}] {input.lines()}")
-}
+let first = input.line()
+let rest = input.lines()
+print("first: {first}")
+print("then {rest.len()} lines: {rest}")
+print("nothing left: [{input.all()}] {input.lines()}")

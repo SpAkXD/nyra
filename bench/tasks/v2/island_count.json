@@ -1,0 +1,42 @@
+{
+  "id": "island_count",
+  "title": "Count the islands",
+  "category": "graphs",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read a map from standard input: lines of equal length made of `#` (land) and `.` (water). An island is a group of land cells connected through their eight neighbours (the cells that touch it by a side or by a corner). Print `islands=K largest=A`, where K is the number of islands and A the number of cells of the biggest one (0 when there is no land). An input without any line is a map without land.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "##..#\n#..#.\n....#\n.##..\n",
+      "expected_output": "islands=3 largest=3\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "#\n",
+      "expected_output": "islands=1 largest=1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "....\n....\n....\n",
+      "expected_output": "islands=0 largest=0\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "#.#.#\n.#.#.\n#.#.#\n.#.#.\n",
+      "expected_output": "islands=1 largest=10\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "########\n#......#\n#.####.#\n#.#..#.#\n#.####.#\n#......#\n########\n",
+      "expected_output": "islands=2 largest=26\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "",
+      "expected_output": "islands=0 largest=0\n"
+    }
+  ]
+}

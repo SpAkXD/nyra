@@ -1,0 +1,44 @@
+use input
+
+fn is_leap(y: int) -> bool = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+
+fn month_days(y: int, m: int) -> int {
+    let days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if m == 2 && is_leap(y) { ret 29 }
+    ret days[m - 1]
+}
+
+fn all_digits(s: str) -> bool = s.all(c => c.is_digit())
+
+// days since 0001-01-01 of a well-formed date text, or -1 when it does not exist
+fn day_number(s: str) -> int {
+    if s.len() != 10 || s[4] != '-' || s[7] != '-' { ret -1 }
+    let ys = s.slice(0, 4)
+    let ms = s.slice(5, 7)
+    let ds = s.slice(8, 10)
+    if !all_digits(ys) || !all_digits(ms) || !all_digits(ds) { ret -1 }
+    let y = int(ys)
+    let m = int(ms)
+    let d = int(ds)
+    if y < 1 || m < 1 || m > 12 || d < 1 || d > month_days(y, m) { ret -1 }
+    var total = (y - 1) * 365 + (y - 1) / 4 - (y - 1) / 100 + (y - 1) / 400
+    for k in 1..m {
+        total += month_days(y, k)
+    }
+    ret total + d
+}
+
+for line in input.lines() {
+    let parts = line.split(" ")
+    if parts.len() != 2 {
+        print("invalid")
+        continue
+    }
+    let a = day_number(parts[0])
+    let b = day_number(parts[1])
+    if a < 0 || b < 0 {
+        print("invalid")
+    } else {
+        print(b - a)
+    }
+}

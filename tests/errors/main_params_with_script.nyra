@@ -1,0 +1,5 @@
+// expect: E0211
+fn main(n: int) {
+    print(n)
+}
+print(1)

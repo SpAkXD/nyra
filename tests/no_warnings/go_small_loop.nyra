@@ -1,0 +1,8 @@
+// target: go
+fn main() {
+    var s = ""
+    for i in 0..10 {
+        s += str(i)
+    }
+    print(s)
+}

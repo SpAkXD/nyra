@@ -1,4 +1,5 @@
 mod ast;
+mod caps;
 mod check;
 mod codegen;
 mod diag;
@@ -6,13 +7,19 @@ mod edit;
 mod examples;
 mod explain;
 mod fix;
+mod fmt;
+mod helpers;
 mod hints;
 mod ir;
 mod json;
 mod lexer;
 mod limits;
 mod mcp;
+mod mem;
+mod modules;
 mod parser;
+mod perfwarn;
+mod sandbox;
 mod stdlib;
 
 use std::path::{Path, PathBuf};
@@ -26,6 +33,7 @@ usage:
   nyra run   <file.nyra> [-- args]   compile and run (args after `--` go to the program)
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
+  nyra fmt   <file.nyra>    rewrite the file in canonical form (fixes applied, `return`, 4 spaces)
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
   nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
@@ -35,29 +43,66 @@ usage:
   nyra <file.nyra>          same as `nyra run`
 
 options:
-  --target <t> the backend: native (default), c, js, py, ts, rs or go
-  --js --py --ts --rs --go   short for --target js / py / ts / rs / go
+  --target <t> the backend: native (default), c, js; experimental: py, ts, rs, go
+  --js --py --ts --rs --go   short for --target js / py / ts / rs / go (py, ts, rs, go: experimental)
   --c          (build) write the generated C source instead of an executable
   -o <path>    output path for `build` (`-o -` prints to stdout)
   --json       print errors as JSON (compile and runtime), for AI agents
   --fix        apply the fixes the errors suggest, check again, and write the
                file back if it then compiles (then run or build it as usual)
+  --strict     errors stay errors: without it, an error that has exactly one certain
+               fix is repaired in memory (the file is not written) and reported as a warning
+  --release    (run) optimize the generated C like `build` does (-O2); `run` compiles faster
+               by default (-O1), so the first output comes sooner
   --time       show how long each step took
 
+safety (for programs you did not write, or agents that run unsupervised):
+  --allow LIST     grant only these capabilities: fs, input, os, net (or all). A `use` of a
+                   module whose capability is not granted is error E0290. Without --allow
+                   and --sandbox everything is granted.
+  --sandbox        run in the interpreter with no capabilities but those of --allow, file
+                   paths confined to the working folder, and the limits below
+  --interp         run in the interpreter (no C compiler or Node.js needed), with the limits
+  --fuel N         steps the program may run (default 2,000,000,000)      E0355, exit 120
+  --max-memory S   heap the program may use, e.g. 256M (default 512M)     E0356, exit 121
+  --max-output S   bytes the program may print (default 64M)              E0357, exit 122
+  --max-depth N    nested calls (default 20,000)                          E0358, exit 123
+  --max-time MS    real time (default: none)                              E0359, exit 124
+  A limit flag implies --interp. Programs that stop on a limit print the error code on stderr.
+
 `build` writes an executable natively and source code for every other target.
+Supported targets: native and js. py, ts, rs and go are experimental.
 `run` needs the target's tool: a C compiler (gcc, clang, cc or tcc; NYRA_CC),
 node (js and ts), python3 (NYRA_PYTHON), rustc (NYRA_RUSTC) or go (NYRA_GO).
 ";
 
-/// Flags nyra passes to the C compiler. Kept deliberately short:
-/// -O2      optimize
+/// Flags nyra passes to the C compiler, besides the optimization level (see `Opt`). Kept deliberately short:
 /// -fwrapv  make int overflow wrap (defined behavior, as the spec says)
 /// -ffp-contract=off  never fuse float operations (a*b+c), so results match JavaScript
 /// -s       strip symbols for a smaller executable (macOS's linker ignores it, so it's left out there)
 #[cfg(not(target_os = "macos"))]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off", "-s"];
+const CC_FLAGS: &[&str] = &["-fwrapv", "-ffp-contract=off", "-s"];
 #[cfg(target_os = "macos")]
-const CC_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
+const CC_FLAGS: &[&str] = &["-fwrapv", "-ffp-contract=off"];
+
+/// How hard the C compiler optimizes. `nyra build` and `nyra run --release` use `Release` (-O2). A
+/// plain `nyra run` is about getting the first output soon, so it uses `Fast` (-O1): the compile is
+/// a third shorter on big programs and the program runs about as fast as at -O2 (-O0 is no
+/// faster to compile, as it still emits the whole runtime, and runs 3 to 10 times slower).
+#[derive(Clone, Copy, PartialEq)]
+pub enum Opt {
+    Fast,
+    Release,
+}
+
+impl Opt {
+    fn flag(self) -> &'static str {
+        match self {
+            Opt::Fast => "-O1",
+            Opt::Release => "-O2",
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Target {
@@ -106,8 +151,50 @@ struct Opts {
     json: bool,
     time: bool,
     fix: bool,
+    /// Do not repair errors in memory (see `--strict`).
+    strict: bool,
+    /// `run --release`: compile the C with -O2 (see `Opt`).
+    release: bool,
     /// What follows `--`: the program's own arguments (`nyra run main.nyra -- a b`).
     prog_args: Vec<String>,
+    /// `--interp`: run in the interpreter.
+    interp: bool,
+    /// `--sandbox`: the interpreter, nothing granted but `--allow`, confined files.
+    sandbox: bool,
+    /// The values of `--allow`.
+    allow: Vec<String>,
+    fuel: Option<u64>,
+    max_memory: Option<u64>,
+    max_output: Option<u64>,
+    max_depth: Option<usize>,
+    max_time: Option<u64>,
+}
+
+impl Opts {
+    /// The capabilities this run grants: everything, unless `--sandbox` or `--allow` narrow it.
+    fn grant(&self) -> Result<caps::Grant, String> {
+        let mut g = if self.sandbox || !self.allow.is_empty() { caps::Grant::none() } else { caps::Grant::all() };
+        for a in &self.allow {
+            g.allow(a)?;
+        }
+        Ok(g)
+    }
+
+    /// True if the program runs in the interpreter: asked for, or needed by a limit.
+    fn interpreted(&self) -> bool {
+        self.interp
+            || self.sandbox
+            || self.fuel.is_some()
+            || self.max_memory.is_some()
+            || self.max_output.is_some()
+            || self.max_depth.is_some()
+            || self.max_time.is_some()
+    }
+}
+
+/// What to add to the command line to grant a capability.
+fn cli_flag(cap: &str) -> String {
+    format!("grant it by running with `--allow {cap}` (`nyra run main.nyra --allow {cap}`)")
 }
 
 fn parse_args() -> Result<Opts, String> {
@@ -121,7 +208,17 @@ fn parse_args() -> Result<Opts, String> {
         json: false,
         time: false,
         fix: false,
+        strict: false,
+        release: false,
         prog_args: Vec::new(),
+        interp: false,
+        sandbox: false,
+        allow: Vec::new(),
+        fuel: None,
+        max_memory: None,
+        max_output: None,
+        max_depth: None,
+        max_time: None,
     };
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -145,6 +242,36 @@ fn parse_args() -> Result<Opts, String> {
             "--json" => opts.json = true,
             "--time" => opts.time = true,
             "--fix" => opts.fix = true,
+            "--interp" => opts.interp = true,
+            "--sandbox" => opts.sandbox = true,
+            "--allow" => opts.allow.push(args.next().ok_or("--allow needs capabilities: `--allow fs,os` (or `all`)")?),
+            _ if a.starts_with("--allow=") => opts.allow.push(a["--allow=".len()..].to_string()),
+            "--fuel" | "--max-depth" | "--max-time" => {
+                let v = args.next().ok_or_else(|| format!("{a} needs a number"))?;
+                let n: u64 = v.replace('_', "").parse().map_err(|_| format!("{a} needs a whole number, found `{v}`"))?;
+                match a.as_str() {
+                    "--fuel" => opts.fuel = Some(n),
+                    "--max-depth" if n > sandbox::MAX_DEPTH as u64 => {
+                        return Err(format!(
+                            "--max-depth is at most {} (deeper calls would overflow the stack of the interpreter)",
+                            sandbox::MAX_DEPTH
+                        ));
+                    }
+                    "--max-depth" => opts.max_depth = Some(n as usize),
+                    _ => opts.max_time = Some(n),
+                }
+            }
+            "--max-memory" | "--max-output" => {
+                let v = args.next().ok_or_else(|| format!("{a} needs a size such as 256M"))?;
+                let n = sandbox::parse_size(&v)?;
+                if a == "--max-memory" {
+                    opts.max_memory = Some(n);
+                } else {
+                    opts.max_output = Some(n);
+                }
+            }
+            "--strict" => opts.strict = true,
+            "--release" => opts.release = true,
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -153,7 +280,7 @@ fn parse_args() -> Result<Opts, String> {
         positional.insert(0, "run".into());
     }
     match positional.as_slice() {
-        [cmd, file] if ["run", "build", "check", "test"].contains(&cmd.as_str()) => {
+        [cmd, file] if ["run", "build", "check", "test", "fmt"].contains(&cmd.as_str()) => {
             opts.cmd = cmd.clone();
             opts.file = file.clone();
             Ok(opts)
@@ -164,7 +291,17 @@ fn parse_args() -> Result<Opts, String> {
 
 /// Lexes, parses, type-checks and runs the examples: a program that passes can be generated.
 fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    compile_granted(src, &caps::Grant::all(), &cli_flag)
+}
+
+/// `compile`, and a `use` of a module whose capability `grant` does not give is error E0290
+/// (`flag` says how to grant it). The capabilities are checked before the examples run.
+fn compile_granted(src: &str, grant: &caps::Grant, flag: &dyn Fn(&str) -> String) -> Result<ast::Program, Vec<diag::Diag>> {
     let mut prog = front(src)?;
+    let errs = caps::enforce(&prog, grant, flag);
+    if !errs.is_empty() {
+        return Err(errs);
+    }
     let errs = examples::run(&mut prog).errors;
     if !errs.is_empty() {
         return Err(errs);
@@ -174,8 +311,11 @@ fn compile(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
 
 /// Lexes, parses and type-checks, without running the examples.
 fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
+    diag::clear_warnings();
     // only fixes that match the source exactly are kept
     let checked = |mut errs: Vec<diag::Diag>| {
+        // a fix is a text edit of this file: one for a mistake in an imported file would edit the wrong text
+        errs.iter_mut().filter(|d| d.file.is_some()).for_each(|d| d.fix.clear());
         fix::validate(&mut errs, src);
         errs
     };
@@ -184,6 +324,11 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
         return Err(checked(errs));
     }
     let (mut prog, errs) = parser::parse(toks);
+    if !errs.is_empty() {
+        return Err(checked(errs));
+    }
+    // the files the program imports (`use ./name`)
+    let errs = modules::load(&mut prog);
     if !errs.is_empty() {
         return Err(checked(errs));
     }
@@ -238,24 +383,51 @@ fn real_main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let src = match std::fs::read_to_string(&opts.file) {
+    let mut src = match std::fs::read_to_string(&opts.file) {
         Ok(s) => s,
         Err(e) => return fail(format!("cannot read `{}`: {e}", opts.file)),
     };
+    // `use ./name` lines are relative to this file
+    modules::set_main(Some(Path::new(&opts.file)));
 
-    if opts.cmd == "test" {
-        return test(&opts, &src);
+    if opts.cmd == "fmt" {
+        return fmt::run(&opts.file, &src, opts.out.as_deref(), opts.json);
+    }
+
+    let grant = match opts.grant() {
+        Ok(g) => g,
+        Err(msg) => return fail(msg),
+    };
+    let compile = |s: &str| compile_granted(s, &grant, &cli_flag);
+    // `test` checks the program and its capabilities; the examples are what it runs
+    let check_only = |s: &str| {
+        let prog = front(s)?;
+        let errs = caps::enforce(&prog, &grant, cli_flag);
+        if errs.is_empty() {
+            Ok(prog)
+        } else {
+            Err(errs)
+        }
+    };
+    if opts.interpreted() && opts.cmd == "build" {
+        return fail("--interp, --sandbox and the limit flags are for `nyra run`: `build` makes a native executable or source code");
+    }
+    if opts.interpreted() && opts.target != Target::Native {
+        return fail("--interp and --sandbox run the program in the interpreter: do not combine them with --target, --js, --py, ...");
     }
 
     let start = Instant::now();
     let mut fixed = 0;
-    let prog = match compile(&src) {
+    let mut warnings: Vec<fix::Applied> = Vec::new();
+    let builder: &dyn Fn(&str) -> Result<ast::Program, Vec<diag::Diag>> = if opts.cmd == "test" { &check_only } else { &compile };
+    let prog = match builder(&src) {
         Ok(p) => p,
         Err(diags) => {
-            // --fix: apply the fixes and check again; the file changes only if it then compiles
-            let repaired = if opts.fix { fix::repair(&src, diags.clone(), compile) } else { None };
+            // --fix: apply the fixes and check again; the file changes only if it then compiles.
+            // Without --strict the same happens in memory, and each fix is reported as a warning.
+            let repaired = if opts.fix || !opts.strict { fix::repair(&src, diags.clone(), builder) } else { None };
             match repaired {
-                Some(r) => {
+                Some(r) if opts.fix => {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {
                         return fail(format!("cannot write `{}`: {e}", opts.file));
                     }
@@ -267,12 +439,19 @@ fn real_main() -> ExitCode {
                         fix::diff(&src, &r.text)
                     );
                     fixed = r.fixed;
+                    src = r.text;
+                    r.value
+                }
+                Some(r) => {
+                    warnings = r.applied;
+                    src = r.text;
                     r.value
                 }
                 None => {
                     if opts.json {
                         println!("{}", diag::render_json(&diags, &opts.file));
                     } else {
+                        eprint!("{}", diag::render_warnings(&opts.file, &src));
                         eprint!("{}", diag::render_human(&diags, &opts.file, &src));
                         eprintln!("nyra: {} error(s)", diags.len());
                     }
@@ -284,18 +463,42 @@ fn real_main() -> ExitCode {
             }
         }
     };
+    if !warnings.is_empty() {
+        if opts.json && opts.cmd != "check" {
+            eprintln!("{{\"warnings\":{}}}", diag::render_json_warnings(&warnings, &opts.file));
+        } else if !opts.json {
+            eprint!("{}", diag::render_warnings_human(&warnings, &opts.file));
+            eprintln!("nyra: {} fix(es) applied in memory; run with --fix to write them to {}", warnings.len(), opts.file);
+        }
+    }
 
+    // slow patterns: warnings too (E0360-E0362)
+    perfwarn::check(&prog, opts.target == Target::Go);
+
+    if opts.cmd == "test" {
+        return test(&opts, &src, prog);
+    }
+
+    // warnings do not stop the build; `check --json` lists them in its JSON instead
+    if !(opts.json && opts.cmd == "check") {
+        eprint!("{}", diag::render_warnings(&opts.file, &src));
+    }
     if opts.cmd == "check" {
         if opts.json {
-            let json = diag::render_json(&[], &opts.file);
-            match fixed {
-                0 => println!("{json}"),
-                n => println!("{},\"fixed\":{n}}}", &json[..json.len() - 1]),
+            let mut json = diag::render_json(&[], &opts.file);
+            if fixed > 0 {
+                json = format!("{},\"fixed\":{fixed}}}", &json[..json.len() - 1]);
             }
+            json = with_applied(json, &warnings, &opts.file);
+            println!("{json}");
         } else {
             eprintln!("nyra: no errors ({})", ms(start.elapsed()));
         }
         return ExitCode::SUCCESS;
+    }
+
+    if opts.interpreted() {
+        return run_interpreted(&opts, &prog);
     }
 
     let code = match generate(&prog, opts.target, &opts.file) {
@@ -313,24 +516,13 @@ fn real_main() -> ExitCode {
 }
 
 /// `nyra test`: runs every example and reports each one that fails; exit code 1 if any does.
-fn test(opts: &Opts, src: &str) -> ExitCode {
+fn test(opts: &Opts, src: &str, mut prog: ast::Program) -> ExitCode {
     let start = Instant::now();
-    let mut prog = match front(src) {
-        Ok(p) => p,
-        Err(diags) => {
-            if opts.json {
-                println!("{}", diag::render_json(&diags, &opts.file));
-            } else {
-                eprint!("{}", diag::render_human(&diags, &opts.file, src));
-                eprintln!("nyra: {} error(s)", diags.len());
-            }
-            return ExitCode::from(1);
-        }
-    };
     let out = examples::run(&mut prog);
     if opts.json {
         println!("{}", examples::json(&out, &opts.file));
     } else {
+        eprint!("{}", diag::render_warnings(&opts.file, src));
         eprint!("{}", diag::render_human(&out.errors, &opts.file, src));
         eprintln!("nyra: {} ({})", examples::summary(&out, &opts.file), ms(start.elapsed()));
     }
@@ -368,11 +560,11 @@ fn generate(prog: &ast::Program, target: Target, file: &str) -> Result<String, S
 const NO_CC: &str = "no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js";
 
 /// The executable for generated C, built in the shared temp dir (see `cc_cached`).
-fn native(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Duration>), ExitCode> {
+fn native(code: &str, stem: &str, source: &str, opt: Opt) -> Result<(PathBuf, Option<Duration>), ExitCode> {
     let Some(compiler) = find_cc() else {
         return Err(fail(NO_CC));
     };
-    cc_cached(&compiler, code, stem, source, &temp_dir(), false).map_err(fail)
+    cc_cached(&compiler, code, stem, source, &temp_dir(), opt, false).map_err(fail)
 }
 
 fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
@@ -388,7 +580,7 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     let mut cc_part = String::new();
     if opts.target == Target::Native {
-        let (exe, cc_time) = match native(code, stem, &opts.file) {
+        let (exe, cc_time) = match native(code, stem, &opts.file, Opt::Release) {
             Ok(r) => r,
             Err(code) => return code,
         };
@@ -402,6 +594,44 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
 
     eprintln!("nyra: built {} (nyra {}{cc_part})", out.display(), ms(nyra_time));
     ExitCode::SUCCESS
+}
+
+/// `nyra run --interp` / `--sandbox`: the program runs in the IR interpreter, in this process,
+/// under the limits of `sandbox.rs`. Its runtime errors are printed like those of a compiled program.
+fn run_interpreted(opts: &Opts, prog: &ast::Program) -> ExitCode {
+    let start = Instant::now();
+    let m = match sandbox::module(prog) {
+        Ok(m) => m,
+        Err(msg) => return fail(msg),
+    };
+    let mut cfg = sandbox::Config::new();
+    cfg.args = opts.prog_args.clone();
+    cfg.confined = opts.sandbox;
+    cfg.limits.steps = opts.fuel.unwrap_or(cfg.limits.steps);
+    cfg.limits.memory = opts.max_memory.unwrap_or(cfg.limits.memory);
+    cfg.limits.output = opts.max_output.unwrap_or(cfg.limits.output);
+    cfg.limits.depth = opts.max_depth.unwrap_or(cfg.limits.depth);
+    cfg.limits.wall_ms = opts.max_time.unwrap_or(0);
+    let nyra_time = start.elapsed();
+    let report = sandbox::run(&m, cfg);
+    if let Some(e) = &report.error {
+        let text = sandbox::render_error(e, &opts.file, opts.json);
+        eprintln!("{text}");
+    }
+    if let Some(what) = &report.internal {
+        eprintln!("nyra: internal error in the interpreter: {what}");
+        eprintln!("nyra: run the program without --interp and report this bug");
+    }
+    if opts.time {
+        eprintln!(
+            "nyra {} | interpreted {:.2} ms ({} steps, {} allocations)",
+            ms(nyra_time),
+            report.run_ms,
+            report.steps,
+            report.allocs
+        );
+    }
+    ExitCode::from(report.exit as u8)
 }
 
 fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
@@ -438,7 +668,7 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
             let built = match opts.target {
                 Target::Rs => rust_cached(code, stem, &opts.file).map_err(fail),
                 Target::Go => go_cached(code, stem, &opts.file).map_err(fail),
-                _ => native(code, stem, &opts.file),
+                _ => native(code, stem, &opts.file, if opts.release { Opt::Release } else { Opt::Fast }),
             };
             match built {
                 Ok((exe, t)) => {
@@ -540,10 +770,13 @@ fn cc_cached(
     stem: &str,
     source: &str,
     dir: &Path,
+    opt: Opt,
     capture: bool,
 ) -> Result<(PathBuf, Option<Duration>), String> {
-    let key = format!("{compiler} | {}", CC_FLAGS.join(" "));
-    cached(code, stem, source, "c", &key, dir, |src, exe| cc(compiler, src, exe, capture))
+    let key = format!("{compiler} | {} {}", opt.flag(), CC_FLAGS.join(" "));
+    // (the builds of each optimization level are kept apart, so `run` and `build` of one file do not evict each other)
+    let variant = if opt == Opt::Fast { "fast" } else { "" };
+    cached(code, stem, source, "c", variant, &key, dir, |src, exe| cc(compiler, src, exe, opt, capture))
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
@@ -557,7 +790,7 @@ fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<
         return Err("no Rust compiler found (tried rustc); install Rust or set NYRA_RUSTC".into());
     }
     let key = format!("{rustc} | {}", RUSTC_FLAGS.join(" "));
-    cached(code, stem, source, "rs", &key, &temp_dir(), |src, exe| {
+    cached(code, stem, source, "rs", "", &key, &temp_dir(), |src, exe| {
         let t = Instant::now();
         match Command::new(&rustc).args(RUSTC_FLAGS).arg("-o").arg(exe).arg(src).status() {
             Ok(s) if s.success() => Ok(t.elapsed()),
@@ -572,7 +805,7 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
     if !works(&go, &["version"]) {
         return Err("no Go toolchain found (tried go); install Go or set NYRA_GO".into());
     }
-    cached(code, stem, source, "go", &go, &temp_dir(), |src, exe| {
+    cached(code, stem, source, "go", "", &go, &temp_dir(), |src, exe| {
         let t = Instant::now();
         // one file builds without a module (it must end in `.go`)
         match Command::new(&go).args(["build", "-o"]).arg(exe).arg(src).status() {
@@ -585,11 +818,13 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
 /// Compiles generated code into an executable in `dir` with `build(source, exe)`. If the same
 /// code was already compiled with the same tool (`key`), the old executable is reused.
 /// Returns the executable and the build time (`None` when cached).
+#[allow(clippy::too_many_arguments)]
 fn cached(
     code: &str,
     stem: &str,
     source: &str,
     ext: &str,
+    variant: &str,
     key: &str,
     dir: &Path,
     build: impl FnOnce(&Path, &Path) -> Result<Duration, String>,
@@ -603,6 +838,9 @@ fn cached(
     // (C builds keep the group names they had before the other compiled targets came)
     if ext != "c" {
         parts.push(ext.as_bytes());
+    }
+    if !variant.is_empty() {
+        parts.push(variant.as_bytes());
     }
     let group = format!("{stem}-{:08x}-", fnv1a(&parts) as u32);
     let exe_suffix = std::env::consts::EXE_SUFFIX;
@@ -640,7 +878,7 @@ fn cached(
 }
 
 /// Runs the C compiler. Returns how long it took.
-fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, String> {
+fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool) -> Result<Duration, String> {
     let mut cmd = Command::new(cc);
     // A compiler given by full path needs its own directory on PATH to find its DLLs/tools.
     if let Some(dir) = Path::new(&cc).parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -650,7 +888,7 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, capture: bool) -> Result<Duration, St
         }
     }
     let t = Instant::now();
-    cmd.args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
+    cmd.arg(opt.flag()).args(CC_FLAGS).arg("-o").arg(exe).arg(c_path);
     // the math library (`math.sqrt`, `math.floor`) is separate outside Windows; it goes after the source
     #[cfg(not(windows))]
     cmd.arg("-lm");
@@ -685,4 +923,21 @@ fn find_cc() -> Option<String> {
         }
     }
     ["gcc", "clang", "cc", "tcc"].into_iter().find(|cc| Command::new(cc).arg("--version").output().is_ok()).map(String::from)
+}
+
+/// `check --json` has one `warnings` array: the compiler's warnings and the fixes applied in memory.
+fn with_applied(json: String, applied: &[fix::Applied], file: &str) -> String {
+    if applied.is_empty() {
+        return json;
+    }
+    let list = diag::render_json_warnings(applied, file);
+    let items = &list[1..list.len() - 1];
+    match json.find("\"warnings\":[") {
+        Some(i) => {
+            let at = i + "\"warnings\":[".len();
+            let sep = if json[at..].starts_with(']') { "" } else { "," };
+            format!("{}{items}{sep}{}", &json[..at], &json[at..])
+        }
+        None => format!("{},\"warnings\":{list}}}", &json[..json.len() - 1]),
+    }
 }

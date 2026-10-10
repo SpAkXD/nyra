@@ -7,18 +7,17 @@ use crate::ast::Type;
 use crate::diag::suggest;
 
 /// A word from another language that Nyra spells differently or does not have.
-/// Used where a syntax error is caused by that word (`return x`, `a and b`, `elif`).
+/// Used where a syntax error is caused by that word (`a and b`, `elif`).
 pub fn word(w: &str) -> Option<String> {
     let hint = match w {
-        "return" => "Nyra spells it `ret`: replace `return` with `ret`",
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
-        "switch" | "case" | "match" => "Nyra has no `switch` or `match`: chain `if` / `else if`",
+        "switch" | "case" => "Nyra has no `switch`: write `match value { 1 => ..., _ => ... }`, or chain `if` / `else if`",
         "and" => "write `&&` for logical and: `a && b`",
         "or" => "write `||` for logical or: `a || b`",
         "not" => "write `!` for logical not: `!done`",
         "then" => "Nyra has no `then`: the body of an `if` is `{ ... }` on the same line as the `if`",
         "null" | "nil" | "None" | "NULL" | "undefined" => {
-            "Nyra has no null: every variable always holds a value of its type"
+            "Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`"
         }
         "True" | "False" => "write `true` or `false` in lowercase",
         "mut" => "write `var` for a variable that changes: `var x = 0`",
@@ -54,9 +53,9 @@ pub fn top_level_word(w: &str) -> Option<String> {
                 "Nyra has no `{w}`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`"
             ))
         }
-        "enum" | "union" | "type" | "typedef" => {
+        "union" | "type" | "typedef" => {
             return Some(format!(
-                "Nyra has no `{w}` yet: the top-level items are `fn` and `struct`; for a fixed set of cases use `int` or `str` values"
+                "Nyra has no `{w}`: the top-level items are `fn`, `struct` and `enum` (`enum Dir {{ N, E, S, W }}`)"
             ))
         }
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
@@ -76,7 +75,7 @@ pub fn top_level_word(w: &str) -> Option<String> {
 /// Hint for an undefined variable whose name is a keyword or literal of another language.
 pub fn undefined_variable(w: &str) -> Option<String> {
     match w {
-        "return" | "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self" | "this" => word(w),
+        "null" | "nil" | "None" | "NULL" | "undefined" | "True" | "False" | "self" | "this" => word(w),
         _ => None,
     }
 }
@@ -116,7 +115,6 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "floor" | "ceil" | "round" | "trunc" => {
             "these are in the standard module `math` (`math.floor(x)` gives a float); `int(x)` truncates a float to an int"
         }
-        "return" => return word(w),
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
         "string" | "String" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" | "sprintf" => {
             "convert with `str(x)`, or build text with interpolation, e.g. `\"{x}\"`"
@@ -388,6 +386,9 @@ pub fn type_fix(w: &str) -> Option<&'static str> {
     nyra_type(w)
 }
 
+/// What to do when a value might be missing (`int?`, `Option<int>`): Nyra has no optional values.
+pub const OPTION_HINT: &str = "an optional type is written with a `?` after the type, `int?`; a missing value is `none`, `x ?? d` gives a default and `if let v = x { ... }` takes the value out";
+
 /// What to do about a type name that does not exist.
 pub fn type_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
@@ -405,8 +406,9 @@ pub fn type_name(name: &str) -> String {
             "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
         }
         "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
-        "tuple" | "pair" => {
-            "Nyra has no tuples: declare a struct with named fields, e.g. `struct Pair { a: int, b: int }`".to_string()
+        "tuple" | "pair" => "a tuple type is written with parentheses, e.g. `(int, str)`; a value `(1, \"a\")`".to_string(),
+        "option" | "optional" | "maybe" | "nullable" => {
+            "an optional type is written with a question mark after the type, e.g. `int?`".to_string()
         }
         "any" | "auto" | "var" | "let" | "dynamic" => {
             "write the type out (only local variables are inferred: leave the annotation off)".to_string()
@@ -517,7 +519,6 @@ pub fn invisible_char(c: char) -> Option<&'static str> {
 pub fn bad_char(c: char) -> String {
     match c {
         '#' => "comments start with `//`, not `#`".into(),
-        '?' => "Nyra has no `?`: for a conditional value write `if cond { a } else { b }`".into(),
         '&' => "write `&&` for logical and (there are no bit operations)".into(),
         '|' => "write `||` for logical or (there are no bit operations)".into(),
         '^' | '~' => "Nyra has no bit operations or power operator: multiply (`x * x`) or use a loop".into(),
@@ -542,4 +543,15 @@ pub fn bad_char(c: char) -> String {
         c if invisible_char(c).is_some() => "remove it: it is an invisible character, often pasted in by accident".into(),
         _ => "this character is not part of Nyra: remove it".into(),
     }
+}
+
+/// Warning E0260 for `${code}` in a string, with `at` the position of the `$`: Nyra keeps the `$`
+/// and inserts the value, which is rarely what a template engine's `${x}` was meant to say.
+pub fn dollar_brace(code: &str, at: crate::ast::Span) {
+    let code = code.trim();
+    crate::diag::warn(
+        crate::diag::Diag::new("E0260", format!("`${{{code}}}` in a string prints a `$` and then the value of `{code}`"), at).hint(format!(
+            "`{{{code}}}` alone inserts the value, so drop the `$` if you did not mean to print one; to print a dollar sign before a value write `\"$\" + str(...)`, to print `${{{code}}}` as text double the braces: `${{{{{code}}}}}`"
+        )),
+    );
 }

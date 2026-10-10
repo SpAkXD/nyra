@@ -6,25 +6,23 @@ fn dice(n: int) -> [int] {
     for i in 0..n {
         rolls.push(random.range(1, 7))
     }
-    ret rolls
+    return rolls
 }
 
-fn main() {
-    random.seed(42)
-    let first = dice(12)
-    print(first)
-    print(random.random(), random.random())
-    print(random.range(-1000000000000, 1000000000000), random.range(0, 9007199254740991))
-    random.seed(42)
-    print("the same again: {dice(12) == first}")
-    random.seed(-7)
-    print(dice(5), random.range(10, 11))
-    random.seed(9007199254740991)
-    print(dice(5))
-    // shuffle a deck (Fisher-Yates)
-    var deck = ["A", "B", "C", "D", "E", "F"]
-    for i in 0..deck.len() - 1 {
-        deck.swap(i, random.range(i, deck.len()))
-    }
-    print(deck)
+random.seed(42)
+let first = dice(12)
+print(first)
+print(random.random(), random.random())
+print(random.range(-1000000000000, 1000000000000), random.range(0, 9007199254740991))
+random.seed(42)
+print("the same again: {dice(12) == first}")
+random.seed(-7)
+print(dice(5), random.range(10, 11))
+random.seed(9007199254740991)
+print(dice(5))
+// shuffle a deck (Fisher-Yates)
+var deck = ["A", "B", "C", "D", "E", "F"]
+for i in 0..deck.len() - 1 {
+    deck.swap(i, random.range(i, deck.len()))
 }
+print(deck)

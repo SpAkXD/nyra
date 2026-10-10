@@ -10,10 +10,10 @@ fn make(name: str) -> User = User(name: name, tags: [name + "!"])
 fn first_long(ws: [str]) -> str {
     for w in ws {
         if w.len() > 3 {
-            ret w
+            return w
         }
     }
-    ret "none"
+    return "none"
 }
 
 fn find_pair(grid: [[str]], want: str) -> [int] {
@@ -21,16 +21,16 @@ fn find_pair(grid: [[str]], want: str) -> [int] {
         let row = grid[r]
         for c in 0..row.len() {
             if row[c] == want {
-                ret [r, c]
+                return [r, c]
             }
         }
     }
-    ret []
+    return []
 }
 
 fn quicksort(xs: [int]) -> [int] {
     if xs.len() < 2 {
-        ret xs
+        return xs
     }
     let pivot = xs[0]
     var less: [int] = []
@@ -42,61 +42,59 @@ fn quicksort(xs: [int]) -> [int] {
             more.push(x)
         }
     }
-    ret quicksort(less) + [pivot] + quicksort(more)
+    return quicksort(less) + [pivot] + quicksort(more)
 }
 
-fn main() {
-    print(first_long(["a", "bb", "cccc", "ddddd"]))
-    print(first_long(["x"]))
-    print(find_pair([["a", "b"], ["c", "d"]], "d"))
-    print(find_pair([["a"]], "z"))
-    print(quicksort([5, 3, 8, 1, 9, 2, 7]))
-    print(make("ann").name)
-    let n = make("bo").tags[0]
-    print(n)
-    print(make("cy"))
-    var names: [str] = []
-    for w in "one two three four five".split(" ") {
-        if w == "two" {
-            continue
-        }
-        if w == "five" {
-            break
-        }
-        names.push(w.upper())
+print(first_long(["a", "bb", "cccc", "ddddd"]))
+print(first_long(["x"]))
+print(find_pair([["a", "b"], ["c", "d"]], "d"))
+print(find_pair([["a"]], "z"))
+print(quicksort([5, 3, 8, 1, 9, 2, 7]))
+print(make("ann").name)
+let n = make("bo").tags[0]
+print(n)
+print(make("cy"))
+var names: [str] = []
+for w in "one two three four five".split(" ") {
+    if w == "two" {
+        continue
     }
-    print(names)
-    var i = 0
-    while i < 3 {
-        let s = "round " + str(i)
-        i += 1
-        if i == 2 {
-            continue
-        }
-        print(s)
+    if w == "five" {
+        break
     }
-    let pick = if names.len() > 2 { names[2] } else { "short" }
-    print(pick)
-    var users = [make("a"), make("b")]
-    users[1].tags.push(users[0].name)
-    let u0 = users[0]
-    users[0] = users[1]
-    users[1] = u0
-    print(users)
-    for c in "héllo" {
-        if c == 'l' {
-            break
-        }
-        print(c)
-    }
-    var acc: [[int]] = []
-    for k in 0..3 {
-        var row: [int] = []
-        for j in 0..k {
-            row.push(j)
-        }
-        acc.push(row)
-        row.push(99)
-    }
-    print(acc)
+    names.push(w.upper())
 }
+print(names)
+var i = 0
+while i < 3 {
+    let s = "round " + str(i)
+    i += 1
+    if i == 2 {
+        continue
+    }
+    print(s)
+}
+let pick = if names.len() > 2 { names[2] } else { "short" }
+print(pick)
+var users = [make("a"), make("b")]
+users[1].tags.push(users[0].name)
+let u0 = users[0]
+users[0] = users[1]
+users[1] = u0
+print(users)
+for c in "héllo" {
+    if c == 'l' {
+        break
+    }
+    print(c)
+}
+var acc: [[int]] = []
+for k in 0..3 {
+    var row: [int] = []
+    for j in 0..k {
+        row.push(j)
+    }
+    acc.push(row)
+    row.push(99)
+}
+print(acc)

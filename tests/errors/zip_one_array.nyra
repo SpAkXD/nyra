@@ -1,0 +1,4 @@
+// expect: E0204
+fn main() {
+    print(zip([1, 2]))
+}

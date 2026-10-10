@@ -1,0 +1,209 @@
+// A small payroll: reads commands from standard input, one per line. Wages are in cents per hour.
+//
+//     hire NAME WAGE               hire someone
+//     hours NAME H                 add hours worked in the current pay period
+//     raise NAME PERCENT           raise someone's wage by a percentage (rounded down to whole cents)
+//     fire NAME                    remove someone
+//     slip NAME                    the pay slip of one person
+//     payroll                      all pay slips, the total and the top earner
+//     budget CENTS                 does the payroll fit in a budget?
+//     reset                        start a new pay period (hours go back to zero)
+
+use input
+
+struct Employee {
+    name: str
+    rate: int
+    hours: int
+}
+
+struct Staff {
+    people: [Employee]
+}
+
+fn money(cents: int) -> str = "${cents / 100}." + str(cents % 100).pad_left(2, '0')
+
+// a whole number written with digits only, or -1
+fn parse_whole(text: str) -> int {
+    if text.len() == 0 || text.len() > 9 || !text.all(c => c.is_digit()) { ret -1 }
+    ret int(text)
+}
+
+fn find_person(staff: Staff, name: str) -> int {
+    for i in 0..staff.people.len() {
+        if staff.people[i].name == name { ret i }
+    }
+    ret -1
+}
+
+fn gross_pay(person: Employee) -> int = person.rate * person.hours
+
+fn slip_line(person: Employee) -> str {
+    ret "{person.name}: {person.hours} hours at {money(person.rate)}/h = {money(gross_pay(person))}"
+}
+
+fn cmd_hire(inout staff: Staff, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: hire NAME WAGE")
+        ret
+    }
+    let wage = parse_whole(args[2])
+    if wage <= 0 {
+        print("error: bad wage")
+        ret
+    }
+    if find_person(staff, args[1]) >= 0 {
+        print("error: {args[1]} already works here")
+        ret
+    }
+    staff.people.push(Employee(name: args[1], rate: wage, hours: 0))
+    print("hired {args[1]} at {money(wage)}/h")
+}
+
+fn cmd_hours(inout staff: Staff, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: hours NAME H")
+        ret
+    }
+    let hours = parse_whole(args[2])
+    if hours <= 0 || hours > 168 {
+        print("error: bad hours")
+        ret
+    }
+    let at = find_person(staff, args[1])
+    if at < 0 {
+        print("error: unknown person {args[1]}")
+        ret
+    }
+    staff.people[at].hours += hours
+    print("{args[1]} worked {hours} hours (total {staff.people[at].hours})")
+}
+
+fn cmd_raise(inout staff: Staff, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: raise NAME PERCENT")
+        ret
+    }
+    let percent = parse_whole(args[2])
+    if percent <= 0 {
+        print("error: bad percentage")
+        ret
+    }
+    let at = find_person(staff, args[1])
+    if at < 0 {
+        print("error: unknown person {args[1]}")
+        ret
+    }
+    staff.people[at].rate = staff.people[at].rate * (100 + percent) / 100
+    print("{args[1]} now earns {money(staff.people[at].rate)}/h")
+}
+
+fn cmd_fire(inout staff: Staff, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: fire NAME")
+        ret
+    }
+    let at = find_person(staff, args[1])
+    if at < 0 {
+        print("error: unknown person {args[1]}")
+        ret
+    }
+    staff.people.remove(at)
+    print("fired {args[1]}")
+}
+
+fn cmd_slip(staff: Staff, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: slip NAME")
+        ret
+    }
+    let at = find_person(staff, args[1])
+    if at < 0 {
+        print("error: unknown person {args[1]}")
+        ret
+    }
+    print(slip_line(staff.people[at]))
+}
+
+fn cmd_payroll(staff: Staff, args: [str]) {
+    if staff.people.len() == 0 {
+        print("nobody works here")
+        ret
+    }
+    var total = 0
+    var sorted = staff.people
+    sorted.sort_by(p => p.name)
+    var best = sorted[0]
+    for person in sorted {
+        print(slip_line(person))
+        total += gross_pay(person)
+        if gross_pay(person) > gross_pay(best) { best = person }
+    }
+    print("total payroll {money(total)}")
+    if gross_pay(best) > 0 {
+        print("top earner: {best.name} ({money(gross_pay(best))})")
+    }
+}
+
+fn cmd_budget(staff: Staff, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: budget CENTS")
+        ret
+    }
+    let budget = parse_whole(args[1])
+    if budget < 0 {
+        print("error: bad budget")
+        ret
+    }
+    var total = 0
+    for person in staff.people {
+        total += gross_pay(person)
+    }
+    if total <= budget {
+        print("within budget, {money(budget - total)} left")
+    } else {
+        print("over budget by {money(total - budget)}")
+    }
+}
+
+fn cmd_reset(inout staff: Staff, args: [str]) {
+    for i in 0..staff.people.len() {
+        staff.people[i].hours = 0
+    }
+    print("new pay period")
+}
+
+fn execute(inout staff: Staff, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "hire" {
+        cmd_hire(inout staff, args)
+    } else if command == "hours" {
+        cmd_hours(inout staff, args)
+    } else if command == "raise" {
+        cmd_raise(inout staff, args)
+    } else if command == "fire" {
+        cmd_fire(inout staff, args)
+    } else if command == "slip" {
+        cmd_slip(staff, args)
+    } else if command == "payroll" {
+        cmd_payroll(staff, args)
+    } else if command == "budget" {
+        cmd_budget(staff, args)
+    } else if command == "reset" {
+        cmd_reset(inout staff, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var staff = Staff(people: [])
+    for line in input.lines() {
+        execute(inout staff, line)
+    }
+}

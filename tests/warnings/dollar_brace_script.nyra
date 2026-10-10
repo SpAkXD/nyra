@@ -1,0 +1,3 @@
+// expect: E0260
+let price = 5
+print("cost: ${price} and ${price + 1}")

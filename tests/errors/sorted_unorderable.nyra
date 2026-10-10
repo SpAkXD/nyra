@@ -1,0 +1,4 @@
+// expect: E0228
+fn main() {
+    print([[1], [0]].sorted())
+}

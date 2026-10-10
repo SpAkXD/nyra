@@ -108,7 +108,9 @@ fn examples_produce_expected_output_on_every_backend() {
         missing("no Node.js for the JavaScript backend");
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
+        // (`run` compiles the C with -O1; `--release` is the -O2 of `build`: both must agree)
         targets.push(("native", &[], "1"));
+        targets.push(("native, --release", &["--release"], "1"));
         targets.push(("native, no optimizations", &[], "0"));
     } else {
         missing("no C compiler for the native backend");
@@ -142,6 +144,7 @@ fn runtime_errors_report_code_position_and_exit_101() {
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         backends.push(&[]);
+        backends.push(&["--release"]);
     } else {
         missing("no C compiler for the native backend");
     }
@@ -194,7 +197,8 @@ fn bad_programs_report_expected_error_codes() {
             .and_then(|l| l.strip_prefix("// expect: "))
             .unwrap_or_else(|| panic!("{} has no `// expect:` line", path.display()))
             .trim();
-        let out = nyra().args(["check", "--json"]).arg(&path).output().unwrap();
+        // (a line `// flags: --sandbox` at the top is the command-line flags the program needs)
+        let out = nyra().args(["check", "--strict", "--json"]).args(common::flags_of(&src)).arg(&path).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(!out.status.success(), "{} should fail to compile", path.display());
         assert!(stdout.starts_with("{\"ok\":false"), "{}: not JSON: {stdout}", path.display());

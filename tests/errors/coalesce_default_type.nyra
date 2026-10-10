@@ -1,0 +1,5 @@
+// expect: E0277
+fn main() {
+    let m = ["a": 1]
+    print(m.get("a") ?? "none")
+}

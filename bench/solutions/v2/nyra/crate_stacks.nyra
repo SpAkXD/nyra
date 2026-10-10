@@ -1,0 +1,56 @@
+use input
+
+let lines = input.lines()
+var split = 0
+while lines[split] != "" {
+    split += 1
+}
+let numbers = lines[split - 1].split(" ")
+var stack_count = 0
+for t in numbers {
+    if t != "" { stack_count += 1 }
+}
+var base: [[char]] = []
+for _ in 0..stack_count {
+    var empty: [char] = []
+    base.push(empty)
+}
+var row = split - 2
+while row >= 0 {
+    for k in 0..stack_count {
+        let at = 1 + 4 * k
+        if at < lines[row].len() && lines[row][at] != ' ' { base[k].push(lines[row][at]) }
+    }
+    row -= 1
+}
+var one = base
+var many = base
+for i in split + 1..lines.len() {
+    if lines[i] == "" { continue }
+    let words = lines[i].split(" ")
+    let count = int(words[1])
+    let src = int(words[3])
+    let dst = int(words[5])
+    if src < 1 || src > stack_count || dst < 1 || dst > stack_count || count > one[src - 1].len() {
+        print("line {i + 1}: impossible move")
+        continue
+    }
+    var lifted: [char] = []
+    for _ in 0..count {
+        let c = one[src - 1].pop()
+        one[dst - 1].push(c)
+        lifted.push(many[src - 1].pop())
+    }
+    lifted.reverse()
+    for c in lifted {
+        many[dst - 1].push(c)
+    }
+}
+var first = ""
+var second = ""
+for k in 0..stack_count {
+    if one[k].len() > 0 { first += str(one[k][one[k].len() - 1]) } else { first += "-" }
+    if many[k].len() > 0 { second += str(many[k][many[k].len() - 1]) } else { second += "-" }
+}
+print("one at a time: {first}")
+print("all at once: {second}")

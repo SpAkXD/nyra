@@ -108,6 +108,12 @@ def ny_mod(a, b, line, col):
     return ny_rem(a, b)
 
 
+def ny_check_some(has, line, col):
+    """`opt.unwrap()` of `none`."""
+    if not has:
+        ny_panic("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col)
+
+
 def ny_check_non_empty(n, last, line, col):
     """`xs.min()` / `xs.max()` of an empty array (`n` elements seen; `last` says which method)."""
     if n == 0:
@@ -382,6 +388,14 @@ def ny_unique_item(xs, i):
     v = xs[i]
     if v.ny_shared:
         v = xs[i] = ny_copy(v)
+    return v
+
+
+def ny_unique_key(m, k, kt, line, col):
+    """`m[k]` made unique for a write (E0248 when the key is missing)."""
+    v = ny_mget(m, k, kt, line, col)
+    if v.ny_shared:
+        v = m[k] = ny_copy(v)
     return v
 
 

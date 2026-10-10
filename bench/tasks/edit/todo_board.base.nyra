@@ -1,0 +1,191 @@
+// A to-do board: reads commands from standard input, one per line.
+//
+//     add PRIORITY TITLE...       add a task (PRIORITY 1 is the most urgent, 3 the least)
+//     done ID                     mark a task as done
+//     undo ID                     mark a done task as open again
+//     drop ID                     delete a task
+//     move ID PRIORITY            change the priority of a task
+//     list                        the open tasks, most urgent first
+//     all                         every task in the order it was added
+//     stats                       how many tasks are open and done
+
+use input
+
+struct Todo {
+    id: int
+    title: str
+    priority: int
+    done: bool
+}
+
+struct Board {
+    todos: [Todo]
+    next_id: int
+}
+
+// a whole number written with digits only, or -1
+fn parse_number(text: str) -> int {
+    if text.len() == 0 || text.len() > 6 || !text.all(c => c.is_digit()) { ret -1 }
+    ret int(text)
+}
+
+fn valid_priority(value: int) -> bool = value >= 1 && value <= 3
+
+fn find_todo(board: Board, todo_id: int) -> int {
+    for i in 0..board.todos.len() {
+        if board.todos[i].id == todo_id { ret i }
+    }
+    ret -1
+}
+
+fn describe(todo: Todo) -> str = "#{todo.id} [{todo.priority}] {todo.title}"
+
+fn cmd_add(inout board: Board, args: [str]) {
+    if args.len() < 3 {
+        print("error: usage: add PRIORITY TITLE")
+        ret
+    }
+    let priority = parse_number(args[1])
+    if !valid_priority(priority) {
+        print("error: priority must be 1, 2 or 3")
+        ret
+    }
+    let title = args.slice(2, args.len()).join(" ")
+    board.todos.push(Todo(id: board.next_id, title: title, priority: priority, done: false))
+    print("added #{board.next_id}: {title} (priority {priority})")
+    board.next_id += 1
+}
+
+fn cmd_done(inout board: Board, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: done ID")
+        ret
+    }
+    let at = find_todo(board, parse_number(args[1]))
+    if at < 0 {
+        print("error: no task {args[1]}")
+        ret
+    }
+    if board.todos[at].done {
+        print("error: #{board.todos[at].id} is already done")
+        ret
+    }
+    board.todos[at].done = true
+    print("completed #{board.todos[at].id}")
+}
+
+fn cmd_undo(inout board: Board, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: undo ID")
+        ret
+    }
+    let at = find_todo(board, parse_number(args[1]))
+    if at < 0 {
+        print("error: no task {args[1]}")
+        ret
+    }
+    if !board.todos[at].done {
+        print("error: #{board.todos[at].id} is not done")
+        ret
+    }
+    board.todos[at].done = false
+    print("reopened #{board.todos[at].id}")
+}
+
+fn cmd_drop(inout board: Board, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: drop ID")
+        ret
+    }
+    let at = find_todo(board, parse_number(args[1]))
+    if at < 0 {
+        print("error: no task {args[1]}")
+        ret
+    }
+    print("dropped #{board.todos[at].id}")
+    board.todos.remove(at)
+}
+
+fn cmd_move(inout board: Board, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: move ID PRIORITY")
+        ret
+    }
+    let at = find_todo(board, parse_number(args[1]))
+    if at < 0 {
+        print("error: no task {args[1]}")
+        ret
+    }
+    let priority = parse_number(args[2])
+    if !valid_priority(priority) {
+        print("error: priority must be 1, 2 or 3")
+        ret
+    }
+    board.todos[at].priority = priority
+    print("#{board.todos[at].id} now has priority {priority}")
+}
+
+fn cmd_list(board: Board, args: [str]) {
+    var open_todos = board.todos.filter(t => !t.done)
+    if open_todos.len() == 0 {
+        print("nothing to do")
+        ret
+    }
+    open_todos.sort_by(t => t.id)
+    open_todos.sort_by(t => t.priority)
+    for todo in open_todos {
+        print(describe(todo))
+    }
+}
+
+fn cmd_all(board: Board, args: [str]) {
+    if board.todos.len() == 0 {
+        print("the board is empty")
+        ret
+    }
+    for todo in board.todos {
+        var mark = " "
+        if todo.done { mark = "x" }
+        print("#{todo.id} [{mark}] [{todo.priority}] {todo.title}")
+    }
+}
+
+fn cmd_stats(board: Board, args: [str]) {
+    let done = board.todos.count(t => t.done)
+    print("open={board.todos.len() - done} done={done}")
+}
+
+fn execute(inout board: Board, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "add" {
+        cmd_add(inout board, args)
+    } else if command == "done" {
+        cmd_done(inout board, args)
+    } else if command == "undo" {
+        cmd_undo(inout board, args)
+    } else if command == "drop" {
+        cmd_drop(inout board, args)
+    } else if command == "move" {
+        cmd_move(inout board, args)
+    } else if command == "list" {
+        cmd_list(board, args)
+    } else if command == "all" {
+        cmd_all(board, args)
+    } else if command == "stats" {
+        cmd_stats(board, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var board = Board(todos: [], next_id: 1)
+    for line in input.lines() {
+        execute(inout board, line)
+    }
+}

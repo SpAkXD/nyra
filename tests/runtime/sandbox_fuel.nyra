@@ -1,0 +1,10 @@
+// expect: E0355 at 8:9
+// only: interp
+// flags: --interp --fuel 100000
+fn main() {
+    print("start")
+    var n = 0
+    while true {
+        n += 1
+    }
+}

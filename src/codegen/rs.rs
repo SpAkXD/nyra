@@ -190,10 +190,40 @@ fn structs(m: &Module, out: &mut String) {
             out.push_str("}\n\n");
         }
         let _ = writeln!(out, "impl NyShow for {n} {{\n    fn show_in(&self, out: &mut String) {{");
-        let _ = writeln!(out, "        out.push_str({});", lit(&format!("{}(", s.name)));
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| lit(&format!("{}.{v}", s.name))).collect();
+            let _ = writeln!(out, "        out.push_str([{}][self.{} as usize]);", names.join(", "), name(&s.fields[0].0));
+            out.push_str("    }\n}\n\n");
+            continue;
+        }
+        if s.option {
+            // `none`, or `Some(value)`
+            let _ = writeln!(out, "        if !self.{} {{ out.push_str(\"none\"); return; }}", name(&s.fields[0].0));
+        }
+        let head = if s.tuple {
+            "(".to_string()
+        } else if s.option {
+            "Some(".to_string()
+        } else {
+            format!("{}(", s.name)
+        };
+        let _ = writeln!(out, "        out.push_str({});", lit(&head));
         for (k, (f, _)) in s.fields.iter().enumerate() {
-            let label = format!("{}{f}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            if s.option && k == 0 {
+                continue;
+            }
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple {
+                sep.to_string()
+            } else if s.option {
+                String::new()
+            } else {
+                format!("{sep}{f}: ")
+            };
+            if !label.is_empty() {
+                let _ = writeln!(out, "        out.push_str({});", lit(&label));
+            }
             let _ = writeln!(out, "        self.{}.show_in(out);", name(f));
         }
         out.push_str("        out.push(')');\n    }\n}\n\n");
@@ -694,6 +724,19 @@ impl<'a> Gen<'a> {
                     pos = Pos::Ref(format!("ny_at_mut({}, {idx}, {}, {})", pos.mut_ref(), span.line, span.col));
                     t = t.elem().expect("verified: an array");
                 }
+                Step::Key(key, span) => {
+                    // `m[k]`: the value under the key (the map is copied first when it is shared)
+                    let kx = if borrowed.iter().any(|r| mentions(key, *r)) {
+                        let v = self.fresh("k");
+                        let line = format!("let {v} = {};", self.owned(key));
+                        self.line(&line);
+                        v
+                    } else {
+                        self.owned(key)
+                    };
+                    pos = Pos::Ref(format!("ny_mat_mut({}, &{kx}, {}, {})", pos.mut_ref(), span.line, span.col));
+                    t = t.map_kv().expect("verified: a map").1;
+                }
                 Step::Field(k) => {
                     let info = self.m.structs.get(t).expect("verified: a struct");
                     let f = name(&info.fields[*k as usize].0);
@@ -713,6 +756,7 @@ impl<'a> Gen<'a> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
@@ -783,6 +827,7 @@ impl<'a> Gen<'a> {
             RtOp::StrCodes => format!("Rc::new({}.chars().map(|c| c as i64).collect())", self.str_ref(&args[0])),
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", self.str_ref(&args[0]), self.str_ref(&args[1])),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, true)", self.str_ref(&args[0]), a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, false)", self.str_ref(&args[0]), a[1], a[2]),

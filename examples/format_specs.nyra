@@ -1,0 +1,44 @@
+// Format specifiers inside { }: the same subset of Python's on every backend.
+fn money(x: int) -> str = "{x:,}"   ex money(1234567) == "1,234,567", money(-12) == "-12"
+fn price(x: float) -> str = "{x:>8.2f}"   ex price(2.5) == "    2.50"
+
+let name = "ann"
+let n = 42
+let neg = -7
+let big = 1234567
+let pi = 3.14159265
+
+// width and alignment: text is left-aligned by default, numbers right-aligned
+print("[{name:8}] [{name:>8}] [{name:<8}] [{name:^8}]")
+print("[{n:6}] [{n:<6}] [{n:^6}] [{n:>6}]")
+print("[{name:*^9}] [{name:->7}] [{n:_<6}] [{n:#>6}]")
+print("[{name:2}] [{'x':3}] [{true:7}] [{[1, 2]:>9}]")
+
+// zeros and signs
+print("{n:05} {neg:05} {n:+} {neg:+} {n:+05} {n:<05}")
+print("{3:02}:{7:02}:{0:02}")
+
+// decimals: rounded exactly like text.fixed, ties away from zero
+print("{pi:.2} {pi:.0} {pi:.5} {2.5:.0} {0.125:.2} {-0.5:.0} {1.005:.2}")
+print("[{pi:10.3}] [{pi:<10.3}] [{pi:^10.3}] [{pi:010.3}] [{-pi:010.3}]")
+print("{pi:.2f} {n:d} {name:s} {n:5d} {pi:8.1f}")
+
+// thousands separators
+print("{big:,} {neg:,} {1000:,} {999:,} {12:,} {0:,}")
+print("{big:12,} {big:<12,}| {1234567.891:,.2} {-9876543.21:,.1} {big:+,}")
+
+// any value can be aligned: it is shown like print shows it
+let pair = (1, "a")
+print("[{pair:>12}] [{pair:<12}]")
+print("{n:>4}{n:>4}{n:>4}")
+
+// the value can be any expression
+let xs = [3, 1, 2]
+print("{xs.len():03} {xs[0] * 100:>6} {(n + 8) / 5:,} {xs.sum():+}")
+for i in 1..4 {
+    print("{i:2} {i * i:3} {float(i) / 3.0:6.2}")
+}
+
+// padding that is wider than the text, narrower, and exactly as wide
+print("[{'é':3}] [{"abc".upper():^9}] [{name:3}] [{name:1}]")
+print("{{{n:3}}} {{}} {n}")

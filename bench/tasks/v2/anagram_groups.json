@@ -1,0 +1,37 @@
+{
+  "id": "anagram_groups",
+  "title": "Group the anagrams",
+  "category": "strings",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read words from standard input, one per line (letters only; blank lines are skipped). Two words are anagrams when they contain the same letters the same number of times, ignoring upper or lower case (`Listen` and `silent` are anagrams). Words that are equal when case is ignored count as one word: keep the first spelling and drop the later ones. Print every group of two or more words, one group per line, the words of a group separated by single spaces and sorted alphabetically (comparing the lowercase forms), and the groups sorted by their first word (also compared in lowercase). Words keep their original spelling in the output. If there is no group print `no anagrams`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "listen\nSilent\nenlist\ngoogle\ngogole\ncat\nact\ntac\ndog\nLISTEN\n",
+      "expected_output": "act cat tac\nenlist listen Silent\ngogole google\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "a\nb\nc\n",
+      "expected_output": "no anagrams\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "\nstop\npots\n\nTops\npost\nspot\nopts\nSPOT\n",
+      "expected_output": "opts post pots spot stop Tops\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "Evil\nvile\nlive\nveil\nLevi\nElvis\nlives\nLives\nsilvE\n",
+      "expected_output": "Elvis lives silvE\nEvil Levi live veil vile\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "aab\naba\nbaa\nabb\nbab\nbba\nabc\n",
+      "expected_output": "aab aba baa\nabb bab bba\n"
+    }
+  ]
+}

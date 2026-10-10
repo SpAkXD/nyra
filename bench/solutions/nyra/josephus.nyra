@@ -1,8 +1,5 @@
 fn survivor(n: int, k: int) -> int {
-    var people: [int] = []
-    for i in 1..n + 1 {
-        people.push(i)
-    }
+    var people = [i for i in 1..n + 1]
     var index = 0
     while people.len() > 1 {
         index = (index + k - 1) % people.len()
@@ -10,9 +7,8 @@ fn survivor(n: int, k: int) -> int {
     }
     ret people[0]
 }
+ex survivor(1, 3) == 1, survivor(7, 3) == 4, survivor(5, 2) == 3
 
-fn main() {
-    print(survivor(7, 3))
-    print(survivor(41, 3))
-    print(survivor(10, 2))
-}
+print(survivor(7, 3))
+print(survivor(41, 3))
+print(survivor(10, 2))

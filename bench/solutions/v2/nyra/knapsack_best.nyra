@@ -1,0 +1,25 @@
+use input
+
+let lines = input.lines()
+let head = lines[0].split(" ")
+let n = int(head[0])
+let capacity = int(head[1])
+var value_at = [0].repeat(capacity + 1)
+var count_at = [0].repeat(capacity + 1)
+for i in 0..n {
+    let parts = lines[1 + i].split(" ")
+    let weight = int(parts[0])
+    let value = int(parts[1])
+    var w = capacity
+    while w >= weight {
+        let v = value_at[w - weight] + value
+        let k = count_at[w - weight] + 1
+        if v > value_at[w] || (v == value_at[w] && k < count_at[w]) {
+            value_at[w] = v
+            count_at[w] = k
+        }
+        w -= 1
+    }
+}
+print("best={value_at[capacity]}")
+print("taken={count_at[capacity]}")

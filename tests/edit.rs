@@ -355,7 +355,7 @@ fn fix_repairs_the_new_code() {
     let sloppy = "fn area(r: Rect) -> int {\n    return r.w * r.h;\n}";
     let (ok, after, err) = edit("fix", SHAPES, &["--fix", "--set", "area", sloppy], None);
     assert!(ok, "{err}");
-    assert!(after.contains("fn area(r: Rect) -> int {\n    ret r.w * r.h\n}\n"), "{after}");
+    assert!(after.contains("fn area(r: Rect) -> int {\n    return r.w * r.h\n}\n"), "{after}");
     assert!(err.contains("--fix repaired"), "{err}");
     let (ok, _, _) = edit("no-fix", SHAPES, &["--set", "area", sloppy], None);
     assert!(!ok);

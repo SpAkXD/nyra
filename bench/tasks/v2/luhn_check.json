@@ -1,0 +1,32 @@
+{
+  "id": "luhn_check",
+  "title": "Card number checksum",
+  "category": "parsing",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input, each holding a payment card number. Lines that are empty or contain only spaces are skipped. For every other line, first remove all spaces and dashes (`-`) from it. If what is left is not made only of digits, or has fewer than 13 or more than 19 digits, print `bad format`. Otherwise apply the Luhn check: starting from the rightmost digit and moving left, double every second digit (the second, fourth, ... from the right); if doubling gives a number above 9, subtract 9; the number is valid when the sum of all the resulting digits is a multiple of 10. Print `valid` or `bad checksum`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "4539 1488 0343 6467\n4539 1488 0343 6468\n1234-5678\n\n79927398713 \n",
+      "expected_output": "valid\nbad checksum\nbad format\nbad format\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "0000000000000\n0000000000001\n4111111111111111\n4111111111111112\n",
+      "expected_output": "valid\nbad checksum\nvalid\nbad checksum\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "378282246310005\n3782-8224-6310-005\n37828224631000\n3782822463100050000\n37828224631000500005\n",
+      "expected_output": "valid\nvalid\nbad checksum\nvalid\nbad format\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "49927398716\n6011 0009 9013 9424\n6011 0009 9013 942x\n  5500-0000-0000-0004  \n5500 0000 0000 0004 \n",
+      "expected_output": "bad format\nvalid\nbad format\nvalid\nvalid\n"
+    }
+  ]
+}

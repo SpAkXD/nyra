@@ -18,31 +18,44 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::json::{obj, Json};
-use crate::{diag, examples, explain, Target};
+use crate::{caps, diag, examples, explain, sandbox, Target};
 
 /// The name programs get in diagnostics and runtime errors.
 const FILE: &str = "main.nyra";
 const SPEC: &str = include_str!("../docs/SPEC.md");
 const GUIDE: &str = include_str!("../docs/AI_GUIDE.md");
+const CARD_FILE: &str = include_str!("../docs/AGENT_CARD.md");
+
+/// The agent card (docs/AGENT_CARD.md): the compact spec `nyra_spec` returns by default. The file starts with a metadata
+/// comment (token count and budget) that a model has no use for, so it is cut off.
+pub fn card() -> &'static str {
+    match CARD_FILE.strip_prefix("<!--").and_then(|rest| rest.split_once("-->")) {
+        Some((_, body)) => body.trim_start_matches(['\r', '\n']),
+        None => CARD_FILE,
+    }
+}
 
 /// Newest first; a client asking for another version gets the newest.
 const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 const STDOUT_CAP: usize = 16 * 1024;
+/// The defaults of a sandboxed run: about ten seconds of interpreting.
+const SANDBOX_FUEL: u64 = 200_000_000;
+const SANDBOX_MEMORY: u64 = 256 << 20;
 const STDERR_CAP: usize = 8 * 1024;
 const TIMEOUT_MS: u64 = 10_000;
 const MAX_TIMEOUT_MS: u64 = 60_000;
 
 const INSTRUCTIONS: &str = "Nyra is a small, strictly typed language that is not in your training data. \
-Before writing Nyra, call nyra_spec once (part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
-Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code. After each non-trivial function write 1-2 examples (`ex f(3) == 9`): nyra_check runs them and reports a false one as E0250 with the actual value. To change an existing program, do not resend it: nyra_outline it, nyra_show the symbols you need, and nyra_edit them by name.";
+Before writing Nyra, call nyra_spec once: it returns the compact agent card (full: true returns the complete spec, part \"guide\" adds rules, recipes and error fixes); do not guess syntax. \
+Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full entry for an error code. After each non-trivial function write 1-2 examples (`ex f(3) == 9`): nyra_check runs them and reports a false one as E0250 with the actual value. To change an existing program, do not resend it: nyra_outline it, nyra_show the symbols you need, and nyra_edit them by name. Programs run with no capabilities but standard input: a `use fs` or `use os` needs allow:[\"fs\"] or [\"os\"] (error E0290 names it); nyra_outline lists what each function needs. sandbox:true runs a program in the interpreter, with limits on steps, memory and output.";
 
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
-{"name":"nyra_spec","title":"Nyra language spec","description":"The complete Nyra language spec (Markdown). Nyra is not in your training data: read it once before writing Nyra. part \"guide\" returns the AI guide instead: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"part":{"type":"string","enum":["spec","guide"],"description":"default spec"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js)"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
+{"name":"nyra_spec","title":"Nyra language spec","description":"The Nyra agent card (Markdown, about 1,400 tokens): one example program, the rules that differ from other languages, what is not in Nyra, every method and module name. Nyra is not in your training data: read it once before writing Nyra. full: true returns the complete language spec instead (about 8,000 tokens). part \"guide\" returns the AI guide: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"full":{"type":"boolean","description":"return the complete spec instead of the card (default false)"},"part":{"type":"string","enum":["spec","guide"],"description":"default spec (the card, or the complete spec with full: true)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
@@ -56,7 +69,7 @@ agents can check, run and learn Nyra. Add it to Claude Code with:
   claude mcp add nyra -- nyra mcp
 
 Tools: nyra_spec, nyra_check, nyra_test, nyra_run, nyra_explain, nyra_build, nyra_outline, nyra_show, nyra_edit.
-Resources: nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
+Resources: nyra://card, nyra://spec, nyra://guide, nyra://errors, nyra://errors/{code}.
 ";
 
 pub fn run(args: Vec<String>) -> ExitCode {
@@ -322,6 +335,10 @@ impl Server {
             Some(other) => return Err(tool_error(format!("backend must be \"native\" or \"js\", found {other:?}"))),
         };
         let stdin = optional_str(args, "stdin")?.unwrap_or("");
+        let grant = grant_of(args)?;
+        if matches!(args.get("sandbox"), Some(Json::Bool(true))) {
+            return sandboxed(args, code, stdin, &grant);
+        }
         let timeout = match args.get("timeout_ms") {
             None | Some(Json::Null) => TIMEOUT_MS,
             Some(t) => match t.as_f64() {
@@ -331,7 +348,7 @@ impl Server {
         };
 
         let start = Instant::now();
-        let source = match generate(code, target)? {
+        let source = match generate_granted(code, target, &grant)? {
             Ok(source) => source,
             Err(diags) => return Ok(diags),
         };
@@ -347,7 +364,8 @@ impl Server {
             let compiler = self.cc.get_or_insert_with(crate::find_cc).clone().ok_or_else(|| {
                 tool_error("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use backend \"js\"")
             })?;
-            let (exe, t) = crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, true).map_err(tool_error)?;
+            let (exe, t) =
+                crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?;
             cc_ms = Some(t);
             Command::new(exe)
         };
@@ -446,6 +464,14 @@ fn resources() -> Json {
     };
     vec![
         res(
+            "nyra://card",
+            "card",
+            "Nyra agent card",
+            "The compact spec for agents (about 1,400 tokens): an example program, the rules that differ from other languages, what is not in Nyra, every method and module name",
+            "text/markdown",
+            Some(card().len()),
+        ),
+        res(
             "nyra://spec",
             "spec",
             "Nyra language spec",
@@ -475,6 +501,7 @@ fn resources() -> Json {
 
 fn read_resource(uri: &str) -> Option<(&'static str, String)> {
     match uri {
+        "nyra://card" => Some(("text/markdown", card().to_string())),
         "nyra://spec" => Some(("text/markdown", SPEC.to_string())),
         "nyra://guide" => Some(("text/markdown", GUIDE.to_string())),
         "nyra://errors" => Some(("application/json", explain::list_json(&explain::database().ok()?, false))),
@@ -508,16 +535,44 @@ fn required_str<'a>(args: &'a Json, key: &str) -> Result<&'a str, String> {
 }
 
 fn spec(args: &Json) -> Result<String, String> {
+    let full = match args.get("full") {
+        None | Some(Json::Null) => false,
+        Some(Json::Bool(b)) => *b,
+        Some(_) => return Err(tool_error("argument `full` must be a boolean")),
+    };
     match optional_str(args, "part")? {
-        None | Some("spec") => Ok(SPEC.to_string()),
+        None | Some("spec") if full => Ok(SPEC.to_string()),
+        None | Some("spec") => Ok(card().to_string()),
         Some("guide") => Ok(GUIDE.to_string()),
         Some(other) => Err(tool_error(format!("part must be \"spec\" or \"guide\", found {other:?}"))),
     }
 }
 
+/// The capabilities a call grants: its `allow` list, else only standard input.
+fn grant_of(args: &Json) -> Result<caps::Grant, String> {
+    let mut grant = caps::Grant::none();
+    match args.get("allow") {
+        None | Some(Json::Null) => grant.allow("input").map_err(tool_error)?,
+        Some(Json::Arr(items)) => {
+            for item in items {
+                let name = item.as_str().ok_or_else(|| tool_error("argument `allow` must be a list of capability names"))?;
+                grant.allow(name).map_err(tool_error)?;
+            }
+        }
+        Some(_) => return Err(tool_error("argument `allow` must be a list of capability names, e.g. [\"fs\"]")),
+    }
+    Ok(grant)
+}
+
+/// How to grant a capability, for the hint of E0290.
+fn allow_flag(cap: &str) -> String {
+    format!("grant it by passing allow: [\"{cap}\"] to the tool")
+}
+
 fn check(args: &Json) -> Result<String, String> {
     let code = required_str(args, "code")?;
-    Ok(match crate::compile(code) {
+    let grant = grant_of(args)?;
+    Ok(match crate::compile_granted(code, &grant, &allow_flag) {
         Ok(_) => diag::render_json(&[], FILE),
         Err(diags) => diag::render_json(&diags, FILE),
     })
@@ -526,8 +581,12 @@ fn check(args: &Json) -> Result<String, String> {
 /// The examples of a program: the JSON of `nyra test --json`.
 fn test(args: &Json) -> Result<String, String> {
     let code = required_str(args, "code")?;
+    let grant = grant_of(args)?;
     Ok(match crate::front(code) {
-        Ok(mut prog) => examples::json(&examples::run(&mut prog), FILE),
+        Ok(mut prog) => match caps::enforce(&prog, &grant, allow_flag) {
+            denied if !denied.is_empty() => diag::render_json(&denied, FILE),
+            _ => examples::json(&examples::run(&mut prog), FILE),
+        },
         Err(diags) => diag::render_json(&diags, FILE),
     })
 }
@@ -535,11 +594,78 @@ fn test(args: &Json) -> Result<String, String> {
 /// Compiles to C or JS. The inner `Err` is the diagnostics JSON (a normal tool result);
 /// the outer one is a failure of the compiler itself.
 fn generate(code: &str, target: Target) -> Result<Result<String, String>, String> {
-    let prog = match crate::compile(code) {
+    generate_granted(code, target, &caps::Grant::all())
+}
+
+/// `generate`, for a program that may use only what `grant` gives (else E0290).
+fn generate_granted(code: &str, target: Target, grant: &caps::Grant) -> Result<Result<String, String>, String> {
+    let prog = match crate::compile_granted(code, grant, &allow_flag) {
         Ok(p) => p,
         Err(diags) => return Ok(Err(diag::render_json(&diags, FILE))),
     };
     crate::generate(&prog, target, FILE).map(Ok).map_err(tool_error)
+}
+
+/// `nyra_run` with `sandbox: true`: the program runs in the interpreter, in this process, under
+/// limits of steps, memory and output that stop it at the same place on every machine.
+fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Result<String, String> {
+    let number = |key: &str, default: u64| -> Result<u64, String> {
+        match args.get(key) {
+            None | Some(Json::Null) => Ok(default),
+            Some(v) => match v.as_f64() {
+                Some(n) if n >= 1.0 && n.fract() == 0.0 && n < 1.8e19 => Ok(n as u64),
+                _ => Err(tool_error(format!("`{key}` must be a whole number from 1"))),
+            },
+        }
+    };
+    let mut cfg = sandbox::Config::new();
+    cfg.limits.steps = number("fuel", SANDBOX_FUEL)?;
+    cfg.limits.memory = number("max_memory", SANDBOX_MEMORY)?;
+    cfg.limits.output = number("max_output", STDOUT_CAP as u64)?.min(STDOUT_CAP as u64);
+    cfg.limits.wall_ms = number("timeout_ms", TIMEOUT_MS)?.min(MAX_TIMEOUT_MS);
+    cfg.confined = true;
+    cfg.to_stdout = false;
+    cfg.stdin = Some(stdin.as_bytes().to_vec());
+    if let Some(list) = args.get("args").filter(|a| !matches!(a, Json::Null)) {
+        let items = list.as_array().ok_or_else(|| tool_error("argument `args` must be a list of strings"))?;
+        for item in items {
+            cfg.args.push(item.as_str().ok_or_else(|| tool_error("argument `args` must be a list of strings"))?.to_string());
+        }
+    }
+    let start = Instant::now();
+    let prog = match crate::compile_granted(code, grant, &allow_flag) {
+        Ok(p) => p,
+        Err(diags) => return Ok(diag::render_json(&diags, FILE)),
+    };
+    let module = sandbox::module(&prog).map_err(tool_error)?;
+    let compile_ms = ms(start.elapsed());
+    let report = sandbox::run(&module, cfg);
+    let mut fields =
+        vec![("ok", Json::from(report.exit == 0)), ("exit", Json::from(report.exit as i64)), ("stdout", report.stdout.clone().into())];
+    if let Some(what) = &report.internal {
+        fields.push(("stderr", format!("internal error in the interpreter: {what}").into()));
+    }
+    if let Some(e) = &report.error {
+        let err = obj([
+            ("code", e.code.into()),
+            ("message", e.msg.clone().into()),
+            ("file", FILE.into()),
+            ("line", Json::from(e.span.line as i64)),
+            ("col", Json::from(e.span.col as i64)),
+            ("hint", e.hint.into()),
+            ("runtime", true.into()),
+        ]);
+        fields.push(("errors", vec![err].into()));
+        match e.code {
+            "E0357" => fields.push(("truncated", true.into())),
+            "E0359" => fields.push(("timeout", true.into())),
+            _ => {}
+        }
+    }
+    fields.push(("steps", Json::from(report.steps as i64)));
+    let times = vec![("compile", compile_ms), ("run", Json::fixed(report.run_ms, 1))];
+    fields.push(("ms", Json::Obj(times.into_iter().map(|(k, v)| (k.to_string(), v)).collect())));
+    Ok(Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string())
 }
 
 fn build(args: &Json) -> Result<String, String> {
@@ -743,7 +869,7 @@ mod tests {
 
     #[test]
     fn resources_resolve() {
-        for uri in ["nyra://spec", "nyra://guide", "nyra://errors", "nyra://errors/E0201", "nyra://errors/e201"] {
+        for uri in ["nyra://card", "nyra://spec", "nyra://guide", "nyra://errors", "nyra://errors/E0201", "nyra://errors/e201"] {
             assert!(read_resource(uri).is_some(), "{uri}");
         }
         // (tests/errors_db.rs counts every code written in src/, so no made-up code here)

@@ -1,0 +1,118 @@
+@add-field Todo due: int
+@replace describe
+fn describe(todo: Todo) -> str {
+    let text = "#{todo.id} [{todo.priority}] {todo.title}"
+    ret if todo.due >= 0 { text + " (due {todo.due})" } else { text }
+}
+@replace cmd_add
+fn cmd_add(inout board: Board, args: [str]) {
+    if args.len() < 3 {
+        print("error: usage: add PRIORITY TITLE")
+        ret
+    }
+    let priority = parse_number(args[1])
+    if !valid_priority(priority) {
+        print("error: priority must be 1, 2 or 3")
+        ret
+    }
+    var due = -1
+    var words = args.slice(2, args.len())
+    if words[0].starts_with("@") {
+        due = parse_number(words[0].slice(1, words[0].len()))
+        if due < 0 {
+            print("error: bad due day")
+            ret
+        }
+        words = words.slice(1, words.len())
+        if words.len() == 0 {
+            print("error: usage: add PRIORITY TITLE")
+            ret
+        }
+    }
+    let title = words.join(" ")
+    board.todos.push(Todo(id: board.next_id, title: title, priority: priority, done: false, due: due))
+    var suffix = ""
+    if due >= 0 { suffix = ", due {due}" }
+    print("added #{board.next_id}: {title} (priority {priority}{suffix})")
+    board.next_id += 1
+}
+@replace cmd_list
+fn cmd_list(board: Board, args: [str]) {
+    var open_todos = board.todos.filter(t => !t.done)
+    if open_todos.len() == 0 {
+        print("nothing to do")
+        ret
+    }
+    open_todos.sort_by(t => t.id)
+    open_todos.sort_by(t => t.priority)
+    open_todos.sort_by(t => if t.due >= 0 { t.due } else { 1000000000 })
+    for todo in open_todos {
+        print(describe(todo))
+    }
+}
+@replace cmd_all
+fn cmd_all(board: Board, args: [str]) {
+    if board.todos.len() == 0 {
+        print("the board is empty")
+        ret
+    }
+    for todo in board.todos {
+        var mark = " "
+        if todo.done { mark = "x" }
+        var due = ""
+        if todo.due >= 0 { due = " (due {todo.due})" }
+        print("#{todo.id} [{mark}] [{todo.priority}] {todo.title}{due}")
+    }
+}
+@add after cmd_stats
+fn cmd_overdue(board: Board, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: overdue DAY")
+        ret
+    }
+    let day = parse_number(args[1])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    var late = board.todos.filter(t => !t.done && t.due >= 0 && t.due < day)
+    if late.len() == 0 {
+        print("nothing is overdue")
+        ret
+    }
+    late.sort_by(t => t.id)
+    late.sort_by(t => t.due)
+    for todo in late {
+        print("#{todo.id} {todo.title} was due {todo.due}")
+    }
+}
+@replace execute
+fn execute(inout board: Board, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "add" {
+        cmd_add(inout board, args)
+    } else if command == "done" {
+        cmd_done(inout board, args)
+    } else if command == "undo" {
+        cmd_undo(inout board, args)
+    } else if command == "drop" {
+        cmd_drop(inout board, args)
+    } else if command == "move" {
+        cmd_move(inout board, args)
+    } else if command == "list" {
+        cmd_list(board, args)
+    } else if command == "all" {
+        cmd_all(board, args)
+    } else if command == "stats" {
+        cmd_stats(board, args)
+    } else if command == "overdue" {
+        cmd_overdue(board, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}

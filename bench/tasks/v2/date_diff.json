@@ -1,0 +1,37 @@
+{
+  "id": "date_diff",
+  "title": "Days between two dates",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each line should hold two dates in the form `YYYY-MM-DD`, separated by exactly one space (no other characters, no spaces at the start or end). For every line (empty lines included) print the number of days from the first date to the second date, which is negative when the second date is earlier. Print `invalid` instead when the line does not have this form or when a date does not exist. The calendar is the Gregorian one with its usual leap year rule (a year is a leap year if it is divisible by 4, except years divisible by 100 that are not divisible by 400), applied to every year from 0001 to 9999; year 0000 does not exist.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "2024-01-01 2024-03-01\n2000-02-28 2000-03-01\n2023-12-25 2023-12-01\n1900-02-29 1900-03-01\n2024-1-1 2024-01-02\n\n",
+      "expected_output": "60\n2\n-24\ninvalid\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "2024-02-29 2024-02-29\n2024-02-28 2024-03-01\n2023-02-28 2023-03-01\n2100-02-29 2100-03-01\n2400-02-29 2400-03-01\n",
+      "expected_output": "0\n2\n1\ninvalid\n1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "0001-01-01 9999-12-31\n9999-12-31 0001-01-01\n0000-01-01 0001-01-01\n1999-12-31 2000-01-01\n1970-01-01 2038-01-19\n",
+      "expected_output": "3652058\n-3652058\ninvalid\n1\n24855\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "2024-04-31 2024-05-01\n2024-13-01 2024-12-01\n2024-00-10 2024-01-10\n2024-01-00 2024-01-10\n2024-01-01  2024-01-02\n 2024-01-01 2024-01-02\n2024-01-01 2024-01-02 \n2024-01-01\n2024-01-01 2024-01-02 2024-01-03\nabcd-ef-gh 2024-01-01\n",
+      "expected_output": "invalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "1582-10-04 1582-10-15\n1600-01-01 1700-01-01\n1700-01-01 1800-01-01\n2020-06-15 2021-06-15\n2021-06-15 2020-06-15\n",
+      "expected_output": "11\n36525\n36524\n365\n-365\n"
+    }
+  ]
+}

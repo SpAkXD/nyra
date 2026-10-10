@@ -1,0 +1,37 @@
+{
+  "id": "log_levels",
+  "title": "Summarize a log",
+  "category": "parsing",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read a log from standard input. A valid log line has exactly this shape: `YYYY-MM-DD hh:mm:ss LEVEL message`, that is a date, one space, a time, one space, a level, one space and a message of at least one character (the message may contain spaces and any characters). The year, month, day, hour, minute and second are digits only, with month 01 to 12, day 01 to 31, hour 00 to 23, minute and second 00 to 59 (no other date checks). The level is one of `DEBUG`, `INFO`, `WARN`, `ERROR`. Lines are taken as they are (no trimming); empty lines are skipped silently.\n\nFor every other line print `line N: malformed` as soon as it is read (N counts from 1 over all lines). Then print the four lines `DEBUG: c`, `INFO: c`, `WARN: c`, `ERROR: c` with the number of valid lines of each level, in that order, and finally `last error: M` where M is the message of the last valid ERROR line, or `last error: none` when there was none.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "2024-03-01 12:00:01 INFO server started\n2024-03-01 12:00:09 ERROR disk full on /dev/sda1\ngarbage\n2024-03-01 25:00:00 INFO bad hour\n2024-03-01 12:01:00 WARN slow response\n",
+      "expected_output": "line 3: malformed\nline 4: malformed\nDEBUG: 0\nINFO: 1\nWARN: 1\nERROR: 1\nlast error: disk full on /dev/sda1\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "2023-12-31 23:59:59 ERROR first\n2024-01-01 00:00:00 ERROR second one\n2024-01-01 00:00:01 DEBUG x\n",
+      "expected_output": "DEBUG: 1\nINFO: 0\nWARN: 0\nERROR: 2\nlast error: second one\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "2024-13-01 10:00:00 INFO month\n2024-02-32 10:00:00 INFO day\n2024-02-31 10:00:00 INFO ok\n2024-02-01 10:60:00 INFO minute\n2024-02-01 10:00:60 INFO second\n2024-02-01 10:00:00 INFO\n2024-02-01 10:00:00 INFO \n2024-02-01 10:00:00 TRACE level\n2024-02-01  10:00:00 INFO double space\n 2024-02-01 10:00:00 INFO lead\n",
+      "expected_output": "line 1: malformed\nline 2: malformed\nline 4: malformed\nline 5: malformed\nline 6: malformed\nline 7: malformed\nline 8: malformed\nline 9: malformed\nline 10: malformed\nDEBUG: 0\nINFO: 1\nWARN: 0\nERROR: 0\nlast error: none\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "",
+      "expected_output": "DEBUG: 0\nINFO: 0\nWARN: 0\nERROR: 0\nlast error: none\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "\n2024-05-05 05:05:05 WARN a b  c\n\n2024-05-05 05:05:06 DEBUG d\n2024-05-05 05:05:07 INFO e\n24-05-05 05:05:07 INFO short\n",
+      "expected_output": "line 6: malformed\nDEBUG: 1\nINFO: 1\nWARN: 1\nERROR: 0\nlast error: none\n"
+    }
+  ]
+}

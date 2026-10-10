@@ -1,5 +1,5 @@
 // forms that models write naturally: braces as text, operators that continue a line,
-// `ret` after a statement in a one-line block, a helper function written inside a function
+// `return` after a statement in a one-line block, a helper function written inside a function
 let code = "fn main() {"
 print(code, code.index_of("{"), "expected } but found )", "{}")
 let n = 4
@@ -14,8 +14,8 @@ print(total, count)
 
 fn grade(score: int) -> str {
     fn passed(s: int) -> bool = s >= 50
-    if score < 0 { print("bad score") ret "?" }
-    ret if passed(score) { "pass" } else { "fail" }
+    if score < 0 { print("bad score") return "?" }
+    return if passed(score) { "pass" } else { "fail" }
 }
 print(grade(70), grade(20), grade(-1))
 print('\0'.code(), "a\0b".len())

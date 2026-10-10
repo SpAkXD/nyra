@@ -1,0 +1,42 @@
+{
+  "id": "calorie_groups",
+  "title": "Who carries the most?",
+  "category": "aoc-style",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input the food carried by a group of hikers. Each hiker's items are listed one per line (a non-negative whole number of calories); the lists of different hikers are separated by one or more blank lines. A line that is not a whole number (digits only) prints `line N: invalid` (N counts from 1) and is ignored, and it does not end a hiker's list. After the last line print three lines: `hikers=H` (how many hikers carry at least one valid item), `top1=A` (the largest total carried by one hiker) and `top3=B` (the sum of the three largest totals, or of all of them when there are fewer than three). With no valid item at all, print `hikers=0`, `top1=0` and `top3=0`.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "1000\n2000\n3000\n\n4000\n\n5000\n6000\n\n7000\n8000\n9000\n\n10000\n",
+      "expected_output": "hikers=5\ntop1=24000\ntop3=45000\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "42\n",
+      "expected_output": "hikers=1\ntop1=42\ntop3=42\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "5\nx\n5\n\n\n\n7\n7.5\n-3\n1\n\n10\n",
+      "expected_output": "line 2: invalid\nline 8: invalid\nline 9: invalid\nhikers=3\ntop1=10\ntop3=28\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "0\n0\n\n0\n",
+      "expected_output": "hikers=2\ntop1=0\ntop3=0\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "",
+      "expected_output": "hikers=0\ntop1=0\ntop3=0\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "100\n\n300\n\n200\n\n50\n50\n50\n\n400\n\n1\n2\n3\n4\n",
+      "expected_output": "hikers=6\ntop1=400\ntop3=900\n"
+    }
+  ]
+}

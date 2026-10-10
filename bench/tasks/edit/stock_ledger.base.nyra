@@ -1,0 +1,193 @@
+// A small stock ledger: reads commands from standard input, one per line.
+//
+//     add SKU QTY PRICE NAME...   add an item, or restock it (the price is updated too); PRICE is in cents
+//     sell SKU QTY                sell units of an item
+//     price SKU CENTS             change the price of an item
+//     remove SKU                  forget an item
+//     report                      list the items by SKU and the value of the stock
+//     low N                       list the items with fewer than N units left
+
+use input
+
+struct Item {
+    sku: str
+    name: str
+    qty: int
+    price: int
+}
+
+struct Shop {
+    items: [Item]
+}
+
+fn money(cents: int) -> str {
+    var sign = ""
+    var c = cents
+    if c < 0 {
+        sign = "-"
+        c = 0 - c
+    }
+    ret "{sign}${c / 100}." + str(c % 100).pad_left(2, '0')
+}
+
+// a whole number written with digits only, or -1
+fn parse_count(text: str) -> int {
+    if text.len() == 0 || text.len() > 9 || !text.all(c => c.is_digit()) { ret -1 }
+    ret int(text)
+}
+
+fn find_item(shop: Shop, sku: str) -> int {
+    for i in 0..shop.items.len() {
+        if shop.items[i].sku == sku { ret i }
+    }
+    ret -1
+}
+
+fn cmd_add(inout shop: Shop, args: [str]) {
+    if args.len() < 5 {
+        print("error: usage: add SKU QTY PRICE NAME")
+        ret
+    }
+    let qty = parse_count(args[2])
+    let price = parse_count(args[3])
+    if qty < 0 || price < 0 {
+        print("error: bad number")
+        ret
+    }
+    let name = args.slice(4, args.len()).join(" ")
+    let at = find_item(shop, args[1])
+    if at >= 0 {
+        shop.items[at].qty += qty
+        shop.items[at].price = price
+        print("restocked {args[1]}: now {shop.items[at].qty}")
+    } else {
+        shop.items.push(Item(sku: args[1], name: name, qty: qty, price: price))
+        print("added {args[1]} ({name})")
+    }
+}
+
+fn cmd_sell(inout shop: Shop, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: sell SKU QTY")
+        ret
+    }
+    let qty = parse_count(args[2])
+    if qty <= 0 {
+        print("error: bad number")
+        ret
+    }
+    let at = find_item(shop, args[1])
+    if at < 0 {
+        print("error: unknown item {args[1]}")
+        ret
+    }
+    let item = shop.items[at]
+    if item.qty < qty {
+        print("error: not enough stock for {item.sku} (have {item.qty})")
+        ret
+    }
+    shop.items[at].qty -= qty
+    print("sold {qty} x {item.name} for {money(qty * item.price)}")
+}
+
+fn cmd_price(inout shop: Shop, args: [str]) {
+    if args.len() != 3 {
+        print("error: usage: price SKU CENTS")
+        ret
+    }
+    let cents = parse_count(args[2])
+    if cents < 0 {
+        print("error: bad number")
+        ret
+    }
+    let at = find_item(shop, args[1])
+    if at < 0 {
+        print("error: unknown item {args[1]}")
+        ret
+    }
+    shop.items[at].price = cents
+    print("price of {args[1]} is now {money(cents)}")
+}
+
+fn cmd_remove(inout shop: Shop, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: remove SKU")
+        ret
+    }
+    let at = find_item(shop, args[1])
+    if at < 0 {
+        print("error: unknown item {args[1]}")
+        ret
+    }
+    shop.items.remove(at)
+    print("removed {args[1]}")
+}
+
+fn cmd_report(shop: Shop, args: [str]) {
+    if shop.items.len() == 0 {
+        print("the shop is empty")
+        ret
+    }
+    var total = 0
+    var sorted = shop.items
+    sorted.sort_by(it => it.sku)
+    for item in sorted {
+        let value = item.qty * item.price
+        total += value
+        print("{item.sku} {item.name} qty={item.qty} price={money(item.price)} value={money(value)}")
+    }
+    print("total value={money(total)}")
+}
+
+fn cmd_low(shop: Shop, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: low N")
+        ret
+    }
+    let limit = parse_count(args[1])
+    if limit < 0 {
+        print("error: bad number")
+        ret
+    }
+    var found = shop.items.filter(it => it.qty < limit)
+    if found.len() == 0 {
+        print("nothing is low")
+        ret
+    }
+    found.sort_by(it => it.sku)
+    found.sort_by(it => it.qty)
+    for item in found {
+        print("{item.sku} {item.name} qty={item.qty}")
+    }
+}
+
+fn execute(inout shop: Shop, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "add" {
+        cmd_add(inout shop, args)
+    } else if command == "sell" {
+        cmd_sell(inout shop, args)
+    } else if command == "price" {
+        cmd_price(inout shop, args)
+    } else if command == "remove" {
+        cmd_remove(inout shop, args)
+    } else if command == "report" {
+        cmd_report(shop, args)
+    } else if command == "low" {
+        cmd_low(shop, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var shop = Shop(items: [])
+    for line in input.lines() {
+        execute(inout shop, line)
+    }
+}

@@ -1,0 +1,12 @@
+[1: ["a", "d"], 2: ["bb", "cc"], 3: ["eee"]]
+[1: ["A", "d"], 2: ["ff", "cc", "bb"], 3: ["eee"]]
+[1: ["a", "d"], 2: ["bb", "cc"], 3: ["eee"]]
+["ann": Player(name: "Annie", score: 22, tags: ["NEW"])]
+["ann": Player(name: "Ann", score: 22, tags: ["NEW", "pro"])]
+Club(members: ["bob": Player(name: "Bob", score: 4, tags: ["x", "y"])])
+["a": ["x": 6]]
+["k": 20]
+[1: "ab"]
+["g": [[0, 0, 9], [7, 0]]]
+3 [true: [2, 99, 1]]
+["a": [0, 1, 2]] 3

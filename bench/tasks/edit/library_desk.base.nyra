@@ -1,0 +1,226 @@
+// A library desk: reads commands from standard input, one per line. Days are whole numbers.
+//
+//     book ID TITLE...             add a book
+//     member NAME                  register a member
+//     borrow NAME ID DAY           lend a book (it is due 14 days later)
+//     return NAME ID DAY           take a book back; late books cost a fine
+//     fines NAME                   what a member owes
+//     status                       every book and where it is
+//     late DAY                     the loans that are overdue on a day
+
+use input
+
+struct Book {
+    id: str
+    title: str
+    holder: str
+    due: int
+}
+
+struct Member {
+    name: str
+    fines: int
+}
+
+struct Library {
+    books: [Book]
+    members: [Member]
+}
+
+// how long a loan lasts, in days
+fn loan_days() -> int = 14
+
+fn money(cents: int) -> str = "${cents / 100}." + str(cents % 100).pad_left(2, '0')
+
+// a day number written with digits only, or -1
+fn parse_day(text: str) -> int {
+    if text.len() == 0 || text.len() > 6 || !text.all(c => c.is_digit()) { ret -1 }
+    ret int(text)
+}
+
+fn find_book(library: Library, book_id: str) -> int {
+    for i in 0..library.books.len() {
+        if library.books[i].id == book_id { ret i }
+    }
+    ret -1
+}
+
+fn find_member(library: Library, name: str) -> int {
+    for i in 0..library.members.len() {
+        if library.members[i].name == name { ret i }
+    }
+    ret -1
+}
+
+// the fine in cents for a book that comes back `days_late` days after its due day
+fn fine_for(days_late: int) -> int = days_late * 10
+
+fn cmd_book(inout library: Library, args: [str]) {
+    if args.len() < 3 {
+        print("error: usage: book ID TITLE")
+        ret
+    }
+    if find_book(library, args[1]) >= 0 {
+        print("error: book {args[1]} already exists")
+        ret
+    }
+    let title = args.slice(2, args.len()).join(" ")
+    library.books.push(Book(id: args[1], title: title, holder: "", due: 0))
+    print("added book {args[1]}: {title}")
+}
+
+fn cmd_member(inout library: Library, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: member NAME")
+        ret
+    }
+    if find_member(library, args[1]) >= 0 {
+        print("error: {args[1]} is already a member")
+        ret
+    }
+    library.members.push(Member(name: args[1], fines: 0))
+    print("welcome {args[1]}")
+}
+
+fn cmd_borrow(inout library: Library, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: borrow NAME ID DAY")
+        ret
+    }
+    let day = parse_day(args[3])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    if find_member(library, args[1]) < 0 {
+        print("error: unknown member {args[1]}")
+        ret
+    }
+    let at = find_book(library, args[2])
+    if at < 0 {
+        print("error: unknown book {args[2]}")
+        ret
+    }
+    if library.books[at].holder != "" {
+        print("error: {library.books[at].id} is already on loan")
+        ret
+    }
+    library.books[at].holder = args[1]
+    library.books[at].due = day + loan_days()
+    print("{args[1]} borrowed {library.books[at].id}, due day {library.books[at].due}")
+}
+
+fn cmd_return(inout library: Library, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: return NAME ID DAY")
+        ret
+    }
+    let day = parse_day(args[3])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    let at = find_book(library, args[2])
+    if at < 0 {
+        print("error: unknown book {args[2]}")
+        ret
+    }
+    let book = library.books[at]
+    if book.holder != args[1] {
+        print("error: {args[1]} does not have {book.id}")
+        ret
+    }
+    library.books[at].holder = ""
+    if day <= book.due {
+        print("{args[1]} returned {book.id} on time")
+        ret
+    }
+    let days_late = day - book.due
+    let fine = fine_for(days_late)
+    library.members[find_member(library, args[1])].fines += fine
+    print("{args[1]} returned {book.id} {days_late} days late, fine {money(fine)}")
+}
+
+fn cmd_fines(library: Library, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: fines NAME")
+        ret
+    }
+    let at = find_member(library, args[1])
+    if at < 0 {
+        print("error: unknown member {args[1]}")
+        ret
+    }
+    print("{args[1]} owes {money(library.members[at].fines)}")
+}
+
+fn cmd_status(library: Library, args: [str]) {
+    if library.books.len() == 0 {
+        print("no books")
+        ret
+    }
+    var sorted = library.books
+    sorted.sort_by(b => b.id)
+    for book in sorted {
+        if book.holder == "" {
+            print("{book.id} {book.title}: available")
+        } else {
+            print("{book.id} {book.title}: on loan to {book.holder} (due day {book.due})")
+        }
+    }
+}
+
+fn cmd_late(library: Library, args: [str]) {
+    if args.len() != 2 {
+        print("error: usage: late DAY")
+        ret
+    }
+    let day = parse_day(args[1])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    var overdue = library.books.filter(b => b.holder != "" && b.due < day)
+    if overdue.len() == 0 {
+        print("nothing is overdue")
+        ret
+    }
+    overdue.sort_by(b => b.id)
+    overdue.sort_by(b => b.holder)
+    for book in overdue {
+        print("{book.holder} {book.id} due {book.due} ({day - book.due} days late)")
+    }
+}
+
+fn execute(inout library: Library, line: str) {
+    var args: [str] = []
+    for word in line.split(" ") {
+        if word != "" { args.push(word) }
+    }
+    if args.len() == 0 { ret }
+    let command = args[0]
+    if command == "book" {
+        cmd_book(inout library, args)
+    } else if command == "member" {
+        cmd_member(inout library, args)
+    } else if command == "borrow" {
+        cmd_borrow(inout library, args)
+    } else if command == "return" {
+        cmd_return(inout library, args)
+    } else if command == "fines" {
+        cmd_fines(library, args)
+    } else if command == "status" {
+        cmd_status(library, args)
+    } else if command == "late" {
+        cmd_late(library, args)
+    } else {
+        print("error: unknown command {command}")
+    }
+}
+
+fn main() {
+    var library = Library(books: [], members: [])
+    for line in input.lines() {
+        execute(inout library, line)
+    }
+}

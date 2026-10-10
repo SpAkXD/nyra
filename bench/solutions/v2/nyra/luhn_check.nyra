@@ -1,0 +1,21 @@
+use input
+
+for raw in input.lines() {
+    if raw.trim() == "" { continue }
+    let s = raw.replace(" ", "").replace("-", "")
+    if s.len() < 13 || s.len() > 19 || !s.all(c => c.is_digit()) {
+        print("bad format")
+        continue
+    }
+    var total = 0
+    let digits = s.reversed()
+    for i, c in digits {
+        var d = c.code() - '0'.code()
+        if i % 2 == 1 {
+            d *= 2
+            if d > 9 { d -= 9 }
+        }
+        total += d
+    }
+    if total % 10 == 0 { print("valid") } else { print("bad checksum") }
+}

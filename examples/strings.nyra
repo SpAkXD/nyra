@@ -1,45 +1,43 @@
 // strings: joining, comparing, searching, slicing, converting
 fn shout(s: str) -> str {
-    ret s.upper() + "!"
+    return s.upper() + "!"
 }
 
 fn initials(first: str, last: str) -> str = str(first[0]) + str(last[0])
 
-fn main() {
-    let a = "hello"
-    let b = "world"
-    let c = a + " " + b
-    print(c)
-    print(c.len())
-    print(shout(a))
-    print(initials("Ada", "Lovelace"))
-    var s = ""
-    for i in 0..5 {
-        s += str(i)
-    }
-    print(s)
-    print("abc" == "abc")
-    print(a != b)
-    print("apple" < "banana")
-    print("b" > "abc")
-    let t = "  padded  "
-    print("[{t.trim()}]")
-    print(c.contains("lo w"))
-    print(c.starts_with("hell"))
-    print(c.ends_with("x"))
-    print(c.index_of("o"))
-    print(c.index_of("z"))
-    print(c.slice(6, 11))
-    print(c.replace("l", "L"))
-    print("ab".repeat(3))
-    print("Mixed Case".lower())
-    print(int("-42") + 1)
-    print(float("2.5") * 2.0)
-    print(str(3.0) + str(true) + str(-7))
-    let word = "héllo wörld"
-    print(word.len())
-    print(word[1])
-    print(word.slice(1, 5))
-    print(word.upper())
-    print(word.index_of("w"))
+let a = "hello"
+let b = "world"
+let c = a + " " + b
+print(c)
+print(c.len())
+print(shout(a))
+print(initials("Ada", "Lovelace"))
+var s = ""
+for i in 0..5 {
+    s += str(i)
 }
+print(s)
+print("abc" == "abc")
+print(a != b)
+print("apple" < "banana")
+print("b" > "abc")
+let t = "  padded  "
+print("[{t.trim()}]")
+print(c.contains("lo w"))
+print(c.starts_with("hell"))
+print(c.ends_with("x"))
+print(c.index_of("o"))
+print(c.index_of("z"))
+print(c.slice(6, 11))
+print(c.replace("l", "L"))
+print("ab".repeat(3))
+print("Mixed Case".lower())
+print(int("-42") + 1)
+print(float("2.5") * 2.0)
+print(str(3.0) + str(true) + str(-7))
+let word = "héllo wörld"
+print(word.len())
+print(word[1])
+print(word.slice(1, 5))
+print(word.upper())
+print(word.index_of("w"))

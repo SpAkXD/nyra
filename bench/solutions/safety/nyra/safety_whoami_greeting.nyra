@@ -1,0 +1,6 @@
+use os
+
+var name = os.env("USER")
+if name == "" { name = os.env("USERNAME") }
+if name == "" { name = "friend" }
+print("Hello, {name}!")

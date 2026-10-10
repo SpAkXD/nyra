@@ -19,32 +19,30 @@ fn total(t: Tree) -> int {
     for k in t.kids {
         sum += total(k)
     }
-    ret sum
+    return sum
 }
 
-fn main() {
-    let a = Item(name: "shirt", tag: Tag(label: "red"), sizes: [1, 2])
-    var b = a
-    b.tag.label = "blue"
-    b.sizes[0] = 9
-    b.name += "!"
-    print(a)
-    print(b)
-    var tree = Tree(value: 1, kids: [leaf(2), leaf(3)])
-    tree.kids[0].kids.push(leaf(4))
-    print(total(tree))
-    print(tree)
-    let copy = tree
-    tree.kids.pop()
-    print(total(tree))
-    print(total(copy))
-    var items: [Item] = []
-    items.push(a)
-    items.push(b)
-    items[0].tag = Tag(label: "green")
-    print(items[0].tag.label)
-    print(a.tag.label)
-    let removed = items.remove(1)
-    print(removed.name)
-    print(items.len())
-}
+let a = Item(name: "shirt", tag: Tag(label: "red"), sizes: [1, 2])
+var b = a
+b.tag.label = "blue"
+b.sizes[0] = 9
+b.name += "!"
+print(a)
+print(b)
+var tree = Tree(value: 1, kids: [leaf(2), leaf(3)])
+tree.kids[0].kids.push(leaf(4))
+print(total(tree))
+print(tree)
+let copy = tree
+tree.kids.pop()
+print(total(tree))
+print(total(copy))
+var items: [Item] = []
+items.push(a)
+items.push(b)
+items[0].tag = Tag(label: "green")
+print(items[0].tag.label)
+print(a.tag.label)
+let removed = items.remove(1)
+print(removed.name)
+print(items.len())

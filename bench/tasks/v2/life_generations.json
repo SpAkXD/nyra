@@ -1,0 +1,42 @@
+{
+  "id": "life_generations",
+  "title": "Conway's Game of Life",
+  "category": "simulation",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read from standard input: a first line `W H G`, then H lines of W characters (`#` is a live cell, `.` a dead one). Run G generations of Conway's Game of Life on this grid, which is bounded: cells outside the grid are always dead. In each generation, all cells change at the same time: a live cell with two or three live neighbours (among the eight around it) stays alive, any other live cell dies, and a dead cell with exactly three live neighbours becomes alive.\n\nPrint the grid after G generations as H lines of W characters in the same notation, then a line `alive=N` with the number of live cells. With G = 0 the grid is printed unchanged.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "5 5 2\n.....\n..#..\n..#..\n..#..\n.....\n",
+      "expected_output": ".....\n..#..\n..#..\n..#..\n.....\nalive=3\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "6 6 4\n......\n.#....\n..##..\n.##...\n......\n......\n",
+      "expected_output": "......\n......\n..#...\n...##.\n..##..\n......\nalive=5\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "4 4 1\n....\n.##.\n.##.\n....\n",
+      "expected_output": "....\n.##.\n.##.\n....\nalive=4\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "3 3 5\n###\n#.#\n###\n",
+      "expected_output": "...\n...\n...\nalive=0\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "8 4 7\n.#......\n..#.....\n###.....\n........\n",
+      "expected_output": "........\n........\n..##....\n..##....\nalive=4\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "2 2 0\n#.\n.#\n",
+      "expected_output": "#.\n.#\nalive=2\n"
+    }
+  ]
+}

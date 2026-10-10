@@ -9,7 +9,7 @@ fn bubble(xs: [int]) -> [int] {
             }
         }
     }
-    ret a
+    return a
 }
 
 print("sorted:", bubble([5, 2, 9, 1]))

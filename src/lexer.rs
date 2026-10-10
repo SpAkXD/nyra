@@ -31,6 +31,8 @@ pub enum Tok {
     Break,
     Continue,
     Arena,
+    Enum,
+    Match,
     // punctuation
     LParen,
     RParen,
@@ -40,6 +42,8 @@ pub enum Tok {
     RBracket,
     Comma,
     Colon,
+    /// `?` of a ternary: `c ? a : b`
+    Question,
     Dot,
     Arrow,
     /// `=>` of a lambda: `x => x * 2`
@@ -62,6 +66,9 @@ pub enum Tok {
     And,
     Or,
     Not,
+    /// `?` of an optional type `int?`
+    /// `??`
+    Coalesce,
     Newline,
     Eof,
 }
@@ -101,6 +108,8 @@ impl Tok {
                 | Tok::Break
                 | Tok::Continue
                 | Tok::Arena
+                | Tok::Enum
+                | Tok::Match
         )
     }
 
@@ -114,7 +123,7 @@ impl Tok {
             Tok::While => "while",
             Tok::For => "for",
             Tok::In => "in",
-            Tok::Ret => "ret",
+            Tok::Ret => "return",
             Tok::True => "true",
             Tok::False => "false",
             Tok::Struct => "struct",
@@ -122,6 +131,8 @@ impl Tok {
             Tok::Break => "break",
             Tok::Continue => "continue",
             Tok::Arena => "arena",
+            Tok::Enum => "enum",
+            Tok::Match => "match",
             Tok::LParen => "(",
             Tok::RParen => ")",
             Tok::LBrace => "{",
@@ -130,6 +141,7 @@ impl Tok {
             Tok::RBracket => "]",
             Tok::Comma => ",",
             Tok::Colon => ":",
+            Tok::Question => "?",
             Tok::Dot => ".",
             Tok::Arrow => "->",
             Tok::FatArrow => "=>",
@@ -149,6 +161,7 @@ impl Tok {
             Tok::And => "&&",
             Tok::Or => "||",
             Tok::Not => "!",
+            Tok::Coalesce => "??",
             _ => "",
         }
     }
@@ -209,7 +222,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 i += 1;
             }
             let mut is_float = false;
-            if i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
+            // after a `.` the digits are a tuple position (`t.0.1` is `t.0` then `.1`), never a float
+            let position = matches!(toks.last().map(|t| &t.tok), Some(Tok::Dot));
+            if !position && i + 1 < cs.len() && cs[i] == '.' && cs[i + 1].is_ascii_digit() {
                 is_float = true;
                 i += 1;
                 while i < cs.len() && cs[i].is_ascii_digit() {
@@ -261,7 +276,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "while" => Tok::While,
                 "for" => Tok::For,
                 "in" => Tok::In,
-                "ret" => Tok::Ret,
+                "return" | "ret" => Tok::Ret,
                 "true" => Tok::True,
                 "false" => Tok::False,
                 "struct" => Tok::Struct,
@@ -269,6 +284,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 "break" => Tok::Break,
                 "continue" => Tok::Continue,
                 "arena" => Tok::Arena,
+                "enum" => Tok::Enum,
+                "match" => Tok::Match,
                 _ => Tok::Ident(text),
             };
             toks.push(Token { tok, span });
@@ -443,6 +460,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ('!', '=') => Some(Tok::Ne),
             ('<', '=') => Some(Tok::Le),
             ('>', '=') => Some(Tok::Ge),
+            ('?', '?') => Some(Tok::Coalesce),
             ('&', '&') => Some(Tok::And),
             ('|', '|') => Some(Tok::Or),
             ('+', '=') => Some(Tok::OpAssign(BinOp::Add)),
@@ -461,7 +479,11 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
         // a single `.` is a token (fields and methods), except in the float typos `.5` and `5.`
         if c == '.' {
-            let after_digit = i > 0 && cs[i - 1].is_ascii_digit() && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)));
+            // (not in `t.1.0`: after a `.` the digits are a tuple position)
+            let after_digit = i > 0
+                && cs[i - 1].is_ascii_digit()
+                && matches!(toks.last().map(|t| &t.tok), Some(Tok::Int(_)))
+                && !(toks.len() >= 2 && toks[toks.len() - 2].tok == Tok::Dot);
             let before_digit =
                 next.is_ascii_digit() && !(i > 0 && (cs[i - 1].is_alphanumeric() || matches!(cs[i - 1], '_' | ')' | ']')));
             if !after_digit && !before_digit {
@@ -481,6 +503,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             ']' => Some(Tok::RBracket),
             ',' => Some(Tok::Comma),
             ':' => Some(Tok::Colon),
+            '?' => Some(Tok::Question),
             '+' => Some(Tok::Plus),
             '-' => Some(Tok::Minus),
             '*' => Some(Tok::Star),
@@ -585,6 +608,7 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
                 | Tok::Ge
                 | Tok::And
                 | Tok::Or
+                | Tok::Question
         )
     };
     // `-` too: a statement cannot start with a negation. Not `++` or `--` (`i--`, `--i`), which
@@ -595,7 +619,9 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
     let mut out: Vec<Token> = Vec::with_capacity(toks.len());
     for (i, t) in toks.iter().enumerate() {
         if t.tok == Tok::Newline && i > 0 {
-            let starts = op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| n.tok == Tok::Dot);
+            // (a line may also start with the `:` of a ternary)
+            let starts =
+                op(toks.get(i + 1), toks.get(i + 2)) || toks.get(i + 1).is_some_and(|n| matches!(n.tok, Tok::Dot | Tok::Colon));
             let ends = op(toks.get(i - 1), i.checked_sub(2).map(|k| &toks[k]));
             if starts || ends {
                 continue;
@@ -603,7 +629,7 @@ fn continue_lines(toks: Vec<Token>) -> Vec<Token> {
         }
         out.push(t.clone());
         // `print("no") ret` in a one-line block: `ret`, `break` and `continue` end a line anyway
-        if !matches!(t.tok, Tok::Newline | Tok::LBrace)
+        if !matches!(t.tok, Tok::Newline | Tok::LBrace | Tok::FatArrow)
             && matches!(toks.get(i + 1).map(|n| &n.tok), Some(Tok::Ret | Tok::Break | Tok::Continue))
             && toks.get(i + 1).is_some_and(|n| n.span.line == t.span.line)
         {
@@ -633,6 +659,10 @@ fn closure_params(cs: &[char], i: usize) -> Option<(usize, Vec<String>)> {
 fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
     let before = i.checked_sub(1).map(|j| cs[j]);
     let after = cs.get(i + 1).copied();
+    if let (true, Some(ty)) = (c == '?', optional_type(cs, i)) {
+        return Diag::new("E0262", format!("`{ty}?` is an optional type: Nyra has no optional values and no null"), span)
+            .hint(hints::OPTION_HINT);
+    }
     let msg = match hints::invisible_char(c) {
         Some(name) => format!("unexpected invisible character U+{:04X} ({name})", c as u32),
         None if c == '`' => "unexpected character '`' (a backtick)".to_string(),
@@ -656,6 +686,38 @@ fn bad_char(c: char, cs: &[char], i: usize, span: Span) -> Diag {
         (hints::bad_char(c), hints::char_fix(c).map(|to| Edit::replace(span, &c.to_string(), to)))
     };
     Diag::new("E0001", msg, span).hint(hint).fix_opt(fix)
+}
+
+/// The type written right before the `?` at `cs[i]` (`int` of `int?`, `[str]` of `[str]?`), if it is one:
+/// a type word of any language, a name that starts uppercase, or an array type.
+fn optional_type(cs: &[char], i: usize) -> Option<String> {
+    let word_char = |c: char| c.is_alphanumeric() || c == '_';
+    let mut start = i;
+    if cs.get(i.checked_sub(1)?) == Some(&']') {
+        // `[int]?`: back to the `[` that opens it
+        let mut depth = 0usize;
+        while start > 0 {
+            start -= 1;
+            match cs[start] {
+                ']' => depth += 1,
+                '[' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(cs[start..i].iter().collect());
+                    }
+                }
+                '\n' => return None,
+                _ => {}
+            }
+        }
+        return None;
+    }
+    while start > 0 && word_char(cs[start - 1]) {
+        start -= 1;
+    }
+    let w: String = cs[start..i].iter().collect();
+    let first = w.chars().next()?;
+    (hints::is_type_word(&w) || hints::nyra_type(&w).is_some() || first.is_uppercase()).then_some(w)
 }
 
 /// E0005 for the `;` at `cs[i]`. At the end of a line (or before a `}`) it is deleted; between two

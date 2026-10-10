@@ -1,0 +1,37 @@
+{
+  "id": "graph_components",
+  "title": "Connected components",
+  "category": "graphs",
+  "difficulty": "easy",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read an undirected graph from standard input: a first line `N M`, then M lines `A B`, each an edge between nodes A and B (nodes are numbered 1 to N; edges may repeat, and A may equal B). Print three lines:\n`components=K` with the number of connected components (a node without edges is a component of its own),\n`sizes: S1 S2 ...` with the component sizes from the largest to the smallest, separated by single spaces,\n`largest contains node X`, where X is the smallest node number inside the largest component (if several components share the largest size, take the one whose smallest node number is lowest).",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "8 6\n1 2\n2 3\n4 5\n6 6\n7 8\n8 7\n",
+      "expected_output": "components=4\nsizes: 3 2 2 1\nlargest contains node 1\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1 0\n",
+      "expected_output": "components=1\nsizes: 1\nlargest contains node 1\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "5 4\n1 2\n2 3\n3 4\n4 5\n",
+      "expected_output": "components=1\nsizes: 5\nlargest contains node 1\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "6 5\n6 5\n5 4\n1 2\n2 3\n3 1\n",
+      "expected_output": "components=2\nsizes: 3 3\nlargest contains node 1\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "10 6\n10 9\n9 8\n8 10\n1 2\n3 4\n4 3\n",
+      "expected_output": "components=6\nsizes: 3 2 2 1 1 1\nlargest contains node 8\n"
+    }
+  ]
+}

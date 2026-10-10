@@ -1,0 +1,7 @@
+// expect: E0284
+enum Nothing {
+}
+
+fn main() {
+    print("hi")
+}

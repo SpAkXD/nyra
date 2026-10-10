@@ -4,8 +4,8 @@ fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
 
 // the distance between two numbers on a line
 fn dist(a: int, b: int) -> int {
-    if a > b { ret a - b }
-    ret b - a
+    if a > b { return a - b }
+    return b - a
 }
 ex dist(7, 2) == 5, dist(2, 7) == 5, dist(3, 3) == 0
 
@@ -20,7 +20,7 @@ fn words(s: str) -> [str] {
     for w in s.split(" ") {
         if w != "" { out.push(w) }
     }
-    ret out
+    return out
 }
 ex words("a  b c") == ["a", "b", "c"], words("") == [], words(" x ").len() == 1
 
@@ -29,27 +29,25 @@ fn title(s: str) -> str {
     for w in words(s) {
         out += str(w[0].upper()) + w.slice(1, w.len()) + " "
     }
-    ret out.trim()
+    return out.trim()
 }
 ex title("hello nyra world") == "Hello Nyra World", title("") == ""
 
 fn mean(xs: [float]) -> float {
-    if xs.len() == 0 { ret 0.0 }
+    if xs.len() == 0 { return 0.0 }
     var total = 0.0
     for x in xs { total += x }
-    ret total / float(xs.len())
+    return total / float(xs.len())
 }
 ex mean([1.0, 2.0, 4.0]) > 2.33, mean([1.0, 2.0, 4.0]) < 2.34, mean([]) == 0.0
 
 fn fib(n: int) -> int = if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
 ex fib(0) == 0, fib(1) == 1, fib(10) == 55
 
-fn main() {
-    print(sq(12))
-    print(dist(-4, 9))
-    print(clamp(42, Range(lo: 0, hi: 10)))
-    print(words("  three   little  words "))
-    print(title("the quick brown fox"))
-    print(mean([2.5, 3.5]))
-    print(fib(20))
-}
+print(sq(12))
+print(dist(-4, 9))
+print(clamp(42, Range(lo: 0, hi: 10)))
+print(words("  three   little  words "))
+print(title("the quick brown fox"))
+print(mean([2.5, 3.5]))
+print(fib(20))

@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use common::{check_json, nyra, scratch, stderr, stdout, Json};
+use common::{check_json_with, flags_of, nyra, scratch, stderr, stdout, Json};
 
 fn available(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().is_ok()
@@ -96,6 +96,40 @@ fn entry(code: &str) -> Json {
     Json::parse(stdout(&out).trim()).unwrap_or_else(|e| panic!("`nyra explain {code} --json`: {e}"))
 }
 
+/// Writes an example of the error database and gives the file to compile (relative to `dir`).
+fn write_example(dir: &Path, name: &str, text: &str) -> String {
+    let header = |l: &str| {
+        let name = l.strip_prefix("// ")?;
+        (name.ends_with(".nyra") && !name.contains(' ')).then(|| name.to_string())
+    };
+    if !text.lines().any(|l| header(l).is_some()) {
+        let file = format!("{name}.nyra");
+        std::fs::write(dir.join(&file), text).unwrap();
+        return file;
+    }
+    let folder = dir.join(name);
+    let _ = std::fs::remove_dir_all(&folder);
+    let mut current: Option<(String, String)> = None;
+    let mut files = Vec::new();
+    for line in text.lines() {
+        if let Some(n) = header(line) {
+            files.extend(current.take());
+            current = Some((n, String::new()));
+        } else if let Some((_, body)) = current.as_mut() {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    files.extend(current);
+    for (file, body) in &files {
+        let path = folder.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+    assert!(files.iter().any(|(f, _)| f == "main.nyra"), "{name}: a multi-file example needs a main.nyra");
+    format!("{name}/main.nyra")
+}
+
 #[test]
 fn every_emitted_code_has_an_entry_and_every_entry_is_emitted() {
     let mut files = Vec::new();
@@ -149,22 +183,58 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
         let fixed = e.get("fixed").and_then(|v| v.as_str()).unwrap();
         assert!(wrong.contains("fn ") && fixed.contains("fn "), "{code}: the examples must be whole programs");
 
-        let wrong_file = format!("{code}_wrong.nyra");
-        let fixed_file = format!("{code}_fixed.nyra");
-        std::fs::write(dir.join(&wrong_file), wrong).unwrap();
-        std::fs::write(dir.join(&fixed_file), fixed).unwrap();
+        // an example of several files has a header line `// name.nyra` before each: they go into a
+        // folder of their own and `main.nyra` is the program
+        let wrong_file = write_example(&dir, &format!("{code}_wrong"), wrong);
+        let fixed_file = write_example(&dir, &format!("{code}_fixed"), fixed);
 
+        // (a line `// flags: --sandbox --allow fs` at the top is the command-line flags the program needs)
+        let (wrong_flags, fixed_flags) = (flags_of(wrong), flags_of(fixed));
         // the fixed program compiles cleanly...
-        let (ok, json) = check_json(&dir, &fixed_file);
+        let (ok, json) = check_json_with(&dir, &fixed_file, &fixed_flags);
         assert!(ok, "{code}: the Fixed example does not compile:\n{fixed}\n{json:?}");
 
-        if item.kind == "runtime error" {
+        if item.kind == "warning" {
+            // a warning does not stop the build: the Wrong program compiles and lists exactly this warning
+            // (a first line `// target: go`: the warning is only given for that target)
+            let mut wrong_flags = wrong_flags.clone();
+            if wrong.starts_with("// target: go") {
+                wrong_flags.push("--go".to_string());
+            }
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
+            assert!(ok, "{code}: a warning example must compile:\n{wrong}\n{json:?}");
+            let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap_or(&[]);
+            assert!(!warnings.is_empty(), "{code}: the Wrong example gives no warning");
+            for w in warnings {
+                assert_eq!(
+                    w.get("code").and_then(|c| c.as_str()),
+                    Some(code.as_str()),
+                    "{code}: the Wrong example gave another warning"
+                );
+                assert!(w.get("hint").and_then(|h| h.as_str()).is_some_and(|h| !h.is_empty()), "{code}: the warning has no hint");
+            }
+            let (_, fixed_json) = check_json_with(&dir, &fixed_file, &fixed_flags);
+            assert!(fixed_json.get("warnings").is_none(), "{code}: the Fixed example still warns:\n{fixed}");
+        } else if item.kind == "runtime error" {
             // ...and the wrong one compiles but stops at run time with that code
-            let (ok, json) = check_json(&dir, &wrong_file);
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(ok, "{code}: a run-time error example must compile:\n{wrong}\n{json:?}");
             // a first line `// target: js`: the error happens only on JavaScript (and TypeScript)
             let js_only = wrong.starts_with("// target: js");
-            if let Some(flags) = backend.filter(|f| !js_only || f.contains(&"--js")) {
+            // the limits of the interpreter (E0355 to E0359): the program asks for its flags, and
+            // the exit code says which limit it was
+            let own: Vec<&str> = wrong_flags.iter().map(String::as_str).collect();
+            let run_flags =
+                if !own.is_empty() { Some(own) } else { backend.filter(|f| !js_only || f.contains(&"--js")).map(|f| f.to_vec()) };
+            let want_exit = match code.as_str() {
+                "E0355" => 120,
+                "E0356" => 121,
+                "E0357" => 122,
+                "E0358" => 123,
+                "E0359" => 124,
+                _ => 101,
+            };
+            if let Some(flags) = run_flags {
                 // a first line `// stdin: ...` is the program's input (`\xff`, `\n` escapes)
                 let input = wrong.lines().next().and_then(|l| l.strip_prefix("// stdin: ")).map(unescape).unwrap_or_default();
                 let mut child = nyra()
@@ -179,12 +249,17 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
                     .unwrap();
                 let _ = child.stdin.take().unwrap().write_all(&input);
                 let out = child.wait_with_output().unwrap();
-                assert_eq!(out.status.code(), Some(101), "{code}: the Wrong example should stop with exit code 101\n{}", stderr(&out));
+                assert_eq!(
+                    out.status.code(),
+                    Some(want_exit),
+                    "{code}: the Wrong example should stop with exit code {want_exit}\n{}",
+                    stderr(&out)
+                );
                 assert!(stderr(&out).contains(&format!("runtime error[{code}]")), "{code}: stderr was\n{}", stderr(&out));
             }
         } else {
             // ...and the wrong one reports exactly this code (possibly several times)
-            let (ok, json) = check_json(&dir, &wrong_file);
+            let (ok, json) = check_json_with(&dir, &wrong_file, &wrong_flags);
             assert!(!ok, "{code}: the Wrong example compiles:\n{wrong}");
             let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
             assert!(!errors.is_empty(), "{code}: no errors reported");
@@ -305,7 +380,7 @@ fn explain_suggests_a_code_for_an_unknown_one() {
 fn compile_errors_point_to_explain() {
     let dir = scratch("errors-db-explain");
     std::fs::write(dir.join("a.nyra"), "fn main() {\n    let count = 1\n    print(cout)\n}\n").unwrap();
-    let out = nyra().current_dir(&dir).args(["check", "a.nyra"]).output().unwrap();
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "a.nyra"]).output().unwrap();
     let err = stderr(&out);
     assert!(err.contains("error[E0201]: undefined variable `cout`"), "{err}");
     assert!(err.contains("  = hint: did you mean `count`?\n  = explain: nyra explain E0201\n"), "{err}");
@@ -320,7 +395,8 @@ fn every_error_program_in_the_tests_has_a_hint_and_a_documented_code() {
         if path.extension().is_none_or(|e| e != "nyra") {
             continue;
         }
-        let (ok, json) = check_json(Path::new("."), path.to_str().unwrap());
+        let flags = flags_of(&std::fs::read_to_string(&path).unwrap());
+        let (ok, json) = check_json_with(Path::new("."), path.to_str().unwrap(), &flags);
         assert!(!ok, "{} should not compile", path.display());
         for err in json.get("errors").and_then(|e| e.as_array()).unwrap() {
             let code = err.get("code").and_then(|c| c.as_str()).unwrap();
@@ -353,8 +429,13 @@ fn expected_codes(dir: &str) -> BTreeSet<String> {
 fn every_code_of_the_compiler_has_a_test_program() {
     let compile = expected_codes("tests/errors");
     let runtime = expected_codes("tests/runtime");
+    let warnings = expected_codes("tests/warnings");
     for item in listed().iter().filter(|e| !e.planned) {
-        let folder = if item.kind == "runtime error" { ("tests/runtime", &runtime) } else { ("tests/errors", &compile) };
+        let folder = match item.kind.as_str() {
+            "runtime error" => ("tests/runtime", &runtime),
+            "warning" => ("tests/warnings", &warnings),
+            _ => ("tests/errors", &compile),
+        };
         assert!(
             folder.1.contains(&item.code),
             "{} has no program in {}: add one whose first line is `// expect: {}`",

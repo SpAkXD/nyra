@@ -1,0 +1,66 @@
+--- a/main.py
++++ b/main.py
+@@ -17,7 +17,7 @@
+ @dataclass
+ class Employee:
+     name: str
+-    rate: int
++    hourly_rate: int
+     hours: int
+ 
+ 
+@@ -44,12 +44,14 @@
+     return -1
+ 
+ 
+-def gross_pay(person: Employee) -> int:
+-    return person.rate * person.hours
++def pay_before_tax(person: Employee) -> int:
++    regular = min(person.hours, 40)
++    overtime = max(person.hours - 40, 0)
++    return person.hourly_rate * regular + person.hourly_rate * overtime * 3 // 2
+ 
+ 
+ def slip_line(person: Employee) -> str:
+-    return f"{person.name}: {person.hours} hours at {money(person.rate)}/h = {money(gross_pay(person))}"
++    return f"{person.name}: {person.hours} hours at {money(person.hourly_rate)}/h = {money(pay_before_tax(person))}"
+ 
+ 
+ def cmd_hire(staff: Staff, args: list) -> None:
+@@ -95,8 +97,8 @@
+     if at < 0:
+         print(f"error: unknown person {args[1]}")
+         return
+-    staff.people[at].rate = staff.people[at].rate * (100 + percent) // 100
+-    print(f"{args[1]} now earns {money(staff.people[at].rate)}/h")
++    staff.people[at].hourly_rate = staff.people[at].hourly_rate * (100 + percent) // 100
++    print(f"{args[1]} now earns {money(staff.people[at].hourly_rate)}/h")
+ 
+ 
+ def cmd_fire(staff: Staff, args: list) -> None:
+@@ -130,12 +132,12 @@
+     best = None
+     for person in sorted(staff.people, key=lambda p: p.name):
+         print(slip_line(person))
+-        total += gross_pay(person)
+-        if best is None or gross_pay(person) > gross_pay(best):
++        total += pay_before_tax(person)
++        if best is None or pay_before_tax(person) > pay_before_tax(best):
+             best = person
+     print(f"total payroll {money(total)}")
+-    if best is not None and gross_pay(best) > 0:
+-        print(f"top earner: {best.name} ({money(gross_pay(best))})")
++    if best is not None and pay_before_tax(best) > 0:
++        print(f"top earner: {best.name} ({money(pay_before_tax(best))})")
+ 
+ 
+ def cmd_budget(staff: Staff, args: list) -> None:
+@@ -146,7 +148,7 @@
+     if budget < 0:
+         print("error: bad budget")
+         return
+-    total = sum(gross_pay(person) for person in staff.people)
++    total = sum(pay_before_tax(person) for person in staff.people)
+     if total <= budget:
+         print(f"within budget, {money(budget - total)} left")
+     else:

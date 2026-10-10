@@ -1,0 +1,47 @@
+{
+  "id": "task_order",
+  "title": "Order tasks by their dependencies",
+  "category": "graphs",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each non-empty line has the form `A -> B` (two names of lowercase letters, an arrow with a single space on each side) and means that task A must be done before task B. The tasks are all the names that appear in at least one line. Print on one line, separated by single spaces, an order in which all the tasks can be done so that every dependency is respected; when several orders are possible, print the one that comes first in alphabetical order (compare the orders name by name, names in plain character order: at every point, among the tasks that are ready, the smallest name goes first). If the dependencies contain a cycle, so that no order exists, print `cycle`. Print an empty line if there are no tasks. Empty lines in the input are skipped. A task may depend on itself, which is a cycle.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "shop -> cook\ncook -> eat\nwash -> eat\nplan -> shop\nplan -> wash\n",
+      "expected_output": "plan shop cook wash eat\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "b -> a\n",
+      "expected_output": "b a\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "a -> b\nb -> c\nc -> a\n",
+      "expected_output": "cycle\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "m -> z\n\nm -> a\nq -> z\na -> q\nx -> a\ny -> x\n",
+      "expected_output": "m y x a q z\n"
+    },
+    {
+      "name": "hidden4",
+      "stdin": "a -> a\n",
+      "expected_output": "cycle\n"
+    },
+    {
+      "name": "hidden5",
+      "stdin": "d -> e\nc -> e\nb -> e\na -> e\ne -> f\nb -> c\n",
+      "expected_output": "a b c d e f\n"
+    },
+    {
+      "name": "hidden6",
+      "stdin": "solo -> next\n",
+      "expected_output": "solo next\n"
+    }
+  ]
+}

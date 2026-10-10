@@ -8,64 +8,60 @@ fn encode(text: str) -> str {
     var out = ""
     var i = 0
     while i < cs.len() {
-        let c = cs[i]
         var j = i
-        while j < cs.len() && cs[j] == c { j += 1 }
+        while j < cs.len() && cs[j] == cs[i] { j += 1 }
         let n = j - i
-        if c == '~' {
+        if cs[i] == '~' {
             out += "~{n}~"
         } else if n >= 4 {
-            out += "~{n}{c}"
+            out += "~{n}{cs[i]}"
         } else {
-            out += str(c).repeat(n)
+            out += str(cs[i]).repeat(n)
         }
         i = j
     }
     ret out
 }
+ex encode("aaaab") == "~4ab", encode("aaab") == "aaab", encode("~") == "~1~"
 
 fn plain(c: char) -> bool = c.is_lower() || c == '.'
 
 fn decode(code: str) -> Decoded {
+    let bad = Decoded(ok: false, text: "")
     let cs = code.chars()
     var out = ""
     var i = 0
     while i < cs.len() {
-        let c = cs[i]
-        if c != '~' {
-            if !plain(c) { ret Decoded(ok: false, text: "") }
-            out += str(c)
+        if cs[i] != '~' {
+            if !plain(cs[i]) { ret bad }
+            out += str(cs[i])
             i += 1
             continue
         }
         i += 1
-        if i >= cs.len() || !cs[i].is_digit() || cs[i] == '0' { ret Decoded(ok: false, text: "") }
+        if i >= cs.len() || !cs[i].is_digit() || cs[i] == '0' { ret bad }
         var n = 0
         while i < cs.len() && cs[i].is_digit() {
             n = n * 10 + cs[i].code() - '0'.code()
             i += 1
         }
-        if i >= cs.len() || !(plain(cs[i]) || cs[i] == '~') { ret Decoded(ok: false, text: "") }
+        if i >= cs.len() || !(plain(cs[i]) || cs[i] == '~') { ret bad }
         out += str(cs[i]).repeat(n)
         i += 1
     }
     ret Decoded(ok: true, text: out)
 }
 
-fn main() {
-    let texts = ["aaaabbbcccccd", "~~x", ".......", "abc", "zzzzzzzzzzzzzz~", "a~~~~b"]
-    for t in texts {
-        print("encode {t} -> {encode(t)}")
-    }
-    let codes = ["~4a~3~b", "~04a", "~2ab", "a~b", "~12z", "~5", "ab~3~~", "x~1~y", "q7", "~10.~4~", "~1~~1~", "a~3B"]
-    for code in codes {
-        let d = decode(code)
-        if !d.ok {
-            print("decode {code} -> invalid")
-        } else if encode(d.text) == code {
-            print("decode {code} -> {d.text}")
-        } else {
-            print("decode {code} -> {d.text} (non-canonical)")
-        }
+for t in ["aaaabbbcccccd", "~~x", ".......", "abc", "zzzzzzzzzzzzzz~", "a~~~~b"] {
+    print("encode {t} -> {encode(t)}")
+}
+for code in ["~4a~3~b", "~04a", "~2ab", "a~b", "~12z", "~5", "ab~3~~", "x~1~y", "q7", "~10.~4~", "~1~~1~", "a~3B"] {
+    let d = decode(code)
+    if !d.ok {
+        print("decode {code} -> invalid")
+    } else if encode(d.text) == code {
+        print("decode {code} -> {d.text}")
+    } else {
+        print("decode {code} -> {d.text} (non-canonical)")
     }
 }

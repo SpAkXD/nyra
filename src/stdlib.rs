@@ -9,7 +9,7 @@
 //! A module's Nyra functions are added to the program as functions named `module.name`
 //! (a name no program can write), helpers starting with `_` stay private.
 
-use crate::ast::{CompSrc, Expr, ExprKind, Func, InterpPart, Program, Stmt, StmtKind, Type};
+use crate::ast::{CompSrc, Expr, ExprKind, Func, InterpPart, Program, Span, Stmt, StmtKind, Type};
 use crate::diag::Diag;
 
 /// Every standard module, sorted.
@@ -253,7 +253,7 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
             let own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
             for mut f in lib.funcs {
                 f.name = format!("{}.{}", u.module, f.name);
-                rename_calls(&mut f, &u.module, &own);
+                rename_calls(&mut f, &u.module, &own, u.span);
                 prog.funcs.push(f);
             }
         }
@@ -261,10 +261,21 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
     errs
 }
 
+thread_local! {
+    /// Where the node being renamed by `rename_calls` is reported: the user's `use` line.
+    static AT: std::cell::Cell<Span> = const { std::cell::Cell::new(Span { line: 1, col: 1 }) };
+}
+
 /// Calls to the module's own functions get the module's name: `exp(x)` becomes `math.exp(x)`.
-fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
+/// Every position of the function becomes `at`, the program's `use` line: the library is not part
+/// of the user's file, so a position inside it (line 692 of a 3-line file) would point nowhere.
+fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
+    AT.with(|a| a.set(at));
+    f.span = at;
+    f.params.iter_mut().for_each(|p| p.span = at);
     fn stmts(ss: &mut [Stmt], m: &str, own: &[String]) {
         for s in ss {
+            s.span = AT.with(|a| a.get());
             match &mut s.kind {
                 StmtKind::Let { value, .. } => expr(value, m, own),
                 StmtKind::Assign { target, value, .. } => {
@@ -295,12 +306,20 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
                     stmts(body, m, own);
                 }
                 StmtKind::Arena(body) => stmts(body, m, own),
+                StmtKind::Match { scrut, arms } => {
+                    expr(scrut, m, own);
+                    for arm in arms {
+                        arm.pats.iter_mut().for_each(|p| expr(p, m, own));
+                        stmts(&mut arm.body, m, own);
+                    }
+                }
                 StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => expr(e, m, own),
                 StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
             }
         }
     }
     fn expr(e: &mut Expr, m: &str, own: &[String]) {
+        e.span = AT.with(|a| a.get());
         match &mut e.kind {
             ExprKind::Call(name, args) => {
                 if own.contains(name) {
@@ -315,25 +334,37 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String]) {
                     }
                 }
             }
-            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => expr(x, m, own),
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+            ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) | ExprKind::Fmt(x, _) => {
+                expr(x, m, own)
+            }
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
                 expr(a, m, own);
                 expr(b, m, own);
+            }
+            ExprKind::Some(x) => expr(x, m, own),
+            ExprKind::None => {}
+            ExprKind::Slice(b, lo, hi) => {
+                expr(b, m, own);
+                lo.iter_mut().chain(hi.iter_mut()).for_each(|x| expr(x, m, own));
             }
             ExprKind::If(c, a, b) => {
                 expr(c, m, own);
                 expr(a, m, own);
                 expr(b, m, own);
             }
-            ExprKind::Array(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
+            ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
             ExprKind::MapLit(pairs) => {
                 for (k, v) in pairs {
                     expr(k, m, own);
                     expr(v, m, own);
                 }
             }
-            ExprKind::Lambda(_, body) => expr(body, m, own),
+            ExprKind::Lambda(params, body) => {
+                params.iter_mut().for_each(|p| p.1 = AT.with(|a| a.get()));
+                expr(body, m, own)
+            }
             ExprKind::Comprehension(c) => {
+                c.var[0].1 = AT.with(|a| a.get());
                 match &mut c.src {
                     CompSrc::Each(x) => expr(x, m, own),
                     CompSrc::Range(a, b, k) => {
@@ -374,6 +405,64 @@ mod tests {
                 panic!("std module `{m}` has errors: {d:?}");
             }
         }
+    }
+
+    /// A call in the library's Nyra source resolves to the library's own function or to a builtin
+    /// the program cannot redefine. `abs`, `min` and `max` can be redefined by a program, so a module
+    /// that called them would call the program's function instead.
+    #[test]
+    fn modules_call_only_their_own_functions_and_fixed_builtins() {
+        for m in MODULES {
+            let Some(src) = source(m) else { continue };
+            let own: Vec<String> = parse_source(src).funcs.into_iter().map(|f| f.name).collect();
+            let (toks, _) = crate::lexer::lex(src);
+            for (i, t) in toks.iter().enumerate() {
+                let (crate::lexer::Tok::Ident(name), Some(next)) = (&t.tok, toks.get(i + 1)) else { continue };
+                let after_dot_or_fn = i > 0 && matches!(toks[i - 1].tok, crate::lexer::Tok::Dot | crate::lexer::Tok::Fn);
+                if next.tok != crate::lexer::Tok::LParen || after_dot_or_fn {
+                    continue;
+                }
+                assert!(
+                    own.contains(name) || crate::check::BUILTINS.contains(&name.as_str()),
+                    "std/{m}.nyra line {} calls `{name}`, which a program may define itself: write the operation out",
+                    t.span.line
+                );
+            }
+        }
+    }
+
+    /// Every position of a module's functions is the program's `use` line.
+    #[test]
+    fn linked_functions_have_no_position_of_their_own() {
+        let (toks, _) = crate::lexer::lex("use math\nfn main() {\n}\n");
+        let (mut prog, _) = crate::parser::parse(toks);
+        assert!(link(&mut prog).is_empty());
+        let at = prog.uses[0].span;
+        let lib: Vec<_> = prog.funcs.iter().filter(|f| f.name.starts_with("math.")).collect();
+        assert!(lib.len() > 10);
+        for f in lib {
+            assert_eq!(f.span, at, "{}", f.name);
+            assert!(f.params.iter().all(|p| p.span == at), "{}", f.name);
+            assert!(f.body.iter().all(|s| s.span == at), "{}", f.name);
+        }
+    }
+
+    /// A mistake inside a module is the compiler's bug: the error says so, and sits on the `use` line.
+    #[test]
+    fn an_error_inside_a_module_is_reported_as_an_internal_error_at_the_use_line() {
+        let (toks, _) = crate::lexer::lex("use math\nfn main() {\n}\n");
+        let (mut prog, _) = crate::parser::parse(toks);
+        assert!(link(&mut prog).is_empty());
+        let mut broken = parse_source("fn broken() {\n    print(nothing_here)\n}\n");
+        let mut f = broken.funcs.remove(0);
+        f.name = "math.broken".to_string();
+        rename_calls(&mut f, "math", &["broken".to_string()], prog.uses[0].span);
+        prog.funcs.push(f);
+        let errs = crate::check::check(&mut prog);
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        assert!(errs[0].msg.starts_with("internal error in the standard module `math`, function `math.broken`: "), "{}", errs[0].msg);
+        assert!(errs[0].hint.as_deref().is_some_and(|h| h.contains("bug in the compiler")));
+        assert_eq!(errs[0].span, prog.uses[0].span);
     }
 
     #[test]

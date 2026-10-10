@@ -1,9 +1,7 @@
-fn main() {
-    var n = 6
-    var line = "{n}"
-    while n != 1 {
-        n = if n % 2 == 0 { n / 2 } else { 3 * n + 1 }
-        line = "{line} -> {n}"
-    }
-    print(line)
+var n = 6
+var line = "{n}"
+while n != 1 {
+    n = if n % 2 == 0 { n / 2 } else { 3 * n + 1 }
+    line += " -> {n}"
 }
+print(line)

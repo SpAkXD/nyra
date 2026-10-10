@@ -1,0 +1,42 @@
+use input
+
+var section = ""
+var conf: [str: str] = [:]
+var errors = 0
+var n = 0
+for raw in input.lines() {
+    n += 1
+    let line = raw.trim()
+    if line == "" || line.starts_with("#") { continue }
+    if line.starts_with("[") && line.ends_with("]") {
+        let name = line.slice(1, line.len() - 1).trim()
+        if name == "" {
+            print("line {n}: syntax error")
+            errors += 1
+        } else {
+            section = name
+        }
+        continue
+    }
+    let eq = line.index_of("=")
+    if eq >= 0 {
+        let key = line.slice(0, eq).trim()
+        let value = line.slice(eq + 1, line.len()).trim()
+        if key != "" {
+            if section != "" {
+                conf[section + "." + key] = value
+            } else {
+                conf[key] = value
+            }
+            continue
+        }
+    }
+    print("line {n}: syntax error")
+    errors += 1
+}
+var keys = conf.keys()
+keys.sort()
+for k in keys {
+    print("{k}={conf[k]}")
+}
+print("entries={conf.len()} errors={errors}")

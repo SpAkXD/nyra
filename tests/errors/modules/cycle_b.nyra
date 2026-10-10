@@ -1,0 +1,2 @@
+use ./cycle_a
+pub fn g() -> int = cycle_a.f()

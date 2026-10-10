@@ -1,0 +1,73 @@
+@replace fine_for
+// the fine in cents for a book that comes back `days_late` days after its due day
+fn fine_for(days_late: int) -> int {
+    if days_late <= 3 { ret 0 }
+    ret min(days_late * 10, 500)
+}
+@replace cmd_borrow
+fn cmd_borrow(inout library: Library, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: borrow NAME ID DAY")
+        ret
+    }
+    let day = parse_day(args[3])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    if find_member(library, args[1]) < 0 {
+        print("error: unknown member {args[1]}")
+        ret
+    }
+    let at = find_book(library, args[2])
+    if at < 0 {
+        print("error: unknown book {args[2]}")
+        ret
+    }
+    if library.books[at].holder != "" {
+        print("error: {library.books[at].id} is already on loan")
+        ret
+    }
+    if library.books.count(b => b.holder == args[1]) >= 3 {
+        print("error: {args[1]} already has 3 books")
+        ret
+    }
+    library.books[at].holder = args[1]
+    library.books[at].due = day + loan_days()
+    print("{args[1]} borrowed {library.books[at].id}, due day {library.books[at].due}")
+}
+@replace cmd_return
+fn cmd_return(inout library: Library, args: [str]) {
+    if args.len() != 4 {
+        print("error: usage: return NAME ID DAY")
+        ret
+    }
+    let day = parse_day(args[3])
+    if day < 0 {
+        print("error: bad day")
+        ret
+    }
+    let at = find_book(library, args[2])
+    if at < 0 {
+        print("error: unknown book {args[2]}")
+        ret
+    }
+    let book = library.books[at]
+    if book.holder != args[1] {
+        print("error: {args[1]} does not have {book.id}")
+        ret
+    }
+    library.books[at].holder = ""
+    if day <= book.due {
+        print("{args[1]} returned {book.id} on time")
+        ret
+    }
+    let days_late = day - book.due
+    let fine = fine_for(days_late)
+    if fine == 0 {
+        print("{args[1]} returned {book.id} {days_late} days late, no fine")
+        ret
+    }
+    library.members[find_member(library, args[1])].fines += fine
+    print("{args[1]} returned {book.id} {days_late} days late, fine {money(fine)}")
+}

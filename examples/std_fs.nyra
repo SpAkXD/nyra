@@ -1,25 +1,23 @@
 // Files and folders, relative to the folder the program runs in.
 use fs
 
-fn main() {
-    print(fs.exists("notes"), fs.exists("notes/a.txt"))
-    fs.mkdir("notes")
-    fs.write("notes/a.txt", "first line\n")
-    fs.append("notes/a.txt", "second line, ünïcode ✓\n")
-    fs.write("notes/b.txt", "")
-    fs.write("notes/Z.txt", "capital")
-    print(fs.exists("notes"), fs.exists("notes/a.txt"))
-    let text = fs.read("notes/a.txt")
-    print("{text.len()} characters, {text.split("\n").len()} parts")
-    print(text)
-    print(fs.list("notes"))
-    print("[{fs.read("notes/b.txt")}]")
-    fs.write("notes/b.txt", "replaced")
-    print(fs.read("notes/b.txt"))
-    for name in fs.list("notes") {
-        fs.remove("notes/{name}")
-    }
-    print(fs.list("notes"))
-    fs.remove("notes")
-    print(fs.exists("notes"))
+print(fs.exists("notes"), fs.exists("notes/a.txt"))
+fs.mkdir("notes")
+fs.write("notes/a.txt", "first line\n")
+fs.append("notes/a.txt", "second line, ünïcode ✓\n")
+fs.write("notes/b.txt", "")
+fs.write("notes/Z.txt", "capital")
+print(fs.exists("notes"), fs.exists("notes/a.txt"))
+let text = fs.read("notes/a.txt")
+print("{text.len()} characters, {text.split("\n").len()} parts")
+print(text)
+print(fs.list("notes"))
+print("[{fs.read("notes/b.txt")}]")
+fs.write("notes/b.txt", "replaced")
+print(fs.read("notes/b.txt"))
+for name in fs.list("notes") {
+    fs.remove("notes/{name}")
 }
+print(fs.list("notes"))
+fs.remove("notes")
+print(fs.exists("notes"))

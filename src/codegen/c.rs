@@ -232,11 +232,45 @@ fn structs(m: &Module, out: &mut String) {
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
         // `Point(x: 1, y: 2)`: the way the value is written in Nyra
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
-        let head = format!("{}(", s.name);
+        if !s.variants.is_empty() {
+            // an enum value prints as its variant: `Dir.N`
+            let names: Vec<String> = s.variants.iter().map(|v| string_lit(&format!("{}.{v}", s.name))).collect();
+            let f = field(s, 0);
+            let _ = writeln!(
+                out,
+                "    static const char *const names[] = {{ {} }};\n    nyrt_buf_lit(o, names[v->{f}], (int64_t)strlen(names[v->{f}]));\n}}",
+                names.join(", ")
+            );
+            continue;
+        }
+        // (a tuple prints as `(1, "a")`: no name, no field names)
+        let head = if s.tuple {
+            "(".to_string()
+        } else if s.option {
+            "Some(".to_string()
+        } else {
+            format!("{}(", s.name)
+        };
+        if s.option {
+            // `none`, or `Some(value)`
+            let _ = writeln!(out, "    if (!v->{}) {{ nyrt_buf_lit(o, \"none\", 4); return; }}", field(s, 0));
+        }
         let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&head), head.len());
         for (k, (fname, t)) in s.fields.iter().enumerate() {
-            let label = format!("{}{fname}: ", if k > 0 { ", " } else { "" });
-            let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            if s.option && k == 0 {
+                continue;
+            }
+            let sep = if k > 0 { ", " } else { "" };
+            let label = if s.tuple {
+                sep.to_string()
+            } else if s.option {
+                String::new()
+            } else {
+                format!("{sep}{fname}: ")
+            };
+            if !label.is_empty() {
+                let _ = writeln!(out, "    nyrt_buf_lit(o, {}, {});", string_lit(&label), label.len());
+            }
             let f = field(s, k);
             let line = match t {
                 Ty::Int => format!("nyrt_buf_int(o, v->{f});"),
@@ -570,7 +604,7 @@ impl Gen<'_> {
         self.f.local(*t).name.is_none()
             && place.root != *t
             && matches!(b.kind, StmtKind::Drop(d) if d == *t)
-            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) if mentions(i, *t)))
+            && !place.path.iter().any(|s| matches!(s, Step::Index(i, _) | Step::Key(i, _) if mentions(i, *t)))
     }
 
     /// `NYRT_ELEMS(T, xs)[nyrt_ix(xs, i, line, col)]`: element `i` of the array `xs` (an
@@ -834,6 +868,22 @@ impl Gen<'_> {
                     lv = self.elem_slot(&lv, root, elem, i, *span);
                     t = elem;
                 }
+                Step::Key(key, span) => {
+                    // the map is about to change below this point; a missing key is E0248
+                    let (kt, vt) = t.map_kv().expect("verified: a map");
+                    self.line(&format!("nyrt_map_unique(&{lv});"));
+                    let p = self.fresh("p");
+                    let line = format!(
+                        "{ct} *{p} = ({ct} *)nyrt_map_at({lv}, {}, {}, {});",
+                        self.addr(key, kt),
+                        span.line,
+                        span.col,
+                        ct = ctype(vt)
+                    );
+                    self.line(&line);
+                    lv = format!("(*{p})");
+                    t = vt;
+                }
                 Step::Field(k) => {
                     let info = self.m.structs.get(t).expect("verified: a struct");
                     lv = format!("{lv}.{}", field(info, *k as usize));
@@ -862,6 +912,7 @@ impl Gen<'_> {
         for s in &p.path {
             t = match s {
                 Step::Index(..) => t.elem().expect("verified: an array"),
+                Step::Key(..) => t.map_kv().expect("verified: a map").1,
                 Step::Field(k) => self.m.structs.get(t).expect("verified: a struct").fields[*k as usize].1,
             };
         }
@@ -1062,6 +1113,7 @@ impl Gen<'_> {
             RtOp::StrCodes => format!("nyrt_str_codes({})", a[0]),
             RtOp::StrSplit => format!("nyrt_str_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("nyrt_check_step({}, {at})", a[0]),
+            RtOp::CheckSome => format!("nyrt_check_some({}, {at})", a[0]),
             RtOp::CheckNonEmpty => format!("nyrt_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("nyrt_str_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("nyrt_str_pad({}, {}, {}, false)", a[0], a[1], a[2]),
@@ -1322,7 +1374,7 @@ fn expr_ok(e: &Expr, x: LocalId, u: &mut ArrUse) -> bool {
 
 fn place_ok(p: &Place, x: LocalId, u: &mut ArrUse) -> bool {
     p.path.iter().all(|s| match s {
-        Step::Index(i, _) => expr_ok(i, x, u),
+        Step::Index(i, _) | Step::Key(i, _) => expr_ok(i, x, u),
         Step::Field(_) => true,
     })
 }

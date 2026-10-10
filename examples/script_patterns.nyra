@@ -1,0 +1,23 @@
+// Patterns, match and if let in a script, where functions see the script variables.
+let (a, b) = (1, 2)
+var (c, d) = ("x", [1, 2])
+fn f() -> int = a + b + d.len()
+fn bump() {
+    c += "!"
+    d.push(9)
+}
+print(f())
+bump()
+print(c, d, f())
+for (k, v) in [(1, 2)] {
+    print(k + v)
+}
+match a {
+    1 => print("one")
+    _ => print("other")
+}
+if let v = [5].find(x => x > 1) {
+    print(v)
+}
+let opt: int? = none
+print(opt ?? a)

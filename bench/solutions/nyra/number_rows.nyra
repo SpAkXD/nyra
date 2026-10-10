@@ -1,9 +1,1 @@
-fn main() {
-    for k in 1..7 {
-        var line = "1"
-        for i in 2..k + 1 {
-            line = "{line} {i}"
-        }
-        print(line)
-    }
-}
+for k in 1..7 { print([str(i) for i in 1..k + 1].join(" ")) }

@@ -1,0 +1,32 @@
+{
+  "id": "increasing_runs",
+  "title": "Longest increasing subsequence",
+  "category": "dynamic-programming",
+  "difficulty": "medium",
+  "min_version": "0.5",
+  "tier": "v2",
+  "prompt": "Read lines from standard input; each line holds integers separated by single spaces (possibly none). For each line print `strict=A nondecreasing=B`: A is the length of the longest strictly increasing subsequence and B the length of the longest non-decreasing subsequence. A subsequence keeps the order of the numbers but may skip some of them. A line with no numbers gives `strict=0 nondecreasing=0`. All values fit easily in 32 bits.",
+  "cases": [
+    {
+      "name": "example",
+      "visible": true,
+      "stdin": "10 9 2 5 3 7 101 18\n1 2 2 3\n5 4 3 2 1\n7\n\n",
+      "expected_output": "strict=4 nondecreasing=4\nstrict=3 nondecreasing=4\nstrict=1 nondecreasing=1\nstrict=1 nondecreasing=1\nstrict=0 nondecreasing=0\n"
+    },
+    {
+      "name": "hidden1",
+      "stdin": "1 1 1 1\n-5 -4 -3 -3 -2\n0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15\n",
+      "expected_output": "strict=1 nondecreasing=4\nstrict=4 nondecreasing=5\nstrict=6 nondecreasing=6\n"
+    },
+    {
+      "name": "hidden2",
+      "stdin": "3 1 2 1 2 3 1 2 3 4\n100 -100\n2 2 1 1 2 2 1 1\n",
+      "expected_output": "strict=4 nondecreasing=6\nstrict=1 nondecreasing=1\nstrict=2 nondecreasing=4\n"
+    },
+    {
+      "name": "hidden3",
+      "stdin": "\n\n-1\n",
+      "expected_output": "strict=0 nondecreasing=0\nstrict=0 nondecreasing=0\nstrict=1 nondecreasing=1\n"
+    }
+  ]
+}

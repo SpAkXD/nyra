@@ -229,8 +229,9 @@ class TaskSet(unittest.TestCase):
         # the mock's deliberately broken replies edit these programs textually
         for t in self.tasks:
             nyra = run.SOLUTIONS_DIR / "nyra" / f"{t.id}.nyra"
-            if nyra.is_file():
-                self.assertIn("fn main() {", nyra.read_text(encoding="utf-8"), nyra.name)
+            if nyra.is_file():  # scripts: the mock adds a statement before them or after them
+                text = nyra.read_text(encoding="utf-8")
+                self.assertTrue(text.endswith("\n") and "\r" not in text, nyra.name)
             rust = (run.SOLUTIONS_DIR / "rust" / f"{t.id}.rs").read_text(encoding="utf-8")
             self.assertIn("fn main() {", rust, f"{t.id}.rs")
             for lang, ext in (("typescript", ".ts"), ("rust", ".rs")):
@@ -755,6 +756,256 @@ class AnthropicProviderWithFakeClient(unittest.TestCase):
         rec = run.run_one(_task(), run.PythonLang(timeout=5), 0, ctx)
         self.assertEqual(rec["status"], "error")
         self.assertTrue(ctx.abort.is_set() and ctx.fatal)
+
+
+class AnthropicPricesAndCaching(unittest.TestCase):
+    """Prices (verified 2026-10-09 against the official pricing page) and prompt caching of the Anthropic provider."""
+
+    def test_the_price_table_matches_the_official_prices(self):
+        p = providers.ANTHROPIC_PRICES
+        # (input, output) in dollars per million tokens
+        self.assertEqual(tuple(p["claude-opus-5-5"][:2]), (4.0, 20.0))
+        self.assertEqual(tuple(p["claude-sonnet-5-5"][:2]), (2.0, 10.0))
+        self.assertEqual(tuple(p["claude-haiku-4-5-20251001"][:2]), (1.0, 5.0))
+        # cache reads: 0.05x on Opus 5.5 and Sonnet 5.5, 0.1x on Haiku 4.5; 5-minute writes 1.25x everywhere
+        self.assertEqual([p[m].cache_read for m in ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001")],
+                         [0.05, 0.05, 0.1])
+        self.assertEqual({v.cache_write for v in p.values()}, {1.25})
+        # the minimum cacheable prefix: 512 tokens on Opus 5.5 / Sonnet 5.5, 4,096 on Haiku 4.5
+        self.assertEqual([p[m].min_cache_tokens for m in ("claude-opus-5-5", "claude-sonnet-5-5",
+                                                          "claude-haiku-4-5-20251001")], [512, 512, 4096])
+        self.assertIs(p["claude-haiku-4-5"], p["claude-haiku-4-5-20251001"])
+
+    def test_cost_counts_fresh_written_and_read_tokens_at_their_own_prices(self):
+        sonnet = providers.ANTHROPIC_PRICES["claude-sonnet-5-5"]
+        # no cache: 10,000 in at $2/M + 1,000 out at $10/M
+        self.assertAlmostEqual(providers.anthropic_cost(sonnet, 10000, 1000), 0.02 + 0.01)
+        # the cache write: 8,000 of the 10,000 written at 1.25x
+        self.assertAlmostEqual(providers.anthropic_cost(sonnet, 10000, 1000, cache_creation=8000),
+                               (2000 * 2 + 8000 * 2 * 1.25 + 1000 * 10) / 1e6)
+        # the cache read: 8,000 of the 10,000 read at 0.05x ($0.10/M on Sonnet 5.5)
+        self.assertAlmostEqual(providers.anthropic_cost(sonnet, 10000, 1000, cache_read=8000),
+                               (2000 * 2 + 8000 * 0.10 + 1000 * 10) / 1e6)
+        haiku = providers.ANTHROPIC_PRICES["claude-haiku-4-5-20251001"]
+        self.assertAlmostEqual(providers.anthropic_cost(haiku, 7000, 0, cache_read=6900), (100 * 1 + 6900 * 0.1) / 1e6)
+
+    def _blocks(self, cache=True):
+        return providers.SystemPrompt([("HEAD " + "spec " * 5, cache), ("TAIL rule", False)])
+
+    def test_a_system_prompt_with_blocks_is_a_string_and_a_list_of_blocks(self):
+        sp = self._blocks()
+        self.assertIsInstance(sp, str)
+        self.assertEqual(str(sp), "HEAD spec spec spec spec spec\n\nTAIL rule")
+        self.assertEqual(sp.blocks, (("HEAD spec spec spec spec spec", True), ("TAIL rule", False)))
+
+    def test_only_the_marked_block_gets_cache_control_and_a_plain_string_stays_a_string(self):
+        client = FakeClient()
+        p = providers.AnthropicProvider(client=client)
+        p.complete(self._blocks(), [{"role": "user", "content": "task one"}], {})
+        p.complete(self._blocks(), [{"role": "user", "content": "task two"}], {})
+        first, second = client.requests
+        self.assertEqual(first["system"], [
+            {"type": "text", "text": "HEAD spec spec spec spec spec", "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": "TAIL rule"}])
+        self.assertEqual(first["system"], second["system"])  # byte-stable: the task is only in the user message
+        self.assertNotIn("task", json.dumps(first["system"]))
+        p.complete("plain", [{"role": "user", "content": "t"}], {})
+        self.assertEqual(client.requests[2]["system"], "plain")
+        self.assertNotIn("cache_control", json.dumps(client.requests[2]))
+
+    def test_caching_can_be_turned_off(self):
+        client = FakeClient()
+        p = providers.AnthropicProvider(client=client, cache=False)
+        p.complete(self._blocks(), [{"role": "user", "content": "t"}], {})
+        self.assertEqual(client.requests[0]["system"], str(self._blocks()))
+        self.assertIsNone(p.warm_up(self._blocks()))
+        self.assertEqual(len(client.requests), 1)
+        self.assertFalse(p.describe()["prompt_cache"])
+
+    def test_usage_has_the_cache_fields_and_the_cost_uses_cache_prices(self):
+        client = FakeClient([SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="x")],
+            usage=SimpleNamespace(input_tokens=100, output_tokens=40, cache_creation_input_tokens=0,
+                                  cache_read_input_tokens=9000), stop_reason="end_turn")])
+        p = providers.AnthropicProvider(client=client, model="claude-sonnet-5-5")
+        reply = p.complete(self._blocks(), [{"role": "user", "content": "t"}], {})
+        u = reply.usage
+        self.assertEqual((u.input_tokens, u.cache_creation_tokens, u.cache_read_tokens), (9100, 0, 9000))
+        self.assertAlmostEqual(u.cost, (100 * 2 + 9000 * 2 * 0.05 + 40 * 10) / 1e6)
+        self.assertEqual(u.to_dict()["cache_read_input_tokens"], 9000)
+        self.assertEqual(u.to_dict()["cache_creation_input_tokens"], 0)
+        self.assertAlmostEqual(p.spent(), u.cost)
+
+    def test_warm_up_sends_the_same_system_blocks_with_a_tiny_reply_and_is_billed(self):
+        client = FakeClient([SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="ready")],
+            usage=SimpleNamespace(input_tokens=20, output_tokens=2, cache_creation_input_tokens=9000,
+                                  cache_read_input_tokens=0), stop_reason="end_turn")])
+        p = providers.AnthropicProvider(client=client, model="claude-sonnet-5-5", effort="medium")
+        reply = p.warm_up(self._blocks())
+        self.assertEqual(reply.usage.cache_creation_tokens, 9000)
+        p.complete(self._blocks(), [{"role": "user", "content": "t"}], {})
+        warm, real = client.requests
+        self.assertEqual(warm["system"], real["system"])
+        self.assertEqual(warm["max_tokens"], 16)
+        self.assertEqual(warm["output_config"], real["output_config"])  # the same request shape, so the same cache
+        self.assertAlmostEqual(reply.usage.cost, (20 * 2 + 9000 * 2 * 1.25 + 2 * 10) / 1e6)
+        self.assertGreater(p.spent(), reply.usage.cost)  # the warm-up counts against --budget
+        self.assertIsNone(providers.AnthropicProvider(client=FakeClient()).warm_up("plain string"))
+
+    def test_other_providers_have_nothing_to_warm(self):
+        self.assertIsNone(providers.MockProvider(reference=lambda *a: "x").warm_up(self._blocks()))
+        self.assertIsNone(providers.OpenRouterProvider("a/b").warm_up(self._blocks()))
+
+
+@needs_nyra
+class NyraSystemPromptBlocks(unittest.TestCase):
+    def lang(self, spec="full", ex=False):
+        return run.NyraLang(NYRA, spec_path=run.resolve_spec(spec), ex_examples=ex)
+
+    def test_full_spec_prompt_is_unchanged_and_split_into_head_and_tail(self):
+        lang = self.lang("full")
+        system = lang.system_prompt
+        self.assertEqual(str(system), run._NYRA_SYSTEM.format(spec=lang.spec.strip()))
+        (head, head_cache), (tail, tail_cache) = system.blocks
+        self.assertTrue(head_cache and not tail_cache)
+        self.assertTrue(head.endswith("</nyra_spec>") and lang.spec.strip() in head)
+        self.assertTrue(tail.endswith(run._REPLY_RULE))
+        self.assertEqual(lang.spec_kind, "full")
+
+    def test_the_card_has_its_metadata_comment_cut_off_and_its_own_intro(self):
+        lang = self.lang("card")
+        raw = (REPO_ROOT / "docs" / "AGENT_CARD.md").read_text(encoding="utf-8")
+        self.assertTrue(raw.startswith("<!--"))
+        self.assertFalse(lang.spec.startswith("<!--") or "<!--" in lang.spec)
+        self.assertTrue(lang.spec.startswith("# Nyra v"))
+        self.assertEqual(lang.spec_kind, "card")
+        self.assertIn("The language card below is the only documentation you have.", lang.system_prompt)
+        self.assertNotIn("complete language specification", lang.system_prompt)
+        # the card names the compiler's version (major.minor of Cargo.toml)
+        cargo = (run.BENCH_DIR.parent / "Cargo.toml").read_text(encoding="utf-8")
+        version = re.search(r'^version = "(\d+\.\d+)', cargo, re.M).group(1)
+        self.assertEqual(lang.spec_version, version)
+        self.assertLess(len(lang.system_prompt), len(self.lang("full").system_prompt) // 3)
+
+    def test_the_system_prompt_is_byte_stable_and_has_no_task_in_it(self):
+        lang = self.lang("card")
+        self.assertEqual(lang.system_prompt, lang.system_prompt)
+        self.assertEqual(lang.system_prompt.blocks, lang.system_prompt.blocks)
+        for task in run.load_tasks()[:5]:
+            self.assertNotIn(task.prompt, lang.system_prompt)
+
+    def test_ex_examples_changes_only_the_tail(self):
+        plain, ex = self.lang("card").system_prompt, self.lang("card", ex=True).system_prompt
+        self.assertEqual(plain.blocks[0], ex.blocks[0])  # the cached prefix is the same
+        self.assertIn("`ex` examples", ex.blocks[1][0])
+        self.assertNotIn("`ex` examples", plain.blocks[1][0])
+        self.assertTrue(ex.blocks[1][0].endswith(run._REPLY_RULE))
+
+    def test_a_custom_spec_path_works_and_is_recorded_as_custom(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "mine.md"
+            path.write_text("<!-- meta -->\n# Nyra v0.5 mine\nbody\n", encoding="utf-8")
+            lang = run.NyraLang(NYRA, spec_path=path)
+        self.assertEqual((lang.spec_kind, lang.spec.strip()), ("custom", "# Nyra v0.5 mine\nbody"))
+
+    def test_resolve_spec(self):
+        self.assertEqual(run.resolve_spec("full"), REPO_ROOT / "docs" / "SPEC.md")
+        self.assertEqual(run.resolve_spec("card"), REPO_ROOT / "docs" / "AGENT_CARD.md")
+        self.assertEqual(run.resolve_spec("x/y.md"), Path("x/y.md"))
+
+
+class _WarmMock(providers.MockProvider):
+    """A mock that has a cache: records the order of warm-up and job requests."""
+
+    def __init__(self, *args, log, **kw):
+        super().__init__(*args, **kw)
+        self.log = log
+        self.cache = True
+
+    def warm_up(self, system):
+        self.log.append("warm")
+        usage = providers.Usage(input_tokens=5000, output_tokens=2, cache_creation_tokens=5000, cache_read_tokens=0)
+        return providers.Reply(text="ready", usage=usage, request_id="warm_1")
+
+    def complete(self, system, messages, meta):
+        self.log.append("job")
+        return super().complete(system, messages, meta)
+
+
+@needs_nyra
+class WarmUpBeforeTheJobs(unittest.TestCase):
+    def test_one_warm_up_per_distinct_system_prompt_before_any_job_and_it_is_recorded(self):
+        log = []
+        langs = run.make_languages(["nyra", "python"], nyra=None, backend="native", spec=run.resolve_spec("card"),
+                                   timeout=10)
+        provider = _WarmMock(reference=lambda lang, tid: langs[lang].reference_code(tid), log=log)
+        # --repairs and --samples are filled in by the CLI per tier; run_model is called directly here
+        args = run.build_parser().parse_args(["--provider", "mock", "--jobs", "3", "-q", "--tier", "v1", "--repairs", "3", "--samples", "1"])
+        tasks = [t for t in run.load_tasks() if t.id in ("fizzbuzz", "gcd_pairs")]
+        plan = run.Plan(args=args, lang_names=["nyra", "python"], langs=langs, tasks=tasks, excluded=[],
+                        max_version=None, max_source=None, warnings=[], toolchains={"node": None, "rust": None})
+        with tempfile.TemporaryDirectory() as out:
+            with contextlib.redirect_stdout(io.StringIO()):
+                outcome = run.run_model(plan, provider, Path(out), None, single=False)
+        self.assertEqual(log[0], "warm")
+        self.assertEqual(log.count("warm"), 2)  # nyra's and python's system prompts differ
+        self.assertEqual(log[:2], ["warm", "warm"])  # both before the first job
+        self.assertEqual(log.count("job"), 4)
+        run_meta = outcome.results["run"]
+        self.assertEqual([w["lang"] for w in run_meta["cache"]["warmup"]], ["nyra", "python"])
+        self.assertEqual(run_meta["cache"]["warmup"][0]["usage"]["cache_creation_input_tokens"], 5000)
+        self.assertTrue(run_meta["cache"]["enabled"])
+        self.assertEqual((run_meta["spec"]["kind"], run_meta["spec"]["ex_examples"]), ("card", False))
+
+    def test_a_prompt_below_the_minimum_cacheable_prefix_is_reported(self):
+        class Uncached(_WarmMock):
+            def warm_up(self, system):
+                self.log.append("warm")
+                return providers.Reply(text="ready", usage=providers.Usage(input_tokens=1500, output_tokens=2,
+                                                                          cache_creation_tokens=0, cache_read_tokens=0))
+
+        langs = run.make_languages(["nyra"], nyra=None, backend="native", spec=run.resolve_spec("card"), timeout=10)
+        provider = Uncached(reference=lambda lang, tid: langs[lang].reference_code(tid), log=[])
+        provider.model = "claude-haiku-4-5-20251001"
+        args = run.build_parser().parse_args(["--provider", "mock", "-q"])
+        plan = run.Plan(args=args, lang_names=["nyra"], langs=langs, tasks=[], excluded=[], max_version=None,
+                        max_source=None, warnings=[], toolchains={})
+        ctx = run.RunContext(provider=provider, repairs=0, count_tokens=False)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            done = run.warm_up(plan, provider, ctx)
+        self.assertIn("not cached", err.getvalue())
+        self.assertIn("4,096", err.getvalue())
+        self.assertEqual(done[0]["usage"]["cache_creation_input_tokens"], 0)
+
+
+class CacheReporting(unittest.TestCase):
+    def test_the_summary_adds_up_cache_tokens(self):
+        def attempt(read, created):
+            return {"n": 1, "usage": {"input_tokens": 1000, "output_tokens": 10, "cache_read_input_tokens": read,
+                                      "cache_creation_input_tokens": created, "cost_usd": 0.001},
+                    "result": {"passed": True, "kind": "pass"}, "stop_reason": "end_turn"}
+
+        recs = [{"task_id": f"t{i}", "lang": "nyra", "sample": 0, "status": "pass", "first_try": True,
+                 "attempts_used": 1, "attempts": [attempt(800, 0)]} for i in range(3)]
+        stats = report._lang_stats(recs)
+        self.assertEqual((stats["total_cache_read_tokens"], stats["total_cache_creation_tokens"]), (2400, 0))
+        self.assertEqual(report._cache_cell(stats), "2,400 / 0 (80%)")
+        self.assertEqual(report._cache_cell({}), "-")
+
+    def test_the_dry_run_estimate_uses_cache_prices(self):
+        langs = {"nyra": SimpleNamespace(system_prompt=providers.SystemPrompt([("x" * 24000, True), ("tail", False)]))}
+        tasks = [_task("1\n")] * 10
+        sonnet = providers.ANTHROPIC_PRICES["claude-sonnet-5-5"]
+        cached = run.estimate_cost_anthropic(sonnet, tasks, ["nyra"], langs, 1, 1000, cache=True)
+        plain = run.estimate_cost_anthropic(sonnet, tasks, ["nyra"], langs, 1, 1000, cache=False)
+        self.assertLess(cached, plain)
+        # Haiku 4.5 caches nothing shorter than 4,096 tokens: a 3,000-character prompt costs the same either way
+        haiku = providers.ANTHROPIC_PRICES["claude-haiku-4-5-20251001"]
+        short = {"nyra": SimpleNamespace(system_prompt=providers.SystemPrompt([("x" * 3000, True), ("tail", False)]))}
+        self.assertAlmostEqual(run.estimate_cost_anthropic(haiku, tasks, ["nyra"], short, 1, 1000, cache=True),
+                               run.estimate_cost_anthropic(haiku, tasks, ["nyra"], short, 1, 1000, cache=False))
 
 
 class _StubAnthropicServer(http.server.ThreadingHTTPServer):
@@ -3257,7 +3508,7 @@ class OldResultFiles(unittest.TestCase):
 
 @needs_nyra
 class NyraSelfRepair(unittest.TestCase):
-    BROKEN = "fn main() {\n    print(f(2))\n}\nfn f(x: int) -> int {\n    return x + 40\n}\n"  # `return`: E0201
+    BROKEN = "fn main() {\n    print(f(2))\n}\nfn f(x: int) -> int {\n    return x + 40;\n}\n"  # `;`: E0005, which --fix removes
 
     def test_the_compiler_repairs_an_unambiguous_mistake(self):
         lang = run.NyraLang(NYRA, timeout=10)
@@ -3265,7 +3516,7 @@ class NyraSelfRepair(unittest.TestCase):
         out = lang.self_repair(self.BROKEN, _task("42\n"))
         self.assertTrue(out["tried"] and out["changed"])
         self.assertTrue(out["result"]["passed"], out)
-        self.assertIn("ret x + 40", out["code"])
+        self.assertIn("return x + 40\n", out["code"])
 
     def test_a_mistake_without_a_fix_is_left_alone(self):
         out = run.NyraLang(NYRA, timeout=10).self_repair("fn main() {\n    print(nothing)\n}\n", _task("1\n"))
@@ -3431,9 +3682,14 @@ class Readme(unittest.TestCase):
         # the ids the README tells the reader to type must be ids the harness itself ships and verified
         readme = (BENCH_DIR / "README.md").read_text(encoding="utf-8")
         shipped = set(modelsmod.default_model_ids())
+        for name in modelsmod.preset_names():  # the ids of the presets are checked against OpenRouter too (models.py --check)
+            shipped |= set(modelsmod.load_preset(name).get("openrouter", []))
         for mid in set(re.findall(r"\b(?:anthropic|openai|google|x-ai|deepseek)/[A-Za-z0-9._-]+", readme)):
             self.assertIn(mid, shipped, f"README mentions {mid}, which is not in bench/models.json")
 
+
+# The tests of the tiers beyond v1 (hidden inputs, edits, safety, type checks, presets, the leaderboard) live in their own file.
+from test_tiers import *  # noqa: E402,F401,F403
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
