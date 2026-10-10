@@ -1,6 +1,6 @@
 # Nyra: guide for AI agents
 
-How to write correct **Nyra v0.5** programs. Read it once, top to bottom; it is short on purpose.
+How to write correct **Nyra v0.6** programs. Read it once, top to bottom; it is short on purpose.
 
 Nyra is **not in your training data** and it is **not** Rust, Go, TypeScript or Python, even though
 the tokens look familiar (code blocks here are marked `rust` only so GitHub highlights them). Use only

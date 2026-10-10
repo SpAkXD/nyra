@@ -1,4 +1,4 @@
-# Nyra v0.5 — language spec
+# Nyra v0.6 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
 context and the agent can write Nyra. For common mistakes and complete examples, see

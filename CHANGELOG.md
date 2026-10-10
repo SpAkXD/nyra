@@ -3,7 +3,7 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
-## v0.6 (unreleased)
+## v0.6.0 (2026-10-10)
 
 Language
 - Tuples: `(1, "a")`, `t.0`, `fn f() -> (int, bool)`, `let (a, b) = f()`, `(a, b) = (b, a)`, `for (k, v) in pairs`. They compare and sort part by part and print as `(1, "a")`. New codes E0272, E0273.
@@ -72,7 +72,7 @@ Speed
 - `perf/` also times Go, Node.js and Python versions of each program; `perf/first_output.py` measures the
   time to the first output of `nyra run`.
 
-## v0.5 (unreleased)
+## v0.5 (released as part of v0.6.0)
 
 Language
 - Lambdas for the array and string methods (`xs.map(x => x * 2)`, `filter`, `count`, `any`, `all`,
