@@ -5276,22 +5276,6 @@ error[E0218]: a map key must be `int`, `str`, `char` or `bool`, found `(int, int
   = explain: nyra explain E0218
 
 nyra: 1 error(s)
-==== tuple_json
-use json
-
-fn main() {
-    print(json.str((1, 2)))
-}
-----
-error[E0309]: `json.str` cannot handle the tuple type in `(int, int)` yet
-  --> case.nyra:4:16
-  |
-4 |     print(json.str((1, 2)))
-  |                ^
-  = hint: use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`
-  = explain: nyra explain E0309
-
-nyra: 1 error(s)
 ==== format_spec_syntax
 fn main() {
     let x = 5
@@ -5553,23 +5537,6 @@ error[E0224]: `P?` is an optional value and has no field `x`
   |             ^
   = hint: take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`
   = explain: nyra explain E0224
-
-nyra: 1 error(s)
-==== option_json
-use json
-
-fn main() {
-    let x: int? = 5
-    print(json.str(x))
-}
-----
-error[E0309]: `json.str` cannot handle the optional type in `int?` yet
-  --> case.nyra:5:16
-  |
-5 |     print(json.str(x))
-  |                ^
-  = hint: use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there
-  = explain: nyra explain E0309
 
 nyra: 1 error(s)
 ==== option_wrong_type

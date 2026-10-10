@@ -1042,29 +1042,6 @@ impl Checker {
         self.generated.push(f);
     }
 
-    /// `"map"` or `"tuple"` if a value of `t` holds one (`json` does not handle them yet).
-    fn json_blocker(&self, t: Type) -> Option<&'static str> {
-        fn go(c: &Checker, t: Type, seen: &mut Vec<String>) -> Option<&'static str> {
-            match t {
-                Type::Map(_) => Some("map"),
-                Type::Array(_) => t.elem().and_then(|e| go(c, e, seen)),
-                Type::Struct(_) if t.is_tuple() => Some("tuple"),
-                Type::Struct(_) if t.is_option() => Some("optional"),
-                Type::Struct(_) if t.struct_name().is_some_and(|n| c.enums.contains_key(&n)) => Some("enum"),
-                Type::Struct(_) => {
-                    let n = t.struct_name()?;
-                    if seen.contains(&n) {
-                        return None;
-                    }
-                    seen.push(n.clone());
-                    c.structs.get(&n).and_then(|s| s.fields.iter().find_map(|(_, ft, _)| go(c, *ft, seen)))
-                }
-                _ => None,
-            }
-        }
-        go(self, t, &mut Vec::new())
-    }
-
     /// A map key must be an `int`, `str`, `char` or `bool` (E0218).
     fn map_key(&mut self, k: Type, span: Span) -> bool {
         if matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool) || k.is_unknown() {
@@ -2421,22 +2398,6 @@ impl Checker {
                 .hint(format!("call it as `{shown}`")),
             );
             return if parse { want.unwrap_or(Type::Unknown) } else { Type::Str };
-        }
-        let t = if parse { want.unwrap_or(Type::Unknown) } else { tys[0] };
-        if let Some(kind) = self.json_blocker(t) {
-            let hint = if kind == "map" {
-                "use a struct for a JSON object with known keys, or an array of structs such as `[Entry]` with `struct Entry { key: str, value: int }`"
-            } else if kind == "enum" {
-                "write the variant as text with `str(d)`, or as an `int` that you choose"
-            } else if kind == "optional" {
-                "use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there"
-            } else {
-                "use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`"
-            };
-            self.errs.push(
-                Diag::new("E0309", format!("`json.{name}` cannot handle the {kind} type in `{}` yet", t.name()), span).hint(hint),
-            );
-            return if parse { t } else { Type::Str };
         }
         if !parse {
             if tys[0] == Type::Void {

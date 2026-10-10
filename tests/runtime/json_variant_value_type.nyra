@@ -1,0 +1,10 @@
+// expect: E0345 at 8:25
+// message: json.parse: expected a number at $.Circle[0]
+use json
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    print("start")
+    let v: Shape = json.parse("{{\"Circle\": [\"x\"]}}")
+    print(v)
+}

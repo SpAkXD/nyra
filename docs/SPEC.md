@@ -342,7 +342,7 @@ not `(str, int)`, and `t.2` of a pair is E0273. A pattern must name every part (
 count is E0272. Tuples are values like structs: they are copied, compare with `==` and `!=` by content, and
 `<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
 (or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
-int that stands for it) and `json` cannot read or write one (use a struct).
+int that stands for it); `json` writes one as an array.
 
 ## Enums and `match`
 ```nyra
@@ -452,7 +452,7 @@ plain value: `m.get(k) == 3`). `x ?? d` is `x`'s value, or `d` (evaluated only w
 optional. `if let v = x { ... } else { ... }` binds `v` in the first block only. `x.is_some()`, `x.is_none()` and
 `x.unwrap()` (E0350 at run time when it holds none) are the only methods; to use a field or a method of the
 value, take it out first. `none` needs a known optional type (E0276), `??` and `if let` need an optional on the
-left (E0277). Optionals cannot be map keys or go through `json`.
+left (E0277). Optionals cannot be map keys. In `json` an optional is the value, or `null`.
 
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
@@ -504,7 +504,7 @@ print(text.fixed(math.sqrt(2.0), 3))   // 1.414
 | `input` | `line()` the next line of standard input without its line end ("" at the end) · `lines()` all the rest as `[str]` · `all()` the rest as it is · `eof()` |
 | `os` | `args()` the program's arguments, `[str]` · `env(name)` a variable ("" when not set) · `has_env(name)` · `exit(code)` stops now |
 | `fs` | `read(path)` · `write(path, text)` · `append(path, text)` · `exists(path)` · `list(dir)` names, sorted · `remove(path)` a file or empty folder · `mkdir(path)` |
-| `json` | `str(v)` any value as JSON · `parse(text)` reads the type the value goes to: `let p: Point = json.parse(s)` |
+| `json` | `str(v)` any value as JSON (see below) · `parse(text)` reads the type the value goes to: `let p: Point = json.parse(s)` |
 | `time` | `now_ms()` int, since 1970 · `mono_ms()` float, a monotonic clock for timing · `sleep_ms(ms)` |
 | `random` | `random()` a float from 0 up to 1 · `range(lo, hi)` an int from lo to hi - 1 · `seed(n)` |
 | `math` | `pi` `e` `inf` · `sqrt floor ceil round trunc exp log log10 log2 sin cos tan asin acos atan` (float) · `pow(x, y)` · `atan2(y, x)` |
@@ -517,7 +517,35 @@ never clash with the program's (`fn sign`, `let x`, `fn lo` are all fine next to
 unless `random.seed(n)` was called; then they are the same sequence on every backend. `math` gives the
 same digits on every backend; `round` rounds halves away from zero. Paths are relative to the folder the
 program runs in and use `/`. JSON objects are read into structs by field name (other keys are skipped;
-every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
+every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`.
+
+Every type has a JSON form, and `json.parse` reads exactly it:
+
+| Nyra | JSON |
+|---|---|
+| `int` `float` `bool` `str` `char` | a number, a number, `true`/`false`, a string, a one-character string |
+| `[T]` | an array |
+| struct | an object with the fields in order: `{"x":1,"y":2}` |
+| tuple `(A, B)` | an array of the parts: `[1,"a"]` (reading needs the exact length) |
+| optional `T?` | the value, or `null` for `none` |
+| enum variant | the name as a string, `"Empty"`, or with values an object with one key and an array: `{"Rect":[1,2]}` |
+| map `[str: V]` | an object: `{"a":1,"b":2}`; a repeated key keeps its first place and the last value |
+| map with other keys | an array of `[key,value]` pairs: `[[1,"one"],[2,"two"]]` |
+
+```nyra
+use json
+
+enum Shape { Circle(float), Empty }
+
+let data = ["a": (1, Shape.Circle(2.5)), "b": (2, Shape.Empty)]
+let text = json.str(data)
+print(text)                          // {"a":[1,{"Circle":[2.5]}],"b":[2,"Empty"]}
+let back: [str: (int, Shape)] = json.parse(text)
+print(back == data)                  // true
+```
+A shape that does not fit is runtime error E0345 with the path, e.g. `expected an array of 2 elements at $.a` or
+`expected a variant of Shape: a name, or {"Name": [values]} at $.b`. An optional inside an optional writes `null`
+for both `none` and `Some(none)`. Text from
 outside (input, files, arguments) must be UTF-8.
 
 ## Capabilities and the sandbox
