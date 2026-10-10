@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nyra · The language agents can run unsupervised</title>
-<meta name="description" content="The language agents can run unsupervised: nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare (capabilities arrive in v0.6). A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, Python, TypeScript, Rust and Go.">
+<meta name="description" content="The language agents can run unsupervised: nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. A small, strict language designed to be written by AI agents. Native code through C, or JavaScript, Python, TypeScript, Rust and Go.">
 <meta name="theme-color" content="#000714">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -70,13 +70,13 @@
     <a href="#pipeline" style="--k:2"><span>03</span>Compiler</a>
     <a href="#values" style="--k:3"><span>04</span>Memory</a>
     <a href="#language" style="--k:4"><span>05</span>Language</a>
-    <a href="#bench" style="--k:5"><span>06</span>Benchmark</a>
+    <a href="/benchmarks/" style="--k:5"><span>06</span>Benchmarks</a>
     <a href="#roadmap" style="--k:6"><span>07</span>Roadmap</a>
     <a href="#install" style="--k:7"><span>08</span>Install</a>
   </nav>
   <div class="ms-foot" style="--k:8">
     <a class="btn btn-teal" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
-    <p>MIT license · Nyra v0.5</p>
+    <p>MIT license · Nyra v0.6</p>
   </div>
 </div>
 
@@ -89,7 +89,7 @@
   <div class="wrap hero-in" id="heroIn">
     <a class="announce rv" href="#roadmap"><span class="ping" aria-hidden="true"></span><b>v0.5</b><span>Standard library, lambdas, near-C speed</span><span class="arr" aria-hidden="true">→</span></a>
     <h1 class="split rv" style="--d:1">The language agents can run <em>unsupervised.</em></h1>
-    <p class="sub rv" style="--d:2">Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. Designed to be written by AI agents; one source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go. Capabilities arrive in v0.6.</p>
+    <p class="sub rv" style="--d:2">Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. Designed to be written by AI agents; one source file compiles to native code through C, or to JavaScript, Python, TypeScript, Rust and Go.</p>
     <div class="cta rv" style="--d:3">
       <a class="btn btn-teal mag" href="#install"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Get started</a>
       <a class="btn btn-ghost" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
@@ -176,7 +176,7 @@ fib(5) = 5</pre></div>
       <p class="lead rv">Agents write code and now run it too. Either you trust generated code with your machine, or you start a VM for every call. Nyra is a language for that step: small enough for a prompt, fast enough to run natively, and strict about what a program may touch.</p>
     </div>
     <div class="trio">
-      <article class="card tilt rv"><span class="num" aria-hidden="true">01</span><h3>Safe to run <span class="tag soon">v0.6</span></h3><p>A program can use only what it declares. Files and the like are capabilities, denied by default and checked by the compiler: <code class="i">--allow fs</code>. No VM per call. Not built yet; until it ships, run code you don't trust in a container.</p></article>
+      <article class="card tilt rv"><span class="num" aria-hidden="true">01</span><h3>Safe to run <span class="tag">new in v0.6</span></h3><p>A program can use only what it declares. Files and the like are capabilities, denied by default and checked by the compiler: <code class="i">--allow fs</code>. No VM per call. For code you don't trust, <code class="i">--sandbox</code> runs it in an interpreter with limits on steps, memory and output.</p></article>
       <article class="card tilt rv" style="--d:1"><span class="num" aria-hidden="true">02</span><h3>Fast <span class="tag ok">measured</span></h3><p>Native code through C: about 5 to 6 ms against about 300 ms for Python on the speed tasks, and within about 1.2&times; of hand-written C.</p></article>
       <article class="card tilt rv" style="--d:2"><span class="num" aria-hidden="true">03</span><h3>Near Python in cost <span class="tag ok">measured</span></h3><p>About 1.2 to 1.3&times; Python's code tokens, and fewer than Rust's. Not cheaper than Python: the spec in the prompt and the extra thinking cost more.</p></article>
     </div>
@@ -188,7 +188,7 @@ fib(5) = 5</pre></div>
     </div>
     <h3 class="why-h rv">What sets it apart</h3>
     <div class="trio">
-      <article class="card rv"><p class="kicker">Compile-time</p><h3>Capabilities as compile errors</h3><p>Using a power you didn't declare is an ordinary error with a code, a position and a hint. Coming in v0.6.</p></article>
+      <article class="card rv"><p class="kicker">Compile-time</p><h3>Capabilities as compile errors</h3><p>Using a power you didn't declare is an ordinary error with a code, a position and a hint. Shipped in v0.6.</p></article>
       <article class="card rv" style="--d:1"><p class="kicker">Published numbers</p><h3>A compiler that repairs</h3><p><code class="i">nyra check --fix</code> applies every fix that is certain, with no model call. Sonnet 96% to 100%; the numbers that did not move are published too.</p></article>
       <article class="card rv" style="--d:2"><p class="kicker">Part of the type check</p><h3>Examples that run while compiling</h3><p><code class="i">ex sq(3) == 9</code> is evaluated at compile time, so a function that is wrong for its own example is a compile error.</p></article>
     </div>
@@ -683,8 +683,9 @@ nyra run hello.nyra --js</pre></div></li>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.2</p><div><h3>Short code <span class="tag">done</span></h3><p>One-line functions, <code class="i">+=</code>, string interpolation, <code class="i">if</code> as a value, a build cache, runtime errors and a typed IR.</p></div></div></li>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.3</p><div><h3>Real data <span class="tag">done</span></h3><p>Strings and chars, arrays, structs, <code class="i">inout</code>, <code class="i">break</code> and <code class="i">continue</code>, reference counting with <code class="i">free</code>, <code class="i">keep</code> and <code class="i">arena</code>.</p></div></div></li>
       <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.4</p><div><h3>Self-repair <span class="tag">done</span></h3><p>Scripts without <code class="i">fn main</code>, <code class="i">nyra check --fix</code>, an MCP server for agents, Python, TypeScript, Rust and Go backends, and a harder benchmark tier.</p></div></div></li>
-      <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>Libraries and speed <span class="tag">now</span></h3><p>Lambdas and comprehensions, <code class="i">ex</code> examples checked while compiling, a standard library (input, files, JSON, math, time, random), maps, script variables in functions, native code near C speed, and the first benchmark results.</p></div></div></li>
-      <li class="next rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Capabilities and modules <span class="tag">next</span></h3><p>Capabilities that deny a program everything it did not declare (<code class="i">--allow fs</code>), modules of your own, a WebAssembly backend and a browser playground, and a C foreign function interface.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.5</p><div><h3>Libraries and speed <span class="tag">done</span></h3><p>Lambdas and comprehensions, <code class="i">ex</code> examples checked while compiling, a standard library (input, files, JSON, math, time, random), maps, script variables in functions, native code near C speed, and the first benchmark results.</p></div></div></li>
+      <li class="done rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.6</p><div><h3>Run unsupervised <span class="tag">done</span></h3><p>Capabilities (<code class="i">--allow fs</code>, deny by default) and a sandboxed interpreter, <code class="i">return</code>, <code class="i">c ? a : b</code>, tuples, optionals (<code class="i">int?</code>, <code class="i">??</code>), enums with <code class="i">match</code>, format specifiers, modules of your own, a 1,400-token agent card and benchmark v2 with hidden inputs.</p></div></div></li>
+      <li class="now rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v0.7</p><div><h3>Instant and in the browser <span class="tag">now</span></h3><p>A browser playground running the real compiler as WebAssembly, an instant <code class="i">nyra run</code>, enums that carry data, <code class="i">match</code> as a value, and JSON for every type.</p></div></div></li>
       <li class="rv"><span class="nd" aria-hidden="true"></span><div class="rm-card"><p class="rm-v">v1.0</p><div><h3>Ecosystem <span class="tag">planned</span></h3><p>Packages and addons, a published VS Code extension, a docs site.</p></div></div></li>
     </ol>
   </div>
@@ -718,7 +719,7 @@ nyra run hello.nyra --js</pre></div></li>
       <a class="totop" href="#top"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
     </div>
     <div class="fb-word" id="fbword" aria-hidden="true"><svg viewBox="-8 -8 288 122"><defs><linearGradient id="gfw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g fill="none" stroke="url(#gfw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/><path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/><path d="M152 0V64M152 28A28 28 0 0 1 180 0"/><circle cx="238" cy="32" r="32"/><path d="M270 0V64"/></g></svg></div>
-    <div class="fb-bot"><p>MIT license · Nyra v0.5</p><p>Built in the open.</p></div>
+    <div class="fb-bot"><p>MIT license · Nyra v0.6</p><p>Built in the open.</p></div>
   </div>
 </footer>
 </body>
