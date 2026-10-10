@@ -366,7 +366,13 @@ fn standard_input_works_in_the_interpreter_and_natively() {
             let (cache, work, file) = program("stdin", SHOUT);
             let out = run(&cache, &work, &file, flags, &[], &input, &[("NYRA_AUTO_STEPS", steps)]);
             assert_eq!(text(&out.stdout), want, "{lines} lines, {mode}: {}", stderr(&out));
-            assert!(stderr(&out).contains(mode), "{lines} lines, expected `{mode}`: {}", stderr(&out));
+            if mode == "gave up" {
+                // native answered: either the interpreter gave up, or (on a slow machine, when the input
+                // arrives after the pipe check) the run went native from the start; both are correct
+                assert!(!stderr(&out).contains("interpreted"), "{lines} lines, expected a native run: {}", stderr(&out));
+            } else {
+                assert!(stderr(&out).contains(mode), "{lines} lines, expected `{mode}`: {}", stderr(&out));
+            }
         }
     }
 }
