@@ -95,20 +95,47 @@ function ny_eq(a, b) {
     return a.ny_eq(b);
 }
 // ---- maps: JavaScript Maps (insertion order), copied on write like arrays ----
+// A tuple used as the key of a map is replaced by one canonical object per value, so the Map finds it
+// again; the canonical objects are marked shared, so a program that changes its own copy never changes one.
+const NY_KEYS = new Map();
+function ny_kstr(v) {
+    if (typeof v === "string") return JSON.stringify(v);
+    if (v === null || typeof v !== "object") return String(v);
+    return "(" + Object.keys(v).filter((f) => !f.startsWith("ny_")).map((f) => ny_kstr(v[f])).join(",") + ")";
+}
+function ny_kcopy(v) {
+    if (v === null || typeof v !== "object") return v;
+    const c = v.ny_cp();
+    for (const f of Object.keys(c)) if (!f.startsWith("ny_")) c[f] = ny_kcopy(c[f]);
+    c.ny_s = true;
+    return c;
+}
+function ny_ik(k) {
+    if (k === null || typeof k !== "object") return k;
+    const s = ny_kstr(k);
+    let c = NY_KEYS.get(s);
+    if (c === undefined) {
+        c = ny_kcopy(k);
+        NY_KEYS.set(s, c);
+    }
+    return c;
+}
 // `[k: v, ...]`: the keys and values alternate.
 function ny_mnew(kv) {
     const m = new Map();
-    for (let i = 0; i < kv.length; i += 2) m.set(kv[i], kv[i + 1]);
+    for (let i = 0; i < kv.length; i += 2) m.set(ny_ik(kv[i]), kv[i + 1]);
     return m;
 }
 // `m[k]`: E0248 when the key is missing (`kt` is the key's type, for the message).
 function ny_mget(m, k, kt, line, col) {
+    k = ny_ik(k);
     if (!m.has(k)) ny_panic("E0248", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
     return m.get(k);
 }
-function ny_mgetor(m, k, d) { return m.has(k) ? m.get(k) : d; }
+function ny_mgetor(m, k, d) { k = ny_ik(k); return m.has(k) ? m.get(k) : d; }
 // `m[k]`, made unique for a change in place (copied and stored back when it was shared).
 function ny_mu(m, k, kt, line, col) {
+    k = ny_ik(k);
     let v = ny_mget(m, k, kt, line, col);
     if (v !== null && typeof v === "object" && v.ny_s) {
         v = ny_cp(v);

@@ -179,7 +179,7 @@ pub fn format(src: &str) -> String {
 
 /// The formatted text must lex to the same tokens as the original (`ret` and `return` are one
 /// token) and compile.
-fn verify(before: &str, after: &str) -> Result<(), String> {
+pub fn verify(before: &str, after: &str) -> Result<(), String> {
     let (a, ea) = lexer::lex(before);
     let (b, eb) = lexer::lex(after);
     if !ea.is_empty() || !eb.is_empty() {

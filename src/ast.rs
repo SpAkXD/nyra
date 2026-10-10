@@ -385,16 +385,42 @@ pub struct StructDef {
     pub name: String,
     pub fields: Vec<Field>,
     pub span: Span,
-    /// The variants of an enum (its one field is the number of the variant); empty for a struct.
+    /// The variants of an enum (its first field is the number of the variant); empty for a struct.
     pub variants: Vec<String>,
+    /// How many values each variant carries (same length as `variants`); the fields after the
+    /// number of the variant hold them: the first variant's values first.
+    pub payloads: Vec<usize>,
 }
 
-/// `enum Dir { N, E, S, W }`
+impl StructDef {
+    /// The index of the first field of each variant's values (the number of the variant is field 0).
+    pub fn slot_starts(payloads: &[usize]) -> Vec<usize> {
+        let mut next = 1;
+        payloads
+            .iter()
+            .map(|n| {
+                let at = next;
+                next += n;
+                at
+            })
+            .collect()
+    }
+}
+
+/// `enum Dir { N, E, S, W }`, or with values: `enum Shape { Circle(float), Rect(float, float), Empty }`
 #[derive(Debug)]
 pub struct EnumDef {
     pub name: String,
-    pub variants: Vec<(String, Span)>,
+    pub variants: Vec<Variant>,
     pub span: Span,
+}
+
+/// One variant of an enum, with the types of the values it carries (none for `N`).
+#[derive(Debug)]
+pub struct Variant {
+    pub name: String,
+    pub span: Span,
+    pub fields: Vec<(Type, Span)>,
 }
 
 /// One arm of a `match`: the patterns that select it (`Dir.N, Dir.S => ...`), or `_`.
@@ -482,7 +508,8 @@ pub enum StmtKind {
     Continue,
     /// `arena { ... }`: everything allocated inside is freed together at `}`.
     Arena(Vec<Stmt>),
-    /// `match value { pattern => body ... }`: the checker turns it into `if` statements.
+    /// `match value { pattern => body ... }`: the checker turns it into `if` statements. (In an
+    /// expression, see `ExprKind::Match`.)
     Match {
         scrut: Expr,
         arms: Vec<MatchArm>,
@@ -575,6 +602,19 @@ impl Expr {
                 c.each_mut(f);
                 a.each_mut(f);
                 b.each_mut(f);
+            }
+            ExprKind::Bind(_, v, body) => {
+                v.each_mut(f);
+                body.each_mut(f);
+            }
+            ExprKind::Match(scrut, arms) => {
+                scrut.each_mut(f);
+                for arm in arms {
+                    arm.pats.iter_mut().for_each(|p| p.each_mut(f));
+                    for st in &mut arm.body {
+                        each_stmt_mut(std::slice::from_mut(st), &mut |_| {}, f);
+                    }
+                }
             }
             ExprKind::Call(_, xs) | ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(|x| x.each_mut(f)),
             ExprKind::Method(r, _, xs) => {
@@ -721,6 +761,12 @@ pub enum ExprKind {
     Lambda(Vec<(String, Span)>, Box<Expr>),
     /// `[elem for var in src if cond]`: a new array, built by a loop like `map` and `filter`
     Comprehension(Box<Comp>),
+    /// `match value { pattern => expr ... }` used as a value: each arm's body is one `Stmt::Expr`.
+    /// The checker turns it into `Bind` and `If`, so it never reaches lowering.
+    Match(Box<Expr>, Vec<MatchArm>),
+    /// `name` is the value of the first expression in the second: made by the checker for `match`
+    /// and by the parser for `if let` used as a value (the name is hidden or a pattern variable).
+    Bind(String, Box<Expr>, Box<Expr>),
 }
 
 /// A format specifier, the part after the colon in `"{x:>8}"`: `[[fill]align][+][0][width][,][.precision][type]`.

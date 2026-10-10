@@ -1,7 +1,0 @@
-// expect: E0309
-use json
-
-fn main() {
-    let x: int? = 5
-    print(json.str(x))
-}

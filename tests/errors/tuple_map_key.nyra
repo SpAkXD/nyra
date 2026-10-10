@@ -1,6 +1,0 @@
-// expect: E0218
-fn main() {
-    var seen: [(int, int): bool] = [:]
-    seen[(1, 2)] = true
-    print(seen.len())
-}

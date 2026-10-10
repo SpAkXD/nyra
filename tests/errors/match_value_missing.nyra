@@ -1,0 +1,11 @@
+// expect: E0281
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    let x = match d {
+        Dir.N => 1
+        Dir.E => 2
+    }
+    print(x)
+}

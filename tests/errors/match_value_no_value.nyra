@@ -1,0 +1,9 @@
+// expect: E0212
+fn main() {
+    let n = 2
+    let x = match n {
+        1 => print("one")
+        _ => print("many")
+    }
+    print(x)
+}

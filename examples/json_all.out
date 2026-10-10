@@ -1,0 +1,23 @@
+[1,"a"] [[1,2.5],"x",[true,false]]
+(2, "b") true
+((1, 2.5), 'x', [true]) [[1,2.5],"x",[true]]
+5 null [5,null,5]
+[Some(1), none, Some(3)] true 3
+(7, none) [7,null] [8,"x"]
+"Red" "Green" ["Red","Green"]
+{"Circle":[2.5]} {"Rect":[1,2]} "Empty"
+[Shape.Empty, Shape.Circle(1.5), Shape.Rect(2, 3)]
+[Light.Green, Light.Red] true
+{"Node":[[{"Leaf":[1]},{"Node":[[]]},{"Node":[[{"Leaf":[2]}]]}]]}
+true Tree.Node([Tree.Leaf(1), Tree.Node([]), Tree.Node([Tree.Leaf(2)])])
+[{"name":"n \"q\"","shape":{"Rect":[1,2]},"tags":["a","b"],"best":3},{"name":"m","shape":"Empty","tags":[],"best":null}]
+true Item(name: "m", shape: Shape.Empty, tags: [], best: none)
+{"a":1,"b":2} {"x":[1,2],"y":[]}
+["x": 3, "y": 2] {"x":3,"y":2}
+[[3,"three"],[1,"one"]] [[true,1],[false,0]] [["a",1],["b",2]]
+[2: "c", 1: "a"] [2, 1]
+{} []
+[:] [:]
+["s": [Shape.Circle(1), Shape.Empty], "t": []] {"s":[{"Circle":[1]},"Empty"],"t":[]}
+[["a": none, "b": Some(2)], [:]] [{"a":null,"b":2},{}]
+["k": (1, Some(Shape.Rect(1, 2))), "j": (2, none)] {"k":[1,{"Rect":[1,2]}],"j":[2,null]}

@@ -2,8 +2,8 @@
 //! `nyra_outline`, `nyra_show` and `nyra_edit`.
 //!
 //! An agent that changes one function of a long program sends that function by name, not the
-//! whole file and not a diff. The symbols are the top-level functions and structs, and struct
-//! fields written `Struct.field`.
+//! whole file and not a diff. The symbols are the top-level functions, structs and enums, struct
+//! fields written `Struct.field` and enum variants written `Enum.Variant`.
 //!
 //! - Every edit replaces an exact range of the source, so the rest of the file stays
 //!   byte-identical; inserted text gets the file's line breaks (`\n` or `\r\n`).
@@ -87,6 +87,7 @@ fn is_blank(s: &str) -> bool {
 pub enum Kind {
     Fn,
     Struct,
+    Enum,
 }
 
 impl Kind {
@@ -94,32 +95,43 @@ impl Kind {
         match self {
             Kind::Fn => "fn",
             Kind::Struct => "struct",
+            Kind::Enum => "enum",
+        }
+    }
+
+    /// What the parts of the item are called: the fields of a struct, the variants of an enum.
+    fn part(self) -> &'static str {
+        match self {
+            Kind::Enum => "variant",
+            _ => "field",
         }
     }
 }
 
-/// A top-level function or struct. Offsets are bytes of the source.
+/// A top-level function, struct or enum. Offsets are bytes of the source.
 #[derive(Debug, Clone)]
 pub struct Item {
     pub kind: Kind,
     /// Empty when the definition has no name (a syntax error).
     pub name: String,
-    /// `fn` or `struct`.
+    /// `fn`, `struct` or `enum`.
     pub start: usize,
     /// After the last character of the definition, and of a comment on its last line.
     pub end: usize,
     /// Where the comment lines right above the definition start, or `start` without any.
     pub doc: usize,
-    /// `fn area(r: Rect) -> int`, or `struct Point { x: int, y: int }`.
+    /// `fn area(r: Rect) -> int`, `struct Point { x: int, y: int }` or `enum Shape { Circle(float), Empty }`.
     pub sig: String,
+    /// The fields of a struct, the variants of an enum.
     pub fields: Vec<FieldItem>,
-    /// The `{` and `}` of a struct (`None` when the struct is cut short).
+    /// The `{` and `}` of a struct or an enum (`None` when it is cut short).
     pub braces: Option<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FieldItem {
     pub name: String,
+    /// The type of a field; the values of a variant, `(float, float)` (empty: it has none).
     pub ty: String,
     /// The name's first byte; `end` is after the type.
     pub start: usize,
@@ -245,7 +257,7 @@ impl Scan<'_> {
                         return (self.end_of(k), k + 1);
                     }
                 }
-                Tok::Fn | Tok::Struct if self.first_on_line(k) => return (self.end_before(k), k),
+                Tok::Fn | Tok::Struct | Tok::Enum if self.first_on_line(k) => return (self.end_before(k), k),
                 Tok::Eof => return (self.end_before(k), k),
                 _ => {}
             }
@@ -261,7 +273,7 @@ impl Scan<'_> {
                 Tok::LBrace | Tok::LBracket | Tok::LParen => depth += 1,
                 Tok::RBrace | Tok::RBracket | Tok::RParen => depth = depth.saturating_sub(1),
                 Tok::Newline if depth == 0 => return k,
-                Tok::Fn | Tok::Struct if depth > 0 && self.first_on_line(k) => return k,
+                Tok::Fn | Tok::Struct | Tok::Enum if depth > 0 && self.first_on_line(k) => return k,
                 Tok::Eof => return k,
                 _ => {}
             }
@@ -269,15 +281,15 @@ impl Scan<'_> {
         }
     }
 
-    /// A `struct` at token `i`.
-    fn structure(&self, i: usize) -> (Item, usize) {
+    /// A `struct` or an `enum` at token `i`.
+    fn record(&self, i: usize, kind: Kind) -> (Item, usize) {
         let start = self.at(i);
         let name = match self.tok(i + 1) {
             Tok::Ident(n) => n.clone(),
             _ => String::new(),
         };
         let doc = self.doc(start);
-        let mut item = Item { kind: Kind::Struct, name, start, end: start, doc, sig: String::new(), fields: Vec::new(), braces: None };
+        let mut item = Item { kind, name, start, end: start, doc, sig: String::new(), fields: Vec::new(), braces: None };
         if !matches!(self.tok(i + 2), Tok::LBrace) || item.name.is_empty() {
             let k = self.line_end_tok(i + 1);
             item.end = self.with_comment(self.end_before(k));
@@ -294,11 +306,39 @@ impl Scan<'_> {
                     item.end = self.end_of(k);
                     break k + 1;
                 }
-                Tok::Eof | Tok::Fn | Tok::Struct => {
+                Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum => {
                     item.end = self.end_before(k);
                     break k;
                 }
-                Tok::Ident(f) if matches!(self.tok(k + 1), Tok::Colon) => {
+                // a variant: `Circle(float, float)` or `Empty`
+                Tok::Ident(v) if kind == Kind::Enum => {
+                    let vstart = self.at(k);
+                    let mut end = self.end_of(k);
+                    let mut t = k + 1;
+                    if matches!(self.tok(t), Tok::LParen) {
+                        let mut depth = 0usize;
+                        loop {
+                            match self.tok(t) {
+                                Tok::LParen | Tok::LBracket => depth += 1,
+                                Tok::RParen | Tok::RBracket => {
+                                    depth = depth.saturating_sub(1);
+                                    if depth == 0 {
+                                        end = self.end_of(t);
+                                        t += 1;
+                                        break;
+                                    }
+                                }
+                                Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum | Tok::RBrace => break,
+                                _ => {}
+                            }
+                            t += 1;
+                        }
+                    }
+                    let ty = squash(&self.text[self.end_of(k)..end]);
+                    item.fields.push(FieldItem { name: v.clone(), ty, start: vstart, end });
+                    k = t;
+                }
+                Tok::Ident(f) if kind == Kind::Struct && matches!(self.tok(k + 1), Tok::Colon) => {
                     let fstart = self.at(k);
                     let mut t = k + 2;
                     let mut depth = 0usize;
@@ -308,7 +348,7 @@ impl Scan<'_> {
                             Tok::LBracket => depth += 1,
                             Tok::RBracket if depth > 0 => depth -= 1,
                             Tok::Comma | Tok::Newline | Tok::RBrace | Tok::Eof if depth == 0 => break,
-                            Tok::Eof | Tok::Fn | Tok::Struct => break,
+                            Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum => break,
                             _ => {}
                         }
                         last = Some(t);
@@ -323,11 +363,15 @@ impl Scan<'_> {
             }
         };
         item.end = self.with_comment(item.end);
-        let fields: Vec<String> = item.fields.iter().map(|f| format!("{}: {}", f.name, f.ty)).collect();
+        let fields: Vec<String> = item
+            .fields
+            .iter()
+            .map(|f| if kind == Kind::Enum { format!("{}{}", f.name, f.ty) } else { format!("{}: {}", f.name, f.ty) })
+            .collect();
         item.sig = if fields.is_empty() {
-            format!("struct {} {{}}", item.name)
+            format!("{} {} {{}}", kind.word(), item.name)
         } else {
-            format!("struct {} {{ {} }}", item.name, fields.join(", "))
+            format!("{} {} {{ {} }}", kind.word(), item.name, fields.join(", "))
         };
         (item, next)
     }
@@ -353,10 +397,24 @@ pub fn outline(text: &str) -> Outline {
                 out.items.push(item);
                 i = next.max(i + 1);
             }
-            Tok::Struct => {
-                let (item, next) = scan.structure(i);
+            Tok::Struct | Tok::Enum => {
+                let kind = if matches!(scan.tok(i), Tok::Enum) { Kind::Enum } else { Kind::Struct };
+                let (item, next) = scan.record(i, kind);
                 out.items.push(item);
                 i = next.max(i + 1);
+            }
+            // `pub fn`, `pub struct`, `pub enum` of a module: the definition starts at `pub`
+            Tok::Ident(w) if w == "pub" && matches!(scan.tok(i + 1), Tok::Fn | Tok::Struct | Tok::Enum) => {
+                let (mut item, next) = match scan.tok(i + 1) {
+                    Tok::Fn => scan.func(i + 1),
+                    Tok::Struct => scan.record(i + 1, Kind::Struct),
+                    _ => scan.record(i + 1, Kind::Enum),
+                };
+                item.start = scan.at(i);
+                item.doc = scan.doc(item.start);
+                item.sig = format!("pub {}", item.sig);
+                out.items.push(item);
+                i = next.max(i + 2);
             }
             _ => {
                 let k = scan.line_end_tok(i);
@@ -384,14 +442,17 @@ impl Outline {
     fn find(&self, name: &str, text: &str) -> Result<Target<'_>, String> {
         if let Some((s, f)) = name.split_once('.') {
             let Target::Item(item) = self.find(s, text)? else { unreachable!() };
-            if item.kind != Kind::Struct {
-                return Err(format!("`{s}` is a function, not a struct: only struct fields are written `Struct.field`"));
+            if item.kind == Kind::Fn {
+                return Err(format!(
+                    "`{s}` is a function: only struct fields and enum variants are written `Struct.field` and `Enum.Variant`"
+                ));
             }
+            let (word, part) = (item.kind.word(), item.kind.part());
             let field = item.fields.iter().find(|x| x.name == f).ok_or_else(|| {
                 let names: Vec<&str> = item.fields.iter().map(|x| x.name.as_str()).collect();
                 match diag::suggest(f, names.iter().copied()) {
-                    Some(h) => format!("struct `{s}` has no field `{f}`: {h}"),
-                    None => format!("struct `{s}` has no field `{f}`; its fields: {}", names.join(", ")),
+                    Some(h) => format!("{word} `{s}` has no {part} `{f}`: {h}"),
+                    None => format!("{word} `{s}` has no {part} `{f}`; its {part}s: {}", names.join(", ")),
                 }
             })?;
             return Ok(Target::Field(item, field));
@@ -409,9 +470,9 @@ impl Outline {
                 }
                 let names: Vec<&str> = self.items.iter().map(|i| i.name.as_str()).collect();
                 Err(match diag::suggest(name, names.iter().copied()) {
-                    Some(h) => format!("no function or struct `{name}`: {h}"),
-                    None if names.len() <= 20 => format!("no function or struct `{name}`; the file has: {}", names.join(", ")),
-                    None => format!("no function or struct `{name}` in the file (`nyra outline` lists them)"),
+                    Some(h) => format!("no function, struct or enum `{name}`: {h}"),
+                    None if names.len() <= 20 => format!("no function, struct or enum `{name}`; the file has: {}", names.join(", ")),
+                    None => format!("no function, struct or enum `{name}` in the file (`nyra outline` lists them)"),
                 })
             }
             many => {
@@ -443,12 +504,12 @@ pub enum Place {
 pub enum Op {
     /// Definitions: each replaces the symbol of its name, or is added at the end.
     Upsert(String),
-    /// `name` (or `Struct.field`) becomes the new definition.
+    /// `name` (or `Struct.field`, `Enum.Variant`) becomes the new definition.
     Replace(String, String),
     Add(String, Place),
     Delete(String),
     Rename(String, String),
-    /// `struct`, `name: type`, after which field (default: the last).
+    /// `struct`, `name: type` (or `enum`, `Name(types)`), after which field or variant (default: the last).
     AddField(String, String, Option<String>),
 }
 
@@ -491,7 +552,7 @@ fn defs(code: &str) -> Result<Vec<Def>, String> {
     let o = outline(&code);
     if let Some(&(s, e)) = o.script.first() {
         return Err(format!(
-            "the new code may only hold `fn` and `struct` definitions, but it has `{}` on line {}",
+            "the new code may only hold `fn`, `struct` and `enum` definitions, but it has `{}` on line {}",
             squash(&code[s..e]).chars().take(40).collect::<String>(),
             Lines::new(&code).line(s)
         ));
@@ -541,6 +602,18 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
         Op::Replace(name, code) => {
             let o = outline(text);
             match o.find(name, text)? {
+                Target::Field(s, f) if s.kind == Kind::Enum => {
+                    let new = clean(code);
+                    let vname = new.split('(').next().unwrap_or("").trim().to_string();
+                    if new.contains('\n') || !valid_name(&vname) {
+                        return Err(format!("a variant is replaced by one line `Name` or `Name(type, ...)`, e.g. `{}(int)`", f.name));
+                    }
+                    let text = splice(text, f.start, f.end, &new);
+                    Ok(Applied {
+                        text,
+                        notes: vec![note(format!("replaced variant {}.{}", s.name, f.name), &format!("{}.{vname}", s.name))],
+                    })
+                }
                 Target::Field(s, f) => {
                     let new = clean(code);
                     if new.contains('\n') || !new.contains(':') {
@@ -606,7 +679,7 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
                 Place::After(anchor) => {
                     let Target::Item(a) = o.find(anchor, text)? else {
                         return Err(
-                            "`@add after` takes a function or struct; for a field use `@add-field Struct name: type after field`"
+                            "`@add after` takes a function, struct or enum; for a field use `@add-field Struct name: type after field`, for a variant `@add-field Enum Name(type) after Variant`"
                                 .into(),
                         );
                     };
@@ -616,7 +689,7 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
                 }
                 Place::Before(anchor) => {
                     let Target::Item(a) = o.find(anchor, text)? else {
-                        return Err("`@add before` takes a function or struct".into());
+                        return Err("`@add before` takes a function, struct or enum".into());
                     };
                     let at = lines.line_start(a.doc);
                     (at, format!("{block}{nl}{gap}"))
@@ -633,7 +706,7 @@ fn apply(text: &str, op: &Op, nl: &str) -> Result<Applied, String> {
                 Target::Field(s, f) => {
                     let (a, b) = field_range(text, &lines, s, f);
                     let text = splice(text, a, b, "");
-                    Ok(Applied { text, notes: vec![(format!("deleted field {name}"), None)] })
+                    Ok(Applied { text, notes: vec![(format!("deleted {} {name}", s.kind.part()), None)] })
                 }
                 Target::Item(item) => {
                     let (mut a, mut b) = (item.doc, item.end);
@@ -694,29 +767,44 @@ fn field_range(text: &str, lines: &Lines, s: &Item, f: &FieldItem) -> (usize, us
 
 fn add_field(text: &str, s: &str, field: &str, after: Option<&str>, nl: &str) -> Result<Applied, String> {
     let field = squash(field);
-    let fname = field.split(':').next().unwrap_or("").trim().to_string();
-    if !field.contains(':') || !valid_name(&fname) {
-        return Err(format!("a new field is written `name: type`, e.g. `@add-field {s} count: int`, found `{field}`"));
-    }
     let o = outline(text);
     let Target::Item(item) = o.find(s, text)? else {
-        return Err(format!("`@add-field` takes a struct name, found `{s}`"));
+        return Err(format!("`@add-field` takes a struct or enum name, found `{s}`"));
     };
-    if item.kind != Kind::Struct {
-        return Err(format!("`{s}` is a function, not a struct"));
+    if item.kind == Kind::Fn {
+        return Err(format!("`{s}` is a function, not a struct or an enum"));
     }
+    let enumeration = item.kind == Kind::Enum;
+    // the name of the new field or variant
+    let fname = if enumeration {
+        field.split('(').next().unwrap_or("").trim().to_string()
+    } else {
+        field.split(':').next().unwrap_or("").trim().to_string()
+    };
+    if enumeration {
+        if !valid_name(&fname) || field.contains(':') || (field.contains('(') && !field.ends_with(')')) {
+            return Err(format!(
+                "a new variant is written `Name` or `Name(type, ...)`, e.g. `@add-field {s} Circle(float)`, found `{field}`"
+            ));
+        }
+    } else if !field.contains(':') || !valid_name(&fname) {
+        return Err(format!("a new field is written `name: type`, e.g. `@add-field {s} count: int`, found `{field}`"));
+    }
+    let part = item.kind.part();
     if item.fields.iter().any(|f| f.name == fname) {
-        return Err(format!("struct `{s}` already has a field `{fname}`: to change its type use `@replace {s}.{fname}`"));
+        return Err(format!("{} `{s}` already has a {part} `{fname}`: to change it use `@replace {s}.{fname}`", item.kind.word()));
     }
     let Some((open, close)) = item.braces else {
-        return Err(format!("struct `{s}` has no closing `}}`: replace the whole struct instead"));
+        return Err(format!("{} `{s}` has no closing `}}`: replace the whole definition instead", item.kind.word()));
     };
     let lines = Lines::new(text);
     let anchor = match after {
-        Some(a) => Some(item.fields.iter().find(|f| f.name == a).ok_or_else(|| format!("struct `{s}` has no field `{a}`"))?),
+        Some(a) => {
+            Some(item.fields.iter().find(|f| f.name == a).ok_or_else(|| format!("{} `{s}` has no {part} `{a}`", item.kind.word()))?)
+        }
         None => item.fields.last(),
     };
-    let note = vec![(format!("added field {s}.{fname}"), Some(format!("{s}.{fname}")))];
+    let note = vec![(format!("added {part} {s}.{fname}"), Some(format!("{s}.{fname}")))];
     let multi = lines.line(open) != lines.line(close);
     let text = match (anchor, multi) {
         (None, false) => splice(text, open + 1, close, &format!(" {field} ")),
@@ -805,12 +893,18 @@ fn walk(e: &Expr, f: &mut dyn FnMut(&Expr)) {
                 }
             }
         }
-        ExprKind::Unary(_, x) | ExprKind::Field(x, _) | ExprKind::Labeled(_, x) | ExprKind::Inout(x) => walk(x, f),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) => {
+        ExprKind::Unary(_, x)
+        | ExprKind::Field(x, _)
+        | ExprKind::Labeled(_, x)
+        | ExprKind::Inout(x)
+        | ExprKind::Some(x)
+        | ExprKind::Fmt(x, _)
+        | ExprKind::Lambda(_, x) => walk(x, f),
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::In(a, b) | ExprKind::Coalesce(a, b) => {
             walk(a, f);
             walk(b, f);
         }
-        ExprKind::Call(_, args) | ExprKind::Array(args) => args.iter().for_each(|a| walk(a, f)),
+        ExprKind::Call(_, args) | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().for_each(|a| walk(a, f)),
         ExprKind::Method(r, _, args) => {
             walk(r, f);
             args.iter().for_each(|a| walk(a, f));
@@ -820,7 +914,48 @@ fn walk(e: &Expr, f: &mut dyn FnMut(&Expr)) {
             walk(a, f);
             walk(b, f);
         }
-        _ => {}
+        ExprKind::Slice(b, lo, hi) => {
+            walk(b, f);
+            lo.iter().chain(hi.iter()).for_each(|x| walk(x, f));
+        }
+        ExprKind::MapLit(pairs) => pairs.iter().for_each(|(k, v)| {
+            walk(k, f);
+            walk(v, f);
+        }),
+        ExprKind::Bind(_, v, body) => {
+            walk(v, f);
+            walk(body, f);
+        }
+        ExprKind::Match(scrut, arms) => {
+            walk(scrut, f);
+            for arm in arms {
+                arm.pats.iter().for_each(|p| walk(p, f));
+                walk_stmts(&arm.body, f);
+            }
+        }
+        ExprKind::Comprehension(c) => {
+            match &c.src {
+                crate::ast::CompSrc::Each(x) => walk(x, f),
+                crate::ast::CompSrc::Range(a, b, k) => {
+                    walk(a, f);
+                    walk(b, f);
+                    if let Some(k) = k {
+                        walk(k, f);
+                    }
+                }
+            }
+            walk(&c.elem, f);
+            if let Some(x) = &c.cond {
+                walk(x, f);
+            }
+        }
+        ExprKind::Int(_)
+        | ExprKind::Float(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Str(_)
+        | ExprKind::Char(_)
+        | ExprKind::Var(_)
+        | ExprKind::None => {}
     }
 }
 
@@ -854,6 +989,30 @@ fn rename(text: &str, name: &str, new: &str) -> Result<Applied, String> {
     let lines = Lines::new(text);
     let mut sites: Vec<Span> = Vec::new();
     let (old, what) = match target {
+        Target::Field(s, f) if s.kind == Kind::Enum => {
+            if s.fields.iter().any(|x| x.name == new) {
+                return Err(format!("enum `{}` already has a variant `{new}`", s.name));
+            }
+            for ed in prog.enums.iter().filter(|e| e.name == s.name) {
+                sites.extend(ed.variants.iter().filter(|v| v.name == f.name).map(|v| v.span));
+            }
+            let en = s.name.clone();
+            let mut on = |e: &Expr| match &e.kind {
+                ExprKind::Field(b, n) | ExprKind::Method(b, n, _)
+                    if *n == f.name && matches!(&b.kind, ExprKind::Var(v) if *v == en) =>
+                {
+                    sites.push(e.span)
+                }
+                _ => {}
+            };
+            for func in &prog.funcs {
+                walk_stmts(&func.body, &mut on);
+            }
+            for ex in &prog.examples {
+                walk(&ex.expr, &mut on);
+            }
+            (f.name.clone(), format!("variant {}.{}", s.name, f.name))
+        }
         Target::Field(s, f) => {
             if s.fields.iter().any(|x| x.name == new) {
                 return Err(format!("struct `{}` already has a field `{new}`", s.name));
@@ -864,18 +1023,22 @@ fn rename(text: &str, name: &str, new: &str) -> Result<Applied, String> {
             for sd in prog.structs.iter().filter(|sd| sd.name == s.name) {
                 sites.extend(sd.fields.iter().filter(|x| x.name == f.name).map(|x| x.span));
             }
-            for func in &prog.funcs {
-                walk_stmts(&func.body, &mut |e| match &e.kind {
-                    ExprKind::Field(base, n) if *n == f.name && base.ty == st => sites.push(e.span),
-                    ExprKind::Call(c, args) if *c == s.name => {
-                        for a in args {
-                            if matches!(&a.kind, ExprKind::Labeled(l, _) if *l == f.name) {
-                                sites.push(a.span);
-                            }
+            let mut on = |e: &Expr| match &e.kind {
+                ExprKind::Field(base, n) if *n == f.name && base.ty == st => sites.push(e.span),
+                ExprKind::Call(c, args) if *c == s.name => {
+                    for a in args {
+                        if matches!(&a.kind, ExprKind::Labeled(l, _) if *l == f.name) {
+                            sites.push(a.span);
                         }
                     }
-                    _ => {}
-                });
+                }
+                _ => {}
+            };
+            for func in &prog.funcs {
+                walk_stmts(&func.body, &mut on);
+            }
+            for ex in &prog.examples {
+                walk(&ex.expr, &mut on);
             }
             (f.name.clone(), format!("field {}.{}", s.name, f.name))
         }
@@ -887,6 +1050,7 @@ fn rename(text: &str, name: &str, new: &str) -> Result<Applied, String> {
                 sites.extend(prog.funcs.iter().filter(|f| f.name == name).map(|f| f.span));
             } else {
                 sites.extend(prog.structs.iter().filter(|s| s.name == name).map(|s| s.span));
+                sites.extend(prog.enums.iter().filter(|e| e.name == name).map(|e| e.span));
                 // type annotations: `p: Point`, `-> Point`, `[Point]` (the AST keeps no positions for types)
                 for (k, t) in toks.iter().enumerate() {
                     let typed = k > 0 && matches!(toks[k - 1].tok, Tok::Colon | Tok::Arrow | Tok::LBracket);
@@ -896,13 +1060,17 @@ fn rename(text: &str, name: &str, new: &str) -> Result<Applied, String> {
                     }
                 }
             }
-            // calls and constructions, also inside `{ }` of strings
+            // calls and constructions, also inside `{ }` of strings; `Shape.Circle(..)`, `Shape.all()`: the enum
+            let mut on = |e: &Expr| match &e.kind {
+                ExprKind::Call(c, _) if c == name => sites.push(e.span),
+                ExprKind::Var(v) if v == name && item.kind == Kind::Enum => sites.push(e.span),
+                _ => {}
+            };
             for func in &prog.funcs {
-                walk_stmts(&func.body, &mut |e| {
-                    if matches!(&e.kind, ExprKind::Call(c, _) if c == name) {
-                        sites.push(e.span);
-                    }
-                });
+                walk_stmts(&func.body, &mut on);
+            }
+            for ex in &prog.examples {
+                walk(&ex.expr, &mut on);
             }
             (name.to_string(), format!("{} {name}", item.kind.word()))
         }
@@ -934,11 +1102,11 @@ fn rename(text: &str, name: &str, new: &str) -> Result<Applied, String> {
 /// of its name, or is added at the end.
 ///
 /// ```text
-/// @replace NAME          the next lines: the new definition (NAME may be Struct.field)
+/// @replace NAME          the next lines: the new definition (NAME may be Struct.field or Enum.Variant)
 /// @add [after|before NAME]   the next lines: new definitions (default: at the end)
-/// @delete NAME           a function, a struct or Struct.field
-/// @rename NAME NEW       the definition and every reference (NAME may be Struct.field)
-/// @add-field STRUCT name: type [after FIELD]
+/// @delete NAME           a function, a struct, an enum, Struct.field or Enum.Variant
+/// @rename NAME NEW       the definition and every reference (NAME may be Struct.field or Enum.Variant)
+/// @add-field STRUCT name: type [after FIELD]      (@add-variant ENUM Name(type) [after VARIANT])
 /// ```
 pub fn parse_script(script: &str) -> Result<Vec<Op>, String> {
     let script = script.replace("\r\n", "\n");
@@ -976,7 +1144,7 @@ pub fn parse_script(script: &str) -> Result<Vec<Op>, String> {
             ["upsert"] => Op::Upsert(body.clone()),
             ["delete" | "remove", name] => no_body(Op::Delete(name.to_string()))?,
             ["rename", name, new] | ["rename", name, "->", new] => no_body(Op::Rename(name.to_string(), new.to_string()))?,
-            ["add-field", s, rest @ ..] if !rest.is_empty() => {
+            ["add-field" | "add-variant", s, rest @ ..] if !rest.is_empty() => {
                 let rest = rest.join(" ");
                 let (field, after) = match rest.rsplit_once(" after ") {
                     Some((f, a)) => (f.to_string(), Some(a.trim().to_string())),
@@ -986,7 +1154,7 @@ pub fn parse_script(script: &str) -> Result<Vec<Op>, String> {
             }
             _ => {
                 return Err(format!(
-                    "unknown command `@{cmd}`: use @replace NAME, @add [after|before NAME], @delete NAME, @rename NAME NEW or @add-field STRUCT name: type"
+                    "unknown command `@{cmd}`: use @replace NAME, @add [after|before NAME], @delete NAME, @rename NAME NEW, @add-field STRUCT name: type or @add-variant ENUM Name(type)"
                 ))
             }
         };
@@ -1264,6 +1432,20 @@ pub fn outline_json(text: &str, file: &str) -> Json {
                 // the capabilities it needs, also through the functions it calls
                 f.push(("effects", names(&eff[k])));
             }
+            Kind::Enum => f.push((
+                "variants",
+                i.fields
+                    .iter()
+                    .map(|x| {
+                        obj([
+                            ("name", x.name.clone().into()),
+                            ("values", x.ty.clone().into()),
+                            ("line", (lines.line(x.start) as i64).into()),
+                        ])
+                    })
+                    .collect::<Vec<_>>()
+                    .into(),
+            )),
             Kind::Struct => f.push((
                 "fields",
                 i.fields
@@ -1312,7 +1494,9 @@ fn show_one(text: &str, name: &str) -> Result<(String, &'static str, usize, usiz
     }
     Ok(match o.find(name, text)? {
         Target::Item(i) => (i.name.clone(), i.kind.word(), lines.line(i.doc), lines.line(i.end), text[i.doc..i.end].to_string()),
-        Target::Field(_, f) => (name.to_string(), "field", lines.line(f.start), lines.line(f.start), text[f.start..f.end].to_string()),
+        Target::Field(s, f) => {
+            (name.to_string(), s.kind.part(), lines.line(f.start), lines.line(f.start), text[f.start..f.end].to_string())
+        }
     })
 }
 
@@ -1344,21 +1528,22 @@ pub fn show_json(text: &str, names: &[String]) -> Result<Json, String> {
 
 const USAGE: &str = "\
 usage:
-  nyra outline <file.nyra> [--json]          the functions, structs and fields, with line ranges
-  nyra show <file.nyra> <name>... [--json]   the source of symbols (`Struct.field` for a field)
+  nyra outline <file.nyra> [--json]          the functions, structs and enums, with line ranges
+  nyra show <file.nyra> <name>... [--json]   the source of symbols (`Struct.field`, `Enum.Variant` for a part)
   nyra edit <file.nyra> [edits] [options]    change symbols by name
 
 edits (several may be given; without any, the edit script is read from stdin):
   --set NAME [CODE]       replace NAME with a new definition (CODE `-` or left out: stdin)
   --add CODE              add definitions (at the end, or --after NAME / --before NAME)
-  --delete NAME           delete a function, a struct or a field (Struct.field)
-  --rename NAME NEW       rename it and every reference (NAME may be Struct.field)
+  --delete NAME           delete a function, a struct, an enum, a field (Struct.field) or a variant (Enum.Variant)
+  --rename NAME NEW       rename it and every reference (NAME may be Struct.field or Enum.Variant)
   --add-field STRUCT 'name: type'   add a field (last, or after --after FIELD)
+  --add-variant ENUM 'Name(type)'   add a variant (last, or after --after VARIANT)
 
 the edit script on stdin: plain definitions replace the symbols of their names or are added;
 or commands, each followed by its code on the next lines:
   @replace NAME | @add [after NAME | before NAME] | @delete NAME | @rename NAME NEW
-  @add-field STRUCT name: type [after FIELD]
+  @add-field STRUCT name: type [after FIELD] | @add-variant ENUM Name(type) [after VARIANT]
 
 options:
   --json      print the result as JSON
@@ -1518,9 +1703,9 @@ fn edit_cli(file: &str, src: &str, args: Vec<String>, json: bool) -> ExitCode {
                 (Ok(n), Some(new)) => Op::Rename(n, new),
                 _ => return usage_error("--rename needs a name and a new name"),
             },
-            "--add-field" => match (word("a struct and a field"), it.next()) {
+            "--add-field" | "--add-variant" => match (word("a struct and a field"), it.next()) {
                 (Ok(s), Some(f)) => Op::AddField(s, f, None),
-                _ => return usage_error("--add-field needs a struct and a field, e.g. --add-field Point 'z: int'"),
+                _ => return usage_error("--add-field needs a struct and a field, e.g. --add-field Point 'z: int'; --add-variant an enum and a variant, e.g. --add-variant Shape 'Circle(float)'"),
             },
             _ => return usage_error(format!("unexpected `{a}`")),
         };
@@ -1587,9 +1772,9 @@ fn edit_cli(file: &str, src: &str, args: Vec<String>, json: bool) -> ExitCode {
 
 /// The tool definitions `nyra mcp` adds to its list.
 pub const TOOLS: &str = r#"[
-{"name":"nyra_outline","title":"Outline a Nyra file","description":"The cheapest view of a Nyra program: one line per function (signature) and struct (fields) with its line range, e.g. `6-9 fn area(r: Rect) -> int`. Read this instead of the whole file, then nyra_show the symbols you need.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_show","title":"Show Nyra symbols","description":"The source of functions, structs or fields (Struct.field) by name, exactly as in the file.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"name":{"type":"string","description":"one or more names separated by spaces"}},"required":["name"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_edit","title":"Edit Nyra symbols by name","description":"Change a program by symbol instead of resending it. edits: plain definitions replace the symbols of their names (or are added), or commands: `@replace NAME` + code, `@add [after|before NAME]` + code, `@delete NAME`, `@rename NAME NEW` (updates every reference), `@add-field Struct name: type`. Fields are Struct.field. The rest of the file stays byte-identical. The result is checked: an edit that adds errors is refused with the errors (force applies it). With path the file is written and only a summary returns; with code the new code returns.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file to edit in place"},"code":{"type":"string","description":"or the program itself"},"edits":{"type":"string","description":"the edit script"},"force":{"type":"boolean","description":"apply even if errors are added"},"fix":{"type":"boolean","description":"repair errors with a certain fix first"}},"required":["edits"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}}
+{"name":"nyra_outline","title":"Outline a Nyra file","description":"The cheapest view of a Nyra program: one line per function (signature), struct (fields) and enum (variants) with its line range, e.g. `6-9 fn area(r: Rect) -> int`. Read this instead of the whole file, then nyra_show the symbols you need.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name -> text"},"file":{"type":"string","description":"with files: the file to work on (default main.nyra)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_show","title":"Show Nyra symbols","description":"The source of functions, structs, enums, fields (Struct.field) or variants (Enum.Variant) by name, exactly as in the file.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name -> text"},"file":{"type":"string","description":"with files: the file to work on (default main.nyra)"},"name":{"type":"string","description":"one or more names separated by spaces"}},"required":["name"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_edit","title":"Edit Nyra symbols by name","description":"Change a program by symbol instead of resending it. edits: plain definitions replace the symbols of their names (or are added), or commands: `@replace NAME` + code, `@add [after|before NAME]` + code, `@delete NAME`, `@rename NAME NEW` (updates every reference), `@add-field Struct name: type`, `@add-variant Enum Name(type)`. Fields are Struct.field, variants Enum.Variant. The rest of the file stays byte-identical. The result is checked: an edit that adds errors is refused with the errors (force applies it). With path the file is written and only a summary returns; with code the new code returns.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"a .nyra file to edit in place"},"code":{"type":"string","description":"or the program itself"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files (so that `use ./name` is checked): file name -> text; the edit works on `file` and the new code of that file comes back"},"file":{"type":"string","description":"with files: the file to edit (default main.nyra)"},"edits":{"type":"string","description":"the edit script"},"force":{"type":"boolean","description":"apply even if errors are added"},"fix":{"type":"boolean","description":"repair errors with a certain fix first"}},"required":["edits"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}}
 ]"#;
 
 fn tool_error(msg: impl Into<String>) -> String {
@@ -1612,25 +1797,33 @@ fn arg_bool(args: &Json, key: &str) -> Result<bool, String> {
     }
 }
 
-/// The program of a tool call: (source, file name, path to write back).
-fn source(args: &Json) -> Result<(String, String, Option<String>), String> {
+/// The program of a tool call: (source, file name, path to write back, the folder of `files`).
+fn source(args: &Json, dir: &std::path::Path) -> Result<(String, String, Option<String>, Option<crate::mcp::Program>), String> {
+    let files = !matches!(args.get("files"), None | Some(Json::Null));
     match (arg_str(args, "path")?, arg_str(args, "code")?) {
+        (None, None) if files => {
+            // a program of several files: `file` says which one the tool works on
+            let program = crate::mcp::program_in(dir, args, arg_str(args, "file")?)?;
+            program.enter();
+            Ok((program.src.clone(), program.name.clone(), None, Some(program)))
+        }
+        (path, code) if files && (path.is_some() || code.is_some()) => Err(tool_error("give one of path, code or files")),
         (Some(_), Some(_)) => Err(tool_error("give either path or code, not both")),
-        (None, None) => Err(tool_error("missing argument `path` (a .nyra file) or `code`")),
-        (None, Some(code)) => Ok((code.to_string(), "main.nyra".into(), None)),
+        (None, None) => Err(tool_error("missing argument `path` (a .nyra file), `code` or `files`")),
+        (None, Some(code)) => Ok((code.to_string(), "main.nyra".into(), None, None)),
         (Some(path), None) => {
             if !path.ends_with(".nyra") {
                 return Err(tool_error(format!("path must be a .nyra file, found `{path}`")));
             }
             let text = std::fs::read_to_string(path).map_err(|e| tool_error(format!("cannot read `{path}`: {e}")))?;
-            Ok((text, path.to_string(), Some(path.to_string())))
+            Ok((text, path.to_string(), Some(path.to_string()), None))
         }
     }
 }
 
 /// `nyra_outline`, `nyra_show` and `nyra_edit`: `Ok` is a normal result, `Err` one with `isError`.
-pub fn tool(name: &str, args: &Json) -> Result<String, String> {
-    let (src, file, path) = source(args)?;
+pub fn tool(name: &str, args: &Json, dir: &std::path::Path) -> Result<String, String> {
+    let (src, file, path, _project) = source(args, dir)?;
     match name {
         "nyra_outline" => Ok(outline_text(&src, &file)),
         "nyra_show" => {
@@ -1652,7 +1845,12 @@ pub fn tool(name: &str, args: &Json) -> Result<String, String> {
                     std::fs::write(p, &out.text).map_err(|e| tool_error(format!("cannot write `{p}`: {e}")))?;
                 }
             }
-            Ok(outcome_json(&out, applied, path.is_none()).to_string())
+            let mut json = outcome_json(&out, applied, path.is_none());
+            // for `files`: which file the code is
+            if let (Some(p), Json::Obj(fields)) = (&_project, &mut json) {
+                fields.push(("file".to_string(), p.name.clone().into()));
+            }
+            Ok(json.to_string())
         }
     }
 }

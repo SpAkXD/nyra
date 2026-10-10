@@ -1,6 +1,6 @@
 [package]
 name = "nyra"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = "A compact, strictly-typed programming language designed to be written by AI agents. Compiles to C, JavaScript, Python, TypeScript, Rust and Go."
 license = "MIT"
@@ -8,6 +8,12 @@ repository = "https://github.com/SpAkXD/nyra"
 readme = "README.md"
 keywords = ["language", "compiler", "transpiler", "ai", "llm"]
 categories = ["compilers", "development-tools"]
+
+# Empty except on wasm32 (the playground: `tools/build_wasm.py`, see `src/lib.rs`).
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
 
 [[bin]]
 name = "nyra"
@@ -19,3 +25,10 @@ path = "src/main.rs"
 opt-level = 3
 lto = true
 codegen-units = 1
+
+# The WebAssembly build of the playground: small rather than fast (`tools/build_wasm.py`).
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
+strip = true
+panic = "abort"

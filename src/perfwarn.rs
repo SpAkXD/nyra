@@ -240,6 +240,20 @@ fn each_child<'a>(e: &'a Expr, f: &mut dyn FnMut(&'a Expr)) {
             f(a);
             f(b);
         }
+        ExprKind::Bind(_, v, body) => {
+            f(v);
+            f(body);
+        }
+        ExprKind::Match(scrut, arms) => {
+            f(scrut);
+            for arm in arms {
+                for st in &arm.body {
+                    if let StmtKind::Expr(x) = &st.kind {
+                        f(x);
+                    }
+                }
+            }
+        }
         ExprKind::MapLit(items) => {
             for (k, v) in items {
                 f(k);

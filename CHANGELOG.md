@@ -3,6 +3,31 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.7.0 (2026-10-10)
+
+Speed
+- **`nyra run` is automatic.** It used to wait about half a second for the C compiler before the first line of
+  output, even for a ten-line program. Now a cached build of the exact source runs as it is; any other program
+  starts in the interpreter with its output kept and a budget of 4,000,000 steps and 350 ms, while the C compiler starts in
+  the background after 15 ms. A program that ends within the budget prints at once (milliseconds); one that does
+  not is dropped and run natively with the same input, so its output appears once. Programs that use `fs` or
+  `os`, call `time.sleep_ms` or read a terminal always run natively; a program that answers a pipe as it goes is not made to wait
+  for the end of its input. Output, exit codes and runtime errors are the same in every mode. `--native` forces
+  the old way; `--release` implies it. Without a C compiler `run` interprets. The MCP tool `nyra_run` does the same
+  (`"mode":"interp"` in its reply when the interpreter answered). See research/SPEED-run.md for the numbers.
+- **A browser playground** (https://nyralang.dev/play/): the compiler builds to WebAssembly with no crates (`python tools/build_wasm.py`), and the page runs programs in the sandboxed interpreter in a Web Worker.
+
+Language
+- Enums that carry values (sum types): `enum Shape { Circle(float), Rect(float, float), Empty }`, built `Shape.Circle(2.0)`, taken apart with `match s { Shape.Circle(r) => ..., Shape.Rect(w, h) => ..., Shape.Empty => ... }` (every case must be covered, `_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`. New codes E0286 (a variant written without its values), E0287 (a variant pattern that does not name its values), E0288 (`all()` of an enum with values); E0222 also covers an enum that contains itself.
+- `match` and `if let` are values: `let area = match s { Shape.Circle(r) => 3.14 * r * r, _ => 0.0 }`, `return match d { ... }`, `let n = if let v = m.get(k) { v + 1 } else { 0 }`. Each arm is one expression (arms on lines of their own or separated by commas) and all arms have one type (E0212); the statement forms are unchanged.
+
+Tooling
+- `nyra outline`, `show` and `edit` (and the MCP tools `nyra_outline`, `nyra_show`, `nyra_edit`) know enums: the outline lists `enum Shape { Circle(float), Empty }` with its variants (`--json` has `variants`), `Enum.Variant` addresses one variant, and an edit can replace, add (`@add-variant Shape Tri(float)` / `--add-variant`), delete or rename an enum or a variant, with every reference. A rename now also follows the uses inside `ex` examples.
+- Tuples as map keys: `var grid: [(int, int): char] = [:]`, `grid[(2, 1)] = 'b'`, `(2, 1) in grid`; the parts must be `int`, `str`, `char`, `bool` or such tuples (E0218 otherwise, and for a float part). They hash and compare by their parts on every target.
+- `json.str` and `json.parse` work for every value type on every target: a tuple is an array (`[1,"a"]`), an optional the value or `null`, an enum variant its name (`"Empty"`) or `{"Rect":[1,2]}` with values, a map with `str` keys an object, any other map an array of `[key,value]` pairs. A shape that does not fit is E0345 with the path (`expected an array of 2 elements at $.a`). E0309 now only means that `json.parse` has no type to read.
+- MCP: the tools `nyra_check`, `nyra_test`, `nyra_run` and `nyra_build` accept `files` (a map of file names to text) instead of `code`, so `use ./shapes` works over MCP (`entry` names the main file; `nyra_outline`, `nyra_show` and `nyra_edit` take `files` and `file`). They repair an error that has exactly one certain fix in memory, like the CLI, and return the repairs and the compiler's warnings under `warnings`; `strict: true` turns the repairs off.
+- Fixed: an error inside an imported file of your own was reworded as a bug of a bundled standard module.
+
 ## v0.6.0 (2026-10-10)
 
 Language

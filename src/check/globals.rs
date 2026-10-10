@@ -469,6 +469,22 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
             lambda_names(a, out);
             lambda_names(b, out);
         }
+        ExprKind::Bind(name, v, body) => {
+            out.insert(name.clone());
+            lambda_names(v, out);
+            lambda_names(body, out);
+        }
+        ExprKind::Match(scrut, arms) => {
+            lambda_names(scrut, out);
+            for arm in arms {
+                arm.pats.iter().for_each(|p| lambda_names(p, out));
+                for st in &arm.body {
+                    if let StmtKind::Expr(x) = &st.kind {
+                        lambda_names(x, out);
+                    }
+                }
+            }
+        }
         ExprKind::Method(r, _, args) => {
             lambda_names(r, out);
             args.iter().for_each(|x| lambda_names(x, out));
