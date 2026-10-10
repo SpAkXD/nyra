@@ -149,7 +149,8 @@ fn tdesc(t: Ty) -> String {
     }
 }
 
-/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ["a", T], or a struct's class.
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ["a", T], ["m", K, V], or a
+/// struct's (tuple's, optional's, enum's) class.
 fn jdesc(t: Ty) -> String {
     match t {
         Ty::Int => "\"i\"".into(),
@@ -158,7 +159,33 @@ fn jdesc(t: Ty) -> String {
         Ty::Char => "\"c\"".into(),
         Ty::Str => "\"s\"".into(),
         Ty::Array(_) => format!("[\"a\", {}]", jdesc(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("[\"m\", {}, {}]", jdesc(k), jdesc(v))
+        }
         _ => format!("nyS_{}", ident(&t.struct_name().expect("a struct"))),
+    }
+}
+
+/// What the JSON runtime needs to know about a tuple, an optional or an enum (`@C@` is its class).
+fn jkind(s: &crate::ir::StructInfo) -> Option<String> {
+    if s.tuple {
+        Some("@C@.ny_jk = \"t\";".into())
+    } else if s.option {
+        Some("@C@.ny_jk = \"o\";".into())
+    } else if !s.variants.is_empty() {
+        let vs: Vec<String> = s
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(v, name)| {
+                let idx: Vec<String> = s.slots(v).map(|k| k.to_string()).collect();
+                format!("[{}, [{}]]", crate::diag::json_str(name), idx.join(", "))
+            })
+            .collect();
+        Some(format!("@C@.ny_jk = \"e\"; @C@.ny_jn = {}; @C@.ny_jv = [{}];", crate::diag::json_str(&s.name), vs.join(", ")))
+    } else {
+        None
     }
 }
 
@@ -255,7 +282,11 @@ pub fn gen(m: &Module, file: &str) -> String {
         for (_, s) in &m.structs.0 {
             let fields: Vec<String> =
                 s.fields.iter().map(|(f, t)| format!("[{}, \"{}\", {}]", crate::diag::json_str(f), jfield(f), jdesc(*t))).collect();
-            let _ = writeln!(out, "nyS_{}.ny_jf = [{}];", ident(&s.name), fields.join(", "));
+            let n = format!("nyS_{}", ident(&s.name));
+            let _ = writeln!(out, "{n}.ny_jf = [{}];", fields.join(", "));
+            if let Some(extra) = jkind(s) {
+                let _ = writeln!(out, "{}", extra.replace("@C@", &n));
+            }
         }
         out.push('\n');
     }

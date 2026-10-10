@@ -151,7 +151,8 @@ fn tdesc(t: Ty) -> String {
     }
 }
 
-/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ("a", T), or a struct's class.
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ("a", T), ("m", K, V), or a
+/// struct's (tuple's, optional's, enum's) class.
 fn jdesc(t: Ty) -> String {
     match t {
         Ty::Int => "\"i\"".into(),
@@ -160,6 +161,10 @@ fn jdesc(t: Ty) -> String {
         Ty::Char => "\"c\"".into(),
         Ty::Str => "\"s\"".into(),
         Ty::Array(_) => format!("(\"a\", {})", jdesc(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("(\"m\", {}, {})", jdesc(k), jdesc(v))
+        }
         _ => name(&t.struct_name().expect("a struct")),
     }
 }
@@ -356,6 +361,23 @@ pub fn gen(m: &Module, file: &str) -> String {
         for (_, s) in &m.structs.0 {
             let fields: Vec<String> = s.fields.iter().map(|(f, t)| format!("({}, \"{}\", {})", lit(f), name(f), jdesc(*t))).collect();
             let _ = writeln!(out, "{}.ny_jf = [{}]", name(&s.name), fields.join(", "));
+            let c = name(&s.name);
+            if s.tuple {
+                let _ = writeln!(out, "{c}.ny_jk = \"t\"");
+            } else if s.option {
+                let _ = writeln!(out, "{c}.ny_jk = \"o\"");
+            } else if !s.variants.is_empty() {
+                let vs: Vec<String> = s
+                    .variants
+                    .iter()
+                    .enumerate()
+                    .map(|(v, vname)| {
+                        let idx: Vec<String> = s.slots(v).map(|k| format!("{k}, ")).collect();
+                        format!("({}, [{}])", lit(vname), idx.concat())
+                    })
+                    .collect();
+                let _ = writeln!(out, "{c}.ny_jk = \"e\"\n{c}.ny_jn = {}\n{c}.ny_jv = [{}]", lit(&s.name), vs.join(", "));
+            }
         }
         out.push_str("\n\n");
     }
