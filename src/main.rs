@@ -18,8 +18,8 @@ mod mcp;
 mod mem;
 mod modules;
 mod parser;
-mod sandbox;
 mod perfwarn;
+mod sandbox;
 mod stdlib;
 
 use std::path::{Path, PathBuf};
@@ -402,7 +402,7 @@ fn real_main() -> ExitCode {
     // `test` checks the program and its capabilities; the examples are what it runs
     let check_only = |s: &str| {
         let prog = front(s)?;
-        let errs = caps::enforce(&prog, &grant, &cli_flag);
+        let errs = caps::enforce(&prog, &grant, cli_flag);
         if errs.is_empty() {
             Ok(prog)
         } else {

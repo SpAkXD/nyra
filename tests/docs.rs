@@ -237,7 +237,11 @@ fn the_agent_card_lists_exactly_the_names_the_compiler_has() {
     for (label, source) in probes {
         let (ok, json) = check_source("names", source);
         assert!(!ok, "{label}: the probe should fail");
-        assert_eq!(sorted(card_names(&card, label)), sorted(hint_names(&json)), "the card's `{label}` methods differ from the compiler's");
+        assert_eq!(
+            sorted(card_names(&card, label)),
+            sorted(hint_names(&json)),
+            "the card's `{label}` methods differ from the compiler's"
+        );
     }
     // modules: "- modules (`use math`): input `line lines all eof`; os `args env ...`; ..."
     let line = card.lines().find_map(|l| l.strip_prefix("- modules (`use math`): ")).expect("no modules list in the card");

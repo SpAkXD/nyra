@@ -882,7 +882,10 @@ class NyraSystemPromptBlocks(unittest.TestCase):
         self.assertEqual(lang.spec_kind, "card")
         self.assertIn("The language card below is the only documentation you have.", lang.system_prompt)
         self.assertNotIn("complete language specification", lang.system_prompt)
-        self.assertEqual(lang.spec_version, "0.5")
+        # the card names the compiler's version (major.minor of Cargo.toml)
+        cargo = (run.BENCH_DIR.parent / "Cargo.toml").read_text(encoding="utf-8")
+        version = re.search(r'^version = "(\d+\.\d+)', cargo, re.M).group(1)
+        self.assertEqual(lang.spec_version, version)
         self.assertLess(len(lang.system_prompt), len(self.lang("full").system_prompt) // 3)
 
     def test_the_system_prompt_is_byte_stable_and_has_no_task_in_it(self):
