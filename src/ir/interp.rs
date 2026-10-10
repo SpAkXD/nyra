@@ -24,11 +24,12 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::host::{Host, Out};
 use super::{Arg, BinOp, Expr, Func, FuncId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Ty, UnOp};
 use crate::ast::Span;
+use crate::clock::Instant;
 
 #[derive(Clone, Debug)]
 pub enum Value {
