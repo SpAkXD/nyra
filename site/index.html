@@ -21,7 +21,7 @@
 <meta name="twitter:description" content="Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare. A small, strict language designed to be written by AI agents.">
 <meta name="twitter:image" content="social-preview.png">
 <script>document.documentElement.classList.add("js")</script>
-<link rel="stylesheet" href="styles.css?v=positioning1">
+<link rel="stylesheet" href="styles.css?v=bench1">
 <script src="main.js?v=positioning1" defer></script>
 </head>
 <body>
@@ -53,6 +53,7 @@
       <a href="#pipeline">Compiler</a>
       <a href="#values">Memory</a>
       <a href="#language">Language</a>
+      <a href="/benchmarks/">Benchmarks</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#install">Install</a>
     </nav>
@@ -658,6 +659,7 @@ nyra run hello.nyra --js</pre></div></li>
         <div class="lane lane3"><b>Rust</b><div class="trk3"><i class="m0" style="--w:100%"></i><i class="m1" style="--w:99%"></i><i class="m2" style="--w:76%"></i></div><span class="q">100 / 99 / 76</span></div>
         <p class="lanes-f">After up to 3 repairs with the compiler's feedback, Opus and Sonnet reach 83/83 in every language. Speed tasks: Nyra ~5 ms, Python ~300 ms. October 2026, Nyra v0.5.</p>
       </div>
+      <div class="cta bench-cta rv"><a class="btn btn-teal mag" href="/benchmarks/">See all benchmarks <span aria-hidden="true">→</span></a><span class="small">Repairs, code tokens, cost per working program, a speed race against C, Rust, Node.js and Python, and the safety tier.</span></div>
       <ul class="metrics">
         <li class="card rv"><span class="num" aria-hidden="true">01</span><b>First-try correctness.</b> How often a model's first program prints exactly the expected output.</li>
         <li class="card rv" style="--d:1"><span class="num" aria-hidden="true">02</span><b>Repairs.</b> The same, when failures are followed by the compiler's feedback and a few retries.</li>
@@ -710,7 +712,7 @@ nyra run hello.nyra --js</pre></div></li>
         <p>A small, strict programming language designed to be written by AI agents.</p>
       </div>
       <nav class="fb-cols" aria-label="Project links">
-        <div><p class="fb-h">Project</p><a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a><a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></div>
+        <div><p class="fb-h">Project</p><a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a><a href="/benchmarks/">Benchmarks</a><a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></div>
         <div><p class="fb-h">Docs</p><a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a><a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a></div>
       </nav>
       <a class="totop" href="#top"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
