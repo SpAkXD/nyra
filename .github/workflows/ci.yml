@@ -75,5 +75,5 @@ jobs:
         run: python bench/verify.py --tier v2 --skip rust,typescript
       - name: Reference edits of the edit tier
         run: python bench/verify.py --tier edit
-      - name: Safety tier (pending: the naive solutions leak until the compiler has --allow)
+      - name: Safety tier (naive Nyra solutions must be rejected at compile time)
         run: python bench/verify.py --tier safety
