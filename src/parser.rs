@@ -2037,6 +2037,54 @@ impl Parser {
         Ok(Expr::new(ExprKind::Unary(op, Box::new(inner)), span))
     }
 
+    /// `match value { pattern => expr ... }` used as a value: one arm per line (or separated by commas),
+    /// each arm one expression.
+    fn match_expr(&mut self) -> PResult<Expr> {
+        self.same_depth(|p| {
+            let span = p.expect(Tok::Match, "`match`")?;
+            let hint = "a match used as a value looks like `match s { Shape.Circle(r) => r * r  _ => 0.0 }`: one arm per line, each arm one expression";
+            let scrut = p.expr()?;
+            p.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| d.or_hint(hint))?;
+            let open = p.pos - 1;
+            let mut arms = Vec::new();
+            loop {
+                p.skip_newlines();
+                if p.at(&Tok::RBrace) {
+                    p.bump();
+                    break;
+                }
+                if matches!(p.peek(), Tok::Eof | Tok::Fn | Tok::Struct | Tok::Enum) {
+                    return Err(p.unexpected("`}` to close the `match`").hint("add the missing `}` after the last arm"));
+                }
+                match p.match_value_arm(hint) {
+                    Ok(arm) => arms.push(arm),
+                    Err(d) => {
+                        p.skip_match(d, open);
+                        break;
+                    }
+                }
+            }
+            Ok(Expr::new(ExprKind::Match(Box::new(scrut), arms), span))
+        })
+    }
+
+    /// One arm of a `match` used as a value: `pattern, pattern => expr`, then a new line, a comma or the `}`.
+    fn match_value_arm(&mut self, hint: &str) -> PResult<MatchArm> {
+        let arm_span = self.span();
+        let (pats, wild) = self.match_patterns()?;
+        self.expect(Tok::FatArrow, "`=>` after the pattern").map_err(|d| d.or_hint(hint))?;
+        let at = self.span();
+        let value = self.expr()?;
+        match self.peek() {
+            Tok::Comma | Tok::Newline => {
+                self.bump();
+            }
+            Tok::RBrace => {}
+            _ => return Err(self.unexpected("a new line or `}` after the arm").or_hint(hint)),
+        }
+        Ok(MatchArm { pats, wild, body: vec![Stmt { kind: StmtKind::Expr(value), span: at }], span: arm_span })
+    }
+
     /// `if c { a } else if d { b } else { c }` used as a value.
     fn if_expr(&mut self) -> PResult<Expr> {
         self.same_depth(|p| p.if_expr_chain())
@@ -2044,8 +2092,25 @@ impl Parser {
 
     fn if_expr_chain(&mut self) -> PResult<Expr> {
         let span = self.expect(Tok::If, "`if`")?;
-        let cond = self.expr()?;
-        let then = self.branch_expr()?;
+        // `if let v = opt { a } else { b }`: a hidden name for `opt`; `v` is bound to its value in `a`
+        let mut bound = None;
+        let cond = if self.at(&Tok::Let) {
+            self.bump();
+            let hint = "`if let v = expr { a } else { b }`: the name takes the value when there is one";
+            let (name, nspan) = self.ident("a name for the value", hint)?;
+            self.expect(Tok::Assign, "`=`").map_err(|d| d.or_hint(hint))?;
+            let value = self.expr()?;
+            let tmp = self.hidden_name().replace('t', "o");
+            bound = Some((name, nspan, tmp.clone(), value));
+            Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp), span)), "has".to_string()), span)
+        } else {
+            self.expr()?
+        };
+        let mut then = self.branch_expr()?;
+        if let Some((name, nspan, tmp, _)) = &bound {
+            let val = Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp.clone()), span)), "val".to_string()), span);
+            then = Expr::new(ExprKind::Bind(name.clone(), Box::new(val), Box::new(then)), *nspan);
+        }
         let save = self.pos;
         self.skip_newlines();
         if !self.at(&Tok::Else) {
@@ -2064,7 +2129,11 @@ impl Parser {
         } else {
             self.branch_expr()?
         };
-        Ok(Expr::new(ExprKind::If(Box::new(cond), Box::new(then), Box::new(els)), span))
+        let chain = Expr::new(ExprKind::If(Box::new(cond), Box::new(then), Box::new(els)), span);
+        Ok(match bound {
+            Some((_, _, tmp, value)) => Expr::new(ExprKind::Bind(tmp, Box::new(value), Box::new(chain)), span),
+            None => chain,
+        })
     }
 
     /// `{ expr }`: one branch of an `if` used as a value.
@@ -2373,6 +2442,7 @@ impl Parser {
                 return self.postfix(e);
             }
             Tok::If => return self.if_expr(),
+            Tok::Match => return self.match_expr(),
             _ => return Err(self.expression_expected()),
         };
         self.postfix(Expr::new(kind, span))
@@ -2637,9 +2707,6 @@ impl Parser {
             Tok::LBrace if before == Some(&Tok::FatArrow) => {
                 d.hint("the body of a lambda is one expression, without braces or `return`: `x => x * 2`")
             }
-            Tok::Match => d.hint(
-                "`match` is a statement, not a value: `ret` the value or assign it in the arms, or write `if cond { a } else { b }` for a value",
-            ),
             Tok::While | Tok::For | Tok::Let | Tok::Var | Tok::Ret => {
                 d.hint(format!("`{}` starts a statement, not a value: put it on its own line", t.text()))
             }
@@ -2750,6 +2817,16 @@ fn rename_in(e: &mut Expr) {
             rename_in(c);
             rename_in(a);
             rename_in(b);
+        }
+        ExprKind::Bind(_, v, body) => {
+            rename_in(v);
+            rename_in(body);
+        }
+        ExprKind::Match(scrut, arms) => {
+            rename_in(scrut);
+            for arm in arms {
+                rename_main_calls(&mut arm.body);
+            }
         }
         ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(rename_in),
         ExprKind::None => {}

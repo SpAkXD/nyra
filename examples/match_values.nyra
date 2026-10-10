@@ -1,0 +1,93 @@
+// `match` and `if let` used as values.
+enum Shape { Circle(float), Rect(float, float), Empty }
+enum Token { Num(int), Word(str), Quit }
+enum Dir { N, E, S, W }
+
+fn area(s: Shape) -> float = match s {
+    Shape.Circle(r) => 3.0 * r * r
+    Shape.Rect(w, h) => w * h
+    Shape.Empty => 0.0
+}
+
+fn label(t: Token) -> str {
+    return match t {
+        Token.Num(n) => "number {n}"
+        Token.Word(w) => w.upper()
+        Token.Quit => "quit"
+    }
+}
+
+fn turn(d: Dir) -> Dir = match d {
+    Dir.N => Dir.E
+    Dir.E => Dir.S
+    Dir.S => Dir.W
+    Dir.W => Dir.N
+}
+
+let s = Shape.Rect(3.0, 4.0)
+let a = match s {
+    Shape.Circle(r) => 3.14 * r * r
+    _ => 0.0
+}
+print(a, area(s), area(Shape.Circle(1.0)), area(Shape.Empty))
+print(label(Token.Num(4)), label(Token.Word("ok")), label(Token.Quit))
+print(turn(Dir.W), turn(turn(Dir.N)))
+
+// on ints, strings, chars and bools; several patterns per arm; commas between arms
+fn size(n: int) -> str = match n { 0 => "none", 1, 2, 3 => "few", _ => "many" }
+fn kind(c: char) -> int = match c { 'a', 'e' => 1, ' ' => 0, _ => 2 }
+fn word(s: str) -> int {
+    return match s {
+        "one" => 1
+        "two" => 2
+        _ => 0
+    }
+}
+print(size(0), size(2), size(40), kind('e'), kind(' '), kind('z'), word("two"), word("ten"))
+print(match 3 > 2 { true => "yes", false => "no" })
+
+// as an argument, in arithmetic, nested, with a function call as the value matched
+var calls = 0
+fn next() -> int {
+    calls += 1
+    return calls
+}
+let total = 10 + match next() {
+    1 => 100
+    _ => 200
+}
+print(total, calls)
+let nested = match Token.Num(2) {
+    Token.Num(n) => match n {
+        2 => "two"
+        _ => "other"
+    }
+    _ => "not a number"
+}
+print(nested)
+
+// optionals
+let none_or: int? = match calls {
+    1 => none
+    _ => 7
+}
+print(none_or, (match calls { 1 => 5, _ => 6 }) * 2)
+
+// if let as a value
+let ages = ["ann": 31, "bob": 27]
+let ann = if let n = ages.get("ann") { n + 1 } else { 0 }
+let cy = if let n = ages.get("cy") { n + 1 } else { -1 }
+print(ann, cy)
+fn half(s: str) -> str = if let n = s.to_int() { "half is {n / 2}" } else if let f = s.to_float() { "float {f / 2.0}" } else { "no number" }
+print(half("10"), half("5.0"), half("x"))
+
+// arrays and strings inside variants, and values that are copied
+enum Box { Items([str]), Name(str), Nothing }
+fn first(b: Box) -> str = match b {
+    Box.Items(xs) => if xs.len() > 0 { xs[0] } else { "-" }
+    Box.Name(n) => n
+    Box.Nothing => ""
+}
+print(first(Box.Items(["a", "b"])), first(Box.Items([])), first(Box.Name("zed")), first(Box.Nothing).len())
+let items = [Box.Name("x"), Box.Items(["y"]), Box.Nothing]
+print([first(b) for b in items])

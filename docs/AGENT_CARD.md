@@ -31,7 +31,7 @@ print([n * n for n in 0..6 if n % 2 == 0], items.map(x => x.qty).sum())
 - Params and the return type are written; `-> T` needs `return` on every path; no `->` returns nothing; `= expr` is the one-line form.
 - `let` immutable, `var` mutable. No shadowing: a visible name cannot be redeclared.
 - No implicit conversions: `int() float() str() char(n) c.code()`. `s[i]` is a `char`. Conditions are `bool`; int `/` truncates.
-- `a..b` excludes `b`; `step -2`; `for k in map` gives keys. `if` is a value too: `if a > b { a } else { b }`, or `a > b ? a : b`.
+- `a..b` excludes `b`; `step -2`; `for k in map` gives keys. `if` and `match` are values too: `if a > b { a } else { b }`, or `a > b ? a : b`.
 - Assignment, passing and returning copy. Changing an array or map needs a `var`.
 - `"{expr}"` interpolates; a brace that starts no value is text. `print(a, b)` joins with a space; `print(x, end: "")`.
 - Tuples `(1, "a")`, `t.0`, `let (a, b) = t`; `int?`, `none`, `x ?? d`, `if let v = x { }`; `enum S { C(float), N }`, `S.C(1.0)`, `match s { S.C(r) => ..., _ => ... }`; `xs[a..b]`; `{s:>8}`; `r.area()` is `area(r)`.

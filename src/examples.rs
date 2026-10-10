@@ -423,6 +423,15 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
             .or_else(|| lo.as_ref().and_then(|x| first_call(x, fns)))
             .or_else(|| hi.as_ref().and_then(|x| first_call(x, fns))),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
+        ExprKind::Bind(_, v, body) => first_call(v, fns).or_else(|| first_call(body, fns)),
+        ExprKind::Match(scrut, arms) => first_call(scrut, fns).or_else(|| {
+            arms.iter().find_map(|a| {
+                a.body.iter().find_map(|s| match &s.kind {
+                    StmtKind::Expr(x) => first_call(x, fns),
+                    _ => None,
+                })
+            })
+        }),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
         ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
         ExprKind::MapLit(kvs) => kvs.iter().find_map(|(k, v)| first_call(k, fns).or_else(|| first_call(v, fns))),
@@ -529,6 +538,8 @@ pub fn source(e: &Expr) -> String {
         }
         ExprKind::Call(n, args) => format!("{n}({})", list(args)),
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
+        ExprKind::Bind(_, _, body) => source(body),
+        ExprKind::Match(scrut, _) => format!("match {} {{ ... }}", source(scrut)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
         ExprKind::Tuple(xs) => format!("({})", list(xs)),
         ExprKind::Fmt(x, spec) => format!("{}:{}", source(x), spec.text),

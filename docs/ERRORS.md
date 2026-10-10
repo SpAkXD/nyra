@@ -643,9 +643,9 @@ fn main() {
 ```
 - **Related:** E0208, E0207
 
-## E0212: bad `if` or `? :` used as a value
+## E0212: bad `if`, `? :` or `match` used as a value
 - **Kind:** compile error · **Since:** v0.2
-- **What it means:** An `if` that is used as a value (`let x = if c { a } else { b }`, also written `let x = c ? a : b`) is incomplete or inconsistent: it has no `else`, a branch is not exactly one expression (an empty branch, a statement, several lines), a branch produces no value, or the two branches have different types.
+- **What it means:** An `if` that is used as a value (`let x = if c { a } else { b }`, also written `let x = c ? a : b`) is incomplete or inconsistent: it has no `else`, a branch is not exactly one expression (an empty branch, a statement, several lines), a branch produces no value, or the two branches have different types. The same goes for the arms of a `match` used as a value (`let x = match n { 1 => "one", _ => "many" }`): each arm is one expression with a value, and all arms have one type.
 - **Why Nyra has this rule:** A value must exist on every path and have one type, so the compiler can give it that type. Branches that do things belong in an `if` statement, which has no value.
 - **Common causes:**
   - `let x = if c { 1 }` without `else` (the `? :` form always has both parts)
@@ -653,6 +653,7 @@ fn main() {
   - an empty branch `{ }`
   - branches of different types, such as `{ 1 } else { 2.5 }`: convert one (`float(1)`, or write `1.0`)
   - a branch that calls a function that returns nothing
+  - the arms of a `match` used as a value that give a `str` in one arm and an `int` in another, or call `print`
 - **Wrong:**
 ```rust
 fn main() {

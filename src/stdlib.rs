@@ -352,6 +352,17 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
                 expr(a, m, own);
                 expr(b, m, own);
             }
+            ExprKind::Bind(_, v, body) => {
+                expr(v, m, own);
+                expr(body, m, own);
+            }
+            ExprKind::Match(scrut, arms) => {
+                expr(scrut, m, own);
+                for arm in arms {
+                    arm.pats.iter_mut().for_each(|p| expr(p, m, own));
+                    stmts(&mut arm.body, m, own);
+                }
+            }
             ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter_mut().for_each(|x| expr(x, m, own)),
             ExprKind::MapLit(pairs) => {
                 for (k, v) in pairs {

@@ -148,7 +148,8 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 
 `if` can also be a value. It needs an `else`, and each branch is one expression of the same type:
 `let max = if a > b { a } else { b }`. The conditional operator is the same thing: `let max = a > b ? a : b`
-(see Operators).
+(see Operators). So is `if let`: `let n = if let v = m.get(k) { v + 1 } else { 0 }`. A `match` is a value too
+(see Enums and `match`).
 
 ## Operators (high to low precedence)
 | ops | types |
@@ -405,6 +406,24 @@ of the matched enum, or a literal `int`, `str`, `char` or `bool` (a `-` literal 
 `bool` both values, for an `int`, `str` or `char` a `_` arm. An arm that can never run is E0283, and a
 pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. As a
 statement, `match` `return`s a value or assigns it in the arms.
+
+`match` and `if let` also give a value. As a value, each arm is one expression (arms are separated by new
+lines or commas), all of one type (E0212), and the cases must still be covered:
+```nyra
+enum Shape { Circle(float), Rect(float, float), Empty }
+fn size(n: int) -> str = match n { 0 => "none", 1, 2, 3 => "few", _ => "many" }
+
+let s = Shape.Rect(2.0, 3.0)
+let area = match s {
+    Shape.Circle(r) => 3.14 * r * r
+    Shape.Rect(w, h) => w * h
+    Shape.Empty => 0.0
+}
+let k = 2
+print(area, size(k), 10 + match k { 1 => 100, _ => 200 })   // 6 few 210
+```
+The value matched is computed once, and only the chosen arm runs. A statement that starts with `match` is
+the statement form; anywhere else (`let`, `return`, an argument, an operand) it is a value.
 
 ## Optional values
 ```nyra

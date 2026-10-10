@@ -512,7 +512,9 @@ fn show(e: &Expr) -> Option<String> {
         | ExprKind::Interp(_)
         | ExprKind::If(..)
         | ExprKind::Comprehension(_)
-        | ExprKind::MapLit(_) => return None,
+        | ExprKind::MapLit(_)
+        | ExprKind::Match(..)
+        | ExprKind::Bind(..) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
             let a: Option<Vec<String>> = args.iter().map(show).collect();
@@ -1760,6 +1762,12 @@ impl Checker {
             e.ty = t;
             return t;
         }
+        // `match value { ... }` used as a value
+        if matches!(e.kind, ExprKind::Match(..)) {
+            let t = self.match_expr(e, want);
+            e.ty = t;
+            return t;
+        }
         // `Dir.N` is a variant of the enum `Dir`, `Dir.all()` are all of them, and
         // `Shape.Circle(2.0)` builds a variant that carries values
         let is_enum = |c: &Checker, b: &Expr| {
@@ -2094,6 +2102,16 @@ impl Checker {
                     ta
                 }
             }
+            ExprKind::Bind(name, value, body) => {
+                let vt = self.expr(value);
+                self.scopes.push(HashMap::new());
+                let name = name.clone();
+                self.declare(&name, vt, Decl::Let, span);
+                let bt = self.expr_with(body, want);
+                self.scopes.pop();
+                bt
+            }
+            ExprKind::Match(..) => unreachable!("handled before"),
             ExprKind::Array(items) => self.array_lit(items, want, span),
             ExprKind::Tuple(items) => self.tuple_lit(items, want),
             ExprKind::None => match want {
@@ -2888,6 +2906,108 @@ impl Checker {
         let mut out = vec![Stmt { kind: StmtKind::Let { name: tmp.clone(), mutable: false, ty: None, value: scrut }, span }];
         out.extend(chain.unwrap_or_default());
         StmtKind::Arena(out)
+    }
+
+    /// `match value { pattern => expr ... }` used as a value: the value of the arm that is chosen.
+    /// It becomes `Bind`s and `If`s, so lowering never sees a `match`.
+    fn match_expr(&mut self, e: &mut Expr, want: Option<Type>) -> Type {
+        let ExprKind::Match(mut scrut, mut arms) = std::mem::replace(&mut e.kind, ExprKind::Int(0)) else {
+            unreachable!("only called for a match")
+        };
+        let span = e.span;
+        let st = self.expr(&mut scrut);
+        let kind = self.match_kind(st, &scrut);
+        let enum_name = st.struct_name().filter(|n| self.enums.contains_key(n));
+        let variants: Vec<String> = enum_name.as_ref().map(|n| self.enums[n].variants.clone()).unwrap_or_default();
+        let mut m = MatchState { kind, st, enum_name, variants, covered: Vec::new(), wild: false };
+        let tmp = self.match_var(st, span);
+        // each arm: its test, and its value with the names of its variant bound
+        let mut parts: Vec<(Vec<usize>, Expr)> = Vec::new();
+        let mut result: Option<Type> = None;
+        let mut bad = false;
+        for arm in arms.iter_mut() {
+            let (ks, binds) = self.arm_patterns(&mut m, arm);
+            self.scopes.push(HashMap::new());
+            for (name, at, ty, _) in &binds {
+                self.declare(name, *ty, Decl::Let, *at);
+            }
+            let mut body = match arm.body.pop() {
+                Some(Stmt { kind: StmtKind::Expr(x), .. }) => x,
+                _ => Expr::new(ExprKind::Int(0), arm.span),
+            };
+            let expect = result.or(want);
+            let mut t = self.expr_with(&mut body, expect);
+            if let Some(w) = expect.filter(|w| w.is_option()) {
+                t = self.coerce(&mut body, w, t);
+            }
+            self.scopes.pop();
+            if t == Type::Void {
+                self.errs.push(
+                    Diag::new(
+                        "E0212",
+                        format!("this arm of a `match` used as a value produces no value: {} returns nothing", call_text(&body)),
+                        body.span,
+                    )
+                    .hint("each arm must be an expression with a value, e.g. `Dir.N => 1`; use a `match` statement for actions"),
+                );
+                bad = true;
+            } else if t.is_unknown() {
+                bad = true;
+            } else {
+                match result {
+                    None => result = Some(t),
+                    Some(r) if r == t => {}
+                    Some(r) => {
+                        self.errs.push(
+                            Diag::new(
+                                "E0212",
+                                format!("the arms of this `match` have different types: `{}` and `{}`", r.name(), t.name()),
+                                body.span,
+                            )
+                            .hint(format!("every arm must give the same type: change this one to `{}`", r.name())),
+                        );
+                        bad = true;
+                    }
+                }
+            }
+            // the names of the variant, bound around the value
+            for (name, at, ty, slot) in binds.into_iter().rev() {
+                if ty.is_unknown() {
+                    continue;
+                }
+                let mut base = Expr::new(ExprKind::Var(tmp.clone()), at);
+                base.ty = st;
+                let mut value = Expr::new(ExprKind::Field(Box::new(base), slot), at);
+                value.ty = ty;
+                let bt = body.ty;
+                let sp = body.span;
+                body = Expr::new(ExprKind::Bind(name, Box::new(value), Box::new(body)), sp);
+                body.ty = bt;
+            }
+            parts.push((ks, body));
+        }
+        self.scopes.pop();
+        let exhaustive = self.match_exhaustive(&m, span);
+        let Some(ty) = result.filter(|_| exhaustive && !bad) else {
+            return Type::Unknown;
+        };
+        // the arms as an `if` chain; the last arm of an exhaustive match needs no test
+        let mut chain: Option<Expr> = None;
+        let n = arms.len();
+        for (i, (arm, (ks, body))) in arms.into_iter().zip(parts).enumerate().rev() {
+            if arm.wild || (i == n - 1 && exhaustive) {
+                chain = Some(body);
+                continue;
+            }
+            let Some(cond) = self.arm_test(&m, &tmp, &ks, arm.pats, arm.span) else { continue };
+            let Some(els) = chain.take() else { continue };
+            let mut branch = Expr::new(ExprKind::If(Box::new(cond), Box::new(body), Box::new(els)), arm.span);
+            branch.ty = ty;
+            chain = Some(branch);
+        }
+        let Some(chain) = chain else { return Type::Unknown };
+        e.kind = ExprKind::Bind(tmp, scrut, Box::new(chain));
+        ty
     }
 
     /// `a ?? b`: the value of the optional `a`, or `b`.

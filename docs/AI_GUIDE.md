@@ -329,8 +329,10 @@ Good to know:
   `Dir.N`, and prints as `Dir.N`. Take it apart with `match`, which must cover every case:
   `match d { Dir.N => return 1  Dir.E, Dir.W => return 2  _ => return 3 }` (one arm per line, `_` takes the rest, an arm
   body is one statement or a `{ }` block). `match` also works on an `int`, `str`, `char` or `bool` (an `int`
-  needs a `_` arm); as a statement it `ret`urns the value or assigns it in the arms. `Dir.all()` is the array of
-  all cases. A variant may carry values: `enum Shape { Circle(float), Rect(float, float), Empty }`, built
+  needs a `_` arm); as a statement it `ret`urns the value or assigns it in the arms, and as a value each arm is one
+  expression: `let a = match s { Shape.Circle(r) => 3.14 * r * r  _ => 0.0 }`, `return match d { Dir.N => 1  _ => 2 }`
+  (arms on lines of their own or separated by commas; `if let v = x { a } else { b }` is a value too).
+  `Dir.all()` is the array of all cases. A variant may carry values: `enum Shape { Circle(float), Rect(float, float), Empty }`, built
   `Shape.Circle(2.0)` (always with its values), taken apart by naming them,
   `match s { Shape.Circle(r) => return 3.0 * r * r  Shape.Rect(w, h) => return w * h  Shape.Empty => return 0.0 }`
   (`_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`; an enum cannot contain itself
