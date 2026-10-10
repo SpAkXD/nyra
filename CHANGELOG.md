@@ -11,6 +11,7 @@ Language
 
 Tooling
 - `nyra outline`, `show` and `edit` (and the MCP tools `nyra_outline`, `nyra_show`, `nyra_edit`) know enums: the outline lists `enum Shape { Circle(float), Empty }` with its variants (`--json` has `variants`), `Enum.Variant` addresses one variant, and an edit can replace, add (`@add-variant Shape Tri(float)` / `--add-variant`), delete or rename an enum or a variant, with every reference. A rename now also follows the uses inside `ex` examples.
+- `json.str` and `json.parse` work for every value type on every target: a tuple is an array (`[1,"a"]`), an optional the value or `null`, an enum variant its name (`"Empty"`) or `{"Rect":[1,2]}` with values, a map with `str` keys an object, any other map an array of `[key,value]` pairs. A shape that does not fit is E0345 with the path (`expected an array of 2 elements at $.a`). E0309 now only means that `json.parse` has no type to read.
 - MCP: the tools `nyra_check`, `nyra_test`, `nyra_run` and `nyra_build` accept `files` (a map of file names to text) instead of `code`, so `use ./shapes` works over MCP (`entry` names the main file; `nyra_outline`, `nyra_show` and `nyra_edit` take `files` and `file`). They repair an error that has exactly one certain fix in memory, like the CLI, and return the repairs and the compiler's warnings under `warnings`; `strict: true` turns the repairs off.
 - Fixed: an error inside an imported file of your own was reworded as a bug of a bundled standard module.
 
