@@ -312,12 +312,17 @@ fn structs(m: &Module, out: &mut String) {
 /// inside them: each gets a generated encoder `nyJE_<k>` and decoder `nyJD_<k>`.
 fn json_types(m: &Module) -> Vec<Ty> {
     fn add(m: &Module, t: Ty, v: &mut Vec<Ty>) {
-        if !matches!(t, Ty::Array(_) | Ty::Struct(_)) || v.contains(&t) {
+        if !matches!(t, Ty::Array(_) | Ty::Struct(_) | Ty::Map(_)) || v.contains(&t) {
             return;
         }
         v.push(t);
         match t {
             Ty::Array(_) => add(m, t.elem().expect("an array"), v),
+            Ty::Map(_) => {
+                let (k, e) = t.map_kv().expect("a map");
+                add(m, k, v);
+                add(m, e, v);
+            }
             _ => {
                 for (_, ft) in &m.structs.get(t).expect("a struct").fields {
                     add(m, *ft, v);
@@ -355,17 +360,160 @@ fn json_types(m: &Module) -> Vec<Ty> {
 fn jfn(json: &[Ty], t: Ty, enc: bool) -> String {
     let (rt, gen) = if enc { ("nyrt_jenc", "nyJE") } else { ("nyrt_jdec", "nyJD") };
     match t {
-        Ty::Array(_) | Ty::Struct(_) => format!("{gen}_{}", json.iter().position(|x| *x == t).expect("collected by json_types")),
+        Ty::Array(_) | Ty::Struct(_) | Ty::Map(_) => format!("{gen}_{}", json.iter().position(|x| *x == t).expect("collected by json_types")),
         _ => format!("{rt}_{}", rt_name(t)),
     }
 }
 
-/// The encoders and decoders of the arrays and structs in `json`.
+/// The statement that sets the lvalue `lv` (of type `t`) to the value that holds nothing: zero,
+/// an empty string, array or map, a struct of such.
+fn jdefault(json: &[Ty], t: Ty, lv: &str) -> String {
+    match t {
+        Ty::Int | Ty::Char => format!("{lv} = 0;"),
+        Ty::Float => format!("{lv} = 0.0;"),
+        Ty::Bool => format!("{lv} = false;"),
+        Ty::Str => format!("{lv} = nyrt_str_from(\"\", 0);"),
+        Ty::Array(_) => format!("{lv} = nyrt_arr_new({}, 0);", desc(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("{lv} = nyrt_map_new({}, {});", desc(k), desc(v))
+        }
+        _ => format!("nyJZ_{}(&{lv});", json.iter().position(|x| *x == t).expect("collected by json_types")),
+    }
+}
+
+/// The encoder and decoder of a tuple, an optional or an enum.
+fn json_special(m: &Module, json: &[Ty], k: usize, info: &StructInfo, n: &str, out: &mut String) {
+    let lit = |s: &str| format!("nyrt_buf_lit(b, {}, {});", string_lit(s), s.len());
+    let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
+    if info.tuple {
+        for (i, (_, ft)) in info.fields.iter().enumerate() {
+            let _ = writeln!(out, "    {}\n    {}(b, &v->{});", lit(if i == 0 { "[" } else { "," }), jfn(json, *ft, true), field(info, i));
+        }
+        let _ = writeln!(out, "    {}", lit("]"));
+    } else if info.option {
+        let _ = writeln!(
+            out,
+            "    if (!v->{}) {{ {} return; }}\n    {}(b, &v->{});",
+            field(info, 0),
+            lit("null"),
+            jfn(json, info.fields[1].1, true),
+            field(info, 1)
+        );
+    } else {
+        let _ = writeln!(out, "    switch (v->{}) {{", field(info, 0));
+        for (v, name) in info.variants.iter().enumerate() {
+            let q = crate::diag::json_str(name);
+            let _ = writeln!(out, "    case {v}:");
+            if info.payloads[v] == 0 {
+                let _ = writeln!(out, "        {}", lit(&q));
+            } else {
+                let _ = writeln!(out, "        {}", lit(&format!("{{{q}:[")));
+                for (j, i) in info.slots(v).enumerate() {
+                    if j > 0 {
+                        let _ = writeln!(out, "        {}", lit(","));
+                    }
+                    let _ = writeln!(out, "        {}(b, &v->{});", jfn(json, info.fields[i].1, true), field(info, i));
+                }
+                let _ = writeln!(out, "        {}", lit("]}"));
+            }
+            out.push_str("        break;\n");
+        }
+        out.push_str("    default: break;\n    }\n");
+    }
+    out.push_str("}\n");
+    let _ = writeln!(out, "static void nyJD_{k}(nyrt_jp *p, void *out) {{\n    {n} v = {{0}};");
+    if info.tuple {
+        let count = info.fields.len();
+        let _ = writeln!(out, "    nyrt_jfixed_open(p, {count});");
+        for (i, (_, ft)) in info.fields.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "    nyrt_jpush_index(p, {i});\n    {}(p, &v.{});\n    nyrt_jpop(p);\n    nyrt_jfixed_next(p, {count}, {});",
+                jfn(json, *ft, false),
+                field(info, i),
+                i + 1 == count
+            );
+        }
+    } else if info.option {
+        let _ = writeln!(
+            out,
+            "    if (nyrt_jnull(p)) {{\n        v.{} = false;\n        {}\n    }} else {{\n        v.{} = true;\n        {}(p, &v.{});\n    }}",
+            field(info, 0),
+            jdefault(json, info.fields[1].1, &format!("v.{}", field(info, 1))),
+            field(info, 0),
+            jfn(json, info.fields[1].1, false),
+            field(info, 1)
+        );
+    } else {
+        let tag = field(info, 0);
+        let ename = string_lit(&info.name);
+        let _ = writeln!(out, "    nyJZ_{k}(&v);\n    int c = nyrt_jstart(p);\n    if (c == '\"') {{\n        nyrt_str *s = nyrt_jstring(p);");
+        for (v, name) in info.variants.iter().enumerate().filter(|(v, _)| info.payloads[*v] == 0) {
+            let _ = writeln!(
+                out,
+                "        if (s->len == {} && memcmp(s->data, {}, {}) == 0) v.{tag} = {v};\n        else",
+                name.len(),
+                string_lit(name),
+                name.len()
+            );
+        }
+        let _ = writeln!(out, "        nyrt_jvariant(p, {ename});\n        nyrt_str_release(s);\n    }} else if (c == '{{') {{");
+        let _ = writeln!(out, "        if (!nyrt_jopen(p, '{{', \"\")) nyrt_jvariant(p, {ename});\n        nyrt_str *s = nyrt_jkey(p);");
+        for (v, name) in info.variants.iter().enumerate().filter(|(v, _)| info.payloads[*v] > 0) {
+            let count = info.payloads[v];
+            let _ = writeln!(
+                out,
+                "        if (s->len == {} && memcmp(s->data, {}, {}) == 0) {{\n            v.{tag} = {v};\n            nyrt_jpush_key(p, {});\n            nyrt_jfixed_open(p, {count});",
+                name.len(),
+                string_lit(name),
+                name.len(),
+                string_lit(name)
+            );
+            for (j, i) in info.slots(v).enumerate() {
+                let ft = info.fields[i].1;
+                let f = field(info, i);
+                let free = if m.managed(ft) { format!("{}\n            ", release(ft, &format!("v.{f}"))) } else { String::new() };
+                let _ = writeln!(
+                    out,
+                    "            nyrt_jpush_index(p, {j});\n            {free}{}(p, &v.{f});\n            nyrt_jpop(p);\n            nyrt_jfixed_next(p, {count}, {});",
+                    jfn(json, ft, false),
+                    j + 1 == count
+                );
+            }
+            out.push_str("            nyrt_jpop(p);\n        } else\n");
+        }
+        let _ = writeln!(
+            out,
+            "        nyrt_jvariant(p, {ename});\n        nyrt_str_release(s);\n        if (nyrt_jnext(p, '}}')) nyrt_jvariant(p, {ename});\n    }} else nyrt_jvariant(p, {ename});"
+        );
+    }
+    let _ = writeln!(out, "    *({n} *)out = v;\n}}");
+}
+
+/// The encoders and decoders of the arrays, maps and structs in `json`.
 fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
-    for k in 0..json.len() {
+    for (k, t) in json.iter().enumerate() {
         let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *v);\nstatic void nyJD_{k}(nyrt_jp *p, void *out);");
+        if matches!(t, Ty::Struct(_)) {
+            let _ = writeln!(out, "static void nyJZ_{k}(void *out);");
+        }
     }
     for (k, t) in json.iter().enumerate() {
+        if let Ty::Map(_) = t {
+            let (kt, vt) = t.map_kv().expect("a map");
+            let _ = writeln!(
+                out,
+                "static void nyJE_{k}(nyrt_buf *b, const void *v) {{ nyrt_jenc_map(b, v, {}, {}); }}\nstatic void nyJD_{k}(nyrt_jp *p, void *out) {{ nyrt_jdec_map(p, out, {}, {}, {}, {}); }}",
+                jfn(json, kt, true),
+                jfn(json, vt, true),
+                desc(kt),
+                desc(vt),
+                jfn(json, kt, false),
+                jfn(json, vt, false)
+            );
+            continue;
+        }
         if let Some(elem) = t.elem() {
             let _ = writeln!(
                 out,
@@ -378,9 +526,19 @@ fn json_funcs(m: &Module, json: &[Ty], out: &mut String) {
         }
         let info = m.structs.get(*t).expect("a struct");
         let n = ctype(*t);
+        // the value of the type that holds nothing (what the other variants' fields hold; the value of `none`)
+        let _ = writeln!(out, "static void nyJZ_{k}(void *out) {{\n    {n} v = {{0}};");
+        for (i, (_, ft)) in info.fields.iter().enumerate() {
+            let _ = writeln!(out, "    {}", jdefault(json, *ft, &format!("v.{}", field(info, i))));
+        }
+        let _ = writeln!(out, "    *({n} *)out = v;\n}}");
+        if !info.variants.is_empty() || info.tuple || info.option {
+            json_special(m, json, k, info, &n, out);
+            continue;
+        }
         let _ = writeln!(out, "static void nyJE_{k}(nyrt_buf *b, const void *p) {{\n    const {n} *v = p;\n    (void)v;");
         for (i, (fname, ft)) in info.fields.iter().enumerate() {
-            let key = format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
+            let key =format!("{}{}:", if i == 0 { "{" } else { "," }, crate::diag::json_str(fname));
             let _ = writeln!(
                 out,
                 "    nyrt_buf_lit(b, {}, {});\n    {}(b, &v->{});",

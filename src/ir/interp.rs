@@ -161,7 +161,7 @@ impl MapVal {
         Ok(self.index.get(&Self::key(k)?).and_then(|&i| self.ents[i].as_ref().map(|e| &e.1)))
     }
 
-    fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
+    pub(super) fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
         let key = Self::key(&k)?;
         if let Some(&i) = self.index.get(&key) {
             self.ents[i] = Some((k, v));
@@ -188,7 +188,7 @@ impl MapVal {
         Ok(())
     }
 
-    fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
         self.ents.iter().flatten()
     }
 }
@@ -537,7 +537,8 @@ impl<'m> Interp<'m> {
                         }
                     }
                 }
-                let ty = dst.map(|d| f.local(d).ty);
+                // (`json.str` needs the type of the value it writes, not of the text)
+                let ty = if *op == RtOp::JsonStr { args.first().map(|a| a.ty(f)) } else { dst.map(|d| f.local(d).ty) };
                 // (most operations have few operands: they go in a buffer on the stack)
                 let r = if args.len() <= 4 {
                     let mut buf = [Value::Unset, Value::Unset, Value::Unset, Value::Unset];
@@ -1108,7 +1109,8 @@ impl<'m> Interp<'m> {
             }
             RtOp::JsonStr => {
                 let mut out = String::new();
-                super::jsonrt::encode(m, args.first().ok_or_else(|| bug("json.str without a value"))?, &mut out);
+                let t = ty.ok_or_else(|| bug("json.str without a type"))?;
+                super::jsonrt::encode(m, t, args.first().ok_or_else(|| bug("json.str without a value"))?, &mut out);
                 self.tick(out.len() as u64)?;
                 text(out)
             }
