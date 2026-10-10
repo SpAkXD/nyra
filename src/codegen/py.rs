@@ -376,9 +376,7 @@ pub fn gen(m: &Module, file: &str) -> String {
                         format!("({}, [{}])", lit(vname), idx.concat())
                     })
                     .collect();
-                let _ = writeln!(out, "{c}.ny_jk = \"e\"
-{c}.ny_jn = {}
-{c}.ny_jv = [{}]", lit(&s.name), vs.join(", "));
+                let _ = writeln!(out, "{c}.ny_jk = \"e\"\n{c}.ny_jn = {}\n{c}.ny_jv = [{}]", lit(&s.name), vs.join(", "));
             }
         }
         out.push_str("\n\n");
