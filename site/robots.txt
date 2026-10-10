@@ -1,0 +1,5 @@
+# Nyra: https://nyralang.dev
+User-agent: *
+Allow: /
+
+Sitemap: https://nyralang.dev/sitemap.xml
