@@ -5261,21 +5261,6 @@ error[E0210]: cannot use `<` on `([int], int)` and `([int], int)`: `<` needs two
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
-==== tuple_map_key
-fn main() {
-    var seen: [(int, int): bool] = [:]
-    seen[(1, 2)] = true
-}
-----
-error[E0218]: a map key must be `int`, `str`, `char` or `bool`, found `(int, int)`
-  --> case.nyra:2:5
-  |
-2 |     var seen: [(int, int): bool] = [:]
-  |     ^
-  = hint: a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `"{x},{y}"`
-  = explain: nyra explain E0218
-
-nyra: 1 error(s)
 ==== format_spec_syntax
 fn main() {
     let x = 5
@@ -6256,5 +6241,20 @@ error[E0281]: this `match` does not cover `Dir.S`
   |             ^
   = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
   = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== tuple_map_key_float
+fn main() {
+    var seen: [(int, float): bool] = [:]
+    print(seen.len())
+}
+----
+error[E0218]: a map key must be `int`, `str`, `char`, `bool` or a tuple of those, found `(int, float)`
+  --> case.nyra:2:5
+  |
+2 |     var seen: [(int, float): bool] = [:]
+  |     ^
+  = hint: a tuple is a key when each of its parts is an `int`, `str`, `char`, `bool` or such a tuple: use an `int` that stands for a float part, or the text `str(x)`
+  = explain: nyra explain E0218
 
 nyra: 1 error(s)

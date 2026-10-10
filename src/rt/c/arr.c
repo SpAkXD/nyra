@@ -10,6 +10,7 @@ typedef struct nyrt_type {
     void (*fmt)(nyrt_buf *b, const void *elem);     // as an element: strings and chars quoted
     bool (*lt)(const void *a, const void *b);       // NULL: not sortable
     void (*keep)(void *elem);                       // `keep`: NULL for plain data
+    uint64_t (*hash)(const void *elem);             // a tuple used as a map key: NULL for the others
 } nyrt_type;
 typedef struct nyrt_arr { int64_t rc, len, cap; const nyrt_type *ty; char *data; } nyrt_arr;
 // The elements of an array as a C array of `T`: they always follow the header (`data` points there).

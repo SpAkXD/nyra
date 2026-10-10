@@ -1044,18 +1044,28 @@ impl Checker {
 
     /// A map key must be an `int`, `str`, `char` or `bool` (E0218).
     fn map_key(&mut self, k: Type, span: Span) -> bool {
-        if matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool) || k.is_unknown() {
+        fn key_type(k: Type) -> bool {
+            matches!(k, Type::Int | Type::Str | Type::Char | Type::Bool)
+                || k.is_unknown()
+                || k.tuple_elems().is_some_and(|es| es.into_iter().all(key_type))
+        }
+        if key_type(k) {
             return true;
         }
         let hint = match k {
             Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
             _ if k.is_tuple() => {
-                "a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `\"{x},{y}\"`".to_string()
+                "a tuple is a key when each of its parts is an `int`, `str`, `char`, `bool` or such a tuple: use an `int` that stands for a float part, or the text `str(x)`".to_string()
             }
             _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
         };
         self.errs.push(
-            Diag::new("E0218", format!("a map key must be `int`, `str`, `char` or `bool`, found `{}`", k.name()), span).hint(hint),
+            Diag::new(
+                "E0218",
+                format!("a map key must be `int`, `str`, `char`, `bool` or a tuple of those, found `{}`", k.name()),
+                span,
+            )
+            .hint(hint),
         );
         false
     }

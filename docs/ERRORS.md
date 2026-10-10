@@ -810,8 +810,8 @@ print(pos)
 
 ## E0218: map key type not allowed
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** A map type `[K: V]` has a key type other than `int`, `str`, `char` or `bool`, such as `[float: str]` or `[Point: int]`.
-- **Why Nyra has this rule:** A key must compare exactly and hash the same way on every backend. Floats do not (rounding, `NaN`, `-0.0`), and arrays and structs as keys would be compared by content on some hosts and by identity on others.
+- **What it means:** A map type `[K: V]` has a key type other than `int`, `str`, `char`, `bool` or a tuple of those (`(int, int)`, `(str, (int, char))`), such as `[float: str]`, `[Point: int]` or `[(int, float): str]`.
+- **Why Nyra has this rule:** A key must compare exactly and hash the same way on every backend. Floats do not (rounding, `NaN`, `-0.0`), and arrays and structs as keys would be compared by content on some hosts and by identity on others. A tuple of exact keys compares and hashes by its parts, the same everywhere.
 - **Common causes:**
   - a float key, such as a price or a coordinate
   - a struct or an array as the key, where a name or an id would do

@@ -14,13 +14,18 @@ typedef struct nyrt_map {
 } nyrt_map;
 
 static int64_t nyrt_align8(int64_t n) { return (n + 7) & ~(int64_t)7; }
+static uint64_t nyrt_str_hash(const nyrt_str *s) {
+    uint64_t h = 1469598103934665603ull;
+    for (int64_t i = 0; i < s->len; i++) { h ^= (unsigned char)s->data[i]; h *= 1099511628211ull; }
+    return h;
+}
+// The hash of a tuple: its parts mixed in order.
+static uint64_t nyrt_hash_mix(uint64_t h, uint64_t x) { h ^= x + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2); return h * 1099511628211ull; }
 static uint64_t nyrt_key_hash(const nyrt_type *kt, const void *k) {
     uint64_t h;
-    if (kt == &nyrt_T_str) {
-        const nyrt_str *s = *(nyrt_str *const *)k;
-        h = 1469598103934665603ull;
-        for (int64_t i = 0; i < s->len; i++) { h ^= (unsigned char)s->data[i]; h *= 1099511628211ull; }
-    } else if (kt == &nyrt_T_int) h = (uint64_t)*(const int64_t *)k;
+    if (kt == &nyrt_T_str) h = nyrt_str_hash(*(nyrt_str *const *)k);
+    else if (kt->hash) h = kt->hash(k);
+    else if (kt == &nyrt_T_int) h = (uint64_t)*(const int64_t *)k;
     else if (kt == &nyrt_T_char) h = *(const nyrt_char *)k;
     else h = *(const bool *)k;
     h ^= h >> 33; h *= 0xff51afd7ed558ccdull; h ^= h >> 33;

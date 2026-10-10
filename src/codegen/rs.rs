@@ -179,7 +179,9 @@ fn structs(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
         let n = name(&s.name);
         let copy = if s.managed { "" } else { "Copy, " };
-        let _ = writeln!(out, "#[derive(Clone, {copy}Default, PartialEq)]");
+        // a tuple of exact parts can be a key of a map
+        let key = if s.tuple && s.fields.iter().all(|(_, t)| key_part(m, *t)) { ", Eq, Hash" } else { "" };
+        let _ = writeln!(out, "#[derive(Clone, {copy}Default, PartialEq{key})]");
         if s.fields.is_empty() {
             let _ = writeln!(out, "struct {n} {{}}\n");
         } else {
@@ -1144,5 +1146,14 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+}
+
+/// True for a type that can be (a part of) a map key: `int`, `str`, `char`, `bool` or a tuple of those.
+fn key_part(m: &Module, t: Ty) -> bool {
+    match t {
+        Ty::Int | Ty::Str | Ty::Char | Ty::Bool => true,
+        Ty::Struct(_) => m.structs.get(t).is_some_and(|s| s.tuple && s.fields.iter().all(|(_, ft)| key_part(m, *ft))),
+        _ => false,
     }
 }

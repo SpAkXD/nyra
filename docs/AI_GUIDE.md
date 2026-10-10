@@ -347,7 +347,7 @@ Good to know:
 - A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
   `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
   `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
-  print as `(1, "a")`. A tuple cannot be a map key; `json` writes it as an array.
+  print as `(1, "a")`. A tuple of ints, strs, chars or bools (or such tuples) can be a map key, `var grid: [(int, int): char] = [:]`; `json` writes a tuple as an array.
 - Values are copies. `var b = a` copies an array, a string or a struct, and so does passing it to a
   function or storing it in another array; changing the copy never changes the original. Copies are
   cheap (the data is shared until one side changes). To let a function change the caller's variable,

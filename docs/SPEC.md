@@ -29,7 +29,7 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \0 \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
-| `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
+| `[K: V]` | map from `K` (`int`, `str`, `char`, `bool` or a tuple of those) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
 | `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
 | `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
@@ -341,8 +341,8 @@ A comma makes a tuple (`(a + b) * c` is still a grouping). The parts are fixed b
 not `(str, int)`, and `t.2` of a pair is E0273. A pattern must name every part (`_` skips one): a wrong
 count is E0272. Tuples are values like structs: they are copied, compare with `==` and `!=` by content, and
 `<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
-(or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
-int that stands for it); `json` writes one as an array.
+(or such a tuple). So `sort()` works on an array of them. A tuple whose parts are
+ints, strs, chars, bools or such tuples can be a map key (`[(int, int): str]`); `json` writes one as an array.
 
 ## Enums and `match`
 ```nyra

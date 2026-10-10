@@ -257,6 +257,11 @@ fn classes(m: &Module, out: &mut String) {
             .collect();
         let eq = if eqs.is_empty() { "True".to_string() } else { eqs.join(" and ") };
         let _ = writeln!(out, "\n    def __eq__(self, other) -> bool:\n        return {eq}");
+        // a tuple of exact parts can be a key of a map
+        if s.tuple && s.fields.iter().all(|(_, t)| key_part(m, *t)) {
+            let parts: Vec<String> = fields.iter().map(|f| format!("self.{f}")).collect();
+            let _ = writeln!(out, "\n    def __hash__(self) -> int:\n        return hash(({},))", parts.join(", "));
+        }
         let mut pieces = vec![Piece::Text(if s.tuple { "(".to_string() } else { format!("{}(", s.name) })];
         for (k, ((fname, t), f)) in s.fields.iter().zip(&fields).enumerate() {
             let sep = if k > 0 { ", " } else { "" };
@@ -591,7 +596,11 @@ impl<'a> Gen<'a> {
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrAppend => format!("ny_extend({target}, {})", a[0]),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
-                    RtOp::MapSet => format!("{target}[{}] = {}", a[0], self.owned(&args[1])),
+                    RtOp::MapSet => {
+                        // a tuple used as a key has one more owner: a later change of the variable it came from copies it
+                        let key = if matches!(self.ty(&args[0]), Ty::Struct(_)) { format!("ny_share({})", a[0]) } else { a[0].clone() };
+                        format!("{target}[{key}] = {}", self.owned(&args[1]))
+                    }
                     RtOp::MapRemove => format!("{target}.pop({}, None)", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
@@ -807,7 +816,14 @@ impl<'a> Gen<'a> {
             // a char is a one-character str: `[str]` and `[char]` join alike
             RtOp::ArrJoin => format!("{}.join({})", self.expr(&args[1]), a[0]),
             RtOp::MapNew => {
-                let items: Vec<String> = args.chunks(2).map(|p| format!("({}, {})", self.arg(&p[0]), self.owned(&p[1]))).collect();
+                let items: Vec<String> = args
+                    .chunks(2)
+                    .map(|p| {
+                        let key = self.arg(&p[0]);
+                        let key = if matches!(self.ty(&p[0]), Ty::Struct(_)) { format!("ny_share({key})") } else { key };
+                        format!("({key}, {})", self.owned(&p[1]))
+                    })
+                    .collect();
                 format!("NyDict([{}])", items.join(", "))
             }
             RtOp::MapGet | RtOp::MapGetOr => {
@@ -1000,5 +1016,14 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+}
+
+/// True for a type that can be (a part of) a map key: `int`, `str`, `char`, `bool` or a tuple of those.
+fn key_part(m: &Module, t: Ty) -> bool {
+    match t {
+        Ty::Int | Ty::Str | Ty::Char | Ty::Bool => true,
+        Ty::Struct(_) => m.structs.get(t).is_some_and(|s| s.tuple && s.fields.iter().all(|(_, ft)| key_part(m, *ft))),
+        _ => false,
     }
 }

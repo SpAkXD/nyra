@@ -503,8 +503,8 @@ impl Gen<'_> {
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
                     RtOp::ArrAppend => format!("ny_append({target}, {})", a[0]),
-                    RtOp::MapSet => format!("{target}.set({}, {})", a[0], self.owned(&args[1])),
-                    RtOp::MapRemove => format!("{target}.delete({})", a[0]),
+                    RtOp::MapSet => format!("{target}.set(ny_ik({}), {})", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.delete(ny_ik({}))", a[0]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
                 let line = self.assign(*dst, code);
@@ -874,7 +874,7 @@ impl Gen<'_> {
                     PureFn::CharIsLower => format!("ny_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
                     PureFn::MapLen => format!("{}.size", self.expr(&args[0])),
-                    PureFn::MapHas => format!("{}.has({})", self.expr(&args[0]), a[1]),
+                    PureFn::MapHas => format!("{}.has(ny_ik({}))", self.expr(&args[0]), a[1]),
                     PureFn::ArrLen => format!("{}.length", self.expr(&args[0])),
                     PureFn::ArrContains => format!("(ny_aindex({}, {}) >= 0)", a[0], a[1]),
                     PureFn::ArrIndexOf => format!("ny_aindex({}, {})", a[0], a[1]),

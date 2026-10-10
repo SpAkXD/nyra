@@ -207,12 +207,17 @@ fn structs(m: &Module, out: &mut String) {
         }
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b);");
         let _ = writeln!(out, "static void {n}_fmt(nyrt_buf *o, const void *p);");
+        let hashed = tuple_key(m, s);
+        if hashed {
+            let _ = writeln!(out, "static uint64_t {n}_hash(const void *p);");
+        }
         let (r, d, k) = if s.managed {
             (format!("{n}_retain"), format!("{n}_release"), format!("{n}_keep"))
         } else {
             ("NULL".into(), "NULL".into(), "NULL".into())
         };
-        let _ = writeln!(out, "static const nyrt_type nyT_{} = {{ sizeof({n}), {r}, {d}, {n}_eq, {n}_fmt, NULL, {k} }};", s.name);
+        let hash = if hashed { format!("{n}_hash") } else { "NULL".to_string() };
+        let _ = writeln!(out, "static const nyrt_type nyT_{} = {{ sizeof({n}), {r}, {d}, {n}_eq, {n}_fmt, NULL, {k}, {hash} }};", s.name);
     }
     for (_, s) in &m.structs.0 {
         let n = format!("nyS_{}", s.name);
@@ -242,6 +247,24 @@ fn structs(m: &Module, out: &mut String) {
                 }
             })
             .collect();
+        if tuple_key(m, s) {
+            let mut h = String::from("    uint64_t h = 1469598103934665603ull;
+");
+            for (k, (_, t)) in s.fields.iter().enumerate() {
+                let f = field(s, k);
+                let part = match t {
+                    Ty::Str => format!("nyrt_str_hash(v->{f})"),
+                    Ty::Struct(_) => format!("{}_hash(&v->{f})", ctype(*t)),
+                    _ => format!("(uint64_t)v->{f}"),
+                };
+                h += &format!("    h = nyrt_hash_mix(h, {part});
+");
+            }
+            let _ = writeln!(out, "static uint64_t {n}_hash(const void *p) {{
+    const {n} *v = p;
+{h}    return h;
+}}");
+        }
         let body = if eqs.is_empty() { "(void)x; (void)y; return true;".to_string() } else { format!("return {};", eqs.join(" && ")) };
         let _ = writeln!(out, "static bool {n}_eq(const void *a, const void *b) {{\n    const {n} *x = a, *y = b;\n    {body}\n}}");
         // `Point(x: 1, y: 2)`: the way the value is written in Nyra
@@ -1604,4 +1627,14 @@ fn stmt_ok(s: &Stmt, x: LocalId, u: &mut ArrUse) -> bool {
         StmtKind::Dup(l) | StmtKind::Drop(l) | StmtKind::Free(l) | StmtKind::Keep(l) => *l != x,
         StmtKind::Return(None) | StmtKind::Break | StmtKind::Continue => true,
     }
+}
+
+/// True for a tuple whose parts can be map keys (`int`, `str`, `char`, `bool` or such tuples): it gets a hash.
+fn tuple_key(m: &Module, s: &StructInfo) -> bool {
+    s.tuple
+        && s.fields.iter().all(|(_, t)| match t {
+            Ty::Int | Ty::Str | Ty::Char | Ty::Bool => true,
+            Ty::Struct(_) => m.structs.get(*t).is_some_and(|inner| tuple_key(m, inner)),
+            _ => false,
+        })
 }

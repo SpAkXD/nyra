@@ -296,7 +296,7 @@ function ny_jdec(p, d) {
                 p.path.push(n++);
                 ny_jfixed(p, 2, (i) => { if (i === 0) k = ny_jdec(p, d[1]); else x = ny_jdec(p, d[2]); });
                 p.path.pop();
-                m.set(k, x);
+                m.set(ny_ik(k), x);
             } while (ny_jnext(p, "]"));
         }
         return m;

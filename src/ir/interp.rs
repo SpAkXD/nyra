@@ -109,13 +109,14 @@ fn dismantle(mut work: Vec<Value>) {
     }
 }
 
-/// The key of a map entry: an int, a string, a char or a bool.
+/// The key of a map entry: an int, a string, a char or a bool, or a tuple of those.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum MapKey {
     Int(i64),
     Str(Rc<String>),
     Char(char),
     Bool(bool),
+    Tuple(Vec<MapKey>),
 }
 
 /// A map: entries in insertion order (a removed one is a gap until the next compaction) and an
@@ -142,7 +143,8 @@ impl MapVal {
             Value::Str(s) => MapKey::Str(s.clone()),
             Value::Char(c) => MapKey::Char(*c),
             Value::Bool(b) => MapKey::Bool(*b),
-            _ => return Err(bug("a map key that is not an int, str, char or bool")),
+            Value::Struct(_, items) => MapKey::Tuple(items.0.iter().map(Self::key).collect::<Result<Vec<_>, _>>()?),
+            _ => return Err(bug("a map key that is not an int, str, char, bool or a tuple of those")),
         })
     }
 
