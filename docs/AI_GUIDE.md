@@ -347,7 +347,7 @@ Good to know:
 - A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
   `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
   `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
-  print as `(1, "a")`. A tuple cannot be a map key or go through `json`.
+  print as `(1, "a")`. A tuple cannot be a map key; `json` writes it as an array.
 - Values are copies. `var b = a` copies an array, a string or a struct, and so does passing it to a
   function or storing it in another array; changing the copy never changes the original. Copies are
   cheap (the data is shared until one side changes). To let a function change the caller's variable,
@@ -713,7 +713,9 @@ fn main() {
 ```
 
 JSON is read into the type the value goes to (a typed `let`, a parameter, a field, `return`); a struct
-reads an object by field names, an array a list:
+reads an object by field names, an array a list. Every type has a JSON form: a tuple is an array, an optional
+the value or `null`, an enum variant its name (`"Empty"`) or `{"Rect":[1,2]}` with values, a map with `str`
+keys an object, a map with other keys an array of `[key,value]` pairs:
 
 ```rust
 use json

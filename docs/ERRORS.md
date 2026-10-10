@@ -2902,7 +2902,7 @@ fn main() {
 ## E0309: `json.parse` needs to know the type
 - **Kind:** compile error · **Since:** v0.5
 - **What it means:** `json.parse(text)` is used where nothing says which type to read. `json.parse` reads the type the value goes to: a `let` with a type, a parameter, a field, a `return` value or an assignment.
-- **Why Nyra has this rule:** JSON is read into ordinary Nyra values (ints, floats, strings, arrays and structs), checked against their type, so there is no untyped "JSON value" that every use would have to inspect. The type must therefore be known where the text is read.
+- **Why Nyra has this rule:** JSON is read into ordinary Nyra values (any type: ints, strings, arrays, structs, tuples, optionals, enums and maps), checked against their type, so there is no untyped "JSON value" that every use would have to inspect. The type must therefore be known where the text is read.
 - **Common causes:**
   - `let x = json.parse(text)` without a type
   - `print(json.parse(text))`: print takes values of any type
@@ -3398,12 +3398,13 @@ fn main() {
 
 ## E0345: JSON text does not fit
 - **Kind:** runtime error · **Since:** v0.5
-- **What it means:** `json.parse(text)` got text that is not JSON (`json.parse: invalid JSON at line 3: expected `,` or `}``), or JSON whose shape does not match the type it is read into (`json.parse: expected an int at $.items[2].count`, `json.parse: missing field "name" at $`). The path starts at `$`, the whole value.
+- **What it means:** `json.parse(text)` got text that is not JSON (`json.parse: invalid JSON at line 3: expected `,` or `}``), or JSON whose shape does not match the type it is read into (`json.parse: expected an int at $.items[2].count`, `json.parse: missing field "name" at $`, `json.parse: expected an array of 2 elements at $.pair` for a tuple, `json.parse: expected a variant of Shape: a name, or {"Name": [values]} at $.shape` for an enum). The path starts at `$`, the whole value.
 - **Why Nyra has this rule:** JSON is read straight into typed values, so every field a struct has must be there with the right type; fields the struct does not have are skipped. A mismatch stops the program instead of producing a value with holes, and the message says where.
 - **Common causes:**
   - a number written as a string in the JSON (`"age": "12"` for an `int`)
   - a float such as `1.5` where the type says `int`
-  - a missing field, or `null` (Nyra has no null)
+  - a missing field, or `null` where the type is not an optional (`int?` reads `null` as `none`)
+  - a tuple of the wrong length, or an enum written as something other than its name or `{"Name": [values]}`
   - a trailing comma, single quotes or comments, which JSON does not allow
 - **Wrong:**
 ```rust
