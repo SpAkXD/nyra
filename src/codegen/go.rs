@@ -342,8 +342,128 @@ fn jdec(t: Ty) -> String {
         Ty::Char => "nyJChar".into(),
         Ty::Str => "nyJStr".into(),
         Ty::Array(_) => format!("nyJArr({})", jdec(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            if k == Ty::Str {
+                format!("nyJMapObj({})", jdec(v))
+            } else {
+                format!("nyJMapPairs({}, {})", jdec(k), jdec(v))
+            }
+        }
         _ => format!("nyJD_{}", name(&t.struct_name().expect("a struct"))),
     }
+}
+
+/// The zero value of a type as the program makes it (empty arrays and maps, never a nil pointer).
+fn zero(m: &Module, t: Ty) -> String {
+    match t {
+        Ty::Int | Ty::Float => "0".into(),
+        Ty::Bool => "false".into(),
+        Ty::Char => "0".into(),
+        Ty::Str => "\"\"".into(),
+        Ty::Array(_) => format!("nyArray[{}]()", gotype(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("nyMOf([]{}{{}}, []{}{{}})", gotype(k), gotype(v))
+        }
+        _ => zero_struct(m, m.structs.get(t).expect("a struct")),
+    }
+}
+
+fn zero_struct(m: &Module, s: &crate::ir::StructInfo) -> String {
+    let fields: Vec<String> = s.fields.iter().map(|(f, t)| format!("{}: {}", name(f), zero(m, *t))).collect();
+    format!("{}{{{}}}", name(&s.name), fields.join(", "))
+}
+
+/// An enum: a variant without values is its name as a string, one with values is `{"Name": [values]}`.
+fn json_enum(m: &Module, s: &crate::ir::StructInfo, out: &mut String) {
+    let n = name(&s.name);
+    let tag = name(&s.fields[0].0);
+    let _ = writeln!(out, "\tswitch v.{tag} {{");
+    for (v, vn) in s.variants.iter().enumerate() {
+        if s.payloads[v] == 0 {
+            let _ = writeln!(out, "\tcase {v}:\n\t\tb.WriteString({})", lit(&crate::diag::json_str(vn)));
+            continue;
+        }
+        let _ = writeln!(out, "\tcase {v}:\n\t\tb.WriteString({})", lit(&format!("{{{}:[", crate::diag::json_str(vn))));
+        for (j, k) in s.slots(v).enumerate() {
+            if j > 0 {
+                out.push_str("\t\tb.WriteByte(',')\n");
+            }
+            let _ = writeln!(out, "\t\tnyJEnc(b, v.{})", name(&s.fields[k].0));
+        }
+        out.push_str("\t\tb.WriteString(\"]}\")\n");
+    }
+    out.push_str("\t}\n}\n\n");
+    let _ = writeln!(
+        out,
+        "func nyJD_{n}(p *nyJP) {n} {{\n\tv := {}\n\tn, obj := p.variant({})\n\tswitch {{",
+        zero_struct(m, s),
+        lit(&s.name)
+    );
+    for (v, vn) in s.variants.iter().enumerate() {
+        let obj = s.payloads[v] > 0;
+        let _ = writeln!(out, "\tcase n == {} && {}obj:\n\t\tv.{tag} = {v}", lit(vn), if obj { "" } else { "!" });
+        if obj {
+            let cnt = s.payloads[v];
+            let _ = writeln!(out, "\t\tp.path = append(p.path, {})\n\t\tp.seqOpen({cnt})", lit(&format!(".{vn}")));
+            for (j, k) in s.slots(v).enumerate() {
+                let (f, t) = &s.fields[k];
+                let _ = writeln!(
+                    out,
+                    "\t\tp.path = append(p.path, {})\n\t\tv.{} = {}(p)\n\t\tp.path = p.path[:len(p.path)-1]\n\t\tp.seqAfter({j}, {cnt})",
+                    lit(&format!("[{j}]")),
+                    name(f),
+                    jdec(*t)
+                );
+            }
+            let _ = writeln!(out, "\t\tp.path = p.path[:len(p.path)-1]\n\t\tp.variantEnd({})", lit(&s.name));
+        }
+    }
+    let _ = writeln!(out, "\tdefault:\n\t\tp.variantErr({})\n\t}}\n\treturn v\n}}\n", lit(&s.name));
+}
+
+/// A tuple is an array of its parts; an optional is `null` or the value.
+fn json_tuple_option(m: &Module, s: &crate::ir::StructInfo, out: &mut String) {
+    let n = name(&s.name);
+    if s.option {
+        let (has, _) = &s.fields[0];
+        let (val, t) = &s.fields[1];
+        let _ = writeln!(
+            out,
+            "\tif v.{} {{\n\t\tnyJEnc(b, v.{})\n\t}} else {{\n\t\tb.WriteString(\"null\")\n\t}}\n}}\n",
+            name(has),
+            name(val)
+        );
+        let _ = writeln!(
+            out,
+            "func nyJD_{n}(p *nyJP) {n} {{\n\tv := {}\n\tif p.start() == 'n' {{\n\t\tp.literal()\n\t}} else {{\n\t\tv.{} = true\n\t\tv.{} = {}(p)\n\t}}\n\treturn v\n}}\n",
+            zero_struct(m, s),
+            name(has),
+            name(val),
+            jdec(*t)
+        );
+        return;
+    }
+    let cnt = s.fields.len();
+    out.push_str("\tb.WriteByte('[')\n");
+    for (k, (f, _)) in s.fields.iter().enumerate() {
+        if k > 0 {
+            out.push_str("\tb.WriteByte(',')\n");
+        }
+        let _ = writeln!(out, "\tnyJEnc(b, v.{})", name(f));
+    }
+    let _ = writeln!(out, "\tb.WriteByte(']')\n}}\n\nfunc nyJD_{n}(p *nyJP) {n} {{\n\tvar v {n}\n\tp.seqOpen({cnt})");
+    for (k, (f, t)) in s.fields.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "\tp.path = append(p.path, {})\n\tv.{} = {}(p)\n\tp.path = p.path[:len(p.path)-1]\n\tp.seqAfter({k}, {cnt})",
+            lit(&format!("[{k}]")),
+            name(f),
+            jdec(*t)
+        );
+    }
+    out.push_str("\treturn v\n}\n\n");
 }
 
 /// How each struct is written as JSON (a method) and read from it (a function).
@@ -351,6 +471,14 @@ fn json_funcs(m: &Module, out: &mut String) {
     for (_, s) in &m.structs.0 {
         let n = name(&s.name);
         let _ = writeln!(out, "func (v {n}) nyJEnc(b *strings.Builder) {{");
+        if !s.variants.is_empty() {
+            json_enum(m, s, out);
+            continue;
+        }
+        if s.tuple || s.option {
+            json_tuple_option(m, s, out);
+            continue;
+        }
         for (k, (f, _)) in s.fields.iter().enumerate() {
             let key = format!("{}{}:", if k == 0 { "{" } else { "," }, crate::diag::json_str(f));
             let _ = writeln!(out, "\tb.WriteString({})\n\tnyJEnc(b, v.{})", lit(&key), name(f));
