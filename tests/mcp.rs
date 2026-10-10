@@ -509,6 +509,7 @@ const SLOW_BOUNDS: &str = "fn main() {
 ";
 const APPEND: &str = "use fs
 fn main() {
+    fs.write(\"mcp_auto_log.txt\", \"\")
     fs.append(\"mcp_auto_log.txt\", \"x\")
     print(fs.read(\"mcp_auto_log.txt\").len())
 }
@@ -533,19 +534,13 @@ fn nyra_run_answers_from_the_interpreter_and_falls_back_to_a_native_run() {
         init,
         run(2, SUM, ""),
         run(3, SLOW_BOUNDS, ""),
-        run(
-            4,
-            ECHO,
-            r#","stdin":"ab
-cd
-""#,
-        ),
+        run(4, ECHO, r#","stdin":"ab\ncd\n""#),
         run(5, APPEND, r#","allow":["fs"]"#),
     ];
     // within the budget: the interpreter answers (`mode`), with the fields of any run
     let fast = session(&requests);
-    // with a budget of 100 steps: the native executable answers, with the same results
-    let slow = session_with(&requests, &[("NYRA_AUTO_STEPS", "100")]);
+    // with a budget of 5 steps: the native executable answers, with the same results
+    let slow = session_with(&requests, &[("NYRA_AUTO_STEPS", "5")]);
     for id in [2, 3, 4] {
         let (is_error, a) = tool_json(&fast, id);
         let (_, b) = tool_json(&slow, id);

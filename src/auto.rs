@@ -407,10 +407,8 @@ pub fn run(opts: &Opts, prog: &Program, start: Instant) -> ExitCode {
         let _ = out.flush();
     }
     if let Some(e) = &report.error {
-        eprint!(
-            "{}\n",
-            native_text(sandbox::render_error(e, &opts.file, opts.json))
-        );
+        let text = format!("{}\n", sandbox::render_error(e, &opts.file, opts.json));
+        eprint!("{}", native_text(text));
     }
     if opts.time {
         eprintln!("nyra {} | interpreted {} ({} steps)", crate::ms(nyra_time), crate::ms(t.elapsed()), report.steps);
