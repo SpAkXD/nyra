@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Playground · Nyra</title>
+<meta name="description" content="Write Nyra in your browser and run it instantly. The real compiler, built to WebAssembly, checks as you type and runs programs in a sandbox: no install, no server.">
+<meta name="theme-color" content="#000714">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Nyra playground: run Nyra in your browser">
+<meta property="og:description" content="The real Nyra compiler as WebAssembly: errors as you type, a sandboxed run, fixes and formatting. No install.">
+<meta property="og:image" content="../social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../styles.css?v=play4">
+<link rel="stylesheet" href="play.css?v=play4">
+<script type="module" src="play.js?v=play4"></script>
+</head>
+<body class="pg-page">
+<a class="skip" href="#editor">Skip to the editor</a>
+
+<header class="nav" id="topbar">
+  <div class="nav-pill">
+    <span class="nav-bg" aria-hidden="true"></span>
+    <a class="brand" href="../" aria-label="Nyra, home">
+      <svg viewBox="0 0 424 140" width="76" height="25" role="img" aria-label="Nyra">
+        <defs>
+          <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22B8E8"/></linearGradient>
+          <linearGradient id="gw" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="270" y2="0"><stop offset="0" stop-color="#9C86FF"/><stop offset="1" stop-color="#5FA6FF"/></linearGradient>
+        </defs>
+        <g class="mk" transform="translate(8 12)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g class="wm" transform="translate(140 28)" fill="none" stroke="url(#gw)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M0 0V64M0 26A26 26 0 0 1 52 26V64"/>
+          <path d="M76 0V38A26 26 0 0 0 128 38V0M128 38V78A20 20 0 0 1 108 98H100"/>
+          <path d="M152 0V64M152 28A28 28 0 0 1 180 0"/>
+          <circle cx="238" cy="32" r="32"/>
+          <path d="M270 0V64"/>
+        </g>
+      </svg>
+    </a>
+    <nav class="nav-links" id="menu" aria-label="Site">
+      <a href="../#ideas">Design</a>
+      <a href="../#errors">Errors</a>
+      <a href="../#language">Language</a>
+      <a href="../#roadmap">Roadmap</a>
+      <a href="../#install">Install</a>
+      <a href="./" class="cur" aria-current="page">Playground</a>
+    </nav>
+    <a class="nav-gh" href="https://github.com/SpAkXD/nyra" rel="noopener" aria-label="Nyra on GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg><span class="gh-t">GitHub</span><span class="gh-a" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l5-5M4.5 3.5h4v4"/></svg></span></a>
+    <button class="nav-menu" type="button" aria-expanded="false" aria-controls="msheet"><span class="sr">Menu</span><i></i><i></i></button>
+  </div>
+</header>
+
+<div class="msheet" id="msheet" hidden>
+  <nav class="ms-links" aria-label="Site">
+    <a href="../" style="--k:0"><span>00</span>Home</a>
+    <a href="../#ideas" style="--k:1"><span>01</span>Design</a>
+    <a href="../#errors" style="--k:2"><span>02</span>Errors</a>
+    <a href="../#language" style="--k:3"><span>05</span>Language</a>
+    <a href="../#roadmap" style="--k:4"><span>07</span>Roadmap</a>
+    <a href="../#install" style="--k:5"><span>08</span>Install</a>
+    <a href="./" class="cur" style="--k:6"><span>09</span>Playground</a>
+  </nav>
+  <div class="ms-foot" style="--k:7">
+    <a class="btn btn-teal" href="https://github.com/SpAkXD/nyra" rel="noopener">View on GitHub</a>
+    <p>MIT license · Nyra v0.6</p>
+  </div>
+</div>
+
+<main id="main" class="ink">
+
+<section class="pg-hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="pg-eb rv"><span class="live" aria-hidden="true"></span>Playground <span class="pg-ver" id="ver">loading the compiler</span></p>
+    <h1 class="rv" style="--d:1">Write Nyra. <em>Run it here.</em></h1>
+    <p class="lead rv" style="--d:2">The real compiler, built to WebAssembly, checks your program as you type and runs it in a sandbox in this tab. No install, no server. The one capability granted is <code class="i">input</code>, from the stdin box.</p>
+  </div>
+</section>
+
+<section class="pg" aria-label="Playground">
+  <div class="pg-wrap">
+    <div class="pg-bar rv" style="--d:3">
+      <div class="pg-ex" role="group" aria-label="Examples">
+        <div class="pg-chips" id="chips"></div>
+      </div>
+      <div class="pg-acts">
+        <button class="pg-btn" type="button" id="fixBtn" disabled title="Apply every fix the compiler is certain about"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5a3 3 0 0 0-3.8 3.8L2.5 10.5a1.4 1.4 0 0 0 2 2l4.2-4.2a3 3 0 0 0 3.8-3.8l-1.8 1.8-1.6-.4-.4-1.6z"/></svg><span>Fix</span><b class="pg-n" id="fixN" hidden></b></button>
+        <button class="pg-btn" type="button" id="fmtBtn" title="Format (Shift+Alt+F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11M5.5 6.5h8M5.5 9.5h8M2.5 12.5h11"/></svg><span>Format</span></button>
+        <button class="pg-btn" type="button" id="shareBtn" title="Copy a link to this program"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 9.2a3 3 0 0 0 4.2 0l2-2a3 3 0 0 0-4.2-4.2l-.9.9M9.2 6.8a3 3 0 0 0-4.2 0l-2 2a3 3 0 0 0 4.2 4.2l.9-.9"/></svg><span>Share</span></button>
+        <button class="btn btn-teal pg-run" type="button" id="runBtn" title="Run (Ctrl+Enter)"><svg class="pl" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.2v9.6L12.5 8z"/></svg><span class="pg-spin" aria-hidden="true"></span><span class="lbl">Run</span><kbd aria-hidden="true">Ctrl ↵</kbd></button>
+      </div>
+    </div>
+    <p class="pg-note rv" style="--d:3" id="exNote" aria-live="polite"></p>
+
+    <div class="pg-grid rv" style="--d:4">
+      <div class="win pg-ed" id="edWin">
+        <div class="win-bar"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span><span>main.nyra</span><span class="badge" id="status" role="status">loading</span></div>
+        <div class="ed" id="ed">
+          <div class="ed-gut" aria-hidden="true"><div class="ed-nums" id="nums"></div></div>
+          <div class="ed-area">
+            <div class="ed-layer" id="layer" aria-hidden="true">
+              <div class="ed-lines" id="lines"></div>
+              <pre class="ed-hl" id="hl"></pre>
+              <div class="ed-marks" id="marks"></div>
+            </div>
+            <textarea class="ed-ta" id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Nyra program. Tab indents; press Escape, then Tab, to leave the editor." aria-describedby="probs"></textarea>
+          </div>
+        </div>
+        <div class="probs" id="probs" aria-live="polite"></div>
+      </div>
+
+      <div class="pg-side">
+        <div class="win pg-out">
+          <div class="win-bar">
+            <div class="pg-tabs" role="tablist" aria-label="Output">
+              <button role="tab" type="button" id="tabOut" aria-selected="true" aria-controls="panOut">Output</button>
+              <button role="tab" type="button" id="tabJs" aria-selected="false" aria-controls="panJs" tabindex="-1">JavaScript</button>
+            </div>
+            <span class="pg-meta" id="meta"></span>
+          </div>
+          <div class="pg-pan" role="tabpanel" id="panOut" aria-labelledby="tabOut">
+            <pre class="out" id="out" aria-live="polite"><span class="cmd">$ nyra run main.nyra --sandbox --allow input</span>
+<span class="dim">Press Run, or Ctrl+Enter.</span></pre>
+          </div>
+          <div class="pg-pan" role="tabpanel" id="panJs" aria-labelledby="tabJs" hidden>
+            <pre class="out code" id="jsOut"></pre>
+          </div>
+        </div>
+        <div class="win pg-in">
+          <div class="win-bar"><label for="stdin">stdin</label><span class="pg-hint">read with <code>use input</code></span></div>
+          <textarea class="pg-stdin" id="stdin" spellcheck="false" rows="4" wrap="off" placeholder="Lines for input.line() and input.lines()"></textarea>
+        </div>
+      </div>
+    </div>
+    <p class="pg-lim small" id="limits">Each run gets 100 million steps, 256 MB of memory, 1 MB of output, 5 seconds and 500 nested calls. A program that goes over stops with an error code, never with a frozen tab.</p>
+  </div>
+</section>
+
+<section class="pg-facts">
+  <div class="wrap facts">
+    <div class="fact rv"><span class="fi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><div><h3>The real compiler</h3><p>The same Rust source as the <code class="i">nyra</code> command, built to WebAssembly with no crates and no bindings generator: <span id="wasmSize">about 1.4 MB</span>.</p></div></div>
+    <div class="fact rv" style="--d:1"><span class="fi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><div><h3>Sandboxed by design</h3><p>Programs run in the interpreter of <code class="i">nyra run --sandbox</code>, in a worker, with limits on steps, memory, output, time and depth.</p></div></div>
+    <div class="fact rv" style="--d:2"><span class="fi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 17v4M17 19h4"/></svg></span><div><h3>Capabilities, live</h3><p>Only <code class="i">input</code> is granted here. A <code class="i">use fs</code> or <code class="i">use os</code> is error E0290 before anything runs: try the <em>use fs</em> example.</p></div></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot-bar ink">
+  <div class="wrap">
+    <div class="fb-top">
+      <div class="fb-brand">
+        <svg viewBox="0 0 112 112" width="40" height="40" role="img" aria-label="Nyra"><g transform="translate(8 8)"><rect width="96" height="96" rx="26" fill="url(#gm)"/><path d="M30 68V28L66 68V28" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+        <p>A small, strict programming language designed to be written by AI agents.</p>
+      </div>
+      <nav class="fb-cols" aria-label="Project links">
+        <div><p class="fb-h">Project</p><a href="https://github.com/SpAkXD/nyra" rel="noopener">GitHub</a><a href="https://github.com/SpAkXD/nyra/releases/latest" rel="noopener">Releases</a><a href="https://github.com/SpAkXD/nyra/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></div>
+        <div><p class="fb-h">Docs</p><a href="https://github.com/SpAkXD/nyra/blob/main/docs/SPEC.md" rel="noopener">Spec</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/AI_GUIDE.md" rel="noopener">AI guide</a><a href="https://github.com/SpAkXD/nyra/blob/main/docs/ERRORS.md" rel="noopener">Errors</a><a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt" rel="noopener">llms.txt</a></div>
+      </nav>
+      <a class="totop" href="#main"><span class="sr">Back to top</span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></a>
+    </div>
+    <div class="fb-bot"><p>MIT license · Nyra v0.6</p><p>Runs entirely in your browser.</p></div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
