@@ -55,7 +55,7 @@ const TOOLS: &str = r#"[
 {"name":"nyra_spec","title":"Nyra language spec","description":"The Nyra agent card (Markdown, about 1,400 tokens): one example program, the rules that differ from other languages, what is not in Nyra, every method and module name. Nyra is not in your training data: read it once before writing Nyra. full: true returns the complete language spec instead (about 8,000 tokens). part \"guide\" returns the AI guide: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"full":{"type":"boolean","description":"return the complete spec instead of the card (default false)"},"part":{"type":"string","enum":["spec","guide"],"description":"default spec (the card, or the complete spec with full: true)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
+{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. A program that ends within a few million steps is answered at once from the interpreter (\"mode\":\"interp\", no wait for the C compiler); one that runs longer, or that uses fs or os, runs as a native executable, with the same output. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
@@ -348,11 +348,42 @@ impl Server {
         };
 
         let start = Instant::now();
-        let source = match generate_granted(code, target, &grant)? {
-            Ok(source) => source,
-            Err(diags) => return Ok(diags),
+        let prog = match crate::compile_granted(code, &grant, &allow_flag) {
+            Ok(p) => p,
+            Err(diags) => return Ok(diag::render_json(&diags, FILE)),
         };
+        let module = crate::lower(&prog).map_err(tool_error)?;
+        let source = crate::emit(&module, target, FILE);
         let compile_ms = ms(start.elapsed());
+
+        // Auto mode, as in `nyra run` (see auto.rs): a program that has no build yet starts in the
+        // interpreter while the C compiler works in the background; one that finishes within the
+        // budget is answered at once, the others wait for the compiler and run natively.
+        let mut pending = None;
+        if target == Target::Native {
+            if let Some(compiler) = self.cc.get_or_insert_with(crate::find_cc).clone() {
+                let cached = crate::cc_lookup(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast).is_some();
+                if !cached && !crate::auto::effects(&module).world {
+                    let job = crate::auto::Job {
+                        compiler,
+                        code: source.clone(),
+                        stem: "main".into(),
+                        source: FILE.into(),
+                        dir: self.dir.clone(),
+                        opt: crate::Opt::Fast,
+                        capture: true,
+                    };
+                    let build = crate::auto::Build::spawn(job, crate::auto::DELAY);
+                    match crate::auto::attempt(&module, stdin.as_bytes().to_vec(), Vec::new(), SANDBOX_MEMORY, STDOUT_CAP as u64) {
+                        Some(report) => {
+                            build.cancel();
+                            return Ok(interpreted_json(&report, compile_ms, Some("interp")));
+                        }
+                        None => pending = Some(build),
+                    }
+                }
+            }
+        }
 
         let mut cc_ms = None;
         let mut cmd = if target == Target::Js {
@@ -364,8 +395,10 @@ impl Server {
             let compiler = self.cc.get_or_insert_with(crate::find_cc).clone().ok_or_else(|| {
                 tool_error("no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use backend \"js\"")
             })?;
-            let (exe, t) =
-                crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?;
+            let (exe, t) = match pending.take() {
+                Some(build) => build.finish().map_err(tool_error)?,
+                None => crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?,
+            };
             cc_ms = Some(t);
             Command::new(exe)
         };
@@ -640,6 +673,12 @@ fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Resul
     let module = sandbox::module(&prog).map_err(tool_error)?;
     let compile_ms = ms(start.elapsed());
     let report = sandbox::run(&module, cfg);
+    Ok(interpreted_json(&report, compile_ms, None))
+}
+
+/// The result of a program that ran in the interpreter: `ok`, `exit`, `stdout`, its runtime error,
+/// the steps and the times. `mode` says how a run that was not asked to be interpreted got here.
+fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&str>) -> String {
     let mut fields =
         vec![("ok", Json::from(report.exit == 0)), ("exit", Json::from(report.exit as i64)), ("stdout", report.stdout.clone().into())];
     if let Some(what) = &report.internal {
@@ -663,9 +702,12 @@ fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Resul
         }
     }
     fields.push(("steps", Json::from(report.steps as i64)));
+    if let Some(mode) = mode {
+        fields.push(("mode", mode.into()));
+    }
     let times = vec![("compile", compile_ms), ("run", Json::fixed(report.run_ms, 1))];
     fields.push(("ms", Json::Obj(times.into_iter().map(|(k, v)| (k.to_string(), v)).collect())));
-    Ok(Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string())
+    Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string()
 }
 
 fn build(args: &Json) -> Result<String, String> {

@@ -131,3 +131,96 @@ See `perf/README.md`. The cold error path of an overflow (and of an index check)
 now three, one of them the packed position. Recursion that gcc had stopped optimizing is
 optimized again (a `fib` that takes its argument from the command line takes 16 ms against 531 ms in C
 and 1406 ms before; what gcc does to it was not investigated); loops that do not recurse (`dp`, `sieve`, `structs`) lose at most 15% to the remaining checks.
+
+## 6. `nyra run` is automatic (v0.7)
+
+Section 2 ends with the floor: gcc's process startup, 0.5 s before the first line of a ten-line program. The
+interpreter of the IR (`src/ir/interp.rs`, used by `--interp` and the `ex` examples) starts in milliseconds
+but runs about 5 to 10 million steps a second, far below native code. `nyra run` now uses both
+(`src/auto.rs`, documented in SPEC.md, "How `nyra run` runs a program"):
+
+1. a cached native build of this exact source (-O1, else -O2) runs as it is;
+2. a program that uses `fs` or `os`, calls `time.sleep_ms`, or reads a terminal goes straight to the C compiler
+   (running it twice could repeat its effects; the interpreter does not wait);
+3. otherwise it starts in the interpreter, output kept in memory, standard input read to the end first (a pipe
+   that stays open for 40 ms is not waited for: the program then runs natively and gets its input as it
+   arrives), with a budget of 4,000,000 steps and 350 ms. The C compiler starts in a background thread 15 ms
+   in, so a program that is done by then never starts one. If the program ends in the budget, the compiler
+   (the whole process tree: a Job Object on Windows, a process group elsewhere) is killed and the output is
+   printed. If not, the kept output is dropped, the run waits for the compiler (which has been working
+   meanwhile) and starts the executable with the same input: the output appears once.
+
+An interpreter limit that is not the program's fault (memory over 256 MiB, output over 8 MiB, more than 20,000
+nested calls) or a panic or gap of the interpreter counts as running out of the budget. Without a C compiler
+the interpreter runs the program to its end. Windows writes `\n` as `\r\n` in the text mode of the compiled
+programs; the interpreter's output gets the same line ends there, so the bytes are the same in every mode
+(`tests/auto.rs` compares them for every example and runtime-error test, also after a forced fallback).
+
+### How the budget was chosen
+
+The cost of a fallback is the time the interpreter wasted beyond what the compiler needed anyway:
+`max(budget time, 15 ms + gcc) + run` against `gcc + run`. With gcc at 0.5 to 0.9 s, a budget that takes less
+than that in the interpreter is free on a machine with a spare core. Whole-command time, best of 3, with
+only a budget of steps (no time cap), the first version:
+
+| program (steps) | native | 1M | 2M | 4M | 8M | 16M |
+|---|---|---|---|---|---|---|
+| word_frequency (6 K) | 1089 | 22 | 21 | 22 | 21 | 21 |
+| fib_recursive (0.8 M) | 626 | 115 | 116 | 122 | 113 | 109 |
+| longest_collatz (3.8 M) | 529 | 555 | 558 | 417 | 417 | 438 |
+| sort_numbers (5.5 M) | 833 | 898 | 1005 | 1007 | 514 | 702 |
+| lcs_table (9.8 M) | 670 | 648 | 736 | 683 | 1138 | 1257 |
+| look_and_say (15 M) | 776 | 811 | 823 | 984 | 1194 | 1921 |
+| big_sieve (25 M) | 697 | 709 | 710 | 790 | 2107 | 4653 |
+| perf/fib (274 M) | 769 | 812 | 889 | 977 | 1590 | 2785 |
+| perf/strings (133 M) | 1888 | 1979 | 2326 | 3991 | 4388 | 4208 |
+
+Up to 4M steps the loss stays below about 0.2 s, and from 8M it grows with the budget. Steps are not alike,
+though: `perf/strings` costs many steps for one big string operation, and with 4M steps it took 4.0 s against
+1.9 s natively. So the budget has a second limit in real time (the interpreter's own time limit, E0359): 350 ms,
+less than the compiler needs. With both (4M steps, 350 ms) the worst case, a heavy program that falls back:
+
+| program (steps in the interpreter) | `--native` | auto (fallback) | extra |
+|---|---|---|---|
+| perf/fib (274 M) | 756 | 778 | +22 |
+| perf/structs (442 M) | 701 | 717 | +16 |
+| perf/strings (133 M) | 1549 | 1598 | +49 |
+| perf/dp (2 G) | 874 | 911 | +37 |
+| perf/sieve (1.2 G) | 965 | 940 | -25 |
+| perf/sort (207 M) | 1130 | 1139 | +9 |
+| int_nbody (20 M) | 761 | 805 | +44 |
+| matrix_mult (14 M) | 697 | 761 | +64 |
+| longest_collatz (3.8 M) | 535 | 560 | +25 |
+| sort_numbers (5.5 M) | 869 | 908 | +39 |
+
+(ms, whole command, cold cache; other build jobs shared the machine, so differences under about 50 ms are noise.)
+The fallback costs 15 to 65 ms, the 15 ms head start of the compiler and the extra load of running two jobs at once.
+
+### Time to first output, before and after
+
+`python perf/first_output.py -n 3 --markdown` (the whole command, best of 3, cold cache: the C compiler really
+runs for `--native`; `how` says what the auto run did):
+
+| program | before: cold `--native` | after: cold auto | how | steps | warm native (cached) | python | node (--js) |
+|---|---|---|---|---|---|---|---|
+| fizzbuzz | 512 | 16 | interp | 173 | 37 | 222 | 85 |
+| fib_recursive | 586 | 115 | interp | 818,455 | 34 | 236 | 88 |
+| word_frequency | 1086 | 18 | interp | 6,163 | 35 | 215 | 87 |
+| text_adventure | 1167 | 19 | interp | 4,806 | 36 | 229 | 88 |
+| spreadsheet_eval | 1118 | 26 | interp | 16,207 | 42 | 243 | 92 |
+| bank_ledger | 881 | 17 | interp | 1,054 | 37 | 220 | 87 |
+| binary_search | 609 | 17 | interp | 151 | 37 | 221 | 86 |
+| ackermann | 548 | 54 | interp | 212,206 | 38 | 244 | 89 |
+| v2/bracket_check | 713 | 16 | interp | 407 | 36 | 209 | 84 |
+| v2/edit_distance | 794 | 18 | interp | 1,657 | 39 | 226 | 88 |
+| v2/knapsack_best | 818 | 17 | interp | 560 | 35 | 223 | 87 |
+| v2/life_generations | 878 | 19 | interp | 8,063 | 37 | 227 | 86 |
+| look_and_say (15 M steps) | 820 | 857 | native | - | 133 | 764 | 187 |
+| big_sieve (25 M steps) | 688 | 727 | native | - | 51 | 1047 | 274 |
+
+Of the 83 reference programs of the benchmark, 76 take under 350 ms in the interpreter. Everything that
+finishes there is 16 to 120 ms (Windows process start is most of the 16 ms; Python needs 210 to 250 ms here),
+which is 5 to 60 times faster than before and several times faster than Python. A program that does not
+finish falls back for 15 to 65 ms more than a plain native run. In the interpreter the run is slower than the
+cached executable (a warm native start is 35 ms), but that is the case only for the program that was run just
+once; once the program has a cached build (after `--native`, `--release` or a fallback) `run` uses it.

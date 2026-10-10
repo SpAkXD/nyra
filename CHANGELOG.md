@@ -3,6 +3,18 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## Unreleased
+
+- **`nyra run` is automatic.** It used to wait about half a second for the C compiler before the first line of
+  output, even for a ten-line program. Now a cached build of the exact source runs as it is; any other program
+  starts in the interpreter with its output kept and a budget of 4,000,000 steps and 350 ms, while the C compiler starts in
+  the background after 15 ms. A program that ends within the budget prints at once (milliseconds); one that does
+  not is dropped and run natively with the same input, so its output appears once. Programs that use `fs` or
+  `os`, call `time.sleep_ms` or read a terminal always run natively; a program that answers a pipe as it goes is not made to wait
+  for the end of its input. Output, exit codes and runtime errors are the same in every mode. `--native` forces
+  the old way; `--release` implies it. Without a C compiler `run` interprets. The MCP tool `nyra_run` does the same
+  (`"mode":"interp"` in its reply when the interpreter answered). See research/SPEED-run.md for the numbers.
+
 ## v0.6.0 (2026-10-10)
 
 Language

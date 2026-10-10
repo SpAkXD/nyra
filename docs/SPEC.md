@@ -479,6 +479,35 @@ program runs in and use `/`. JSON objects are read into structs by field name (o
 every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
 outside (input, files, arguments) must be UTF-8.
 
+## How `nyra run` runs a program
+`nyra run` does not make you wait for the C compiler. It is *automatic*: a program that ends quickly is
+answered from the interpreter in milliseconds, one that runs long runs as a native executable, and the
+output is the same either way.
+
+1. If a native build of this exact source is already cached, it runs: nothing is faster.
+2. A program that uses `fs` or `os` (it could write a file or stop with a code), that calls
+   `time.sleep_ms` (the interpreter does not wait), or that reads a terminal, goes straight to the C
+   compiler: running it twice could repeat what it does.
+3. Any other program starts in the interpreter with its output kept in memory, a budget of 4,000,000
+   steps and 350 ms, and its standard input read to the end first. After 15 ms the C compiler starts in a background
+   thread, so its work overlaps with the interpreter's.
+   - If the program ends within the budget, the compiler is stopped, the output is printed and the exit
+     code is the program's: the whole run took milliseconds.
+   - If it does not (or it prints more than 8 MiB, needs more than 256 MiB, nests more than 20,000 calls,
+     or does something the interpreter cannot do), the kept output is thrown away, the run waits for the
+     compiler and starts the executable with the same standard input. The output appears once, from the
+     native run.
+
+The output, the exit code and the runtime errors (code, message, position, `--json`) are the same in every
+mode; only the time differs. `--native` skips the interpreter (the plain compile, then run); `--release`
+does too, and optimizes the C more (-O2, like `build`); `--interp`, `--sandbox` and the limit flags run in
+the interpreter only (see below). `--time` says which way a run went. A program that talks to a pipe and
+answers as its input arrives does not wait for the end of the input: when the end does not come within
+40 ms the program runs natively and gets the input as it arrives. Without a C compiler `run` interprets
+the program to its end. The budgets can be changed for tests with the environment variables
+`NYRA_AUTO_STEPS` and `NYRA_AUTO_WALL_MS` (and the delay of the compiler with `NYRA_AUTO_DELAY_MS`). The MCP tool `nyra_run` does
+the same when it is not asked to sandbox (its reply has `"mode":"interp"` when the interpreter answered).
+
 ## Capabilities and the sandbox
 A program says what it touches with its `use` lines, and a run decides what it may touch. The modules
 `json`, `math`, `text`, `time` and `random` are always available. The others are *effectful* and need a
