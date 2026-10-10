@@ -110,13 +110,14 @@ fn dismantle(mut work: Vec<Value>) {
     }
 }
 
-/// The key of a map entry: an int, a string, a char or a bool.
+/// The key of a map entry: an int, a string, a char or a bool, or a tuple of those.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum MapKey {
     Int(i64),
     Str(Rc<String>),
     Char(char),
     Bool(bool),
+    Tuple(Vec<MapKey>),
 }
 
 /// A map: entries in insertion order (a removed one is a gap until the next compaction) and an
@@ -143,7 +144,8 @@ impl MapVal {
             Value::Str(s) => MapKey::Str(s.clone()),
             Value::Char(c) => MapKey::Char(*c),
             Value::Bool(b) => MapKey::Bool(*b),
-            _ => return Err(bug("a map key that is not an int, str, char or bool")),
+            Value::Struct(_, items) => MapKey::Tuple(items.0.iter().map(Self::key).collect::<Result<Vec<_>, _>>()?),
+            _ => return Err(bug("a map key that is not an int, str, char, bool or a tuple of those")),
         })
     }
 
@@ -162,7 +164,7 @@ impl MapVal {
         Ok(self.index.get(&Self::key(k)?).and_then(|&i| self.ents[i].as_ref().map(|e| &e.1)))
     }
 
-    fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
+    pub(super) fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
         let key = Self::key(&k)?;
         if let Some(&i) = self.index.get(&key) {
             self.ents[i] = Some((k, v));
@@ -189,7 +191,7 @@ impl MapVal {
         Ok(())
     }
 
-    fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
         self.ents.iter().flatten()
     }
 }
@@ -538,7 +540,8 @@ impl<'m> Interp<'m> {
                         }
                     }
                 }
-                let ty = dst.map(|d| f.local(d).ty);
+                // (`json.str` needs the type of the value it writes, not of the text)
+                let ty = if *op == RtOp::JsonStr { args.first().map(|a| a.ty(f)) } else { dst.map(|d| f.local(d).ty) };
                 // (most operations have few operands: they go in a buffer on the stack)
                 let r = if args.len() <= 4 {
                     let mut buf = [Value::Unset, Value::Unset, Value::Unset, Value::Unset];
@@ -1109,7 +1112,8 @@ impl<'m> Interp<'m> {
             }
             RtOp::JsonStr => {
                 let mut out = String::new();
-                super::jsonrt::encode(m, args.first().ok_or_else(|| bug("json.str without a value"))?, &mut out);
+                let t = ty.ok_or_else(|| bug("json.str without a type"))?;
+                super::jsonrt::encode(m, t, args.first().ok_or_else(|| bug("json.str without a value"))?, &mut out);
                 self.tick(out.len() as u64)?;
                 text(out)
             }
@@ -1418,6 +1422,17 @@ fn show_in(m: &Module, v: &Value, out: &mut String, depth: usize) {
                 if let Value::Int(k) = &fields[0] {
                     if let Some(v) = info.variants.get(*k as usize) {
                         out.push_str(&format!("{}.{v}", info.name));
+                        // `Shape.Circle(2)`: the values of the variant
+                        if info.payloads.get(*k as usize).is_some_and(|n| *n > 0) {
+                            out.push('(');
+                            for (j, slot) in info.slots(*k as usize).enumerate() {
+                                if j > 0 {
+                                    out.push_str(", ");
+                                }
+                                show_in(m, &fields[slot], out, depth + 1);
+                            }
+                            out.push(')');
+                        }
                         return;
                     }
                 }

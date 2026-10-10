@@ -1,0 +1,6 @@
+// expect: E0222
+enum Tree { Leaf(int), Node(Tree, Tree) }
+
+fn main() {
+    print(Tree.Leaf(1))
+}

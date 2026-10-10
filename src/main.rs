@@ -999,8 +999,14 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool, killer: Opti
         Ok(out) => {
             let text = String::from_utf8_lossy(&out.stderr);
             let short: String = text.trim().chars().take(2000).collect();
-            Err(if short.is_empty() { failed } else { format!("{failed}:
-{short}") })
+            Err(if short.is_empty() {
+                failed
+            } else {
+                format!(
+                    "{failed}:
+{short}"
+                )
+            })
         }
         Err(_) => Err(failed),
     }
@@ -1025,8 +1031,14 @@ fn cc_killable(mut cmd: Command, killer: &auto::Killer, capture: bool, t: Instan
         Ok(out) => {
             let text = String::from_utf8_lossy(&out.stderr);
             let short: String = text.trim().chars().take(2000).collect();
-            Err(if short.is_empty() { failed } else { format!("{failed}:
-{short}") })
+            Err(if short.is_empty() {
+                failed
+            } else {
+                format!(
+                    "{failed}:
+{short}"
+                )
+            })
         }
         Err(_) => Err(failed),
     }

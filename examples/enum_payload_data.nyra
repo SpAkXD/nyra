@@ -1,0 +1,32 @@
+// Enum variants that carry arrays, tuples, optionals, structs and enums.
+struct P { x: int, y: int }
+enum Inner { A(int), B }
+enum Big {
+    Items([str])
+    Pair((int, str))
+    Maybe(int?)
+    At(P)
+    Wrap(Inner)
+    Grid([[int]], str)
+    Nothing
+}
+
+fn show(b: Big) -> str {
+    match b {
+        Big.Items(xs) => return "items {xs.len()} {xs.join("+")}"
+        Big.Pair(p) => return "pair {p.0} {p.1}"
+        Big.Maybe(m) => return "maybe {m ?? -1}"
+        Big.At(p) => return "at {p.x},{p.y}"
+        Big.Wrap(i) => return "wrap {i}"
+        Big.Grid(g, s) => return "grid {g.len()} {s}"
+        Big.Nothing => return "nothing"
+    }
+}
+let all = [Big.Items(["a", "b"]), Big.Pair((1, "z")), Big.Maybe(none), Big.Maybe(5), Big.At(P(x: 1, y: 2)), Big.Wrap(Inner.B), Big.Grid([[1], [2, 3]], "g"), Big.Nothing]
+for b in all {
+    print(b, show(b))
+}
+var v = Big.Items(["q"])
+let w = v
+v = Big.Items(["r", "s"])
+print(v, w, v == w, w == Big.Items(["q"]))

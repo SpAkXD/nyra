@@ -10,6 +10,11 @@
 //!
 //! Programs are compiled in-process with the same pipeline as the CLI. Generated files and cached
 //! executables live in a temp dir of their own per server process, removed when stdin closes.
+//!
+//! A program is given as `code` (one file) or as `files`, a map from file names to text (`main.nyra`
+//! and the files it imports with `use ./name`). Like the CLI, the tools repair an error that has
+//! exactly one certain fix in memory and report each repair under `warnings`; `strict: true` turns
+//! that off.
 
 use std::io::{BufRead, Read, Write};
 use std::path::PathBuf;
@@ -18,7 +23,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::json::{obj, Json};
-use crate::{caps, diag, examples, explain, sandbox, Target};
+use crate::{ast, caps, diag, examples, explain, fix, modules, perfwarn, sandbox, Target};
 
 /// The name programs get in diagnostics and runtime errors.
 const FILE: &str = "main.nyra";
@@ -53,11 +58,11 @@ Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full en
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
 {"name":"nyra_spec","title":"Nyra language spec","description":"The Nyra agent card (Markdown, about 1,400 tokens): one example program, the rules that differ from other languages, what is not in Nyra, every method and module name. Nyra is not in your training data: read it once before writing Nyra. full: true returns the complete language spec instead (about 8,000 tokens). part \"guide\" returns the AI guide: workflow, do/don't rules, error codes with fixes, recipes, complete programs.","inputSchema":{"type":"object","properties":{"full":{"type":"boolean","description":"return the complete spec instead of the card (default false)"},"part":{"type":"string","enum":["spec","guide"],"description":"default spec (the card, or the complete spec with full: true)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program. Returns {ok,exit,stdout,stderr?,errors?,timeout?,truncated?,ms}. A program that ends within a few million steps is answered at once from the interpreter (\"mode\":\"interp\", no wait for the C compiler); one that runs longer, or that uses fs or os, runs as a native executable, with the same output. Compile errors come back as from nyra_check; a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":["code"]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
+{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program (code, or files for a program of several files) without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}],\"warnings\":[..]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. An error with exactly one certain fix is repaired in memory and listed under warnings (with the fix edits), unless strict is true. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check (repairs included).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program (code, or files for several files). Returns {ok,exit,stdout,stderr?,errors?,warnings?,timeout?,truncated?,ms}. A program that ends within a few million steps is answered at once from the interpreter (\"mode\":\"interp\", no wait for the C compiler); one that runs longer, or that uses fs or os, runs as a native executable, with the same output. Compile errors come back as from nyra_check, and an error with one certain fix is repaired in memory first (listed under warnings; strict: true turns that off); a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":[]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program and return the generated source: {ok,target,source}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":["code"]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
+{"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program (code, or files) and return the generated source: {ok,target,source,warnings?}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
 
 const USAGE: &str = "\
@@ -261,12 +266,12 @@ impl Server {
                 }
                 let out = self.isolated(|server| match name {
                     "nyra_spec" => spec(args),
-                    "nyra_check" => check(args),
-                    "nyra_test" => test(args),
+                    "nyra_check" => check(server, args),
+                    "nyra_test" => test(server, args),
                     "nyra_run" => server.run_tool(args),
                     "nyra_explain" => explain_tool(args),
-                    "nyra_build" => build(args),
-                    _ => crate::edit::tool(name, args),
+                    "nyra_build" => build(server, args),
+                    _ => crate::edit::tool(name, args, &server.dir),
                 });
                 let (text, is_error) = match out {
                     Ok(text) => (text, false),
@@ -328,7 +333,8 @@ impl Server {
     // ---- nyra_run ---------------------------------------------------------------------------------
 
     fn run_tool(&mut self, args: &Json) -> Result<String, String> {
-        let code = required_str(args, "code")?;
+        let program = self.program(args)?;
+        let strict = arg_bool(args, "strict")?;
         let target = match optional_str(args, "backend")? {
             None | Some("native") => Target::Native,
             Some("js") => Target::Js,
@@ -337,7 +343,7 @@ impl Server {
         let stdin = optional_str(args, "stdin")?.unwrap_or("");
         let grant = grant_of(args)?;
         if matches!(args.get("sandbox"), Some(Json::Bool(true))) {
-            return sandboxed(args, code, stdin, &grant);
+            return sandboxed(args, &program, stdin, &grant, strict);
         }
         let timeout = match args.get("timeout_ms") {
             None | Some(Json::Null) => TIMEOUT_MS,
@@ -348,13 +354,16 @@ impl Server {
         };
 
         let start = Instant::now();
-        let prog = match crate::compile_granted(code, &grant, &allow_flag) {
-            Ok(p) => p,
-            Err(diags) => return Ok(diag::render_json(&diags, FILE)),
+        let c = match compile_tool(&program, &grant, strict, true) {
+            Ok(c) => c,
+            Err(diags) => return Ok(diag::render_json(&diags, &program.name)),
         };
-        let module = crate::lower(&prog).map_err(tool_error)?;
-        let source = crate::emit(&module, target, FILE);
+        perfwarn::check(&c.prog, false);
+        let applied = c.applied;
+        let module = crate::lower(&c.prog).map_err(tool_error)?;
+        let source = crate::emit(&module, target, &program.name);
         let compile_ms = ms(start.elapsed());
+        let file = program.name.clone();
 
         // Auto mode, as in `nyra run` (see auto.rs): a program that has no build yet starts in the
         // interpreter while the C compiler works in the background; one that finishes within the
@@ -362,13 +371,13 @@ impl Server {
         let mut pending = None;
         if target == Target::Native {
             if let Some(compiler) = self.cc.get_or_insert_with(crate::find_cc).clone() {
-                let cached = crate::cc_lookup(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast).is_some();
+                let cached = crate::cc_lookup(&compiler, &source, "main", &file, &self.dir, crate::Opt::Fast).is_some();
                 if !cached && !crate::auto::effects(&module).world {
                     let job = crate::auto::Job {
                         compiler,
                         code: source.clone(),
                         stem: "main".into(),
-                        source: FILE.into(),
+                        source: file.clone(),
                         dir: self.dir.clone(),
                         opt: crate::Opt::Fast,
                         capture: true,
@@ -377,7 +386,13 @@ impl Server {
                     match crate::auto::attempt(&module, stdin.as_bytes().to_vec(), Vec::new(), SANDBOX_MEMORY, STDOUT_CAP as u64) {
                         Some(report) => {
                             build.cancel();
-                            return Ok(interpreted_json(&report, compile_ms, Some("interp")));
+                            return Ok(interpreted_json(
+                                &report,
+                                compile_ms,
+                                Some("interp"),
+                                &file,
+                                warnings_value(&program, &applied),
+                            ));
                         }
                         None => pending = Some(build),
                     }
@@ -397,7 +412,7 @@ impl Server {
             })?;
             let (exe, t) = match pending.take() {
                 Some(build) => build.finish().map_err(tool_error)?,
-                None => crate::cc_cached(&compiler, &source, "main", FILE, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?,
+                None => crate::cc_cached(&compiler, &source, "main", &file, &self.dir, crate::Opt::Fast, true).map_err(tool_error)?,
             };
             cc_ms = Some(t);
             Command::new(exe)
@@ -429,7 +444,7 @@ impl Server {
             errors.push(obj([
                 ("code", "E0249".into()),
                 ("message", msg.into()),
-                ("file", FILE.into()),
+                ("file", file.as_str().into()),
                 ("line", Json::from(0)),
                 ("col", Json::from(0)),
                 ("hint", "the program needs more memory than the system gave it".into()),
@@ -447,6 +462,9 @@ impl Server {
         }
         if !errors.is_empty() {
             fields.push(("errors", errors.into()));
+        }
+        if let Some(w) = warnings_value(&program, &applied) {
+            fields.push(("warnings", w));
         }
         if let Some(sig) = ran.signal {
             fields.push(("signal", Json::from(sig as i64)));
@@ -563,10 +581,6 @@ fn optional_str<'a>(args: &'a Json, key: &str) -> Result<Option<&'a str>, String
     }
 }
 
-fn required_str<'a>(args: &'a Json, key: &str) -> Result<&'a str, String> {
-    optional_str(args, key)?.ok_or_else(|| tool_error(format!("missing argument `{key}`")))
-}
-
 fn spec(args: &Json) -> Result<String, String> {
     let full = match args.get("full") {
         None | Some(Json::Null) => false,
@@ -602,46 +616,279 @@ fn allow_flag(cap: &str) -> String {
     format!("grant it by passing allow: [\"{cap}\"] to the tool")
 }
 
-fn check(args: &Json) -> Result<String, String> {
-    let code = required_str(args, "code")?;
+fn arg_bool(args: &Json, key: &str) -> Result<bool, String> {
+    match args.get(key) {
+        None | Some(Json::Null) => Ok(false),
+        Some(Json::Bool(b)) => Ok(*b),
+        Some(_) => Err(tool_error(format!("argument `{key}` must be true or false"))),
+    }
+}
+
+// ---- the program of a call -------------------------------------------------------------------------
+
+/// The most files, and the most text, a call may send.
+const MAX_FILES: usize = 100;
+const MAX_FILES_BYTES: usize = 4 << 20;
+
+/// The program a tool call works on: the text of the file that is compiled (`src`), the name that
+/// messages call it, and, for a program of several files, the folder they were written to (removed
+/// when this value is dropped).
+pub(crate) struct Program {
+    pub(crate) src: String,
+    pub(crate) name: String,
+    root: Option<Root>,
+}
+
+struct Root {
+    dir: PathBuf,
+    entry: PathBuf,
+}
+
+impl Drop for Root {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+impl Program {
+    /// Tells the loader where the imports of the file are (call it on the thread that compiles).
+    pub(crate) fn enter(&self) {
+        if let Some(r) = &self.root {
+            modules::set_main(Some(&r.entry));
+        }
+    }
+
+    /// The files named in `diags` are shown relative to the program's folder.
+    fn localize(&self, diags: &mut [diag::Diag]) {
+        let Some(r) = &self.root else { return };
+        let prefix = format!("{}/", r.dir.display().to_string().replace('\\', "/"));
+        for d in diags {
+            if let Some(f) = d.file.as_mut() {
+                let shown = f.replace('\\', "/");
+                *f = shown.strip_prefix(&prefix).unwrap_or(&shown).to_string();
+            }
+            d.msg = d.msg.replace(&prefix, "");
+            if let Some(h) = d.hint.as_mut() {
+                *h = h.replace(&prefix, "");
+            }
+        }
+    }
+}
+
+/// A file name of a program given as `files`: relative, with `/`, ending in `.nyra`.
+fn valid_file_name(name: &str) -> bool {
+    name.ends_with(".nyra")
+        && !name.starts_with('/')
+        && !name.contains(['\\', ':', '\0'])
+        && name.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
+impl Server {
+    /// The program of a call: `code`, or `files` (written to a folder of their own, so that
+    /// `use ./name` finds them).
+    fn program(&self, args: &Json) -> Result<Program, String> {
+        program_in(&self.dir, args, optional_str(args, "entry")?)
+    }
+}
+
+/// The program of a call, written (for `files`) to a new folder below `dir`. `entry` names the file
+/// of `files` that is compiled; without it that is `main.nyra`, or the only file.
+pub(crate) fn program_in(dir: &std::path::Path, args: &Json, entry: Option<&str>) -> Result<Program, String> {
+    {
+        let code = optional_str(args, "code")?;
+        let files = match args.get("files") {
+            None | Some(Json::Null) => None,
+            Some(Json::Obj(items)) => Some(items),
+            Some(_) => return Err(tool_error("argument `files` must be an object: file name -> text")),
+        };
+        let items = match (code, files) {
+            (Some(_), Some(_)) => return Err(tool_error("give either `code` or `files`, not both")),
+            (None, None) => return Err(tool_error("missing argument `code` (the program) or `files` (a program of several files)")),
+            (Some(code), None) => return Ok(Program { src: code.to_string(), name: FILE.to_string(), root: None }),
+            (None, Some(items)) => items,
+        };
+        if items.is_empty() {
+            return Err(tool_error("`files` is empty"));
+        }
+        if items.len() > MAX_FILES {
+            return Err(tool_error(format!("`files` has {} files: at most {MAX_FILES}", items.len())));
+        }
+        let mut files: Vec<(&str, &str)> = Vec::new();
+        for (name, text) in items {
+            let Json::Str(text) = text else {
+                return Err(tool_error(format!("the text of `{name}` in `files` must be a string")));
+            };
+            if !valid_file_name(name) {
+                return Err(tool_error(format!(
+                    "`{name}` is not a file name Nyra imports: write a relative name with `/` that ends in .nyra, e.g. \"shapes.nyra\" or \"util/text.nyra\""
+                )));
+            }
+            files.push((name, text));
+        }
+        if files.iter().map(|(_, t)| t.len()).sum::<usize>() > MAX_FILES_BYTES {
+            return Err(tool_error(format!("`files` holds more than {} MiB of text", MAX_FILES_BYTES >> 20)));
+        }
+        let names: Vec<&str> = files.iter().map(|(n, _)| *n).collect();
+        let entry = match entry {
+            Some(e) => e,
+            None if names.contains(&"main.nyra") => "main.nyra",
+            None if names.len() == 1 => names[0],
+            None => {
+                return Err(tool_error(format!(
+                    "`files` has no main.nyra: name the file to run with `entry` (the files are {})",
+                    names.join(", ")
+                )))
+            }
+        };
+        let Some((_, src)) = files.iter().find(|(n, _)| *n == entry) else {
+            return Err(tool_error(format!("`entry` is `{entry}`, which is not one of the files ({})", names.join(", "))));
+        };
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = dir.join(format!("proj-{}", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        let _ = std::fs::remove_dir_all(&dir);
+        // the folder is removed when `root` is dropped, also when writing a file fails
+        let root = Root { entry: dir.join(entry), dir };
+        for (name, text) in &files {
+            let path = root.dir.join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| tool_error(format!("cannot write the files: {e}")))?;
+            }
+            std::fs::write(&path, text).map_err(|e| tool_error(format!("cannot write `{name}`: {e}")))?;
+        }
+        Ok(Program { src: src.to_string(), name: entry.to_string(), root: Some(root) })
+    }
+}
+
+// ---- compiling with repairs -----------------------------------------------------------------------------
+
+/// A program that compiled, and the repairs it needed.
+struct Compiled {
+    prog: ast::Program,
+    applied: Vec<fix::Applied>,
+}
+
+/// Compiles `program` like the CLI: an error with exactly one certain fix is repaired in memory, and
+/// each repair is reported (unless `strict`). With `full` the examples run too; without it only the
+/// front half runs (`nyra_test` runs the examples itself). The diagnostics name files relative to
+/// the program's folder.
+fn compile_tool(program: &Program, grant: &caps::Grant, strict: bool, full: bool) -> Result<Compiled, Vec<diag::Diag>> {
+    program.enter();
+    let build = |s: &str| -> Result<ast::Program, Vec<diag::Diag>> {
+        if full {
+            return crate::compile_granted(s, grant, &allow_flag);
+        }
+        let prog = crate::front(s)?;
+        let errs = caps::enforce(&prog, grant, allow_flag);
+        if errs.is_empty() {
+            Ok(prog)
+        } else {
+            Err(errs)
+        }
+    };
+    let result = match build(&program.src) {
+        Ok(prog) => Ok(Compiled { prog, applied: Vec::new() }),
+        Err(diags) if strict => Err(diags),
+        Err(diags) => match fix::repair(&program.src, diags.clone(), build) {
+            Some(r) => Ok(Compiled { prog: r.value, applied: r.applied }),
+            None => Err(diags),
+        },
+    };
+    result.map_err(|mut diags| {
+        program.localize(&mut diags);
+        diags
+    })
+}
+
+/// The `warnings` of a call: the warnings of the compiler (`${x}` in a string, slow patterns) and the
+/// repairs that were applied. `None` when there are none.
+fn warnings_value(program: &Program, applied: &[fix::Applied]) -> Option<Json> {
+    let mut w = diag::warnings();
+    program.localize(&mut w);
+    let mut items: Vec<Json> = Vec::new();
+    if !w.is_empty() {
+        items.extend(
+            Json::parse(&diag::render_json_errors(&w, &program.name))
+                .ok()
+                .and_then(|j| j.as_array().map(<[Json]>::to_vec))
+                .unwrap_or_default(),
+        );
+    }
+    if !applied.is_empty() {
+        items.extend(
+            Json::parse(&diag::render_json_warnings(applied, &program.name))
+                .ok()
+                .and_then(|j| j.as_array().map(<[Json]>::to_vec))
+                .unwrap_or_default(),
+        );
+    }
+    (!items.is_empty()).then_some(Json::Arr(items))
+}
+
+/// `{"ok":true,"errors":[],"warnings":[..]}` for a program that compiled.
+fn ok_json(program: &Program, applied: &[fix::Applied]) -> String {
+    let mut fields = vec![("ok", Json::from(true)), ("errors", Json::Arr(Vec::new()))];
+    if let Some(w) = warnings_value(program, applied) {
+        fields.push(("warnings", w));
+    }
+    Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string()
+}
+
+fn check(server: &Server, args: &Json) -> Result<String, String> {
+    let program = server.program(args)?;
     let grant = grant_of(args)?;
-    Ok(match crate::compile_granted(code, &grant, &allow_flag) {
-        Ok(_) => diag::render_json(&[], FILE),
-        Err(diags) => diag::render_json(&diags, FILE),
+    Ok(match compile_tool(&program, &grant, arg_bool(args, "strict")?, true) {
+        Ok(c) => {
+            perfwarn::check(&c.prog, false);
+            ok_json(&program, &c.applied)
+        }
+        Err(diags) => diag::render_json(&diags, &program.name),
     })
 }
 
 /// The examples of a program: the JSON of `nyra test --json`.
-fn test(args: &Json) -> Result<String, String> {
-    let code = required_str(args, "code")?;
+fn test(server: &Server, args: &Json) -> Result<String, String> {
+    let program = server.program(args)?;
     let grant = grant_of(args)?;
-    Ok(match crate::front(code) {
-        Ok(mut prog) => match caps::enforce(&prog, &grant, allow_flag) {
-            denied if !denied.is_empty() => diag::render_json(&denied, FILE),
-            _ => examples::json(&examples::run(&mut prog), FILE),
-        },
-        Err(diags) => diag::render_json(&diags, FILE),
+    Ok(match compile_tool(&program, &grant, arg_bool(args, "strict")?, false) {
+        Ok(mut c) => {
+            perfwarn::check(&c.prog, false);
+            let mut json = examples::json(&examples::run(&mut c.prog), &program.name);
+            if let Some(w) = warnings_value(&program, &c.applied) {
+                if json.ends_with('}') {
+                    json.pop();
+                    json.push_str(&format!(",\"warnings\":{w}}}"));
+                }
+            }
+            json
+        }
+        Err(diags) => diag::render_json(&diags, &program.name),
     })
 }
 
 /// Compiles to C or JS. The inner `Err` is the diagnostics JSON (a normal tool result);
-/// the outer one is a failure of the compiler itself.
-fn generate(code: &str, target: Target) -> Result<Result<String, String>, String> {
-    generate_granted(code, target, &caps::Grant::all())
+/// the outer one is a failure of the compiler itself. The inner `Ok` has the source and the repairs.
+fn generate(program: &Program, target: Target, strict: bool) -> Result<Result<(String, Vec<fix::Applied>), String>, String> {
+    generate_granted(program, target, &caps::Grant::all(), strict)
 }
 
 /// `generate`, for a program that may use only what `grant` gives (else E0290).
-fn generate_granted(code: &str, target: Target, grant: &caps::Grant) -> Result<Result<String, String>, String> {
-    let prog = match crate::compile_granted(code, grant, &allow_flag) {
-        Ok(p) => p,
-        Err(diags) => return Ok(Err(diag::render_json(&diags, FILE))),
+fn generate_granted(
+    program: &Program,
+    target: Target,
+    grant: &caps::Grant,
+    strict: bool,
+) -> Result<Result<(String, Vec<fix::Applied>), String>, String> {
+    let c = match compile_tool(program, grant, strict, true) {
+        Ok(c) => c,
+        Err(diags) => return Ok(Err(diag::render_json(&diags, &program.name))),
     };
-    crate::generate(&prog, target, FILE).map(Ok).map_err(tool_error)
+    perfwarn::check(&c.prog, false);
+    crate::generate(&c.prog, target, &program.name).map(|source| Ok((source, c.applied))).map_err(tool_error)
 }
 
 /// `nyra_run` with `sandbox: true`: the program runs in the interpreter, in this process, under
 /// limits of steps, memory and output that stop it at the same place on every machine.
-fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Result<String, String> {
+fn sandboxed(args: &Json, program: &Program, stdin: &str, grant: &caps::Grant, strict: bool) -> Result<String, String> {
     let number = |key: &str, default: u64| -> Result<u64, String> {
         match args.get(key) {
             None | Some(Json::Null) => Ok(default),
@@ -666,19 +913,20 @@ fn sandboxed(args: &Json, code: &str, stdin: &str, grant: &caps::Grant) -> Resul
         }
     }
     let start = Instant::now();
-    let prog = match crate::compile_granted(code, grant, &allow_flag) {
-        Ok(p) => p,
-        Err(diags) => return Ok(diag::render_json(&diags, FILE)),
+    let c = match compile_tool(program, grant, strict, true) {
+        Ok(c) => c,
+        Err(diags) => return Ok(diag::render_json(&diags, &program.name)),
     };
-    let module = sandbox::module(&prog).map_err(tool_error)?;
+    perfwarn::check(&c.prog, false);
+    let module = sandbox::module(&c.prog).map_err(tool_error)?;
     let compile_ms = ms(start.elapsed());
     let report = sandbox::run(&module, cfg);
-    Ok(interpreted_json(&report, compile_ms, None))
+    Ok(interpreted_json(&report, compile_ms, None, &program.name, warnings_value(program, &c.applied)))
 }
 
 /// The result of a program that ran in the interpreter: `ok`, `exit`, `stdout`, its runtime error,
 /// the steps and the times. `mode` says how a run that was not asked to be interpreted got here.
-fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&str>) -> String {
+fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&str>, file: &str, warnings: Option<Json>) -> String {
     let mut fields =
         vec![("ok", Json::from(report.exit == 0)), ("exit", Json::from(report.exit as i64)), ("stdout", report.stdout.clone().into())];
     if let Some(what) = &report.internal {
@@ -688,7 +936,7 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
         let err = obj([
             ("code", e.code.into()),
             ("message", e.msg.clone().into()),
-            ("file", FILE.into()),
+            ("file", file.into()),
             ("line", Json::from(e.span.line as i64)),
             ("col", Json::from(e.span.col as i64)),
             ("hint", e.hint.into()),
@@ -701,6 +949,9 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
             _ => {}
         }
     }
+    if let Some(w) = warnings {
+        fields.push(("warnings", w));
+    }
     fields.push(("steps", Json::from(report.steps as i64)));
     if let Some(mode) = mode {
         fields.push(("mode", mode.into()));
@@ -710,15 +961,21 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
     Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string()
 }
 
-fn build(args: &Json) -> Result<String, String> {
-    let code = required_str(args, "code")?;
+fn build(server: &Server, args: &Json) -> Result<String, String> {
+    let program = server.program(args)?;
     let (target, name) = match optional_str(args, "target")? {
         None | Some("c") => (Target::C, "c"),
         Some("js") => (Target::Js, "js"),
         Some(other) => return Err(tool_error(format!("target must be \"c\" or \"js\", found {other:?}"))),
     };
-    Ok(match generate(code, target)? {
-        Ok(source) => obj([("ok", true.into()), ("target", name.into()), ("source", source.into())]).to_string(),
+    Ok(match generate(&program, target, arg_bool(args, "strict")?)? {
+        Ok((source, applied)) => {
+            let mut fields = vec![("ok", Json::from(true)), ("target", name.into()), ("source", source.into())];
+            if let Some(w) = warnings_value(&program, &applied) {
+                fields.push(("warnings", w));
+            }
+            Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_string()
+        }
         Err(diags) => diags,
     })
 }

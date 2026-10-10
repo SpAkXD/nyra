@@ -1,0 +1,11 @@
+// expect: E0287
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Circle(1.0)
+    let a = match s {
+        Shape.Circle(r) => r
+        Shape.Rect(w) => w
+    }
+    print(a)
+}

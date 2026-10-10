@@ -1,0 +1,9 @@
+// expect: E0345 at 7:30
+// message: json.parse: expected an int at $.a
+use json
+
+fn main() {
+    print("start")
+    let v: [str: int] = json.parse("{{\"a\": true}}")
+    print(v)
+}

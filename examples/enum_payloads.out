@@ -1,0 +1,12 @@
+Shape.Circle(2) Shape.Rect(3, 4.5) Shape.Empty
+12 13.5 0
+true false true true
+true false
+Token.Num(7) -> number 7
+Token.Word("hi") -> word HI
+Token.Pair(3, "x") -> pair 3
+Token.Quit -> quit
+[Token.Num(7), Token.Word("hi"), Token.Pair(3, "x"), Token.Quit]
+true false 3
+Drawing(name: "a", shape: Shape.Rect(2, 2)) Drawing(name: "a", shape: Shape.Circle(1))
+8 103 -1 -1

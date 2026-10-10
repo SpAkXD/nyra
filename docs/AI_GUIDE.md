@@ -121,7 +121,7 @@ reports runtime errors as JSON too.
 **If you have the `nyra` MCP server** (`nyra mcp`, added with `claude mcp add nyra -- nyra mcp`), the
 same loop needs no files: `nyra_check {code}` returns the JSON above (failed examples included),
 `nyra_test {code}` the result of every example, `nyra_run {code, backend}` returns
-`stdout`, `exit` and runtime `errors` (it grants only standard input: pass `allow: ["fs"]` or `["os"]` for a program that
+`stdout`, `exit` and runtime `errors`. A program of several files is `files: {"main.nyra": ..., "shapes.nyra": ...}` instead of `code` (so `use ./shapes` works; `entry` names another main file). Like the CLI, an error with exactly one certain fix is repaired in memory and listed under `warnings` (`strict: true` turns that off). It grants only standard input: pass `allow: ["fs"]` or `["os"]` for a program that
 uses those modules, or E0290 says so; `sandbox: true` runs it in the interpreter with `fuel`, `max_memory` and
 `max_output` limits), `nyra_explain {code: "E0201"}` an error entry, and `nyra_spec`
 the agent card (`full: true`: the complete language spec). `nyra_outline`, `nyra_show` and `nyra_edit {path or code, edits}` edit a program by
@@ -129,7 +129,7 @@ symbol, as described next.
 
 **Changing a program that already exists: edit by symbol, do not resend the file.** Rewriting a whole
 file to change one function costs the whole file in output tokens on every turn. Nyra addresses
-functions, structs and fields (`Struct.field`) by name:
+functions, structs, enums, struct fields (`Struct.field`) and enum variants (`Enum.Variant`) by name:
 
 ```
 nyra outline prog.nyra             # one line per symbol: `45-52 fn find(items: [Item], sku: str) -> int`
@@ -152,6 +152,8 @@ fn tax(total: int) -> int = total / 5
 @delete old_helper
 @rename Item.stock in_stock
 @add-field Order note: str after customer
+@add-variant Shape Tri(float, float, float) after Rect
+@rename Shape.Circle Disc
 ```
 
 - Each edit replaces the exact source range of its symbol; every other byte of the file stays as it
@@ -330,8 +332,14 @@ Good to know:
   `Dir.N`, and prints as `Dir.N`. Take it apart with `match`, which must cover every case:
   `match d { Dir.N => return 1  Dir.E, Dir.W => return 2  _ => return 3 }` (one arm per line, `_` takes the rest, an arm
   body is one statement or a `{ }` block). `match` also works on an `int`, `str`, `char` or `bool` (an `int`
-  needs a `_` arm); it is a statement, so `ret` the value or assign it in the arms. `Dir.all()` is the array of
-  all cases.
+  needs a `_` arm); as a statement it `ret`urns the value or assigns it in the arms, and as a value each arm is one
+  expression: `let a = match s { Shape.Circle(r) => 3.14 * r * r  _ => 0.0 }`, `return match d { Dir.N => 1  _ => 2 }`
+  (arms on lines of their own or separated by commas; `if let v = x { a } else { b }` is a value too).
+  `Dir.all()` is the array of all cases. A variant may carry values: `enum Shape { Circle(float), Rect(float, float), Empty }`, built
+  `Shape.Circle(2.0)` (always with its values), taken apart by naming them,
+  `match s { Shape.Circle(r) => return 3.0 * r * r  Shape.Rect(w, h) => return w * h  Shape.Empty => return 0.0 }`
+  (`_` skips a value). Values compare with `==` and print as `Shape.Circle(2)`; an enum cannot contain itself
+  (keep children in an array: `Node([Tree])`) and `Shape.all()` needs variants without values.
 - A value that may be missing is an optional: `m.get(k)`, `xs.find(x => x > 3)` and `s.to_int()` give a `V?` that
   is a value or `none`. Unwrap with `m.get(k) ?? 0`, `if let v = m.get(k) { ... } else { ... }` or
   `.unwrap()` (stops with E0350 on `none`); test with `x != none` or `x.is_some()`. Declare one with
@@ -340,7 +348,7 @@ Good to know:
 - A tuple holds values of different types: `let t = (1, "a")`, read `t.0`, take it apart with
   `let (n, s) = t`, swap with `(a, b) = (b, a)`, loop with `for (k, v) in pairs`, return several values with
   `fn f() -> (int, bool)`. Tuples compare part by part (`(1, "b") < (2, "a")`), so `pairs.sort()` works, and
-  print as `(1, "a")`. A tuple cannot be a map key or go through `json`.
+  print as `(1, "a")`. A tuple of ints, strs, chars or bools (or such tuples) can be a map key, `var grid: [(int, int): char] = [:]`; `json` writes a tuple as an array.
 - Values are copies. `var b = a` copies an array, a string or a struct, and so does passing it to a
   function or storing it in another array; changing the copy never changes the original. Copies are
   cheap (the data is shared until one side changes). To let a function change the caller's variable,
@@ -388,7 +396,7 @@ that works (section 6 has the usual replacements).
 
 - **Network**: no sockets or HTTP. Input, arguments, files, the clock, random numbers, JSON and math
   are in the standard library (section 6b).
-- **Types**: no sets, `Result`, generics, enums with values or type aliases. Use a map
+- **Types**: no sets, `Result`, generics or type aliases (an enum may carry values, section 3). Use a map
   `[str: bool]` or `contains` for a set. Tuples `(int, str)`, optionals `int?` (section 3) and maps `[K: V]`
   (section 6) exist.
 - **Methods you may expect**: arrays have no `reduce` (write `fold`), `find` (`find_index`), `append`
@@ -485,6 +493,9 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
 | E0271 | specifier does not fit the value | `.2`, `,`, `+` and `0` are for numbers; for text only width, fill and alignment |
 | E0278 | no such enum variant | a variant is written with its enum, `Dir.N` (also in `match` arms) |
+| E0286 | variant written without its values | `Shape.Circle(1.5)`, not `Shape.Circle` |
+| E0287 | variant pattern does not name the values | `Shape.Rect(w, h)`; `_` skips one; no literals, one arm per variant |
+| E0288 | `all()` of an enum with values | list the variants by hand: `[Shape.Circle(1.0), Shape.Empty]` |
 | E0279 | bad `match` pattern or value | patterns are constants of the matched type; match an enum, `bool`, `int`, `str` or `char` |
 | E0281 | `match` does not cover every case | add the missing arms, or a last arm `_ => ...` |
 | E0283 | `match` arm can never run | a repeated pattern, or an arm after `_` |
@@ -705,7 +716,9 @@ fn main() {
 ```
 
 JSON is read into the type the value goes to (a typed `let`, a parameter, a field, `return`); a struct
-reads an object by field names, an array a list:
+reads an object by field names, an array a list. Every type has a JSON form: a tuple is an array, an optional
+the value or `null`, an enum variant its name (`"Empty"`) or `{"Rect":[1,2]}` with values, a map with `str`
+keys an object, a map with other keys an array of `[key,value]` pairs:
 
 ```rust
 use json

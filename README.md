@@ -337,12 +337,12 @@ both backends and the error database as tools, and needs no files or shell acces
 | `nyra_test` | `{code}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped) |
 | `nyra_spec` | the language spec (`part: "guide"`: the AI guide), so the agent learns Nyra in one call |
-| `nyra_check` | `{code, allow?}` → the same JSON as `nyra check --json` (with the capabilities `nyra_run` would grant) |
+| `nyra_check` | `{code, allow?, strict?}` → the same JSON as `nyra check --json` (with the capabilities `nyra_run` would grant). `files: {"main.nyra": ..., "shapes.nyra": ...}` replaces `code` for a program of several files (`use ./shapes`); `nyra_test`, `nyra_run` and `nyra_build` take them too. An error with one certain fix is repaired in memory and listed under `warnings` unless `strict: true` |
 | `nyra_test` | `{code, allow?}` → the same JSON as `nyra test --json`: every `ex` example, with the values of a false one |
 | `nyra_run` | `{code, backend?: "native"\|"js", stdin?, timeout_ms?, allow?: ["fs", "os", "input", "net"], sandbox?, fuel?, max_memory?, max_output?, args?}` → `{ok, exit, stdout, errors?, ms}` (10 s timeout, output capped; grants only `input` unless `allow` says more; `sandbox: true` runs it in the interpreter with limits, no child process) |
 | `nyra_explain` | `{code: "E0201"}` → the error database entry (without `code`: every code) |
 | `nyra_build` | `{code, target?: "c"\|"js"}` → the generated C or JavaScript |
-| `nyra_outline` | `{path}` or `{code}` → one line per function and struct with its line range |
+| `nyra_outline` | `{path}` or `{code}` → one line per function, struct and enum with its line range |
 | `nyra_show` | `{path or code, name: "find Item.tags"}` → the source of those symbols |
 | `nyra_edit` | `{path or code, edits, force?, fix?}` → change symbols by name ([below](#editing-by-symbol)); a path is written in place and only a summary returns |
 
@@ -386,7 +386,7 @@ to the binary as `command`.
 ### Editing by symbol
 
 An agent that changes one function of a long program should not send the program again. `nyra edit`
-(and the `nyra_edit` tool) changes functions, structs and struct fields **by name**:
+(and the `nyra_edit` tool) changes functions, structs, enums, struct fields and enum variants **by name**:
 
 ```
 $ nyra outline shop.nyra
@@ -405,7 +405,7 @@ nyra: edited shop.nyra: renamed field Item.stock -> in_stock, 7 references (line
 - **Operations:** replace a function or struct (send its new definition), add one (at the end, or
   `after`/`before` another), delete one, rename one with every reference, add or remove a struct field.
   Several go in one script (`@replace NAME`, `@add after NAME`, `@delete NAME`, `@rename NAME NEW`,
-  `@add-field Struct name: type`), or plain definitions replace the symbols of their names.
+  `@add-field Struct name: type`, `@add-variant Enum Name(type)`), or plain definitions replace the symbols of their names.
 - **Exact:** each edit replaces the source range of its symbol, so the rest of the file stays
   byte-identical, including its line breaks (`\r\n` files stay `\r\n`). A rename uses the parser and the
   checker: it changes calls, constructions, type annotations, field reads and labels, never strings,
@@ -603,9 +603,9 @@ See [known differences](docs/SPEC.md#known-differences-between-backends) for the
 | `nyra fmt <file>` | rewrite the file in canonical form: the fixes errors carry applied, `return` for `ret`, four-space indentation; the program does the same afterwards (`-o -` prints instead) |
 | `nyra explain [CODE]` | explain an error code (what it means, why, causes, a wrong and a fixed program); without a code, list the codes it reports (`--planned` adds those of future designs) |
 | `nyra mcp` | run the [MCP server](#mcp-server) on stdin/stdout, for AI agents |
-| `nyra outline <file>` | the functions and structs with signatures, fields and line ranges (`--json` too) |
-| `nyra show <file> <name>...` | the source of functions, structs or fields (`Struct.field`) |
-| `nyra edit <file> [edits]` | [change symbols by name](#editing-by-symbol): `--set`, `--add`, `--delete`, `--rename`, `--add-field`, or an edit script on stdin; `--force`, `--fix`, `--dry-run`, `--json` |
+| `nyra outline <file>` | the functions, structs and enums with signatures, fields, variants and line ranges (`--json` too) |
+| `nyra show <file> <name>...` | the source of functions, structs, enums, fields (`Struct.field`) or variants (`Enum.Variant`) |
+| `nyra edit <file> [edits]` | [change symbols by name](#editing-by-symbol): `--set`, `--add`, `--delete`, `--rename`, `--add-field`, `--add-variant`, or an edit script on stdin; `--force`, `--fix`, `--dry-run`, `--json` |
 
 | Option | Meaning |
 |---|---|

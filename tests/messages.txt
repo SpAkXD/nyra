@@ -5261,37 +5261,6 @@ error[E0210]: cannot use `<` on `([int], int)` and `([int], int)`: `<` needs two
   = explain: nyra explain E0210
 
 nyra: 1 error(s)
-==== tuple_map_key
-fn main() {
-    var seen: [(int, int): bool] = [:]
-    seen[(1, 2)] = true
-}
-----
-error[E0218]: a map key must be `int`, `str`, `char` or `bool`, found `(int, int)`
-  --> case.nyra:2:5
-  |
-2 |     var seen: [(int, int): bool] = [:]
-  |     ^
-  = hint: a tuple cannot be a key: use one `int` that stands for it (`y * width + x`), or the text `"{x},{y}"`
-  = explain: nyra explain E0218
-
-nyra: 1 error(s)
-==== tuple_json
-use json
-
-fn main() {
-    print(json.str((1, 2)))
-}
-----
-error[E0309]: `json.str` cannot handle the tuple type in `(int, int)` yet
-  --> case.nyra:4:16
-  |
-4 |     print(json.str((1, 2)))
-  |                ^
-  = hint: use a struct with named fields instead of a tuple: `struct Pair { first: int, second: str }`
-  = explain: nyra explain E0309
-
-nyra: 1 error(s)
 ==== format_spec_syntax
 fn main() {
     let x = 5
@@ -5553,23 +5522,6 @@ error[E0224]: `P?` is an optional value and has no field `x`
   |             ^
   = hint: take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`
   = explain: nyra explain E0224
-
-nyra: 1 error(s)
-==== option_json
-use json
-
-fn main() {
-    let x: int? = 5
-    print(json.str(x))
-}
-----
-error[E0309]: `json.str` cannot handle the optional type in `int?` yet
-  --> case.nyra:5:16
-  |
-5 |     print(json.str(x))
-  |                ^
-  = hint: use the value itself (`x ?? 0`), or a struct with a `bool` field that says whether it is there
-  = explain: nyra explain E0309
 
 nyra: 1 error(s)
 ==== option_wrong_type
@@ -5870,22 +5822,22 @@ error[E0101]: expected `=>` after the pattern, found `print`
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
-==== match_in_expression
+==== match_value_no_arrow
 fn main() {
     let n = 3
     let s = match n {
-        1 => "one"
+        1 "one"
         _ => "other"
     }
     print(s)
 }
 ----
-error[E0101]: expected an expression, found keyword `match`
-  --> case.nyra:3:13
+error[E0101]: expected `=>` after the pattern, found a string
+  --> case.nyra:4:11
   |
-3 |     let s = match n {
-  |             ^
-  = hint: `match` is a statement, not a value: `ret` the value or assign it in the arms, or write `if cond { a } else { b }` for a value
+4 |         1 "one"
+  |           ^
+  = hint: a match used as a value looks like `match s { Shape.Circle(r) => r * r  _ => 0.0 }`: one arm per line, each arm one expression
   = explain: nyra explain E0101
 
 nyra: 1 error(s)
@@ -6174,5 +6126,135 @@ error[E0201]: undefined variable `local`
   |       ^
   = hint: declare it first: `let local = ...`
   = explain: nyra explain E0201
+
+nyra: 1 error(s)
+==== enum_payload_bare
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle
+    print(s)
+}
+----
+error[E0286]: the variant `Shape.Circle` carries 1 value, so it is written with them
+  --> case.nyra:4:19
+  |
+4 |     let s = Shape.Circle
+  |                   ^
+  = hint: write `Shape.Circle(float)`, e.g. `Shape.Circle(0.0)`
+  = explain: nyra explain E0286
+
+nyra: 1 error(s)
+==== enum_payload_arity
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0)
+    print(s)
+}
+----
+error[E0204]: `Shape.Rect(float, float)` takes 2 values but 1 was given
+  --> case.nyra:4:19
+  |
+4 |     let s = Shape.Rect(1.0)
+  |                   ^
+  = hint: write `Shape.Rect(float, float)`, e.g. `Shape.Rect(0.0, 0.0)`
+  = explain: nyra explain E0204
+
+nyra: 1 error(s)
+==== enum_pattern_arity
+enum Shape { Circle(float), Rect(float, float) }
+
+fn main() {
+    let s = Shape.Rect(1.0, 2.0)
+    match s {
+        Shape.Circle(r) => print(r)
+        Shape.Rect(w) => print(w)
+    }
+}
+----
+error[E0287]: the pattern names 1 value but `Shape.Rect(float, float)` carries 2 values
+  --> case.nyra:7:15
+  |
+7 |         Shape.Rect(w) => print(w)
+  |               ^
+  = hint: write one name for each value, `_` for one you do not need: `Shape.Rect(_, _)`
+  = explain: nyra explain E0287
+
+nyra: 1 error(s)
+==== enum_pattern_bare
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Circle(1.0)
+    match s {
+        Shape.Circle => print("round")
+        Shape.Empty => print("none")
+    }
+}
+----
+error[E0287]: the pattern `Shape.Circle` does not name the 1 value of the variant
+  --> case.nyra:6:15
+  |
+6 |         Shape.Circle => print("round")
+  |               ^
+  = hint: a variant that carries values is matched with a name for each, `_` for one you do not need: `Shape.Circle(_)`
+  = fix: `Shape.Circle(_) => print("round")`
+  = explain: nyra explain E0287
+
+nyra: 1 error(s)
+==== match_value_types
+fn main() {
+    let n = 2
+    let x = match n {
+        1 => "one"
+        _ => 2
+    }
+    print(x)
+}
+----
+error[E0212]: the arms of this `match` have different types: `str` and `int`
+  --> case.nyra:5:14
+  |
+5 |         _ => 2
+  |              ^
+  = hint: every arm must give the same type: change this one to `str`
+  = explain: nyra explain E0212
+
+nyra: 1 error(s)
+==== match_value_missing
+enum Dir { N, E, S }
+
+fn main() {
+    let d = Dir.N
+    let x = match d {
+        Dir.N => 1
+        Dir.E => 2
+    }
+    print(x)
+}
+----
+error[E0281]: this `match` does not cover `Dir.S`
+  --> case.nyra:5:13
+  |
+5 |     let x = match d {
+  |             ^
+  = hint: add an arm for each, or a last arm `_ => ...` that takes everything else
+  = explain: nyra explain E0281
+
+nyra: 1 error(s)
+==== tuple_map_key_float
+fn main() {
+    var seen: [(int, float): bool] = [:]
+    print(seen.len())
+}
+----
+error[E0218]: a map key must be `int`, `str`, `char`, `bool` or a tuple of those, found `(int, float)`
+  --> case.nyra:2:5
+  |
+2 |     var seen: [(int, float): bool] = [:]
+  |     ^
+  = hint: a tuple is a key when each of its parts is an `int`, `str`, `char`, `bool` or such a tuple: use an `int` that stands for a float part, or the text `str(x)`
+  = explain: nyra explain E0218
 
 nyra: 1 error(s)
