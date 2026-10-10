@@ -9,7 +9,20 @@ use common::{nyra, Json};
 
 /// Sends `requests` (one JSON message per line), closes stdin and returns the replies by id.
 fn session(requests: &[String]) -> Vec<Json> {
-    let mut child = nyra().arg("mcp").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    session_with(requests, &[])
+}
+
+/// `session`, with environment variables set for the server.
+fn session_with(requests: &[String], env: &[(&str, &str)]) -> Vec<Json> {
+    let mut child = nyra()
+        .arg("mcp")
+        .env("NYRA_AUTO_WALL_MS", "600000")
+        .envs(env.iter().copied())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     {
         let mut stdin = child.stdin.take().unwrap();
         for r in requests {
@@ -469,4 +482,109 @@ fn capabilities_and_the_sandbox() {
     let second = tool_json(&again, 2).1;
     assert_eq!(first.get("errors"), second.get("errors"), "deterministic");
     assert_eq!(first.get("steps"), second.get("steps"));
+}
+
+fn has_cc() -> bool {
+    std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| Command::new(c).arg("--version").output().is_ok())
+}
+
+const SUM: &str = "fn main() {
+    print(\"start\")
+    var t = 0
+    for i in 0..200000 {
+        t += i % 7
+    }
+    print(\"sum {t}\")
+}
+";
+const SLOW_BOUNDS: &str = "fn main() {
+    print(\"before\")
+    var t = 0
+    for i in 0..100000 {
+        t += i
+    }
+    let xs = [1, 2]
+    print(xs[t % 5 + 5])
+}
+";
+const APPEND: &str = "use fs
+fn main() {
+    fs.append(\"mcp_auto_log.txt\", \"x\")
+    print(fs.read(\"mcp_auto_log.txt\").len())
+}
+";
+const ECHO: &str = "use input
+fn main() {
+    for l in input.lines() {
+        print(l.upper())
+    }
+}
+";
+
+#[test]
+fn nyra_run_answers_from_the_interpreter_and_falls_back_to_a_native_run() {
+    if !has_cc() {
+        common::missing("no C compiler for the native backend");
+        return;
+    }
+    let init = request(1, "initialize", r#"{"protocolVersion":"2025-06-18","capabilities":{}}"#);
+    let run = |id: u64, code: &str, extra: &str| call(id, "nyra_run", &format!(r#"{{"code":{}{extra}}}"#, esc(code)));
+    let requests = vec![
+        init,
+        run(2, SUM, ""),
+        run(3, SLOW_BOUNDS, ""),
+        run(
+            4,
+            ECHO,
+            r#","stdin":"ab
+cd
+""#,
+        ),
+        run(5, APPEND, r#","allow":["fs"]"#),
+    ];
+    // within the budget: the interpreter answers (`mode`), with the fields of any run
+    let fast = session(&requests);
+    // with a budget of 100 steps: the native executable answers, with the same results
+    let slow = session_with(&requests, &[("NYRA_AUTO_STEPS", "100")]);
+    for id in [2, 3, 4] {
+        let (is_error, a) = tool_json(&fast, id);
+        let (_, b) = tool_json(&slow, id);
+        assert!(!is_error, "{a:?}");
+        assert_eq!(a.get("mode").and_then(Json::as_str), Some("interp"), "run {id} should be interpreted: {a:?}");
+        assert_eq!(b.get("mode"), None, "run {id} should be native: {b:?}");
+        for key in ["ok", "exit", "stdout", "errors"] {
+            assert_eq!(a.get(key), b.get(key), "run {id}, `{key}`");
+        }
+        assert!(b.get("ms").and_then(|m| m.get("run")).is_some() && a.get("ms").and_then(|m| m.get("run")).is_some());
+    }
+    assert_eq!(
+        tool_json(&fast, 2).1.get("stdout").and_then(Json::as_str),
+        Some(
+            "start
+sum 599994
+"
+        )
+    );
+    assert_eq!(tool_json(&fast, 3).1.get("exit").and_then(Json::as_u64), Some(101));
+    assert_eq!(
+        tool_json(&fast, 4).1.get("stdout").and_then(Json::as_str),
+        Some(
+            "AB
+CD
+"
+        )
+    );
+    // a program that uses fs is never interpreted first (that would write twice)
+    for replies in [&fast, &slow] {
+        let (_, fs) = tool_json(replies, 5);
+        assert_eq!(fs.get("mode"), None, "{fs:?}");
+        assert_eq!(
+            fs.get("stdout").and_then(Json::as_str),
+            Some(
+                "1
+"
+            ),
+            "{fs:?}"
+        );
+    }
 }

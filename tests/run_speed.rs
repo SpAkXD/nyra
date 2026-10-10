@@ -21,7 +21,7 @@ fn run(dir: &Path, tmp: &Path, extra: &[&str], prog: &str) -> Output {
         .env("TEMP", tmp)
         .env("TMP", tmp)
         .env("TMPDIR", tmp)
-        .args(["run", "--time"])
+        .args(["run", "--time", "--native"])
         .args(extra)
         .arg(prog)
         .output()

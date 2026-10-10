@@ -49,6 +49,64 @@ pub fn after_spawn(child: &Child, cpu_secs: u64) -> Limited {
     }
 }
 
+/// A child process and everything it starts, which can be killed together (a C compiler is a
+/// driver that starts the compiler proper, the assembler and the linker). Windows: a Job Object
+/// that kills its processes when closed. Unix: the process group (the child must have been
+/// started with `process_group(0)`, see `Tree::prepare`).
+pub struct Tree {
+    #[cfg(windows)]
+    _job: windows::Job,
+    #[cfg(unix)]
+    group: i32,
+}
+
+impl Tree {
+    /// Call before spawning: puts the child in a group of its own (Unix).
+    pub fn prepare(cmd: &mut Command) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        #[cfg(not(unix))]
+        let _ = cmd;
+    }
+
+    /// Call right after spawning. `None` if the system refused: the tree then cannot be killed.
+    pub fn of(child: &Child) -> Option<Tree> {
+        #[cfg(windows)]
+        {
+            windows::Job::kill_on_close(child).map(|job| Tree { _job: job })
+        }
+        #[cfg(unix)]
+        {
+            Some(Tree { group: child.id() as i32 })
+        }
+        #[cfg(not(any(windows, unix)))]
+        {
+            let _ = child;
+            None
+        }
+    }
+
+    /// Kills every process of the tree.
+    pub fn kill(self) {
+        #[cfg(unix)]
+        {
+            extern "C" {
+                fn kill(pid: i32, sig: i32) -> i32;
+            }
+            // SAFETY: a plain system call; a negative pid is the process group
+            unsafe {
+                kill(-self.group, 9);
+            }
+        }
+        // Windows: dropping the job closes it, which kills what it holds
+        #[cfg(windows)]
+        drop(self);
+    }
+}
+
 #[cfg(windows)]
 mod windows {
     use std::ffi::c_void;
@@ -121,6 +179,29 @@ mod windows {
                 // in units of 100 ns
                 info.basic.per_process_user_time_limit = (cpu_secs as i64).saturating_mul(10_000_000);
                 info.process_memory_limit = super::MEMORY as usize;
+                let size = std::mem::size_of::<ExtendedLimits>() as u32;
+                let set =
+                    SetInformationJobObject(job.0, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut c_void, size);
+                if set == 0 || AssignProcessToJobObject(job.0, child.as_raw_handle() as Handle) == 0 {
+                    return None;
+                }
+                Some(job)
+            }
+        }
+    }
+
+    impl Job {
+        /// A job that holds `child` and kills it, and what it starts, when closed.
+        pub fn kill_on_close(child: &Child) -> Option<Job> {
+            // SAFETY: plain Win32 calls with valid arguments; the handle is closed by `Drop`.
+            unsafe {
+                let job = CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
+                if job.is_null() {
+                    return None;
+                }
+                let job = Job(job);
+                let mut info = ExtendedLimits::default();
+                info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
                 let size = std::mem::size_of::<ExtendedLimits>() as u32;
                 let set =
                     SetInformationJobObject(job.0, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut c_void, size);
