@@ -15,7 +15,8 @@ nyra test prog.nyra --json     # run the `ex` examples: {"ok":..,"examples":3,"p
 nyra check prog.nyra --json --fix   # the same, after repairing every mistake that has a certain fix
 nyra check prog.nyra --strict  # errors stay errors (without it, mistakes with one certain fix are repaired in memory)
 nyra fmt prog.nyra             # rewrite the file in canonical form (the fixes applied, `return`, 4-space indent)
-nyra run prog.nyra             # compile and run natively (needs gcc, clang or tcc)
+nyra run prog.nyra             # run it: a short program is answered at once by the interpreter, a long one natively (needs gcc, clang or tcc)
+nyra run prog.nyra --native    # always compile with the C compiler first
 nyra run prog.nyra --js        # or run on Node.js
 nyra run prog.nyra --sandbox   # run in the interpreter with limits, and no files/environment/input unless --allow names them
 nyra explain E0201 --json      # what an error code means: why, causes, a wrong and a fixed program
@@ -374,7 +375,9 @@ Good to know:
   (`s = x + s`) and searching an array again and again in a long loop (`seen.contains(v)` while the loop
   does `seen.push(v)`) are not: use a map (`seen[v] = true`, `seen.has(v)`) for lookups. The compiler
   warns about both (E0360, E0361), and the warning never stops the build. `nyra run` compiles quickly;
-  `nyra run --release` and `nyra build` optimize more.
+  `nyra run --release` and `nyra build` optimize more. `nyra run` starts a short program in the interpreter, so its
+  first output comes in milliseconds, and switches to a native executable when the program runs long (`--native` skips
+  the interpreter); the output is the same either way.
 - Style: 4 spaces, `snake_case` for functions and variables, `CamelCase` for structs, short functions,
   `//` comments that say why.
 
