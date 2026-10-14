@@ -6482,3 +6482,76 @@ error[E0371]: `str` takes no child block
   = explain: nyra explain E0371
 
 nyra: 1 error(s)
+==== web_anchor_missing
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><a href=\"/about#team\">Team</a><section id=\"kontakt\"><h2>Contact</h2></section>")
+page("/about", "<h1>About</h1><section id=\"people\"><h2>People</h2></section>")
+----
+error[E0382]: page "/" links to "#contact", but no element on this page has id="contact"
+  --> case.nyra:4:5
+  |
+4 |     _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+  |     ^
+  = hint: did you mean `kontakt`? An anchor link needs an element with that id on this page
+  = explain: nyra explain E0382
+
+error[E0382]: page "/" links to "/about#team", but no element on the page "/about" has id="team"
+  --> case.nyra:4:5
+  |
+4 |     _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+  |     ^
+  = hint: give the element you mean that id (a section's first argument is its id: `section("team", ...)`), or fix the link; the ids on the page "/about": `people`
+  = explain: nyra explain E0382
+
+nyra: 2 error(s)
+==== web_image_missing
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+----
+error[E0383]: page "/" shows the image "counter.jpg", which is not in `assets/` next to the program
+  --> case.nyra:4:5
+  |
+4 |     _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+  |     ^
+  = hint: put the file at `assets/counter.jpg` (images are read from the folder `assets` next to the program), or fix the name
+  = explain: nyra explain E0383
+
+nyra: 1 error(s)
+==== web_page_paths
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/about", "<h1>About us</h1>")
+page("/about/", "<h1>Our team</h1>")
+page("/a b", "<h2>Contact</h2>")
+----
+error[E0387]: two pages have the path "/about/" ("/about" and "/about/" are one file)
+  --> case.nyra:4:5
+  |
+4 |     _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+  |     ^
+  = hint: each page needs its own path: rename one of them, or make one page of the two
+  = explain: nyra explain E0387
+
+error[E0387]: page path "/a b" is not a path of the site: a page path has only letters, digits and `-_./~%` (found ` `)
+  --> case.nyra:4:5
+  |
+4 |     _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+  |     ^
+  = hint: write the path from the site's root, as in the address bar: `page("/", ...)`, `page("/about", ...)`
+  = explain: nyra explain E0387
+
+nyra: 2 error(s)

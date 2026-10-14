@@ -4,7 +4,8 @@
 //! groups:
 //!
 //! - *pure* modules, always available: `json`, `math`, `text`, and `time` and `random` (they only
-//!   read a clock or a generator; nothing outside the program changes);
+//!   read a clock or a generator; nothing outside the program changes), and `web` (the program
+//!   hands its pages to the build, which alone writes them, into the output folder);
 //! - *effectful* modules, which need a capability of the same name: `fs` (files and folders),
 //!   `input` (standard input), `os` (arguments, environment variables, `exit`), and `net` when
 //!   the language gets networking. Any module that is not listed as pure needs one, so a module
@@ -19,7 +20,7 @@ use crate::ast::Program;
 use crate::diag::Diag;
 
 /// Modules every program may use.
-pub const PURE: &[&str] = &["json", "math", "random", "text", "time"];
+pub const PURE: &[&str] = &["json", "math", "random", "text", "time", "web"];
 
 /// The capabilities that can be granted, sorted, with what each one allows.
 pub const CAPABILITIES: &[(&str, &str)] = &[

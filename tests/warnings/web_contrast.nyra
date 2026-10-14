@@ -1,0 +1,9 @@
+// expect: E0380
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_css(":root{{--bg:#ffffff;--ink:#999999;--muted:#bbbbbb}}")
+page("/", "<h1>Bakery</h1>")

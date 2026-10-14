@@ -130,7 +130,8 @@ thread_local! {
 pub fn warn(d: Diag) {
     WARNINGS.with(|w| {
         let mut w = w.borrow_mut();
-        if !w.iter().any(|o| o.code == d.code && o.span == d.span) {
+        // (the web build reports one warning per page at the same call: those differ in the message)
+        if !w.iter().any(|o| o.code == d.code && o.span == d.span && o.msg == d.msg) {
             w.push(d);
         }
     });
