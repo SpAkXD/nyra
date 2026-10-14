@@ -23,6 +23,7 @@ mod parser;
 mod perfwarn;
 mod sandbox;
 mod stdlib;
+mod webcheck;
 // the C-ABI entry points of the WebAssembly build (`src/lib.rs`); natively only for their tests
 #[cfg(any(target_arch = "wasm32", test))]
 mod wasm;

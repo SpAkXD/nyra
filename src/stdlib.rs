@@ -13,7 +13,7 @@ use crate::ast::{CompSrc, Expr, ExprKind, Func, InterpPart, Program, Span, Stmt,
 use crate::diag::Diag;
 
 /// Every standard module, sorted.
-pub const MODULES: &[&str] = &["fs", "input", "json", "math", "os", "random", "text", "time"];
+pub const MODULES: &[&str] = &["fs", "input", "json", "math", "os", "random", "text", "time", "web"];
 
 /// "`fs`, `input`, ... and `time`" for messages.
 pub fn module_list() -> String {
@@ -146,6 +146,7 @@ pub const JSON_FNS: &[&str] = &["parse", "str"];
 fn source(module: &str) -> Option<&'static str> {
     match module {
         "math" => Some(include_str!("std/math.nyra")),
+        "web" => Some(crate::webcheck::source()),
         _ => None,
     }
 }
@@ -248,6 +249,10 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
             continue;
         }
         seen.push(u.module.clone());
+        if u.module == "web" {
+            errs.extend(crate::webcheck::link(prog, u.span));
+            continue;
+        }
         if let Some(src) = source(&u.module) {
             let lib = parse_source(src);
             let own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
@@ -269,7 +274,7 @@ thread_local! {
 /// Calls to the module's own functions get the module's name: `exp(x)` becomes `math.exp(x)`.
 /// Every position of the function becomes `at`, the program's `use` line: the library is not part
 /// of the user's file, so a position inside it (line 692 of a 3-line file) would point nowhere.
-fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
+pub(crate) fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
     AT.with(|a| a.set(at));
     f.span = at;
     f.params.iter_mut().for_each(|p| p.span = at);
@@ -426,7 +431,9 @@ mod tests {
     fn modules_call_only_their_own_functions_and_fixed_builtins() {
         for m in MODULES {
             let Some(src) = source(m) else { continue };
-            let own: Vec<String> = parse_source(src).funcs.into_iter().map(|f| f.name).collect();
+            // its own functions, and its structs (built by a call of their name)
+            let lib = parse_source(src);
+            let own: Vec<String> = lib.funcs.into_iter().map(|f| f.name).chain(lib.structs.into_iter().map(|s| s.name)).collect();
             let (toks, _) = crate::lexer::lex(src);
             for (i, t) in toks.iter().enumerate() {
                 let (crate::lexer::Tok::Ident(name), Some(next)) = (&t.tok, toks.get(i + 1)) else { continue };

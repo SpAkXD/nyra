@@ -3,7 +3,7 @@
 //! A program says what it touches with its `use` lines, and the standard modules fall in two
 //! groups:
 //!
-//! - *pure* modules, always available: `json`, `math`, `text`, and `time` and `random` (they only
+//! - *pure* modules, always available: `json`, `math`, `text`, `web`, and `time` and `random` (they only
 //!   read a clock or a generator; nothing outside the program changes);
 //! - *effectful* modules, which need a capability of the same name: `fs` (files and folders),
 //!   `input` (standard input), `os` (arguments, environment variables, `exit`), and `net` when
@@ -19,7 +19,7 @@ use crate::ast::Program;
 use crate::diag::Diag;
 
 /// Modules every program may use.
-pub const PURE: &[&str] = &["json", "math", "random", "text", "time"];
+pub const PURE: &[&str] = &["json", "math", "random", "text", "time", "web"];
 
 /// The capabilities that can be granted, sorted, with what each one allows.
 pub const CAPABILITIES: &[(&str, &str)] = &[
