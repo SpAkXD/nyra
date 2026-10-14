@@ -527,6 +527,17 @@ impl Site {
                             }
                         }
                     }
+                    // a preloaded image must name the same variants as its `<img>`, or the browser fetches the
+                    // full-size file first and the WebP it then picks second
+                    if t.name == "link" && name == "href" && t.get("as") == Some("image") && !img.variants.is_empty() {
+                        if !t.has("imagesrcset") {
+                            let set: Vec<String> = img.variants.iter().map(|(f, w)| format!("{}{f} {w}w", p.up)).collect();
+                            changed.set("imagesrcset", &set.join(", "));
+                        }
+                        if !t.has("imagesizes") {
+                            changed.set("imagesizes", "100vw");
+                        }
+                    }
                 }
                 if t.name == "img" {
                     for (k, v) in [("loading", "lazy"), ("decoding", "async")] {
