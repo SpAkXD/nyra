@@ -1,4 +1,5 @@
-//! Turns source text into tokens. Newlines end statements, except inside `( )`.
+//! Turns source text into tokens. Newlines end statements, except inside `( )` (and not in a
+//! `{ }` block inside those, such as a child block).
 
 use crate::ast::{BinOp, Span};
 use crate::diag::{Diag, Edit};
@@ -185,7 +186,9 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let mut toks: Vec<Token> = Vec::new();
     let mut errs = Vec::new();
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
-    let mut paren_depth = 0usize;
+    // the open `(` (true) and `{` (false), innermost last: a new line inside `( )` is not the end
+    // of a statement, one inside a `{ }` is again
+    let mut open: Vec<bool> = Vec::new();
 
     let ends_line = |toks: &Vec<Token>| matches!(toks.last().map(|t| &t.tok), None | Some(Tok::Newline));
 
@@ -195,7 +198,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         let next = cs.get(i + 1).copied().unwrap_or('\0');
 
         if c == '\n' {
-            if paren_depth == 0 && !ends_line(&toks) {
+            if open.last() != Some(&true) && !ends_line(&toks) {
                 toks.push(Token { tok: Tok::Newline, span });
             }
             i += 1;
@@ -517,14 +520,21 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         };
         match one {
             Some(tok) => {
-                if tok == Tok::LParen {
-                    paren_depth += 1;
-                } else if tok == Tok::RParen {
-                    paren_depth = paren_depth.saturating_sub(1);
+                match tok {
+                    Tok::LParen => open.push(true),
+                    Tok::LBrace => open.push(false),
+                    // a `)` or `}` that closes nothing is the parser's to report
+                    Tok::RParen if open.last() == Some(&true) => {
+                        open.pop();
+                    }
+                    Tok::RBrace if open.last() == Some(&false) => {
+                        open.pop();
+                    }
+                    _ => {}
                 }
                 toks.push(Token { tok, span });
             }
-            None if c == ';' => errs.push(semicolon(&cs, i, span, paren_depth)),
+            None if c == ';' => errs.push(semicolon(&cs, i, span, usize::from(open.last() == Some(&true)))),
             None if c == '#' && hash_comment(&cs, i) => {
                 // a comment of another language: one error for the `#`, and the rest of the line is skipped
                 errs.push(

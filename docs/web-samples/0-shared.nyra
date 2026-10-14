@@ -1,0 +1,13 @@
+// Shared by every page of the site: identity, SEO defaults, theme, kit words, business data.
+use web
+
+site("Flora & Krby Kuběna", url: "https://flora.ageofwords.site", lang: "cs", tz: "Europe/Prague",
+    desc: "Prodejna Flora & Kamnářství Kuběna – zahradní potřeby, domácí dekorace, stavba krbů, kamen a komínů ve Valašském Meziříčí od roku 1991.",
+    share: "Zahradní potřeby a dekorace · krby, kamna a komíny. Od roku 1991 na náměstí ve Valašském Meziříčí.",
+    primary: "#2D5A1B", accent: "#D4691A", bg: "#F5F0E8", alt: "#EDE7D9", ink: "#1C1007", muted: "#5C4A38",
+    palette: ["flora": "#2D5A1B", "krby": "#8B2500"], font: "Inter", display: "Playfair Display", radius: 24,
+    say: ["open": "Nyní otevřeno", "closed": "Nyní zavřeno", "shut": "Zavřeno", "more": "Více", "down": "Posunout dolů",
+        "map": "Mapa", "menu": "Otevřít menu", "close": "Zavřít menu"])
+
+let addr = "Náměstí 71/11, 757 01 Valašské Meziříčí"
+let open_hours = [("Pondělí – Pátek", "1-5 8:00-16:00"), ("Sobota", "6 8:30-11:30"), ("Neděle", "")]

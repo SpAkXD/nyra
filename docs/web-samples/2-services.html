@@ -1,0 +1,81 @@
+<style>
+  .services { display: grid; gap: 1.25rem; }
+  @media (min-width: 640px) { .services { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1024px) { .services { grid-template-columns: repeat(3, 1fr); } }
+  .service { position: relative; height: 100%; overflow: hidden; padding: 2rem; border-radius: 1.5rem; background: #fff; box-shadow: var(--shadow); transition: transform .5s ease-out, box-shadow .5s ease-out; }
+  .service:hover { transform: translateY(-6px); box-shadow: 0 24px 48px -20px rgba(92, 24, 0, .35), var(--shadow); }
+  .service .num { position: absolute; top: 1.25rem; right: 1.5rem; font-family: var(--serif); font-size: 3rem; font-weight: 700; color: rgba(139, 37, 0, .07); transition: color .5s; }
+  .service:hover .num { color: rgba(139, 37, 0, .15); }
+  .service .icon { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin-bottom: 1.5rem; border-radius: 1rem; background: rgba(139, 37, 0, .1); color: var(--krby); transition: background-color .5s, color .5s; }
+  .service:hover .icon { background: var(--krby); color: #fff; }
+  .service .icon svg { width: 1.5rem; height: 1.5rem; }
+  .service h3 { margin-bottom: .75rem; font-size: 1.25rem; }
+  .service p { font-size: .875rem; line-height: 1.625; color: var(--ink-muted); }
+  .service::after { content: ""; position: absolute; inset: auto 0 0; height: 4px; background: linear-gradient(to right, var(--krby), var(--amber)); transform: scaleX(0); transform-origin: left; transition: transform .5s; }
+  .service:hover::after { transform: scaleX(1); }
+  .partner-wrap { display: flex; justify-content: center; margin-top: 3.5rem; }
+  .partner { display: flex; align-items: center; gap: 1rem; padding: .75rem 1.75rem .75rem .75rem; border-radius: 999px; background: #fff; box-shadow: var(--shadow); }
+  .partner-icon { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: rgba(212, 105, 26, .1); color: var(--amber); }
+  .partner-icon svg { width: 1.25rem; height: 1.25rem; }
+  .partner strong { display: block; font-size: .875rem; }
+  .partner small { font-size: .75rem; color: var(--ink-muted); }
+</style>
+
+<section id="sluzby" class="section alt krby">
+  <div class="container">
+    <div class="heading">
+      <span class="kicker reveal">Kamnářství</span>
+      <h2 class="words">Naše služby</h2>
+      <p class="reveal" style="--d: .15s">Komplexní kamnářské a zednické práce — od výpočtu tepelných ztrát až po finální revizi komína.</p>
+    </div>
+
+    <div class="services stagger">
+      <article class="service">
+        <span class="num">01</span>
+        <div class="icon"><i data-lucide="flame"></i></div>
+        <h3>Stavba krbů na míru</h3>
+        <p>Navrhujeme a stavíme krby přesně podle vašich představ a dispozic. Každý krb je jedinečný díl, který snoubí funkčnost s estetikou vašeho domova.</p>
+      </article>
+      <article class="service">
+        <span class="num">02</span>
+        <div class="icon"><i data-lucide="home"></i></div>
+        <h3>Montáž kamen a krbových vložek</h3>
+        <p>Odborná instalace kamen, krbových vložek i sporáků od předních výrobců. Pracujeme jako autorizovaný partner značky Brunner.</p>
+      </article>
+      <article class="service">
+        <span class="num">03</span>
+        <div class="icon"><i data-lucide="ruler"></i></div>
+        <h3>Výpočet tepelných ztrát a 3D projekce</h3>
+        <p>Před každou realizací provedeme odborný výpočet tepelných ztrát objektu a vytvoříme 3D projekci vašeho akumulačního nebo sálavého krbu.</p>
+      </article>
+      <article class="service">
+        <span class="num">04</span>
+        <div class="icon"><i data-lucide="hard-hat"></i></div>
+        <h3>Stavba komínů</h3>
+        <p>Komplexní výstavba zděných i systémových komínů. Dbáme na bezpečnost, správný tah a soulad s platnou legislativou a normami ČSN.</p>
+      </article>
+      <article class="service">
+        <span class="num">05</span>
+        <div class="icon"><i data-lucide="search"></i></div>
+        <h3>Revize a čištění komínů</h3>
+        <p>Provádíme pravidelné revize, inspekce a čištění komínů. Vystavíme vám průkaz o revizi, který je povinnou součástí každého funkčního komína.</p>
+      </article>
+      <article class="service">
+        <span class="num">06</span>
+        <div class="icon"><i data-lucide="message-circle"></i></div>
+        <h3>Poradenství a návrhy</h3>
+        <p>Poradíme vám s výběrem nejvhodnějšího topidla, materiálů i obkladu. Přijďte do naší prodejny nebo nás kontaktujte – rádi vám pomůžeme.</p>
+      </article>
+    </div>
+
+    <div class="partner-wrap reveal">
+      <div class="partner">
+        <span class="partner-icon"><i data-lucide="medal"></i></span>
+        <div>
+          <strong>Autorizovaný partner Brunner</strong>
+          <small>Prodej a montáž prémiových krbů a kamen</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

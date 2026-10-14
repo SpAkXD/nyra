@@ -1,0 +1,6 @@
+// expect: E0371
+fn card(title: str, size: int) -> str = "{title} {size}"
+
+print(card("a") {
+    "b"
+})

@@ -1,0 +1,42 @@
+// Default parameter values and named arguments: leave an argument out, or give it by name in any order.
+struct Pen { color: str, width: int }
+enum Size { S, M, L }
+
+fn price(n: int, currency: str = "Kč", space: bool = true) -> str = if space { "{n} {currency}" } else { "{n}{currency}" }
+ex price(5) == "5 Kč", price(5, space: false) == "5Kč", price(currency: "EUR", n: 7) == "7 EUR"
+
+fn label(text: str, size: Size = Size.M, tags: [str] = [], pen: Pen = Pen(color: "black", width: 1), note: str? = none) -> str {
+    let extra = note ?? "-"
+    return "{text} {size} {tags} {pen.color}/{pen.width} {extra}"
+}
+
+fn grow(inout xs: [int], by: int = 1, times: int = 1) {
+    for _ in 0..times {
+        xs.push(xs.len() * by)
+    }
+}
+
+fn trace(name: str, value: int) -> int {
+    print("  computing {name}")
+    return value
+}
+
+print(price(5))
+print(price(5, "EUR"))
+print(price(5, space: false))
+print(price(currency: "$", n: 3, space: false))
+print(label("a"))
+print(label("b", tags: ["new"], size: Size.L))
+print(label("c", note: "gift", pen: Pen(color: "red", width: 2)))
+
+var xs = [0]
+grow(inout xs)
+grow(inout xs, times: 2, by: 10)
+print(xs)
+
+// arguments run in the order they are written, named or not
+print("in order:")
+print(price(currency: str(trace("currency", 1)), n: trace("n", 2)))
+// a method-style call takes names too
+let four = 4
+print(four.price(space: false))

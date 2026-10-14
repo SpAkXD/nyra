@@ -3,6 +3,22 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## Unreleased (v0.8)
+
+Language
+- **Default parameter values and named arguments.** `fn price(n: int, currency: str = "Kč")` may be called
+  `price(5)`, and any argument of a program's own function may be named, after the unnamed ones and in any order:
+  `price(currency: "EUR", n: 7)`. A default is a constant (a literal, `[]`, `[:]`, `none`, an enum variant, or an
+  array, tuple, map or struct of those). Arguments still run in the order they are written. New code E0370 (a value
+  without a name after a named one, a parameter given twice, a default that is not a constant or on an `inout`
+  parameter); E0226 now means a name the function has no parameter for (until v0.8: any named argument to a function).
+- **Child blocks.** A call whose last parameter is an array may be followed by a block on its line, one element per
+  line, with `let`, `if`, `for` and `match` inside: `list("shop") { "pen"  for s in stock { s.name } }` (one line
+  each). `stack { ... }` calls a function with only the block. New code E0371 (a block where the last parameter is not
+  an array, a line that makes no value, or an assignment, `var`, `while`, `return`, `break`, `continue` or `arena` in
+  a block). A new line inside a `{ }` that is inside `( )` now ends a statement, as anywhere else. These are the
+  first part of `use web` (docs/WEB.md).
+
 ## v0.7.0 (2026-10-10)
 
 Speed

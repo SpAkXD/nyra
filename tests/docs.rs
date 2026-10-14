@@ -287,7 +287,7 @@ fn the_agent_card_keeps_its_token_budget() {
     // the header). This test cannot call the API, so it checks the header and that the card did not grow past the size
     // that was measured: re-measure after any change, then move MAX_CHARS.
     const BUDGET: usize = 1400;
-    const MAX_CHARS: usize = 3250; // measured: 3,213 characters = 1,387 tokens on claude-sonnet-5-5
+    const MAX_CHARS: usize = 3150; // measured: 3,102 characters = 1,399 tokens on claude-sonnet-5-5
     let file = std::fs::read_to_string("docs/AGENT_CARD.md").unwrap().replace("\r\n", "\n");
     let header: &str = file.split_once("-->\n").unwrap().0;
     assert!(header.contains("The card has a hard budget: a feature that needs card text must displace something."));

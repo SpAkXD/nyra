@@ -275,6 +275,8 @@ and arrays is a method (`s.len()`, `xs.push(v)`, `c.code()`): the full lists are
 | Only `var` changes | `let n = 0` then `n = 1`, `let xs = [1]` then `xs.push(2)` (E0205) | `var n = 0`, `var xs = [1]` |
 | Parameters are immutable | `n = n / 2` or `xs.push(1)` on a parameter (E0205) | `var m = n`, then change `m`; or an `inout` parameter |
 | `inout` at both ends | `swap(x, y)` for `fn swap(inout a: int, inout b: int)` (E0237) | `swap(inout x, inout y)` |
+| Named arguments after the others | `area(width: 3, 4)`, `area(3, width: 4)` (E0370), `area(widht: 3)` (E0226) | `area(3, height: 4)`; a parameter with a default (`h: int = 1`) may be left out |
+| A child block lists values | `count += 1` or `print(x)` inside `list("t") { ... }` (E0371) | one value per line: `list("t") {` newline `"a"` newline `for x in xs { x }` newline `}` |
 | Two `inout` arguments, two variables | `swap(inout xs[i], inout xs[j])` (E0237) | `xs.swap(i, j)` |
 | No shadowing | `let x = 1` ... `let x = 2` in one function (E0206) | a new name, or `var` and reassign |
 | Unique names | `let str = "a"`, `for char in s`, a variable named like a function (E0206) | `let text = "a"`, `for c in s` |
@@ -407,8 +409,10 @@ that works (section 6 has the usual replacements).
 - **Syntax**: no negative indexes, `switch`, `?.`,
   `do-while`, `loop`, labeled `break` or `elif`. A comprehension has one `for` and no index.
 - **Declarations**: no global variables outside a script (a script's top-level variables are visible in
-  functions, also with a `fn main`; the local variables of `fn main` are not), no closures, function values, overloading, default
-  arguments or methods on structs (`impl`, `self`). A program may `use` the standard modules (section 6b)
+  functions, also with a `fn main`; the local variables of `fn main` are not), no closures, function values, overloading
+  or methods on structs (`impl`, `self`). Parameters may have default values and calls may name their arguments
+  (`fn f(a: int, b: int = 0)`, `f(1, b: 2)`), and a call whose last parameter is an array takes a child block,
+  one element per line (see the spec). A program may `use` the standard modules (section 6b)
   and files of its own: `use ./shapes` imports `shapes.nyra` from the same folder, whose `pub fn`s are called
   `shapes.area(r)` (see the spec). A lambda (`x => x * 2`) is only an argument of an array
   method, and it cannot change variables.
@@ -462,7 +466,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0223 | missing field | give every field: `Point(x: 1, y: 2)` |
 | E0224 | unknown field | check the name (see `hint`); arrays and strings have methods, not fields: `xs.len()` |
 | E0225 | fields unnamed or out of order | `Point(x: 1, y: 2)`, in declaration order |
-| E0226 | named argument to a function | names are only for structs: `add(1, 2)` |
+| E0226 | named argument the function does not have | check the name (see `hint`); builtins and methods take their values by position |
 | E0227 | unknown method | the `hint` lists the methods of the type; structs have none: `fn area(r: Rect)` |
 | E0228 | method needs another element type | `join` needs `[str]` or `[char]`; `sort`, `min`, `max` and `sort_by` keys need `int`, `float`, `str`, `char` or a tuple of those; `sum` needs numbers |
 | E0229 | cannot change this | strings are immutable (`s[0] = 'x'`); a temporary (`f().push(1)`); `inout` needs a variable, not `inout m[k]` |
@@ -486,6 +490,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0262 | `Option<int>` | an optional type is written `int?` |
 | E0263 | `fn` inside a `struct`, or an `impl` block | write the function outside: `fn area(r: Rect)` |
 | E0264 | `class` | `struct Rect { w: int }` and plain functions |
+| E0370 | named argument or default value out of place | unnamed values first, each parameter once; a default is a constant (`b: int = 0`), and an `inout` parameter has none |
+| E0371 | misused child block | only after a call whose last parameter is an array; each line makes one element; no assignments, `var`, `while` or `return` inside |
 | E0290 | capability not granted | `use fs` / `os` / `input` needs `--allow fs` / `os` / `input` (CLI) or `allow: ["fs"]` (MCP); or drop the module |
 | E0292 | malformed property example | `ex for n in 0..200: f(n) >= 0`: the range is two whole-number literals, `step` is not 0 |
 | E0293 | property example has too many inputs | at most 100,000: shorten the range or add a `step` |

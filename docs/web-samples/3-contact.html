@@ -1,0 +1,230 @@
+<style>
+  .contact-grid { display: grid; gap: 1.5rem; }
+  @media (min-width: 1024px) { .contact-grid { grid-template-columns: 1fr 1.15fr; gap: 2rem; } }
+  .contact-side { display: grid; gap: 1.5rem; align-content: start; }
+  .info { position: relative; overflow: hidden; padding: 2rem; border-radius: 1.5rem; background: var(--accent); color: #fff; }
+  .info::before { content: ""; position: absolute; top: -4rem; right: -4rem; width: 14rem; height: 14rem; border-radius: 50%; background: rgba(255, 255, 255, .1); filter: blur(40px); }
+  .info-head { position: relative; display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
+  .info-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 1rem; background: rgba(255, 255, 255, .15); }
+  .info-icon svg { width: 1.5rem; height: 1.5rem; }
+  .info-head h3 { font-size: 1.25rem; }
+  .info-head p { font-size: .875rem; color: rgba(255, 255, 255, .7); }
+  .info address { position: relative; display: grid; gap: .25rem; font-size: 15px; font-style: normal; }
+  .info address a { display: flex; align-items: center; gap: .75rem; margin: 0 -.75rem; padding: .625rem .75rem; border-radius: .75rem; font-weight: 500; transition: background-color .2s; }
+  .info address a:hover { background: rgba(255, 255, 255, .1); }
+  .info address svg { color: rgba(255, 255, 255, .6); }
+  .info-foot { position: relative; display: flex; align-items: center; gap: .5rem; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(255, 255, 255, .2); font-size: .875rem; font-weight: 500; color: rgba(255, 255, 255, .9); }
+  a.info-foot { display: inline-flex; }
+  a.info-foot:hover { color: #fff; }
+  p.info-foot { gap: .75rem; font-size: .75rem; font-weight: 400; color: rgba(255, 255, 255, .8); }
+  .hours { padding: 1.75rem; }
+  .hours-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+  .hours-head h3 { display: flex; align-items: center; gap: .5rem; font-family: var(--sans); font-size: 1rem; font-weight: 600; }
+  .hours table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  .hours td { padding: .625rem 0; border-bottom: 1px solid rgba(28, 16, 7, .05); color: var(--ink-muted); }
+  .hours tr:last-child td { border: 0; }
+  .hours td + td { text-align: right; font-weight: 500; color: var(--ink); }
+  .hours td.closed { color: var(--krby); }
+  .hours-note { margin-top: .75rem; font-size: .75rem; color: var(--ink-muted); }
+  .map { overflow: hidden; }
+  .map-frame { position: relative; aspect-ratio: 16 / 9; background: var(--cream-dark); }
+  .map-frame iframe, .map-load { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .map-load { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .75rem; font-size: .75rem; color: var(--ink-muted); background: radial-gradient(circle at center, rgba(212, 105, 26, .12), transparent 60%); }
+  .map-load strong { font-size: .875rem; color: var(--ink); }
+  .map-pin { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 50%; background: var(--accent); color: #fff; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1); transition: transform .3s; }
+  .map-pin svg { width: 1.5rem; height: 1.5rem; }
+  .map-load:hover .map-pin { transform: scale(1.1); }
+  .map-link { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .75rem 1rem; font-size: .875rem; font-weight: 600; color: var(--accent); }
+  .map-link:hover { text-decoration: underline; }
+  .form-card { height: 100%; padding: 1.75rem; }
+  @media (min-width: 768px) { .form-card { padding: 2.5rem; } }
+  .form-card h3 { margin-bottom: 1.5rem; font-size: 1.5rem; }
+  @media (min-width: 768px) { .form-card h3 { font-size: 1.875rem; } }
+  .contact-form { display: grid; gap: 1.25rem; }
+  .form-row { display: grid; gap: 1.25rem; }
+  @media (min-width: 640px) { .form-row { grid-template-columns: 1fr 1fr; } }
+  .contact-form label > span { display: block; margin-bottom: .375rem; font-size: .875rem; font-weight: 500; }
+  .contact-form b { color: var(--krby); }
+  .contact-form input, .contact-form textarea { width: 100%; padding: .875rem 1rem; border: 1px solid rgba(28, 16, 7, .15); border-radius: .75rem; background: rgba(245, 240, 232, .4); font: inherit; font-size: 15px; resize: none; transition: border-color .2s, box-shadow .2s, background-color .2s; }
+  .contact-form ::placeholder { color: rgba(28, 16, 7, .35); }
+  .contact-form input:focus, .contact-form textarea:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .send { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; padding: 1rem; border-radius: 999px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1); transition: filter .2s, transform .2s; }
+  .send:hover { filter: brightness(1.1); }
+  .send:active { transform: scale(.98); }
+  .send svg { transition: transform .3s; }
+  .send:hover svg { transform: translate(2px, -2px); }
+  .form-note { text-align: center; font-size: .75rem; color: var(--ink-muted); }
+  .sent { padding: 3rem 0; text-align: center; animation: pop .4s var(--ease); }
+  .sent > svg { width: 4rem; height: 4rem; margin: 0 auto 1rem; color: var(--accent); animation: pop .5s cubic-bezier(.34, 1.56, .64, 1) .1s both; }
+  .sent h4 { margin-bottom: .5rem; font-size: 1.25rem; color: var(--accent); }
+  .sent p { max-width: 24rem; margin: 0 auto; font-size: .875rem; color: var(--ink-muted); }
+  .sent p a { font-weight: 600; color: var(--accent); text-decoration: underline; }
+  .edit { margin-top: 1.5rem; font-size: .875rem; font-weight: 600; color: var(--ink-muted); text-decoration: underline; }
+  .edit:hover { color: var(--ink); }
+  @keyframes pop { from { opacity: 0; transform: scale(.9); } }
+</style>
+
+<!-- flora/index.html -->
+<section id="kontakt" class="section">
+  <div class="container">
+    <div class="heading">
+      <span class="kicker reveal">Kontakt</span>
+      <h2 class="words">Ozvěte se nám</h2>
+      <p class="reveal" style="--d: .15s">Navštivte nás nebo se ozvěte – rádi poradíme.</p>
+    </div>
+    <div class="contact-grid">
+      <div class="contact-side">
+        <div class="info reveal">
+          <div class="info-head">
+            <span class="info-icon"><i data-lucide="leaf"></i></span>
+            <div><h3>Prodejna Flora</h3><p>Stanislav Kuběna</p></div>
+          </div>
+          <address>
+            <a href="tel:+420571623840"><i data-lucide="phone"></i> +420 571 623 840</a>
+            <a href="mailto:floravalmez@seznam.cz"><i data-lucide="mail"></i> floravalmez@seznam.cz</a>
+            <a href="https://www.google.com/maps/search/?api=1&query=Náměstí+71/11,+757+01+Valašské+Meziříčí" target="_blank" rel="noopener noreferrer"><i data-lucide="map-pin"></i> Náměstí 71/11, 757 01 Valašské Meziříčí</a>
+          </address>
+          <a class="info-foot" href="https://www.facebook.com/prodejnaflora/" target="_blank" rel="noopener noreferrer"><i data-lucide="facebook"></i> Sledujte nás na Facebooku</a>
+        </div>
+        <div class="card hours reveal" style="--d: .08s">
+          <div class="hours-head">
+            <h3><i data-lucide="clock"></i> Otevírací doba</h3>
+            <span class="badge dark"><span class="dot"></span><span class="label">Nyní zavřeno</span></span>
+          </div>
+          <table>
+            <tr><td>Pondělí – Pátek</td><td>8:00 – 16:00</td></tr>
+            <tr><td>Sobota</td><td>8:30 – 11:30</td></tr>
+            <tr><td>Neděle</td><td class="closed">Zavřeno</td></tr>
+          </table>
+          <p class="hours-note">Platba v hotovosti</p>
+        </div>
+        <div class="card map reveal" style="--d: .12s">
+          <div class="map-frame">
+            <button type="button" class="map-load" data-src="https://www.google.com/maps?q=Náměstí+71/11,+757+01+Valašské+Meziříčí&z=16&output=embed">
+              <span class="map-pin"><i data-lucide="map-pin"></i></span>
+              <strong>Zobrazit mapu</strong>
+              <span>Náměstí 71/11, 757 01 Valašské Meziříčí</span>
+            </button>
+          </div>
+          <a class="map-link" href="https://www.google.com/maps/search/?api=1&query=Náměstí+71/11,+757+01+Valašské+Meziříčí" target="_blank" rel="noopener noreferrer"><i data-lucide="navigation"></i> Navigovat v Google Maps</a>
+        </div>
+      </div>
+      <div class="card form-card reveal" style="--d: .1s">
+        <h3>Napište nám</h3>
+        <form class="contact-form" data-email="floravalmez@seznam.cz" data-subject="Dotaz z webu – Prodejna Flora">
+          <div class="form-row">
+            <label><span>Jméno <b>*</b></span><input name="jmeno" required autocomplete="name" placeholder="Jan Novák"></label>
+            <label><span>E-mail <b>*</b></span><input name="email" type="email" required autocomplete="email" placeholder="jan@priklad.cz"></label>
+          </div>
+          <label><span>Telefon</span><input name="telefon" type="tel" autocomplete="tel" placeholder="+420 123 456 789"></label>
+          <label><span>Zpráva <b>*</b></span><textarea name="zprava" required rows="6" placeholder="Na co se chcete zeptat?"></textarea></label>
+          <button type="submit" class="send">Odeslat zprávu <i data-lucide="send"></i></button>
+          <p class="form-note">Zpráva se otevře ve vašem e-mailu, odkud ji odešlete.</p>
+        </form>
+        <div class="sent" hidden>
+          <i data-lucide="circle-check"></i>
+          <h4>Zpráva je připravená</h4>
+          <p>Otevřeli jsme ji ve vašem e-mailovém programu — stačí ji odeslat. Pokud se nic neotevřelo, napište nám přímo na <a href="mailto:floravalmez@seznam.cz">floravalmez@seznam.cz</a> nebo zavolejte na <a href="tel:+420571623840">+420 571 623 840</a>.</p>
+          <button type="button" class="edit">Upravit zprávu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- krby/index.html -->
+<section id="kontakt" class="section krby">
+  <div class="container">
+    <div class="heading">
+      <span class="kicker reveal">Kontakt</span>
+      <h2 class="words">Ozvěte se nám</h2>
+      <p class="reveal" style="--d: .15s">Obraťte se na nás pro nezávaznou poptávku nebo konzultaci.</p>
+    </div>
+    <div class="contact-grid">
+      <div class="contact-side">
+        <div class="info reveal">
+          <div class="info-head">
+            <span class="info-icon"><i data-lucide="flame"></i></span>
+            <div><h3>Kamnářství Kuběna</h3><p>Stanislav Kuběna — certifikovaný kamnář</p></div>
+          </div>
+          <address>
+            <a href="tel:+420602566330"><i data-lucide="phone"></i> +420 602 566 330</a>
+            <a href="mailto:krby@krby-valmez.cz"><i data-lucide="mail"></i> krby@krby-valmez.cz</a>
+            <a href="https://www.google.com/maps/search/?api=1&query=Náměstí+71/11,+757+01+Valašské+Meziříčí" target="_blank" rel="noopener noreferrer"><i data-lucide="map-pin"></i> Náměstí 71/11, 757 01 Valašské Meziříčí</a>
+          </address>
+          <p class="info-foot"><i data-lucide="medal"></i> Autorizovaný partner Brunner · IČO: 67304630</p>
+        </div>
+        <div class="card hours reveal" style="--d: .08s">
+          <div class="hours-head">
+            <h3><i data-lucide="clock"></i> Otevírací doba</h3>
+            <span class="badge dark"><span class="dot"></span><span class="label">Nyní zavřeno</span></span>
+          </div>
+          <table>
+            <tr><td>Pondělí – Pátek</td><td>8:00 – 16:00</td></tr>
+            <tr><td>Sobota</td><td>8:30 – 11:30</td></tr>
+            <tr><td>Neděle</td><td class="closed">Zavřeno</td></tr>
+          </table>
+        </div>
+        <div class="card map reveal" style="--d: .12s">
+          <div class="map-frame">
+            <button type="button" class="map-load" data-src="https://www.google.com/maps?q=Náměstí+71/11,+757+01+Valašské+Meziříčí&z=16&output=embed">
+              <span class="map-pin"><i data-lucide="map-pin"></i></span>
+              <strong>Zobrazit mapu</strong>
+              <span>Náměstí 71/11, 757 01 Valašské Meziříčí</span>
+            </button>
+          </div>
+          <a class="map-link" href="https://www.google.com/maps/search/?api=1&query=Náměstí+71/11,+757+01+Valašské+Meziříčí" target="_blank" rel="noopener noreferrer"><i data-lucide="navigation"></i> Navigovat v Google Maps</a>
+        </div>
+      </div>
+      <div class="card form-card reveal" style="--d: .1s">
+        <h3>Nezávazná poptávka</h3>
+        <form class="contact-form" data-email="krby@krby-valmez.cz" data-subject="Poptávka z webu – Kamnářství Kuběna">
+          <div class="form-row">
+            <label><span>Jméno <b>*</b></span><input name="jmeno" required autocomplete="name" placeholder="Jan Novák"></label>
+            <label><span>E-mail <b>*</b></span><input name="email" type="email" required autocomplete="email" placeholder="jan@priklad.cz"></label>
+          </div>
+          <label><span>Telefon</span><input name="telefon" type="tel" autocomplete="tel" placeholder="+420 123 456 789"></label>
+          <label><span>Zpráva <b>*</b></span><textarea name="zprava" required rows="6" placeholder="Popište, co potřebujete (typ krbu či kamen, rozměry, lokalita…)"></textarea></label>
+          <button type="submit" class="send">Odeslat zprávu <i data-lucide="send"></i></button>
+          <p class="form-note">Zpráva se otevře ve vašem e-mailu, odkud ji odešlete.</p>
+        </form>
+        <div class="sent" hidden>
+          <i data-lucide="circle-check"></i>
+          <h4>Zpráva je připravená</h4>
+          <p>Otevřeli jsme ji ve vašem e-mailovém programu — stačí ji odeslat. Pokud se nic neotevřelo, napište nám přímo na <a href="mailto:krby@krby-valmez.cz">krby@krby-valmez.cz</a> nebo zavolejte na <a href="tel:+420602566330">+420 602 566 330</a>.</p>
+          <button type="button" class="edit">Upravit zprávu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Map: load the Google Maps iframe only when asked.
+  document.querySelectorAll('.map-load').forEach((btn) => btn.addEventListener('click', () => {
+    const frame = document.createElement('iframe');
+    frame.title = 'Mapa';
+    frame.src = btn.dataset.src;
+    frame.loading = 'lazy';
+    frame.referrerPolicy = 'no-referrer-when-downgrade';
+    btn.replaceWith(frame);
+  }));
+
+  // Form: no backend, so compose the message in the visitor's e-mail app.
+  document.querySelectorAll('.contact-form').forEach((form) => {
+    const sent = form.nextElementSibling;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = new FormData(form);
+      const phone = f.get('telefon') ? `\n${f.get('telefon')}` : '';
+      const body = `${f.get('zprava')}\n\n—\n${f.get('jmeno')}\n${f.get('email')}${phone}`;
+      location.href = `mailto:${form.dataset.email}?subject=${encodeURIComponent(form.dataset.subject)}&body=${encodeURIComponent(body)}`;
+      form.hidden = true;
+      sent.hidden = false;
+    });
+    sent.querySelector('.edit').addEventListener('click', () => {
+      sent.hidden = true;
+      form.hidden = false;
+    });
+  });
+</script>

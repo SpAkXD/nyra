@@ -1,0 +1,6 @@
+// expect: E0371
+fn list(items: [int]) -> int = items.len()
+
+print(list([1]) {
+    2
+})

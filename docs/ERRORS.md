@@ -38,12 +38,14 @@ design may still change.
 | E0350-E0354 | run time (v0.6) | `unwrap()` of `none` (E0350) |
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
+| E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
+| E0372-E0389 | `use web` (planned, v0.8) | kept for the web library designed in [WEB.md](WEB.md) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0372-E0389 are kept for `use web`. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -421,7 +423,7 @@ fn main() {
 ## E0204: wrong number of arguments
 - **Kind:** compile error · **Since:** v0.1
 - **What it means:** A call passes a different number of arguments than the function declares. `print`, `int`, `float`, `str`, `char`, `free` and `keep` take exactly one argument, and a method takes the arguments it needs: `xs.push(1, 2)` reports "`.push()` takes 1 argument but 2 were given".
-- **Why Nyra has this rule:** A function has one signature: no default arguments, no variable argument lists, no overloading. The message shows the signature and the hint says which argument is missing or extra.
+- **Why Nyra has this rule:** A function has one signature: no variable argument lists and no overloading; only a parameter with a default value (`b: int = 0`) may be left out. The message shows the signature and the hint says which argument is missing or extra.
 - **Common causes:**
   - an argument was forgotten, or one too many was passed
   - `print(a, b)`: `print` takes one value, so build the text with interpolation: `print("{a} {b}")`
@@ -939,7 +941,7 @@ fn main() {
 ## E0223: missing field in a struct construction
 - **Kind:** compile error · **Since:** v0.3
 - **What it means:** A construction `Point(...)` does not give a value for every field of the struct. The message lists what is missing: "missing field in `Point(...)`: `y`" (or "missing fields ... `x`, `y`") and the hint shows the whole call: `Point(x: ..., y: ...)`.
-- **Why Nyra has this rule:** There are no default values and no null. Every field of a struct always holds a value, so a field can never be read before it was set.
+- **Why Nyra has this rule:** A struct field has no default value, and there is no null. Every field of a struct always holds a value, so a field can never be read before it was set.
 - **Common causes:**
   - a field was added to the struct and a construction was not updated
   - a field was forgotten
@@ -1040,20 +1042,20 @@ fn main() {
 ```
 - **Related:** E0101, E0223, E0226
 
-## E0226: named argument in a function call
+## E0226: named argument the function does not have
 - **Kind:** compile error · **Since:** v0.3
-- **What it means:** A call to a function, a builtin or a method uses `name: value` arguments. Names belong only to building a struct, `Point(x: 1, y: 2)`. Each named argument is reported: "named argument `width:` in a call to function `area`", and when the values are short the hint shows the call to write, with the values in the order of the parameters: `area(3, 4)`.
-- **Why Nyra has this rule:** Arguments are passed in one way only: by position, in the order of the parameters. There are no keyword arguments, no default values and no reordering, so a call reads the same way everywhere. Struct construction is the one place where names appear.
+- **What it means:** A call gives an argument by a name, `label: value`, that the called function has no parameter for: "`area` has no parameter `heigth`". The hint gives the closest parameter name (and `--fix` uses it when the only difference is the case of the letters), or lists the parameters. Builtins and methods take their values by position, so any named argument to them is this error too (`print` has one: a last `end:`). Until v0.8 every named argument to a function was this error; since v0.8 the arguments of a program's own functions may be named.
+- **Why Nyra has this rule:** A named argument goes to the parameter of that name, wherever it is written in the call. A name that matches no parameter is a mistake in the call or in the signature, and the value would otherwise be lost silently.
 - **Common causes:**
-  - keyword arguments from Python, Swift or Kotlin
-  - calling a function as if it were a struct
-  - `print(value: x)` or `str(value: x)`
+  - a misspelled parameter name, or the name from an older version of the function
+  - a parameter that was renamed in `fn` but not at the call
+  - keyword arguments on a builtin or a method: `str(value: x)`, `s.split(sep: ",")`
 - **Wrong:**
 ```rust
 fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(area(width: 3, height: 4))
+    print(area(width: 3, heigth: 4))
 }
 ```
 - **Fixed:**
@@ -1061,10 +1063,10 @@ fn main() {
 fn area(width: int, height: int) -> int = width * height
 
 fn main() {
-    print(area(3, 4))
+    print(area(width: 3, height: 4))
 }
 ```
-- **Related:** E0204, E0225
+- **Related:** E0204, E0225, E0370
 
 ## E0227: unknown method
 - **Kind:** compile error · **Since:** v0.3
@@ -3708,3 +3710,63 @@ fn main() {
 }
 ```
 - **Related:** E0361, E0360
+
+## E0370: named argument or default value out of place
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A call or a signature breaks a rule of named arguments and default values: a value without a name after a named one (`area(width: 3, 4)`), a parameter given twice (`area(3, width: 4)`: the 3 already went to `width`), a default value that is not a constant (`fn wait(ms: int = now())`), or a default value on an `inout` parameter.
+- **Why Nyra has this rule:** The values without a name fill the parameters in order, so they come first, and every parameter gets exactly one value. A default value is filled in at each call that leaves the argument out, so it must be a constant (a literal, `[]`, `[:]`, `none`, an enum variant, or an array, tuple, map or struct of those): it means the same at every call and runs nothing. An `inout` argument is a variable of the caller, which a default cannot be.
+- **Common causes:**
+  - Python or Kotlin style calls with a positional value after a keyword argument
+  - naming a parameter that a positional value already filled
+  - a default computed by a call, such as the current time or a list read from a file
+- **Wrong:**
+```rust
+fn area(width: int, height: int) -> int = width * height
+
+fn main() {
+    print(area(width: 3, 4))
+}
+```
+- **Fixed:**
+```rust
+fn area(width: int, height: int) -> int = width * height
+
+fn main() {
+    print(area(3, height: 4))
+}
+```
+- **Related:** E0204, E0226, E0371
+
+## E0371: misused child block
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A child block, `f(...) { ... }` on the line of the call, gives the last argument of `f`: an array of the values its lines make. This error is a block where there is no such argument (the last parameter is not an array, the call is of a builtin or a method, `f` takes no arguments, or the last argument is given already), a line that makes no value (`print("x")` returns nothing), or a statement that a block cannot have: an assignment, `var`, `while`, `return`, `break`, `continue` or `arena`.
+- **Why Nyra has this rule:** A child block describes a value, usually a tree of values such as the parts of a page, and runs in place, once, like the body of an `if`. Because it changes nothing, each line reads as one element, and the compiler checks every line against the element type. Work that changes variables belongs before the call.
+- **Common causes:**
+  - a block after a function whose last parameter is not an array
+  - counting or printing inside a block
+  - a `while` loop where `for x in xs` is meant
+- **Wrong:**
+```rust
+fn list(title: str, items: [str]) -> str = "{title}: " + items.join(", ")
+
+fn main() {
+    var count = 0
+    print(list("shop") {
+        "pen"
+        count += 1
+    })
+}
+```
+- **Fixed:**
+```rust
+fn list(title: str, items: [str]) -> str = "{title}: " + items.join(", ")
+
+fn main() {
+    let count = 1
+    print(list("shop") {
+        "pen"
+        "{count} more"
+    })
+}
+```
+- **Related:** E0203, E0370

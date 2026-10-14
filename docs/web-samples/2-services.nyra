@@ -1,0 +1,19 @@
+// Kamnářství services: six numbered feature cards and the Brunner partner chip.
+fn services() -> Node = section("sluzby", "Naše služby", kicker: "Kamnářství", bg: "alt",
+    text: "Komplexní kamnářské a zednické práce — od výpočtu tepelných ztrát až po finální revizi komína.") {
+    grid(3, numbers: true, hover: "lift") {
+        card("Stavba krbů na míru",
+            "Navrhujeme a stavíme krby přesně podle vašich představ a dispozic. Každý krb je jedinečný díl, který snoubí funkčnost s estetikou vašeho domova.", icon: "flame")
+        card("Montáž kamen a krbových vložek",
+            "Odborná instalace kamen, krbových vložek i sporáků od předních výrobců. Pracujeme jako autorizovaný partner značky Brunner.", icon: "home")
+        card("Výpočet tepelných ztrát a 3D projekce",
+            "Před každou realizací provedeme odborný výpočet tepelných ztrát objektu a vytvoříme 3D projekci vašeho akumulačního nebo sálavého krbu.", icon: "ruler")
+        card("Stavba komínů",
+            "Komplexní výstavba zděných i systémových komínů. Dbáme na bezpečnost, správný tah a soulad s platnou legislativou a normami ČSN.", icon: "hard-hat")
+        card("Revize a čištění komínů",
+            "Provádíme pravidelné revize, inspekce a čištění komínů. Vystavíme vám průkaz o revizi, který je povinnou součástí každého funkčního komína.", icon: "search")
+        card("Poradenství a návrhy",
+            "Poradíme vám s výběrem nejvhodnějšího topidla, materiálů i obkladu. Přijďte do naší prodejny nebo nás kontaktujte – rádi vám pomůžeme.", icon: "message-circle")
+    }
+    chip("Autorizovaný partner Brunner", "Prodej a montáž prémiových krbů a kamen", icon: "medal")
+}

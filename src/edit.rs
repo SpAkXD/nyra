@@ -933,6 +933,7 @@ fn walk(e: &Expr, f: &mut dyn FnMut(&Expr)) {
                 walk_stmts(&arm.body, f);
             }
         }
+        ExprKind::Block(_, body) => walk_stmts(body, f),
         ExprKind::Comprehension(c) => {
             match &c.src {
                 crate::ast::CompSrc::Each(x) => walk(x, f),

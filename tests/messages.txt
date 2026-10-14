@@ -4222,26 +4222,18 @@ nyra: 1 error(s)
 ==== call_named_args
 fn area(width: int, height: int) -> int = width * height
 fn main() {
-    print(area(height: 4, width: 3))
+    print(area(heigth: 4, width: 3))
 }
 ----
-error[E0226]: named argument `height:` in a call to function `area`
+error[E0226]: `area` has no parameter `heigth`
   --> case.nyra:3:16
   |
-3 |     print(area(height: 4, width: 3))
+3 |     print(area(heigth: 4, width: 3))
   |                ^
-  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
+  = hint: did you mean `height`?
   = explain: nyra explain E0226
 
-error[E0226]: named argument `width:` in a call to function `area`
-  --> case.nyra:3:27
-  |
-3 |     print(area(height: 4, width: 3))
-  |                           ^
-  = hint: names are only for building structs: write the values in parameter order, `area(3, 4)`
-  = explain: nyra explain E0226
-
-nyra: 2 error(s)
+nyra: 1 error(s)
 ==== method_other_language_array
 fn main() {
     var xs = [1, 2, 3]
@@ -6256,5 +6248,237 @@ error[E0218]: a map key must be `int`, `str`, `char`, `bool` or a tuple of those
   |     ^
   = hint: a tuple is a key when each of its parts is an `int`, `str`, `char`, `bool` or such a tuple: use an `int` that stands for a float part, or the text `str(x)`
   = explain: nyra explain E0218
+
+nyra: 1 error(s)
+==== named_arg_unknown_name
+fn area(width: int, height: int) -> int = width * height
+print(area(3, size: 4))
+----
+error[E0226]: `area` has no parameter `size`
+  --> case.nyra:2:15
+  |
+2 | print(area(3, size: 4))
+  |               ^
+  = hint: its parameters are `width`, `height`: `fn area(width: int, height: int)`
+  = explain: nyra explain E0226
+
+nyra: 1 error(s)
+==== named_arg_builtin
+print(str(value: 3))
+----
+error[E0226]: named argument `value:` in a call to `str`
+  --> case.nyra:1:11
+  |
+1 | print(str(value: 3))
+  |           ^
+  = hint: write the value alone: `str(x)`
+  = explain: nyra explain E0226
+
+nyra: 1 error(s)
+==== named_arg_before_positional
+fn area(width: int, height: int) -> int = width * height
+print(area(width: 3, 4))
+----
+error[E0370]: a value without a name after a named argument in the call of `area`
+  --> case.nyra:2:22
+  |
+2 | print(area(width: 3, 4))
+  |                      ^
+  = hint: write the values without names first, in parameter order, then the named ones: `fn area(width: int, height: int)`
+  = explain: nyra explain E0370
+
+nyra: 1 error(s)
+==== named_arg_twice
+fn area(width: int, height: int) -> int = width * height
+print(area(3, width: 4))
+----
+error[E0370]: `width` is given twice in the call of `area`
+  --> case.nyra:2:15
+  |
+2 | print(area(3, width: 4))
+  |               ^
+  = hint: give each parameter one value: `width` is parameter 1 of `fn area(width: int, height: int)`
+  = explain: nyra explain E0370
+
+nyra: 1 error(s)
+==== named_arg_missing
+fn area(width: int, height: int = 1) -> int = width * height
+print(area(height: 4))
+----
+error[E0204]: the call of `area` gives no value for `width: int`
+  --> case.nyra:2:7
+  |
+2 | print(area(height: 4))
+  |       ^
+  = hint: pass it, e.g. `area(..., width: ...)`, or give the parameter a default value in `fn area(width: int, height: int)`
+  = explain: nyra explain E0204
+
+nyra: 1 error(s)
+==== default_not_constant
+fn now() -> int = 5
+fn wait(ms: int = now()) = print(ms)
+wait()
+----
+error[E0370]: the default value of `ms` in `wait` is not a constant
+  --> case.nyra:2:19
+  |
+2 | fn wait(ms: int = now()) = print(ms)
+  |                   ^
+  = hint: a default value is a literal, `[]`, `[:]`, `none`, an enum variant, or an array, tuple, map or struct of those: `ms: int = 0`
+  = explain: nyra explain E0370
+
+nyra: 1 error(s)
+==== default_on_inout
+fn bump(inout n: int = 0) {
+    n += 1
+}
+var x = 1
+bump(inout x)
+print(x)
+----
+error[E0370]: the `inout` parameter `n` of `bump` cannot have a default value
+  --> case.nyra:1:24
+  |
+1 | fn bump(inout n: int = 0) {
+  |                        ^
+  = hint: an `inout` argument is a variable of the caller, so every call must name it: remove `= ...`
+  = explain: nyra explain E0370
+
+nyra: 1 error(s)
+==== default_wrong_type
+fn greet(name: str = 3) = print(name)
+greet()
+----
+error[E0203]: type mismatch in the default value of `name` in `fn greet`: expected `str`, found `int`
+  --> case.nyra:1:22
+  |
+1 | fn greet(name: str = 3) = print(name)
+  |                      ^
+  = hint: build text with interpolation: `"{3}"`, or convert with `str(3)`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== child_block_not_array
+fn card(title: str, size: int) -> str = title
+print(card("a") {
+    "b"
+})
+----
+error[E0371]: `card` takes no child block: its last parameter `size` is an `int`, not an array
+  --> case.nyra:2:17
+  |
+2 | print(card("a") {
+  |                 ^
+  = hint: pass the value as an argument, `card(..., size: ...)`, or declare the parameter as an array to take a block
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_no_params
+fn now() -> int = 1
+print(now() {
+    1
+})
+----
+error[E0371]: `now` takes no arguments, so it takes no child block
+  --> case.nyra:2:13
+  |
+2 | print(now() {
+  |             ^
+  = hint: remove the block, or give `fn now` a last parameter that is an array, e.g. `kids: [str]`
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_given_twice
+fn list(items: [int]) -> int = items.len()
+print(list([1]) {
+    2
+})
+----
+error[E0371]: `list` gets its last parameter `items` twice: as an argument and as the child block
+  --> case.nyra:2:17
+  |
+2 | print(list([1]) {
+  |                 ^
+  = hint: leave out the argument `items` or the block: the block is the value of the last parameter
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_assignment
+fn list(items: [int]) -> int = items.len()
+var n = 0
+print(list {
+    n = 1
+    2
+})
+----
+error[E0371]: the child block of `list` changes `n`: a child block lists values and changes nothing
+  --> case.nyra:4:5
+  |
+4 |     n = 1
+  |     ^
+  = hint: compute the value before the call and use it in the block, or name it with `let`
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_while
+fn list(items: [int]) -> int = items.len()
+print(list {
+    while true {
+        1
+    }
+})
+----
+error[E0371]: `while` in the child block of `list`
+  --> case.nyra:3:5
+  |
+3 |     while true {
+  |     ^
+  = hint: use `for x in xs { ... }` or `for i in 0..n { ... }`: a child block changes no variable, so a `while` could not end
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_no_value
+fn list(items: [str]) -> int = items.len()
+print(list {
+    print("x")
+})
+----
+error[E0371]: this line of the child block of `list` makes no value: `print("x")` returns nothing
+  --> case.nyra:3:5
+  |
+3 |     print("x")
+  |     ^
+  = hint: each line of a child block is one element of it: call this before the block, or make it return a value
+  = explain: nyra explain E0371
+
+nyra: 1 error(s)
+==== child_block_element_type
+fn list(items: [int]) -> int = items.len()
+print(list {
+    "a"
+})
+----
+error[E0203]: type mismatch in a line of the child block of `list`: expected `int`, found `str`
+  --> case.nyra:3:5
+  |
+3 |     "a"
+  |     ^
+  = hint: this text is not a number: write an `int` here, or give the variable the type you need
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== child_block_builtin
+fn list(items: [int]) -> int = items.len()
+print(list([str(1) {
+    "x"
+}.len()]))
+----
+error[E0371]: `str` takes no child block
+  --> case.nyra:2:20
+  |
+2 | print(list([str(1) {
+  |                    ^
+  = hint: a child block follows a call of a function whose last parameter is an array; this call is written with its values in `( )`
+  = explain: nyra explain E0371
 
 nyra: 1 error(s)

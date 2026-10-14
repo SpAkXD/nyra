@@ -154,9 +154,16 @@ fn mutates(e: &ast::Expr) -> bool {
     use ast::ExprKind as K;
     match &e.kind {
         K::Method(r, name, args) => {
-            matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse" | "sort_by" | "set")
+            // a line of a child block adds to the block's own array, which nothing else can see
+            let kids = matches!(&r.kind, K::Var(v) if v.starts_with(ast::KIDS_PREFIX));
+            (!kids && matches!(name.as_str(), "push" | "pop" | "insert" | "remove" | "swap" | "sort" | "reverse" | "sort_by" | "set"))
                 || mutates(r)
                 || args.iter().any(mutates)
+        }
+        K::Block(_, body) => {
+            let mut m = false;
+            ast::stmt_exprs(body, &mut |x| m |= mutates(x));
+            m
         }
         K::Call(name, args) => {
             WRITERS.with(|w| w.borrow().contains(name)) || args.iter().any(|a| matches!(a.kind, K::Inout(_)) || mutates(a))
@@ -218,6 +225,7 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
             }
         }
         K::Call(_, xs) | K::Array(xs) | K::Tuple(xs) => xs.iter().for_each(|x| each_expr(x, f)),
+        K::Block(_, body) => ast::stmt_exprs(body, &mut |x| each_expr(x, f)),
         K::Some(x) => each_expr(x, f),
         K::Coalesce(a, b) => {
             each_expr(a, f);
@@ -1638,6 +1646,19 @@ impl<'a> Lower<'a> {
                 let v = self.comprehension(c, e, out);
                 self.restore(facts, mark);
                 v
+            }
+            ast::ExprKind::Block(kids, body) => {
+                // a child block: a new array, then its lines (the checker made each value a `push`)
+                let Expr::Local(acc) = self.op(RtOp::ArrNew, Vec::new(), e.ty, dst, span, out) else { unreachable!() };
+                let saved = std::mem::take(&mut self.pending);
+                let live = std::mem::take(&mut self.chain_live);
+                let (facts, mark) = self.save();
+                self.scopes.last_mut().expect("a scope is open").names.insert(kids.clone(), acc);
+                self.block(body, out, false);
+                self.restore(facts, mark);
+                self.chain_live = live;
+                self.pending = saved;
+                Expr::Local(acc)
             }
         }
     }

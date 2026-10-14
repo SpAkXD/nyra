@@ -1,0 +1,8 @@
+// expect: E0370
+fn bump(inout n: int = 0) {
+    n += 1
+}
+
+var x = 1
+bump(inout x)
+print(x)

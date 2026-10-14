@@ -1,0 +1,8 @@
+// expect: E0371
+fn list(items: [int]) -> int = items.len()
+
+var n = 0
+print(list {
+    n = 1
+    2
+})

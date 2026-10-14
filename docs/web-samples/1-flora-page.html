@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Prodejna Flora – zahradní potřeby a dekorace | Valašské Meziříčí</title>
+  <meta name="description" content="Prodejna Flora &amp; Kamnářství Kuběna – zahradní potřeby, domácí dekorace, stavba krbů, kamen a komínů ve Valašském Meziříčí od roku 1991.">
+  <meta name="theme-color" content="#1C1007">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Prodejna Flora – zahradní potřeby a dekorace | Valašské Meziříčí">
+  <meta property="og:description" content="Zahradní potřeby a dekorace · krby, kamna a komíny. Od roku 1991 na náměstí ve Valašském Meziříčí.">
+  <meta property="og:image" content="https://flora.ageofwords.site/img/flora-hero-1200.webp">
+  <link rel="canonical" href="https://flora.ageofwords.site/flora/">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preload" as="image" type="image/webp" fetchpriority="high" imagesizes="100vw"
+        imagesrcset="/img/flora-hero-480.webp 480w, /img/flora-hero-800.webp 800w, /img/flora-hero-1200.webp 1200w, /img/flora-hero-1600.webp 1600w">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* hero */
+    .hero { position: relative; display: flex; align-items: flex-end; min-height: 100svh; margin-top: -4rem; overflow: hidden; color: #fff; }
+    .hero-media { position: absolute; inset: 0; will-change: transform; }
+    .hero-media img { width: 100%; height: 100%; object-fit: cover; animation: hero-zoom 2.2s var(--ease) both; }
+    .hero-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(30, 61, 18, .95), rgba(30, 61, 18, .45), rgba(30, 61, 18, .1)); }
+    .hero-shade::before { content: ""; position: absolute; inset: 0 0 auto; height: 10rem; background: linear-gradient(rgba(0, 0, 0, .3), transparent); }
+    .hero-content { position: relative; z-index: 1; width: 100%; padding-top: 8rem; padding-bottom: 5rem; will-change: transform, opacity; }
+    @media (min-width: 768px) { .hero-content { padding-bottom: 7rem; } }
+    .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+    .hero-kicker { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .25em; color: rgba(255, 255, 255, .8); }
+    .hero h1 { max-width: 56rem; margin-bottom: 1.5rem; font-size: 3rem; line-height: 1.02; }
+    @media (min-width: 640px) { .hero h1 { font-size: 3.75rem; } }
+    @media (min-width: 768px) { .hero h1 { font-size: 6rem; } }
+    .hero-text { max-width: 36rem; margin-bottom: 2.25rem; font-size: 1.125rem; line-height: 1.625; color: rgba(255, 255, 255, .85); }
+    @media (min-width: 768px) { .hero-text { font-size: 1.25rem; } }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+    .fade-up { animation: fade-up .9s var(--ease) var(--d) both; }
+    .hero-cue { position: absolute; bottom: 1.5rem; left: 50%; z-index: 1; display: none; flex-direction: column; align-items: center; gap: .25rem; transform: translateX(-50%); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .3em; color: rgba(255, 255, 255, .7); transition: color .2s; animation: fade-in .8s 1.6s both; }
+    .hero-cue:hover { color: #fff; }
+    .hero-cue svg { width: 1.25rem; height: 1.25rem; animation: bob 2s ease-in-out infinite; }
+    @media (min-width: 768px) { .hero-cue { display: flex; } }
+    @keyframes hero-zoom { from { transform: scale(1.15); } to { transform: scale(1.02); } }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(18px); } }
+    @keyframes fade-in { from { opacity: 0; } }
+    @keyframes bob { 50% { transform: translateY(5px); } }
+
+    /* marquee */
+    .marquee { display: flex; overflow: hidden; padding: 1.25rem 0; background: var(--flora); color: rgba(255, 255, 255, .9); font-family: var(--serif); font-size: 1.25rem; font-weight: 600; }
+    @media (min-width: 768px) { .marquee { font-size: 1.5rem; } }
+    .marquee-track { display: flex; animation: marquee 38s linear infinite; }
+    .marquee:hover .marquee-track { animation-play-state: paused; }
+    .marquee ul { display: flex; flex-shrink: 0; align-items: center; gap: 2.5rem; margin: 0; padding: 0 2.5rem 0 0; list-style: none; }
+    .marquee li { display: flex; align-items: center; gap: 2.5rem; white-space: nowrap; }
+    .marquee li::after { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: currentColor; opacity: .5; }
+    @keyframes marquee { to { transform: translate3d(-50%, 0, 0); } }
+    @media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
+  </style>
+</head>
+<body>
+  <!-- navbar (SubsiteNavbar) -->
+
+  <section id="top" class="hero">
+    <div class="hero-media">
+      <img src="/img/flora-hero-1600.webp" alt="Květiny a rostliny v prodejně Flora" width="1620" height="1080"
+           srcset="/img/flora-hero-480.webp 480w, /img/flora-hero-800.webp 800w, /img/flora-hero-1200.webp 1200w, /img/flora-hero-1600.webp 1600w"
+           sizes="100vw" fetchpriority="high" decoding="async">
+    </div>
+    <div class="hero-shade"></div>
+    <div class="hero-content container">
+      <div class="hero-meta fade-up" style="--d: .5s">
+        <span class="hero-kicker">Valašské Meziříčí · od roku 1991</span>
+        <span class="badge"><span class="dot"></span><span class="label">Nyní zavřeno</span></span>
+      </div>
+      <h1 class="words" data-now data-delay=".55" data-stagger=".08">Prodejna Flora</h1>
+      <p class="hero-text fade-up" style="--d: .85s">Zahradnické potřeby, domácí dekorace, vonné svíčky a včelařské vybavení – vše na jednom místě na náměstí ve Valašském Meziříčí.</p>
+      <div class="hero-actions fade-up" style="--d: 1s">
+        <a class="btn btn-primary" href="#prodejna">Prohlédnout sortiment</a>
+        <a class="btn btn-outline" href="#kontakt">Kontakt</a>
+      </div>
+    </div>
+    <a class="hero-cue" href="#prodejna" aria-label="Posunout dolů">Více <i data-lucide="chevron-down"></i></a>
+  </section>
+
+  <div class="marquee">
+    <div class="marquee-track">
+      <ul>
+        <li>Osivo</li>
+        <li>Cibuloviny</li>
+        <li>Substráty</li>
+        <li>Hnojiva</li>
+        <li>Zahradní nářadí</li>
+        <li>Bytové dekorace</li>
+        <li>Svíčky</li>
+        <li>Včelařské potřeby</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- store (#prodejna), gallery (#galerie), contact (#kontakt), footer -->
+
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <script src="/main.js"></script>
+  <script>
+    // Marquee: a second copy of the list makes the loop seamless.
+    const track = document.querySelector('.marquee-track');
+    const copy = track.firstElementChild.cloneNode(true);
+    copy.setAttribute('aria-hidden', 'true');
+    track.append(copy);
+
+    // Hero parallax: the photo sinks, the text rises and fades while the hero scrolls away.
+    const hero = document.querySelector('.hero');
+    const media = hero.querySelector('.hero-media');
+    const content = hero.querySelector('.hero-content');
+    function parallax() {
+      const p = Math.min(Math.max(-hero.getBoundingClientRect().top / hero.offsetHeight, 0), 1);
+      media.style.transform = `translateY(${p * 22}%)`;
+      content.style.transform = `translateY(${p * -18}%)`;
+      content.style.opacity = Math.max(1 - p / 0.7, 0);
+    }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      addEventListener('scroll', () => requestAnimationFrame(parallax), { passive: true });
+      parallax();
+    }
+  </script>
+</body>
+</html>

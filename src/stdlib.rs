@@ -395,6 +395,7 @@ fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
                 expr(r, m, own);
                 args.iter_mut().for_each(|a| expr(a, m, own));
             }
+            ExprKind::Block(_, body) => stmts(body, m, own),
             ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::Var(_) => {}
         }
     }
