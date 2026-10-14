@@ -181,6 +181,25 @@ pub struct Token {
     pub span: Span,
 }
 
+/// The inside of `{ }` in a string is CSS, not code, when a space follows the `{` and it is a list
+/// of `property: value` (separated by `;`, a space after each colon): `"50% { rotate: 3deg }"` is
+/// text, so the bodies of `keyframes(...)` and `css(...)` in `use web` read as written.
+fn css_block(code: &str) -> bool {
+    if !code.starts_with([' ', '\t']) {
+        return false;
+    }
+    let mut decls = code.split(';').map(str::trim).filter(|d| !d.is_empty()).peekable();
+    decls.peek().is_some()
+        && decls.all(|d| {
+            let Some((p, v)) = d.split_once(':') else { return false };
+            let p = p.trim_end();
+            !p.is_empty()
+                && p.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+                && v.starts_with([' ', '\t'])
+                && !v.trim().is_empty()
+        })
+}
+
 pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let cs: Vec<char> = src.chars().collect();
     let mut toks: Vec<Token> = Vec::new();
@@ -416,7 +435,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         !after.is_some_and(|a| a.starts_with('.') || a.starts_with('['))
                     };
                     match end {
-                        Some(e) if !code.trim().is_empty() && !quoted(&code) => {
+                        Some(e) if !code.trim().is_empty() && !quoted(&code) && !css_block(&code) => {
                             if !s.is_empty() {
                                 parts.push(StrPart::Lit(std::mem::take(&mut s)));
                             }
