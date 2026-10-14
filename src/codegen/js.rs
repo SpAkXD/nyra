@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use super::{bare, names};
 use crate::ast::Span;
-use crate::ir::{Arg, BinOp, Expr, Func, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
+use crate::ir::{Arg, BinOp, Expr, Func, FuncId, LocalId, Module, Place, PureFn, RtOp, Step, Stmt, StmtKind, Structs, Ty, UnOp};
 
 /// The largest int JavaScript numbers hold exactly (`Number.MAX_SAFE_INTEGER`).
 const SAFE_INT: u64 = (1 << 53) - 1;
@@ -279,32 +279,10 @@ pub fn gen(m: &Module, file: &str) -> String {
     out.push('\n');
     classes(m, &mut out);
     if json {
-        // the fields of each struct for `json.str` and `json.parse`, after every class exists
-        for (_, s) in &m.structs.0 {
-            let fields: Vec<String> =
-                s.fields.iter().map(|(f, t)| format!("[{}, \"{}\", {}]", crate::diag::json_str(f), jfield(f), jdesc(*t))).collect();
-            let n = format!("nyS_{}", ident(&s.name));
-            let _ = writeln!(out, "{n}.ny_jf = [{}];", fields.join(", "));
-            if let Some(extra) = jkind(s) {
-                let _ = writeln!(out, "{}", extra.replace("@C@", &n));
-            }
-        }
-        out.push('\n');
+        json_fields(m, &mut out);
     }
     for f in &m.funcs {
-        let n = names::locals(f, name, "ny_");
-        let _ = writeln!(out, "function {}({}) {{", name(&f.name), n[..f.params].join(", "));
-        // every local is declared at the top; statements only assign
-        if f.locals.len() > f.params {
-            let _ = writeln!(out, "    let {};", n[f.params..].join(", "));
-        }
-        // an `inout` parameter is a box: the value is `p.v`
-        let uses: Vec<String> =
-            n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("{x}.v") } else { x.clone() }).collect();
-        let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, span: Cell::new(f.span) };
-        g.stmts(&f.body);
-        out.push_str(&g.out);
-        out.push_str("}\n\n");
+        func(m, f, &mut out);
     }
     // `os.exit(n)` throws `NyExit` (only programs that use the standard library can)
     let exit = if std {
@@ -334,6 +312,125 @@ pub fn gen(m: &Module, file: &str) -> String {
         close
     );
     out
+}
+
+/// The fields of each struct for `json.str` and `json.parse`, after every class exists.
+fn json_fields(m: &Module, out: &mut String) {
+    for (_, s) in &m.structs.0 {
+        let fields: Vec<String> =
+            s.fields.iter().map(|(f, t)| format!("[{}, \"{}\", {}]", crate::diag::json_str(f), jfield(f), jdesc(*t))).collect();
+        let n = format!("nyS_{}", ident(&s.name));
+        let _ = writeln!(out, "{n}.ny_jf = [{}];", fields.join(", "));
+        if let Some(extra) = jkind(s) {
+            let _ = writeln!(out, "{}", extra.replace("@C@", &n));
+        }
+    }
+    out.push('\n');
+}
+
+/// One function of the program.
+fn func(m: &Module, f: &Func, out: &mut String) {
+    let n = names::locals(f, name, "ny_");
+    let _ = writeln!(out, "function {}({}) {{", name(&f.name), n[..f.params].join(", "));
+    // every local is declared at the top; statements only assign
+    if f.locals.len() > f.params {
+        let _ = writeln!(out, "    let {};", n[f.params..].join(", "));
+    }
+    // an `inout` parameter is a box: the value is `p.v`
+    let uses: Vec<String> =
+        n.iter().enumerate().map(|(i, x)| if i < f.params && f.locals[i].inout { format!("{x}.v") } else { x.clone() }).collect();
+    let mut g = Gen { m, f, names: &uses, out: String::new(), indent: 1, tmp: 0, span: Cell::new(f.span) };
+    g.stmts(&f.body);
+    out.push_str(&g.out);
+    out.push_str("}\n\n");
+}
+
+/// The JavaScript runtime with the standard library and JSON, for code that picks the parts it
+/// calls (the client code of a web site, `src/web/client.rs`).
+pub fn runtime(file: &str) -> String {
+    let mut out = PRELUDE.replace("@FILE@", &crate::diag::json_str(file));
+    for part in [STRINGS, ARRAYS, STD, JSON] {
+        out.push('\n');
+        out.push_str(part);
+    }
+    out
+}
+
+/// A live view: its name in `data-live`, the function, the script variables it gets (name,
+/// `inout`), and the function that turns its value into HTML (`None`: the view returns `str`).
+pub type View = (String, FuncId, Vec<(String, bool)>, Option<FuncId>);
+
+/// What the browser runs of a `use web` program (see `src/web/client.rs`).
+pub struct Client {
+    /// The functions to compile: `update`, the live views and everything they call.
+    pub funcs: Vec<FuncId>,
+    /// `update(m: Msg)`, and the script variables it gets after `m` in order (name, `inout`).
+    pub update: Option<(FuncId, Vec<(String, bool)>)>,
+    /// Each live view.
+    pub views: Vec<View>,
+    /// The script variables the browser starts from: name, type, value as JSON.
+    pub state: Vec<(String, Ty, String)>,
+}
+
+/// The client code of a web site: the struct classes, the functions of `c`, the starting state,
+/// and `ny_web`, the object `src/web/runtime.js` drives: `ny_web.update(msgJson)` runs `update`,
+/// `ny_web.views[name]()` renders a live region. The runtime functions it calls come separately
+/// (`runtime`).
+pub fn gen_client(m: &Module, c: &Client) -> String {
+    let mut out = String::new();
+    classes(m, &mut out);
+    json_fields(m, &mut out);
+    for id in &c.funcs {
+        func(m, m.func(*id), &mut out);
+    }
+    // (the JSON was written by the build, so it is read with `JSON.parse`, not the checking parser)
+    out.push_str("const ny_st = {\n");
+    for (n, t, json) in &c.state {
+        let _ = writeln!(out, "    {}: ny_from({json}, {}),", crate::diag::json_str(n), jdesc(*t));
+    }
+    out.push_str("};\nconst ny_web = {\n");
+    if let Some((id, globals)) = &c.update {
+        let msg = m.func(*id).locals[0].ty;
+        let _ = writeln!(out, "    update(text) {{\n        const ny_m = ny_from(JSON.parse(text), {});", jdesc(msg));
+        let (call, back) = with_state(m, *id, "ny_m", globals, &mut out);
+        let _ = writeln!(out, "        {call};\n{back}    }},");
+    }
+    out.push_str("    views: {\n");
+    for (live, id, globals, render) in &c.views {
+        let _ = writeln!(out, "        {}: () => {{", crate::diag::json_str(live));
+        let (call, back) = with_state(m, *id, "", globals, &mut out);
+        let html = match render {
+            Some(r) => format!("{}({call})", name(&m.func(*r).name)),
+            None => call,
+        };
+        let _ = writeln!(out, "        const ny_r = {html};\n{back}        return ny_r;\n        }},");
+    }
+    out.push_str("    },\n};\n");
+    out
+}
+
+/// A call of `id` with `first` (if any) and then the script variables it gets from the state
+/// `ny_st`: a variable it changes goes in a box (written to `out`), whose value goes back to the
+/// state after the call (the second text). The value in the box is marked shared first, so a call
+/// that stops with an error leaves the state as it was.
+fn with_state(m: &Module, id: FuncId, first: &str, globals: &[(String, bool)], out: &mut String) -> (String, String) {
+    let f = m.func(id);
+    let st = |n: &str| format!("ny_st[{}]", crate::diag::json_str(n));
+    let skip = usize::from(!first.is_empty());
+    let mut args: Vec<String> = if first.is_empty() { Vec::new() } else { vec![first.to_string()] };
+    let mut back = String::new();
+    for (k, (g, inout)) in globals.iter().enumerate() {
+        if !inout {
+            args.push(st(g));
+            continue;
+        }
+        let ty = f.locals[skip + k].ty;
+        let v = if Structs::aggregate(ty) { format!("ny_sh({})", st(g)) } else { st(g) };
+        let _ = writeln!(out, "        const ny_b{k} = {{v: {v}}};");
+        args.push(format!("ny_b{k}"));
+        let _ = writeln!(back, "        {} = ny_b{k}.v;", st(g));
+    }
+    (format!("{}({})", name(&f.name), args.join(", ")), back)
 }
 
 struct Gen<'a> {

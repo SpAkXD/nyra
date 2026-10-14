@@ -87,6 +87,8 @@ pub struct Report {
     pub allocs: u64,
     /// Milliseconds spent running (without compiling).
     pub run_ms: f64,
+    /// What a `use web` program handed to the build (empty for other programs).
+    pub web: crate::ir::host::Web,
 }
 
 /// Lowers a checked program, as every backend does (`NYRA_OPT=0` skips the optimizer).
@@ -134,7 +136,8 @@ pub fn run(m: &ir::Module, cfg: Config) -> Report {
         },
     };
     let stdout = it.output().to_string();
-    Report { exit, stdout, error, internal, steps: it.steps(), allocs: crate::mem::allocs() - allocs0, run_ms }
+    let web = it.take_web();
+    Report { exit, stdout, error, internal, steps: it.steps(), allocs: crate::mem::allocs() - allocs0, run_ms, web }
 }
 
 /// A runtime error as the compiled programs print it: human or JSON (one line).

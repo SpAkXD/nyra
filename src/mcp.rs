@@ -62,7 +62,7 @@ const TOOLS: &str = r#"[
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check (repairs included).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program (code, or files for several files). Returns {ok,exit,stdout,stderr?,errors?,warnings?,timeout?,truncated?,ms}. A program that ends within a few million steps is answered at once from the interpreter (\"mode\":\"interp\", no wait for the C compiler); one that runs longer, or that uses fs or os, runs as a native executable, with the same output. Compile errors come back as from nyra_check, and an error with one certain fix is repaired in memory first (listed under warnings; strict: true turns that off); a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":[]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_build","title":"Build Nyra to C or JavaScript","description":"Compile a Nyra program (code, or files) and return the generated source: {ok,target,source,warnings?}. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"target":{"type":"string","enum":["c","js"],"description":"default c"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
+{"name":"nyra_build","title":"Build Nyra to C or JavaScript, or a website","description":"Compile a Nyra program (code, or files) and return the generated source: {ok,target,source,warnings?}. A program with `use web` builds its website instead (in memory, nothing is written): {ok,target:\"web\",pages,files:[{path,bytes}],warnings?}, with the site's checks (E0382 broken #anchors and the others) as errors or warnings. Compile errors come back as from nyra_check.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"target":{"type":"string","enum":["c","js","web"],"description":"default c, or web for a program with `use web`"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"web only: capabilities the program gets while the site is built; default none"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}}
 ]"#;
 
 const USAGE: &str = "\
@@ -765,6 +765,8 @@ pub(crate) fn program_in(dir: &std::path::Path, args: &Json, entry: Option<&str>
 struct Compiled {
     prog: ast::Program,
     applied: Vec<fix::Applied>,
+    /// The source as compiled: the program's, with the repairs applied.
+    text: String,
 }
 
 /// Compiles `program` like the CLI: an error with exactly one certain fix is repaired in memory, and
@@ -786,10 +788,10 @@ fn compile_tool(program: &Program, grant: &caps::Grant, strict: bool, full: bool
         }
     };
     let result = match build(&program.src) {
-        Ok(prog) => Ok(Compiled { prog, applied: Vec::new() }),
+        Ok(prog) => Ok(Compiled { prog, applied: Vec::new(), text: program.src.clone() }),
         Err(diags) if strict => Err(diags),
         Err(diags) => match fix::repair(&program.src, diags.clone(), build) {
-            Some(r) => Ok(Compiled { prog: r.value, applied: r.applied }),
+            Some(r) => Ok(Compiled { prog: r.value, applied: r.applied, text: r.text }),
             None => Err(diags),
         },
     };
@@ -963,10 +965,14 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
 
 fn build(server: &Server, args: &Json) -> Result<String, String> {
     let program = server.program(args)?;
-    let (target, name) = match optional_str(args, "target")? {
+    let target = optional_str(args, "target")?;
+    if target == Some("web") || (target.is_none() && crate::web::uses_web(&program.src)) {
+        return web_build(server, &program, args);
+    }
+    let (target, name) = match target {
         None | Some("c") => (Target::C, "c"),
         Some("js") => (Target::Js, "js"),
-        Some(other) => return Err(tool_error(format!("target must be \"c\" or \"js\", found {other:?}"))),
+        Some(other) => return Err(tool_error(format!("target must be \"c\", \"js\" or \"web\", found {other:?}"))),
     };
     Ok(match generate(&program, target, arg_bool(args, "strict")?)? {
         Ok((source, applied)) => {
@@ -978,6 +984,41 @@ fn build(server: &Server, args: &Json) -> Result<String, String> {
         }
         Err(diags) => diags,
     })
+}
+
+/// `nyra_build` of a `use web` program: the site is built in memory and described (its pages, and
+/// each file with its size), or its errors come back as from nyra_check. The program gets only the
+/// capabilities in `allow` (default none); images are read from the folder of a program given as
+/// `files` (a missing one is a warning here), and no image tool runs.
+fn web_build(server: &Server, program: &Program, args: &Json) -> Result<String, String> {
+    let grant = match args.get("allow") {
+        None | Some(Json::Null) => caps::Grant::none(),
+        Some(_) => grant_of(args)?,
+    };
+    let c = match compile_tool(program, &grant, arg_bool(args, "strict")?, true) {
+        Ok(c) => c,
+        Err(diags) => return Ok(diag::render_json(&diags, &program.name)),
+    };
+    perfwarn::check(&c.prog, false);
+    let dir = program.root.as_ref().map(|r| r.dir.clone()).unwrap_or_else(|| server.dir.join("no-assets"));
+    let opts = crate::web::Options {
+        dir,
+        file: program.name.clone(),
+        image_tool: Some("none".into()),
+        convert: false,
+        strict_images: false,
+        dev: false,
+        to_stdout: false,
+    };
+    let mut json = match crate::web::build(c.prog, &c.text, &opts) {
+        Ok(site) => crate::web::site_json(&site, &program.name, None).replacen("{\"ok\":true,", "{\"ok\":true,\"target\":\"web\",", 1),
+        Err(e) => e.json(&program.name),
+    };
+    if !c.applied.is_empty() && json.ends_with('}') {
+        json.pop();
+        json.push_str(&format!(",\"applied\":{}}}", diag::render_json_warnings(&c.applied, &program.name)));
+    }
+    Ok(json)
 }
 
 fn explain_tool(args: &Json) -> Result<String, String> {

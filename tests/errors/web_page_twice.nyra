@@ -1,0 +1,10 @@
+// expect: E0387
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/about", "<h1>About us</h1>")
+page("/about/", "<h1>Our team</h1>")
+page("contact", "<h1>Contact</h1>")
