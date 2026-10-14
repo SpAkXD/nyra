@@ -1,0 +1,15 @@
+// The Flora subsite: page, navbar, hero, marquee. The other sections are functions of their own.
+let links = [("Sortiment", "#prodejna"), ("Galerie", "#galerie"), ("Kontakt", "#kontakt")]
+
+page("/flora", "Prodejna Flora – zahradní potřeby a dekorace | Valašské Meziříčí") {
+    navbar("Prodejna Flora", links, back: ("Zpět", "/"), other: (":flame: Krby Kuběna", "/krby"), cta: ("Kontakt", "#kontakt"))
+    hero("Prodejna Flora", kicker: "Valašské Meziříčí · od roku 1991", badge: open_hours,
+        text: "Zahradnické potřeby, domácí dekorace, vonné svíčky a včelařské vybavení – vše na jednom místě na náměstí ve Valašském Meziříčí.",
+        image: "flora-hero.jpg", alt: "Květiny a rostliny v prodejně Flora",
+        buttons: [("Prohlédnout sortiment", "#prodejna"), ("Kontakt", "#kontakt")])
+    marquee(["Osivo", "Cibuloviny", "Substráty", "Hnojiva", "Zahradní nářadí", "Bytové dekorace", "Svíčky", "Včelařské potřeby"])
+    store()
+    gallery_section("flora")
+    contact(flora)
+    footer_section(links)
+}

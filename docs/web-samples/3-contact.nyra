@@ -1,0 +1,42 @@
+// Contact section for both subsites: info card, opening hours, map, mailto form.
+struct Shop { name: str, person: str, phone: str, email: str, icon: str, foot: str, pay: str,
+    intro: str, ask: str, hint: str, subject: str }
+
+let flora = Shop(name: "Prodejna Flora", person: "Stanislav Kuběna", phone: "+420 571 623 840",
+    email: "floravalmez@seznam.cz", icon: "leaf", pay: "Platba v hotovosti",
+    foot: "[:facebook: Sledujte nás na Facebooku](https://www.facebook.com/prodejnaflora/)",
+    intro: "Navštivte nás nebo se ozvěte – rádi poradíme.", ask: "Napište nám",
+    hint: "Na co se chcete zeptat?", subject: "Dotaz z webu – Prodejna Flora")
+let krby = Shop(name: "Kamnářství Kuběna", person: "Stanislav Kuběna — certifikovaný kamnář",
+    phone: "+420 602 566 330", email: "krby@krby-valmez.cz", icon: "flame", pay: "",
+    foot: ":medal: Autorizovaný partner Brunner · IČO: 67304630",
+    intro: "Obraťte se na nás pro nezávaznou poptávku nebo konzultaci.", ask: "Nezávazná poptávka",
+    hint: "Popište, co potřebujete (typ krbu či kamen, rozměry, lokalita…)", subject: "Poptávka z webu – Kamnářství Kuběna")
+
+fn contact(s: Shop) -> Node = section("kontakt", "Ozvěte se nám", kicker: "Kontakt", text: s.intro) {
+    grid(widths: "1fr 1.15fr") {
+        stack {
+            card(fill: true) {
+                h3(s.name, sub: s.person, icon: s.icon)
+                address {
+                    link(":phone: {s.phone}", "tel:{s.phone}")
+                    link(":mail: {s.email}", "mailto:{s.email}")
+                    link(":map-pin: {addr}", maps(addr))
+                }
+                note(s.foot)
+            }
+            hours(open_hours, title: ":clock: Otevírací doba", note: s.pay)
+            map(addr, show: "Zobrazit mapu", go: ":navigation: Navigovat v Google Maps")
+        }
+        form(s.ask, mailto: s.email, subject: s.subject, send: "Odeslat zprávu :send:",
+            note: "Zpráva se otevře ve vašem e-mailu, odkud ji odešlete.", done: "Zpráva je připravená", edit: "Upravit zprávu",
+            done_text: "Otevřeli jsme ji ve vašem e-mailovém programu — stačí ji odeslat. Pokud se nic neotevřelo, napište nám přímo na [{s.email}](mailto:{s.email}) nebo zavolejte na [{s.phone}](tel:{s.phone}).") {
+            row {
+                field("jmeno", "Jméno", req: true, auto: "name", hint: "Jan Novák")
+                field("email", "E-mail", type: "email", req: true, hint: "jan@priklad.cz")
+            }
+            field("telefon", "Telefon", type: "tel", hint: "+420 123 456 789")
+            field("zprava", "Zpráva", type: "area", req: true, hint: s.hint)
+        }
+    }
+}

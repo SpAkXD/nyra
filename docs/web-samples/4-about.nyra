@@ -1,0 +1,22 @@
+// About (the motion sample): a drawn timeline, staggered milestones, counters, a revealed photo.
+fn about() -> Node = section("o-nas", "Rodinná firma s tradicí", kicker: "Od roku 1991", tone: "accent",
+    text: "Dvě specializace, jedna rodina. Stanislav Kuběna a jeho tým vám poslouží jak v kamnářství, tak v prodejně Flora.") {
+    grid(2) {
+        stack {
+            p("Od roku 1991 provozujeme ve Valašském Meziříčí prodejnu Flora, která zásobuje místní zahradníky, včelaře i milovníky domácích dekorací. O několik let později jsme přidali kamnářství – a dnes nabízíme kompletní služby od návrhu krbu až po jeho revizi.", size: "lg")
+            steps([("1991", "Zahájení provozu prodejny Flora se zahradnickým a domácím sortimentem."),
+                ("1998", "Rozšíření o prodej krbů, kamen a topidel – vznik kamnářské divize."),
+                ("2006", "Získání živnostenského oprávnění pro kamnářství a zednické práce."),
+                ("Dnes", "Autorizovaný partner značky Brunner, přes 30 let ve Valašském Meziříčí.")], anim: "draw")
+        }
+        stack {
+            grid(2, anim: "stagger") {
+                stat("{year() - 1991}+", "let zkušeností", color: "krby", anim: "count")
+                stat("2", "specializace", color: "flora", anim: "count")
+                stat("1–5", "odborní pracovníci", color: "accent", anim: "count")
+                stat("★", "Brunner partner", color: "accent")
+            }
+            img("about-namesti.jpg", "Náměstí ve Valašském Meziříčí", ratio: "16/10", caption: ":map-pin: {addr}", anim: "rise")
+        }
+    }
+}

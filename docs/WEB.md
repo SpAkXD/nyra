@@ -1,0 +1,732 @@
+# Nyra on the web (design for v0.8)
+
+Status: **design, not built.** Nothing in this file is in the compiler yet. Error codes below are reserved, not emitted.
+
+Today Nyra cannot make a web page: there is no DOM, HTML, CSS or events. This document designs `use web`: a way for an
+agent to write a whole website (pages, theme, sections, motion, interactivity) in Nyra, and get a fast static site out of
+`nyra build`. The test case is a real site, [flora.ageofwords.site](https://flora.ageofwords.site) (React 19, Vite,
+Tailwind, motion, three.js), and the target is an experiment: an AI builds the same mock site once in plain HTML/CSS/JS
+and once in Nyra, and Nyra must cost clearly fewer tokens while the result looks as good and loads as fast or faster.
+
+**The short answer, measured** (details in [Token measurement](#token-measurement)): four real flora sections plus
+their shared theme cost **3,479 tokens in Nyra against 18,180 in plain HTML/CSS/JS (0.19x)** and 19,626 in the
+React/TSX original (0.18x). About three quarters of that saving comes from the built-in component and motion kit
+(the CSS and JS an agent no longer writes), and about one quarter from the syntax (no closing tags, no repeated
+classes, data reused, links and icons in text). 70% of the remaining Nyra tokens are the site's own Czech text.
+
+## Contents
+1. [How a site is built and served](#how-a-site-is-built-and-served)
+2. [Two small language additions](#two-small-language-additions)
+3. [The `web` API](#the-web-api)
+4. [Motion](#motion)
+5. [Interactivity](#interactivity)
+6. [Where the savings come from](#where-the-savings-come-from)
+7. [Escape hatches, accessibility, SEO, safety](#escape-hatches-accessibility-seo-safety)
+8. [Error codes](#error-codes)
+9. [The web card](#the-web-card)
+10. [Token measurement](#token-measurement)
+11. [Clone from a URL (later)](#clone-from-a-url-later)
+12. [Implementation plan](#implementation-plan)
+13. [Open questions and risks](#open-questions-and-risks)
+
+## One example
+
+```nyra
+use web
+
+site("Pekárna Hana", lang: "cs", primary: "#7A3E1D", font: "Inter", display: "Fraunces")
+
+struct Bread { name: str, kind: str, price: int, photo: str }
+let breads = [Bread(name: "Kváskový chléb", kind: "chléb", price: 89, photo: "kvas.jpg"),
+    Bread(name: "Croissant", kind: "sladké", price: 35, photo: "croissant.jpg"),
+    Bread(name: "Bageta", kind: "chléb", price: 29, photo: "bageta.jpg")]
+
+enum Msg { Show(str) }
+var kind = "vše"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+    }
+}
+
+fn menu() -> Node = stack {                  // reads `kind`, so it is re-rendered in the browser after each update
+    row {
+        for k in ["vše", "chléb", "sladké"] { button(k, on: Msg.Show(k), active: k == kind) }
+    }
+    grid(3, anim: "stagger", hover: "lift") {
+        for b in breads.filter(b => kind == "vše" || b.kind == kind) { card(b.name, "{b.price} Kč", image: b.photo) }
+    }
+}
+
+page("/", "Pekárna Hana – chléb každé ráno") {
+    navbar("Pekárna Hana", [("Nabídka", "#nabidka"), ("Kontakt", "#kontakt")])
+    hero("Chléb každé ráno", image: "pult.jpg", alt: "Pult s chlebem", buttons: [("Nabídka", "#nabidka")])
+    section("nabidka", "Nabídka", kicker: "Dnes upečeno") {
+        menu()
+    }
+    section("kontakt", "Kontakt", bg: "alt") {
+        map("Hlavní 1, 602 00 Brno", show: "Zobrazit mapu")
+    }
+}
+```
+
+`nyra build bakery.nyra` writes `dist/index.html` (the whole page prerendered: it shows without JavaScript), one CSS
+file with the theme and only the components used, and a small JS file for the filter, the navbar menu and the
+animations. The page has a sticky navbar with a mobile menu, a full-screen hero with a parallax photo and an entrance
+sequence, staggered cards that lift on hover, a filter whose buttons re-render the grid, a map that loads on click,
+and it respects `prefers-reduced-motion`. No styling code was written.
+
+## How a site is built and served
+
+```
+nyra build site.nyra          # a program with `use web` -> dist/
+nyra run site.nyra            # build, serve dist/ on http://localhost:8080, rebuild and reload on save
+nyra check site.nyra          # types plus web checks (broken #anchors, missing images, contrast), writes nothing
+```
+
+`nyra build` sees `use web` and builds a site instead of an executable; no new flag (`--out dir` changes `dist/`).
+
+**At build time** the whole program runs once in the IR interpreter (the same one `--interp` uses: deterministic, with
+limits). Each `page(path, title) { ... }` call renders its node tree and hands the HTML to the build. The build
+writes:
+
+| File | What is in it |
+|---|---|
+| `dist/<path>/index.html` | One per `page`: the prerendered HTML, `<head>` with title, description, Open Graph, canonical, preload of the first image, the font links |
+| `dist/site.<hash>.css` | The theme as CSS variables, then the CSS of only the components and motion words the pages used, then any raw `css(...)` |
+| `dist/site.<hash>.js` | Only when needed: the kit behaviors the pages used (menu, lightbox, reveal, ...), and the program's own client code (below). Absent for a page with nothing interactive |
+| `dist/img/<name>-<width>-<hash>.webp` | Image variants for `srcset`, when an image tool is available (see Images) |
+| `dist/sitemap.xml`, `dist/robots.txt` | From `site(url: ...)` and the pages |
+
+**In the browser** nothing is rendered on load: the HTML is already there. The JS file only attaches behavior. If the
+program has interactive state (an `enum Msg` and `fn update`, see [Interactivity](#interactivity)), the JS backend
+compiles `update`, the view functions it affects and what they call into the same JS file, so a click re-renders only
+those regions. There is no framework runtime and no hydration of the whole page.
+
+Targets for the flora port (checked by a test on the built `dist/`): first paint with no JS, CSS under 15 KB and JS
+under 8 KB gzipped for a subsite, Lighthouse performance 95+ on a mid-range phone profile. The React original ships
+React, motion and the Tailwind output; it loads a JS bundle before anything shows (its `index.html` has an empty
+`#root`).
+
+**Images.** The compiler has no crates, so it does not decode or encode JPEG/WebP itself. It reads the width and
+height from the file header (PNG, JPEG, WebP, AVIF headers are simple) so every `<img>` gets `width`/`height` and no
+layout shift. If `cwebp`, `magick` or `vips` is on the PATH (like the C compiler for native builds), the build also
+writes 480/800/1200/1600 px WebP variants and a tiny blurred preview, and emits `srcset`/`sizes`. Without a tool the
+original file is copied and a warning (E0386) says what was skipped. Images are read only from the folder `assets/`
+next to the program; the build needs no `--allow fs`.
+
+**Fonts** come from Google Fonts with `display=swap`, loaded without blocking the first paint (as flora does), or
+from `assets/fonts/` when the files are there.
+
+## Two small language additions
+
+Nyra has no closures, no generics, no classes, and lambdas only as array-method arguments. The design keeps all of
+that. It needs two additions, both familiar from languages models know well, both lowered away before the IR so no
+backend changes:
+
+**1. Default parameter values and named arguments.** `print(x, end: "")` already works this way; this makes it
+general.
+
+```nyra
+fn price(n: int, currency: str = "Kč", space: bool = true) -> str = ...
+price(5)                        // positional arguments first,
+price(5, space: false)          // then named ones, in any order
+```
+
+A parameter with `= value` may be left out; the value is a constant (a literal, `[]`, `[:]`, `none`, or a struct of
+constants), filled in at the call. Any argument may be named. Why: a component has many options, nearly all with a
+good default. Without this every call would list every option, in order: `hero(...)` alone has eleven. Structs with
+labels cannot help, because every field must be given. Cost: E0226 ("named argument to a function") keeps its number
+with a narrower meaning: the function has no parameter of that name. One card line.
+
+**2. Child blocks.** A call whose last parameter is `kids: [Node]` may be followed by a block instead of that
+argument:
+
+```nyra
+section("sluzby", "Naše služby") {
+    p("Úvod")                       // each statement that makes a Node adds it, in order
+    "Text také jde"                 // a string on its own line is a text node
+    for s in services { card(s.title, s.text) }
+    if open { note("Dnes otevřeno") }
+}
+```
+
+The block runs immediately, in place, like the body of an `if`: it is not a closure and captures nothing. It is
+lowered to `var kids: [Node] = []`, one `kids.push(...)` per node statement, and the call with `kids`. Allowed in the
+block: node expressions, strings, `let`, `for`, `if`, `match`. Not allowed: assigning or changing variables (E0371);
+the block describes a tree, it does not compute. Why: pages are trees, often 6 to 10 levels deep. As nested array
+literals (`section(..., [p("Úvod"), grid(3, [card(...), ...])])`) a missing comma or bracket 40 lines down is a
+common, hard to place error, and `for`/`if` would need comprehensions everywhere. Blocks are what models write in
+SwiftUI, Jetpack Compose, Kotlin builders and Flutter, and braces keep Nyra's rule that a truncated reply is a compile
+error.
+
+Both are general features (a user's own component can have defaults and take a child block: `fn panel(title: str,
+kids: [Node]) -> Node = card(title, "", kids: kids)`, called as `panel("Hodiny") { ... }`).
+
+**Names.** In a program with `use web`, the web functions are called by their bare names (`hero(...)`, not
+`web.hero(...)`), like the builtins. Every line of a page is a web call; we measured the prefix at +2.6% tokens
+(3,571 vs 3,479), and the bare form is what models write in every UI framework. A program function or variable with
+the name of a web function is E0372 with a hint to rename it. This is a choice for the owner (see open questions): the
+alternative keeps the module rule and pays the 2.6%.
+
+## The `web` API
+
+Three levels, from most used to least:
+
+1. **Kit components**: a whole section of a modern site in one call (`hero`, `navbar`, `gallery`, `contact` parts).
+   This is where most savings come from.
+2. **Layout and content elements**: `section`, `grid`, `stack`, `row`, `card`, `h1`-`h3`, `p`, `img`, `link`,
+   `button`, `list`, `table`. For anything the kit does not have.
+3. **Escape hatches**: `css(...)`, `html(...)`, `cls:`. For the last 5%.
+
+### Site and pages
+
+| Call | Does |
+|---|---|
+| `site(name, url:, lang:, tz:, desc:, share:, primary:, accent:, bg:, alt:, ink:, muted:, palette:, font:, display:, radius:, style:, motion:, transition:, say:)` | Once, at the top. Identity and SEO defaults (`desc` for the description, `share` for Open Graph), the theme, motion level, the kit's UI words |
+| `page(path, title, desc:, image:, primary:) { ... }` | One HTML file. `primary:` overrides the theme color for this page (flora green vs krby red) |
+
+**Theme, not class soup.** A theme is a handful of values; every component derives the rest (tints, hover shades,
+rings, gradients, shadows, dark text on light colors and the reverse) with `color-mix()` from them:
+
+| Option | Meaning | Default |
+|---|---|---|
+| `primary`, `accent` | Brand color, second color for buttons and highlights | blue-violet, amber |
+| `bg`, `alt`, `ink`, `muted` | Page background, alternate section background, text, secondary text | derived from `bg` |
+| `palette: ["krby": "#8B2500"]` | Extra named colors, usable anywhere a color is (`color: "krby"`) | none |
+| `font`, `display` | Body and heading fonts (Google Fonts names) | Inter, same |
+| `radius` | Corner radius in px for cards (buttons are pills, inputs follow) | 16 |
+| `style` | A preset of the above: `"soft"` (flora), `"sharp"`, `"editorial"`, `"dark"` | `"soft"` |
+
+A color is a hex string, a palette name, or a theme name (`"primary"`, `"accent"`, `"alt"`). Sections choose a
+background with `bg: "alt" | "dark" | "primary" | "white"`; text color follows automatically.
+
+**Kit words** (`say:`). The kit's own labels ("open now", "show map", "close menu", aria labels) are English by
+default. `say: ["open": "Nyní otevřeno", ...]` replaces them; the measured samples write them out (they are content).
+Built-in word lists for a few languages (`lang: "cs"` picks Czech) are an open question.
+
+### Text
+
+Every text argument is plain text with a small inline Markdown subset and icons:
+
+- `**bold**`, `*italic*`, `` `code` ``, `[label](url)`; `\\*` for a literal star.
+- `:name:` is an icon from the built-in set (a subset of Lucide, plus brand icons): `":phone: {s.phone}"`. A name
+  starts with a letter and has no spaces, so `8:00 – 16:00` stays text; an unknown name is E0374.
+- Interpolation works as everywhere: `"[{c.email}](mailto:{c.email})"`.
+
+Text is always escaped: `"<b>"` shows `<b>`. Markdown is the only markup, and its links are checked (Safety).
+`tel:` links drop spaces, external links get `rel="noopener"` and open in a new tab.
+
+### Layout and content elements
+
+| Element | Does | Main options |
+|---|---|---|
+| `section(id, title) { }` | Full-width band, centered container, vertical rhythm, and a section heading when `title` is given | `kicker:`, `text:` (subtitle), `bg:`, `tone:` (heading accent), `align:` |
+| `grid(cols) { }` | Responsive grid: `cols` on desktop, 2 on tablets, 1 on phones | `widths: "1fr 1.15fr"`, `gap:`, `numbers: true` (01, 02, ... on cards) |
+| `stack { }`, `row { }` | Vertical / horizontal (wrapping) flow with the theme's gap | `gap:`, `align:` |
+| `card(title, text) { }` | Surface with radius and shadow; an `icon:` card is a feature card, an `image:` card a product card | `icon:`, `image:`, `fill: true` (primary background), `href:` |
+| `h1`, `h2`, `h3`, `p`, `small` | Text | `icon:`, `sub:` (h3), `size: "lg"` |
+| `img(src, alt)` | Responsive image; `alt` is required, `""` marks a decorative one | `ratio: "16/10"`, `caption:`, `fit:` |
+| `link(text, href)`, `button(text, href)` | A link; a button-styled link or an action | `style: "primary" | "outline" | "ghost"`, `on:` (action) |
+| `list(items)`, `table(rows)`, `address { }`, `note(text)` | Lists, tables, contact block, a small line with a divider | |
+| `chip(title, text)` | Pill with an icon, a title and a line | `icon:` |
+| `embed(url, title)` | An iframe (video, 3D model viewer), lazy | `ratio:` |
+
+Every element also takes `id:`, `cls:` and the four motion options `anim:`, `hover:`, `loop:`, `scroll:` (Motion).
+
+### Kit components
+
+Each one is the look and behavior of a well-made modern site with no styling code. Their structure is fixed
+(a contract with the CSS), their content comes from arguments.
+
+| Component | What it makes | Behavior included |
+|---|---|---|
+| `navbar(brand, links)` | Sticky, translucent header; links, `back:`, `other:` (switch to another subsite), `cta:` button | Blur and shadow after scrolling, scroll-spy pill on the active link, mobile menu with `aria-expanded`, reading progress bar |
+| `hero(title)` | Full-height photo hero: `kicker:`, `text:`, `image:`, `alt:`, `buttons:`, `badge:` | Gradient from the primary color, photo zoom-in and parallax, word reveal of the title, staggered entrance, scroll cue to the next section |
+| `split(panels)` | Full-screen selection between two (or more) subsites | Hover zoom, labels, page transition into the chosen site |
+| `marquee(items)` | Endless ticker strip in the primary color | CSS-only loop, pauses on hover, static for reduced motion |
+| `gallery(photos)` | Masonry gallery: `filters:` | Filter tabs with a sliding pill, lightbox with keys, swipe, counter, focus trap |
+| `hours(rows)` | Opening-hours card: rows like `("Sobota", "6 8:30-11:30")` | Live "open now" badge in `site(tz:)`, closed days marked, refreshed each minute |
+| `map(address)` | Map card: `show:`, `go:` | Placeholder until clicked (no Google request before consent), then the embed; a directions link |
+| `form(title) { field(...) }` | Form with labeled fields: `mailto:` or `to:` (POST URL), `send:`, `note:`, `done:`, `done_text:`, `edit:` | Validation, focus rings in the theme, a mailto composer (message, then a line, then the other fields), a "sent" state with an edit button |
+| `steps(items)` | Vertical timeline of (label, text) | Drawn line, staggered items |
+| `stat(value, label)` | Big number with a label | Counts up when seen |
+| `footer(...)` | Columns of brand text, links, contacts, small print | Back-to-top |
+
+Helpers: `maps(address)` gives a Google Maps search URL, `year()` the current year (at build time).
+
+`hero(..., badge: open_hours)` shows the same live open/closed badge as `hours(...)`.
+
+## Motion
+
+Motion is part of the kit, not an extra library: every component already moves the way flora does, and every element
+can say how it moves in one or two words. The rules:
+
+- **CSS first.** Entrances, hovers and loops are CSS transitions and `@keyframes` on `transform`, `opacity`,
+  `filter` and `clip-path` only (the properties the compositor animates without layout). Scroll-linked effects use
+  CSS scroll-driven animations (`animation-timeline: view()`) where the browser has them.
+- **Tiny JS only for triggers.** One `IntersectionObserver` adds a class when an element scrolls into view, and one
+  `requestAnimationFrame` loop (asleep when nothing on screen needs it, stopped in hidden tabs) runs counters, tilt,
+  and parallax where scroll timelines are missing. About 1.5 KB gzipped, included only if a page uses those words.
+- **Reduced motion by default.** Under `prefers-reduced-motion: reduce`, entrances become a short fade or nothing,
+  loops and the marquee stop, parallax and tilt are off, counters show the final number. Nothing to write.
+  `site(motion: "calm")` halves distances and durations for everyone; `"off"` removes motion.
+
+### One word per element
+
+Four options, on every element, inherited by children when set on a container (`grid(3, hover: "lift")` lifts each
+card):
+
+| Option | When | Words |
+|---|---|---|
+| `anim:` | Once, when the element scrolls into view (or on load above the fold) | `fade` `rise` `slide` `slide-left` `zoom` `blur` `pop` `words` `letters` `draw` `count` `stagger` `none` |
+| `hover:` | Pointer over / keyboard focus | `lift` `glow` `zoom` `shine` `tilt` `underline` `fill` |
+| `loop:` | Always, while on screen | `bob` `float` `pulse` `ping` `spin` `shimmer` `gradient` `marquee` |
+| `scroll:` | Linked to the scroll position | `parallax` `fade-out` `scale` `progress` |
+
+A word can carry modifiers in the same string: a speed (`fast`, `slow`), a delay in seconds, an easing preset:
+`anim: "rise slow 0.2"`, `hover: "lift spring"`, `scroll: "parallax 0.3"`. Unknown words are compile errors with the
+nearest word (E0374).
+
+What the words do: `rise` fades in from 28 px below (the default for sections and cards), `words` reveals a heading
+word by word from clipping boxes (the default for `h1`/`h2` and section titles), `stagger` starts each child 80 ms
+after the previous one (the default for grids), `draw` grows a line or SVG stroke, `count` counts a number at the
+start of the text up from 0 ("33+" counts 0...33, then "+"), `pop` scales in on a spring. `shine` sweeps a light
+sheen across a button (as on nyralang.dev), `tilt` turns a card toward the pointer in 3D, `gradient` slowly moves a
+background gradient (an animated `@property` angle), `progress` is a reading-progress bar.
+
+**Defaults** are chosen per component so that most pages need no motion words at all: sections `rise`, headings
+`words`, grids `stagger`, cards `hover: "lift"`, buttons `hover: "lift"` with an active press, images in cards
+`hover: "zoom"`, the hero its own sequence (photo zoom, then kicker, title, text, buttons, scroll cue),
+`marquee` its loop, `stat` `count`, `steps` `draw`. `anim: "none"` turns one off.
+
+### Easing and springs
+
+Presets: `out` (an expo-out, `cubic-bezier(.16, 1, .3, 1)`, the default), `in-out` (`.76, 0, .24, 1`, for panels),
+`spring`, `bounce`, `snappy`, `linear`. A spring is computed at build time: the compiler simulates a damped spring
+and writes it as a CSS `linear(...)` easing with enough points, so springs need no JS. `"spring 260 16"` sets
+stiffness and damping. Browsers without `linear()` get a close cubic-bezier.
+
+### Sequences
+
+`at:` puts an element on a timeline, in seconds after its parent's trigger (the page load for the hero, the scroll
+into view for a section). The hero's sequence, written out, would be:
+
+```nyra
+stack(anim: "fade") {
+    p(kicker, anim: "rise", at: 0.5)
+    h1(title, anim: "words", at: 0.55)
+    p(text, anim: "rise", at: 0.85)
+    row(anim: "rise", at: 1.0) { ... }
+}
+```
+
+### Custom keyframes
+
+For anything the words do not cover, `keyframes(name, body)` defines a new word with a CSS keyframes body (the syntax
+models already know), and the word works in `anim:` or `loop:`:
+
+```nyra
+keyframes("sway", "0%, 100% { rotate: -3deg } 50% { rotate: 3deg }")
+img("leaf.png", "", loop: "sway 4s in-out")
+```
+
+The body is parsed at build time. Only compositor-friendly properties are accepted silently (`transform` and its
+parts `translate`/`rotate`/`scale`, `opacity`, `filter`, `clip-path`, `background-position`); a property that causes
+layout (`width`, `top`, `margin`, ...) is the warning E0375, like Nyra's performance warnings.
+
+### Page transitions
+
+`site(transition: "fade" | "slide" | "rise" | "none")` turns on cross-document View Transitions
+(`@view-transition { navigation: auto }`) between the site's pages: no JS, and browsers without support simply
+navigate. `morph: "flora"` on an element in one page and on one in the next makes the browser animate one into the
+other: flora's selection panel growing into the subsite hero is `split` panels and `hero`s with the same `morph`
+names.
+
+### What flora and nyralang.dev use, and the word for it
+
+| Effect | flora / nyralang.dev | Nyra |
+|---|---|---|
+| Scroll reveal, staggered grids | `Reveal`, `Stagger` (motion library) | default; `anim: "rise"`, `"stagger"` |
+| Word-by-word heading | `TextReveal` | default for headings; `anim: "words"` |
+| Card lift, icon fill, accent bar | Tailwind `group-hover` classes | `card` default; `hover: "lift"` |
+| Endless strip | `Marquee` + `@keyframes` | `marquee(items)` |
+| Hero parallax and fade-out | `useScroll` + `useTransform` | `hero` default; `scroll: "parallax"`, `"fade-out"` |
+| Counters | `CountUp` | `stat` default; `anim: "count"` |
+| Timeline line | `scaleY` on view | `steps` default; `anim: "draw"` |
+| Button sheen, link underline | nyralang.dev CSS | `hover: "shine"`, `"underline"` |
+| Spring nav pill | `layoutId` (flora), CSS spring (nyralang.dev) | `navbar` default; `"spring"` easing |
+| Live "open" dot | `animate-ping` | `hours` default; `loop: "ping"` |
+| Page change animation | React state machine with timers | `site(transition:)`, `morph:` |
+| Reading progress | `useSpring` on scroll | `navbar` default; `scroll: "progress"` |
+
+## Interactivity
+
+Most interactivity on business sites is in the kit (menus, filters, lightbox, forms, maps, badges) and needs no code.
+For the rest, a program uses the language it already has: **state in script `var`s, events as values of an enum
+named `Msg`, one `fn update(m: Msg)`, and view functions that read the state.** It is the Elm architecture, which
+fits a language without closures: an event handler is data, not a function.
+
+```nyra
+enum Msg { Add(int), Clear }
+var cart: [int] = []
+fn update(m: Msg) {
+    match m {
+        Msg.Add(id) => cart.push(id)
+        Msg.Clear => cart = []
+    }
+}
+fn basket() -> Node = row {
+    p("V košíku: {cart.len()}")
+    button("Vysypat", on: Msg.Clear)
+}
+```
+
+- `on:` takes a `Msg` value. The value is written into the HTML as its JSON (`data-on='{"Add":[3]}'`, the JSON form
+  every Nyra type already has); one delegated listener reads it, calls `update`, and re-renders.
+- **Live regions are found by the compiler**, not declared: a call in a page to a function with no parameters that
+  returns a `Node` and reads a script `var` that `update` can change is prerendered and wrapped as a live region. After
+  each `update`, the browser calls that function again (compiled to JS) and patches the region's DOM (a small keyed
+  morph; focus and scroll position are kept). The rest of the page is never touched.
+- `form(on: Msg.Send)` with a variant that carries `[str: str]` passes the form's fields (the one place where a
+  variant is written without its value). `field(..., on: Msg.Typed)` with a `str` variant fires on input.
+- In `update`, browser effects are calls: `go(url)`, `scroll_to(id)`, `after(ms, Msg.Tick)`, `copy(text)`.
+  `time.now_ms()` works as it does everywhere.
+- A program with `on:` but no `enum Msg` or no `fn update(m: Msg)` is E0373. A live function with parameters is
+  E0376 (pass state through script variables instead).
+
+Client code is ordinary Nyra compiled by the JS backend, so it has Nyra's checks and its runtime errors (an index out
+of bounds stops the update with E0240 in the console instead of corrupting the page).
+
+## Where the savings come from
+
+Honestly, from two places, and the larger one is not the syntax:
+
+| Source | Share of the saving vs plain HTML/CSS/JS (measured on the samples) |
+|---|---|
+| **The kit**: CSS and JS the agent does not write (theme, layout, components, motion, behaviors) | about 74% (10,876 of the 14,701 tokens saved) |
+| **The syntax and data**: no closing tags, no class lists, one `struct` for two subsites, Markdown links, icons by name, `head` meta from `site` | about 26% (3,825 tokens) |
+
+So if an HTML author had an equally complete ready-made kit (component CSS plus behaviors, used by writing markup with
+its class names), Nyra would still be about **0.48x** of that markup (3,479 vs 7,259 tokens), not 0.19x. Tailwind is
+not that kit: the same services section with the Tailwind CDN costs 3,716 tokens, more than plain CSS (2,107),
+because every card repeats its class list.
+
+What Nyra adds that a CSS kit alone cannot: defaults that compose (a `card` inside a `grid` in a `section` already has
+its spacing, reveal, stagger and hover), typed options checked at compile time (a wrong word, a broken `#anchor`, a
+missing image or alt text is an error before anything is deployed), one place for data (the two contact sections are
+one function and two values), and the interactivity model without a framework.
+
+**Good defaults are the product.** If the kit's output does not look as good as flora with zero styling code, agents
+will reach for `css(...)` and the saving disappears. The kit's design quality is therefore its own work package with
+the flora site as the bar.
+
+## Escape hatches, accessibility, SEO, safety
+
+**Escape hatches.**
+- `css("...")` at the top level adds raw CSS to the site's stylesheet; it may use the theme variables (`var(--primary)`).
+- `cls: "name"` adds a class to any element, for that CSS.
+- `html("...")` inserts raw HTML. It takes only a string literal (no interpolation, no variables): data never
+  becomes markup (E0378).
+- `embed(url, title)` for iframes (a video, a 3D model viewer: flora's three.js showroom stays out of scope for v0.8
+  and can be embedded).
+
+**Accessibility**, by construction:
+- Semantic HTML: `header`, `nav`, `main`, `section` with `aria-labelledby` its heading, `footer`, `address`, lists as
+  lists, the lightbox as a `dialog` with a focus trap.
+- `img` needs `alt` (a parameter, so a missing one is a type error); `""` marks decorative images explicitly.
+- Icon-only buttons need `label:` (E0377). One `h1` per page and no skipped heading levels (warning E0379).
+- Visible focus rings in the theme color, a skip link, `aria-expanded` and `aria-current` in the navbar, labels tied
+  to fields, required fields marked for screen readers, `lang` from `site`.
+- The theme's text and background colors are checked for WCAG AA contrast at build time (warning E0380 with the ratio).
+- Reduced motion is respected by default (Motion).
+
+**SEO**: every page has a title (a required parameter) and `lang`; description and Open Graph tags come from `site`
+and can be overridden per page; `og:image` defaults to the first hero image; canonical URLs and `sitemap.xml` from
+`site(url:)`; the content is in the HTML, not rendered by JS. With `hours` and an address on a page, the build can add
+schema.org `LocalBusiness` data (open question).
+
+**Safety.**
+- No HTML injection: all text is escaped; the only markup is the Markdown subset, which makes a fixed set of tags.
+- URLs are checked: `http`, `https`, `mailto`, `tel`, relative paths and `#anchors` only; `javascript:` and `data:`
+  links are E0381 (at compile time for literals, as a build error for computed text).
+- A `#anchor` that no element on the page has is E0382, an image missing from `assets/` is E0383.
+- The build writes a Content-Security-Policy `<meta>` derived from what the page uses: scripts only from the site,
+  frames only from Google Maps when `map` is used, no inline scripts. The policy is computed, not written by hand.
+- Capabilities stay as they are: client code (`update` and live views) cannot use `fs`, `os` or `input` (E0384).
+  Future network access from the browser (`web.fetch`) will need `--allow net` at build time and a `connect:` list
+  that also becomes the CSP `connect-src`; local storage (`web.save`) a new capability `store`.
+
+## Error codes
+
+Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning slightly (above).
+
+| Code | Kind | Meaning |
+|---|---|---|
+| E0370 | compile | A positional argument after a named one, or an argument given twice |
+| E0371 | compile | A child block changes a variable, or holds a statement that is not a node, string, `let`, `for`, `if` or `match` |
+| E0372 | compile | A program function or variable has the name of a web function (`fn hero`, `let hours`) |
+| E0373 | compile | `on:` is used but the program has no `enum Msg` or no `fn update(m: Msg)` |
+| E0374 | compile | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown icon name |
+| E0375 | warning | A custom keyframe animates a layout property (`width`, `top`, ...) |
+| E0376 | compile | A live view function has parameters |
+| E0377 | compile | An icon-only button or link has no `label:` |
+| E0378 | compile | `html(...)` or `css(...)` with a value that is not a string literal |
+| E0379 | warning | Not exactly one `h1` on a page, or a skipped heading level |
+| E0380 | warning | Theme colors below WCAG AA contrast (the ratio and the pair are in the message) |
+| E0381 | compile / build | A link with a forbidden scheme (`javascript:`, `data:`) |
+| E0382 | build | A `#anchor` link to an id that is not on the page |
+| E0383 | build | An image that is not in `assets/`, or that cannot be read |
+| E0384 | compile | Client code (`update`, a live view, what they call) uses `fs`, `os` or `input` |
+| E0385 | compile | A node made but not used (a node expression outside a child block, not returned or passed) |
+| E0386 | warning | No image tool found: images copied without `srcset` variants |
+| E0387 | build | Two pages with the same path, or a path that is not `/...` |
+| E0388-E0389 | | free |
+
+Each gets a full entry (wrong and fixed program) in `docs/ERRORS.md` when it is built, as the error database requires.
+
+## The web card
+
+The agent card has a hard budget of 1,400 tokens and must not grow for web work most programs never do. Plan:
+
+- **Main card**: one line for the two language additions (default parameters, named arguments, child blocks), about
+  35 tokens. Something must be shortened to make room; the card's "Names" list is the candidate.
+- **Web card**, `docs/WEB_CARD.md`, a second card with the same hard budget as the main card, **1,400 tokens**, served only for web tasks:
+  `nyra_spec` (MCP) with `topic: "web"`, `llms.txt` links it, and the experiment's prompt includes it. It holds one
+  complete page example, the element and component lists with their main options, the motion words, the `Msg`/`update`
+  pattern and the five most likely mistakes. The draft below measures **1,336 tokens** on claude-sonnet-5-5 (1,049 on claude-haiku-4-5).
+
+A web request therefore carries about 2,700 tokens of cards as input (cacheable), against the thousands of output
+tokens it saves per section.
+
+<details>
+<summary>Draft of the web card</summary>
+
+````markdown
+# Nyra web card (read with the main card)
+`use web` makes a site: `nyra build site.nyra` writes `dist/` (HTML per page, one CSS, a small JS).
+
+```nyra
+use web
+site("Flora", lang: "cs", primary: "#2D5A1B", font: "Inter", display: "Playfair Display")
+struct Item { name: str, kind: str, photo: str }
+let items = [Item(name: "Seeds", kind: "seed", photo: "seeds.jpg")]
+enum Msg { Show(str) }
+var kind = "all"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+    }
+}
+fn shop() -> Node = stack {                // reads `kind`: re-rendered after each update
+    row {
+        for k in ["all", "seed"] { button(k, on: Msg.Show(k), active: k == kind) }
+    }
+    grid(3, hover: "lift") {
+        for p in items.filter(p => kind == "all" || p.kind == kind) { card(p.name, "", image: p.photo) }
+    }
+}
+page("/", "Flora – garden shop") {
+    navbar("Flora", [("Shop", "#shop")])
+    hero("Flora", text: "Seeds and tools.", image: "hero.jpg", alt: "Shop", buttons: [("Shop", "#shop")])
+    section("shop", "Shop", kicker: "Since 1991", bg: "alt") {
+        shop()
+    }
+}
+```
+
+## Rules
+- Positional arguments, then `name: value` ones in any order; options have defaults.
+- A call whose last parameter is `kids: [Node]` takes a `{ }` block: one node or string per line, plus `for`, `if`, `let`; no assignments.
+- Text is escaped; inline `**b**`, `[label](url)`, icons `:phone:`. Colors: hex, `primary accent alt`, or `palette` names.
+- `img(src, alt)`: alt required (`""` = decorative); files in `assets/`.
+- State: script `var`s. Events: `on: Msg.X(..)` and `fn update(m: Msg)`. A no-parameter fn returning `Node` that reads the state re-renders itself.
+- Raw: `css("...")`, `html("...")` (literals only), `cls:`.
+
+## Elements
+- `site(name, theme...)` `page(path, title) {}`
+- `section(id, title, kicker:, text:, bg:) {}` `grid(cols, widths:) {}` `stack {}` `row {}` `card(title, text, icon:, image:, fill:) {}`
+- `h1 h2 h3 p small` `img(src, alt, ratio:, caption:)` `link(text, href)` `button(text, href, on:)` `list` `table` `address {}` `note` `chip(title, text, icon:)` `embed(url, title)`
+- kit: `navbar(brand, links, back:, cta:)` `hero(title, kicker:, text:, image:, alt:, buttons:, badge:)` `split` `marquee(items)` `gallery(photos, filters:)` `hours(rows)` `map(address)` `form(title, mailto:) { field(name, label, type:, req:, hint:) }` `steps` `stat(value, label)` `footer`
+
+## Motion (any element; a container passes it to its children)
+- `anim:` fade rise slide zoom blur pop words draw count stagger none · `hover:` lift glow zoom shine tilt underline
+- `loop:` bob float pulse ping spin gradient · `scroll:` parallax fade-out progress
+- `"rise slow 0.2 spring"` adds speed, delay, easing; `at: 0.5` places it in the parent's sequence; `keyframes("sway", "50% { rotate: 3deg }")` adds a word.
+- Sections, headings, grids, cards and the hero already move; reduced motion is respected.
+
+No class lists, inline styles, JSX or handler functions: a handler is a `Msg` value.
+````
+
+</details>
+
+## Token measurement
+
+**What was measured.** Four parts of the real flora site, each written three ways with the same text and the same
+features:
+
+| Part | React original (counted as is) | Same look and behavior |
+|---|---|---|
+| 0. Shared | the theme, base CSS, `index.html`, and the helpers the parts use (`motion.tsx`, `Button`, `SectionHeading`, `OpenBadge`, `SmartImage`, `business.ts`, `scroll.tsx`, `easing.ts`) | theme and colors, fonts, base styles, buttons, section heading, scroll reveal, stagger, word reveal, the live open/closed badge |
+| 1. Flora page | `FloraSubsite.tsx`, `SubsiteHero.tsx`, `Marquee.tsx` | page head (title, description, Open Graph, preload, fonts), hero (photo zoom, parallax, entrance sequence, word reveal, badge, two buttons, scroll cue), marquee; the other sections referenced |
+| 2. Services | `Services.tsx`, `data/services.ts` | heading, six numbered cards with icons (hover lift, number tint, icon fill, accent bar), stagger, partner chip |
+| 3. Contact | `Contact.tsx` (both subsites) | heading, colored info card, opening hours with live badge, click-to-load map, mailto form with validation and a "sent" state; for both subsites |
+| 4. About (the motion sample) | `About.tsx` | heading, lead, drawn timeline with staggered milestones, four counters, revealed photo with caption |
+
+The samples are in [`docs/web-samples/`](web-samples): `*.html` (plain HTML/CSS/JS as an AI would write it without a
+framework: semantic HTML, one stylesheet, vanilla JS, Lucide icons from a CDN), `*.nyra` (the design above), and
+`2-services.tailwind.html` (a sensitivity check). Counts are from Claude's tokenizer (the `count_tokens` endpoint,
+`claude-sonnet-5-5`, the per-message overhead subtracted). Each sample's first line, a note for the reader, is not
+counted.
+
+**Results (tokens):**
+
+| Part | React/TSX | HTML + CSS + JS | Nyra | Nyra / HTML | Nyra / TSX |
+|---|---:|---:|---:|---:|---:|
+| 0. Shared (theme, base, helpers) | 8,033 | 3,183 | 509 | 0.16 | 0.06 |
+| 1. Flora page: head, hero, marquee | 2,929 | 3,606 | 466 | 0.13 | 0.16 |
+| 2. Services | 1,950 | 2,107 | 703 | 0.33 | 0.36 |
+| 3. Contact (both subsites) | 4,884 | 6,728 | 1,164 | 0.17 | 0.24 |
+| 4. About (motion) | 1,830 | 2,556 | 637 | 0.25 | 0.35 |
+| **Parts 1-3 (the brief)** | 9,763 | 12,441 | 2,333 | **0.19** | 0.24 |
+| **Parts 1-4** | 11,593 | 14,997 | 2,970 | **0.20** | 0.26 |
+| **All, with shared** | 19,626 | 18,180 | 3,479 | **0.19** | **0.18** |
+
+**Checks on the result:**
+
+| Question | Measurement |
+|---|---|
+| How much of the Nyra is the site's own text? | 2,448 of 3,479 tokens (70%) are inside string literals. The code around the text is about 1,000 tokens for four sections and the theme. Czech text is token-heavy; an English site would show a larger code share |
+| Is the contact ratio inflated because HTML repeats the section for the second subsite? | Partly. HTML with only the Flora contact section is 4,979 tokens; Nyra's 1,164 (both subsites) is still 0.23x of that |
+| Would Tailwind have been cheaper than plain CSS? | No: the services section with Tailwind classes is 3,716 tokens (plain: 2,107; Nyra: 703) |
+| How much is the kit, how much the syntax? | HTML = 10,876 CSS+JS + 706 `<head>` + 6,553 markup. Nyra vs markup and head only: 3,479 vs 7,259, **0.48x** (see Where the savings come from) |
+| What does the `web.` prefix cost? | +92 tokens (+2.6%) over the whole sample |
+| Is the TSX column fair? | It is the original as it is in the repository, so it is understated in one way (the Tailwind theme and the `motion`, React and lucide libraries are free to it) and overstated in another (TypeScript types, props plumbing, the subsite switching state machine) |
+
+**What is not equal.** The Nyra version writes the kit's Czech UI words once in `site(say: ...)` (counted); the "years
+of experience" counter is computed at build time, the React one in the browser (a yearly rebuild or a `since:` option
+fixes that); the Nyra navbar call in part 1 is a real call, while the HTML and TSX parts reference the navbar
+without its code (this favors HTML and TSX). The blurred image previews (LQIP) of the original are produced by its
+build script in both React and Nyra, and left out of the hand-written HTML.
+
+**Cost.** For the experiment the measure is billed tokens, not file size: the agent's output (the program) plus its
+input (the prompt, which for Nyra carries the two cards, about 2,700 tokens, cacheable). On these samples the output
+difference is about 14,700 tokens for four sections, far larger than the cards. The experiment must still report
+both, and first-try correctness, as `docs/DESIGN.md` requires (pass@1 first, tokens second).
+
+## Clone from a URL (later)
+
+The longer-term goal: give an agent only the URL of an existing site and get it rebuilt in Nyra, cheaper and faster
+than rewriting HTML/CSS/JS. The `web` API is shaped for this: what an agent sees on a page (a navbar, a hero, a row of
+cards, a contact block, the brand colors and fonts) maps one to one onto kit components and `site(...)` options.
+
+A tool, `nyra web clone URL` (also as the MCP tool `nyra_clone`), does the mechanical part and leaves the judgment to
+the agent:
+
+1. **Capture**: load the page in a headless browser (the agent's browser tool or a local Chrome), scroll it once so
+   lazy content loads, and take a full-page screenshot per breakpoint (mobile, desktop).
+2. **Extract** (a script run in the page) into one JSON outline:
+   - *theme*: the most used background, text and button colors from computed styles, the font families and their
+     Google Fonts names, the median card radius, light or dark;
+   - *structure*: landmarks (header, nav, main, footer), then sections split at headings, each with a guess of its
+     kit component from patterns (a first section with a large background image and an `h1` is a `hero`; three or
+     more siblings with the same shape are a `grid` of `card`s; an animated overflowing row is a `marquee`; a table of
+     days and times is `hours`; a Maps iframe is `map`; a form is a `form` with its fields);
+   - *content*: the visible text in order with its headings, links (internal ones become `#anchors` or pages), and
+     images (the largest `srcset` candidate and its `alt`);
+   - *motion*: which elements animate on scroll or hover (classes and computed `transition`/`animation`), mapped to
+     the nearest motion words.
+3. **Skeleton**: `nyra web skeleton outline.json` writes `site.nyra` using kit components, with the text filled in,
+   an `assets/` download list, and `// guess:` comments where the match is weak. Parts that match nothing become a
+   `section` of plain elements; nothing is pasted as raw HTML by default.
+4. **Refine**: the agent builds, the tool renders `dist/` at the same breakpoints and shows a per-section visual diff
+   against the original screenshots; the agent fixes the sections that differ most, a few rounds.
+
+The agent's work is then mostly steps 3 and 4: reviewing a skeleton of a few hundred tokens instead of writing
+thousands of tokens of HTML and CSS. Only sites the user owns or has the right to copy may be cloned; the tool says so
+and does not fetch through logins or paywalls. Not part of v0.8: it needs the kit first, and its quality depends on
+how many real sites the component guesses cover.
+
+## Implementation plan
+
+Six work packages. WP1 is small and goes first (the others write against its syntax but can start with positional
+calls); WP2 to WP5 then run in parallel; WP6 closes.
+
+**WP1: Language (defaults, named arguments, child blocks).**
+- Default parameter values, named arguments in any order, E0226 narrowed, E0370; child blocks lowered to
+  `var kids` + `push` (E0371, E0385); the bare web names (E0372); `fmt` and `--fix` support (a missing comma between
+  named arguments, a positional after a named one).
+- Files: `src/ast.rs`, `src/parser.rs`, `src/check.rs` (+ `src/check/*`), `src/ir/lower.rs`, `src/fmt.rs`,
+  `src/fix.rs`, `src/hints.rs`, `docs/SPEC.md`, `docs/AGENT_CARD.md`, `docs/ERRORS.md`.
+- Tests: new examples run on every backend (defaults and blocks are lowered before the IR, so parity is free);
+  wrong/fixed programs for each new code; card token test.
+
+**WP2: `web` core (nodes, elements, text, rendering).**
+- `Node` type, every element and kit component as a function with defaults, the text pipeline (escaping, the
+  Markdown subset, `:icon:` shortcodes, URL checks), rendering to HTML with the `<head>` (SEO, Open Graph, canonical,
+  preload), the page registry (an intrinsic `_emit(path, html)`), the icon set (Lucide subset, ISC license; brand
+  icons from Simple Icons, CC0), the live-region detection and `Msg` checks (E0373, E0376, E0384).
+- Written mostly in Nyra (`src/std/web.nyra`, like `src/std/math.nyra`), so it runs the same on every backend and is
+  the code that is compiled to JS for re-rendering.
+- Files: `src/std/web.nyra`, `src/stdlib.rs`, `src/web/icons.rs`, `src/check.rs` (hooks).
+- Tests: golden HTML for each element and component (`tests/web.rs`, `examples/web/*.nyra` → expected HTML), escaping
+  and injection tests (text, attributes, Markdown links, `javascript:`), E0374/E0377/E0378/E0381.
+
+**WP3: Kit look and behaviors.**
+- `src/web/kit.css`: theme variables and derivation (`color-mix`), layout, every component in the flora quality bar,
+  responsive breakpoints, focus styles, the `style` presets; `src/web/kit.js` per behavior (menu, scroll-spy, lightbox,
+  gallery filter, hours badge, map placeholder, mailto form), each a separate chunk the build includes only when used.
+- The HTML structure of each component is the contract with WP2 (a fixture file per component).
+- Tests: a static fixture page per component (`tests/web/fixtures/`), screenshots in a headless browser at 390 and
+  1440 px compared with references, axe-core accessibility run, CSS and JS size budgets.
+
+**WP4: Motion.**
+- `src/web/motion.css` (the words, generated per used word), `src/web/motion.js` (one IntersectionObserver, one rAF
+  loop: counters, tilt, parallax fallback), `src/web/ease.rs` (spring simulation to CSS `linear()`, easing presets),
+  the keyframes parser and checker (E0375), `at:` sequences, reduced-motion and `motion:` levels, View Transitions and
+  `morph:`.
+- Tests: unit tests for the spring curve and the keyframes parser; fixture pages for each word; a reduced-motion run
+  that asserts no animation longer than 10 ms; the JS budget (1.5 KB gzipped).
+
+**WP5: Build, serve, client code.**
+- `src/web.rs`: `nyra build` for `use web` programs (run in the interpreter, collect pages, assemble and hash CSS/JS
+  from the used parts, `sitemap.xml`, `robots.txt`, the CSP), images (header parsing for sizes, optional
+  `cwebp`/`magick`/`vips` variants and previews, E0383, E0386, E0387), anchor checks (E0382), contrast and heading
+  checks (E0379, E0380); `nyra run` dev server with live reload (`std::net`, zero crates); client code: the JS backend
+  compiles `update`, live views and what they call plus `src/web/runtime.js` (event delegation, keyed morph);
+  `nyra_build` in MCP.
+- Files: `src/web.rs`, `src/main.rs`, `src/mcp.rs`, `src/codegen/js.rs` (entry points only), `src/web/runtime.js`.
+- Tests: build `examples/web/` into a temp folder and check the files, a `dist/` size budget test, a headless
+  click-through of a `Msg` example.
+
+**WP6: Flora port, docs, experiment (after WP1-WP5).**
+- `examples/web/flora/site.nyra`: the whole flora site (both subsites and the selection screen; the 3D showroom as an
+  `embed`), with a side-by-side screenshot comparison and Lighthouse numbers against the React original.
+- `docs/WEB_CARD.md` (budget test like the main card), the spec section, `llms.txt`, the error entries.
+- `bench/web/`: the A/B experiment: a mock-site spec, the two prompts (plain HTML/CSS/JS, Nyra with both cards), the
+  same model, several runs each; reported: output and input tokens, cost, first-try build success, screenshot
+  similarity to the spec, Lighthouse scores.
+
+## Open questions and risks
+
+1. **Bare names or `web.` prefix?** Recommended bare (measured cost of the prefix: +2.6%). It changes the rule that a
+   module's names never clash with the program's, for this one module.
+2. **Named arguments for every function**, or only for web functions? Recommended for all (one rule, and
+   `print(end:)` already is one). It reverses the narrow reading of E0226 that was a deliberate choice.
+3. **Built-in UI words per language** (`lang: "cs"` gives "Nyní otevřeno" without `say:`) would save tokens on every
+   site, but is text that does not appear in the program. The samples write the words out.
+4. **The kit's look is the whole bet.** Savings come mostly from the kit; a kit that looks generic pushes agents to raw
+   CSS. Mitigation: the flora bar, `style` presets, screenshot tests, and the clone workflow as a coverage test of
+   real sites.
+5. **First-try correctness is unknown.** Models have never seen Nyra web. Named options and words are checked at
+   compile time with nearest-match hints, but the benchmark must measure pass@1 before any claim.
+6. **Images without crates** depend on an external tool for `srcset` and WebP. A small built-in PNG/JPEG decoder and
+   resizer is possible later; a WebP encoder is not small.
+7. **Browser support**: CSS scroll-driven animations and cross-document View Transitions are not in every browser
+   (the fallbacks are a JS loop and plain navigation); `linear()` easing has a cubic-bezier fallback.
+8. **Values that change with time** (years since 1991) are computed at build time unless the kit offers a live
+   option; a static site needs rebuilding for them.
+9. **Live-region detection by data flow** may surprise ("why did this re-render?"). `nyra outline --json` will list
+   the live regions and the variables each one reads.
+10. **The fairness of the experiment**: the HTML side gets no component kit; with one, the measured ratio is 0.48x,
+    not 0.19x. The write-up must state both.

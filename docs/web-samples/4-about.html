@@ -1,0 +1,83 @@
+<style>
+  .about { --accent: var(--amber); }
+  .about-grid { display: grid; align-items: start; gap: 3.5rem; }
+  @media (min-width: 1024px) { .about-grid { grid-template-columns: 1fr 1fr; gap: 5rem; } }
+  .about-lead { margin-bottom: 3rem; font-size: 1.125rem; line-height: 1.625; color: var(--ink-muted); }
+  .milestones { position: relative; display: grid; gap: 2.25rem; margin: 0; padding: 0 0 0 2rem; list-style: none; }
+  .milestones::before { content: ""; position: absolute; top: .5rem; bottom: .5rem; left: 7px; width: 2px; background: linear-gradient(var(--amber), rgba(212, 105, 26, .5), rgba(212, 105, 26, .1)); transform: scaleY(0); transform-origin: top; transition: transform 1.4s var(--ease); }
+  .milestones.in::before { transform: scaleY(1); }
+  .milestones li { position: relative; opacity: 0; transform: translateY(16px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  .milestones.in li { opacity: 1; transform: none; }
+  .milestones li::before { content: ""; position: absolute; top: .375rem; left: -2rem; width: 1rem; height: 1rem; border: 3px solid var(--cream); border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 4px rgba(212, 105, 26, .15); }
+  .milestones strong { display: block; margin-bottom: .25rem; font-family: var(--serif); font-size: 1.5rem; color: var(--amber); }
+  .milestones p { font-size: .875rem; line-height: 1.625; color: var(--ink-muted); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .stat { padding: 1.5rem; text-align: center; }
+  .stat strong { display: block; font-family: var(--serif); font-size: 2.25rem; }
+  @media (min-width: 768px) { .stat strong { font-size: 3rem; } }
+  .stat span { display: block; margin-top: .5rem; font-size: .75rem; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
+  .about figure { margin: 0; overflow: hidden; border-radius: 1.5rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1); }
+  .about figure img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+  .about figcaption { display: flex; align-items: center; justify-content: center; gap: .375rem; padding: .75rem 1rem; background: #fff; font-size: .875rem; color: var(--ink-muted); }
+  .about figcaption svg { width: .875rem; height: .875rem; color: var(--krby); }
+</style>
+
+<section id="o-nas" class="section about">
+  <div class="container">
+    <div class="heading">
+      <span class="kicker reveal">Od roku 1991</span>
+      <h2 class="words">Rodinná firma s tradicí</h2>
+      <p class="reveal" style="--d: .15s">Dvě specializace, jedna rodina. Stanislav Kuběna a jeho tým vám poslouží jak v kamnářství, tak v prodejně Flora.</p>
+    </div>
+    <div class="about-grid">
+      <div>
+        <p class="about-lead reveal">Od roku 1991 provozujeme ve Valašském Meziříčí prodejnu Flora, která zásobuje místní zahradníky, včelaře i milovníky domácích dekorací. O několik let později jsme přidali kamnářství – a dnes nabízíme kompletní služby od návrhu krbu až po jeho revizi.</p>
+        <ol class="milestones reveal">
+          <li style="transition-delay: .15s"><strong>1991</strong><p>Zahájení provozu prodejny Flora se zahradnickým a domácím sortimentem.</p></li>
+          <li style="transition-delay: .27s"><strong>1998</strong><p>Rozšíření o prodej krbů, kamen a topidel – vznik kamnářské divize.</p></li>
+          <li style="transition-delay: .39s"><strong>2006</strong><p>Získání živnostenského oprávnění pro kamnářství a zednické práce.</p></li>
+          <li style="transition-delay: .51s"><strong>Dnes</strong><p>Autorizovaný partner značky Brunner, přes 30 let ve Valašském Meziříčí.</p></li>
+        </ol>
+      </div>
+      <div>
+        <div class="stats stagger">
+          <div class="card stat"><strong class="count" id="years" style="color: var(--krby)">33+</strong><span>let zkušeností</span></div>
+          <div class="card stat"><strong class="count" style="color: var(--flora)">2</strong><span>specializace</span></div>
+          <div class="card stat"><strong class="count" style="color: var(--amber)">1–5</strong><span>odborní pracovníci</span></div>
+          <div class="card stat"><strong style="color: var(--amber)">★</strong><span>Brunner partner</span></div>
+        </div>
+        <figure class="reveal" style="--d: .1s">
+          <img src="/img/about-namesti-1200.webp" alt="Náměstí ve Valašském Meziříčí" width="1200" height="750" loading="lazy" decoding="async"
+               srcset="/img/about-namesti-480.webp 480w, /img/about-namesti-800.webp 800w, /img/about-namesti-1200.webp 1200w"
+               sizes="(min-width: 1024px) 600px, 100vw">
+          <figcaption><i data-lucide="map-pin"></i> Náměstí 71/11, 757 01 Valašské Meziříčí</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.getElementById('years').textContent = `${new Date().getFullYear() - 1991}+`;
+
+  // Count up to the number at the start of the text ("33+" counts 0…33, then "+") when it scrolls into view.
+  const ease = (t) => 1 - Math.pow(1 - t, 4);
+  document.querySelectorAll('.count').forEach((el) => {
+    const m = /^(\d+)(.*)$/.exec(el.textContent);
+    if (!m || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const [, num, rest] = m;
+    el.setAttribute('aria-label', el.textContent);
+    el.textContent = `0${rest}`;
+    new IntersectionObserver(([e], obs) => {
+      if (!e.isIntersecting) return;
+      obs.disconnect();
+      const start = performance.now();
+      const tick = (now) => {
+        const t = Math.min((now - start) / 1600, 1);
+        el.textContent = `${Math.round(ease(t) * num)}${rest}`;
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, { rootMargin: '0px 0px -10% 0px' }).observe(el);
+  });
+</script>
