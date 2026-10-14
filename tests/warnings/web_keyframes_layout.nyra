@@ -1,0 +1,9 @@
+// expect: E0375
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_keyframes("grow", "from { width: 0; opacity: 0 } to { width: 100% }")
+page("/", "<h1 data-anim=\"grow\">Bakery</h1>")

@@ -117,10 +117,10 @@ fn keyframes_words_work_in_anim_and_loop() {
 #[test]
 fn keyframes_are_checked_and_normalized() {
     let k = check_keyframes("sway", "0%, 100% { rotate: -3deg } 50% { rotate: 3deg }").unwrap();
-    assert_eq!(k.css(), "@keyframes m-k-sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}");
+    assert_eq!(k.css(), "@keyframes sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}");
     assert!(k.layout.is_empty() && k.layout_warning().is_none());
     let k = check_keyframes("in", "from { opacity: 0; transform: translateY(20px) scale(.9) } to { opacity: 1 }").unwrap();
-    assert_eq!(k.css(), "@keyframes m-k-in{0%{opacity:0;transform:translateY(20px) scale(.9)}100%{opacity:1}}");
+    assert_eq!(k.css(), "@keyframes in{0%{opacity:0;transform:translateY(20px) scale(.9)}100%{opacity:1}}");
     let k = check_keyframes("glow-2", "50% { --x: 3; box-shadow: 0 0 20px rgb(0 0 0 / .2); -webkit-mask-size: 50%; color: red }");
     assert!(k.is_ok(), "{k:?}");
 }
@@ -130,7 +130,10 @@ fn layout_properties_are_listed_for_the_warning() {
     let k = check_keyframes("grow", "from { width: 0; opacity: 0 } to { width: 100%; margin-top: 4px }").unwrap();
     assert_eq!(k.layout, ["width", "margin-top"]);
     let (msg, hint) = k.layout_warning().unwrap();
-    assert_eq!(msg, "the keyframes `grow` animate the layout properties `width`, `margin-top`: the page is laid out again on every frame");
+    assert_eq!(
+        msg,
+        "the keyframes `grow` animate the layout properties `width`, `margin-top`: the page is laid out again on every frame"
+    );
     assert!(hint.contains("`translate`"), "{hint}");
     let one = check_keyframes("drop", "to { top: 10px }").unwrap();
     assert!(one.layout_warning().unwrap().0.contains("layout property `top`"));
@@ -167,8 +170,10 @@ fn wrong_keyframes_are_refused_with_a_reason() {
 
 #[test]
 fn css_in_a_string_is_text() {
-    let (toks, errs) = crate::lexer::lex("keyframes(\"sway\", \"0%, 100% { rotate: -3deg } 50% { rotate: 3deg; opacity: .5 }\")
-");
+    let (toks, errs) = crate::lexer::lex(
+        "keyframes(\"sway\", \"0%, 100% { rotate: -3deg } 50% { rotate: 3deg; opacity: .5 }\")
+",
+    );
     assert!(errs.is_empty(), "{errs:?}");
     assert_eq!(toks[4].tok, Tok::Str("0%, 100% { rotate: -3deg } 50% { rotate: 3deg; opacity: .5 }".into()));
     // code stays code: no space after the brace, or no `property: value`
@@ -195,7 +200,11 @@ page("/", "A") {
     let issues = lint_source(src);
     let got: Vec<(IssueKind, usize, String)> = issues.iter().map(|i| (i.kind, i.span.line, i.message.clone())).collect();
     let expect = [
-        (IssueKind::LayoutProperty, 3, "the keyframes `grow` animate the layout property `width`: the page is laid out again on every frame"),
+        (
+            IssueKind::LayoutProperty,
+            3,
+            "the keyframes `grow` animate the layout property `width`: the page is laid out again on every frame",
+        ),
         (IssueKind::BadKeyframes, 4, "`rise` is already a word of `anim:`; a keyframes word needs a new name"),
         (IssueKind::UnknownWord, 5, "`transition: \"fdae\"` is not one of `fade`, `slide`, `rise`, `none`"),
         (IssueKind::UnknownWord, 7, "`lfit` is not a word of `hover:`"),
@@ -227,7 +236,7 @@ fn only_the_parts_used_are_included() {
     assert!(css.contains("[data-anim~=rise]{--m-y:28px}"));
     assert!(css.contains("@keyframes m-in{"));
     assert!(css.contains("prefers-reduced-motion:reduce"));
-    for absent in ["m-word", "data-hover~=lift", "m-marquee", "view-transition", "m-k-", "/*"] {
+    for absent in ["m-word", "data-hover~=lift", "m-marquee", "view-transition", "@keyframes sway", "/*"] {
         assert!(!css.contains(absent), "{absent} in {css}");
     }
     let css = motion_css(&[("hover", "lift"), ("data-loop", "ping")], &[]);
@@ -271,14 +280,15 @@ fn values_with_numbers_get_their_own_rules() {
 fn keyframes_words_get_their_css_when_used() {
     let k = check_keyframes("sway", "0%, 100% { rotate: -3deg } 50% { rotate: 3deg }").unwrap();
     let unused = motion_css(&[("anim", "rise")], std::slice::from_ref(&k));
-    assert!(!unused.contains("m-k-sway"));
-    let css = motion_css(&[("loop", "sway 4s in-out")], &[k.clone()]);
-    assert!(css.contains("@keyframes m-k-sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}"));
-    assert!(css.contains("[data-loop~=sway]{--m-a2:m-k-sway"));
+    // defined but not used in an option: the keyframes are there (raw `css(...)` may use them), no rules
+    assert!(unused.contains("@keyframes sway{") && !unused.contains("[data-anim~=sway]"));
+    let css = motion_css(&[("loop", "sway 4s in-out")], std::slice::from_ref(&k));
+    assert!(css.contains("@keyframes sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}"));
+    assert!(css.contains("[data-loop~=sway]{--m-a2:sway"));
     assert!(css.contains("[data-loop=\"sway 4s in-out\"]{--ml-dur:4s}"));
     assert!(!css.contains("[data-anim~=sway]"));
     let css = motion_css(&[("anim", "sway")], &[k]);
-    assert!(css.contains("[data-anim~=sway].m-in{--m-a1:m-k-sway"));
+    assert!(css.contains("[data-anim~=sway].m-in{--m-a1:sway"));
     assert!(css.contains("paused both"));
 }
 

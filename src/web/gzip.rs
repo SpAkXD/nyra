@@ -1,7 +1,7 @@
 //! The size a file has after `gzip -9`, computed without compressing it to bytes (zero crates):
 //! the DEFLATE symbols of an LZ77 pass with lazy matching like zlib's, coded as one block with
 //! its own Huffman codes, plus the gzip header and trailer. On text it lands within about 1% of
-//! `gzip -9` (motion.js for a typical page: 1,472 bytes here, 1,473 from gzip). The size budgets
+//! `gzip -9` (motion.js for a typical page: 1,485 bytes here, 1,486 from gzip). The size budgets
 //! of `use web` (motion JS 1.5 KB, a site's CSS and JS) are checked with it.
 
 // The build (WP5) checks its budgets with this; until it lands only the tests use it.
@@ -14,8 +14,8 @@ const LEN_BASE: [usize; 29] =
     [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
 const LEN_EXTRA: [usize; 29] = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
 const DIST_BASE: [usize; 30] = [
-    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193,
-    12289, 16385, 24577,
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289,
+    16385, 24577,
 ];
 const DIST_EXTRA: [usize; 30] = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
 /// The order the code-length code lengths are written in.
@@ -221,5 +221,4 @@ mod tests {
         let limited = lengths(&[1, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024], 5);
         assert!(limited.iter().all(|&x| x <= 5), "{limited:?}");
     }
-
 }

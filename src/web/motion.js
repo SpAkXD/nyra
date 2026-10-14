@@ -5,6 +5,8 @@
 // loop runs counters, tilt, magnetic pull and the scroll fallback, asleep when nothing needs it and
 // stopped in hidden tabs. The build includes each part (marked by a `motion:` comment) only when a page uses it.
 (() => {
+// outside a page (a test in Node.js) there is nothing to move
+if (!globalThis.document) return;
 const D = document, R = D.documentElement,
   RM = matchMedia('(prefers-reduced-motion: reduce)').matches || R.dataset.motion == 'off',
   $ = (s, r = D) => [...r.querySelectorAll(s)],
@@ -176,10 +178,15 @@ setup.push(() => {
   }
 });
 /*! motion: scroll */
-// The scroll words where CSS scroll-driven animations are missing: the same curves as the CSS,
-// computed in the frame loop from positions measured on load and resize.
+// The scroll words. A box with `overflow: hidden` around one would become the scroller its CSS
+// timeline follows, and it never scrolls: such a box clips instead (it looks the same). Where CSS
+// scroll-driven animations are missing, the same curves as the CSS are computed in the frame loop
+// from positions measured on load and resize.
 setup.push(() => {
   const els = $('[data-scroll]');
+  for (const el of els)
+    for (let a = el.parentElement; a && a != D.body; a = a.parentElement)
+      if (/hidden/.test(getComputedStyle(a).overflow)) a.style.overflow = 'clip';
   if (RM || !els.length || CSS.supports('animation-timeline: view()')) return;
   let vh, items;
   const measure = () => {
@@ -198,7 +205,7 @@ setup.push(() => {
       const p = cover(it), s = it.el.style;
       if (/\bprogress\b/.test(it.w)) { const H = R.scrollHeight - vh; s.transform = `scaleX(${H > 0 ? clamp(scrollY / H) : 1})`; }
       else if (/\bparallax\b/.test(it.w)) s.transform = `translate3d(0,${((2 * p - 1) * it.r * (vh + it.h) / 2).toFixed(1)}px,0)`;
-      else if (/\bfade-out\b/.test(it.w)) { const q = clamp((p - .35) / .5); s.opacity = 1 - q; s.transform = `translate3d(0,${-q * 18}%,0)`; }
+      else if (/\bfade-out\b/.test(it.w)) { const q = clamp((p - .3) / .5); s.opacity = 1 - q; s.transform = `translate3d(0,${-q * 18}%,0)`; }
       else if (/\bscale\b/.test(it.w)) { const q = clamp(p / .4); s.transform = `scale(${.88 + .12 * (1 - Math.pow(1 - q, 3))})`; }
     }
   };

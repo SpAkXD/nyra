@@ -8,11 +8,11 @@
 <link rel="stylesheet" href="fixture.css">
 <link rel="stylesheet" href="../../../src/web/motion.css">
 <style>
-@keyframes m-k-sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}
+@keyframes sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}
 [data-anim~=sway]{--m-o:1}
-@media (scripting:enabled) and (prefers-reduced-motion:no-preference){:root:not([data-motion=off]) [data-anim~=sway]:not(.m-in){--m-a1:m-k-sway 1s paused both}}
-[data-anim~=sway].m-in{--m-a1:m-k-sway calc(var(--m-dur,1s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s)) both}
-[data-loop~=sway]{--m-a2:m-k-sway calc(var(--ml-dur,2s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){:root:not([data-motion=off]) [data-anim~=sway]:not(.m-in){--m-a1:sway 1s paused both}}
+[data-anim~=sway].m-in{--m-a1:sway calc(var(--m-dur,1s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s)) both}
+[data-loop~=sway]{--m-a2:sway calc(var(--ml-dur,2s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
 [data-loop="sway 4s in-out"]{--ml-dur:4s}
 </style>
 <script src="../../../src/web/motion.js" defer></script>

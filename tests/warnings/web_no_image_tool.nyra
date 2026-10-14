@@ -1,0 +1,10 @@
+// expect: E0386
+// flags: --image-tool none
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+// the photo is tests/warnings/assets/counter.jpg
+page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")

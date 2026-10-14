@@ -39,7 +39,7 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0389 | `use web` (planned, v0.8) | kept for the web library designed in [WEB.md](WEB.md) |
+| E0372-E0389 | `use web` (v0.8; parts planned) | the site build's checks (since v0.8): motion words (E0374), keyframes (E0375, E0388), headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387); the other codes are kept for the web library designed in [WEB.md](WEB.md) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
@@ -2625,7 +2625,7 @@ fn main() {
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text`, `time` and `web` (websites, see WEB.md); the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
@@ -3770,3 +3770,289 @@ fn main() {
 }
 ```
 - **Related:** E0203, E0370
+
+## E0374: unknown motion word
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A motion option of a `use web` site has a word that is not one of its words: `anim:`, `hover:`, `loop:` and `scroll:` each have their own list (see Motion in [WEB.md](WEB.md)), plus the speeds `fast` and `slow`, the easings `out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, one number and one duration (`4s`, `600ms`). The build reads the attributes the pages have (`data-anim`, `data-hover`, `data-loop`, `data-scroll`) and names the nearest word; a word made with `keyframes` counts in `anim:` and `loop:`.
+- **Why Nyra has this rule:** A misspelled class or animation name in CSS fails silently: the element just does not move, and nobody notices until a visitor does. A motion word is checked like a name in code, before the site is deployed.
+- **Common causes:**
+  - a typo (`hover: "lfit"`)
+  - a word of another option (`hover: "rise"`: `rise` is an entrance, an `anim:` word)
+  - a word from a CSS library (`fadeInUp`, `bounceIn`)
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1 data-anim=\"rsie\">Bakery</h1>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1 data-anim=\"rise\">Bakery</h1>")
+```
+- **Related:** E0375, E0388
+
+## E0375: keyframes animate a layout property
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A `keyframes(name, body)` of a `use web` site animates a property that changes the layout (`width`, `height`, `top`, `margin`, `padding`, `font-size`, ...). It works, but the browser lays the page out again on every frame of the animation. The message lists the properties. Moving and growing are smooth with `translate`, `scale`, `rotate`, `opacity`, `filter` and `clip-path`, which the compositor animates without layout.
+- **Why Nyra has this rule:** Every built-in motion word moves only those compositor properties, so motion stays smooth on a slow phone. A custom keyframe is the one place where a janky animation can come in; like Nyra's performance warnings, this one does not stop the build.
+- **Common causes:**
+  - growing a bar with `width` instead of `scale`
+  - moving with `top` or `left` instead of `translate`
+  - a pulse made with `padding` or `font-size`
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_keyframes("grow", "from { width: 0 } to { width: 100% }")
+page("/", "<h1 data-anim=\"grow\">Bakery</h1>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_keyframes("grow", "from { scale: 0 1 } to { scale: 1 }")
+page("/", "<h1 data-anim=\"grow\">Bakery</h1>")
+```
+- **Related:** E0374, E0388
+
+## E0379: a page's headings are out of order
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A page of a `use web` site does not have exactly one `h1`, or a heading skips a level (an `h3` right after an `h1`). `nyra build`, `nyra run` and `nyra check` check every page the program makes; the page is still written, and the warning names the page and the headings. (The examples here make their pages with `_emit(path, html)`, the hook the web library's `page(...)` uses, so they do not depend on the kit.)
+- **Why Nyra has this rule:** The `h1` is the page's title for search engines and screen readers, and screen reader users move through a page by its headings: a missing level looks like a missing section. The kit makes the right headings by default (a hero's title is the `h1`, a section's title an `h2`), so this warning usually means a heading was written by hand.
+- **Common causes:**
+  - a page without a hero, whose first heading is a section title (`h2`)
+  - two heroes, or an `h1` written in a section
+  - an `h3` used for its size right below the page title
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h2>Our bread</h2><p>Baked every morning.</p>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Our bread</h1><p>Baked every morning.</p>")
+```
+- **Related:** E0380, E0382
+
+## E0380: theme colors with too little contrast
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** The theme of a `use web` site sets a text color and a background whose contrast is below 4.5:1, the minimum WCAG AA asks for normal text. The build checks the text colors `ink` and `muted` on the backgrounds `bg` and `alt` (the CSS variables `--ink`, `--muted`, `--bg`, `--alt` of the theme, when they are hex colors); the message gives the pair and the ratio. The site is still built.
+- **Why Nyra has this rule:** Light grey text on white is a common design choice that many people cannot read, on a phone in the sun or with weaker eyes. Every component takes its colors from the theme, so one bad pair makes the whole site hard to read, and the theme is the one place to fix it.
+- **Common causes:**
+  - a light grey for secondary text (`muted`) on a white background
+  - a brand color used as the text color
+  - a dark theme with dark grey text
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_css(":root{{--bg:#ffffff;--ink:#999999}}")
+page("/", "<h1>Bakery</h1>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_css(":root{{--bg:#ffffff;--ink:#333333}}")
+page("/", "<h1>Bakery</h1>")
+```
+- **Related:** E0379
+
+## E0382: link to an anchor that is not on the page
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A link of a `use web` site points to `#name` (or `/page#name`), and no element on that page has `id="name"`. The build checks every such link on every page, so a menu entry that scrolls nowhere is found before the site is deployed. `nyra check` reports it too; nothing is written.
+- **Why Nyra has this rule:** One-page sites are held together by anchor links (the navbar's `#contact`, a hero button's `#menu`), and a renamed section breaks them silently: the link still looks fine and does nothing. A section's first argument is its id, so the fix is usually one word.
+- **Common causes:**
+  - a section renamed (`section("kontakt", ...)`) and the navbar still linking `#contact`
+  - a typo or a different language in the link
+  - a link to a section of another page written without the page (`#team` instead of `/about#team`)
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><section id=\"kontakt\"><h2>Contact</h2></section>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><section id=\"contact\"><h2>Contact</h2></section>")
+```
+- **Related:** E0383, E0387
+
+## E0383: image not found
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A page of a `use web` site shows an image (`img(...)`, a hero or card photo, `og:image`) whose file is not in the folder `assets/` next to the program (or next to the program itself). The build copies every image it finds into the site, with its size; one it cannot find is this error. `nyra run` (the dev server) reports it as a warning, so the page still shows while the file is being added.
+- **Why Nyra has this rule:** A missing image is a broken page that looks fine in the code. Images are read only from the program's own folder, so a site never depends on files elsewhere on the machine that built it.
+- **Common causes:**
+  - a typo or a different extension (`photo.jpg` for `photo.jpeg`)
+  - the file next to the program instead of in `assets/`, in another folder
+  - a path that starts with `/` or `../`
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><p>The counter opens at seven.</p>")
+```
+- **Related:** E0382, E0386
+
+## E0386: images copied without WebP variants
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** The site has photos (PNG, JPEG or WebP), and no image tool was found on the PATH (`cwebp`, `magick` or `vips`), or `--image-tool none` was given. The build copies the originals with their width and height, `loading="lazy"` and `decoding="async"`, but cannot make the smaller WebP variants and the `srcset` that let phones load less. The site works; it is only heavier. Vector images (SVG) and GIFs never need variants.
+- **Why Nyra has this rule:** The compiler has no image codecs of its own, so it uses a tool when there is one, like the C compiler for native programs. The build never fails over images, so the warning is the only sign that the photos are full size.
+- **Common causes:**
+  - no image tool installed: install cwebp (libwebp), ImageMagick 7 or libvips
+  - a CI machine without the tool that the developer's machine has
+  - `--image-tool none` left in a build script
+- **Wrong:**
+```rust
+// main.nyra
+// flags: --image-tool none
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+// assets/counter.jpg
+(the bytes of a JPEG photo)
+```
+- **Fixed:**
+```rust
+// main.nyra
+// flags: --image-tool cwebp
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+// assets/counter.jpg
+(the bytes of a JPEG photo)
+```
+- **Related:** E0383
+
+## E0387: two pages with one path, or a path that is not one
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** Two pages of a `use web` site have the same path (`/about` and `/about/` are one page: both are the file `about/index.html`), or a page's path is not a path of the site: it must start with `/` and have only letters, digits and `-_./~%`, without `..` or an empty part. Each page is one file of the built site, so its path must name exactly one.
+- **Why Nyra has this rule:** A second page with the same path would silently replace the first one in `dist/`, and a relative path (`about`) would depend on the page that links to it. The build finds both before anything is written.
+- **Common causes:**
+  - a page copied to make a new one and its path left the same
+  - the same path with and without the `/` at the end
+  - a path written without the leading `/` (`page("about", ...)`)
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/about", "<h1>About us</h1>")
+page("/about/", "<h1>Our team</h1>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+page("/about", "<h1>About us</h1>")
+page("/team", "<h1>Our team</h1>")
+```
+- **Related:** E0382
+
+## E0388: a keyframes word that cannot be made
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A `keyframes(name, body)` of a `use web` site cannot become a motion word. Either the name is wrong (it must be lowercase letters, digits and single `-`, start with a letter, and not be a word that exists already, such as `rise` or `slow`), or the body is not a CSS keyframes body: blocks like `0%, 100% { rotate: -3deg } 50% { rotate: 3deg }` (offsets are `from`, `to` or percentages), each with `property: value` lines of properties keyframes can animate, and plain values (no quotes, `url()` or `!important`). The message says which part is wrong, with the nearest property for a typo.
+- **Why Nyra has this rule:** The body goes into the site's CSS file. A broken one would end the CSS early or animate nothing, without an error anywhere; checked at build time, it is a message with a place.
+- **Common causes:**
+  - the name of a built-in word (`keyframes("rise", ...)`)
+  - a typo in a property (`opacty`)
+  - a block without braces, or a brace not closed
+- **Wrong:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_keyframes("rise", "from { opacity: 0; translate: 0 40px } to { opacity: 1 }")
+page("/", "<h1 data-anim=\"rise\">Bakery</h1>")
+```
+- **Fixed:**
+```rust
+use web
+
+fn page(path: str, body: str) {
+    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+}
+
+_keyframes("rise-far", "from { opacity: 0; translate: 0 40px } to { opacity: 1 }")
+page("/", "<h1 data-anim=\"rise-far\">Bakery</h1>")
+```
+- **Related:** E0374, E0375

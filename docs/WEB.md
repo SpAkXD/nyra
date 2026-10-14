@@ -1,8 +1,10 @@
 # Nyra on the web (design for v0.8)
 
 Status: **design.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
-E0371) are built and documented in [SPEC.md](SPEC.md); the rest is not built yet, and its error codes are reserved,
-not emitted. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
+E0371) are built and documented in [SPEC.md](SPEC.md). The build, the dev server and the client runtime (WP5) are
+built as described in [Build contract](#build-contract), with their checks E0379, E0380, E0382, E0383, E0386 and
+E0387. The motion library (WP4) is built as described in [Motion build contract](#motion-build-contract), with
+its checks E0374 (motion words), E0375 and E0388 (keyframes). The rest is not built yet, and its error codes are reserved, not emitted. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
 
 Today Nyra cannot make a web page: there is no DOM, HTML, CSS or events. This document designs `use web`: a way for an
 agent to write a whole website (pages, theme, sections, motion, interactivity) in Nyra, and get a fast static site out of
@@ -28,8 +30,10 @@ classes, data reused, links and icons in text). 70% of the remaining Nyra tokens
 9. [The web card](#the-web-card)
 10. [Token measurement](#token-measurement)
 11. [Clone from a URL (later)](#clone-from-a-url-later)
-12. [Implementation plan](#implementation-plan)
-13. [Open questions and risks](#open-questions-and-risks)
+12. [Build contract](#build-contract) (built: the build, the dev server, the client runtime)
+    and [Motion build contract](#motion-build-contract) (built: the motion words)
+13. [Implementation plan](#implementation-plan)
+14. [Open questions and risks](#open-questions-and-risks)
 
 ## One example
 
@@ -82,11 +86,12 @@ and it respects `prefers-reduced-motion`. No styling code was written.
 
 ```
 nyra build site.nyra          # a program with `use web` -> dist/
-nyra run site.nyra            # build, serve dist/ on http://localhost:8080, rebuild and reload on save
+nyra run site.nyra            # build, serve it on http://127.0.0.1:8000, rebuild and reload on save
 nyra check site.nyra          # types plus web checks (broken #anchors, missing images, contrast), writes nothing
 ```
 
-`nyra build` sees `use web` and builds a site instead of an executable; no new flag (`--out dir` changes `dist/`).
+`nyra build` sees `use web` and builds a site instead of an executable; no new flag (`-o DIR` changes `dist/`).
+What is built so far is described exactly in [Build contract](#build-contract).
 
 **At build time** the whole program runs once in the IR interpreter (the same one `--interp` uses: deterministic, with
 limits). Each `page(path, title) { ... }` call renders its node tree and hands the HTML to the build. The build
@@ -282,7 +287,7 @@ card):
 | Option | When | Words |
 |---|---|---|
 | `anim:` | Once, when the element scrolls into view (or on load above the fold) | `fade` `rise` `slide` `slide-left` `zoom` `blur` `pop` `words` `letters` `draw` `count` `stagger` `none` |
-| `hover:` | Pointer over / keyboard focus | `lift` `glow` `zoom` `shine` `tilt` `underline` `fill` |
+| `hover:` | Pointer over / keyboard focus | `lift` `glow` `zoom` `shine` `tilt` `underline` `fill` `magnetic` |
 | `loop:` | Always, while on screen | `bob` `float` `pulse` `ping` `spin` `shimmer` `gradient` `marquee` |
 | `scroll:` | Linked to the scroll position | `parallax` `fade-out` `scale` `progress` |
 
@@ -469,8 +474,8 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 | E0371 | compile (built) | A misused child block: after a call whose last parameter is not an array (or is given already), a line that makes no value, or an assignment, `var`, `while`, `return`, `break`, `continue` or `arena` in it |
 | E0372 | compile | A program function or variable has the name of a web function (`fn hero`, `let hours`) |
 | E0373 | compile | `on:` is used but the program has no `enum Msg` or no `fn update(m: Msg)` |
-| E0374 | compile | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown icon name |
-| E0375 | warning | A custom keyframe animates a layout property (`width`, `top`, ...) |
+| E0374 | compile (built for motion words) | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown icon name |
+| E0375 | warning (built) | A custom keyframe animates a layout property (`width`, `top`, ...) |
 | E0376 | compile | A live view function has parameters |
 | E0377 | compile | An icon-only button or link has no `label:` |
 | E0378 | compile | `html(...)` or `css(...)` with a value that is not a string literal |
@@ -478,12 +483,13 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 | E0380 | warning | Theme colors below WCAG AA contrast (the ratio and the pair are in the message) |
 | E0381 | compile / build | A link with a forbidden scheme (`javascript:`, `data:`) |
 | E0382 | build | A `#anchor` link to an id that is not on the page |
-| E0383 | build | An image that is not in `assets/`, or that cannot be read |
+| E0383 | build | An image that is not in `assets/`, or that cannot be read (a warning in the dev server and MCP) |
 | E0384 | compile | Client code (`update`, a live view, what they call) uses `fs`, `os` or `input` |
 | E0385 | compile | A node made but not used (a node expression outside a child block, not returned or passed) |
 | E0386 | warning | No image tool found: images copied without `srcset` variants |
 | E0387 | build | Two pages with the same path, or a path that is not `/...` |
-| E0388-E0389 | | free |
+| E0388 | compile (built) | A `keyframes(name, body)` that cannot be a word: a bad or taken name, a body that does not parse, an unknown property, a value that is not plain CSS |
+| E0389 | | free |
 
 Each gets a full entry (wrong and fixed program) in `docs/ERRORS.md` when it is built, as the error database requires.
 
@@ -648,6 +654,205 @@ The agent's work is then mostly steps 3 and 4: reviewing a skeleton of a few hun
 thousands of tokens of HTML and CSS. Only sites the user owns or has the right to copy may be cloned; the tool says so
 and does not fetch through logins or paywalls. Not part of v0.8: it needs the kit first, and its quality depends on
 how many real sites the component guesses cover.
+
+## Build contract
+
+What WP5 built (`src/web.rs`, `src/web/*.rs`, `src/web/runtime.js`), and the exact contract between the build
+and the web library (WP2), the kit files (WP3) and the motion files (WP4).
+
+### Commands
+
+| Command | Does |
+|---|---|
+| `nyra build site.nyra` | Runs the program, writes the site to `dist/` next to the program. `-o DIR` writes elsewhere. `--json` prints `{ok, out, pages, files: [{path, bytes}], warnings}` |
+| `nyra run site.nyra` | The dev server: builds in memory, serves on `http://127.0.0.1:8000` (`--port N`; `--port 0` lets the system choose, the port is printed), rebuilds when the program, a file it imports or a file below `assets/` changes, and reloads the open pages. A failed build shows its errors in the browser and the terminal |
+| `nyra check site.nyra` | Compiles and runs the build in memory for its checks; writes nothing |
+| `--image-tool T` | `cwebp`, `magick`, `vips` (or the path of one) or `none`; default: the first one found on the PATH |
+| MCP `nyra_build` | For a program with `use web` (or `target: "web"`): builds in memory and returns `{ok, target: "web", pages, files, warnings}`; a missing image is a warning there, and no image tool runs |
+
+A `use web` program gets no capability (`fs`, `os`, `input`, `net`) unless `--allow` names it, and only the build
+writes files, and only into the output folder. The output folder must be empty, missing, or written by an earlier
+build: the build keeps a list of its files in `DIR/.nyra-build` and removes the ones a new build no longer makes;
+files it did not write are never touched.
+
+### Intrinsics
+
+The web library hands everything to the build through intrinsics of the `web` module. They are private: the
+library's Nyra source calls them by their short names (`_emit(...)`), and so may a program (the error database's
+examples do, so they do not depend on the kit). In the browser they do nothing.
+
+| Intrinsic | Meaning |
+|---|---|
+| `_emit(path: str, html: str)` | One page. `path` is the page's path (`/`, `/about`; E0387 for a bad or repeated one), `html` the whole document (a fragment without `<head>` is wrapped in a minimal document) |
+| `_uses(chunk: str)` | The page uses the kit chunk `chunk` (a component or behavior). Call it while rendering the component; repeated calls are fine |
+| `_css(text: str)` | CSS for the site's stylesheet, after the kit and motion parts: the theme variables and the program's raw `css(...)` |
+| `_keyframes(name: str, body: str)` | A custom motion word: `@keyframes name { body }` goes into the stylesheet, and `name` counts as a used motion word |
+| `_state(name: str, json: str)` | Written by the build, not the library (see Client code) |
+
+### What the build reads from the pages
+
+The build reads the finished HTML of each page, so the library is free in how it renders:
+
+- **Motion words**: the values of `data-anim`, `data-hover`, `data-loop`, `data-scroll`, `data-at` and `data-motion`,
+  split at spaces, plus the attribute's own name without `data-` (`anim`, `hover`, ..., so a chunk can serve a whole
+  option), plus the `_keyframes` names, plus `custom` when there are any.
+- **Events and live regions**: `data-on="<the Msg as JSON>"` on an element (the JSON of `json.str` of the `Msg`
+  value), and `data-live="<name of the view function>"` on the element that wraps a live view's HTML. A form or field
+  whose `data-on` is only a variant name (`"Send"`, a JSON string) sends that variant with the form's fields (a
+  `[str: str]`) or the field's value.
+- **Images**: the attributes `src`, `poster`, `data-src`, `data-full`, `data-bg`, `data-image`, the `href` of `a`
+  and `link`, and the `content` of `<meta property="og:image">` / `<meta name="twitter:image">`, when the value is
+  a relative path with an image extension. The file is looked up in `assets/` next to the program, then next to the
+  program (E0383 if missing). CSS `url(...)` of a file in `assets/` is copied too.
+- **Checks**: `id` attributes and `#anchor` links (E0382), `h1`-`h6` (E0379), the CSS variables `--ink`, `--muted`,
+  `--bg`, `--alt` in `_css` text (E0380, hex colors only).
+- **Sitemap**: `<link rel="canonical" href="https://...">`. The site's address is the canonical URL of `/` (else
+  the origin of any canonical URL); without one there is no `sitemap.xml`. A page with
+  `<meta name="robots" content="noindex">` and the page `/404` are left out.
+
+### What the build adds to each page
+
+- Right after `<meta charset>` (or `<head>`): `<meta http-equiv="Content-Security-Policy">` computed from the page:
+  `default-src 'self'`, `script-src 'self'` (or `'none'` without JS), `style-src 'self'` plus `'unsafe-inline'` only
+  when the page has `style` attributes or a `<style>`, Google Fonts when linked, `img-src 'self' data:` plus external
+  image origins, `frame-src` for iframes, `data-src`/`data-embed`/`data-frame` URLs and Google Maps when the `map`
+  chunk is used, `form-action 'self'` plus form targets, `base-uri 'self'`, `object-src 'none'`. No inline scripts.
+- Before `</head>`: `<link rel="stylesheet" href="site.<hash>.css">` and `<script src="site.<hash>.js" defer>`
+  (relative, so the site also works from a sub-folder), and with `nyra run` the reload script.
+- On each `<img>`: `width` and `height` from the file's header when neither is set, `loading="lazy"` (unless
+  `loading` is set or `fetchpriority="high"`), `decoding="async"`, and with an image tool `srcset` and
+  `sizes="100vw"` (unless set).
+
+### Files of the site
+
+| File | Content |
+|---|---|
+| `<path>/index.html` | Each page: `/` is `index.html`, `/about` and `/about/` are `about/index.html`, `/404` is `404.html`, a path ending in `.html` is that file |
+| `site.<hash>.css` | The kit's base CSS (before its first marker), the used kit chunks, the used motion chunks, the keyframes, then the `_css` texts; comments and spaces removed |
+| `site.<hash>.js` | Only when needed: the used kit JS chunks (in their own function scope), the used motion parts (one function scope of their own), then the client code |
+| `img/<name>-<hash>.<ext>`, `img/<name>-<width>-<hash>.webp` | The images and, with a tool, WebP variants 480/800/1200/1600 px wide (only those smaller than the image) |
+| `files/<name>-<hash>.<ext>` | Other files that the CSS refers to (fonts) |
+| `sitemap.xml`, `robots.txt` | See above; `robots.txt` names the sitemap |
+| `_headers` | The pages' policies joined, plus `frame-ancestors 'self'`, `X-Content-Type-Options` and `Referrer-Policy`, in the format of Netlify and Cloudflare Pages (the dev server sends the same header) |
+
+### Chunk markers
+
+`src/web/kit.css` and `src/web/kit.js` are split by `/*! chunk: NAME */` lines, `src/web/motion.css` and
+`src/web/motion.js` by `/*! motion: WORD */` lines. A chunk runs to the next marker; the text before the first
+marker is the file's base. The kit's base CSS is always included; any other base only when one of its file's
+chunks is used. The kit files are embedded into the compiler by `build.rs` when they exist (an absent file is
+empty), so the build works at every stage of WP3. The motion files have their own parts and rules; the build calls
+`web::motion` for them (see [Motion build contract](#motion-build-contract)).
+
+### Client code
+
+A program with an `enum Msg`, a `fn update(m: Msg)` and live views gets client code in `site.<hash>.js`, made only
+when a page has a `data-on`:
+
+- The build lowers the program again without the optimizer (which drops functions the script never calls) and
+  compiles, with the JavaScript backend, `update`, each view named in a `data-live`, the function that renders a view's
+  value to HTML, and everything they call. A view that returns `str` needs no renderer; for another type the build
+  uses the first of `web._render`, `web.render`, `_render`, `render` that takes that type and returns `str`.
+- Only the runtime functions the code reaches are included (`client::shake`), then `src/web/runtime.js` (about 1.6 KB
+  gzipped): one delegated `click`, `submit` and `input` listener reads `data-on`, calls `update`, then re-renders every
+  `data-live` region with a keyed morph (`data-key` or `id`; unkeyed nodes match in order; nodes in place are not
+  moved, a focused field keeps what is typed). A runtime error stops that update, is logged, and leaves the state as
+  it was.
+- The state: the script variables that `update` and the possible live views use (any function of the program
+  without parameters that returns a value; the pages say which are live) are recorded at the end of the build's run:
+  the build compiles the program once more with `web._state("name", json.str(name))` appended to the script, and puts
+  the values into the JS file. Every page starts from the values the variables had when the script ended.
+- The test site in `tests/web_build/` (with the stub library `minimal_web.nyra`, made the `web` module by
+  `NYRA_WEB_LIB=path`) is built and its client code run in Node.js by `tests/web_build.rs`; outside a page the runtime
+  hands out `globalThis.nyra_web = {web, morph, msg}` for such tests. Sizes on that site: the JS file is about 4.5 KB
+  gzipped.
+
+Not built yet: the browser effects of `update` (`go`, `scroll_to`, `after`, `copy`), blurred image previews, and a
+headless-browser click-through test (no browser on the build machine; the Node.js test covers update, views, morph
+and messages).
+
+## Motion build contract
+
+What WP4 built: `src/web/motion.css`, `src/web/motion.js`, `src/web/motion.rs` (the words, the parts, the checks),
+`src/web/ease.rs` (springs) and `src/web/gzip.rs` (sizes). The fixtures are in `tests/web/motion/`.
+
+### Attributes
+
+The renderer writes each motion option as an attribute, with the value as written; CSS and JS key off these only.
+
+| Attribute | From | Where |
+|---|---|---|
+| `data-anim`, `data-hover`, `data-loop`, `data-scroll` | `anim:`, `hover:`, `loop:`, `scroll:` | the element; a container's value is written on the container. `stagger` and `draw` act on the container's children; hover and loop words act on the element that has them, so the renderer writes a container's `hover:` on each child |
+| `data-at` | `at: 0.5` | the element; it starts that many seconds after the nearest ancestor with `data-anim` is revealed (or after the page load when there is none) |
+| `data-motion` | `site(motion:)`: `full`, `calm`, `off` | `<html>` |
+| `data-transition` | `site(transition:)`: `fade`, `slide`, `rise`, `none` | `<html>` |
+| `data-morph` | `morph: "flora"` | the element; it becomes `view-transition-name: m-flora` |
+
+A value is words, a speed (`fast`, `slow`), an easing (`out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, or
+`spring K D` for stiffness and damping), one number (a delay in seconds for `anim` and `loop`, a strength for `hover`,
+a rate for `scroll`) and one duration (`4s`, `600ms`). Several words may share a value (`hover: "lift shine"`,
+`anim: "stagger zoom"`).
+
+### Rust API (`crate::web::motion`)
+
+| Function | Does |
+|---|---|
+| `motion_css(used: &[(&str, &str)], custom: &[Keyframes]) -> String` | The motion CSS for a site: the base, the parts of the words used, the springs they need, the `keyframes` words, and one rule per value with numbers (`[data-anim="rise slow 0.2"]{--ma-d:.2s}`). `used` is (attribute without `data-`, value) pairs, each once. Empty when nothing moves |
+| `motion_js(used: &[(&str, &str)]) -> String` | The motion script, already in its own function scope and minified. Empty when no word needs one: only `anim` words, `at`, `tilt`, `magnetic`, `marquee` and the scroll fallback do |
+| `parse(opt, value, custom) -> Result<Spec, WordError>` | Reads one value; the error has the message and the nearest word (E0374) |
+| `check_keyframes(name, body) -> Result<Keyframes, KeyframesError>` | Checks a `keyframes` call (E0388); `Keyframes::layout_warning()` gives E0375 |
+| `lint(tokens)`, `lint_source(src)` | The same checks on string literals in a program, before it runs, with positions; for the checker hooks of WP2 |
+| `scan_html(html, &mut pairs)` | The motion attributes of some HTML, for tools and tests (the build uses `assets::motion_attrs` on its parsed tags) |
+| `ease::Spring::new(k, d).curve()` | A spring as `linear(...)`, its settle time and its closest `cubic-bezier(...)` |
+| `gzip::gzip_size(bytes)` | The size after `gzip -9`, within about 1% on text; for the size budgets |
+
+The build (`src/web.rs`) collects the pairs from the final HTML of every page plus the `_keyframes(name, body)` calls
+of the run, checks the keyframes (E0388 stops the build, E0375 warns) and every value (E0374), and appends
+`motion_css` to the kit's CSS and `motion_js` to the JS file.
+
+### The parts
+
+`motion.css` and `motion.js` are split by `/*! motion: <part> */` lines: `base`, `mods` (speeds and easings),
+`reveal` (the entrance machinery), `ease spring|bounce|snappy` (a spring's `linear()` easing, written by `ease.rs`; a
+test keeps the file equal to what it computes), `anim <word>`, `hover <word>`, `loop <word>`, `scroll <word>`,
+`transition` and `transition <name>`; in the JS `core`, `words`, `count`, `draw`, `tilt`, `magnetic`, `marquee`,
+`scroll` and `end`. Both files work as they are (the fixtures link them directly).
+
+How it moves:
+- Entrances are CSS animations on `opacity`, `translate`, `scale`, `rotate`, `filter`, with `animation-fill-mode:
+  backwards`, so after the entrance the element's own styles (a hover `transform`) apply again. Loops use the
+  individual transform properties too, hover words use `transform`, scroll words use `transform` on a CSS scroll
+  timeline. One `animation` list per element holds the three (entrance, loop, scroll), so they never replace each
+  other.
+- An element waits hidden only where scripts run (`@media (scripting: enabled)`); if the script never starts,
+  everything appears after 3 s. With `prefers-reduced-motion: reduce` or `data-motion="off"` nothing waits and nothing
+  moves (the fixtures check that no animation or transition is longer than 10 ms, even under the pointer); counters
+  show their number. `data-motion="calm"` halves distances and durations.
+- Kit CSS can follow an entrance: `draw` animates `--draw` from 0 to 1 (a timeline line uses `scale: 1 var(--draw)`),
+  and `lift` takes its shadow from `--m-lift-shadow`. `glow`, `fill` and `gradient` use `--primary`, `--accent` and
+  `--on-primary` from the theme.
+- `shine` uses the element's `::after`, `shimmer` its `::before`, `ping` its `::after`; `tilt` adds a glare element and
+  `marquee` wraps the children in groups (copies are `aria-hidden` and `inert`).
+- A box with `overflow: hidden` around a `scroll:` element would become the scroller its CSS timeline follows (and it
+  never scrolls), so the parallax would stand still. The kit should use `overflow: clip` (it looks the same);
+  `motion.js` also turns `hidden` into `clip` on the ancestors of `scroll:` elements, and the fixtures check that every
+  scroll timeline follows the page.
+
+### Budgets (measured)
+
+| What | Size |
+|---|---|
+| Motion JS of a typical page (`rise`, `words`, `stagger`, `count`, `at`) | 3,026 bytes, **1,485 gzipped** (budget 1,536) |
+| All of the motion JS | 2,832 gzipped |
+| Motion CSS of the typical page | about 1.4 KB gzipped |
+| All of the motion CSS | about 3.3 KB gzipped |
+
+### Keyframes in strings
+
+A body like `"0%, 100% { rotate: -3deg } 50% { rotate: 3deg }"` used to be read as `{value}` insertions. Since v0.8 the
+lexer treats `{ ... }` in a string as text when a space follows the `{` and the inside is `property: value` pairs
+(with a space after each colon), so CSS in `keyframes(...)` and `css(...)` reads as written. `{x}`, `{x:>8}` and
+`{ f(a: 1) }` are still insertions.
 
 ## Implementation plan
 

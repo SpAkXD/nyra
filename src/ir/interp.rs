@@ -370,6 +370,11 @@ impl<'m> Interp<'m> {
         self.out.flush();
     }
 
+    /// What a `use web` program handed to the build (its pages and parts), taken out of the host.
+    pub fn take_web(&mut self) -> super::host::Web {
+        std::mem::take(&mut self.host.web)
+    }
+
     /// Steps run so far.
     pub fn steps(&self) -> u64 {
         self.steps

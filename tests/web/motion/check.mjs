@@ -85,6 +85,10 @@ const REVEALED = `(() => {
     const s = getComputedStyle(e);
     if (+s.opacity < .99 && !e.closest('[data-motion=off]')) bad.push('not visible (opacity ' + s.opacity + '): ' + e.outerHTML.slice(0, 80));
   }
+  // a scroll word follows the page's scrolling, not a box that never scrolls (overflow: hidden)
+  for (const a of document.getAnimations())
+    if (a.timeline && a.timeline.source !== undefined && a.timeline.source !== document.scrollingElement)
+      bad.push('scroll timeline of ' + a.animationName + ' follows ' + (a.timeline.source?.outerHTML ?? 'nothing').slice(0, 60));
   for (const e of document.querySelectorAll('[data-expect]'))
     if (e.textContent.trim() !== e.dataset.expect) bad.push('counter ended on ' + JSON.stringify(e.textContent) + ', not ' + e.dataset.expect);
   return bad;
@@ -146,7 +150,6 @@ for (const f of files) {
   if (kind === 'enter') {
     await sleep(120);
     await seek([0, 150, 300, 500, 750, 1100, 1600, 2500], '');
-    await sleep(Math.max(0, 3600 - (Date.now() - t0)));
   } else if (kind === 'hover') {
     await sleep(600);
     const [x, y, l, t, w, h] = await center('[data-hover]', name === 'hover-lift' ? 1 : 0);
@@ -176,10 +179,13 @@ for (const f of files) {
   }
   // let the entrances that are still running (pausing them for the frames delayed some) finish
   await run(`Promise.race([Promise.all(document.getAnimations().filter(a => a.timeline == document.timeline && isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => 0))), new Promise(r => setTimeout(r, 4000))])`);
+  // counters run on the frame loop: give them their 1.6 s
+  await run(`new Promise(r => { const t = Date.now(), f = () => [...document.querySelectorAll('[data-expect]')].every(e => e.textContent.trim() === e.dataset.expect) || Date.now() - t > 3500 ? r() : setTimeout(f, 50); f(); })`);
   if (!off) for (const b of await run(REVEALED)) fail(b);
   // scrolling down reveals the rest
   await run(`(async () => { for (let y = 0; y <= document.documentElement.scrollHeight; y += innerHeight / 2) { scrollTo(0, y); await new Promise(r => setTimeout(r, 120)); } })()`);
-  await sleep(1500);
+  await sleep(200);
+  await run(`Promise.race([Promise.all(document.getAnimations().filter(a => a.timeline == document.timeline && isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => 0))), new Promise(r => setTimeout(r, 4000))])`);
   const hidden = await run(`[...document.querySelectorAll('[data-anim]')].filter(e => !e.classList.contains('m-in')).map(e => e.outerHTML.slice(0, 70))`);
   for (const h of hidden) fail('never revealed after scrolling: ' + h);
   if (off) for (const b of await run(STILL)) fail('motion off: ' + b);

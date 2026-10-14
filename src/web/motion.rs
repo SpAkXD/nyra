@@ -126,9 +126,7 @@ pub struct Spec {
 impl Spec {
     /// Does this value need a rule of its own (a number, a duration, a spring of its own)?
     pub fn needs_rule(&self) -> bool {
-        self.number.is_some()
-            || self.duration.is_some()
-            || matches!(&self.ease_text, Some(t) if t.contains(' '))
+        self.number.is_some() || self.duration.is_some() || matches!(&self.ease_text, Some(t) if t.contains(' '))
     }
 }
 
@@ -165,8 +163,8 @@ fn distance(a: &str, b: &str) -> usize {
     for (i, row) in d.iter_mut().enumerate() {
         row[0] = i;
     }
-    for j in 0..=b.len() {
-        d[0][j] = j;
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
     }
     for i in 1..=a.len() {
         for j in 1..=b.len() {
@@ -193,9 +191,7 @@ fn nearest<'a>(token: &str, candidates: impl IntoIterator<Item = &'a str>) -> Op
 
 /// A plain number: `0.2`, `12`, `-0.3`.
 fn number(t: &str) -> Option<f64> {
-    let ok = !t.is_empty()
-        && t.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-')
-        && t.chars().any(|c| c.is_ascii_digit());
+    let ok = !t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') && t.chars().any(|c| c.is_ascii_digit());
     ok.then(|| t.parse::<f64>().ok()).flatten().filter(|n| n.is_finite())
 }
 
@@ -262,10 +258,7 @@ pub fn parse(opt: Opt, value: &str, custom: &[&str]) -> Result<Spec, WordError> 
             spec.duration = Some(s);
         } else if let Some(n) = number(t) {
             if spec.number.is_some() {
-                let msg = format!(
-                    "`{name}: \"{value}\"` has two numbers; after the words a number is {}",
-                    opt.number_means()
-                );
+                let msg = format!("`{name}: \"{value}\"` has two numbers; after the words a number is {}", opt.number_means());
                 return Err(WordError::new(t, msg, None));
             }
             let range = match opt {
@@ -392,23 +385,27 @@ const LAYOUT: &[&str] = &[
     "grid-template-rows",
 ];
 
+/// One block of a keyframes body: its offsets in percent, then its declarations (property, value).
+pub type Frame = (Vec<f64>, Vec<(String, String)>);
+
 /// A checked `keyframes(name, body)`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keyframes {
     pub name: String,
     /// Each block: its offsets in percent, then its declarations (property, value).
-    pub frames: Vec<(Vec<f64>, Vec<(String, String)>)>,
+    pub frames: Vec<Frame>,
     /// The properties that cause layout, in the order first used (E0375).
     pub layout: Vec<String>,
 }
 
 impl Keyframes {
-    /// The CSS name of the animation: `m-k-sway`.
+    /// The CSS name of the animation: the word itself, so raw `css(...)` can use it too (the
+    /// library's own names all start with `m-`, which a keyframes word cannot).
     pub fn css_name(&self) -> String {
-        format!("m-k-{}", self.name)
+        self.name.clone()
     }
 
-    /// `@keyframes m-k-sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}`
+    /// `@keyframes sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}`
     pub fn css(&self) -> String {
         let mut s = format!("@keyframes {}{{", self.css_name());
         for (offs, decls) in &self.frames {
@@ -433,9 +430,8 @@ impl Keyframes {
             if s.is_empty() { "y" } else { "ies" },
             props.join(", ")
         );
-        let hint = format!(
-            "move {them} with `translate`, `scale` or `clip-path` instead, which the compositor animates without layout"
-        );
+        let hint =
+            format!("move {them} with `translate`, `scale` or `clip-path` instead, which the compositor animates without layout");
         Some((msg, hint))
     }
 }
@@ -458,9 +454,12 @@ fn check_name(name: &str) -> Result<(), KeyframesError> {
         && name.starts_with(|c: char| c.is_ascii_lowercase())
         && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         && !name.ends_with('-')
-        && !name.contains("--");
+        && !name.contains("--")
+        && !name.starts_with("m-");
     if !ok {
-        let msg = format!("`{name}` cannot name a motion word: use lowercase letters, digits and single `-`, starting with a letter");
+        let msg = format!(
+            "`{name}` cannot name a motion word: use lowercase letters, digits and single `-`, starting with a letter (not `m-`, which the library uses)"
+        );
         return Err(kf_err(msg, Some("for example `keyframes(\"sway\", ...)`".to_string())));
     }
     if let Some((o, _)) = all_words().find(|(_, w)| *w == name) {
@@ -565,9 +564,9 @@ fn check_property(name: &str, p: &str) -> Result<(), KeyframesError> {
     let all = COMPOSITOR.iter().chain(PAINT).chain(LAYOUT).copied();
     let near = nearest(p, all);
     let msg = format!("in the keyframes `{name}`, `{p}` is not a property keyframes can animate");
-    let hint = near.map(|n| format!("did you mean `{n}`?")).or_else(|| {
-        Some("the usual ones are `transform`, `translate`, `rotate`, `scale`, `opacity` and `filter`".to_string())
-    });
+    let hint = near
+        .map(|n| format!("did you mean `{n}`?"))
+        .or_else(|| Some("the usual ones are `transform`, `translate`, `rotate`, `scale`, `opacity` and `filter`".to_string()));
     Err(kf_err(msg, hint))
 }
 
@@ -595,7 +594,10 @@ fn check_value(name: &str, p: &str, v: &str) -> Result<(), KeyframesError> {
         } else {
             format!("in the keyframes `{name}`, the value of `{p}` is not a plain CSS value: `{v}`")
         };
-        return Err(kf_err(msg, Some("a value is numbers, units, names and functions like `rotate(3deg)`; no quotes, `url()` or `!important`".to_string())));
+        return Err(kf_err(
+            msg,
+            Some("a value is numbers, units, names and functions like `rotate(3deg)`; no quotes, `url()` or `!important`".to_string()),
+        ));
     }
     Ok(())
 }
@@ -966,7 +968,7 @@ pub fn motion_css(used: &[(&str, &str)], custom: &[Keyframes]) -> String {
     let u = read(used, &names);
     let off = u.level.as_deref() == Some("off");
     let transition = u.transition.as_deref().filter(|t| *t != "none" && !off);
-    if u.specs.is_empty() && u.morph.is_empty() && transition.is_none() {
+    if u.specs.is_empty() && u.morph.is_empty() && transition.is_none() && custom.is_empty() {
         return String::new();
     }
     let mut want: Vec<String> = vec!["base".into(), "mods".into()];
@@ -1001,7 +1003,7 @@ pub fn motion_css(used: &[(&str, &str)], custom: &[Keyframes]) -> String {
         want.push(format!("transition {t}"));
     }
     let mut css: String = parts(CSS).into_iter().filter(|(n, _)| want.iter().any(|w| w == n)).map(|(_, b)| b).collect();
-    for (k, a, l) in custom_use.into_iter().filter(|(_, a, l)| *a || *l) {
+    for (k, a, l) in custom_use {
         css.push_str(&custom_rules(k, a, l));
     }
     for (s, v) in &u.specs {

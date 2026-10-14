@@ -136,13 +136,13 @@ hr[data-anim~=draw]{scale:var(--draw) 1;transform-origin:0 50%}
 
 /*! motion: hover zoom */
 /* the picture inside grows slowly in its frame */
-[data-hover~=zoom]:has(>:is(img,video,picture)),[data-hover~=zoom] :has(>:is(img,video)){overflow:hidden}
+[data-hover~=zoom]:has(>:is(img,video,picture)),[data-hover~=zoom] :has(>:is(img,video)){overflow:clip}
 [data-hover~=zoom] :is(img,video),:is(img,video)[data-hover~=zoom]{transition:scale calc(1.2s*var(--mh-t)*var(--m-k)) var(--m-out)}
 @media (hover:hover){[data-hover~=zoom]:is(:hover,:focus-within) :is(img,video),:is(img,video)[data-hover~=zoom]:hover{scale:calc(1 + .06*var(--mh-k))}}
 
 /*! motion: hover shine */
 /* a sheen sweeps across once, over the background and under the text */
-:where([data-hover~=shine]){position:relative;overflow:hidden;isolation:isolate}
+:where([data-hover~=shine]){position:relative;overflow:clip;isolation:isolate}
 [data-hover~=shine]::after{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:-50%;width:45%;background:linear-gradient(100deg,transparent,rgb(255 255 255/.5),transparent);transform:translateX(-120%) skewX(-18deg);pointer-events:none}
 @media (hover:hover){[data-hover~=shine]:is(:hover,:focus-visible)::after{transform:translateX(460%) skewX(-18deg);transition:transform calc(.9s*var(--mh-t)*var(--m-k)) var(--m-out)}}
 
@@ -191,7 +191,7 @@ hr[data-anim~=draw]{scale:var(--draw) 1;transform-origin:0 50%}
 
 /*! motion: loop shimmer */
 /* a band of light passes over the background, then rests */
-:where([data-loop~=shimmer]){position:relative;overflow:hidden;isolation:isolate}
+:where([data-loop~=shimmer]){position:relative;overflow:clip;isolation:isolate}
 [data-loop~=shimmer]::before{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(100deg,transparent 25%,rgb(255 255 255/.4) 50%,transparent 75%);translate:-100% 0;pointer-events:none;animation:m-shimmer calc(var(--ml-dur,2.6s)*var(--ml-t)) var(--ml-e,var(--m-out)) var(--ml-d) infinite}
 @keyframes m-shimmer{70%,100%{translate:100% 0}}
 
@@ -204,7 +204,7 @@ hr[data-anim~=draw]{scale:var(--draw) 1;transform-origin:0 50%}
 
 /*! motion: loop marquee */
 /* an endless strip: the groups slide left forever, pause under the pointer, fade at the edges */
-[data-loop~=marquee]{display:flex;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+[data-loop~=marquee]{display:flex;overflow:clip;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
 [data-loop~=marquee]>*{flex:none;animation:m-marquee calc(var(--m-mq,38s)*var(--ml-t)) linear var(--ml-d) infinite}
 [data-loop~=marquee]:hover>*{animation-play-state:paused}
 .m-mq{display:flex;align-items:center;gap:var(--m-gap,2.5rem);padding-right:var(--m-gap,2.5rem)}
@@ -217,7 +217,7 @@ hr[data-anim~=draw]{scale:var(--draw) 1;transform-origin:0 50%}
 
 /*! motion: scroll fade-out */
 /* fades and drifts up while it leaves the top of the screen */
-@supports (animation-timeline:view()){[data-scroll~=fade-out]{--m-a3:m-fade-out linear both;--m-tl:view();--m-rg:cover 35% cover 85%}}
+@supports (animation-timeline:view()){[data-scroll~=fade-out]{--m-a3:m-fade-out linear both;--m-tl:view();--m-rg:cover 30% cover 80%}}
 @keyframes m-fade-out{to{opacity:0;transform:translate3d(0,-18%,0)}}
 
 /*! motion: scroll scale */
