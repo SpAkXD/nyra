@@ -57,6 +57,23 @@ the caller's variable (see Values).
 A function can be called like a method, with its first argument before the dot, when no built-in method has
 its name: `r.area()` is `area(r)`, and `p.move_by(2)` is `move_by(inout p, 2)` when the first parameter is `inout`.
 
+### Default values and named arguments
+```nyra
+fn price(n: int, currency: str = "Kč", space: bool = true) -> str = if space { "{n} {currency}" } else { "{n}{currency}" }
+
+print(price(5))                            // 5 Kč: the left-out arguments take their default values
+print(price(5, space: false))              // 5Kč: an argument given by its name
+print(price(currency: "EUR", n: 7))        // 7 EUR: named arguments in any order
+```
+A parameter may have a default value, `name: T = value`, which a call that leaves the argument out gets. The value
+is a constant: a literal, `[]`, `[:]`, `none`, an enum variant, or an array, tuple, map or struct of those (E0370);
+an `inout` parameter has none. Any argument of a function of the program may be given by its name, `name: value`.
+The values without a name come first and fill the parameters in order, then the named ones follow in any order: a
+value without a name after a named one, or a parameter given twice, is E0370, a name the function does not have is
+E0226, and a parameter with no value and no default is E0204. The arguments still run in the order they are written.
+An `inout` argument is given without a name. Builtins and methods take their values by position (`print` has one
+named argument, a last `end:`).
+
 ## Examples
 ```nyra
 fn sq(x: int) -> int = x * x   ex sq(3) == 9, sq(-2) == 4
@@ -279,6 +296,38 @@ A chain of `map` and `filter` and the method that ends it run as one loop, eleme
 array in between); `any`, `all` and `find_index` stop at the answer. `[e for x in src if c]` (the
 `if` is optional) is a new array like `src.filter(x => c).map(x => e)`; `src` is an array, a string or
 a range `a..b` (with an optional `step`).
+
+## Child blocks
+```nyra
+fn list(title: str, items: [str]) -> str = "{title}: " + items.join(", ")
+fn stack(kids: [str]) -> str = kids.join(" / ")
+
+let stock = ["pen", "ink"]
+let open = true
+print(list("shop") {                       // the block is the last argument: an array of its lines
+    "paper"
+    for s in stock {
+        s.upper()
+    }
+    if open { "open now" }
+})                                         // shop: paper, PEN, INK, open now
+print(stack {                              // a call with only a block needs no parentheses
+    "a"
+    list("b") {
+        "c"
+    }
+})                                         // a / b: c
+```
+A call whose last parameter is an array `[T]` may be followed, on the same line, by a block instead of that
+argument: its *child block*. Each line of the block that makes a value adds it to the array, in order; `let`, `if`,
+`for` and `match` work inside the block as anywhere, and their lines add values too. The block runs in place, when
+the call's arguments are computed, like the body of an `if`: it is not a function and keeps nothing. It describes
+a value and changes nothing: an assignment, `var`, `while`, `return`, `break`, `continue` or `arena` in it is E0371,
+and so is a line that makes no value, or a block after a call whose last parameter is not an array (or is given
+already). A name followed by a block, `stack { ... }`, calls the function with only the block. In the condition of
+`if`, `while`, `for` and `match` a `{` starts the body, so a call with a block goes inside parentheses there. A new
+line inside a block ends a line of the block, also inside `( )`. Child blocks make trees of values short to write;
+web pages are made of them (`use web`, see [WEB.md](WEB.md)).
 
 ## Maps
 ```nyra
@@ -650,7 +699,7 @@ clash is E0206). A module holds only definitions: `fn`, `struct`, `enum`, `ex`, 
 with that file's name and line. A program given as text (`nyra mcp`) has no folder and cannot import files.
 
 ## Errors
-`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0359), a `message`,
+`nyra check file.nyra --json` lists every error with a stable `code` (E0001–E0371), a `message`,
 `line`, `col` and a `hint` that says how to fix it. `nyra explain E0201` explains a code with a wrong
 and a fixed program; [ERRORS.md](ERRORS.md) has them all. Positions are always in your file.
 

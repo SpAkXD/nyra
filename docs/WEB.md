@@ -1,6 +1,8 @@
 # Nyra on the web (design for v0.8)
 
-Status: **design, not built.** Nothing in this file is in the compiler yet. Error codes below are reserved, not emitted.
+Status: **design.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
+E0371) are built and documented in [SPEC.md](SPEC.md); the rest is not built yet, and its error codes are reserved,
+not emitted. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
 
 Today Nyra cannot make a web page: there is no DOM, HTML, CSS or events. This document designs `use web`: a way for an
 agent to write a whole website (pages, theme, sections, motion, interactivity) in Nyra, and get a fast static site out of
@@ -463,8 +465,8 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 
 | Code | Kind | Meaning |
 |---|---|---|
-| E0370 | compile | A positional argument after a named one, or an argument given twice |
-| E0371 | compile | A child block changes a variable, or holds a statement that is not a node, string, `let`, `for`, `if` or `match` |
+| E0370 | compile (built) | A value without a name after a named one, a parameter given twice, a default value that is not a constant, or a default on an `inout` parameter |
+| E0371 | compile (built) | A misused child block: after a call whose last parameter is not an array (or is given already), a line that makes no value, or an assignment, `var`, `while`, `return`, `break`, `continue` or `arena` in it |
 | E0372 | compile | A program function or variable has the name of a web function (`fn hero`, `let hours`) |
 | E0373 | compile | `on:` is used but the program has no `enum Msg` or no `fn update(m: Msg)` |
 | E0374 | compile | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown icon name |
@@ -707,14 +709,29 @@ calls); WP2 to WP5 then run in parallel; WP6 closes.
   same model, several runs each; reported: output and input tokens, cost, first-try build success, screenshot
   similarity to the spec, Lighthouse scores.
 
+## Decisions
+
+Taken by the owner after this design was written:
+
+1. **Bare names.** A program with `use web` calls the web functions by their bare names. A program function or
+   variable with the name of a web function is compile error E0372, with a message that names both.
+2. **Named arguments for every function**, positional ones still work. E0226 now means "the function has no
+   parameter of that name" (built in WP1).
+3. **Built-in UI words** for `lang: "en"` and `lang: "cs"` only: a small table (the opening-hours badge, form labels
+   and placeholders, the lightbox's close and arrows, the menu, ...), each word overridable by an argument or
+   `say:`. Other languages fall back to English.
+4. **Images**: with `cwebp`, `magick` or `vips` on the PATH the build writes WebP variants and `srcset`; without one
+   it copies the originals with `width`/`height`, `loading="lazy"` and `decoding="async"`. The build never fails over
+   images (E0386 is a warning).
+5. **The web card's budget is 1,400 tokens**, like the main card's.
+6. **The experiment reports both ratios**: 0.19x against plain HTML/CSS/JS and 0.48x against markup over a complete
+   component kit.
+
 ## Open questions and risks
 
-1. **Bare names or `web.` prefix?** Recommended bare (measured cost of the prefix: +2.6%). It changes the rule that a
-   module's names never clash with the program's, for this one module.
-2. **Named arguments for every function**, or only for web functions? Recommended for all (one rule, and
-   `print(end:)` already is one). It reverses the narrow reading of E0226 that was a deliberate choice.
-3. **Built-in UI words per language** (`lang: "cs"` gives "Nyní otevřeno" without `say:`) would save tokens on every
-   site, but is text that does not appear in the program. The samples write the words out.
+1. (decided, see above)
+2. (decided, see above)
+3. (decided, see above)
 4. **The kit's look is the whole bet.** Savings come mostly from the kit; a kit that looks generic pushes agents to raw
    CSS. Mitigation: the flora bar, `style` presets, screenshot tests, and the clone workflow as a coverage test of
    real sites.

@@ -1,0 +1,5 @@
+// expect: E0370
+fn now() -> int = 5
+fn wait(ms: int = now()) = print(ms)
+
+wait()

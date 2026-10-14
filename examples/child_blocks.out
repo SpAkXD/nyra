@@ -1,0 +1,5 @@
+shop: paper, pen, INK (sold out), pad, open now, three kinds
+## Top [inner: a, b | # Deep [x / y]]
+71
+["pen: 2", "ink: 0", "pad: 5"]
+[]

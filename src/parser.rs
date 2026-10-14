@@ -41,6 +41,7 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
         too_deep: None,
         queue: Vec::new(),
         hidden: 0,
+        no_block: false,
     };
     let prog = p.program();
     let mut errs = p.errs;
@@ -82,6 +83,9 @@ struct Parser {
     queue: Vec<Stmt>,
     /// How many hidden names (`·t1`) were made: each destructuring or `if let` has its own.
     hidden: usize,
+    /// True while parsing a condition (`if`, `while`, `for ... in`, `match`): a `{` there starts
+    /// the body, not the child block of a call. Parentheses and brackets clear it again.
+    no_block: bool,
 }
 
 /// A pattern: `a`, `_` or `(a, (b, _))`.
@@ -1062,7 +1066,14 @@ impl Parser {
             }
             self.bump();
             let ty = self.ty(&format!("every parameter needs a type: `{pname}: int`"))?;
-            params.push(Param { name: pname, ty, inout, mutable, span: pspan });
+            // `name: T = value`: the value when a call leaves the argument out
+            let default = if self.at(&Tok::Assign) {
+                self.bump();
+                Some(self.expr()?)
+            } else {
+                None
+            };
+            params.push(Param { name: pname, ty, inout, mutable, default, span: pspan });
             if !self.at(&Tok::RParen) {
                 let hint = if matches!(self.peek(), Tok::LBrace | Tok::Arrow | Tok::Assign | Tok::Eof | Tok::Newline) {
                     "close the parameter list with `)`"
@@ -1550,7 +1561,7 @@ impl Parser {
             Tok::If => return self.if_stmt(),
             Tok::While => {
                 self.bump();
-                let cond = self.expr()?;
+                let cond = self.cond_expr()?;
                 let body = self.loop_body("while")?;
                 StmtKind::While { cond, body }
             }
@@ -1572,7 +1583,7 @@ impl Parser {
                     (None, first, first_pat)
                 };
                 self.expect(Tok::In, "`in`").map_err(|d| d.or_hint(LOOPS))?;
-                let start = self.expr()?;
+                let start = self.cond_expr()?;
                 if let ExprKind::Call(f, args) = &start.kind {
                     if f == "range" {
                         let example = range_example(args);
@@ -1600,10 +1611,10 @@ impl Parser {
                 }
                 if self.at(&Tok::DotDot) {
                     self.bump();
-                    let end = self.expr()?;
+                    let end = self.cond_expr()?;
                     let step = if matches!(self.peek(), Tok::Ident(w) if w == "step") {
                         self.bump();
-                        Some(self.expr()?)
+                        Some(self.cond_expr()?)
                     } else {
                         None
                     };
@@ -1686,7 +1697,7 @@ impl Parser {
 
     /// `match value { pattern, pattern => body  _ => body }` after the word `match`.
     fn match_stmt(&mut self, span: Span) -> PResult<Stmt> {
-        let scrut = self.expr()?;
+        let scrut = self.cond_expr()?;
         self.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| {
             d.or_hint("a match looks like `match d { Dir.N => print(\"north\") _ => print(\"other\") }`, one arm per line")
         })?;
@@ -1912,13 +1923,13 @@ impl Parser {
             let hint = "`if let v = expr {`: the name takes the value when there is one";
             let (name, nspan) = self.ident("a name for the value", hint)?;
             self.expect(Tok::Assign, "`=`").map_err(|d| d.or_hint(hint))?;
-            let value = self.expr()?;
+            let value = self.cond_expr()?;
             let tmp = self.hidden_name().replace('t', "o");
             stmts.push(Stmt { kind: StmtKind::Let { name: tmp.clone(), mutable: false, ty: None, value }, span });
             bound = Some((name, nspan, tmp.clone()));
             Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp), span)), "has".to_string()), span)
         } else {
-            self.expr()?
+            self.cond_expr()?
         };
         let mut then = self.block("if")?;
         if let Some((name, nspan, tmp)) = bound {
@@ -1963,6 +1974,35 @@ impl Parser {
             let els = p.expr()?;
             Ok(Expr::new(ExprKind::If(Box::new(cond), Box::new(then), Box::new(els)), span))
         })
+    }
+
+    /// The expression of a condition, a loop or a `match`: a `{` after it starts the body.
+    fn cond_expr(&mut self) -> PResult<Expr> {
+        let saved = std::mem::replace(&mut self.no_block, true);
+        let e = self.expr();
+        self.no_block = saved;
+        e
+    }
+
+    /// An expression inside `( )` or `[ ]`: a `{` there may start a child block again.
+    fn open_expr(&mut self) -> PResult<Expr> {
+        let saved = std::mem::replace(&mut self.no_block, false);
+        let e = self.expr();
+        self.no_block = saved;
+        e
+    }
+
+    /// `{ ... }` right after a call, on its line: the child block, given as the last argument.
+    fn child_block(&mut self, args: &mut Vec<Expr>) -> PResult<()> {
+        if self.no_block || !self.at(&Tok::LBrace) {
+            return Ok(());
+        }
+        let span = self.span();
+        let saved = std::mem::replace(&mut self.no_block, false);
+        let body = self.block("the child block");
+        self.no_block = saved;
+        args.push(Expr::new(ExprKind::Block(String::new(), body?), span));
+        Ok(())
     }
 
     fn binop(t: &Tok) -> Option<(BinOp, u8)> {
@@ -2046,7 +2086,7 @@ impl Parser {
         self.same_depth(|p| {
             let span = p.expect(Tok::Match, "`match`")?;
             let hint = "a match used as a value looks like `match s { Shape.Circle(r) => r * r  _ => 0.0 }`: one arm per line, each arm one expression";
-            let scrut = p.expr()?;
+            let scrut = p.cond_expr()?;
             p.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| d.or_hint(hint))?;
             let open = p.pos - 1;
             let mut arms = Vec::new();
@@ -2102,12 +2142,12 @@ impl Parser {
             let hint = "`if let v = expr { a } else { b }`: the name takes the value when there is one";
             let (name, nspan) = self.ident("a name for the value", hint)?;
             self.expect(Tok::Assign, "`=`").map_err(|d| d.or_hint(hint))?;
-            let value = self.expr()?;
+            let value = self.cond_expr()?;
             let tmp = self.hidden_name().replace('t', "o");
             bound = Some((name, nspan, tmp.clone(), value));
             Expr::new(ExprKind::Field(Box::new(Expr::new(ExprKind::Var(tmp), span)), "has".to_string()), span)
         } else {
-            self.expr()?
+            self.cond_expr()?
         };
         let mut then = self.branch_expr()?;
         if let Some((name, nspan, tmp, _)) = &bound {
@@ -2239,6 +2279,7 @@ impl Parser {
             too_deep: None,
             queue: Vec::new(),
             hidden: 0,
+            no_block: true,
         };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);
@@ -2335,7 +2376,7 @@ impl Parser {
                         self.bump();
                         break;
                     }
-                    let item = self.expr()?;
+                    let item = self.open_expr()?;
                     // `[k: v, ...]`: a map literal
                     if items.is_empty() && self.at(&Tok::Colon) {
                         return self.map_literal(item, open, span);
@@ -2408,7 +2449,19 @@ impl Parser {
                 self.bump();
                 if self.at(&Tok::LParen) {
                     let open = self.bump().span;
-                    ExprKind::Call(name.clone(), self.args(&name, open)?)
+                    let mut args = self.args(&name, open)?;
+                    self.child_block(&mut args)?;
+                    ExprKind::Call(name.clone(), args)
+                } else if !self.no_block
+                    && self.at(&Tok::LBrace)
+                    && name.starts_with(|c: char| c.is_lowercase())
+                    && hints::word(&name).is_none()
+                {
+                    // `stack { ... }`: a call whose only argument is its child block (not `loop {` or
+                    // `do {` of other languages, which get their own message)
+                    let mut args = Vec::new();
+                    self.child_block(&mut args)?;
+                    ExprKind::Call(name.clone(), args)
                 } else {
                     ExprKind::Var(name)
                 }
@@ -2428,13 +2481,13 @@ impl Parser {
             }
             Tok::LParen => {
                 let open = self.bump().span;
-                let e = self.expr()?;
+                let e = self.open_expr()?;
                 // `(a, b)`: a comma makes a tuple
                 if self.at(&Tok::Comma) {
                     let mut items = vec![e];
                     while self.at(&Tok::Comma) {
                         self.bump();
-                        items.push(self.expr()?);
+                        items.push(self.open_expr()?);
                     }
                     self.expect(Tok::RParen, &format!("`)` to close the tuple opened at {}:{}", open.line, open.col))
                         .map_err(|d| d.or_hint("separate the values with commas: `(1, \"a\")`"))?;
@@ -2550,6 +2603,13 @@ impl Parser {
 
     /// The arguments of a call after its `(`: `a`, `inout place` or `label: value`.
     fn args(&mut self, name: &str, open: Span) -> PResult<Vec<Expr>> {
+        let saved = std::mem::replace(&mut self.no_block, false);
+        let args = self.args_inner(name, open);
+        self.no_block = saved;
+        args
+    }
+
+    fn args_inner(&mut self, name: &str, open: Span) -> PResult<Vec<Expr>> {
         let mut args = Vec::new();
         while !self.at(&Tok::RParen) {
             let span = self.span();
@@ -2607,7 +2667,8 @@ impl Parser {
                     )?;
                     if self.at(&Tok::LParen) {
                         let open = self.bump().span;
-                        let args = self.args(&name, open)?;
+                        let mut args = self.args(&name, open)?;
+                        self.child_block(&mut args)?;
                         e = Expr::new(ExprKind::Method(Box::new(e), name, args), span);
                     } else {
                         e = Expr::new(ExprKind::Field(Box::new(e), name), span);
@@ -2854,6 +2915,7 @@ fn rename_in(e: &mut Expr) {
             rename_in(r);
             args.iter_mut().for_each(rename_in);
         }
+        ExprKind::Block(_, body) => rename_main_calls(body),
         ExprKind::Comprehension(c) => {
             rename_in(&mut c.elem);
             match &mut c.src {

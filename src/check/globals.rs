@@ -493,6 +493,14 @@ fn lambda_names(e: &Expr, out: &mut HashSet<String>) {
             out.extend(ps.iter().map(|(n, _)| n.clone()));
             lambda_names(body, out);
         }
+        // a child block: its array and its `let`s are local names too
+        ExprKind::Block(kids, body) => {
+            out.insert(kids.clone());
+            let mut decls = Vec::new();
+            collect_decls(body, &mut decls);
+            out.extend(decls.into_iter().map(|(n, _)| n));
+            crate::ast::stmt_exprs(body, &mut |x| lambda_names(x, out));
+        }
         ExprKind::Comprehension(c) => {
             out.insert(c.var[0].0.clone());
             lambda_names(&c.elem, out);

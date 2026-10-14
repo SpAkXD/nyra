@@ -17,6 +17,8 @@ mod globals;
 mod lambda;
 
 pub const BUILTINS: &[&str] = &["print", "int", "float", "str", "char", "free", "keep"];
+/// The method a line of a child block becomes before it is checked: a `push` onto the block's array.
+const KID_LINE: &str = "\u{b7}line";
 /// Builtins a program may also define itself (its own definition wins).
 pub const MATH: &[&str] = &["abs", "min", "max"];
 
@@ -55,6 +57,10 @@ struct Sig {
     params: Vec<Type>,
     names: Vec<String>,
     inout: Vec<bool>,
+    /// The default value of each parameter (`b: int = 0`), if it has one.
+    defaults: Vec<Option<Expr>>,
+    /// The parameters whose default value is wrong (reported once, at the definition).
+    bad_defaults: Vec<bool>,
     ret: Type,
     span: Span,
 }
@@ -115,6 +121,13 @@ enum Ctx<'a> {
     },
     Ret,
     Range(&'static str),
+    /// the default value of parameter `param` of `f`
+    Default {
+        f: &'a str,
+        param: &'a str,
+    },
+    /// a line of the child block of a call to `f`
+    Kid(&'a str),
 }
 
 /// The state of a variable after `free`: where it was freed, and whether only on some paths.
@@ -155,6 +168,18 @@ struct Checker {
     matches: usize,
     /// The imported file of the functions that come from one, by function name.
     files: HashMap<String, String>,
+    /// How many child blocks were named (each has a hidden array, `·k1`).
+    kids: usize,
+    /// The function whose call has the child block being checked, innermost last.
+    block_fns: Vec<String>,
+    /// The function and the parameter that the next child block is checked for (set just before it).
+    next_block: Option<(String, String)>,
+    /// How many named arguments were moved out of their call to keep the order they are written in.
+    hoisted: usize,
+    /// The moved arguments of each call being checked, innermost last (see `bind_args`).
+    bind_stack: Vec<Vec<(String, Expr)>>,
+    /// The moved arguments of the call just checked: its expression binds them around itself.
+    arg_binds: Vec<(String, Expr)>,
 }
 
 pub fn check(prog: &mut Program) -> Vec<Diag> {
@@ -176,6 +201,12 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         enums: HashMap::new(),
         matches: 0,
         files: prog.files.clone(),
+        kids: 0,
+        block_fns: Vec::new(),
+        next_block: None,
+        hoisted: 0,
+        bind_stack: Vec::new(),
+        arg_binds: Vec::new(),
     };
 
     // the imported modules: their intrinsics are functions named `module.name`
@@ -187,6 +218,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                     params: f.params().iter().map(|(_, t)| t.ty()).collect(),
                     names: f.params().iter().map(|(n, _)| n.to_string()).collect(),
                     inout: vec![false; f.params().len()],
+                    defaults: vec![None; f.params().len()],
+                    bad_defaults: vec![false; f.params().len()],
                     ret: f.ret().ty(),
                     span: u.span,
                 };
@@ -343,12 +376,15 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                 params,
                 names: f.params.iter().map(|p| p.name.clone()).collect(),
                 inout: f.params.iter().map(|p| p.inout).collect(),
+                defaults: f.params.iter().map(|p| p.default.clone()).collect(),
+                bad_defaults: vec![false; f.params.len()],
                 ret,
                 span: f.span,
             };
             c.fns.insert(f.name.clone(), sig);
         }
     }
+    c.check_defaults(&prog.funcs);
 
     // a program with statements and its own `fn main` has it under another name (`USER_MAIN`)
     let entry = prog.funcs.iter().find(|f| f.name == USER_MAIN).or_else(|| prog.funcs.iter().find(|f| f.name == "main"));
@@ -512,6 +548,7 @@ fn show(e: &Expr) -> Option<String> {
         | ExprKind::Comprehension(_)
         | ExprKind::MapLit(_)
         | ExprKind::Match(..)
+        | ExprKind::Block(..)
         | ExprKind::Bind(..) => return None,
         ExprKind::Var(n) => n.clone(),
         ExprKind::Call(n, args) => {
@@ -1036,6 +1073,8 @@ impl Checker {
             params: f.params.iter().map(|p| p.ty).collect(),
             names: f.params.iter().map(|p| p.name.clone()).collect(),
             inout: f.params.iter().map(|p| p.inout).collect(),
+            defaults: vec![None; f.params.len()],
+            bad_defaults: vec![false; f.params.len()],
             ret: f.ret,
             span: at,
         };
@@ -1085,6 +1124,8 @@ impl Checker {
             Ctx::Field { s, f } => format!("field `{f}` of `{s}(...)`"),
             Ctx::Ret => format!("the return value of `{}`", self.fname),
             Ctx::Range(which) => format!("the {which} of a range"),
+            Ctx::Default { f, param } => format!("the default value of `{param}` in `fn {f}`"),
+            Ctx::Kid(f) => format!("a line of the child block of `{f}`"),
         };
         if got == Type::Void {
             self.errs.push(
@@ -1222,6 +1263,8 @@ impl Checker {
             }
             Ctx::Ret => format!("return {}, or change the return type of `{}` to `{}`", article(want), self.fname, got.name()),
             Ctx::Range(_) => "the bounds of a range are `int` values: `for i in 0..10`".to_string(),
+            Ctx::Default { param, .. } => format!("give `{param}` a default of its type, {}", article(want)),
+            Ctx::Kid(f) => format!("each line of the child block of `{f}` is one element of {}: make it one", article(want)),
         }
     }
 
@@ -1748,6 +1791,7 @@ impl Checker {
         // `math.sqrt(x)`, `math.pi`: an item of a module
         if let Some(t) = self.module_item(e, want) {
             e.ty = t;
+            self.wrap_binds(e);
             return t;
         }
         // `match value { ... }` used as a value
@@ -2257,6 +2301,10 @@ impl Checker {
                     self.field_type(bt, name, shown, span)
                 }
             }
+            ExprKind::Method(recv, name, args) if name == KID_LINE => {
+                *name = "push".to_string();
+                self.kid_line(recv, args)
+            }
             ExprKind::Method(recv, name, args) => self.method(recv, name, args, span),
             ExprKind::Labeled(label, v) => {
                 self.expr(v);
@@ -2279,8 +2327,10 @@ impl Checker {
                 );
                 Type::Unknown
             }
+            ExprKind::Block(kids, body) => self.child_block(kids, body, want, span),
         };
         e.ty = t;
+        self.wrap_binds(e);
         t
     }
 
@@ -3810,9 +3860,395 @@ impl Checker {
         t
     }
 
-    fn call(&mut self, name: &str, args: &mut [Expr], span: Span, want: Option<Type>) -> Type {
+    /// Checks the default values of the parameters: each is a constant of the parameter's type.
+    /// A wrong one is reported here, once, and calls that leave it out report nothing more.
+    fn check_defaults(&mut self, funcs: &[Func]) {
+        self.scopes = vec![HashMap::new()];
+        for f in funcs {
+            for (i, p) in f.params.iter().enumerate() {
+                let Some(d) = &p.default else { continue };
+                let ok = if p.inout {
+                    self.errs.push(
+                        Diag::new(
+                            "E0370",
+                            format!("the `inout` parameter `{}` of `{}` cannot have a default value", p.name, f.name),
+                            d.span,
+                        )
+                        .hint("an `inout` argument is a variable of the caller, so every call must name it: remove `= ...`"),
+                    );
+                    false
+                } else if !self.constant(d) {
+                    self.errs.push(
+                        Diag::new("E0370", format!("the default value of `{}` in `{}` is not a constant", p.name, f.name), d.span).hint(
+                            format!(
+                                "a default value is a literal, `[]`, `[:]`, `none`, an enum variant, or an array, tuple, map or struct of those: `{}: {} = {}`",
+                                p.name,
+                                p.ty.name(),
+                                sample(p.ty)
+                            ),
+                        ),
+                    );
+                    false
+                } else {
+                    let mut v = d.clone();
+                    let before = self.errs.len();
+                    let t = self.expr_with(&mut v, Some(p.ty));
+                    let t = self.coerce(&mut v, p.ty, t);
+                    self.expect_ty(p.ty, t, &v, Ctx::Default { f: &f.name, param: &p.name });
+                    self.errs.len() == before
+                };
+                if !ok {
+                    if let Some(sig) = self.fns.get_mut(&f.name).filter(|s| s.span == f.span) {
+                        sig.bad_defaults[i] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    /// A constant: a literal, `none`, an enum variant, or an array, tuple, map or struct of constants.
+    fn constant(&self, e: &Expr) -> bool {
+        let enum_name = |b: &Expr| matches!(&b.kind, ExprKind::Var(en) if self.enums.contains_key(en.as_str()));
+        match &e.kind {
+            ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Char(_) | ExprKind::None => true,
+            ExprKind::Unary(UnOp::Neg, x) => matches!(x.kind, ExprKind::Int(_) | ExprKind::Float(_)),
+            ExprKind::Array(xs) | ExprKind::Tuple(xs) => xs.iter().all(|x| self.constant(x)),
+            ExprKind::MapLit(kvs) => kvs.iter().all(|(k, v)| self.constant(k) && self.constant(v)),
+            ExprKind::Field(b, _) => enum_name(b),
+            ExprKind::Method(b, _, args) => enum_name(b) && args.iter().all(|a| self.constant(a)),
+            ExprKind::Call(n, args) => {
+                self.structs.contains_key(n.as_str())
+                    && !self.enums.contains_key(n.as_str())
+                    && args.iter().all(|a| match &a.kind {
+                        ExprKind::Labeled(_, v) => self.constant(v),
+                        _ => self.constant(a),
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    /// Puts the arguments of a call of the program's function `name` in the order of its
+    /// parameters: the values without a name first, then `label: value` ones by name, the child
+    /// block for the last parameter, and the default values of those left out. False when that is
+    /// not possible: the errors are reported and the values are checked. Named arguments that may
+    /// change something and would now run in another order are moved out of the call first (see
+    /// `bind_stack`), so the arguments still run in the order they are written.
+    fn bind_args(&mut self, name: &str, args: &mut Vec<Expr>, span: Span) -> bool {
+        let sig = &self.fns[name];
+        let (params, names, defaults, bad, shown) =
+            (sig.params.clone(), sig.names.clone(), sig.defaults.clone(), sig.bad_defaults.clone(), sig.show(name));
+        let n = params.len();
+        let block = if matches!(args.last().map(|a| &a.kind), Some(ExprKind::Block(..))) { args.pop() } else { None };
+        let mut slots: Vec<Option<Expr>> = vec![None; n];
+        // values that go to no parameter: still checked, for their own mistakes
+        let mut spare: Vec<Expr> = Vec::new();
+        let mut ok = true;
+        let (mut next, mut extra, mut named) = (0, 0, false);
+        let given = args.len() + usize::from(block.is_some());
+        // the parameters of the named arguments that may change something, in written order
+        let mut effects: Vec<usize> = Vec::new();
+        for a in std::mem::take(args) {
+            let at = a.span;
+            if !matches!(a.kind, ExprKind::Labeled(..)) {
+                if named {
+                    self.errs.push(
+                        Diag::new("E0370", format!("a value without a name after a named argument in the call of `{name}`"), at).hint(
+                            format!("write the values without names first, in parameter order, then the named ones: `fn {shown}`"),
+                        ),
+                    );
+                    spare.push(a);
+                    ok = false;
+                } else if next < n {
+                    slots[next] = Some(a);
+                    next += 1;
+                } else {
+                    extra += 1;
+                    spare.push(a);
+                }
+                continue;
+            }
+            let ExprKind::Labeled(label, v) = a.kind else { unreachable!("checked above") };
+            named = true;
+            match names.iter().position(|p| *p == label) {
+                None => {
+                    let (hint, fix) = match suggest_fix(&label, names.iter().map(String::as_str)) {
+                        Some((h, f)) => (h, f.map(|f| Edit::replace(at, &label, f))),
+                        None if names.is_empty() => (format!("`{name}` takes no arguments: call it as `{name}()`"), None),
+                        None => {
+                            let list: Vec<String> = names.iter().map(|p| format!("`{p}`")).collect();
+                            (format!("its parameters are {}: `fn {shown}`", list.join(", ")), None)
+                        }
+                    };
+                    self.errs.push(Diag::new("E0226", format!("`{name}` has no parameter `{label}`"), at).hint(hint).fix_opt(fix));
+                    spare.push(*v);
+                    ok = false;
+                }
+                Some(j) if slots[j].is_some() => {
+                    self.errs.push(
+                        Diag::new("E0370", format!("`{label}` is given twice in the call of `{name}`"), at)
+                            .hint(format!("give each parameter one value: `{label}` is parameter {} of `fn {shown}`", j + 1)),
+                    );
+                    spare.push(*v);
+                    ok = false;
+                }
+                Some(j) => {
+                    let mut v = *v;
+                    let mut changes = false;
+                    v.each_mut(&mut |x| changes |= matches!(x.kind, ExprKind::Call(..) | ExprKind::Method(..) | ExprKind::Block(..)));
+                    if changes {
+                        effects.push(j);
+                    }
+                    slots[j] = Some(v);
+                }
+            }
+        }
+        if let Some(b) = block {
+            match n.checked_sub(1) {
+                Some(last) if slots[last].is_none() => slots[last] = Some(b),
+                Some(last) => {
+                    self.errs.push(
+                        Diag::new(
+                            "E0371",
+                            format!("`{name}` gets its last parameter `{}` twice: as an argument and as the child block", names[last]),
+                            b.span,
+                        )
+                        .hint(format!(
+                            "leave out the argument `{}` or the block: the block is the value of the last parameter",
+                            names[last]
+                        )),
+                    );
+                    ok = false;
+                }
+                None => {
+                    self.errs.push(
+                        Diag::new("E0371", format!("`{name}` takes no arguments, so it takes no child block"), b.span).hint(format!(
+                            "remove the block, or give `fn {name}` a last parameter that is an array, e.g. `kids: [str]`"
+                        )),
+                    );
+                    ok = false;
+                }
+            }
+        }
+        let mut missing = Vec::new();
+        for (j, slot) in slots.iter_mut().enumerate() {
+            if slot.is_some() {
+                continue;
+            }
+            match &defaults[j] {
+                // a wrong default value: reported at the definition
+                _ if bad[j] => ok = false,
+                Some(d) => {
+                    let mut d = d.clone();
+                    d.each_mut(&mut |x| x.span = span);
+                    *slot = Some(d);
+                }
+                None => missing.push(j),
+            }
+        }
+        if extra > 0 && ok {
+            self.errs.push(
+                Diag::new("E0204", format!("`{shown}` takes {} but {given} {} given", count(n, "argument"), was_were(given)), span)
+                    .hint(format!("remove the extra argument(s): the signature is `fn {shown}`")),
+            );
+            ok = false;
+        }
+        if !missing.is_empty() && ok {
+            let list: Vec<String> = missing.iter().map(|&j| format!("`{}: {}`", names[j], params[j].name())).collect();
+            let named: Vec<String> = missing.iter().map(|&j| format!("{}: ...", names[j])).collect();
+            self.errs.push(Diag::new("E0204", format!("the call of `{name}` gives no value for {}", list.join(", ")), span).hint(
+                format!(
+                    "pass {}, e.g. `{name}(..., {})`, or give the parameter a default value in `fn {shown}`",
+                    if missing.len() == 1 { "it" } else { "them" },
+                    named.join(", ")
+                ),
+            ));
+            ok = false;
+        }
+        if !ok {
+            for (j, v) in slots.iter_mut().enumerate() {
+                if let Some(v) = v.as_mut().filter(|v| !matches!(v.kind, ExprKind::Block(..))) {
+                    self.arg_type(v, Some(params[j]));
+                }
+            }
+            for v in &mut spare {
+                self.arg_type(v, None);
+            }
+            return false;
+        }
+        // named arguments that may change something run in the order they are written
+        if effects.windows(2).any(|w| w[0] > w[1]) {
+            self.scopes.push(HashMap::new());
+            let mut binds = Vec::new();
+            for j in effects {
+                let mut v = slots[j].take().expect("given above");
+                let t = self.arg_type(&mut v, Some(params[j]));
+                let t = self.coerce(&mut v, params[j], t);
+                self.hoisted += 1;
+                let tmp = format!("\u{b7}a{}", self.hoisted);
+                self.declare(&tmp, t, Decl::Let, v.span);
+                slots[j] = Some(Expr::new(ExprKind::Var(tmp.clone()), v.span));
+                binds.push((tmp, v));
+            }
+            self.bind_stack.push(binds);
+        }
+        *args = slots.into_iter().map(|s| s.expect("every parameter has a value")).collect();
+        true
+    }
+
+    /// The arguments `bind_args` moved out of the call `e` (just checked): `e` binds them around itself.
+    fn wrap_binds(&mut self, e: &mut Expr) {
+        let binds = std::mem::take(&mut self.arg_binds);
+        for (name, value) in binds.into_iter().rev() {
+            let (span, ty) = (e.span, e.ty);
+            let inner = std::mem::replace(e, Expr::new(ExprKind::Int(0), span));
+            *e = Expr { kind: ExprKind::Bind(name, Box::new(value), Box::new(inner)), span, ty };
+        }
+    }
+
+    /// The child block `{ ... }` of a call: the array of the values its lines make, given for a
+    /// parameter of type `want`. Each line that makes a value becomes a `push` onto the block's
+    /// hidden array `kids`.
+    fn child_block(&mut self, kids: &mut String, body: &mut [Stmt], want: Option<Type>, span: Span) -> Type {
+        let owner = self.next_block.take();
+        let (f, want) = match (owner, want) {
+            (Some((f, _)), Some(w)) if matches!(w, Type::Array(_)) => (f, w),
+            (Some((f, param)), Some(w)) if !w.is_unknown() => {
+                self.errs.push(
+                    Diag::new("E0371", format!("`{f}` takes no child block: its last parameter `{param}` is {}, not an array", article(w)), span)
+                        .hint(format!("pass the value as an argument, `{f}(..., {param}: ...)`, or declare the parameter as an array to take a block")),
+                );
+                return Type::Unknown;
+            }
+            (Some(_), _) => return Type::Unknown,
+            (None, _) => {
+                self.errs.push(
+                    Diag::new("E0371", "a child block `{ ... }` follows only a call of a function whose last parameter is an array", span)
+                        .hint("pass the values as an argument instead, `f([a, b])`, or write a function with a last parameter such as `kids: [str]`"),
+                );
+                return Type::Unknown;
+            }
+        };
+        self.kids += 1;
+        *kids = format!("{KIDS_PREFIX}{}", self.kids);
+        self.kid_lines(&f, kids, body);
+        self.scopes.push(HashMap::new());
+        self.declare(kids, want, Decl::Var, span);
+        self.block_fns.push(f);
+        self.block(body);
+        self.block_fns.pop();
+        self.scopes.pop();
+        want
+    }
+
+    /// Turns each line of a child block that makes a value into a `push` onto the block's array
+    /// (also in its `if`, `for` and `match`), and reports the statements a block cannot have.
+    fn kid_lines(&mut self, f: &str, kids: &str, body: &mut [Stmt]) {
+        for s in body.iter_mut() {
+            let at = s.span;
+            let wrong = match &mut s.kind {
+                StmtKind::Expr(e) => {
+                    let e = std::mem::replace(e, Expr::new(ExprKind::Int(0), at));
+                    let espan = e.span;
+                    let recv = Expr::new(ExprKind::Var(kids.to_string()), espan);
+                    s.kind = StmtKind::Expr(Expr::new(ExprKind::Method(Box::new(recv), KID_LINE.to_string(), vec![e]), espan));
+                    None
+                }
+                StmtKind::Let { mutable: false, .. } => None,
+                StmtKind::Let { name, .. } => Some((
+                    format!("`var {name}` in the child block of `{f}`: a child block lists values and changes nothing"),
+                    format!("write `let {name} = ...`, or compute the value before the call"),
+                )),
+                StmtKind::If { then, els, .. } => {
+                    self.kid_lines(f, kids, then);
+                    if let Some(e) = els {
+                        self.kid_lines(f, kids, e);
+                    }
+                    None
+                }
+                StmtKind::For { body, .. } | StmtKind::ForEach { body, .. } => {
+                    self.kid_lines(f, kids, body);
+                    None
+                }
+                StmtKind::Match { arms, .. } => {
+                    for arm in arms.iter_mut() {
+                        self.kid_lines(f, kids, &mut arm.body);
+                    }
+                    None
+                }
+                StmtKind::Assign { target, .. } => Some((
+                    format!(
+                        "the child block of `{f}` changes {}: a child block lists values and changes nothing",
+                        show(target).map_or("a variable".to_string(), |t| format!("`{t}`"))
+                    ),
+                    "compute the value before the call and use it in the block, or name it with `let`".to_string(),
+                )),
+                StmtKind::While { .. } => Some((
+                    format!("`while` in the child block of `{f}`"),
+                    "use `for x in xs { ... }` or `for i in 0..n { ... }`: a child block changes no variable, so a `while` could not end".to_string(),
+                )),
+                StmtKind::Ret(_) | StmtKind::Break | StmtKind::Continue => Some((
+                    format!("`{}` in the child block of `{f}`", match s.kind { StmtKind::Ret(_) => "return", StmtKind::Break => "break", _ => "continue" }),
+                    "a child block runs to its end: choose its lines with `if` instead".to_string(),
+                )),
+                StmtKind::Arena(_) => Some((
+                    format!("`arena` in the child block of `{f}`"),
+                    "put the `arena { ... }` around the whole call instead".to_string(),
+                )),
+            };
+            if let Some((msg, hint)) = wrong {
+                self.errs.push(Diag::new("E0371", msg, at).hint(hint));
+            }
+        }
+    }
+
+    /// One line of a child block, `kids.push(value)`: the value is one element of the block's array.
+    fn kid_line(&mut self, recv: &mut Expr, args: &mut [Expr]) -> Type {
+        let arr = self.expr(recv);
+        let elem = arr.elem().unwrap_or(Type::Unknown);
+        let f = self.block_fns.last().cloned().unwrap_or_default();
+        let Some(v) = args.first_mut() else { return Type::Void };
+        let t = self.expr_with(v, Some(elem));
+        let t = self.coerce(v, elem, t);
+        if t == Type::Void {
+            self.errs.push(
+                Diag::new(
+                    "E0371",
+                    format!("this line of the child block of `{f}` makes no value: {} returns nothing", call_text(v)),
+                    v.span,
+                )
+                .hint("each line of a child block is one element of it: call this before the block, or make it return a value"),
+            );
+        } else {
+            self.expect_ty(elem, t, v, Ctx::Kid(&f));
+        }
+        Type::Void
+    }
+
+    fn call(&mut self, name: &str, args: &mut Vec<Expr>, span: Span, want: Option<Type>) -> Type {
+        let (scopes, stack) = (self.scopes.len(), self.bind_stack.len());
+        let t = self.call_inner(name, args, span, want);
+        // the scope of the arguments `bind_args` moved out, and the moved arguments themselves
+        self.scopes.truncate(scopes);
+        if self.bind_stack.len() > stack {
+            self.arg_binds = self.bind_stack.pop().unwrap_or_default();
+        }
+        t
+    }
+
+    fn call_inner(&mut self, name: &str, args: &mut Vec<Expr>, span: Span, want: Option<Type>) -> Type {
+        // only the program's functions take a child block: not a builtin, a struct or an unknown name
+        if !self.fns.contains_key(name) {
+            if let Some(b) = args.pop_if(|a| matches!(a.kind, ExprKind::Block(..))) {
+                let what = if self.structs.contains_key(name) { "a struct is built" } else { "this call is written" };
+                self.errs.push(Diag::new("E0371", format!("`{name}` takes no child block"), b.span).hint(format!(
+                    "a child block follows a call of a function whose last parameter is an array; {what} with its values in `( )`"
+                )));
+            }
+        }
         // (the checker itself turns `Dir.N` into a call of `Dir` with the number: those are right)
-        if self.enums.contains_key(name) && !matches!(args, [a] if matches!(a.kind, ExprKind::Int(_)) && a.ty == Type::Int) {
+        if self.enums.contains_key(name) && !matches!(args.as_slice(), [a] if matches!(a.kind, ExprKind::Int(_)) && a.ty == Type::Int)
+        {
             for a in args.iter_mut() {
                 self.arg_type(a, None);
             }
@@ -3847,8 +4283,8 @@ impl Checker {
             let hint = if self.lookup(name).is_some() {
                 format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
             } else if let Some(h) = hints::undefined_function(name) {
-                let plain = matches!(args, [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
-                match (name, &*args) {
+                let plain = matches!(args.as_slice(), [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
+                match (name, args.as_slice()) {
                     ("println" | "puts" | "writeln", _) if plain => fix.push(Edit::replace(span, name, "print")),
                     // `len(xs)` is `xs.len()`
                     ("len" | "length" | "size", [a]) if matches!(tys[0], Type::Array(_) | Type::Str) => {
@@ -3874,14 +4310,21 @@ impl Checker {
         };
         let _ = want;
         let (params, names, inout, ret, shown) = (sig.params.clone(), sig.names.clone(), sig.inout.clone(), sig.ret, sig.show(name));
-        let mut tys: Vec<Type> = args
-            .iter_mut()
-            .enumerate()
-            .map(|(i, a)| {
-                let w = params.get(i).copied();
-                self.arg_type(a, w)
-            })
-            .collect();
+        // named arguments, default values and a child block: the arguments in parameter order
+        let defaulted = args.len() < params.len() && sig.defaults[args.len()..].iter().any(Option::is_some);
+        let bind = defaulted || args.iter().any(|a| matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Block(..)));
+        if bind && !self.bind_args(name, args, span) {
+            return ret;
+        }
+        // a child block is checked as the argument of the last parameter
+        let given = args.len();
+        let mut tys: Vec<Type> = Vec::with_capacity(given);
+        for (i, a) in args.iter_mut().enumerate() {
+            if matches!(a.kind, ExprKind::Block(..)) && i + 1 == params.len() {
+                self.next_block = Some((name.to_string(), names[i].clone()));
+            }
+            tys.push(self.arg_type(a, params.get(i).copied()));
+        }
         // a `T` goes into a parameter of type `T?`
         for (i, a) in args.iter_mut().enumerate() {
             if let (Some(&p), false) = (params.get(i), matches!(a.kind, ExprKind::Inout(_) | ExprKind::Labeled(..))) {
@@ -3906,11 +4349,6 @@ impl Checker {
             );
             return ret;
         }
-        let plain = without_names(name, &names, args);
-        let in_order = args.iter().zip(&names).all(|(a, n)| match &a.kind {
-            ExprKind::Labeled(l, _) => l == n,
-            _ => true,
-        });
         // which variables the `inout` arguments change: each at most once per call
         let mut roots: Vec<(String, Span)> = Vec::new();
         // the script variables among them
@@ -3966,22 +4404,6 @@ impl Checker {
                     self.errs.push(
                         Diag::new("E0237", format!("argument {} of `{name}` is `inout`: the call must say so", i + 1), a.span)
                             .hint(format!("write `inout {s}`: the call shows what can change, e.g. `{name}(inout {s})`")),
-                    );
-                }
-                (ExprKind::Labeled(label, v), false) => {
-                    let label = label.clone();
-                    let hint = match &plain {
-                        Some(call) => format!("names are only for building structs: write the values in parameter order, `{call}`"),
-                        None => {
-                            format!("names are only for building structs: write the value alone, `{name}(...)` in parameter order")
-                        }
-                    };
-                    // the names are already in parameter order: dropping them changes nothing else
-                    let fix = in_order.then(|| Edit::range(a.span, start(v), &format!("{label}:"), ""));
-                    self.errs.push(
-                        Diag::new("E0226", format!("named argument `{label}:` in a call to function `{name}`"), a.span)
-                            .hint(hint)
-                            .fix_opt(fix),
                     );
                 }
                 (_, false) => {
@@ -4290,26 +4712,6 @@ fn declared_fields(name: &str, args: &[Expr], tys: &[Type]) -> Option<String> {
         })
         .collect();
     fields.filter(|f| !f.is_empty()).map(|f| f.join(", "))
-}
-
-/// `area(width: 3, height: 4)` written as `area(3, 4)`: the values without their names, in the order of
-/// the parameters when every parameter is named once. `None` if a value is too long to show.
-fn without_names(name: &str, params: &[String], args: &[Expr]) -> Option<String> {
-    let label = |a: &Expr| match &a.kind {
-        ExprKind::Labeled(l, _) => Some(l.clone()),
-        _ => None,
-    };
-    let value = |a: &Expr| match &a.kind {
-        ExprKind::Labeled(_, v) => show(v),
-        _ => show(a),
-    };
-    let named: Option<Vec<&Expr>> = params.iter().map(|p| args.iter().find(|a| label(a).as_deref() == Some(p.as_str()))).collect();
-    let ordered: Vec<&Expr> = match named {
-        Some(v) if v.len() == args.len() => v,
-        _ => args.iter().collect(),
-    };
-    let values: Option<Vec<String>> = ordered.into_iter().map(value).collect();
-    Some(format!("{name}({})", values?.join(", ")))
 }
 
 /// The freed variables after two paths join: freed on both = freed, on one = maybe freed.

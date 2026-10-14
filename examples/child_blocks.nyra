@@ -1,0 +1,56 @@
+// Child blocks: a call whose last parameter is an array takes a `{ }` block, one element per line.
+struct Item { name: str, qty: int }
+
+fn list(title: str, items: [str]) -> str = "{title}: " + items.join(", ")
+fn stack(kids: [str]) -> str = kids.join(" / ")
+fn section(title: str, level: int = 1, kids: [str] = []) -> str = "#".repeat(level) + " {title} [" + kids.join(" | ") + "]"
+fn total(xs: [int]) -> int = xs.sum()
+
+let stock = [Item(name: "pen", qty: 2), Item(name: "ink", qty: 0), Item(name: "pad", qty: 5)]
+let open = true
+
+print(list("shop") {
+    "paper"
+    for it in stock {
+        if it.qty > 0 {
+            it.name
+        } else {
+            let shout = it.name.upper()
+            "{shout} (sold out)"
+        }
+    }
+    if open { "open now" }
+    match stock.len() {
+        3 => "three kinds"
+        _ => "many kinds"
+    }
+})
+
+// nested blocks, a block after named arguments, and a call with only a block
+print(section("Top", level: 2) {
+    list("inner") {
+        "a"
+        "b"
+    }
+    section("Deep") {
+        stack {
+            "x"
+            "y"
+        }
+    }
+})
+
+// any element type; a block may go inside a lambda
+print(total {
+    for it in stock {
+        it.qty * 10
+    }
+    1
+})
+print(stock.map(it => list(it.name) {
+    str(it.qty)
+}))
+
+// a block with no lines is an empty array
+print("[" + stack {
+} + "]")

@@ -424,7 +424,7 @@ pub struct Variant {
 }
 
 /// One arm of a `match`: the patterns that select it (`Dir.N, Dir.S => ...`), or `_`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MatchArm {
     pub pats: Vec<Expr>,
     pub wild: bool,
@@ -456,16 +456,18 @@ pub struct Param {
     pub inout: bool,
     /// `var name: T`: a copy the function may change (the caller's variable is not touched).
     pub mutable: bool,
+    /// `name: T = value`: a constant used when a call leaves the argument out.
+    pub default: Option<Expr>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Stmt {
     pub kind: StmtKind,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StmtKind {
     Let {
         name: String,
@@ -561,7 +563,7 @@ pub enum UnOp {
     Not,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
@@ -621,6 +623,7 @@ impl Expr {
                 r.each_mut(f);
                 xs.iter_mut().for_each(|x| x.each_mut(f));
             }
+            ExprKind::Block(_, body) => each_stmt_mut(body, &mut |_| {}, f),
             ExprKind::MapLit(pairs) => pairs.iter_mut().for_each(|(k, v)| {
                 k.each_mut(f);
                 v.each_mut(f);
@@ -705,13 +708,63 @@ pub fn each_stmt_mut(stmts: &mut [Stmt], f: &mut dyn FnMut(&mut Stmt), g: &mut d
     }
 }
 
-#[derive(Debug)]
+/// Calls `f` on each expression that the statements of `stmts` hold directly, also in the blocks
+/// nested in them (not on the expressions inside those expressions).
+pub fn stmt_exprs<'a>(stmts: &'a [Stmt], f: &mut dyn FnMut(&'a Expr)) {
+    for s in stmts {
+        match &s.kind {
+            StmtKind::Let { value, .. } => f(value),
+            StmtKind::Assign { target, value, .. } => {
+                f(target);
+                f(value);
+            }
+            StmtKind::If { cond, then, els } => {
+                f(cond);
+                stmt_exprs(then, f);
+                if let Some(e) = els {
+                    stmt_exprs(e, f);
+                }
+            }
+            StmtKind::While { cond, body } => {
+                f(cond);
+                stmt_exprs(body, f);
+            }
+            StmtKind::For { start, end, step, body, .. } => {
+                f(start);
+                f(end);
+                if let Some(k) = step {
+                    f(k);
+                }
+                stmt_exprs(body, f);
+            }
+            StmtKind::ForEach { iter, body, .. } => {
+                f(iter);
+                stmt_exprs(body, f);
+            }
+            StmtKind::Arena(body) => stmt_exprs(body, f),
+            StmtKind::Match { scrut, arms } => {
+                f(scrut);
+                for arm in arms {
+                    arm.pats.iter().for_each(&mut *f);
+                    stmt_exprs(&arm.body, f);
+                }
+            }
+            StmtKind::Ret(Some(e)) | StmtKind::Expr(e) => f(e),
+            StmtKind::Ret(None) | StmtKind::Break | StmtKind::Continue => {}
+        }
+    }
+}
+
+/// The prefix of the hidden name of a child block's array (`·k1`): no program can write it.
+pub const KIDS_PREFIX: &str = "\u{b7}k";
+
+#[derive(Debug, Clone)]
 pub enum InterpPart {
     Lit(String),
     Expr(Expr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprKind {
     Int(i64),
     Float(f64),
@@ -767,6 +820,10 @@ pub enum ExprKind {
     /// `name` is the value of the first expression in the second: made by the checker for `match`
     /// and by the parser for `if let` used as a value (the name is hidden or a pattern variable).
     Bind(String, Box<Expr>, Box<Expr>),
+    /// The child block of a call, `f(a) { x  y }`: its last argument, an array of the values its
+    /// lines make. The checker names the array (the `String`, a hidden name) and turns each line
+    /// that makes a value into a `push` onto it.
+    Block(String, Vec<Stmt>),
 }
 
 /// A format specifier, the part after the colon in `"{x:>8}"`: `[[fill]align][+][0][width][,][.precision][type]`.
@@ -798,7 +855,7 @@ impl FmtSpec {
 }
 
 /// `[elem for var in src if cond]`. Like a lambda's body, `elem` and `cond` only read variables.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Comp {
     pub elem: Expr,
     /// The loop variable (one-element slice, so it reads like a lambda's parameters).
@@ -807,7 +864,7 @@ pub struct Comp {
     pub cond: Option<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CompSrc {
     /// an array or a string
     Each(Expr),

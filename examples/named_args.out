@@ -1,0 +1,13 @@
+5 Kč
+5 EUR
+5Kč
+3$
+a Size.M [] black/1 -
+b Size.L ["new"] black/1 -
+c Size.M [] red/2 gift
+[0, 1, 20, 30]
+in order:
+  computing currency
+  computing n
+2 1
+4Kč

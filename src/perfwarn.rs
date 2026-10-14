@@ -266,6 +266,7 @@ fn each_child<'a>(e: &'a Expr, f: &mut dyn FnMut(&'a Expr)) {
                 f(a);
             }
         }
+        ExprKind::Block(_, body) => crate::ast::stmt_exprs(body, &mut |x| f(x)),
         ExprKind::Comprehension(c) => {
             f(&c.elem);
             match &c.src {

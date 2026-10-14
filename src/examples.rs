@@ -187,7 +187,7 @@ pub fn run(prog: &mut Program) -> Outcome {
 fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Forall>) -> Func {
     let s = e.span;
     let params = match forall {
-        Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, mutable: false, span: f.span }],
+        Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, mutable: false, default: None, span: f.span }],
         None => Vec::new(),
     };
     Func { name, params, ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span }
@@ -448,6 +448,15 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
             InterpPart::Lit(_) => None,
         }),
         ExprKind::Lambda(_, body) => first_call(body, fns),
+        ExprKind::Block(_, body) => {
+            let mut found = None;
+            crate::ast::stmt_exprs(body, &mut |x| {
+                if found.is_none() {
+                    found = first_call(x, fns);
+                }
+            });
+            found
+        }
         ExprKind::Comprehension(c) => {
             let src = match &c.src {
                 ast::CompSrc::Each(x) => first_call(x, fns),
@@ -569,6 +578,7 @@ pub fn source(e: &Expr) -> String {
         ExprKind::Method(r, m, args) => format!("{}.{m}({})", tight(r), list(args)),
         ExprKind::Labeled(l, v) => format!("{l}: {}", source(v)),
         ExprKind::Inout(v) => format!("inout {}", source(v)),
+        ExprKind::Block(..) => "{ ... }".to_string(),
         ExprKind::Lambda(ps, body) => {
             let names: Vec<&str> = ps.iter().map(|(n, _)| n.as_str()).collect();
             if names.len() == 1 {
