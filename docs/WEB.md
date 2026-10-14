@@ -1,9 +1,12 @@
 # Nyra on the web (design for v0.8)
 
-Status: **design.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
+Status: **being built.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
 E0371) are built and documented in [SPEC.md](SPEC.md). The build, the dev server and the client runtime (WP5) are
 built as described in [Build contract](#build-contract), with their checks E0379, E0380, E0382, E0383, E0386 and
-E0387. The rest is not built yet, and its error codes are reserved, not emitted. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
+E0387. The web library and the kit (WP2, WP3) are built, with E0372-E0374, E0376-E0378, E0381 and E0384: see
+[The web library as built](#the-web-library-as-built-wp2-wp3) for how they meet the build and where they differ
+from this design. Motion (WP4) is not built yet. The owner's decisions on the open questions are recorded in
+[Decisions](#decisions).
 
 Today Nyra cannot make a web page: there is no DOM, HTML, CSS or events. This document designs `use web`: a way for an
 agent to write a whole website (pages, theme, sections, motion, interactivity) in Nyra, and get a fast static site out of
@@ -30,8 +33,9 @@ classes, data reused, links and icons in text). 70% of the remaining Nyra tokens
 10. [Token measurement](#token-measurement)
 11. [Clone from a URL (later)](#clone-from-a-url-later)
 12. [Build contract](#build-contract) (built: the build, the dev server, the client runtime)
-13. [Implementation plan](#implementation-plan)
-14. [Open questions and risks](#open-questions-and-risks)
+13. [The web library as built](#the-web-library-as-built-wp2-wp3)
+14. [Implementation plan](#implementation-plan)
+15. [Open questions and risks](#open-questions-and-risks)
 
 ## One example
 
@@ -767,6 +771,75 @@ when a page has a `data-on`:
 Not built yet: the browser effects of `update` (`go`, `scroll_to`, `after`, `copy`), blurred image previews, and a
 headless-browser click-through test (no browser on the build machine; the Node.js test covers update, views, morph
 and messages).
+
+## The web library as built (WP2, WP3)
+
+The library is `src/std/web.nyra` (elements, kit components, text, `<head>`), `src/std/web_icons.nyra` (generated
+by `tools/gen_web_icons.py`: 208 Lucide icons, ISC license, plus the Facebook icon from Simple Icons, CC0) and
+`src/webcheck.rs` (linking, bare names, compile-time checks, live regions). The kit is `src/web/kit.css` and
+`src/web/kit.js`. `examples/web/` has a program per area (elements, kit components, interactivity, escaping) with
+its images in `examples/web/assets/`; `tests/web.rs` builds each one and compares the site with
+`tests/web/fixtures/<name>/`, which are also the fixture pages to open in a browser.
+
+**How the library meets the build** (the intrinsics above):
+
+- A component returns a `Node`, `struct Node { html: str, kit: [str] }`: its HTML, already rendered and escaped,
+  and the kit chunks it needs. `page(path, title) { ... }` puts the document together (head, sprite, skip link,
+  the navbar before `<main>`, the footer after it), calls `_uses(chunk)` for the chunks of its children and
+  `_emit(path, html)` once. The chunk names are the markers of `kit.css` and `kit.js`: `table chip embed quote nav
+  hero hours map form steps stat foot marquee gallery split` (CSS) and `nav hours map form gallery` (JS); the text
+  before the first marker of `kit.css` is the base (theme defaults, type, layout, cards, buttons, lists).
+- `site(...)` gives the theme to `_css` as one `:root{...}` rule with the variables `--primary`, `--accent`, `--bg`,
+  `--alt`, `--ink`, `--muted` (what the contrast check reads), `--c-NAME` for each palette color, `--on-primary`,
+  `--on-accent`, `--font`, `--display` and `--radius`. `css("...")` is `_css`, `keyframes(name, body)` is
+  `_keyframes`.
+- A build error found while rendering, which the compiler cannot see in a literal (a computed `javascript:` link,
+  an unknown icon or color in computed text), is given to `_css` as a comment `/*! nyra:error E0381 message */`;
+  the build reports it as that error and writes nothing.
+- The site lives in the script variable `_web` (a `WebConfig`), which the compiler declares before the program's
+  first statement and `site(...)` fills; the web functions read it (for the kit's words, the time zone, the
+  palette). A program cannot name it.
+- A view's `Node` is rendered for the browser by `web._render(view: Node) -> str`.
+- Local images are written as the file's name (`src="counter.jpg"`), for the build to find in `assets/`; the
+  hero's photo is `<img fetchpriority="high">` and also the page's preload link and default `og:image`.
+- Icons are `<svg class="i"><use href="#i-NAME"/></svg>`; each page starts with a hidden sprite of the symbols it
+  uses. So an icon used often is drawn once, and the code compiled for the browser needs the icons' names, not
+  their paths. (A live region that shows an icon nothing else on the page uses shows nothing in its place.)
+
+Where the build differs from the design above, and why:
+
+- **E0372 is for functions, types and script variables** (a `let` or `var` at the top level). Variables inside
+  functions, loop variables and parameters may have a web function's name (`for p in items` is in the web card's
+  own example); a call is always a function, so there is no ambiguity.
+- **`gallery(photos)`** takes `(image, alt, tag)` triples and `filters: [(tag, label)]`; the first tab ("all")
+  is added, its label from `all:` or the kit words. A tag that is a `palette` name colors its label.
+- **`split { ... }`** takes its panels as a child block of `card(title, text, image:, href:, color:)`.
+- **`footer(brand:, text:, links:, links_title:, contact:, contact_title:, small:, top:)`**: `contact` and `small`
+  are lines of text; the default small print is `© <year> <site name>`.
+- **`hours(rows)`**: days are numbers, 1 (Monday) to 7 (Sunday): `"1-5 8:00-16:00"`, `"6 8:30-11:30"`,
+  `"1,3 9:00-12:00 13:00-17:00"`; `""` is closed. The open/closed badge is hidden until the script sets it, so a
+  page without JavaScript never shows a wrong state.
+- **A form's `on: Msg.Send`** (a variant that carries the fields) is written `data-on="&quot;Send&quot;"`, as
+  the build expects.
+- **Added:** `quote(text, name, place:, tag:, stars:, color:)` (testimonials), `chip`'s `color:`, `card`'s `tag:`,
+  `items:` (a two-column list of dots, as flora's product cards) and `ratio:`, `button`'s `icon:` and `label:`,
+  `list(icon:, ordered:, cols:)`, `section(width: "narrow")`, `hero(next:, height: "half")`, `site(logo:)`,
+  `navbar(logo:)`, and the helpers `maps(address)` and `year()`.
+- **The kit's words** (`say:` keys, English and Czech built in): `open closed shut hours more down map show go
+  menu close nav skip back all filter zoom prev next dismiss send mail_note done done_text edit top links contact`.
+- **Motion words are not checked here**: the words, their defaults per component and E0375 are WP4's; this
+  package writes the options as the attributes the build reads (`data-anim`, `data-hover`, `data-loop`,
+  `data-scroll`, `data-at`, `data-morph`; `data-motion` and `data-transition` on `<html>`). The kit has only the
+  movement that is part of a component's look: hover colors and shadows, the marquee loop, the badge ping, the
+  scroll cue, the mobile menu and lightbox openings; `prefers-reduced-motion` stops them.
+- **`css("...")` is Nyra text**, so a brace is written `{{` and `}}` (`css("a {{ color: red }}")`).
+- **A string on its own line of a block of nodes is a paragraph** (`<p class="t">`), made by `web._text`.
+- **Style presets** `soft` (default), `sharp`, `editorial` (Fraunces headings unless `display:` is given) and
+  `dark` set defaults on `<html data-style>`; the theme's own values win over them.
+- **The JavaScript of a live site** includes the library functions its views call (escaping, Markdown, the
+  components): about 35 KB before gzip on `examples/web/live.nyra`.
+- One sample was changed: in `3-contact.nyra` the fields of `struct Shop` are declared in the order the two
+  values give them (`pay` before `foot`), which Nyra requires (E0225).
 
 ## Implementation plan
 

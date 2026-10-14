@@ -1,0 +1,94 @@
+// The kit components of `use web`, one page each, with the built-in Czech kit words (`lang: "cs"`).
+// `nyra build examples/web/kit.nyra` makes the site; tests/web.rs compares it with tests/web/fixtures/kit.
+use web
+
+site("Zahradnictví Jaro", url: "https://jaro.example", lang: "cs", tz: "Europe/Prague",
+    desc: "Rostliny, semínka a rady do zahrady.", primary: "#2D5A1B", accent: "#D4691A", bg: "#F5F0E8",
+    alt: "#EDE7D9", ink: "#1C1007", muted: "#5C4A38", palette: ["les": "#2D5A1B", "cihla": "#8B2500"],
+    font: "Inter", display: "Playfair Display", radius: 24, say: ["more": "Dolů"])
+
+let open_hours = [("Pondělí – Pátek", "1-5 8:00-16:00"), ("Sobota", "6 8:30-11:30"), ("Neděle", "")]
+let links = [("Sortiment", "#sortiment"), ("Galerie", "/galerie"), ("Kontakt", "/kontakt")]
+let addr = "Náměstí 1, 757 01 Valašské Meziříčí"
+
+page("/hero", "Hero a navigace") {
+    navbar("Zahradnictví Jaro", links, back: ("Zpět", "/"), other: (":flame: Krby", "/krby"), cta: ("Kontakt", "/kontakt"))
+    hero("Vše pro vaši zahradu", kicker: "Valašské Meziříčí · od roku 1991", badge: open_hours,
+        text: "Osivo, sazenice, nářadí a dobrá rada zdarma.", image: "photo-1.svg", alt: "Záhony plné květin",
+        buttons: [("Prohlédnout sortiment", "#sortiment"), ("Kontakt", "/kontakt")])
+    marquee(["Osivo", "Cibuloviny", "Substráty", "Hnojiva", "Nářadí", "Dekorace"])
+    section("sortiment", "Vše pro dům a zahradu", kicker: "Sortiment", bg: "white") {
+        grid(3) {
+            card("Zahrada", "Osivo, cibuloviny a substráty.", image: "photo-2.svg", items: ["Osivo", "Cibuloviny", "Substráty", "Hnojiva"])
+            card("Domov", "Dekorace a svíčky.", image: "photo-3.svg", items: ["Svíčky", "Dekorace"])
+            card("Včelaři", "Úly a rámky.", image: "photo-4.svg", items: ["Úly", "Rámky"])
+        }
+    }
+    footer(text: "Od roku 1991 s láskou k zahradě. [:facebook: Facebook](https://facebook.com/jaro)", links: links,
+        contact: ["**Zahradnictví Jaro**", "[+420 571 000 000](tel:+420 571 000 000)", addr], small: ["© 2026 Zahradnictví Jaro", "IČO 12345678"])
+}
+
+page("/galerie", "Galerie") {
+    section("galerie", "Galerie", kicker: "Inspirace", bg: "alt", tone: "accent", text: "Realizace i sortiment.") {
+        gallery([("photo-1.svg", "Záhon s letničkami", "les"), ("photo-2.svg", "Kachlová kamna", "cihla"),
+            ("photo-3.svg", "Svíčky a aranžmá", "les"), ("photo-4.svg", "Zděný krb", "cihla"),
+            ("photo-5.svg", "Zahradní nářadí", "les"), ("photo-6.svg", "Cihlový komín", "cihla")],
+            filters: [("les", "Zahrada"), ("cihla", "Krby")])
+    }
+}
+
+page("/kontakt", "Kontakt") {
+    section("kontakt", "Ozvěte se nám", kicker: "Kontakt", text: "Rádi poradíme.") {
+        grid(widths: "1fr 1.15fr") {
+            stack {
+                card(fill: true) {
+                    h3("Zahradnictví Jaro", sub: "Jana Jarová", icon: "leaf")
+                    address {
+                        link(":phone: +420 571 000 000", "tel:+420 571 000 000")
+                        link(":mail: info@jaro.example", "mailto:info@jaro.example")
+                        link(":map-pin: {addr}", maps(addr))
+                    }
+                    note(":medal: Člen Svazu zahradníků")
+                }
+                hours(open_hours, title: ":clock: Otevírací doba", note: "Platba v hotovosti")
+                map(addr)
+            }
+            form("Napište nám", mailto: "info@jaro.example", subject: "Dotaz z webu") {
+                row {
+                    field("jmeno", "Jméno", req: true, auto: "name", hint: "Jan Novák")
+                    field("email", "E-mail", type: "email", req: true, hint: "jan@priklad.cz")
+                }
+                field("tema", "Téma", type: "select", options: ["Zahrada", "Krby"], hint: "Vyberte")
+                field("zprava", "Zpráva", type: "area", req: true, hint: "Na co se chcete zeptat?")
+                field("souhlas", "Souhlasím se zpracováním údajů", type: "check", req: true)
+            }
+        }
+    }
+}
+
+page("/o-nas", "O nás") {
+    section("o-nas", "Rodinná firma s tradicí", kicker: "Od roku 1991", tone: "accent") {
+        grid(2) {
+            steps([("1991", "Otevření prodejny."), ("1998", "Kamnářská divize."), ("Dnes", "Přes 30 let na náměstí.")])
+            grid(2) {
+                stat("35+", "let zkušeností", color: "cihla")
+                stat("2", "specializace", color: "les")
+                stat("1–5", "pracovníci", color: "accent")
+                stat("★", "partner Brunner", color: "accent")
+            }
+        }
+    }
+    section("reference", "Co říkají zákazníci", kicker: "Reference", bg: "dark") {
+        grid(2) {
+            quote("Krb nám postavili přesně podle představ.", "Jana Nováková", place: "Rožnov", tag: "Krby", stars: 5, color: "cihla")
+            quote("Vždy poradí a mají vše pro zahradu.", "Petr Svoboda", place: "Val. Meziříčí", tag: "Zahrada", stars: 4, color: "les")
+        }
+    }
+}
+
+page("/rozcestnik", "Rozcestník", primary: "#8B2500") {
+    split {
+        card("Zahradnictví", "Rostliny, semínka a nářadí.", image: "photo-1.svg", href: "/hero", color: "les")
+        card("Krby", "Krby, kamna a komíny na míru.", image: "photo-4.svg", href: "/o-nas", color: "cihla")
+    }
+}

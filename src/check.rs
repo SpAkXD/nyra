@@ -213,7 +213,9 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
     for u in &prog.uses {
         if stdlib::is_module(&u.module) && !c.modules.iter().any(|(m, _)| *m == u.module) {
             c.modules.push((u.module.clone(), u.span));
-            for f in stdlib::StdFn::ALL.iter().filter(|f| f.path().0 == u.module) {
+            // (`web` reads the clock for `year()`)
+            let web_clock = |f: &stdlib::StdFn| u.module == "web" && *f == stdlib::StdFn::TimeNowMs;
+            for f in stdlib::StdFn::ALL.iter().filter(|f| f.path().0 == u.module || web_clock(f)) {
                 let sig = Sig {
                     params: f.params().iter().map(|(_, t)| t.ty()).collect(),
                     names: f.params().iter().map(|(n, _)| n.to_string()).collect(),
@@ -498,7 +500,7 @@ fn returns(b: &[Stmt]) -> bool {
 }
 
 /// Every name a function declares, with the position of its declaration.
-fn collect_decls(b: &[Stmt], out: &mut Vec<(String, Span)>) {
+pub(crate) fn collect_decls(b: &[Stmt], out: &mut Vec<(String, Span)>) {
     for s in b {
         match &s.kind {
             StmtKind::Let { name, .. } => out.push((name.clone(), s.span)),
@@ -2759,7 +2761,9 @@ impl Checker {
             // what the pattern covers
             let key = match (&pat.kind, kind) {
                 (ExprKind::Bool(b), 2) => Some(b.to_string()),
-                (ExprKind::Int(_) | ExprKind::Str(_) | ExprKind::Char(_), 3) => show(pat),
+                // (a string of any length: `show` gives up on long ones)
+                (ExprKind::Str(s), 3) => Some(format!("{s:?}")),
+                (ExprKind::Int(_) | ExprKind::Char(_), 3) => show(pat),
                 (ExprKind::Unary(UnOp::Neg, x), 3) if matches!(x.kind, ExprKind::Int(_)) => show(pat),
                 _ => None,
             };
@@ -4208,6 +4212,15 @@ impl Checker {
         let elem = arr.elem().unwrap_or(Type::Unknown);
         let f = self.block_fns.last().cloned().unwrap_or_default();
         let Some(v) = args.first_mut() else { return Type::Void };
+        // `use web`: a string on its own line of a block of nodes is a paragraph of text
+        if matches!(v.kind, ExprKind::Str(_) | ExprKind::Interp(_))
+            && elem.struct_name().as_deref() == Some("Node")
+            && self.fns.contains_key("web._text")
+        {
+            let span = v.span;
+            let text = std::mem::replace(v, Expr::new(ExprKind::None, span));
+            *v = Expr::new(ExprKind::Call("web._text".to_string(), vec![text]), span);
+        }
         let t = self.expr_with(v, Some(elem));
         let t = self.coerce(v, elem, t);
         if t == Type::Void {

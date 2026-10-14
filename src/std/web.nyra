@@ -1,0 +1,1395 @@
+// `use web`: the elements and kit components of a site, written in Nyra (see docs/WEB.md).
+//
+// A component returns a `Node`: its HTML, already rendered, and the kit chunks it needs (the
+// parts of src/web/kit.css and src/web/kit.js the build includes). The build's intrinsics
+// ("Build contract" in docs/WEB.md) take the rest: `page` hands each page to `_emit` and its
+// chunks to `_uses`, `site` and `css` hand CSS to `_css`, `keyframes` calls `_keyframes`. A
+// build error found while rendering (a computed `javascript:` link) is a CSS comment
+// `/*! nyra:error E0381 message */` given to `_css`, which the build reports.
+//
+// Text is always escaped; the only markup is the inline Markdown of `_md`. Links are checked
+// (`_href`). The script variable `_web` (the site: name, theme, words) is declared by the
+// compiler when it links this module (src/webcheck.rs), before the program's first statement.
+// Names starting with `_` are private; the others are what a program calls by their bare names.
+
+struct Node { html: str, kit: [str] }
+
+struct WebConfig { name: str, url: str, lang: str, tz: str, desc: str, share: str, style: str, motion: str,
+    transition: str, font: str, display: str, primary: str, logo: str, say: [str: str], palette: [str: str] }
+
+// The value `_web` starts with: what a site without `site(...)` gets.
+fn _init() -> WebConfig = WebConfig(name: "", url: "", lang: "en", tz: "", desc: "", share: "", style: "soft",
+    motion: "", transition: "", font: "Inter", display: "", primary: "", logo: "", say: [:], palette: [:])
+
+// ---------------------------------------------------------------------------------------------
+// Site, pages, raw CSS
+
+// The site: identity, SEO defaults, theme, motion level and the kit's UI words. Call it once,
+// before the pages.
+fn site(name: str, url: str = "", lang: str = "en", tz: str = "", desc: str = "", share: str = "",
+    primary: str = "", accent: str = "", bg: str = "", alt: str = "", ink: str = "", muted: str = "",
+    palette: [str: str] = [:], font: str = "", display: str = "", radius: int = -1, style: str = "soft",
+    motion: str = "", transition: str = "", logo: str = "", say: [str: str] = [:]) {
+    _web.name = name
+    _web.url = _trim_slash(url)
+    _web.lang = lang
+    _web.tz = tz
+    _web.desc = desc
+    _web.share = share
+    _web.style = style
+    _web.motion = motion
+    _web.transition = transition
+    _web.logo = logo
+    _web.primary = primary
+    _web.say = say
+    _web.palette = palette
+    if font != "" {
+        _web.font = font
+    }
+    _web.display = if display != "" { display } else if style == "editorial" { "Fraunces" } else { "" }
+    var css = ""
+    css += _var("primary", _color(primary))
+    css += _var("accent", _color(accent))
+    css += _var("bg", _color(bg))
+    css += _var("alt", _color(alt))
+    css += _var("ink", _color(ink))
+    css += _var("muted", _color(muted))
+    for k in palette.keys().sorted() {
+        css += "--c-{k}:" + _css_value(palette[k]) + ";"
+    }
+    if primary.starts_with("#") {
+        css += "--on-primary:" + _on_color(primary) + ";"
+    }
+    if accent.starts_with("#") {
+        css += "--on-accent:" + _on_color(accent) + ";"
+    }
+    if font != "" {
+        css += "--font:" + _family(font) + ";"
+    }
+    if _web.display != "" {
+        css += "--display:" + _family(_web.display) + ";"
+    }
+    if radius >= 0 {
+        css += "--radius:{radius}px;"
+    }
+    if css != "" {
+        _css(":root{{" + css + "}}")
+    }
+}
+
+// One page: the whole HTML document, printed as a page record for the build.
+fn page(path: str, title: str, desc: str = "", image: str = "", primary: str = "", kids: [Node] = []) {
+    var top = ""
+    var body = ""
+    var bottom = ""
+    for k in kids {
+        if k.html.starts_with("<header") {
+            top += k.html
+        } else if k.html.starts_with("<footer") {
+            bottom += k.html
+        } else {
+            body += k.html
+        }
+    }
+    let kit = _kits(kids, "")
+    let lang = _web.lang
+    let about = if desc != "" { desc } else { _web.desc }
+    let share = if desc != "" { desc } else if _web.share != "" { _web.share } else { _web.desc }
+    // the largest image on the page (the hero's) is preloaded and shared
+    let lcp = _first_lcp(body)
+    let shown = if image != "" { _src(image) } else { lcp }
+    var h = "<!doctype html>\n<html lang=\"" + _attr(lang) + "\"" + _at("data-style", _web.style)
+    h += _at("data-motion", _web.motion) + _at("data-transition", _web.transition) + ">\n<head>\n"
+    h += "<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n"
+    h += "<title>" + _esc(title) + "</title>\n"
+    if about != "" {
+        h += "<meta name=\"description\" content=\"" + _attr(about) + "\">\n"
+    }
+    let color = if primary.starts_with("#") { primary } else if _web.primary.starts_with("#") { _web.primary } else { "" }
+    if color != "" {
+        h += "<meta name=\"theme-color\" content=\"" + _attr(color) + "\">\n"
+    }
+    let canonical = if _web.url != "" { _web.url + _canon_path(path) } else { "" }
+    if canonical != "" {
+        h += "<link rel=\"canonical\" href=\"" + _attr(canonical) + "\">\n"
+    }
+    h += "<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:title\" content=\"" + _attr(title) + "\">\n"
+    if share != "" {
+        h += "<meta property=\"og:description\" content=\"" + _attr(share) + "\">\n"
+    }
+    if _web.name != "" {
+        h += "<meta property=\"og:site_name\" content=\"" + _attr(_web.name) + "\">\n"
+    }
+    if canonical != "" {
+        h += "<meta property=\"og:url\" content=\"" + _attr(canonical) + "\">\n"
+    }
+    if shown != "" {
+        let abs = if shown.starts_with("/") && _web.url != "" { _web.url + shown } else { shown }
+        h += "<meta property=\"og:image\" content=\"" + _attr(abs) + "\">\n<meta name=\"twitter:card\" content=\"summary_large_image\">\n"
+    }
+    if lcp != "" {
+        h += "<link rel=\"preload\" as=\"image\" href=\"" + _attr(lcp) + "\" fetchpriority=\"high\">\n"
+    }
+    h += _fonts()
+    h += "</head>\n<body id=\"top\""
+    let tone = _color(primary)
+    if tone != "" {
+        h += " style=\"--primary:" + _attr(tone) + ";" + (if primary.starts_with("#") { "--on-primary:" + _on_color(primary) + ";" } else { "" }) + "\""
+    }
+    let content = top + "\n<main id=\"main\">\n" + body + "\n</main>\n" + bottom
+    h += ">\n" + _sprite(content) + "<a class=\"skip\" href=\"#main\">" + _esc(_say("skip")) + "</a>\n"
+    h += content + "\n</body>\n</html>\n"
+    for c in kit.sorted() {
+        _uses(c)
+    }
+    _emit(path, h)
+}
+
+// Raw CSS for the site's stylesheet (a string literal: the compiler checks, E0378). It may use the
+// theme's variables, `var(--primary)`.
+fn css(text: str) {
+    _css(text)
+}
+
+// A new motion word from a CSS keyframes body (WEB.md, Motion).
+fn keyframes(name: str, body: str) {
+    _keyframes(name, body)
+}
+
+// A view's value as HTML: what the browser's runtime puts into a live region after an update.
+fn _render(view: Node) -> str = view.html
+
+// Raw HTML (a string literal: the compiler checks, E0378).
+fn html(raw: str) -> Node = Node(html: raw, kit: [])
+
+// A line of a child block that is a string: a paragraph of text.
+fn _text(text: str) -> Node = Node(html: "<p class=\"t\">" + _md(text) + "</p>", kit: [])
+
+// A live region: a view the browser renders again after each `update` (WEB.md, Interactivity).
+fn _live(name: str, view: Node) -> Node = Node(html: "<div class=\"live\" data-live=\"" + _attr(name) + "\">" + view.html + "</div>", kit: view.kit)
+
+// ---------------------------------------------------------------------------------------------
+// Layout
+
+// A full-width band with a centered container and a heading.
+fn section(id: str = "", title: str = "", kicker: str = "", text: str = "", bg: str = "", tone: str = "",
+    align: str = "", width: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    var c = "sec"
+    if bg != "" {
+        c += " sec-" + _word(bg)
+    }
+    if align == "left" {
+        c += " sec-left"
+    }
+    var h = "<section" + _at("id", id) + " class=\"" + _attr(_join(c, cls)) + "\""
+    if title != "" && id != "" {
+        h += " aria-labelledby=\"" + _attr(id) + "-h\""
+    }
+    let t = _color(tone)
+    if t != "" {
+        h += " style=\"--tint:" + _attr(t) + "\""
+    }
+    h += _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"wrap" + (if width == "narrow" { " wrap-narrow" } else { "" }) + "\">"
+    if title != "" || kicker != "" || text != "" {
+        h += "<header class=\"sec-head\">"
+        if kicker != "" {
+            h += "<p class=\"kicker\">" + _md(kicker) + "</p>"
+        }
+        if title != "" {
+            h += "<h2" + _at("id", if id != "" { id + "-h" } else { "" }) + " class=\"sec-title\">" + _md(title) + "</h2>"
+        }
+        if text != "" {
+            h += "<p class=\"sec-text\">" + _md(text) + "</p>"
+        }
+        h += "</header>"
+    }
+    h += _html(kids) + "</div></section>"
+    return Node(html: h, kit: _kits(kids, ""))
+}
+
+// A responsive grid: `cols` columns on wide screens, 2 on tablets, 1 on phones. `widths` sets the
+// wide columns instead ("1fr 1.15fr"); with neither, as many 17rem columns as fit.
+fn grid(cols: int = 0, widths: str = "", gap: str = "", numbers: bool = false, align: str = "", id: str = "",
+    cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none,
+    morph: str = "", kids: [Node] = []) -> Node {
+    var c = "grid"
+    if widths != "" {
+        c += " grid-w"
+    } else if cols > 0 {
+        c += " g{cols}"
+    } else {
+        c += " grid-auto"
+    }
+    if numbers {
+        c += " grid-num"
+    }
+    if align == "center" {
+        c += " grid-mid"
+    }
+    var style = ""
+    if widths != "" {
+        style += "--widths:" + widths + ";"
+    }
+    if cols > 6 {
+        style += "--cols:{cols};"
+    }
+    if gap != "" {
+        style += "--gap:" + _size(gap) + ";"
+    }
+    let h = "<div" + _ic(c, id, cls) + _at("style", style) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _html(kids) + "</div>"
+    return Node(html: h, kit: _kits(kids, ""))
+}
+
+// Children one under another, with the theme's gap.
+fn stack(gap: str = "", align: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    return _flow("stack", gap, align, id, cls, _mo(anim, hover, loop, scroll, at, morph), kids)
+}
+
+// Children side by side, wrapping onto the next line when there is no room.
+fn row(gap: str = "", align: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    return _flow("row", gap, align, id, cls, _mo(anim, hover, loop, scroll, at, morph), kids)
+}
+
+fn _flow(kind: str, gap: str, align: str, id: str, cls: str, motion: str, kids: [Node]) -> Node {
+    var c = kind
+    if align != "" {
+        c += " " + kind + "-" + _word(align)
+    }
+    let style = if gap != "" { "--gap:" + _size(gap) + ";" } else { "" }
+    return Node(html: "<div" + _ic(c, id, cls) + _at("style", style) + motion + ">" + _html(kids) + "</div>", kit: _kits(kids, ""))
+}
+
+// A surface with a radius and a shadow. With `icon:` a feature card, with `image:` a product card,
+// with `fill: true` a card in the primary color; `href:` makes the whole card a link.
+fn card(title: str = "", text: str = "", icon: str = "", image: str = "", alt: str = "", fill: bool = false,
+    href: str = "", color: str = "", tag: str = "", items: [str] = [], ratio: str = "", id: str = "", cls: str = "",
+    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "",
+    kids: [Node] = []) -> Node {
+    var c = "card"
+    if fill {
+        c += " card-fill"
+    }
+    if image != "" {
+        c += " card-img"
+    }
+    if icon != "" && image == "" {
+        c += " card-feat"
+    }
+    if href != "" {
+        c += " card-link"
+    }
+    let tag_name = if href != "" { "a" } else { "article" }
+    var h = "<" + tag_name + _ic(c, id, cls)
+    if href != "" {
+        h += _link_attrs(href)
+    }
+    let t = _color(color)
+    if t != "" {
+        h += " style=\"--tint:" + _attr(t) + "\""
+    }
+    h += _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if image != "" {
+        h += "<div class=\"card-media\"" + (if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" }) + ">"
+        h += _img_tag(image, if alt != "" { alt } else { title }, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false)
+        if tag != "" {
+            h += "<span class=\"card-tag\">" + _md(tag) + "</span>"
+        }
+        h += "</div>"
+    } else if icon != "" {
+        h += "<span class=\"card-icon\">" + _icon(icon) + "</span>"
+    }
+    h += "<div class=\"card-body\">"
+    if image == "" && tag != "" {
+        h += "<span class=\"card-tag\">" + _md(tag) + "</span>"
+    }
+    if title != "" {
+        h += "<h3 class=\"card-title\">" + _md(title) + "</h3>"
+    }
+    if text != "" {
+        h += "<p class=\"card-text\">" + _md(text) + "</p>"
+    }
+    if items.len() > 0 {
+        h += "<ul class=\"card-items\">"
+        for it in items {
+            h += "<li>" + _md(it) + "</li>"
+        }
+        h += "</ul>"
+    }
+    h += _html(kids) + "</div>"
+    if icon != "" && image == "" && !fill {
+        h += "<span class=\"card-bar\" aria-hidden=\"true\"></span>"
+    }
+    h += "</" + tag_name + ">"
+    return Node(html: h, kit: _kits(kids, ""))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Text
+
+fn h1(text: str, icon: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    return _heading("h1", text, icon, "", id, cls, _mo(anim, hover, loop, scroll, at, morph))
+}
+
+fn h2(text: str, icon: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    return _heading("h2", text, icon, "", id, cls, _mo(anim, hover, loop, scroll, at, morph))
+}
+
+// A small heading; `sub:` is a line under it, `icon:` a tile beside it.
+fn h3(text: str, sub: str = "", icon: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    return _heading("h3", text, icon, sub, id, cls, _mo(anim, hover, loop, scroll, at, morph))
+}
+
+fn _heading(tag: str, text: str, icon: str, sub: str, id: str, cls: str, motion: str) -> Node {
+    if sub == "" && (icon == "" || tag != "h3") {
+        let lead = if icon != "" { _icon(icon) + " " } else { "" }
+        return Node(html: "<" + tag + _ic("hd " + tag, id, cls) + motion + ">" + lead + _md(text) + "</" + tag + ">", kit: [])
+    }
+    var h = "<div" + _ic("hd-sub", "", cls) + motion + ">"
+    if icon != "" {
+        h += "<span class=\"hd-icon\">" + _icon(icon) + "</span>"
+    }
+    h += "<div><" + tag + _ic("hd " + tag, id, "") + ">" + _md(text) + "</" + tag + ">"
+    if sub != "" {
+        h += "<p class=\"hd-line\">" + _md(sub) + "</p>"
+    }
+    return Node(html: h + "</div></div>", kit: [])
+}
+
+// A paragraph; `size: "lg"` is a lead paragraph.
+fn p(text: str, size: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let c = if size != "" { "p p-" + _word(size) } else { "p" }
+    return Node(html: "<p" + _ic(c, id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _md(text) + "</p>", kit: [])
+}
+
+// Small print.
+fn small(text: str, id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "") -> Node {
+    return Node(html: "<p" + _ic("small", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><small>" + _md(text) + "</small></p>", kit: [])
+}
+
+// A short line under a divider (a card's footnote).
+fn note(text: str, id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "") -> Node {
+    return Node(html: "<p" + _ic("note", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _md(text) + "</p>", kit: [])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Content
+
+// A responsive image. `alt` is required; "" marks a decorative image.
+fn img(src: str, alt: str, ratio: str = "", caption: str = "", fit: str = "", id: str = "", cls: str = "",
+    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var c = "fig"
+    if fit == "contain" {
+        c += " fig-contain"
+    }
+    var h = "<figure" + _ic(c, id, cls) + (if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" })
+    h += _mo(anim, hover, loop, scroll, at, morph) + ">" + _img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false)
+    if caption != "" {
+        h += "<figcaption>" + _md(caption) + "</figcaption>"
+    }
+    return Node(html: h + "</figure>", kit: [])
+}
+
+// A link. An external one opens in a new tab; `label:` names a link that shows only an icon.
+fn link(text: str, href: str, label: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    return Node(html: "<a" + _ic("lnk", id, cls) + _link_attrs(href) + _at("aria-label", label) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _md(text) + "</a>", kit: [])
+}
+
+// A button: a link styled as a button (`href`), or an action (`on: Msg.X`). Styles: "primary",
+// "accent", "outline", "ghost", "light" (for dark backgrounds).
+fn button(text: str = "", href: str = "", style: str = "", on: str = "", active: bool = false, icon: str = "",
+    label: str = "", size: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var c = "btn btn-" + (if style != "" { _word(style) } else { "primary" })
+    if size != "" {
+        c += " btn-" + _word(size)
+    }
+    if active {
+        c += " is-active"
+    }
+    let inner = (if icon != "" { _icon(icon) } else { "" }) + _md(text)
+    let motion = _mo(anim, hover, loop, scroll, at, morph)
+    if href != "" {
+        return Node(html: "<a" + _ic(c, id, cls) + _link_attrs(href) + _at("aria-label", label) + motion + ">" + inner + "</a>", kit: [])
+    }
+    var h = "<button type=\"button\"" + _ic(c, id, cls) + _at("aria-label", label) + _at("data-on", on)
+    if on != "" {
+        h += " aria-pressed=\"" + (if active { "true" } else { "false" }) + "\""
+    }
+    return Node(html: h + motion + ">" + inner + "</button>", kit: [])
+}
+
+// A list; `icon:` puts an icon before each item instead of a dot, `cols: 2` makes two columns.
+fn list(items: [str], icon: str = "", ordered: bool = false, cols: int = 1, id: str = "", cls: str = "",
+    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let tag = if ordered { "ol" } else { "ul" }
+    var c = "list"
+    if icon != "" {
+        c += " list-icon"
+    }
+    if cols == 2 {
+        c += " list-2"
+    }
+    var h = "<" + tag + _ic(c, id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    let mark = if icon != "" { _icon(icon) } else { "" }
+    for it in items {
+        h += "<li>" + mark + "<span>" + _md(it) + "</span></li>"
+    }
+    return Node(html: h + "</" + tag + ">", kit: [])
+}
+
+// A table: rows of cells; `head:` is the header row.
+fn table(rows: [[str]], head: [str] = [], id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<div" + _ic("table", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><table>"
+    if head.len() > 0 {
+        h += "<thead><tr>"
+        for x in head {
+            h += "<th scope=\"col\">" + _md(x) + "</th>"
+        }
+        h += "</tr></thead>"
+    }
+    h += "<tbody>"
+    for r in rows {
+        h += "<tr>"
+        for i, x in r {
+            h += if i == 0 && head.len() == 0 { "<th scope=\"row\">" + _md(x) + "</th>" } else { "<td>" + _md(x) + "</td>" }
+        }
+        h += "</tr>"
+    }
+    return Node(html: h + "</tbody></table></div>", kit: ["table"])
+}
+
+// A contact block: its links become rows with their icons.
+fn address(id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    return Node(html: "<address" + _ic("addr", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _html(kids) + "</address>", kit: _kits(kids, ""))
+}
+
+// A pill with an icon, a title and a line.
+fn chip(title: str, text: str = "", icon: str = "", color: str = "", id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let t = _color(color)
+    var h = "<div" + _ic("chip", id, cls) + (if t != "" { " style=\"--tint:" + _attr(t) + "\"" } else { "" })
+    h += _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if icon != "" {
+        h += "<span class=\"chip-icon\">" + _icon(icon) + "</span>"
+    }
+    h += "<span class=\"chip-body\"><span class=\"chip-title\">" + _md(title) + "</span>"
+    if text != "" {
+        h += "<span class=\"chip-text\">" + _md(text) + "</span>"
+    }
+    return Node(html: h + "</span></div>", kit: ["chip"])
+}
+
+// An iframe (a video, a 3D viewer), loaded lazily.
+fn embed(url: str, title: str, ratio: str = "16/9", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<div" + _ic("embed", id, cls) + " style=\"--ratio:" + _attr(ratio) + "\"" + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    h += "<iframe src=\"" + _href(url) + "\" title=\"" + _attr(title) + "\" loading=\"lazy\" allowfullscreen referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>"
+    return Node(html: h + "</div>", kit: ["embed"])
+}
+
+// A testimonial: the quote, who said it, where from, a tag and 1 to 5 stars.
+fn quote(text: str, name: str, place: str = "", tag: str = "", stars: int = 0, color: str = "", id: str = "",
+    cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none,
+    morph: str = "") -> Node {
+    let t = _color(color)
+    var h = "<figure" + _ic("quote", id, cls) + (if t != "" { " style=\"--tint:" + _attr(t) + "\"" } else { "" })
+    h += _mo(anim, hover, loop, scroll, at, morph) + ">" + _icon("quote")
+    if stars > 0 {
+        h += "<p class=\"quote-stars\" aria-label=\"{stars}/5\">" + "★".repeat(if stars > 5 { 5 } else { stars }) + "</p>"
+    }
+    h += "<blockquote>" + _md(text) + "</blockquote><figcaption><span class=\"quote-avatar\" aria-hidden=\"true\">"
+    h += _esc(_initial(name)) + "</span><span class=\"quote-who\"><span class=\"quote-name\">" + _md(name) + "</span>"
+    if place != "" {
+        h += "<span class=\"quote-place\">" + _md(place) + "</span>"
+    }
+    h += "</span>"
+    if tag != "" {
+        h += "<span class=\"quote-tag\">" + _md(tag) + "</span>"
+    }
+    return Node(html: h + "</figcaption></figure>", kit: ["quote"])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Kit components
+
+// The sticky header: brand, section links with a scroll-spy pill, `back:` (to a parent site),
+// `other:` (to a sister site), `cta:` (a button), a mobile menu and a reading-progress bar.
+fn navbar(brand: str, links: [(str, str)] = [], back: (str, str)? = none, other: (str, str)? = none,
+    cta: (str, str)? = none, logo: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<header" + _ic("nav", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><nav class=\"nav-bar wrap\" aria-label=\""
+    h += _attr(_say("nav")) + "\">"
+    if let b = back {
+        h += "<a class=\"nav-back\"" + _link_attrs(b.1) + ">" + _icon("chevron-left") + _md(b.0) + "</a><span class=\"nav-sep\" aria-hidden=\"true\"></span>"
+    }
+    let mark = if logo != "" { _img_tag(logo, "", "40px", false) } else if _web.logo != "" { _img_tag(_web.logo, "", "40px", false) } else { "" }
+    h += "<a class=\"nav-brand\" href=\"#top\">" + mark + "<span>" + _md(brand) + "</span></a>"
+    var items = ""
+    for l in links {
+        items += "<li><a" + _link_attrs(l.1) + ">" + _md(l.0) + "</a></li>"
+    }
+    if links.len() > 0 {
+        h += "<ul class=\"nav-links\">" + items + "</ul>"
+    }
+    var end = ""
+    if let o = other {
+        end += "<a class=\"nav-other\"" + _link_attrs(o.1) + ">" + _md(o.0) + "</a>"
+    }
+    if let c = cta {
+        end += "<a class=\"btn btn-primary btn-sm nav-cta\"" + _link_attrs(c.1) + ">" + _md(c.0) + "</a>"
+    }
+    if end != "" {
+        h += "<div class=\"nav-end\">" + end + "</div>"
+    }
+    if links.len() > 0 || end != "" {
+        h += "<details class=\"nav-more\"><summary class=\"nav-toggle\" aria-label=\"" + _attr(_say("menu")) + "\" data-open=\""
+        h += _attr(_say("menu")) + "\" data-close=\"" + _attr(_say("close")) + "\">" + _icon("menu") + _icon("x") + "</summary>"
+        h += "<div class=\"nav-menu\"><ul>" + items + "</ul>"
+        if end != "" {
+            h += "<div class=\"nav-menu-end\">" + end + "</div>"
+        }
+        h += "</div></details>"
+    }
+    h += "</nav><div class=\"nav-progress\" aria-hidden=\"true\"></div></header>"
+    return Node(html: h, kit: ["nav"])
+}
+
+// A full-height photo hero: the photo under a gradient of the primary color, a kicker, the title,
+// a text, buttons (the first one in the accent color), an open/closed badge and a scroll cue.
+fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str = "", buttons: [(str, str)] = [],
+    badge: [(str, str)] = [], next: str = "", height: str = "", id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    var c = "hero"
+    if image == "" {
+        c += " hero-plain"
+    }
+    if height == "half" {
+        c += " hero-half"
+    }
+    var h = "<section" + _ic(c, id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if image != "" {
+        h += "<div class=\"hero-media\">" + _img_tag(image, alt, "100vw", true) + "</div>"
+    }
+    h += "<div class=\"hero-shade\" aria-hidden=\"true\"></div><div class=\"hero-body wrap\">"
+    if kicker != "" || badge.len() > 0 {
+        h += "<div class=\"hero-meta\">"
+        if kicker != "" {
+            h += "<span class=\"hero-kicker\">" + _md(kicker) + "</span>"
+        }
+        if badge.len() > 0 {
+            h += _badge(badge, "light")
+        }
+        h += "</div>"
+    }
+    h += "<h1 class=\"hero-title\">" + _md(title) + "</h1>"
+    if text != "" {
+        h += "<p class=\"hero-text\">" + _md(text) + "</p>"
+    }
+    if buttons.len() > 0 {
+        h += "<div class=\"hero-actions\">"
+        for i, b in buttons {
+            h += "<a class=\"btn btn-lg " + (if i == 0 { "btn-accent" } else { "btn-light" }) + "\"" + _link_attrs(b.1) + ">" + _md(b.0) + "</a>"
+        }
+        h += "</div>"
+    }
+    h += _html(kids) + "</div>"
+    var cue = next
+    if cue == "" {
+        for b in buttons {
+            if cue == "" && b.1.starts_with("#") {
+                cue = b.1
+            }
+        }
+    }
+    if cue != "" {
+        h += "<a class=\"hero-cue\"" + _link_attrs(cue) + " aria-label=\"" + _attr(_say("down")) + "\">" + _esc(_say("more")) + _icon("chevron-down") + "</a>"
+    }
+    var kit = _kits(kids, "hero")
+    if badge.len() > 0 {
+        kit = _add(kit, "hours")
+    }
+    return Node(html: h + "</section>", kit: kit)
+}
+
+// A full-screen choice between subsites: each child (a `card` with `image:` and `href:`) is a panel.
+fn split(id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    return Node(html: "<section" + _ic("split", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _html(kids) + "</section>", kit: _kits(kids, "split"))
+}
+
+// An endless strip of words in the primary color (`color:` another one).
+fn marquee(items: [str], color: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var list = ""
+    for it in items {
+        list += "<li>" + _md(it) + "</li>"
+    }
+    let t = _color(color)
+    var h = "<div" + _ic("marquee", id, cls) + (if t != "" { " style=\"--tint:" + _attr(t) + "\"" } else { "" })
+    h += _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"marquee-track\"><ul>" + list + "</ul><ul aria-hidden=\"true\">"
+    return Node(html: h + list + "</ul></div></div>", kit: ["marquee"])
+}
+
+// A masonry gallery of (image, alt, tag) photos. `filters:` [(tag, label)] adds filter tabs (the
+// first tab shows all); a photo opens in a lightbox.
+fn gallery(photos: [(str, str, str)], filters: [(str, str)] = [], all: str = "", cols: int = 3, id: str = "",
+    cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none,
+    morph: str = "") -> Node {
+    var h = "<div" + _ic("gallery" + (if cols == 2 { " gallery-2" } else if cols == 4 { " gallery-4" } else { "" }), id, cls)
+    h += _mo(anim, hover, loop, scroll, at, morph) + " data-zoom=\"" + _attr(_say("zoom")) + "\" data-prev=\"" + _attr(_say("prev"))
+    h += "\" data-next=\"" + _attr(_say("next")) + "\" data-dismiss=\"" + _attr(_say("dismiss")) + "\">"
+    if filters.len() > 0 {
+        h += "<div class=\"tabs\" role=\"tablist\" aria-label=\"" + _attr(_say("filter")) + "\" hidden>"
+        h += "<button type=\"button\" role=\"tab\" aria-selected=\"true\" data-filter=\"\">" + _md(if all != "" { all } else { _say("all") }) + "</button>"
+        for f in filters {
+            h += "<button type=\"button\" role=\"tab\" aria-selected=\"false\" data-filter=\"" + _attr(f.0) + "\">" + _md(f.1) + "</button>"
+        }
+        h += "</div>"
+    }
+    h += "<div class=\"gallery-grid\">"
+    for ph in photos {
+        var label = ""
+        for f in filters {
+            if f.0 == ph.2 {
+                label = f.1
+            }
+        }
+        let tint = if _web.palette.has(ph.2) { " style=\"--tint:var(--c-" + _word(ph.2) + ")\"" } else { "" }
+        h += "<a class=\"gallery-item\" href=\"" + _attr(_src(ph.0)) + "\"" + _at("data-tag", ph.2) + tint + " aria-label=\""
+        h += _attr(_say("zoom") + ": " + ph.1) + "\">" + _img_tag(ph.0, ph.1, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false)
+        h += "<span class=\"gallery-over\" aria-hidden=\"true\">"
+        if label != "" {
+            h += "<span class=\"gallery-tag\">" + _md(label) + "</span>"
+        }
+        h += "<span class=\"gallery-cap\">" + _esc(ph.1) + "</span>" + _icon("expand") + "</span></a>"
+    }
+    return Node(html: h + "</div></div>", kit: ["gallery"])
+}
+
+// Opening hours: rows of (days, "1-5 8:00-16:00"), where the days are 1 (Monday) to 7 (Sunday);
+// an empty time means closed. A live open/closed badge follows the site's time zone.
+fn hours(rows: [(str, str)], title: str = "", note: str = "", badge: bool = true, id: str = "", cls: str = "",
+    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<div" + _ic("card hours", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"hours-head\"><h3 class=\"hours-title\">"
+    h += _md(if title != "" { title } else { _say("hours") }) + "</h3>"
+    if badge {
+        h += _badge(rows, "dark")
+    }
+    h += "</div><table class=\"hours-table\"><tbody>"
+    for r in rows {
+        let spec = r.1.trim()
+        let days = if spec == "" { "" } else { spec.split(" ")[0] }
+        h += "<tr" + (if spec == "" { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
+        h += "</th><td>" + _esc(_hours_text(spec)) + "</td></tr>"
+    }
+    h += "</tbody></table>"
+    if note != "" {
+        h += "<p class=\"hours-note\">" + _md(note) + "</p>"
+    }
+    return Node(html: h + "</div>", kit: ["hours"])
+}
+
+// A map card that loads Google Maps only when clicked, and a directions link.
+fn map(address: str, show: str = "", go: str = "", zoom: int = 16, id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let q = _uri(address)
+    let embed = "https://www.google.com/maps?q=" + q + "&z={zoom}&output=embed"
+    let search = maps(address)
+    var h = "<div" + _ic("card map", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"map-frame\" data-src=\""
+    h += _attr(embed) + "\" data-title=\"" + _attr(_say("map")) + "\"><a class=\"map-load\" href=\"" + _attr(search)
+    h += "\" target=\"_blank\" rel=\"noopener noreferrer\"><span class=\"map-pin\">" + _icon("map-pin") + "</span><span class=\"map-show\">"
+    h += _md(if show != "" { show } else { _say("show") }) + "</span><span class=\"map-addr\">" + _esc(address) + "</span></a></div>"
+    h += "<a class=\"map-go\" href=\"" + _attr(search) + "\" target=\"_blank\" rel=\"noopener noreferrer\">"
+    h += _md(if go != "" { go } else { ":navigation: " + _say("go") }) + "</a>"
+    return Node(html: h + "</div>", kit: ["map"])
+}
+
+// A form. With `mailto:` it composes an e-mail in the visitor's mail app (no server needed), with
+// `to:` it posts to that URL, with `on: Msg.X` it sends the fields to `update`. After sending it
+// shows `done` and `done_text`, with an `edit` button.
+fn form(title: str = "", mailto: str = "", to: str = "", subject: str = "", send: str = "", note: str = "",
+    done: str = "", done_text: str = "", edit: str = "", on: str = "", id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    var h = "<div" + _ic("card form", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if title != "" {
+        h += "<h3 class=\"form-title\">" + _md(title) + "</h3>"
+    }
+    h += "<form class=\"form-body\""
+    if mailto != "" {
+        let action = "mailto:" + mailto + (if subject != "" { "?subject=" + _uri(subject) } else { "" })
+        h += " action=\"" + _href(action) + "\" method=\"post\" enctype=\"text/plain\" data-mailto=\"" + _attr(mailto) + "\"" + _at("data-subject", subject)
+    } else if to != "" {
+        h += " action=\"" + _href(to) + "\" method=\"post\""
+    }
+    h += _at("data-on", on) + ">" + _html(kids) + "<button class=\"btn btn-primary btn-block\" type=\"submit\">"
+    h += _md(if send != "" { send } else { _say("send") + " :send:" }) + "</button>"
+    let line = if note != "" { note } else if mailto != "" { _say("mail_note") } else { "" }
+    if line != "" {
+        h += "<p class=\"form-note\">" + _md(line) + "</p>"
+    }
+    h += "</form><div class=\"form-done\" role=\"status\" hidden><span class=\"form-check\">" + _icon("circle-check") + "</span>"
+    h += "<h4>" + _md(if done != "" { done } else { _say("done") }) + "</h4><p>" + _md(if done_text != "" { done_text } else { _say("done_text") })
+    h += "</p><button type=\"button\" class=\"form-edit\">" + _md(if edit != "" { edit } else { _say("edit") }) + "</button></div>"
+    return Node(html: h + "</div>", kit: _kits(kids, "form"))
+}
+
+// A labeled field of a form. Types: "text", "email", "tel", "number", "date", "url", "area" (several
+// lines), "select" (with `options:`), "check" (a checkbox). `req: true` makes it required, `hint:`
+// is the placeholder, `auto:` the autocomplete name.
+fn field(name: str, label: str, type: str = "text", req: bool = false, hint: str = "", auto: str = "",
+    options: [str] = [], rows: int = 5, value: str = "", on: str = "", id: str = "", cls: str = "") -> Node {
+    let kind = _word(type)
+    let star = if req { " <span class=\"req\" aria-hidden=\"true\">*</span>" } else { "" }
+    let fid = if id != "" { id } else { "f-" + name }
+    let ac = if auto != "" { auto } else if kind == "email" { "email" } else if kind == "tel" { "tel" } else { "" }
+    let common = " id=\"" + _attr(fid) + "\" name=\"" + _attr(name) + "\"" + (if req { " required" } else { "" }) + _at("data-on", on)
+    if kind == "check" {
+        return Node(html: "<label" + _ic("field field-check", "", cls) + "><input type=\"checkbox\"" + common + "><span>" + _md(label) + star + "</span></label>", kit: [])
+    }
+    var h = "<div" + _ic("field" + (if kind == "area" { " field-area" } else { "" }), "", cls) + "><label for=\"" + _attr(fid) + "\">" + _md(label) + star + "</label>"
+    if kind == "area" {
+        h += "<textarea" + common + " rows=\"{rows}\"" + _at("placeholder", hint) + _at("autocomplete", ac) + ">" + _esc(value) + "</textarea>"
+    } else if kind == "select" {
+        h += "<select" + common + ">"
+        if hint != "" {
+            h += "<option value=\"\">" + _esc(hint) + "</option>"
+        }
+        for o in options {
+            h += "<option" + (if o == value { " selected" } else { "" }) + ">" + _esc(o) + "</option>"
+        }
+        h += "</select>"
+    } else {
+        h += "<input type=\"" + _attr(kind) + "\"" + common + _at("placeholder", hint) + _at("autocomplete", ac) + _at("value", value) + ">"
+    }
+    return Node(html: h + "</div>", kit: [])
+}
+
+// A vertical timeline of (label, text) steps.
+fn steps(items: [(str, str)], id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<ol" + _ic("steps", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    for s in items {
+        h += "<li class=\"step\"><span class=\"step-dot\" aria-hidden=\"true\"></span><span class=\"step-label\">" + _md(s.0)
+        h += "</span><p class=\"step-text\">" + _md(s.1) + "</p></li>"
+    }
+    return Node(html: h + "</ol>", kit: ["steps"])
+}
+
+// A big number with a label ("33+", "let zkušeností").
+fn stat(value: str, label: str, color: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let t = _color(color)
+    var h = "<div" + _ic("stat", id, cls) + (if t != "" { " style=\"--tint:" + _attr(t) + "\"" } else { "" })
+    h += _mo(anim, hover, loop, scroll, at, morph) + "><span class=\"stat-value\">" + _md(value) + "</span><span class=\"stat-label\">"
+    return Node(html: h + _md(label) + "</span></div>", kit: ["stat"])
+}
+
+// The page footer: the brand and a text, a column of links, a column of contact lines, the small
+// print and a back-to-top link. A child block adds columns.
+fn footer(brand: str = "", text: str = "", links: [(str, str)] = [], links_title: str = "", contact: [str] = [],
+    contact_title: str = "", small: [str] = [], top: str = "", id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    let name = if brand != "" { brand } else { _web.name }
+    var h = "<footer" + _ic("foot", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"wrap foot-grid\"><div class=\"foot-brand\">"
+    if name != "" {
+        h += "<p class=\"foot-name\">" + _md(name) + "</p>"
+    }
+    if text != "" {
+        h += "<p class=\"foot-text\">" + _md(text) + "</p>"
+    }
+    h += "</div>"
+    if links.len() > 0 {
+        h += "<nav class=\"foot-col\" aria-label=\"" + _attr(if links_title != "" { links_title } else { _say("links") }) + "\"><h2 class=\"foot-h\">"
+        h += _md(if links_title != "" { links_title } else { _say("links") }) + "</h2><ul>"
+        for l in links {
+            h += "<li><a" + _link_attrs(l.1) + ">" + _md(l.0) + "</a></li>"
+        }
+        h += "</ul></nav>"
+    }
+    if contact.len() > 0 {
+        h += "<div class=\"foot-col\"><h2 class=\"foot-h\">" + _md(if contact_title != "" { contact_title } else { _say("contact") })
+        h += "</h2><address>"
+        for c in contact {
+            h += "<p>" + _md(c) + "</p>"
+        }
+        h += "</address></div>"
+    }
+    h += _html(kids) + "</div><div class=\"foot-bottom\"><div class=\"wrap foot-bar\"><div class=\"foot-small\">"
+    if small.len() > 0 {
+        for s in small {
+            h += "<p>" + _md(s) + "</p>"
+        }
+    } else {
+        h += "<p>© {year()} " + _md(name) + "</p>"
+    }
+    h += "</div><a class=\"foot-top\" href=\"#top\">" + _icon("arrow-up") + _md(if top != "" { top } else { _say("top") }) + "</a></div></div></footer>"
+    return Node(html: h, kit: _kits(kids, "foot"))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Helpers for programs
+
+// A Google Maps search for an address (a link that opens the map).
+fn maps(address: str) -> str = "https://www.google.com/maps/search/?api=1&query=" + _uri(address)
+
+// The current year, when the site is built.
+fn year() -> int {
+    // days since 1970 to a civil date (Howard Hinnant's algorithm)
+    let z = time.now_ms() / 86400000 + 719468
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097
+    let doe = z - era * 146097
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+    let mp = (5 * doy + 2) / 153
+    let month = if mp < 10 { mp + 3 } else { mp - 9 }
+    return yoe + era * 400 + (if month <= 2 { 1 } else { 0 })
+}
+
+// ---------------------------------------------------------------------------------------------
+// The open/closed badge and the opening hours
+
+fn _badge(rows: [(str, str)], tone: str) -> str {
+    var spec = ""
+    for r in rows {
+        let s = r.1.trim()
+        if s != "" {
+            spec += (if spec != "" { "|" } else { "" }) + s
+        }
+    }
+    var h = "<span class=\"badge badge-" + tone + "\" data-hours=\"" + _attr(spec) + "\"" + _at("data-tz", _web.tz)
+    h += " data-open=\"" + _attr(_say("open")) + "\" data-closed=\"" + _attr(_say("closed")) + "\">"
+    return h + "<span class=\"badge-dot\" aria-hidden=\"true\"></span><span class=\"badge-label\"></span></span>"
+}
+
+// "1-5 8:00-16:00 17:00-19:00" -> "8:00 – 16:00, 17:00 – 19:00"; "" -> the word for closed.
+fn _hours_text(spec: str) -> str {
+    if spec == "" {
+        return _say("shut")
+    }
+    let parts = spec.split(" ")
+    var out: [str] = []
+    for i, x in parts {
+        if i > 0 && x != "" {
+            out.push(x.replace("-", " – "))
+        }
+    }
+    return out.join(", ")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Text: escaping, inline Markdown, icons
+
+// Text for an element's content or an attribute value: the five HTML characters escaped.
+fn _esc(s: str) -> str = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+
+fn _attr(s: str) -> str = _esc(s)
+
+// ` name="value"`, or nothing for an empty value.
+fn _at(name: str, value: str) -> str = if value == "" { "" } else { " " + name + "=\"" + _attr(value) + "\"" }
+
+// Inline Markdown: **bold**, *italic*, `code`, [label](url), :icon:, and \ before a character to
+// write it as it is. Everything else is escaped text.
+fn _md(s: str) -> str {
+    let cs = s.chars()
+    let n = cs.len()
+    var o = ""
+    var i = 0
+    var bold = false
+    var em = false
+    while i < n {
+        let c = cs[i]
+        if c == '\\' && i + 1 < n {
+            o += _esc(str(cs[i + 1]))
+            i += 2
+        } else if c == '*' && i + 1 < n && cs[i + 1] == '*' && (bold || _find(cs, i + 2, "**") > i + 2) {
+            o += if bold { "</strong>" } else { "<strong>" }
+            bold = !bold
+            i += 2
+        } else if c == '*' && (em || (i + 1 < n && cs[i + 1] != ' ' && _find(cs, i + 1, "*") > i + 1)) {
+            o += if em { "</em>" } else { "<em>" }
+            em = !em
+            i += 1
+        } else if c == '`' && _find(cs, i + 1, "`") > i {
+            let j = _find(cs, i + 1, "`")
+            o += "<code>" + _esc(s.slice(i + 1, j)) + "</code>"
+            i = j + 1
+        } else if c == '[' && _link_end(cs, i) > i {
+            let mid = _find(cs, i + 1, "](")
+            let end = _link_end(cs, i)
+            let url = s.slice(mid + 2, end)
+            o += "<a" + _link_attrs(url) + ">" + _md(s.slice(i + 1, mid)) + "</a>"
+            i = end + 1
+        } else if c == ':' && _icon_end(cs, i) > i {
+            let j = _icon_end(cs, i)
+            let name = s.slice(i + 1, j)
+            if _icon_kind(name) > 0 {
+                o += _icon(name)
+                i = j + 1
+            } else {
+                _err("E0374", "unknown icon `:" + name + ":` in the text \"" + s + "\"")
+                o += _esc(str(c))
+                i += 1
+            }
+        } else {
+            o += _esc(str(c))
+            i += 1
+        }
+    }
+    if em {
+        o += "</em>"
+    }
+    if bold {
+        o += "</strong>"
+    }
+    return o
+}
+
+// The index of the first `pat` in `cs` at or after `from`, or -1.
+fn _find(cs: [char], from: int, pat: str) -> int {
+    let ps = pat.chars()
+    var i = from
+    while i + ps.len() <= cs.len() {
+        var ok = true
+        for k in 0..ps.len() {
+            if cs[i + k] != ps[k] {
+                ok = false
+                break
+            }
+        }
+        if ok {
+            return i
+        }
+        i += 1
+    }
+    return -1
+}
+
+// For `[` at `at`: the index of the `)` that ends `[label](url)`, or -1.
+fn _link_end(cs: [char], at: int) -> int {
+    let mid = _find(cs, at + 1, "](")
+    if mid < 0 {
+        return -1
+    }
+    // the `)` that closes the target: parentheses inside it must be balanced (spaces are allowed:
+    // `[+420 571 000 000](tel:+420 571 000 000)`)
+    var depth = 0
+    var k = mid + 2
+    while k < cs.len() {
+        let c = cs[k]
+        if c == '\n' {
+            return -1
+        }
+        if c == '(' {
+            depth += 1
+        } else if c == ')' {
+            if depth == 0 {
+                return k
+            }
+            depth -= 1
+        }
+        k += 1
+    }
+    return -1
+}
+
+// For `:` at `at`: the index of the `:` that ends an icon name (a letter, then letters, digits
+// and dashes), or -1.
+fn _icon_end(cs: [char], at: int) -> int {
+    if at + 1 >= cs.len() || !_lower(cs[at + 1]) {
+        return -1
+    }
+    var j = at + 1
+    while j < cs.len() && (_lower(cs[j]) || cs[j].is_digit() || cs[j] == '-') {
+        j += 1
+    }
+    if j < cs.len() && cs[j] == ':' {
+        return j
+    }
+    return -1
+}
+
+fn _lower(c: char) -> bool = c >= 'a' && c <= 'z'
+
+// An inline icon: a stroked Lucide icon, or a filled brand icon. It shows a symbol of the page's
+// sprite (`_sprite`), so an icon used ten times is drawn once, and a view the browser renders
+// again needs only the names.
+fn _icon(name: str) -> str {
+    let kind = _icon_kind(name)
+    if kind == 0 {
+        _err("E0374", "unknown icon `" + name + "`")
+        return ""
+    }
+    let brand = if kind == 2 { " i-brand" } else { "" }
+    return "<svg class=\"i" + brand + " i-" + name + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-" + name + "\"/></svg>"
+}
+
+// The symbols of the icons a page uses, for the start of its <body>.
+fn _sprite(html: str) -> str {
+    var names: [str] = []
+    for part in html.split("<use href=\"#i-") {
+        let end = part.index_of("\"")
+        if end > 0 && names.len() < 1000 {
+            let name = part.slice(0, end)
+            if !names.contains(name) && _icon_kind(name) > 0 {
+                names.push(name)
+            }
+        }
+    }
+    if names.len() == 0 {
+        return ""
+    }
+    var h = "<svg class=\"sprite\" aria-hidden=\"true\">"
+    for n in names.sorted() {
+        let body = if _icon_kind(n) == 2 { _brand_body(n) } else { _icon_body(n) }
+        h += "<symbol id=\"i-" + n + "\" viewBox=\"0 0 24 24\">" + body + "</symbol>"
+    }
+    return h + "</svg>\n"
+}
+
+// The first letter of a name, for an avatar.
+fn _initial(name: str) -> str = if name == "" { "" } else { str(name.chars()[0]).upper() }
+
+// ---------------------------------------------------------------------------------------------
+// Links and URLs
+
+// The checked value of an `href`: http(s), mailto, tel, a path or an #anchor. A forbidden scheme
+// (javascript:, data:, ...) is build error E0381 and the link goes nowhere.
+fn _href(url: str) -> str {
+    let u = url.trim()
+    let scheme = _scheme(u)
+    if scheme != "" && scheme != "http" && scheme != "https" && scheme != "mailto" && scheme != "tel" {
+        _err("E0381", "the link `" + u + "` uses the scheme `" + scheme + ":`, which a page may not link to")
+        return "#"
+    }
+    if scheme == "tel" {
+        return _attr(u.replace(" ", ""))
+    }
+    return _attr(u)
+}
+
+// ` href="..."` for a link, opening an external one in a new tab.
+fn _link_attrs(url: str) -> str {
+    let u = url.trim()
+    let ext = u.lower().starts_with("http://") || u.lower().starts_with("https://")
+    return " href=\"" + _href(u) + "\"" + (if ext { " target=\"_blank\" rel=\"noopener noreferrer\"" } else { "" })
+}
+
+// The scheme of a URL, lowercase ("" for a path or an anchor).
+fn _scheme(u: str) -> str {
+    let cs = u.chars()
+    var i = 0
+    while i < cs.len() {
+        let c = cs[i]
+        if c == ':' {
+            return if i > 0 { u.slice(0, i).lower() } else { "" }
+        }
+        if !(c.is_letter() || (i > 0 && (c.is_digit() || c == '+' || c == '-' || c == '.'))) {
+            return ""
+        }
+        i += 1
+    }
+    return ""
+}
+
+// An image: a file of `assets/` by its name (the build copies it and rewrites the reference), a
+// path of the site, or an https URL.
+fn _src(src: str) -> str {
+    let s = src.trim()
+    let scheme = _scheme(s)
+    if scheme == "http" || scheme == "https" || s.starts_with("/") {
+        return s
+    }
+    if scheme != "" {
+        _err("E0381", "the image `" + s + "` uses the scheme `" + scheme + ":`: use a file of `assets/` or an https URL")
+        return ""
+    }
+    return s
+}
+
+fn _img_tag(src: str, alt: str, sizes: str, first: bool) -> str {
+    let s = _src(src)
+    if first {
+        return "<img fetchpriority=\"high\" src=\"" + _attr(s) + "\" alt=\"" + _attr(alt) + "\" decoding=\"async\" sizes=\"" + sizes + "\">"
+    }
+    return "<img src=\"" + _attr(s) + "\" alt=\"" + _attr(alt) + "\" loading=\"lazy\" decoding=\"async\" sizes=\"" + sizes + "\">"
+}
+
+// The src of the page's priority image (the hero's), or "".
+fn _first_lcp(html: str) -> str {
+    let mark = "<img fetchpriority=\"high\" src=\""
+    let at = html.index_of(mark)
+    if at < 0 {
+        return ""
+    }
+    let rest = html.slice(at + mark.len(), html.len())
+    return rest.slice(0, rest.index_of("\""))
+}
+
+// Percent-encoding of a query value (UTF-8).
+fn _uri(s: str) -> str {
+    var o = ""
+    for code in s.codes() {
+        let c = char(code)
+        if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c.is_digit() || c == '-' || c == '_' || c == '.' || c == '~' {
+            o += str(c)
+        } else if code < 128 {
+            o += _pct(code)
+        } else if code < 2048 {
+            o += _pct(192 + code / 64) + _pct(128 + code % 64)
+        } else if code < 65536 {
+            o += _pct(224 + code / 4096) + _pct(128 + code / 64 % 64) + _pct(128 + code % 64)
+        } else {
+            o += _pct(240 + code / 262144) + _pct(128 + code / 4096 % 64) + _pct(128 + code / 64 % 64) + _pct(128 + code % 64)
+        }
+    }
+    return o
+}
+
+fn _pct(b: int) -> str {
+    let hex = "0123456789ABCDEF".chars()
+    return "%" + str(hex[b / 16]) + str(hex[b % 16])
+}
+
+// `/flora` -> `/flora/`; a path to a file stays as it is.
+fn _canon_path(path: str) -> str {
+    if path.ends_with("/") || path.contains(".") {
+        return path
+    }
+    return path + "/"
+}
+
+fn _trim_slash(u: str) -> str = if u.ends_with("/") { u.slice(0, u.len() - 1) } else { u }
+
+// A build error found while rendering: the build reports it and fails (src/web.rs).
+fn _err(code: str, msg: str) {
+    _css("/*! nyra:error " + code + " " + msg.replace("*/", "* /").replace("\n", " ") + " */")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Theme, classes, motion attributes
+
+// A color option as CSS: a hex color, a theme color, or a name from `site(palette:)`.
+fn _color(c: str) -> str {
+    if c == "" || c.starts_with("#") || c.starts_with("rgb") || c.starts_with("hsl") || c.starts_with("oklch") {
+        return c
+    }
+    if c == "primary" || c == "accent" || c == "bg" || c == "alt" || c == "ink" || c == "muted" {
+        return "var(--" + c + ")"
+    }
+    if _web.palette.has(c) {
+        return "var(--c-" + c + ")"
+    }
+    if c == "white" || c == "black" {
+        return c
+    }
+    _err("E0374", "unknown color `" + c + "`: use a hex color, a theme color (primary, accent, bg, alt, ink, muted) or a name of `site(palette:)`")
+    return ""
+}
+
+fn _var(name: str, value: str) -> str = if value == "" { "" } else { "--" + name + ":" + _css_value(value) + ";" }
+
+// A value inside the theme's CSS: no characters that end a declaration or a rule.
+fn _css_value(v: str) -> str = v.replace(";", "").replace("}", "").replace("{", "").replace("<", "")
+
+// Text on a color: white, or the ink color when white is too light on it.
+fn _on_color(hex: str) -> str = if _luma(hex) > 0.42 { "#16130f" } else { "#fff" }
+
+// The relative luminance of a hex color (approximated with a square for the sRGB curve).
+fn _luma(hex: str) -> float {
+    let h = hex.replace("#", "")
+    let full = if h.len() == 3 { str(h.chars()[0]).repeat(2) + str(h.chars()[1]).repeat(2) + str(h.chars()[2]).repeat(2) } else { h }
+    if full.len() < 6 {
+        return 0.0
+    }
+    let r = float(_hex2(full.slice(0, 2))) / 255.0
+    let g = float(_hex2(full.slice(2, 4))) / 255.0
+    let b = float(_hex2(full.slice(4, 6))) / 255.0
+    return 0.2126 * r * r + 0.7152 * g * g + 0.0722 * b * b
+}
+
+fn _hex2(s: str) -> int {
+    var v = 0
+    for c in s.lower().chars() {
+        let d = "0123456789abcdef".index_of(str(c))
+        v = v * 16 + (if d < 0 { 0 } else { d })
+    }
+    return v
+}
+
+// A font family for CSS, with a fallback stack.
+fn _family(name: str) -> str {
+    let l = name.lower()
+    let serif = l.contains("serif") && !l.contains("sans") || l.contains("playfair") || l.contains("fraunces") || l.contains("lora")
+        || l.contains("merriweather") || l.contains("garamond") || l.contains("display") && !l.contains("sans") || l.contains("libre baskerville")
+        || l.contains("cormorant") || l.contains("georgia")
+    let stack = if serif { "Georgia,\"Times New Roman\",serif" } else { "system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif" }
+    return "\"" + _css_value(name).replace("\"", "") + "\"," + stack
+}
+
+// The Google Fonts links of the site's fonts.
+fn _fonts() -> str {
+    let body = _web.font
+    let head = _web.display
+    var fams = ""
+    if body != "" {
+        fams += "family=" + body.replace(" ", "+") + ":wght@400;500;600;700"
+    }
+    if head != "" && head != body {
+        fams += (if fams != "" { "&" } else { "" }) + "family=" + head.replace(" ", "+") + ":wght@500;600;700"
+    }
+    if fams == "" {
+        return ""
+    }
+    var h = "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n"
+    return h + "<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?" + _attr(fams) + "&amp;display=swap\">\n"
+}
+
+// A word of an option, safe in a class name.
+fn _word(w: str) -> str {
+    var o = ""
+    for c in w.lower().chars() {
+        if _lower(c) || c.is_digit() || c == '-' {
+            o += str(c)
+        }
+    }
+    return o
+}
+
+// A size option: a number alone is in rem.
+fn _size(s: str) -> str = if s.to_float() != none { s + "rem" } else { _css_value(s).replace("\"", "") }
+
+fn _join(a: str, b: str) -> str = if b == "" { a } else { a + " " + b }
+
+// ` id="..." class="..."`
+fn _ic(base: str, id: str, cls: str) -> str = _at("id", id) + " class=\"" + _attr(_join(base, cls)) + "\""
+
+// The motion options, written for the motion package as they are (WEB.md, Motion).
+fn _mo(anim: str, hover: str, loop: str, scroll: str, at: float?, morph: str) -> str {
+    var o = _at("data-anim", anim) + _at("data-hover", hover) + _at("data-loop", loop) + _at("data-scroll", scroll)
+    if let t = at {
+        o += " data-at=\"{t}\""
+    }
+    return o + _at("data-morph", morph)
+}
+
+fn _html(kids: [Node]) -> str {
+    var h = ""
+    for k in kids {
+        h += k.html
+    }
+    return h
+}
+
+// The kit chunks of the children, and `own` (if not "").
+fn _kits(kids: [Node], own: str) -> [str] {
+    var all: [str] = []
+    if own != "" {
+        all.push(own)
+    }
+    for k in kids {
+        for c in k.kit {
+            if !all.contains(c) {
+                all.push(c)
+            }
+        }
+    }
+    return all
+}
+
+fn _add(kit: [str], c: str) -> [str] {
+    if kit.contains(c) {
+        return kit
+    }
+    var k = kit
+    k.push(c)
+    return k
+}
+
+// ---------------------------------------------------------------------------------------------
+// The kit's words: English and Czech built in, each one replaced by `site(say: [...])`.
+
+fn _say(key: str) -> str {
+    if _web.say.has(key) {
+        return _web.say[key]
+    }
+    if _web.lang == "cs" {
+        return _say_cs(key)
+    }
+    return _say_en(key)
+}
+
+fn _say_en(key: str) -> str = match key {
+    "open" => "Open now"
+    "closed" => "Closed now"
+    "shut" => "Closed"
+    "hours" => "Opening hours"
+    "more" => "More"
+    "down" => "Scroll down"
+    "map" => "Map"
+    "show" => "Show map"
+    "go" => "Open in Google Maps"
+    "menu" => "Open menu"
+    "close" => "Close menu"
+    "nav" => "Main navigation"
+    "skip" => "Skip to content"
+    "back" => "Back"
+    "all" => "All"
+    "filter" => "Filter photos"
+    "zoom" => "Enlarge"
+    "prev" => "Previous"
+    "next" => "Next"
+    "dismiss" => "Close"
+    "send" => "Send message"
+    "mail_note" => "The message opens in your e-mail app, ready to send."
+    "done" => "Your message is ready"
+    "done_text" => "We opened it in your e-mail app: just send it from there."
+    "edit" => "Edit message"
+    "top" => "Back to top"
+    "links" => "Links"
+    "contact" => "Contact"
+    _ => key
+}
+
+fn _say_cs(key: str) -> str = match key {
+    "open" => "Nyní otevřeno"
+    "closed" => "Nyní zavřeno"
+    "shut" => "Zavřeno"
+    "hours" => "Otevírací doba"
+    "more" => "Více"
+    "down" => "Posunout dolů"
+    "map" => "Mapa"
+    "show" => "Zobrazit mapu"
+    "go" => "Otevřít v Google Maps"
+    "menu" => "Otevřít menu"
+    "close" => "Zavřít menu"
+    "nav" => "Hlavní navigace"
+    "skip" => "Přeskočit na obsah"
+    "back" => "Zpět"
+    "all" => "Vše"
+    "filter" => "Filtrovat fotografie"
+    "zoom" => "Zvětšit"
+    "prev" => "Předchozí"
+    "next" => "Další"
+    "dismiss" => "Zavřít"
+    "send" => "Odeslat zprávu"
+    "mail_note" => "Zpráva se otevře ve vašem e-mailu, odkud ji odešlete."
+    "done" => "Zpráva je připravená"
+    "done_text" => "Otevřeli jsme ji ve vašem e-mailovém programu, stačí ji odeslat."
+    "edit" => "Upravit zprávu"
+    "top" => "Nahoru"
+    "links" => "Odkazy"
+    "contact" => "Kontakt"
+    _ => _say_en(key)
+}

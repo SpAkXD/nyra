@@ -19,6 +19,20 @@ Language
   a block). A new line inside a `{ }` that is inside `( )` now ends a statement, as anywhere else. These are the
   first part of `use web` (docs/WEB.md).
 
+Web
+- **`use web`: the library and the kit.** Elements (`section`, `grid`, `stack`, `row`, `card`, `h1`-`h3`, `p`,
+  `img`, `link`, `button`, `list`, `table`, `address`, `note`, `chip`, `embed`, `quote`, `html`) and kit components
+  (`navbar`, `hero`, `split`, `marquee`, `gallery`, `hours`, `map`, `form` and `field`, `steps`, `stat`, `footer`)
+  called by their bare names, `site(...)` for the theme and `page(...)` for each page. Text is escaped and has an
+  inline Markdown subset with links and 200+ Lucide icons (`:phone:`). The kit (`src/web/kit.css`, `src/web/kit.js`)
+  gives every component its look and behavior with no styling code: theme colors derived with `color-mix`,
+  responsive grids, a sticky navbar with scroll-spy and a mobile menu, a gallery with filters and a lightbox, a live
+  open/closed badge, a map that loads on click, a mailto form. `nyra build` turns it into the site (docs/WEB.md). New codes E0372 (a program name that hides a web function), E0373 (`on:` without
+  `enum Msg` and `fn update`), E0374 (unknown icon or option word), E0376 (a live view with parameters), E0377 (an
+  icon-only button without a label), E0378 (raw HTML or CSS that is not a literal), E0381 (a `javascript:` or `data:`
+  link), E0384 (browser code that uses `fs`, `os` or `input`).
+- A `match` on a string whose pattern was longer than 16 characters was wrongly reported as E0279; fixed.
+
 ## v0.7.0 (2026-10-10)
 
 Speed

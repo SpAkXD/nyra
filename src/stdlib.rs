@@ -169,11 +169,11 @@ fn web_source() -> Option<&'static str> {
     LIB.with(|l| *l).or(BUNDLED_WEB)
 }
 
-/// The bundled web library (`src/std/web.nyra`, written in WP2): `None` until it is part of the compiler.
-const BUNDLED_WEB: Option<&str> = None;
+/// The bundled web library: `src/std/web.nyra` and its icons (src/webcheck.rs).
+const BUNDLED_WEB: Option<&str> = Some(crate::webcheck::SOURCE);
 
 /// The intrinsics of a module that its library calls by their short names (`_emit` of `web`).
-fn private_intrinsics(module: &str) -> Vec<String> {
+pub(crate) fn private_intrinsics(module: &str) -> Vec<String> {
     StdFn::ALL.iter().filter(|f| f.path().0 == module && f.path().1.starts_with('_')).map(|f| f.path().1.to_string()).collect()
 }
 
@@ -281,6 +281,13 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
         if !intrinsics.is_empty() {
             rename_intrinsics(prog, &u.module, &intrinsics);
         }
+        // the web library: bare names, its state, its checks (src/webcheck.rs)
+        if u.module == "web" {
+            if let Some(src) = source("web") {
+                errs.extend(crate::webcheck::link(prog, u.span, src, &intrinsics));
+            }
+            continue;
+        }
         if let Some(src) = source(&u.module) {
             let lib = parse_source(src);
             let mut own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
@@ -320,7 +327,7 @@ thread_local! {
 /// Calls to the module's own functions get the module's name: `exp(x)` becomes `math.exp(x)`.
 /// Every position of the function becomes `at`, the program's `use` line: the library is not part
 /// of the user's file, so a position inside it (line 692 of a 3-line file) would point nowhere.
-fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
+pub(crate) fn rename_calls(f: &mut Func, module: &str, own: &[String], at: Span) {
     AT.with(|a| a.set(at));
     f.span = at;
     f.params.iter_mut().for_each(|p| p.span = at);
@@ -477,7 +484,9 @@ mod tests {
     fn modules_call_only_their_own_functions_and_fixed_builtins() {
         for m in MODULES {
             let Some(src) = source(m) else { continue };
-            let mut own: Vec<String> = parse_source(src).funcs.into_iter().map(|f| f.name).collect();
+            // its own functions, its structs (built by a call of their name) and its intrinsics
+            let lib = parse_source(src);
+            let mut own: Vec<String> = lib.funcs.into_iter().map(|f| f.name).chain(lib.structs.into_iter().map(|s| s.name)).collect();
             own.extend(private_intrinsics(m));
             let (toks, _) = crate::lexer::lex(src);
             for (i, t) in toks.iter().enumerate() {

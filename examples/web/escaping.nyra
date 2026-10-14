@@ -1,0 +1,25 @@
+// Text is never markup: every text and attribute is escaped, and Markdown makes a fixed set of
+// tags. (A computed link with a forbidden scheme fails the build: tests/web.rs.)
+use web
+
+site("Test <site> & \"quotes\"", desc: "a \"desc\" with <tags> & 'quotes'")
+
+let evil = "<script>alert(1)</script>"
+let attr = "x\" onmouseover=\"alert(1)"
+
+page("/", "Title </title><script>x</script>") {
+    section("s", "Heading {evil}", kicker: attr, text: "**bold <i>not italic</i>** and `code <b>`") {
+        h1(evil)
+        p(evil)
+        p("A [link](/x?a=(1)) and a [good one](https://example.com/?a=1&b=\"2\")")
+        p("Literal \\*stars\\* and \\:phone: and 8:00 – 16:00 and a lone * star")
+        card(attr, evil, image: "photo-1.svg", alt: attr, href: "/x?q=\"y\"")
+        img("photo-2.svg", attr, caption: evil)
+        link("Mail", "mailto:{attr}")
+        button("Click", href: "/x?{attr}")
+        list([evil, "[x](#s)"])
+        table([[evil, attr]])
+        quote(evil, attr)
+        "{evil} on its own line"
+    }
+}

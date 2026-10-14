@@ -1,0 +1,18 @@
+// expect: E0384
+use web
+use fs
+
+enum Msg { Load }
+var doc = ""
+fn update(m: Msg) {
+    match m {
+        Msg.Load => doc = fs.read("notes.txt")
+    }
+}
+
+fn notes() -> Node = p(doc)
+
+page("/", "Home") {
+    notes()
+    button("Load", on: Msg.Load)
+}

@@ -1,9 +1,8 @@
 // expect: E0380
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+site("Bakery", bg: "#ffffff", ink: "#999999", muted: "#bbbbbb")
 
-_css(":root{{--bg:#ffffff;--ink:#999999;--muted:#bbbbbb}}")
-page("/", "<h1>Bakery</h1>")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+}

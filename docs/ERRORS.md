@@ -39,13 +39,13 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0389 | `use web` (v0.8; parts planned) | the site build's checks (since v0.8): headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387); the other codes are kept for the web library designed in [WEB.md](WEB.md) |
+| E0372-E0389 | `use web` (since v0.8; E0375 and E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons and option words, live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0372-E0389 are kept for `use web`. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0375, E0385, E0388 and E0389 are kept for `use web`. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -1728,7 +1728,6 @@ fn main() {
 }
 ```
 - **Related:** E0240, E0218
-
 
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3
@@ -3771,9 +3770,217 @@ fn main() {
 ```
 - **Related:** E0203, E0370
 
+## E0372: name of a web function
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** In a program with `use web`, a function, a type or a script variable (a `let` or `var` at the top level) has the name of a web function or type: `fn hero`, `let hours = ...`, `struct Node`. The web functions are called by their bare names (`hero(...)`, not `web.hero(...)`), so the program's own name would hide one of them. Variables inside functions, loop variables and parameters may use these names.
+- **Why Nyra has this rule:** One name means one thing. A page is mostly calls of web functions, and the bare names are what models write in every UI framework; a program function that silently replaced `hero` would change every page that calls it.
+- **Common causes:**
+  - a section function named after the component it wraps (`fn footer() -> Node = footer(...)`)
+  - data named like a component: `let hours = [...]`, `let map = ...`
+  - a type of your own called `Node`
+- **Wrong:**
+```rust
+use web
+
+fn hero(title: str) -> Node = h1(title)
+
+page("/", "Home") {
+    hero("Hello")
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn intro(title: str) -> Node = h1(title)
+
+page("/", "Home") {
+    intro("Hello")
+}
+```
+- **Related:** E0206, E0202
+
+## E0373: `on:` without `Msg` and `update`
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A web function gets `on:` (an event: `button("Add", on: Msg.Add)`), but the program has no `enum Msg` or no `fn update(m: Msg)`. An event is a value of `Msg`; the browser passes it to `update`, which changes the program's script variables.
+- **Why Nyra has this rule:** Nyra has no closures, so an event handler is data, not a function: one enum lists every event and one function says what each does (the Elm architecture). Without both, a click would have nothing to run.
+- **Common causes:**
+  - `on:` written before the `enum Msg` and `fn update` exist
+  - `update` with another parameter type (`fn update(e: Event)`), or with an `inout` parameter
+- **Wrong:**
+```rust
+use web
+
+enum Msg { Add }
+
+fn add() -> Node = button("Add", on: Msg.Add)
+
+page("/", "Home") {
+    add()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+enum Msg { Add }
+var clicks = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Add => clicks += 1
+    }
+}
+
+fn add() -> Node = button("Add", on: Msg.Add)
+
+page("/", "Home") {
+    add()
+}
+```
+- **Related:** E0376, E0384
+
+## E0374: unknown icon or option word
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A web text names an icon that does not exist (`":phnoe: 123"`, `icon: "phnoe"`), or an option that takes one of a few words got another one (`section(..., bg: "alternative")`). The message names the nearest icon or lists the words. Text that is computed while the site is built is checked then: the build stops with the same code.
+- **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a missing icon or a section without its background is easy to miss on a page and costs a round of looking at screenshots.
+- **Common causes:**
+  - an icon name from another set: the icons are [Lucide](https://lucide.dev) names (`phone`, `mail`, `map-pin`, `clock`, `calendar`, `leaf`, `flame`, `house`, `star`, `check`, `send`, `navigation`, `arrow-right`, `chevron-down`, `menu`, `x`, the brand icon `facebook`, ...); `src/std/web_icons.nyra` lists all of them
+  - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
+  - an option word from CSS (`bg: "gray"`): `bg:` takes `alt`, `white`, `dark`, `primary`, `accent`, `ink`
+  - a color that is neither a hex color, a theme color nor a name of `site(palette:)` (found while the site is built)
+- **Wrong:**
+```rust
+use web
+
+fn phone() -> Node = p(":phnoe: +420 123 456 789")
+
+page("/", "Home") {
+    phone()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn phone() -> Node = p(":phone: +420 123 456 789")
+
+page("/", "Home") {
+    phone()
+}
+```
+- **Related:** E0381, E0377
+
+## E0376: live view with parameters
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A function that returns a `Node` reads a script variable that `update` changes, so its part of the page must be rendered again in the browser after each event, but it takes parameters, and it is called outside any view that could render it again.
+- **Why Nyra has this rule:** The browser renders a live region again by calling its function with no arguments: the arguments of the first call are gone by then. Script variables are where the state lives, so a live view reads them instead of taking parameters.
+- **Common causes:**
+  - a view written like a component, `fn counter(label: str) -> Node`, that also shows the state
+- **Wrong:**
+```rust
+use web
+
+enum Msg { Add }
+var clicks = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Add => clicks += 1
+    }
+}
+
+fn counter(label: str) -> Node = p("{label}: {clicks}")
+
+page("/", "Home") {
+    counter("Clicks")
+    button("Add", on: Msg.Add)
+}
+```
+- **Fixed:**
+```rust
+use web
+
+enum Msg { Add }
+var clicks = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Add => clicks += 1
+    }
+}
+
+fn counter() -> Node = p("Clicks: {clicks}")
+
+page("/", "Home") {
+    counter()
+    button("Add", on: Msg.Add)
+}
+```
+- **Related:** E0373, E0384
+
+## E0377: icon-only button without a label
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A `button` or `link` shows only an icon (`button(":phone:", href: "tel:...")`, or `icon:` with no text) and has no `label:`. A screen reader would announce it as an empty link.
+- **Why Nyra has this rule:** Accessibility by construction: every control on the page has a name, and the compiler is the cheapest place to ask for it.
+- **Common causes:**
+  - social media links that show only the brand icon
+  - a phone or e-mail button in a narrow row
+- **Wrong:**
+```rust
+use web
+
+fn call() -> Node = button(":phone:", href: "tel:+420123456789")
+
+page("/", "Home") {
+    call()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn call() -> Node = button(":phone:", href: "tel:+420123456789", label: "Call us")
+
+page("/", "Home") {
+    call()
+}
+```
+- **Related:** E0374
+
+## E0378: raw HTML or CSS that is not a literal
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** `html(...)` or `css(...)` gets something other than one string literal: a variable, an interpolation `"{x}"` or text joined with `+`. Or the program builds a `Node` (or the site's `WebConfig`) itself, with `Node(...)`.
+- **Why Nyra has this rule:** The escape hatches are for markup and styles the author writes; data never becomes markup, so text from a file or a form can never inject a `<script>`. Every other function escapes its text.
+- **Common causes:**
+  - a name or a price put into raw HTML: use `p("{name}")` or another element, which escape it
+  - a color put into CSS: use the theme (`site(primary: ...)`, `palette:`) and `var(--primary)` in a literal
+- **Wrong:**
+```rust
+use web
+
+let name = "Ann"
+
+fn greeting() -> Node = html("<b>" + name + "</b>")
+
+page("/", "Home") {
+    greeting()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+let name = "Ann"
+
+fn greeting() -> Node = p("**{name}**")
+
+page("/", "Home") {
+    greeting()
+}
+```
+- **Related:** E0381
+
 ## E0379: a page's headings are out of order
 - **Kind:** warning · **Since:** v0.8
-- **What it means:** A page of a `use web` site does not have exactly one `h1`, or a heading skips a level (an `h3` right after an `h1`). `nyra build`, `nyra run` and `nyra check` check every page the program makes; the page is still written, and the warning names the page and the headings. (The examples here make their pages with `_emit(path, html)`, the hook the web library's `page(...)` uses, so they do not depend on the kit.)
+- **What it means:** A page of a `use web` site does not have exactly one `h1`, or a heading skips a level (an `h3` right after an `h1`). `nyra build`, `nyra run` and `nyra check` check every page the program makes; the page is still written, and the warning names the page and the headings.
 - **Why Nyra has this rule:** The `h1` is the page's title for search engines and screen readers, and screen reader users move through a page by its headings: a missing level looks like a missing section. The kit makes the right headings by default (a hero's title is the `h1`, a section's title an `h2`), so this warning usually means a heading was written by hand.
 - **Common causes:**
   - a page without a hero, whose first heading is a section title (`h2`)
@@ -3783,21 +3990,26 @@ fn main() {
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+fn bread() -> Node = section("bread", "Our bread") {
+    p("Baked every morning.")
 }
 
-page("/", "<h2>Our bread</h2><p>Baked every morning.</p>")
+page("/", "Bakery") {
+    bread()
+}
 ```
 - **Fixed:**
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+fn bread() -> Node = section("bread", "Our bread") {
+    p("Baked every morning.")
 }
 
-page("/", "<h1>Our bread</h1><p>Baked every morning.</p>")
+page("/", "Bakery") {
+    hero("Bakery Hana")
+    bread()
+}
 ```
 - **Related:** E0380, E0382
 
@@ -3813,25 +4025,59 @@ page("/", "<h1>Our bread</h1><p>Baked every morning.</p>")
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+site("Bakery", bg: "#ffffff", ink: "#999999")
 
-_css(":root{{--bg:#ffffff;--ink:#999999}}")
-page("/", "<h1>Bakery</h1>")
+fn home() -> Node = hero("Bakery Hana")
+
+page("/", "Bakery") {
+    home()
+}
 ```
 - **Fixed:**
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+site("Bakery", bg: "#ffffff", ink: "#333333")
 
-_css(":root{{--bg:#ffffff;--ink:#333333}}")
-page("/", "<h1>Bakery</h1>")
+fn home() -> Node = hero("Bakery Hana")
+
+page("/", "Bakery") {
+    home()
+}
 ```
 - **Related:** E0379
+
+## E0381: link with a forbidden scheme
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A link (`href`, a Markdown `[label](url)`, a button, the tuples of `navbar` and `hero`) uses a scheme other than `http`, `https`, `mailto` and `tel`, such as `javascript:` or `data:`; an image uses one other than `http` and `https`. A literal is checked by the compiler; a link computed while the site is built stops the build with the same code, and the link goes nowhere.
+- **Why Nyra has this rule:** `javascript:` and `data:` links run or carry code. Paths (`/about`), anchors (`#contact`) and the four schemes cover what a site links to.
+- **Common causes:**
+  - `javascript:void(0)` copied from old HTML for a button that does something: use `on: Msg.X`
+  - an image written as a `data:` URL: put the file in `assets/`
+- **Wrong:**
+```rust
+use web
+
+fn more() -> Node = link("Click me", "javascript:alert(1)")
+
+page("/", "Home") {
+    more()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn more() -> Node = link("Click me", "#contact")
+
+page("/", "Home") {
+    more()
+    section("contact", "Contact") {
+        p("Write to us.")
+    }
+}
+```
+- **Related:** E0378, E0374
 
 ## E0382: link to an anchor that is not on the page
 - **Kind:** compile error · **Since:** v0.8
@@ -3845,21 +4091,27 @@ page("/", "<h1>Bakery</h1>")
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+fn contact() -> Node = section("kontakt", "Contact") {
+    p("Call us.")
 }
 
-page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><section id=\"kontakt\"><h2>Contact</h2></section>")
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}
 ```
 - **Fixed:**
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+fn contact() -> Node = section("contact", "Contact") {
+    p("Call us.")
 }
 
-page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><section id=\"contact\"><h2>Contact</h2></section>")
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}
 ```
 - **Related:** E0383, E0387
 
@@ -3875,23 +4127,73 @@ page("/", "<h1>Bakery</h1><a href=\"#contact\">Contact</a><section id=\"contact\
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn counter() -> Node = img("counter.jpg", "The counter")
 
-page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
 ```
 - **Fixed:**
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn counter() -> Node = p("The counter opens at seven.")
 
-page("/", "<h1>Bakery</h1><p>The counter opens at seven.</p>")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
 ```
 - **Related:** E0382, E0386
+
+## E0384: browser code uses `fs`, `os` or `input`
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** Code that runs in the browser uses `fs`, `os` or `input`. That code is `update`, the live views (functions that render state `update` changes) and every function they call: the compiler turns them into JavaScript for the page.
+- **Why Nyra has this rule:** A browser has no files, command-line arguments or standard input, and the capabilities a build is given must not leak into a page. Whatever a page needs from files is read while the site is built.
+- **Common causes:**
+  - reading a file in `update` instead of once at the top of the program
+- **Wrong:**
+```rust
+use web
+use fs
+
+enum Msg { Load }
+var doc = ""
+fn update(m: Msg) {
+    match m {
+        Msg.Load => doc = fs.read("notes.txt")
+    }
+}
+
+fn notes() -> Node = p(doc)
+
+page("/", "Home") {
+    notes()
+    button("Load", on: Msg.Load)
+}
+```
+- **Fixed:**
+```rust
+use web
+
+enum Msg { Show }
+let saved = "Notes from the build."
+var doc = ""
+fn update(m: Msg) {
+    match m {
+        Msg.Show => doc = saved
+    }
+}
+
+fn notes() -> Node = p(doc)
+
+page("/", "Home") {
+    notes()
+    button("Show", on: Msg.Show)
+}
+```
+- **Related:** E0290, E0373
 
 ## E0386: images copied without WebP variants
 - **Kind:** warning · **Since:** v0.8
@@ -3907,11 +4209,12 @@ page("/", "<h1>Bakery</h1><p>The counter opens at seven.</p>")
 // flags: --image-tool none
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn counter() -> Node = img("counter.jpg", "The counter")
 
-page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
 // assets/counter.jpg
 (the bytes of a JPEG photo)
 ```
@@ -3921,11 +4224,12 @@ page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
 // flags: --image-tool cwebp
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn counter() -> Node = img("counter.jpg", "The counter")
 
-page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
 // assets/counter.jpg
 (the bytes of a JPEG photo)
 ```
@@ -3943,22 +4247,26 @@ page("/", "<h1>Bakery</h1><img src=\"counter.jpg\" alt=\"The counter\">")
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn about(title: str) -> Node = h1(title)
 
-page("/about", "<h1>About us</h1>")
-page("/about/", "<h1>Our team</h1>")
+page("/about", "About us") {
+    about("About us")
+}
+page("/about/", "Our team") {
+    about("Our team")
+}
 ```
 - **Fixed:**
 ```rust
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
-}
+fn about(title: str) -> Node = h1(title)
 
-page("/about", "<h1>About us</h1>")
-page("/team", "<h1>Our team</h1>")
+page("/about", "About us") {
+    about("About us")
+}
+page("/team", "Our team") {
+    about("Our team")
+}
 ```
 - **Related:** E0382

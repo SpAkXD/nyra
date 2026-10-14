@@ -1,5 +1,5 @@
 // Contact section for both subsites: info card, opening hours, map, mailto form.
-struct Shop { name: str, person: str, phone: str, email: str, icon: str, foot: str, pay: str,
+struct Shop { name: str, person: str, phone: str, email: str, icon: str, pay: str, foot: str,
     intro: str, ask: str, hint: str, subject: str }
 
 let flora = Shop(name: "Prodejna Flora", person: "Stanislav Kuběna", phone: "+420 571 623 840",

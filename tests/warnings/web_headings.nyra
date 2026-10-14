@@ -1,9 +1,10 @@
 // expect: E0379
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    h3("Bread")
 }
-
-page("/", "<h1>Bakery</h1><h3>Bread</h3>")
-page("/about", "<h2>About us</h2>")
+page("/about", "About us") {
+    h2("About us")
+}

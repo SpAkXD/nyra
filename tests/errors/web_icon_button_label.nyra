@@ -1,0 +1,6 @@
+// expect: E0377
+use web
+
+page("/", "Home") {
+    button(":phone:", href: "tel:+420123456789")
+}

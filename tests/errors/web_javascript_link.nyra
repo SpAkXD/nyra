@@ -1,0 +1,6 @@
+// expect: E0381
+use web
+
+page("/", "Home") {
+    link("Click me", "javascript:alert(1)")
+}

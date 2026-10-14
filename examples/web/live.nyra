@@ -1,0 +1,48 @@
+// Interactivity: state in script variables, events as `Msg` values, `fn update`. `menu()` reads
+// `kind`, which `update` changes, so the compiler makes it a live region (`data-live="menu"`) and
+// every `on:` becomes the JSON of its value (`data-on`); the build compiles `update` and `menu`
+// for the browser.
+use web
+
+site("Pekárna Hana", lang: "cs", primary: "#7A3E1D")
+
+struct Bread { name: str, kind: str, price: int }
+let breads = [Bread(name: "Kváskový chléb", kind: "chléb", price: 89), Bread(name: "Croissant", kind: "sladké", price: 35),
+    Bread(name: "Bageta", kind: "chléb", price: 29)]
+
+enum Msg { Show(str), Send([str: str]), Clear }
+var kind = "vše"
+var sent = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+        Msg.Send(fields) => sent += fields.len()
+        Msg.Clear => kind = "vše"
+    }
+}
+
+fn menu() -> Node = stack {
+    row {
+        for k in ["vše", "chléb", "sladké"] { button(k, on: Msg.Show(k), active: k == kind) }
+        button("Zrušit filtr", on: Msg.Clear, style: "ghost")
+    }
+    grid(3, anim: "stagger", hover: "lift") {
+        for b in breads.filter(b => kind == "vše" || b.kind == kind) { card(b.name, "{b.price} Kč") }
+    }
+}
+
+fn thanks() -> Node = if sent > 0 { p("Děkujeme za zprávu.") } else { p("") }
+
+page("/", "Pekárna Hana") {
+    hero("Pekárna Hana", text: "Chléb každé ráno.")
+    section("nabidka", "Nabídka", kicker: "Dnes upečeno", anim: "rise", at: 0.2) {
+        menu()
+    }
+    section("napiste", "Napište nám", bg: "alt") {
+        form("Objednávka", on: Msg.Send) {
+            field("jmeno", "Jméno", req: true)
+            field("pocet", "Počet", type: "number", on: Msg.Show("chléb"))
+        }
+        thanks()
+    }
+}

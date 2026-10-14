@@ -205,7 +205,7 @@ fn a_view_that_returns_a_node_is_rendered_by_the_program_s_render() {
     let src = r#"use web
 use json
 
-struct Node { tag: str, text: str }
+struct Item { tag: str, text: str }
 enum Msg { Add }
 var n = 0
 
@@ -213,9 +213,9 @@ fn update(m: Msg) {
     n += 1
 }
 
-fn render(x: Node) -> str = "<" + x.tag + ">" + x.text + "</" + x.tag + ">"
+fn render(x: Item) -> str = "<" + x.tag + ">" + x.text + "</" + x.tag + ">"
 
-fn counter() -> Node = Node(tag: "p", text: "{n} items")
+fn counter() -> Item = Item(tag: "p", text: "{n} items")
 
 let msg = json.str(Msg.Add)
 _emit("/", "<!doctype html><html><head><title>Cart</title></head><body><h1>Cart</h1><button data-on='" + msg + "'>Add</button><div data-live=\"counter\">" + render(counter()) + "</div></body></html>")
@@ -245,13 +245,13 @@ fn check_reports_the_site_s_errors_and_writes_nothing() {
     std::fs::create_dir_all(&dir).unwrap();
     let src = r##"use web
 
-fn page(path: str, body: str) {
+fn doc(path: str, body: str) {
     _emit(path, "<!doctype html><html><head><title>T</title></head><body>" + body + "</body></html>")
 }
 
-page("/", "<h1>Home</h1><a href=\"#contact\">Contact</a><a href=\"/about#team\">Team</a><img src=\"gone.png\" alt=\"\">")
-page("/about", "<h2>About</h2><section id=\"team\"></section>")
-page("/about/", "<h1>Again</h1>")
+doc("/", "<h1>Home</h1><a href=\"#contact\">Contact</a><a href=\"/about#team\">Team</a><img src=\"gone.png\" alt=\"\">")
+doc("/about", "<h2>About</h2><section id=\"team\"></section>")
+doc("/about/", "<h1>Again</h1>")
 "##;
     std::fs::write(dir.join("a.nyra"), src).unwrap();
     let out = nyra().current_dir(&dir).args(["check", "--json", "a.nyra"]).output().unwrap();
@@ -268,7 +268,7 @@ page("/about/", "<h1>Again</h1>")
     // the anchor to another page is found there
     let ok = src
         .replace("<h2>About</h2>", "<h1>About</h1>")
-        .replace("page(\"/about/\", \"<h1>Again</h1>\")\n", "")
+        .replace("doc(\"/about/\", \"<h1>Again</h1>\")\n", "")
         .replace("<img src=\\\"gone.png\\\" alt=\\\"\\\">", "");
     let ok = ok.replace("<a href=\\\"#contact\\\">Contact</a>", "");
     std::fs::write(dir.join("b.nyra"), &ok).unwrap();

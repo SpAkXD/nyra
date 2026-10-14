@@ -1,0 +1,375 @@
+//! `use web` (docs/WEB.md): the library (`src/std/web.nyra`), the kit (`src/web/kit.css`,
+//! `src/web/kit.js`) and how they meet the build.
+//!
+//! - every `examples/web/*.nyra` builds (`nyra build`) to exactly the site in
+//!   `tests/web/fixtures/<name>/`: those folders are the golden output and, opened in a browser,
+//!   the fixture pages of every element and component;
+//! - every page is a whole, well-nested HTML document;
+//! - text never becomes markup, and a computed `javascript:` link fails the build (E0381);
+//! - literal mistakes are compile errors; the measured samples of `docs/web-samples` build;
+//! - every kit chunk a component names exists in the kit files, and the behaviors are valid
+//!   JavaScript.
+//!
+//! After changing the library or the kit on purpose, rewrite the fixtures with
+//!
+//!     NYRA_BLESS=1 cargo test --release --test web
+//!
+//! and look at the pages (and the diff) before committing them.
+
+mod common;
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use common::{missing, nyra, scratch, stderr, stdout};
+
+fn programs() -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir("examples/web")
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "nyra"))
+        .collect();
+    v.sort();
+    v
+}
+
+/// Every file below `dir`, by its path relative to `dir` (with `/`).
+fn files(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut out = BTreeMap::new();
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(d) = todo.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for e in entries {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                todo.push(p);
+            } else {
+                let rel = p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
+                out.insert(rel, std::fs::read(&p).unwrap());
+            }
+        }
+    }
+    out
+}
+
+/// Builds an example into a fresh folder and gives its files.
+fn build(path: &Path) -> BTreeMap<String, Vec<u8>> {
+    let name = path.file_stem().unwrap().to_string_lossy().to_string();
+    let out = scratch(&format!("web-build-{name}"));
+    let _ = std::fs::remove_dir_all(&out);
+    let run = nyra().arg("build").arg(path).arg("-o").arg(&out).args(["--image-tool", "none"]).output().unwrap();
+    assert!(run.status.success(), "nyra build {} failed:\n{}", path.display(), stderr(&run));
+    files(&out)
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).replace("\r\n", "\n")
+}
+
+#[test]
+fn examples_build_to_their_fixtures() {
+    let bless = std::env::var("NYRA_BLESS").is_ok();
+    for path in programs() {
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        let got = build(&path);
+        let dir = Path::new("tests/web/fixtures").join(&name);
+        if bless {
+            let _ = std::fs::remove_dir_all(&dir);
+            for (f, bytes) in &got {
+                let p = dir.join(f);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, bytes).unwrap();
+            }
+        }
+        let want = files(&dir);
+        let (g, w): (BTreeSet<&String>, BTreeSet<&String>) = (got.keys().collect(), want.keys().collect());
+        assert_eq!(g, w, "{}: the built files differ from {} (NYRA_BLESS=1 rewrites them)", path.display(), dir.display());
+        for (f, bytes) in &got {
+            assert!(
+                text(bytes) == text(&want[f]),
+                "{}: {f} differs from {} (NYRA_BLESS=1 rewrites it)",
+                path.display(),
+                dir.display()
+            );
+        }
+    }
+}
+
+/// The pages of the fixtures: (label, html).
+fn pages() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for p in programs() {
+        let name = p.file_stem().unwrap().to_string_lossy().to_string();
+        for (f, bytes) in files(&Path::new("tests/web/fixtures").join(&name)) {
+            if f.ends_with(".html") {
+                out.push((format!("{name}/{f}"), text(&bytes)));
+            }
+        }
+    }
+    assert!(out.len() >= 8, "only {} fixture pages", out.len());
+    out
+}
+
+/// The elements whose end tag is left out (void elements).
+const VOID: &[&str] =
+    &["meta", "link", "img", "input", "br", "hr", "source", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse"];
+
+/// Checks that the tags of a document nest; returns the first problem.
+fn nesting(html: &str) -> Result<(), String> {
+    let mut stack: Vec<String> = Vec::new();
+    let mut rest = html;
+    while let Some(i) = rest.find('<') {
+        rest = &rest[i + 1..];
+        if rest.starts_with("!--") {
+            let end = rest.find("-->").ok_or("an unclosed comment")?;
+            rest = &rest[end + 3..];
+            continue;
+        }
+        if rest.starts_with('!') {
+            continue;
+        }
+        let end = rest.find('>').ok_or("an unclosed tag")?;
+        let tag = &rest[..end];
+        rest = &rest[end + 1..];
+        let closing = tag.starts_with('/');
+        let name: String = tag.trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+        if name.is_empty() {
+            return Err(format!("a `<` that starts no tag: <{tag}>"));
+        }
+        if closing {
+            match stack.pop() {
+                Some(open) if open == name => {}
+                other => return Err(format!("</{name}> closes {other:?}")),
+            }
+            continue;
+        }
+        if !tag.ends_with('/') && !VOID.contains(&name.as_str()) {
+            stack.push(name.clone());
+        }
+        // the text of a script or style is not markup
+        if name == "script" || name == "style" {
+            let at = rest.find(&format!("</{name}>")).ok_or("an unclosed script or style")?;
+            rest = &rest[at..];
+        }
+    }
+    if stack.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("unclosed: {stack:?}"))
+    }
+}
+
+#[test]
+fn every_page_is_a_whole_document() {
+    for (label, html) in pages() {
+        assert!(html.starts_with("<!doctype html>\n<html lang=\""), "{label}");
+        assert!(html.trim_end().ends_with("</html>"), "{label}");
+        for one in [
+            "<main id=\"main\">",
+            "<title>",
+            "<meta name=\"viewport\"",
+            "<a class=\"skip\" href=\"#main\">",
+            "Content-Security-Policy",
+        ] {
+            assert_eq!(html.matches(one).count(), 1, "{label}: `{one}`");
+        }
+        assert!(!html.contains("<script>"), "{label}: an inline script");
+        if let Err(e) = nesting(&html) {
+            panic!("{label}: {e}");
+        }
+        let ids: Vec<&str> = html.split(" id=\"").skip(1).map(|s| &s[..s.find('"').unwrap()]).collect();
+        let unique: BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "{label}: an id twice: {ids:?}");
+    }
+}
+
+#[test]
+fn text_never_becomes_markup() {
+    let page = text(&std::fs::read("tests/web/fixtures/escaping/index.html").unwrap());
+    let body = &page[page.find("<body").unwrap()..];
+    assert!(!body.contains("<script>alert"), "a script tag got through");
+    assert!(!body.contains("onmouseover=\""), "an attribute got through");
+    assert!(!body.contains("<i>") && !body.contains("<b>"), "inline HTML in text got through");
+    assert!(body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    assert!(page.contains("<title>Title &lt;/title&gt;&lt;script&gt;x&lt;/script&gt;</title>"));
+    assert!(body.contains("Literal *stars* and :phone: and 8:00 – 16:00 and a lone * star"), "escapes and lone stars");
+    assert!(body.contains("href=\"https://example.com/?a=1&amp;b=&quot;2&quot;\""), "a URL's quotes and ampersands");
+    assert!(body.contains("<a href=\"/x?a=(1)\">link</a>"), "parentheses inside a Markdown link");
+}
+
+#[test]
+fn a_computed_forbidden_link_fails_the_build() {
+    let dir = scratch("web-forbidden");
+    let file = dir.join("site.nyra");
+    std::fs::write(
+        &file,
+        "use web\nlet scheme = \"javascript\"\nlet data = \"DATA\"\npage(\"/\", \"T\") {\n    h1(\"T\")\n    p(\"[a]({scheme}:alert(1))\")\n    button(\"B\", href: \"{scheme}:void(0)\")\n    list([\"[x]({data}:text/html,hi)\"])\n}\n",
+    )
+    .unwrap();
+    let out = nyra().args(["build", "--json"]).arg(&file).arg("-o").arg(dir.join("dist")).output().unwrap();
+    let json = stdout(&out);
+    assert!(!out.status.success(), "the build succeeded: {json}");
+    assert_eq!(json.matches("\"code\":\"E0381\"").count(), 3, "{json}");
+    assert!(!dir.join("dist").join("index.html").exists(), "a failed build wrote a page");
+}
+
+#[test]
+fn literal_mistakes_are_compile_errors() {
+    let dir = scratch("web-errors");
+    let cases = [
+        ("p(\"<b>[x](javascript:alert(1))</b>\")", "E0381"),
+        ("img(\"data:image/png;base64,AA\", \"x\")", "E0381"),
+        ("navbar(\"A\", [(\"B\", \"JAVASCRIPT:x\")])", "E0381"),
+        ("card(\"A\", icon: \"no-such-icon\")", "E0374"),
+        ("button(\"Go\", style: \"primay\")", "E0374"),
+        ("link(\":mail:\", \"mailto:a@b.cz\")", "E0377"),
+        ("button(icon: \"phone\", href: \"tel:1\")", "E0377"),
+        ("css(\"a {{ color: {1} }}\")", "E0378"),
+    ];
+    for (i, (call, code)) in cases.iter().enumerate() {
+        let file = dir.join(format!("case{i}.nyra"));
+        let body = if call.starts_with("css") {
+            format!("{call}\npage(\"/\", \"T\") {{\n}}\n")
+        } else {
+            format!("page(\"/\", \"T\") {{\n    {call}\n}}\n")
+        };
+        std::fs::write(&file, format!("use web\n{body}")).unwrap();
+        let out = nyra().args(["check", "--json"]).arg(&file).output().unwrap();
+        let json = stdout(&out);
+        assert!(!out.status.success(), "{call} compiles");
+        assert!(json.contains(&format!("\"code\":\"{code}\"")), "{call}: expected {code}, got {json}");
+    }
+    // and the right forms compile
+    let ok = dir.join("ok.nyra");
+    std::fs::write(
+        &ok,
+        "use web\nlet n = 3\ncss(\"a {{ color: red }}\")\npage(\"/\", \"T\") {\n    h1(\"T\")\n    link(\":mail:\", \"mailto:a@b.cz\", label: \"Mail\")\n    p(\"8:00 \\\\:x: [a](tel:+420 1) {n}\")\n}\n",
+    )
+    .unwrap();
+    let out = nyra().arg("check").arg(&ok).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+}
+
+/// The measured samples of the design, put together into one program as a site would be.
+#[test]
+fn the_design_samples_build() {
+    let part = |f: &str| {
+        let text = std::fs::read_to_string(Path::new("docs/web-samples").join(f)).unwrap().replace("\r\n", "\n");
+        text.lines().skip(1).filter(|l| *l != "use web").collect::<Vec<_>>().join("\n")
+    };
+    // the sections the Flora page calls but the samples leave out
+    let rest = r#"
+fn store() -> Node = section("prodejna", "Vše pro dům a zahradu", kicker: "Sortiment") {
+    grid(3) {
+        card("Zahrada", "Osivo a substráty.", image: "zahrada.svg", items: ["Osivo", "Hnojiva"])
+    }
+}
+fn gallery_section(tab: str) -> Node = section("galerie", "Galerie", bg: "alt") {
+    gallery([("g1.svg", "Krb", "krby"), ("g2.svg", "Záhon", "flora")], filters: [("krby", "Krby"), ("flora", "Flora")])
+}
+fn footer_section(l: [(str, str)]) -> Node = footer(links: l)
+page("/krby", "Kamnářství") {
+    h1("Kamnářství Kuběna")
+    services()
+    about()
+    contact(krby)
+}
+"#;
+    let src = format!(
+        "use web\n{}\n{}\n{}\n{}\n{}\n{}",
+        part("0-shared.nyra"),
+        part("2-services.nyra"),
+        part("3-contact.nyra"),
+        part("4-about.nyra"),
+        part("1-flora-page.nyra"),
+        rest
+    )
+    .replace(".jpg\"", ".svg\"");
+    let dir = scratch("web-samples");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("assets")).unwrap();
+    let svg = std::fs::read("examples/web/assets/photo-1.svg").unwrap();
+    for img in ["flora-hero", "about-namesti", "zahrada", "g1", "g2"] {
+        std::fs::write(dir.join("assets").join(format!("{img}.svg")), &svg).unwrap();
+    }
+    std::fs::write(dir.join("site.nyra"), src).unwrap();
+    let out = nyra().arg("build").arg(dir.join("site.nyra")).args(["--image-tool", "none"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let flora = std::fs::read_to_string(dir.join("dist/flora/index.html")).unwrap();
+    for part in [
+        "class=\"nav\"",
+        "class=\"hero\"",
+        "class=\"marquee\"",
+        "class=\"gallery\"",
+        "class=\"card hours\"",
+        "data-mailto=\"floravalmez@seznam.cz\"",
+        "Nyní otevřeno",
+    ] {
+        assert!(flora.contains(part), "the Flora page has no `{part}`");
+    }
+    assert!(dir.join("dist/krby/index.html").is_file());
+}
+
+/// The chunk markers of a kit file, in order.
+fn chunks(file: &str) -> Vec<String> {
+    let text = std::fs::read_to_string(file).unwrap();
+    text.lines().filter_map(|l| l.strip_prefix("/*! chunk: ").and_then(|r| r.strip_suffix(" */"))).map(str::to_string).collect()
+}
+
+/// The chunk names the library hands to the build (`kit: ["gallery"]`, `_kits(kids, "hero")`, ...).
+fn named_chunks() -> BTreeSet<String> {
+    let src = std::fs::read_to_string("src/std/web.nyra").unwrap();
+    let mut out = BTreeSet::new();
+    for pat in ["kit: [\"", "_kits(kids, \"", "_add(kit, \""] {
+        for part in src.split(pat).skip(1) {
+            let name = &part[..part.find('"').unwrap()];
+            if !name.is_empty() {
+                out.insert(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn every_chunk_a_component_names_is_in_the_kit() {
+    let css = chunks("src/web/kit.css");
+    let js = chunks("src/web/kit.js");
+    for list in [&css, &js] {
+        let unique: BTreeSet<&String> = list.iter().collect();
+        assert_eq!(unique.len(), list.len(), "a chunk twice: {list:?}");
+    }
+    let named = named_chunks();
+    assert!(named.len() >= 12, "{named:?}");
+    for c in &named {
+        assert!(css.contains(c) || js.contains(c), "the library names the chunk `{c}`, which neither kit file has");
+    }
+    for c in css.iter().chain(&js) {
+        assert!(named.contains(c), "the kit has the chunk `{c}`, which no component names");
+    }
+    // the stylesheet's braces balance (a missing one would swallow the rest of the kit)
+    let text = std::fs::read_to_string("src/web/kit.css").unwrap();
+    assert_eq!(text.matches('{').count(), text.matches('}').count());
+    assert!(text.len() < 64 * 1024, "kit.css grew to {} bytes", text.len());
+    assert!(std::fs::metadata("src/web/kit.js").unwrap().len() < 16 * 1024);
+}
+
+#[test]
+fn the_behaviors_are_valid_javascript() {
+    if Command::new("node").arg("--version").output().is_err() {
+        missing("no Node.js to check src/web/kit.js");
+        return;
+    }
+    let mut scripts = vec![PathBuf::from("src/web/kit.js")];
+    for (f, _) in files(Path::new("tests/web/fixtures")) {
+        if f.ends_with(".js") {
+            scripts.push(Path::new("tests/web/fixtures").join(f));
+        }
+    }
+    assert!(scripts.len() >= 3, "{scripts:?}");
+    for s in scripts {
+        let out = Command::new("node").arg("--check").arg(&s).output().unwrap();
+        assert!(out.status.success(), "{}: {}", s.display(), stderr(&out));
+    }
+}

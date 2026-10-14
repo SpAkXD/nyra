@@ -1,8 +1,7 @@
 // expect: E0383
 use web
 
-fn page(path: str, body: str) {
-    _emit(path, "<!doctype html><html><head><title>Bakery</title></head><body>" + body + "</body></html>")
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    img("no-such-photo.jpg", "The counter")
 }
-
-page("/", "<h1>Bakery</h1><img src=\"no-such-photo.jpg\" alt=\"The counter\">")

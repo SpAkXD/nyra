@@ -1,0 +1,6 @@
+// expect: E0374
+use web
+
+page("/", "Home") {
+    p(":phnoe: +420 123 456 789")
+}

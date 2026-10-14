@@ -1,6 +1,8 @@
 //! The bundled standard modules (`src/std/*.nyra`, `src/stdlib.rs`) live in a namespace of their own:
 //! the names inside them (functions, parameters, variables) never clash with the names of a program,
 //! the program reaches them only as `math.name`, and no error ever points outside the program's file.
+//! (`web` is the exception by design: its functions are called by their bare names, and a program
+//! name that hides one is E0372, tested in tests/web.rs and tests/errors.)
 
 mod common;
 
@@ -30,7 +32,8 @@ fn names() -> Vec<String> {
     let mut found: BTreeSet<String> = BTreeSet::new();
     for entry in std::fs::read_dir("src/std").unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().is_none_or(|e| e != "nyra") {
+        let web = path.file_name().is_some_and(|n| n.to_string_lossy().starts_with("web"));
+        if path.extension().is_none_or(|e| e != "nyra") || web {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
@@ -263,7 +266,8 @@ fn no_diagnostic_points_outside_the_file() {
     }
     for entry in std::fs::read_dir("tests/errors").unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().is_none_or(|e| e != "nyra") {
+        let web = path.file_name().is_some_and(|n| n.to_string_lossy().starts_with("web"));
+        if path.extension().is_none_or(|e| e != "nyra") || web {
             continue;
         }
         let src = std::fs::read_to_string(&path).unwrap();

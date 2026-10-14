@@ -350,6 +350,19 @@ impl Site {
                 }
             }
         }
+        // errors the library found while rendering (a computed `javascript:` link, an unknown
+        // icon): `_css("/*! nyra:error E0381 message */")`
+        for text in &web.css {
+            for part in text.split("/*! nyra:error ").skip(1) {
+                let msg = part.split(" */").next().unwrap_or(part);
+                let (code, msg) = msg.split_once(' ').unwrap_or((msg, ""));
+                let (code, hint): (&'static str, &str) = match code {
+                    "E0381" => ("E0381", "link to `https://...`, `mailto:...`, `tel:...`, a path or an #anchor; the value was computed while the site was built"),
+                    _ => ("E0374", "use an icon of the set (`nyra explain E0374`), a hex color, a theme color or a name of `site(palette:)`"),
+                };
+                errs.push(Diag::new(code, msg.to_string(), at).hint(hint));
+            }
+        }
         if pages.is_empty() && errs.is_empty() {
             return Err(Error::Text(
                 "the program made no page: a `use web` program calls `page(\"/\", title) { ... }` at least once".into(),
