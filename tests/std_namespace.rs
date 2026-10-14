@@ -22,6 +22,7 @@ fn modules() -> Vec<String> {
     let src = std::fs::read_to_string("src/stdlib.rs").unwrap();
     let line = src.lines().find(|l| l.starts_with("pub const MODULES")).expect("MODULES in src/stdlib.rs");
     let list = &line[line.find("&[\"").unwrap() + 2..line.rfind(']').unwrap()];
+    // (`use web` makes the program a website, which is built and checked differently: tests/web_build.rs)
     list.split(',').map(|m| m.trim().trim_matches('"').to_string()).filter(|m| !m.is_empty() && m != "web").collect()
 }
 

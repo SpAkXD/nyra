@@ -1,0 +1,7 @@
+// expect: E0383
+use web
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    img("no-such-photo.jpg", "The counter")
+}

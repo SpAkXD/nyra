@@ -112,6 +112,16 @@ def main() -> None:
             raise SystemExit(f"lucide-react {version} has no icon `{name}`")
         bodies[name] = elements(f)
     lines = [NOTICE.format(version=version)]
+    # the names alone, so that rendering an icon (a <use> of the page's sprite) needs no paths
+    names = sorted(list(bodies) + list(ALIASES))
+    lines.append("// 1 for a stroked icon, 2 for a brand icon, 0 for a name that is no icon.")
+    lines.append("fn _icon_kind(name: str) -> int {")
+    lines.append(f'    let icons = "|{"|".join(names)}|"')
+    lines.append(f'    let brands = "|{"|".join(sorted(BRANDS))}|"')
+    lines.append('    let key = "|" + name + "|"')
+    lines.append("    return if icons.contains(key) { 1 } else if brands.contains(key) { 2 } else { 0 }")
+    lines.append("}")
+    lines.append("")
     lines.append("// The SVG elements of the icon `name` (24 x 24, stroked), \"\" for a name that is no icon.")
     lines.append("fn _icon_body(name: str) -> str = match name {")
     for name in sorted(bodies):

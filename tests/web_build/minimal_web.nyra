@@ -1,0 +1,51 @@
+// A stub of the web library for the build tests: `NYRA_WEB_LIB=tests/web_build/minimal_web.nyra`
+// makes it the `web` module. Elements are HTML strings, and it hands its pages and parts to the
+// build with the same intrinsics the real library uses (`_emit`, `_uses`, `_css`, `_keyframes`).
+
+fn esc(s: str) -> str = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+fn site(ink: str = "#1a1a1a", bg: str = "#ffffff") {
+    _uses("base")
+    _css(":root{{--bg:" + bg + ";--ink:" + ink + ";--muted:#555555;--alt:#f4f1ea}}")
+}
+
+fn page(path: str, title: str, kids: [str]) {
+    let head = "<head><meta charset=\"utf-8\"><title>" + esc(title) + "</title><link rel=\"canonical\" href=\"https://example.com" + path + "\"></head>"
+    let body = kids.join("\n")
+    _emit(path, "<!doctype html><html lang=\"en\">" + head + "<body>" + body + "</body></html>")
+}
+
+fn h1(t: str) -> str = "<h1>" + esc(t) + "</h1>"
+
+fn h3(t: str) -> str = "<h3>" + esc(t) + "</h3>"
+
+fn p(t: str) -> str = "<p>" + esc(t) + "</p>"
+
+fn section(id: str, title: str, kids: [str]) -> str {
+    _uses("section")
+    return "<section id=\"" + esc(id) + "\" data-anim=\"rise\"><h2>" + esc(title) + "</h2>" + kids.join("") + "</section>"
+}
+
+fn card(title: str) -> str {
+    _uses("card")
+    return "<article class=\"card\" data-key=\"" + esc(title) + "\" data-hover=\"lift\">" + esc(title) + "</article>"
+}
+
+fn img(src: str, alt: str) -> str = "<img src=\"" + esc(src) + "\" alt=\"" + esc(alt) + "\">"
+
+fn link(text: str, href: str) -> str = "<a href=\"" + esc(href) + "\">" + esc(text) + "</a>"
+
+fn button(text: str, on: str) -> str {
+    _uses("button")
+    return "<button type=\"button\" data-on=\"" + esc(on) + "\">" + esc(text) + "</button>"
+}
+
+fn live(view: str, html: str) -> str = "<div data-live=\"" + view + "\">" + html + "</div>"
+
+fn keyframes(name: str, body: str) {
+    _keyframes(name, body)
+}
+
+fn css(text: str) {
+    _css(text)
+}

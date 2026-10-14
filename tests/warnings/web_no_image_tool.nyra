@@ -1,0 +1,9 @@
+// expect: E0386
+// flags: --image-tool none
+use web
+
+// the photo is tests/warnings/assets/counter.jpg
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    img("counter.jpg", "The counter")
+}

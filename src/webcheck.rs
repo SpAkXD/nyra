@@ -31,19 +31,8 @@ pub const STATE: &str = "_web";
 /// The types of the library a program may name.
 pub const TYPES: &[&str] = &["Node", "WebConfig"];
 
-/// The library's source. A debug build reads it from the folder `NYRA_WEB_DEV` names (the
-/// repository) when that is set, so the library can be changed without building the compiler again.
-pub fn source() -> &'static str {
-    #[cfg(debug_assertions)]
-    if let Ok(dir) = std::env::var("NYRA_WEB_DEV") {
-        let read = |f: &str| std::fs::read_to_string(std::path::Path::new(&dir).join("src/std").join(f)).unwrap_or_default();
-        return Box::leak(format!("{}\n{}", read("web.nyra"), read("web_icons.nyra")).into_boxed_str());
-    }
-    SOURCE
-}
-
-fn library() -> Program {
-    let (toks, errs) = crate::lexer::lex(source());
+fn library(src: &str) -> Program {
+    let (toks, errs) = crate::lexer::lex(src);
     assert!(errs.is_empty(), "the web library does not lex: {errs:?}");
     let (prog, errs) = crate::parser::parse(toks);
     assert!(errs.is_empty(), "the web library does not parse: {errs:?}");
@@ -53,7 +42,7 @@ fn library() -> Program {
 /// The public functions of the library and their parameter names, sorted by name.
 #[cfg(test)]
 fn functions() -> Vec<(String, Vec<String>)> {
-    let mut v: Vec<(String, Vec<String>)> = library()
+    let mut v: Vec<(String, Vec<String>)> = library(SOURCE)
         .funcs
         .into_iter()
         .filter(|f| !f.name.starts_with('_'))
@@ -136,9 +125,10 @@ fn kind(func: &str, param: &str, elem: Option<usize>) -> Kind {
     }
 }
 
-/// Links the library into `prog` (for its `use web` line at `at`).
-pub fn link(prog: &mut Program, at: Span) -> Vec<Diag> {
-    let lib = library();
+/// Links the library `src` into `prog` (for its `use web` line at `at`); `intrinsics` are the
+/// build's hooks the library calls by their short names (`_emit`).
+pub fn link(prog: &mut Program, at: Span, src: &str, intrinsics: &[String]) -> Vec<Diag> {
+    let lib = library(src);
     let public: HashSet<String> = lib.funcs.iter().filter(|f| !f.name.starts_with('_')).map(|f| f.name.clone()).collect();
     let params: HashMap<String, Vec<String>> =
         lib.funcs.iter().map(|f| (f.name.clone(), f.params.iter().map(|p| p.name.clone()).collect())).collect();
@@ -162,10 +152,14 @@ pub fn link(prog: &mut Program, at: Span) -> Vec<Diag> {
     for ex in prog.examples.iter_mut() {
         ex.expr.each_mut(&mut |e| ctx.call(e, &user, &mut errs, &mut used_on));
     }
-    errs.extend(live(prog, &public));
+    if lib.funcs.iter().any(|f| f.name == "_live") {
+        errs.extend(live(prog, &public));
+    }
 
     // the library, as `web.name`
-    let own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
+    let mut own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
+    own.extend(intrinsics.iter().cloned());
+    let stateful = own.iter().any(|f| f == "_init");
     for mut f in lib.funcs {
         f.name = format!("web.{}", f.name);
         crate::stdlib::rename_calls(&mut f, "web", &own, at);
@@ -184,7 +178,9 @@ pub fn link(prog: &mut Program, at: Span) -> Vec<Diag> {
         crate::stdlib::rename_calls(&mut f, "web", &[], at);
         prog.funcs.push(f);
     }
-    declare_state(prog, at);
+    if stateful {
+        declare_state(prog, at);
+    }
     errs
 }
 
@@ -316,7 +312,7 @@ impl Ctx<'_> {
     }
 
     /// `on: Msg.X(..)`: the JSON of the value, made by `web._on`; a form's `on: Msg.Send` (a variant
-    /// that carries the fields) is written without its value.
+    /// that carries the fields) is written without its value, as the JSON string `"Send"`.
     fn on(&self, func: &str, value: &mut Expr, errs: &mut Vec<Diag>) {
         if !self.msg.update {
             let missing = if self.msg.variants.is_none() { "no `enum Msg`" } else { "no `fn update(m: Msg)`" };
@@ -331,7 +327,7 @@ impl Ctx<'_> {
             if let ExprKind::Field(base, variant) = &value.kind {
                 let carries = self.msg.variants.as_ref().and_then(|vs| vs.iter().find(|(n, _)| n == variant)).is_some_and(|(_, c)| *c);
                 if matches!(&base.kind, ExprKind::Var(m) if m == "Msg") && carries {
-                    value.kind = ExprKind::Str(format!("{{\"{variant}\":[]}}"));
+                    value.kind = ExprKind::Str(format!("\"{variant}\""));
                     return;
                 }
             }
@@ -513,7 +509,7 @@ fn md_links(s: &str) -> Vec<String> {
     while let Some(i) = rest.find("](") {
         let after = &rest[i + 2..];
         match after.find(')') {
-            Some(j) if !after[..j].contains(' ') => {
+            Some(j) if !after[..j].contains('\n') => {
                 out.push(after[..j].to_string());
                 rest = &after[j..];
             }

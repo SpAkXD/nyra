@@ -23,6 +23,7 @@ mod parser;
 mod perfwarn;
 mod sandbox;
 mod stdlib;
+mod web;
 mod webcheck;
 // the C-ABI entry points of the WebAssembly build (`src/lib.rs`); natively only for their tests
 #[cfg(any(target_arch = "wasm32", test))]
@@ -72,6 +73,14 @@ options:
   --release    (run) optimize the generated C like `build` does (-O2), and run it natively (as
                --native); `run` compiles with -O1 by default, so the first output comes sooner
   --time       show how long each step took
+
+websites (a program with `use web`, see docs/WEB.md):
+  nyra build site.nyra      write the site to `dist/` next to the program (`-o DIR` for another folder)
+  nyra run site.nyra        serve it on http://127.0.0.1:8000 and rebuild and reload when a file changes
+  nyra check site.nyra      also run the site's checks (anchors, images, headings, contrast); writes nothing
+  --port N        (run) the port; 0 lets the system choose
+  --image-tool T  cwebp, magick, vips or none: the tool for WebP image variants (default: the first found)
+  A web program gets no capability (fs, os, ...) unless --allow names it.
 
 safety (for programs you did not write, or agents that run unsupervised):
   --allow LIST     grant only these capabilities: fs, input, os, net (or all). A `use` of a
@@ -187,6 +196,10 @@ struct Opts {
     max_output: Option<u64>,
     max_depth: Option<usize>,
     max_time: Option<u64>,
+    /// `--port N`: the dev server of a `use web` program.
+    port: Option<u16>,
+    /// `--image-tool T`: the image tool of a `use web` build.
+    image_tool: Option<String>,
 }
 
 impl Opts {
@@ -239,6 +252,8 @@ fn parse_args() -> Result<Opts, String> {
         max_output: None,
         max_depth: None,
         max_time: None,
+        port: None,
+        image_tool: None,
     };
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -293,6 +308,19 @@ fn parse_args() -> Result<Opts, String> {
             }
             "--strict" => opts.strict = true,
             "--release" => opts.release = true,
+            "--port" => {
+                let v = args.next().ok_or("--port needs a number")?;
+                opts.port = Some(v.parse().map_err(|_| format!("--port needs a port number (0 to 65535), found `{v}`"))?);
+            }
+            "--image-tool" => {
+                let t = args.next().ok_or("--image-tool needs a name: cwebp, magick, vips or none")?;
+                // a name, or the path of one (`C:\tools\cwebp.exe`)
+                let stem = Path::new(&t).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if !web::image::TOOLS.contains(&stem) && t != "none" {
+                    return Err(format!("unknown image tool `{t}`: use cwebp, magick, vips or none (or the path of one)"));
+                }
+                opts.image_tool = Some(t);
+            }
             _ if a.starts_with('-') => return Err(format!("unknown option `{a}`\n\n{USAGE}")),
             _ => positional.push(a),
         }
@@ -419,6 +447,12 @@ fn real_main() -> ExitCode {
         Ok(g) => g,
         Err(msg) => return fail(msg),
     };
+    // a `use web` program builds or serves a site (src/web.rs), with no capability unless `--allow` gives it
+    let is_web = web::uses_web(&src) && ["build", "run", "check"].contains(&opts.cmd.as_str());
+    let grant = if is_web && !opts.sandbox && opts.allow.is_empty() { caps::Grant::none() } else { grant };
+    if is_web && (opts.interpreted() || opts.target != Target::Native) {
+        return fail("a `use web` program builds a site in the interpreter: --target, --interp, --sandbox and the limit flags do not apply (see `nyra help`)");
+    }
     let compile = |s: &str| compile_granted(s, &grant, &cli_flag);
     // `test` checks the program and its capabilities; the examples are what it runs
     let check_only = |s: &str| {
@@ -495,6 +529,19 @@ fn real_main() -> ExitCode {
 
     // slow patterns: warnings too (E0360-E0362)
     perfwarn::check(&prog, opts.target == Target::Go);
+
+    if is_web {
+        let cli = web::Cli {
+            cmd: opts.cmd.clone(),
+            file: opts.file.clone(),
+            out: opts.out.clone(),
+            json: opts.json,
+            port: opts.port,
+            image_tool: opts.image_tool.clone(),
+            grant: grant.clone(),
+        };
+        return web::cli(&cli, &src, prog);
+    }
 
     if opts.cmd == "test" {
         return test(&opts, &src, prog);

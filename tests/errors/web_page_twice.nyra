@@ -1,0 +1,12 @@
+// expect: E0387
+use web
+
+page("/about", "About us") {
+    h1("About us")
+}
+page("/about/", "Our team") {
+    h1("Our team")
+}
+page("contact", "Contact") {
+    h1("Contact")
+}

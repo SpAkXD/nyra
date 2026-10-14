@@ -1,0 +1,11 @@
+// expect: E0382
+use web
+
+fn contact() -> Node = section("kontakt", "Contact") {
+    p("Call us.")
+}
+
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}

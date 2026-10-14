@@ -75,6 +75,23 @@ impl Out {
     }
 }
 
+/// What a `use web` program hands to the build while it runs (the `web._*` intrinsics, see
+/// `src/web.rs`): its pages, the kit parts they use, its own CSS, and the script variables that
+/// the browser starts from.
+#[derive(Default)]
+pub struct Web {
+    /// `_emit(path, html)`: each page, with the position of the call.
+    pub pages: Vec<(String, String, Span)>,
+    /// `_uses(chunk)`: the kit chunks (components and behaviors) the pages use, in first-use order.
+    pub chunks: Vec<String>,
+    /// `_css(text)`: the theme and the program's own CSS, in order.
+    pub css: Vec<String>,
+    /// `_keyframes(name, body)`: custom motion words.
+    pub keyframes: Vec<(String, String)>,
+    /// `_state(name, json)`: script variables as JSON, written by the build at the end of the script.
+    pub state: Vec<(String, String)>,
+}
+
 enum Input {
     /// The process's standard input.
     Process,
@@ -96,6 +113,8 @@ pub struct Host {
     start: Instant,
     /// Steps the last call cost on top of the call itself (bytes read, time slept).
     pub cost: u64,
+    /// What a web program handed to the build.
+    pub web: Web,
 }
 
 impl Host {
@@ -116,6 +135,7 @@ impl Host {
             slept_ms: 0,
             start: Instant::now(),
             cost: 0,
+            web: Web::default(),
         }
     }
 
@@ -317,6 +337,38 @@ impl Host {
                     ));
                 }
                 text(fixed(v, d))
+            }
+            StdFn::WebEmit => {
+                let (path, html) = (s(0)?, s(1)?);
+                self.cost = html.len() as u64;
+                self.web.pages.push((path.to_string(), html.to_string(), span));
+                None
+            }
+            StdFn::WebUses => {
+                let chunk = s(0)?;
+                if !self.web.chunks.iter().any(|c| c == chunk) {
+                    self.web.chunks.push(chunk.to_string());
+                }
+                None
+            }
+            StdFn::WebCss => {
+                let css = s(0)?;
+                self.cost = css.len() as u64;
+                self.web.css.push(css.to_string());
+                None
+            }
+            StdFn::WebKeyframes => {
+                let (name, body) = (s(0)?, s(1)?);
+                if !self.web.keyframes.iter().any(|(n, _)| n == name) {
+                    self.web.keyframes.push((name.to_string(), body.to_string()));
+                }
+                None
+            }
+            StdFn::WebState => {
+                let (name, json) = (s(0)?, s(1)?);
+                self.cost = json.len() as u64;
+                self.web.state.push((name.to_string(), json.to_string()));
+                None
             }
         })
     }

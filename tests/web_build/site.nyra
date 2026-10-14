@@ -1,0 +1,45 @@
+// The build tests' site (tests/web_build.rs), written against the stub library
+// tests/web_build/minimal_web.nyra: two pages, an image, a live view with events.
+use web
+use json
+
+struct Bread { name: str, kind: str }
+
+let breads = [Bread(name: "Sourdough", kind: "bread"), Bread(name: "Croissant", kind: "sweet"), Bread(name: "Baguette", kind: "bread")]
+
+enum Msg { Show(str), Clear }
+
+var kind = "all"
+var clicks = 0
+
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+        Msg.Clear => kind = "all"
+    }
+    clicks += 1
+}
+
+fn menu() -> str {
+    var out = ""
+    for k in ["all", "bread", "sweet"] {
+        out += web.button(k, json.str(Msg.Show(k)))
+    }
+    for b in breads {
+        if kind == "all" || b.kind == kind {
+            out += web.card(b.name)
+        }
+    }
+    return out + web.p("{clicks} clicks, showing {kind}")
+}
+
+web.site()
+web.keyframes("sway", "50% {{ rotate: 3deg }}")
+web.page("/", "Bakery", [
+    web.h1("Bread every morning"),
+    web.link("Menu", "#menu"),
+    web.img("photo.png", "The counter"),
+    web.section("menu", "Menu", [web.live("menu", menu())]),
+    web.link("About the team", "/about#team")
+])
+web.page("/about", "About us", [web.h1("About"), web.section("team", "Team", [web.p("We bake."), web.img("logo.svg", "")])])

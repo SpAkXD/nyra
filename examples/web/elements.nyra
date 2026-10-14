@@ -1,0 +1,65 @@
+// The layout and content elements of `use web`, each once, with the default (English) kit words.
+use web
+
+site("Studio North", url: "https://studio.example", desc: "A small design studio.", primary: "#1F4E79",
+    accent: "#E07A1F", font: "Inter", display: "Fraunces", radius: 18)
+
+struct Plan { name: str, price: int, perks: [str] }
+let plans = [Plan(name: "Starter", price: 9, perks: ["One site", "E-mail support"]),
+    Plan(name: "Studio", price: 29, perks: ["Five sites", "Priority support", "Custom domain"])]
+
+page("/", "Studio North – design that works", desc: "Websites and brands for small businesses.") {
+    section("intro", kicker: "Since 2012", text: "Small team, *careful* work, fair prices.") {
+        h1("We design **clear** websites")
+        grid(3, numbers: true) {
+            card("Brand", "Logos, colors and type that fit you.", icon: "palette")
+            card("Web", "Fast sites that are easy to change.", icon: "monitor")
+            card("Print", "Business cards to banners.", icon: "printer", color: "accent")
+        }
+        chip("Award winning", "Czech Design Award 2024", icon: "award")
+    }
+    section("plans", "Plans", bg: "alt", align: "left") {
+        grid(widths: "1fr 1.2fr") {
+            stack {
+                h2("Simple pricing", icon: "tag")
+                p("Pay monthly, cancel any time. Prices without VAT.", size: "lg")
+                list(["No setup fee", "Hosting included", "Backups every day"], icon: "check")
+                small("Questions? Write to [hello@studio.example](mailto:hello@studio.example).")
+            }
+            grid(2, gap: "1") {
+                for pl in plans {
+                    card(pl.name, "€{pl.price} a month", items: pl.perks) {
+                        button("Choose {pl.name}", href: "#contact", style: "outline")
+                    }
+                }
+            }
+        }
+    }
+    section("work", "Selected work", bg: "white") {
+        grid(cols: 2) {
+            card("Bakery Hana", "A shop that sells out by noon.", image: "photo-5.svg", tag: "Web", href: "/work/bakery")
+            img("photo-6.svg", "Our studio in Brno", ratio: "16/10", caption: ":map-pin: Brno, Czechia")
+        }
+        table([["Sites built", "120"], ["Years", "12"], ["Coffee", "too much"]], head: ["What", "How many"])
+        embed("https://www.youtube-nocookie.com/embed/abc123", "Studio tour")
+    }
+    section("contact", "Contact", bg: "dark", width: "narrow") {
+        row(align: "center") {
+            quote("They made our site in two weeks and it still looks fresh.", "Eva Malá", place: "Brno", tag: "Web", stars: 5)
+        }
+        address {
+            link(":phone: +420 777 123 456", "tel:+420 777 123 456")
+            link(":mail: hello@studio.example", "mailto:hello@studio.example")
+            link(":globe: studio.example", "https://studio.example")
+        }
+        h3("Follow us", sub: "New work every month", icon: "sparkles")
+        row {
+            button("Call", href: "tel:+420777123456", icon: "phone")
+            button("Write", href: "mailto:hello@studio.example", style: "ghost", icon: "mail")
+            link(":facebook:", "https://facebook.com/studio", label: "Facebook")
+        }
+        note("Studio North s.r.o. · IČO 12345678")
+        "A line of text on its own is a paragraph: <tags> stay text."
+        html("<hr class=\"rule\">")
+    }
+}

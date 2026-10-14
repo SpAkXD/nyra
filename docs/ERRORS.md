@@ -39,13 +39,13 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0389 | `use web` (since v0.8) | the web library of [WEB.md](WEB.md): names, events, icons and option words, live views, raw HTML, links, code that runs in the browser |
+| E0372-E0389 | `use web` (since v0.8; E0375 and E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons and option words, live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0375, E0379-E0380 and E0382-E0389 are kept for `use web`. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0375, E0385, E0388 and E0389 are kept for `use web`. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -1729,7 +1729,6 @@ fn main() {
 ```
 - **Related:** E0240, E0218
 
-
 ## E0249: out of memory
 - **Kind:** runtime error · **Since:** v0.3
 - **What it means:** The program asked for more memory than a string, an array or the machine can have, and it stops with exit code 101: "out of memory", at the operation that asked, or at position 0:0 when that is not known. `repeat` has a size limit on every backend, so a result of more than 536870888 characters (strings) or 100000000 elements (arrays) is reported at once, without trying to allocate it: `"ab".repeat(1000000000000)`. Natively, the error is also reported when the system gives no more memory. On JavaScript it is also reported when the engine runs out of string or array length, for example for a string built up past 536870888 characters. A JavaScript program that fills the whole heap is stopped by Node itself ("JavaScript heap out of memory", exit code 134), which cannot be reported as E0249.
@@ -2625,7 +2624,7 @@ fn main() {
 
 ## E0300: module not found
 - **Kind:** compile error · **Since:** v0.5
-- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text` and `time`; the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
+- **What it means:** A `use` line names a module that does not exist. The standard modules are `fs`, `input`, `json`, `math`, `os`, `random`, `text`, `time` and `web` (websites, see WEB.md); the message suggests the closest one. For `use ./name` the file `name.nyra` is missing from the importing file's folder, or the program was given as text, which has no folder.
 - **Why Nyra has this rule:** Imports must be explicit and checkable before anything runs. The message suggests the closest module name and lists the standard modules.
 - **Common causes:**
   - a typo in a module name (`mth` for `math`)
@@ -3979,6 +3978,75 @@ page("/", "Home") {
 ```
 - **Related:** E0381
 
+## E0379: a page's headings are out of order
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A page of a `use web` site does not have exactly one `h1`, or a heading skips a level (an `h3` right after an `h1`). `nyra build`, `nyra run` and `nyra check` check every page the program makes; the page is still written, and the warning names the page and the headings.
+- **Why Nyra has this rule:** The `h1` is the page's title for search engines and screen readers, and screen reader users move through a page by its headings: a missing level looks like a missing section. The kit makes the right headings by default (a hero's title is the `h1`, a section's title an `h2`), so this warning usually means a heading was written by hand.
+- **Common causes:**
+  - a page without a hero, whose first heading is a section title (`h2`)
+  - two heroes, or an `h1` written in a section
+  - an `h3` used for its size right below the page title
+- **Wrong:**
+```rust
+use web
+
+fn bread() -> Node = section("bread", "Our bread") {
+    p("Baked every morning.")
+}
+
+page("/", "Bakery") {
+    bread()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn bread() -> Node = section("bread", "Our bread") {
+    p("Baked every morning.")
+}
+
+page("/", "Bakery") {
+    hero("Bakery Hana")
+    bread()
+}
+```
+- **Related:** E0380, E0382
+
+## E0380: theme colors with too little contrast
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** The theme of a `use web` site sets a text color and a background whose contrast is below 4.5:1, the minimum WCAG AA asks for normal text. The build checks the text colors `ink` and `muted` on the backgrounds `bg` and `alt` (the CSS variables `--ink`, `--muted`, `--bg`, `--alt` of the theme, when they are hex colors); the message gives the pair and the ratio. The site is still built.
+- **Why Nyra has this rule:** Light grey text on white is a common design choice that many people cannot read, on a phone in the sun or with weaker eyes. Every component takes its colors from the theme, so one bad pair makes the whole site hard to read, and the theme is the one place to fix it.
+- **Common causes:**
+  - a light grey for secondary text (`muted`) on a white background
+  - a brand color used as the text color
+  - a dark theme with dark grey text
+- **Wrong:**
+```rust
+use web
+
+site("Bakery", bg: "#ffffff", ink: "#999999")
+
+fn home() -> Node = hero("Bakery Hana")
+
+page("/", "Bakery") {
+    home()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+site("Bakery", bg: "#ffffff", ink: "#333333")
+
+fn home() -> Node = hero("Bakery Hana")
+
+page("/", "Bakery") {
+    home()
+}
+```
+- **Related:** E0379
+
 ## E0381: link with a forbidden scheme
 - **Kind:** compile error · **Since:** v0.8
 - **What it means:** A link (`href`, a Markdown `[label](url)`, a button, the tuples of `navbar` and `hero`) uses a scheme other than `http`, `https`, `mailto` and `tel`, such as `javascript:` or `data:`; an image uses one other than `http` and `https`. A literal is checked by the compiler; a link computed while the site is built stops the build with the same code, and the link goes nowhere.
@@ -4010,6 +4078,74 @@ page("/", "Home") {
 }
 ```
 - **Related:** E0378, E0374
+
+## E0382: link to an anchor that is not on the page
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A link of a `use web` site points to `#name` (or `/page#name`), and no element on that page has `id="name"`. The build checks every such link on every page, so a menu entry that scrolls nowhere is found before the site is deployed. `nyra check` reports it too; nothing is written.
+- **Why Nyra has this rule:** One-page sites are held together by anchor links (the navbar's `#contact`, a hero button's `#menu`), and a renamed section breaks them silently: the link still looks fine and does nothing. A section's first argument is its id, so the fix is usually one word.
+- **Common causes:**
+  - a section renamed (`section("kontakt", ...)`) and the navbar still linking `#contact`
+  - a typo or a different language in the link
+  - a link to a section of another page written without the page (`#team` instead of `/about#team`)
+- **Wrong:**
+```rust
+use web
+
+fn contact() -> Node = section("kontakt", "Contact") {
+    p("Call us.")
+}
+
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn contact() -> Node = section("contact", "Contact") {
+    p("Call us.")
+}
+
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}
+```
+- **Related:** E0383, E0387
+
+## E0383: image not found
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A page of a `use web` site shows an image (`img(...)`, a hero or card photo, `og:image`) whose file is not in the folder `assets/` next to the program (or next to the program itself). The build copies every image it finds into the site, with its size; one it cannot find is this error. `nyra run` (the dev server) reports it as a warning, so the page still shows while the file is being added.
+- **Why Nyra has this rule:** A missing image is a broken page that looks fine in the code. Images are read only from the program's own folder, so a site never depends on files elsewhere on the machine that built it.
+- **Common causes:**
+  - a typo or a different extension (`photo.jpg` for `photo.jpeg`)
+  - the file next to the program instead of in `assets/`, in another folder
+  - a path that starts with `/` or `../`
+- **Wrong:**
+```rust
+use web
+
+fn counter() -> Node = img("counter.jpg", "The counter")
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn counter() -> Node = p("The counter opens at seven.")
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
+```
+- **Related:** E0382, E0386
 
 ## E0384: browser code uses `fs`, `os` or `input`
 - **Kind:** compile error · **Since:** v0.8
@@ -4058,3 +4194,79 @@ page("/", "Home") {
 }
 ```
 - **Related:** E0290, E0373
+
+## E0386: images copied without WebP variants
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** The site has photos (PNG, JPEG or WebP), and no image tool was found on the PATH (`cwebp`, `magick` or `vips`), or `--image-tool none` was given. The build copies the originals with their width and height, `loading="lazy"` and `decoding="async"`, but cannot make the smaller WebP variants and the `srcset` that let phones load less. The site works; it is only heavier. Vector images (SVG) and GIFs never need variants.
+- **Why Nyra has this rule:** The compiler has no image codecs of its own, so it uses a tool when there is one, like the C compiler for native programs. The build never fails over images, so the warning is the only sign that the photos are full size.
+- **Common causes:**
+  - no image tool installed: install cwebp (libwebp), ImageMagick 7 or libvips
+  - a CI machine without the tool that the developer's machine has
+  - `--image-tool none` left in a build script
+- **Wrong:**
+```rust
+// main.nyra
+// flags: --image-tool none
+use web
+
+fn counter() -> Node = img("counter.jpg", "The counter")
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
+// assets/counter.jpg
+(the bytes of a JPEG photo)
+```
+- **Fixed:**
+```rust
+// main.nyra
+// flags: --image-tool cwebp
+use web
+
+fn counter() -> Node = img("counter.jpg", "The counter")
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    counter()
+}
+// assets/counter.jpg
+(the bytes of a JPEG photo)
+```
+- **Related:** E0383
+
+## E0387: two pages with one path, or a path that is not one
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** Two pages of a `use web` site have the same path (`/about` and `/about/` are one page: both are the file `about/index.html`), or a page's path is not a path of the site: it must start with `/` and have only letters, digits and `-_./~%`, without `..` or an empty part. Each page is one file of the built site, so its path must name exactly one.
+- **Why Nyra has this rule:** A second page with the same path would silently replace the first one in `dist/`, and a relative path (`about`) would depend on the page that links to it. The build finds both before anything is written.
+- **Common causes:**
+  - a page copied to make a new one and its path left the same
+  - the same path with and without the `/` at the end
+  - a path written without the leading `/` (`page("about", ...)`)
+- **Wrong:**
+```rust
+use web
+
+fn about(title: str) -> Node = h1(title)
+
+page("/about", "About us") {
+    about("About us")
+}
+page("/about/", "Our team") {
+    about("Our team")
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn about(title: str) -> Node = h1(title)
+
+page("/about", "About us") {
+    about("About us")
+}
+page("/team", "Our team") {
+    about("Our team")
+}
+```
+- **Related:** E0382

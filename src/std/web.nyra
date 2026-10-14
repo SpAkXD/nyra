@@ -1,12 +1,11 @@
 // `use web`: the elements and kit components of a site, written in Nyra (see docs/WEB.md).
 //
 // A component returns a `Node`: its HTML, already rendered, and the kit chunks it needs (the
-// parts of src/web/kit.css and src/web/kit.js the build includes). `page` puts a page together
-// and prints it as a record that `nyra build` collects ("Build contract" in docs/WEB.md):
-//
-//     <!--nyra:page /path chunk chunk ...-->      the page's HTML, then <!--nyra:end-->
-//     <!--nyra:css theme-->  /  <!--nyra:css user-->   CSS for the site's stylesheet
-//     <!--nyra:error E0381 message-->               a build error found while rendering
+// parts of src/web/kit.css and src/web/kit.js the build includes). The build's intrinsics
+// ("Build contract" in docs/WEB.md) take the rest: `page` hands each page to `_emit` and its
+// chunks to `_uses`, `site` and `css` hand CSS to `_css`, `keyframes` calls `_keyframes`. A
+// build error found while rendering (a computed `javascript:` link) is a CSS comment
+// `/*! nyra:error E0381 message */` given to `_css`, which the build reports.
 //
 // Text is always escaped; the only markup is the inline Markdown of `_md`. Links are checked
 // (`_href`). The script variable `_web` (the site: name, theme, words) is declared by the
@@ -74,7 +73,7 @@ fn site(name: str, url: str = "", lang: str = "en", tz: str = "", desc: str = ""
         css += "--radius:{radius}px;"
     }
     if css != "" {
-        print("<!--nyra:css theme-->\n:root{{" + css + "}}\n<!--nyra:end-->")
+        _css(":root{{" + css + "}}")
     }
 }
 
@@ -132,24 +131,24 @@ fn page(path: str, title: str, desc: str = "", image: str = "", primary: str = "
         h += "<link rel=\"preload\" as=\"image\" href=\"" + _attr(lcp) + "\" fetchpriority=\"high\">\n"
     }
     h += _fonts()
-    h += "<!--nyra:head-->\n</head>\n<body id=\"top\""
+    h += "</head>\n<body id=\"top\""
     let tone = _color(primary)
     if tone != "" {
         h += " style=\"--primary:" + _attr(tone) + ";" + (if primary.starts_with("#") { "--on-primary:" + _on_color(primary) + ";" } else { "" }) + "\""
     }
-    h += ">\n<a class=\"skip\" href=\"#main\">" + _esc(_say("skip")) + "</a>\n"
-    h += top + "\n<main id=\"main\">\n" + body + "\n</main>\n" + bottom + "\n<!--nyra:body-->\n</body>\n</html>"
-    var chunks = "base"
+    let content = top + "\n<main id=\"main\">\n" + body + "\n</main>\n" + bottom
+    h += ">\n" + _sprite(content) + "<a class=\"skip\" href=\"#main\">" + _esc(_say("skip")) + "</a>\n"
+    h += content + "\n</body>\n</html>\n"
     for c in kit.sorted() {
-        chunks += " " + c
+        _uses(c)
     }
-    print("<!--nyra:page " + _clean(path) + " " + chunks + "-->\n" + h + "\n<!--nyra:end-->")
+    _emit(path, h)
 }
 
 // Raw CSS for the site's stylesheet (a string literal: the compiler checks, E0378). It may use the
 // theme's variables, `var(--primary)`.
 fn css(text: str) {
-    print("<!--nyra:css user-->\n" + text + "\n<!--nyra:end-->")
+    _css(text)
 }
 
 // A new motion word from a CSS keyframes body (WEB.md, Motion).
@@ -157,9 +156,8 @@ fn keyframes(name: str, body: str) {
     _keyframes(name, body)
 }
 
-// Registers a keyframes word. The motion package (WP4) gives this its body.
-fn _keyframes(name: str, body: str) {
-}
+// A view's value as HTML: what the browser's runtime puts into a live region after an update.
+fn _render(view: Node) -> str = view.html
 
 // Raw HTML (a string literal: the compiler checks, E0378).
 fn html(raw: str) -> Node = Node(html: raw, kit: [])
@@ -936,7 +934,7 @@ fn _md(s: str) -> str {
         } else if c == ':' && _icon_end(cs, i) > i {
             let j = _icon_end(cs, i)
             let name = s.slice(i + 1, j)
-            if _icon_body(name) != "" || _brand_body(name) != "" {
+            if _icon_kind(name) > 0 {
                 o += _icon(name)
                 i = j + 1
             } else {
@@ -984,12 +982,13 @@ fn _link_end(cs: [char], at: int) -> int {
     if mid < 0 {
         return -1
     }
-    // the `)` that closes the target: parentheses inside it must be balanced, spaces end it
+    // the `)` that closes the target: parentheses inside it must be balanced (spaces are allowed:
+    // `[+420 571 000 000](tel:+420 571 000 000)`)
     var depth = 0
     var k = mid + 2
     while k < cs.len() {
         let c = cs[k]
-        if c == ' ' || c == '\n' {
+        if c == '\n' {
             return -1
         }
         if c == '(' {
@@ -1023,18 +1022,40 @@ fn _icon_end(cs: [char], at: int) -> int {
 
 fn _lower(c: char) -> bool = c >= 'a' && c <= 'z'
 
-// An inline icon: a stroked Lucide icon, or a filled brand icon.
+// An inline icon: a stroked Lucide icon, or a filled brand icon. It shows a symbol of the page's
+// sprite (`_sprite`), so an icon used ten times is drawn once, and a view the browser renders
+// again needs only the names.
 fn _icon(name: str) -> str {
-    let body = _icon_body(name)
-    if body != "" {
-        return "<svg class=\"i i-" + name + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + body + "</svg>"
+    let kind = _icon_kind(name)
+    if kind == 0 {
+        _err("E0374", "unknown icon `" + name + "`")
+        return ""
     }
-    let brand = _brand_body(name)
-    if brand != "" {
-        return "<svg class=\"i i-brand i-" + name + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + brand + "</svg>"
+    let brand = if kind == 2 { " i-brand" } else { "" }
+    return "<svg class=\"i" + brand + " i-" + name + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-" + name + "\"/></svg>"
+}
+
+// The symbols of the icons a page uses, for the start of its <body>.
+fn _sprite(html: str) -> str {
+    var names: [str] = []
+    for part in html.split("<use href=\"#i-") {
+        let end = part.index_of("\"")
+        if end > 0 && names.len() < 1000 {
+            let name = part.slice(0, end)
+            if !names.contains(name) && _icon_kind(name) > 0 {
+                names.push(name)
+            }
+        }
     }
-    _err("E0374", "unknown icon `" + name + "`")
-    return ""
+    if names.len() == 0 {
+        return ""
+    }
+    var h = "<svg class=\"sprite\" aria-hidden=\"true\">"
+    for n in names.sorted() {
+        let body = if _icon_kind(n) == 2 { _brand_body(n) } else { _icon_body(n) }
+        h += "<symbol id=\"i-" + n + "\" viewBox=\"0 0 24 24\">" + body + "</symbol>"
+    }
+    return h + "</svg>\n"
 }
 
 // The first letter of a name, for an avatar.
@@ -1082,7 +1103,8 @@ fn _scheme(u: str) -> str {
     return ""
 }
 
-// Where a local image is served from: a file of `assets/` is under /img/ in the built site.
+// An image: a file of `assets/` by its name (the build copies it and rewrites the reference), a
+// path of the site, or an https URL.
 fn _src(src: str) -> str {
     let s = src.trim()
     let scheme = _scheme(s)
@@ -1093,7 +1115,7 @@ fn _src(src: str) -> str {
         _err("E0381", "the image `" + s + "` uses the scheme `" + scheme + ":`: use a file of `assets/` or an https URL")
         return ""
     }
-    return "/img/" + s
+    return s
 }
 
 fn _img_tag(src: str, alt: str, sizes: str, first: bool) -> str {
@@ -1150,12 +1172,9 @@ fn _canon_path(path: str) -> str {
 
 fn _trim_slash(u: str) -> str = if u.ends_with("/") { u.slice(0, u.len() - 1) } else { u }
 
-// Text for a comment of a record: no `--`.
-fn _clean(s: str) -> str = s.replace("--", "- -").replace("\n", " ")
-
-// A build error found while rendering: the build reports it and fails.
+// A build error found while rendering: the build reports it and fails (src/web.rs).
 fn _err(code: str, msg: str) {
-    print("<!--nyra:error " + code + " " + _clean(msg) + "-->")
+    _css("/*! nyra:error " + code + " " + msg.replace("*/", "* /").replace("\n", " ") + " */")
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -27,8 +27,7 @@ Web
   inline Markdown subset with links and 200+ Lucide icons (`:phone:`). The kit (`src/web/kit.css`, `src/web/kit.js`)
   gives every component its look and behavior with no styling code: theme colors derived with `color-mix`,
   responsive grids, a sticky navbar with scroll-spy and a mobile menu, a gallery with filters and a lightbox, a live
-  open/closed badge, a map that loads on click, a mailto form. Pages print records that `nyra build` will collect
-  (docs/WEB.md, "Build contract"). New codes E0372 (a program name that hides a web function), E0373 (`on:` without
+  open/closed badge, a map that loads on click, a mailto form. `nyra build` turns it into the site (docs/WEB.md). New codes E0372 (a program name that hides a web function), E0373 (`on:` without
   `enum Msg` and `fn update`), E0374 (unknown icon or option word), E0376 (a live view with parameters), E0377 (an
   icon-only button without a label), E0378 (raw HTML or CSS that is not a literal), E0381 (a `javascript:` or `data:`
   link), E0384 (browser code that uses `fs`, `os` or `input`).

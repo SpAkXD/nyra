@@ -116,6 +116,13 @@ std_fns! {
     TextFixed: "text"."fixed"("x": Float, "digits": Int) -> Str;
     TextIsInt: "text"."is_int"("s": Str) -> Bool;
     TextIsFloat: "text"."is_float"("s": Str) -> Bool;
+    // the build of a `use web` site (src/web.rs): the web library calls them while the program runs
+    // at build time; in the browser they do nothing (src/web/runtime.js)
+    WebEmit: "web"."_emit"("path": Str, "html": Str) -> Void;
+    WebUses: "web"."_uses"("chunk": Str) -> Void;
+    WebCss: "web"."_css"("css": Str) -> Void;
+    WebKeyframes: "web"."_keyframes"("name": Str, "body": Str) -> Void;
+    WebState: "web"."_state"("name": Str, "json": Str) -> Void;
 }
 
 impl StdFn {
@@ -146,14 +153,34 @@ pub const JSON_FNS: &[&str] = &["parse", "str"];
 fn source(module: &str) -> Option<&'static str> {
     match module {
         "math" => Some(include_str!("std/math.nyra")),
-        "web" => Some(crate::webcheck::source()),
+        "web" => web_source(),
         _ => None,
     }
 }
 
+/// The web library. `NYRA_WEB_LIB=path` replaces it with a file (the build tests use a small stub
+/// library, `tests/web_build/minimal_web.nyra`); otherwise it is the bundled one, when there is one.
+fn web_source() -> Option<&'static str> {
+    thread_local! {
+        static LIB: Option<&'static str> = std::env::var_os("NYRA_WEB_LIB")
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .map(|text| &*Box::leak(text.into_boxed_str()));
+    }
+    LIB.with(|l| *l).or(BUNDLED_WEB)
+}
+
+/// The bundled web library: `src/std/web.nyra` and its icons (src/webcheck.rs).
+const BUNDLED_WEB: Option<&str> = Some(crate::webcheck::SOURCE);
+
+/// The intrinsics of a module that its library calls by their short names (`_emit` of `web`).
+pub(crate) fn private_intrinsics(module: &str) -> Vec<String> {
+    StdFn::ALL.iter().filter(|f| f.path().0 == module && f.path().1.starts_with('_')).map(|f| f.path().1.to_string()).collect()
+}
+
 /// Every public name of a module (functions and constants), sorted, for hints and listings.
 pub fn names(module: &str) -> Vec<String> {
-    let mut v: Vec<String> = StdFn::ALL.iter().filter(|f| f.path().0 == module).map(|f| f.path().1.to_string()).collect();
+    let mut v: Vec<String> =
+        StdFn::ALL.iter().filter(|f| f.path().0 == module && !f.path().1.starts_with('_')).map(|f| f.path().1.to_string()).collect();
     for c in ["pi", "e", "inf"] {
         if constant(module, c).is_some() {
             v.push(c.to_string());
@@ -249,13 +276,22 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
             continue;
         }
         seen.push(u.module.clone());
+        // the module's private intrinsics are called by their short names (`_emit(path, html)`)
+        let intrinsics = private_intrinsics(&u.module);
+        if !intrinsics.is_empty() {
+            rename_intrinsics(prog, &u.module, &intrinsics);
+        }
+        // the web library: bare names, its state, its checks (src/webcheck.rs)
         if u.module == "web" {
-            errs.extend(crate::webcheck::link(prog, u.span));
+            if let Some(src) = source("web") {
+                errs.extend(crate::webcheck::link(prog, u.span, src, &intrinsics));
+            }
             continue;
         }
         if let Some(src) = source(&u.module) {
             let lib = parse_source(src);
-            let own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
+            let mut own: Vec<String> = lib.funcs.iter().map(|f| f.name.clone()).collect();
+            own.extend(intrinsics);
             for mut f in lib.funcs {
                 f.name = format!("{}.{}", u.module, f.name);
                 rename_calls(&mut f, &u.module, &own, u.span);
@@ -264,6 +300,23 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
         }
     }
     errs
+}
+
+/// In the program's own functions, a call of a private intrinsic of an imported module by its short
+/// name (`_emit(path, html)` with `use web`) calls the intrinsic, unless the program defines a
+/// function of that name: the low-level hooks of the web build (docs/WEB.md, "Build contract").
+fn rename_intrinsics(prog: &mut Program, module: &str, names: &[String]) {
+    let defined: Vec<String> = prog.funcs.iter().map(|f| f.name.clone()).collect();
+    let names: Vec<&String> = names.iter().filter(|n| !defined.contains(n)).collect();
+    for f in prog.funcs.iter_mut() {
+        crate::ast::each_stmt_mut(&mut f.body, &mut |_| {}, &mut |e| {
+            if let ExprKind::Call(name, _) = &mut e.kind {
+                if names.contains(&&*name) {
+                    *name = format!("{module}.{name}");
+                }
+            }
+        });
+    }
 }
 
 thread_local! {
@@ -431,9 +484,10 @@ mod tests {
     fn modules_call_only_their_own_functions_and_fixed_builtins() {
         for m in MODULES {
             let Some(src) = source(m) else { continue };
-            // its own functions, and its structs (built by a call of their name)
+            // its own functions, its structs (built by a call of their name) and its intrinsics
             let lib = parse_source(src);
-            let own: Vec<String> = lib.funcs.into_iter().map(|f| f.name).chain(lib.structs.into_iter().map(|s| s.name)).collect();
+            let mut own: Vec<String> = lib.funcs.into_iter().map(|f| f.name).chain(lib.structs.into_iter().map(|s| s.name)).collect();
+            own.extend(private_intrinsics(m));
             let (toks, _) = crate::lexer::lex(src);
             for (i, t) in toks.iter().enumerate() {
                 let (crate::lexer::Tok::Ident(name), Some(next)) = (&t.tok, toks.get(i + 1)) else { continue };

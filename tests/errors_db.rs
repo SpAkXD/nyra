@@ -98,9 +98,10 @@ fn entry(code: &str) -> Json {
 
 /// Writes an example of the error database and gives the file to compile (relative to `dir`).
 fn write_example(dir: &Path, name: &str, text: &str) -> String {
+    // (a site's example may hold files of its `assets/` folder too: `// assets/photo.jpg`)
     let header = |l: &str| {
         let name = l.strip_prefix("// ")?;
-        (name.ends_with(".nyra") && !name.contains(' ')).then(|| name.to_string())
+        ((name.ends_with(".nyra") || name.starts_with("assets/")) && !name.contains(' ')).then(|| name.to_string())
     };
     if !text.lines().any(|l| header(l).is_some()) {
         let file = format!("{name}.nyra");
@@ -274,7 +275,15 @@ fn wrong_examples_produce_their_code_and_fixed_examples_run() {
                 assert!(!hint.is_empty(), "{code}: the error has no hint");
             }
         }
-        if let Some(flags) = backend {
+        if fixed.contains("use web") {
+            // a site is built (into a folder of its own), not run
+            let out_dir = dir.join(format!("{code}_dist"));
+            let _ = std::fs::remove_dir_all(&out_dir);
+            let out =
+                nyra().current_dir(&dir).arg("build").arg(&fixed_file).args(&fixed_flags).arg("-o").arg(&out_dir).output().unwrap();
+            assert!(out.status.success(), "{code}: the Fixed example fails to build:\n{fixed}\n{}", stderr(&out));
+            assert!(out_dir.join(".nyra-build").is_file(), "{code}: the Fixed example wrote no site");
+        } else if let Some(flags) = backend {
             let out = nyra().current_dir(&dir).arg("run").arg(&fixed_file).args(flags).output().unwrap();
             assert!(out.status.success(), "{code}: the Fixed example fails to run:\n{fixed}\n{}", stderr(&out));
         }

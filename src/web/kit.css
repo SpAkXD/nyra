@@ -1,8 +1,7 @@
-/*! Nyra web kit: the look of `use web` (docs/WEB.md). The build includes the `base` chunk and the
-    chunks a page uses; a chunk runs from its marker to the next one. Theme values are custom
-    properties: the site's theme (`site(...)`) sets them on :root, everything else derives from them. */
-
-/*! chunk: base */
+/*! Nyra web kit: the look of `use web` (docs/WEB.md). The build always includes this first part
+    (the base: theme defaults, type, layout, cards, buttons) and the chunks the pages use; a chunk
+    runs from its marker to the next one. Theme values are custom properties: the site's theme
+    (`site(...)`) sets them on :root, everything else derives from them. */
 :where(:root) {
   --primary: #4f46e5;
   --accent: #e8890c;
@@ -70,6 +69,7 @@ code { padding: .1em .35em; border-radius: 6px; background: color-mix(in srgb, c
 
 .i { display: inline-block; flex: none; width: 1.1em; height: 1.1em; vertical-align: -.18em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .i-brand { fill: currentColor; stroke: none; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .skip { position: absolute; left: 1rem; top: -4rem; z-index: 200; padding: .65rem 1.1rem; border-radius: 999px; background: var(--ink); color: var(--bg); font-weight: 600; transition: top .2s; }
 .skip:focus { top: 1rem; }

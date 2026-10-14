@@ -1,0 +1,10 @@
+// expect: E0379
+use web
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    h3("Bread")
+}
+page("/about", "About us") {
+    h2("About us")
+}

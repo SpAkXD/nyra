@@ -6,3 +6,6 @@ examples/*.js
 /examples/*
 !/examples/*.*
 __pycache__/
+# the web examples: their programs and images (a build writes dist/ next to them)
+!/examples/web/
+/examples/web/dist/

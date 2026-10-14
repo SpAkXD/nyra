@@ -1,0 +1,8 @@
+// expect: E0380
+use web
+
+site("Bakery", bg: "#ffffff", ink: "#999999", muted: "#bbbbbb")
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+}

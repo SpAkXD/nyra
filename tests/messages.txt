@@ -6657,3 +6657,71 @@ error[E0384]: `update` runs in the browser (as `update`, a live view or a functi
   = explain: nyra explain E0384
 
 nyra: 1 error(s)
+==== web_anchor_missing
+use web
+
+fn contact() -> Node = section("kontakt", "Contact") {
+    p("Call us.")
+}
+
+page("/", "Bakery") {
+    hero("Bakery Hana", buttons: [("Contact", "#contact")])
+    contact()
+}
+----
+error[E0382]: page "/" links to "#contact", but no element on this page has id="contact"
+  --> case.nyra:1:5
+  |
+1 | use web
+  |     ^
+  = hint: did you mean `kontakt`? An anchor link needs an element with that id on this page
+  = explain: nyra explain E0382
+
+nyra: 1 error(s)
+==== web_image_missing
+use web
+
+page("/", "Bakery") {
+    h1("Bakery Hana")
+    img("no-such-photo.jpg", "The counter")
+}
+----
+error[E0383]: page "/" shows the image "no-such-photo.jpg", which is not in `assets/` next to the program
+  --> case.nyra:1:5
+  |
+1 | use web
+  |     ^
+  = hint: put the file at `assets/no-such-photo.jpg` (images are read from the folder `assets` next to the program), or fix the name
+  = explain: nyra explain E0383
+
+nyra: 1 error(s)
+==== web_page_paths
+use web
+
+page("/about", "About us") {
+    h1("About us")
+}
+page("/about/", "Our team") {
+    h1("Our team")
+}
+page("/a b", "Contact") {
+    h1("Contact")
+}
+----
+error[E0387]: two pages have the path "/about/" ("/about" and "/about/" are one file)
+  --> case.nyra:1:5
+  |
+1 | use web
+  |     ^
+  = hint: each page needs its own path: rename one of them, or make one page of the two
+  = explain: nyra explain E0387
+
+error[E0387]: page path "/a b" is not a path of the site: a page path has only letters, digits and `-_./~%` (found ` `)
+  --> case.nyra:1:5
+  |
+1 | use web
+  |     ^
+  = hint: write the path from the site's root, as in the address bar: `page("/", ...)`, `page("/about", ...)`
+  = explain: nyra explain E0387
+
+nyra: 2 error(s)

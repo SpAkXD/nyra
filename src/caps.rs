@@ -3,8 +3,9 @@
 //! A program says what it touches with its `use` lines, and the standard modules fall in two
 //! groups:
 //!
-//! - *pure* modules, always available: `json`, `math`, `text`, `web`, and `time` and `random` (they only
-//!   read a clock or a generator; nothing outside the program changes);
+//! - *pure* modules, always available: `json`, `math`, `text`, and `time` and `random` (they only
+//!   read a clock or a generator; nothing outside the program changes), and `web` (the program
+//!   hands its pages to the build, which alone writes them, into the output folder);
 //! - *effectful* modules, which need a capability of the same name: `fs` (files and folders),
 //!   `input` (standard input), `os` (arguments, environment variables, `exit`), and `net` when
 //!   the language gets networking. Any module that is not listed as pure needs one, so a module
