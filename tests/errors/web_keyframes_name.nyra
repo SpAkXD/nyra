@@ -1,0 +1,10 @@
+// expect: E0388
+use web
+
+keyframes("rise", "to { opacity: 1 }")
+
+fn title() -> Node = h1("Bakery", anim: "rise")
+
+page("/", "Bakery") {
+    title()
+}

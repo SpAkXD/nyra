@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="motion-check" content="enter">
+<title>motion: anim: 'draw'</title>
+<link rel="stylesheet" href="fixture.css">
+<link rel="stylesheet" href="../../../src/web/motion.css">
+<script src="../../../src/web/motion.js" defer></script>
+</head>
+<body>
+<header class="label"><b>anim: "draw"</b> · the timeline line draws (a kit line uses --draw), the items follow; an SVG stroke and an hr draw themselves</header>
+<div class="grid two">
+<ol class="steps" data-anim="draw">
+  <li><strong>1991</strong><p>Zahájení provozu prodejny Flora.</p></li>
+  <li><strong>1998</strong><p>Rozšíření o prodej krbů a kamen.</p></li>
+  <li><strong>2006</strong><p>Oprávnění pro kamnářství.</p></li>
+  <li><strong>Dnes</strong><p>Autorizovaný partner Brunner.</p></li>
+</ol>
+<div class="stack"><svg data-anim="draw" viewBox="0 0 300 120" width="300" height="120" fill="none" stroke="#D4691A" stroke-width="4" stroke-linecap="round"><path d="M10 100 C 60 10, 110 10, 150 60 S 240 110, 290 20"/></svg>
+<hr data-anim="draw" style="border:0;height:3px;background:#2D5A1B;width:300px"></div>
+</div>
+</body>
+</html>

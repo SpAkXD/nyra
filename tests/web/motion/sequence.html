@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="motion-check" content="enter">
+<title>motion: at: a hero sequence</title>
+<link rel="stylesheet" href="fixture.css">
+<link rel="stylesheet" href="../../../src/web/motion.css">
+<style>[data-at="0.5"]{--m-at:.5s}[data-at="0.55"]{--m-at:.55s}[data-at="0.85"]{--m-at:.85s}[data-at="1"]{--m-at:1s}</style>
+<script src="../../../src/web/motion.js" defer></script>
+</head>
+<body>
+<header class="label"><b>at: a hero sequence</b> · the hero's sequence written out: kicker, title, text, buttons, each at its time after the hero's own start</header>
+<section class="hero" data-anim="fade">
+  <div class="bg" data-scroll="parallax"></div>
+  <div>
+    <p class="kicker" data-anim="rise" data-at="0.5">Od roku 1991</p>
+    <h1 data-anim="words" data-at="0.55">Krby, kamna a zahrada</h1>
+    <p data-anim="rise" data-at="0.85">Dvě specializace, jedna rodina.</p>
+    <div class="row" data-anim="rise" data-at="1"><a class="btn" href="#" data-hover="lift shine">Nabídka</a><a class="btn outline" style="color:#fff;box-shadow:inset 0 0 0 2px #fff" href="#" data-hover="fill">Kontakt</a></div>
+  </div>
+</section>
+</body>
+</html>

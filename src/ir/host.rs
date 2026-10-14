@@ -86,8 +86,8 @@ pub struct Web {
     pub chunks: Vec<String>,
     /// `_css(text)`: the theme and the program's own CSS, in order.
     pub css: Vec<String>,
-    /// `_keyframes(name, body)`: custom motion words.
-    pub keyframes: Vec<(String, String)>,
+    /// `_keyframes(name, body)`: custom motion words, with the place of the call.
+    pub keyframes: Vec<(String, String, Span)>,
     /// `_state(name, json)`: script variables as JSON, written by the build at the end of the script.
     pub state: Vec<(String, String)>,
 }
@@ -359,8 +359,8 @@ impl Host {
             }
             StdFn::WebKeyframes => {
                 let (name, body) = (s(0)?, s(1)?);
-                if !self.web.keyframes.iter().any(|(n, _)| n == name) {
-                    self.web.keyframes.push((name.to_string(), body.to_string()));
+                if !self.web.keyframes.iter().any(|(n, _, _)| n == name) {
+                    self.web.keyframes.push((name.to_string(), body.to_string(), span));
                 }
                 None
             }

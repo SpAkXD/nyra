@@ -1,12 +1,13 @@
 //! The site's one CSS file and one JS file, made of only the parts its pages use.
 //!
-//! The kit (`src/web/kit.css`, `kit.js`) and the motion words (`src/web/motion.css`,
-//! `motion.js`) are split into chunks by marker comments:
+//! The kit (`src/web/kit.css`, `kit.js`) is split into chunks by marker comments:
 //!
 //! ```text
 //! /*! chunk: navbar */      a kit component or behavior, chosen by `_uses("navbar")`
-//! /*! motion: rise */       a motion word, chosen when a page has it in a motion attribute
 //! ```
+//!
+//! The motion words (`src/web/motion.css`, `motion.js`) are picked by `web::motion` from the
+//! motion attributes of the pages ([`motion_attrs`]).
 //!
 //! A chunk runs to the next marker. What comes before the first marker of a file is its base: the
 //! kit's base CSS is always included; the base of the other files only when one of their chunks is.
@@ -59,24 +60,21 @@ pub fn pick(text: &str, kind: &str, used: &[String], always: bool) -> String {
     out
 }
 
-/// The motion words of a page: every word in its motion attributes, plus the attribute's own name
-/// (`at` for `data-at`), so a chunk can serve a whole option.
-pub const MOTION_ATTRS: [&str; 6] = ["data-anim", "data-hover", "data-loop", "data-scroll", "data-at", "data-motion"];
+/// The attributes the motion CSS and JS key off (`site(transition:)` is `data-transition`).
+pub const MOTION_ATTRS: [&str; 8] =
+    ["data-anim", "data-hover", "data-loop", "data-scroll", "data-at", "data-motion", "data-morph", "data-transition"];
 
-pub fn motion_words(tags: &[super::html::Tag], out: &mut Vec<String>) {
+/// The motion attributes of a page as (name without `data-`, value), each pair once: what
+/// `web::motion::motion_css` and `motion_js` take.
+pub fn motion_attrs(tags: &[super::html::Tag], out: &mut Vec<(String, String)>) {
     for t in tags {
         for (n, v) in &t.attrs {
             if !MOTION_ATTRS.contains(&n.as_str()) {
                 continue;
             }
-            let mut add = |w: &str| {
-                if !w.is_empty() && !out.iter().any(|o| o == w) {
-                    out.push(w.to_string());
-                }
-            };
-            add(&n["data-".len()..]);
-            for w in v.as_deref().unwrap_or("").split_whitespace() {
-                add(w);
+            let pair = (n["data-".len()..].to_string(), v.as_deref().unwrap_or("").trim().to_string());
+            if !out.contains(&pair) {
+                out.push(pair);
             }
         }
     }

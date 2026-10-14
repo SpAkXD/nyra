@@ -1,0 +1,9 @@
+// expect: E0374
+use web
+
+fn bread() -> Node = card(title: "Bread", href: "/", hover: "lfit")
+
+page("/", "Bakery") {
+    hero("Bakery")
+    bread()
+}

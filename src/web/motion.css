@@ -1,0 +1,282 @@
+/*! motion: base */
+/* Nyra motion (`use web`). Every word keys off one attribute the renderer writes with the value as
+   written: data-anim, data-hover, data-loop, data-scroll, data-at, data-motion. Only transform,
+   translate, scale, rotate, opacity, filter and clip-path move, so the compositor does the work.
+   The build keeps the parts a site uses: each part starts with a line "motion: <part>". */
+:root{--m-k:1;--m-out:cubic-bezier(.16,1,.3,1);--m-in-out:cubic-bezier(.76,0,.24,1)}
+[data-motion=calm]{--m-k:.5}
+@property --m-a1{syntax:"*";inherits:false}
+@property --m-a2{syntax:"*";inherits:false}
+@property --m-a3{syntax:"*";inherits:false}
+@property --m-tl{syntax:"*";inherits:false}
+@property --m-rg{syntax:"*";inherits:false}
+/* one animation list for every moving element: entrance, loop, scroll */
+:is([data-anim],[data-loop],[data-scroll],[data-anim~=stagger]>*,[data-anim~=draw]:not(svg)>*){animation:var(--m-a1,none),var(--m-a2,none),var(--m-a3,none);animation-timeline:auto,auto,var(--m-tl,auto);animation-range:normal,normal,var(--m-rg,normal)}
+[data-anim]{--ma-t:1;--ma-e:var(--m-out);--ma-d:0s;--m-at:0s;--m-dur:initial;--m-o:0;--m-x:0px;--m-y:0px;--m-s:1;--m-r:0deg;--m-b:0px}
+[data-hover]{--mh-t:1;--mh-e:var(--m-out);--mh-dur:.5s;--mh-k:1;transition-property:transform,box-shadow,background-size,background-color,border-color,color;transition-duration:calc(var(--mh-dur)*var(--mh-t)*var(--m-k));transition-timing-function:var(--mh-e)}
+[data-loop]{--ml-t:1;--ml-e:initial;--ml-d:0s;--ml-dur:initial}
+[data-scroll]{--ms-r:.2}
+/* reduced motion and `site(motion: "off")`: everything in its place, nothing moves */
+@media (prefers-reduced-motion:reduce){:is([data-anim],[data-loop],[data-scroll],[data-hover],[data-anim~=stagger]>*,[data-anim~=draw]>*,[data-loop~=marquee]>*,.m-wi,.m-li,[data-hover~=zoom] :is(img,video)),:is([data-loop],[data-hover])::before,:is([data-loop],[data-hover])::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}}
+[data-motion=off] :is([data-anim],[data-loop],[data-scroll],[data-hover],[data-anim~=stagger]>*,[data-anim~=draw]>*,[data-loop~=marquee]>*,.m-wi,.m-li,[data-hover~=zoom] :is(img,video)),[data-motion=off] :is([data-loop],[data-hover])::before,[data-motion=off] :is([data-loop],[data-hover])::after{animation:none!important;transition:none!important}
+
+/*! motion: ease spring */
+/* written by ease.rs from its spring (a test keeps it equal) */
+:root{--m-spring:cubic-bezier(.397,1.269,.031,1.02);--m-spring-t:.72s}
+@supports (transition-timing-function:linear(0,1)){:root{--m-spring:linear(0,.008 1.2%,.03 2.5%,.064 3.8%,.106 5%,.156 6.2%,.229 7.9%,.487 13.3%,.599 15.8%,.7 18.3%,.788 20.8%,.861 23.3%,.892 24.6%,.928 26.2%,.972 28.7%,1.008 31.7%,1.026 33.8%,1.04 36.2%,1.047 38.8%,1.05 41.7%,1.045 46.7%,1.013 61.3%,1.002 69.2%,.998 80.8%,1)}}
+
+/*! motion: ease bounce */
+/* written by ease.rs from its spring (a test keeps it equal) */
+:root{--m-bounce:cubic-bezier(.25,2.14,0,.656);--m-bounce-t:1.18s}
+@supports (transition-timing-function:linear(0,1)){:root{--m-bounce:linear(0,.003 .4%,.011 .8%,.025 1.2%,.043 1.7%,.066 2.1%,.092 2.5%,.157 3.3%,.233 4.2%,.318 5%,.41 5.8%,.743 8.8%,.875 10%,.994 11.2%,1.064 12.1%,1.096 12.5%,1.152 13.3%,1.177 13.8%,1.2 14.2%,1.238 15%,1.254 15.4%,1.278 16.2%,1.287 16.7%,1.299 17.5%,1.303 18.3%,1.3 19.2%,1.291 20%,1.276 20.8%,1.257 21.7%,1.222 22.9%,1.052 27.9%,1.015 29.2%,.982 30.4%,.955 31.7%,.934 32.9%,.919 34.2%,.909 35.8%,.909 37.5%,.919 39.6%,.932 41.2%,.984 46.2%,1.002 48.3%,1.018 50.8%,1.027 53.8%,1.026 57.5%,1 66.7%,.992 71.7%,.992 75.8%,1.002 89.2%,1)}}
+
+/*! motion: ease snappy */
+/* written by ease.rs from its spring (a test keeps it equal) */
+:root{--m-snappy:cubic-bezier(.316,.627,.086,1.095);--m-snappy-t:.39s}
+@supports (transition-timing-function:linear(0,1)){:root{--m-snappy:linear(0,.006 1.2%,.022 2.5%,.046 3.8%,.088 5.4%,.124 6.7%,.178 8.3%,.412 15%,.509 17.9%,.608 21.2%,.684 24.2%,.749 27.1%,.811 30.4%,.861 33.8%,.904 37.5%,.939 41.7%,.963 45.8%,.982 50.8%,.994 56.2%,1 62.1%,1.003 69.6%,1)}}
+
+/*! motion: reveal */
+/* Hidden until revealed, but only where scripts run (no flash, and a page without JS shows
+   everything); if the script never starts, everything appears after 3 s anyway. */
+@keyframes m-in{from{opacity:var(--m-o);translate:calc(var(--m-x)*var(--m-k)) calc(var(--m-y)*var(--m-k));scale:var(--m-s);rotate:var(--m-r);filter:blur(calc(var(--m-b)*var(--m-k)))}}
+@keyframes m-safe{to{opacity:1;translate:none;scale:none;rotate:none;filter:none;--draw:1}}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){
+:root:not([data-motion=off]) [data-anim]:not(.m-in,[data-anim~=stagger],[data-anim~=draw]){opacity:var(--m-o);translate:calc(var(--m-x)*var(--m-k)) calc(var(--m-y)*var(--m-k));scale:var(--m-s);rotate:var(--m-r);filter:blur(calc(var(--m-b)*var(--m-k)))}
+:root:not(.m-on) [data-anim]:not(.m-in),:root:not(.m-on) :is([data-anim~=stagger],[data-anim~=draw]):not(.m-in)>*{animation:m-safe .4s 3s both}
+}
+[data-anim].m-in{--m-a1:m-in calc(var(--m-dur,.8s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s)) backwards}
+[data-anim~=stagger].m-in{--m-a1:none}
+
+/*! motion: anim stagger */
+/* the children come in one after another, 80 ms apart, as the container's word says (`stagger`
+   alone: they rise; `stagger zoom`: they zoom); a child keeps its own word for the rest */
+@keyframes m-in-c{from{opacity:0;translate:calc(var(--m-cx)*var(--m-k)) calc(var(--m-cy)*var(--m-k));scale:var(--m-cs);rotate:var(--m-cr);filter:blur(calc(var(--m-cb)*var(--m-k)))}}
+[data-anim~=stagger]{--m-y:26px;--m-cx:var(--m-x);--m-cy:var(--m-y);--m-cs:var(--m-s);--m-cr:var(--m-r);--m-cb:var(--m-b);--m-cdur:var(--m-dur,.7s);--m-step:calc(80ms*var(--ma-t)*var(--m-k))}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){:root:not([data-motion=off]) [data-anim~=stagger]:not(.m-in)>*{opacity:0;translate:calc(var(--m-cx)*var(--m-k)) calc(var(--m-cy)*var(--m-k));scale:var(--m-cs);rotate:var(--m-cr);filter:blur(calc(var(--m-cb)*var(--m-k)))}}
+[data-anim~=stagger].m-in>*{--m-a1:m-in-c calc(var(--m-cdur)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + .05s + var(--m-i,0)*var(--m-step)) backwards}
+
+/*! motion: anim fade */
+[data-anim~=fade]{--m-x:0px;--m-y:0px;--m-dur:.9s}
+
+/*! motion: anim rise */
+[data-anim~=rise]{--m-y:28px}
+
+/*! motion: anim slide */
+[data-anim~=slide]{--m-x:-48px;--m-y:0px;--m-dur:.9s}
+
+/*! motion: anim slide-left */
+[data-anim~=slide-left]{--m-x:48px;--m-y:0px;--m-dur:.9s}
+
+/*! motion: anim zoom */
+[data-anim~=zoom]{--m-s:.92;--m-y:0px;--m-dur:1s}
+
+/*! motion: anim blur */
+[data-anim~=blur]{--m-b:16px;--m-s:1.04;--m-y:0px;--m-dur:1.1s}
+
+/*! motion: anim pop */
+[data-anim~=pop]{--m-s:.5;--m-r:-8deg;--m-y:0px;--ma-e:var(--m-bounce);--m-dur:var(--m-bounce-t)}
+
+/*! motion: anim words */
+/* each word rises out of its own clipping box */
+[data-anim~=words]{--m-o:1}
+.m-w{display:inline-block;vertical-align:top;clip-path:inset(-.3em -.6em -.28em -.3em)}
+.m-wi{display:inline-block;transform-origin:0 100%}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){
+:root:not(.m-on) [data-anim~=words]{--m-o:0}
+:root:not([data-motion=off]) [data-anim~=words]:not(.m-in) .m-wi{translate:0 140%;rotate:5deg}
+}
+[data-anim~=words].m-in .m-wi{animation:m-word calc(var(--m-dur,1s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s) + var(--m-j)*55ms*var(--ma-t)*var(--m-k)) backwards}
+@keyframes m-word{from{translate:0 140%;rotate:5deg}}
+
+/*! motion: anim letters */
+/* each letter rises and sharpens, 24 ms apart; a word never breaks between lines */
+[data-anim~=letters]{--m-o:1}
+.m-lw{display:inline-block;white-space:nowrap}
+.m-li{display:inline-block}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){
+:root:not(.m-on) [data-anim~=letters]{--m-o:0}
+:root:not([data-motion=off]) [data-anim~=letters]:not(.m-in) .m-li{opacity:0}
+}
+[data-anim~=letters].m-in .m-li{animation:m-letter calc(var(--m-dur,.8s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s) + var(--m-j)*24ms*var(--ma-t)*var(--m-k)) backwards}
+@keyframes m-letter{from{opacity:0;translate:0 .45em;filter:blur(6px)}}
+
+/*! motion: anim draw */
+/* `--draw` grows from 0 to 1: a kit line uses `scale: 1 var(--draw)`; an `hr` and SVG strokes draw
+   themselves; the children come in after the line starts */
+@property --draw{syntax:"<number>";inherits:true;initial-value:1}
+@keyframes m-draw{from{--draw:0}}
+@keyframes m-draw-c{from{opacity:0;translate:0 calc(16px*var(--m-k))}}
+[data-anim~=draw]{--m-o:1;--m-step:calc(120ms*var(--ma-t)*var(--m-k))}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){
+:root:not([data-motion=off]) [data-anim~=draw]:not(.m-in){--draw:0}
+:root:not([data-motion=off]) [data-anim~=draw]:not(.m-in,svg)>*{opacity:0;translate:0 calc(16px*var(--m-k))}
+}
+[data-anim~=draw].m-in{--m-a1:m-draw calc(var(--m-dur,1.4s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d)) backwards}
+[data-anim~=draw].m-in:not(svg)>*{--m-a1:m-draw-c calc(.8s*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + .15s + var(--m-i,0)*var(--m-step)) backwards}
+hr[data-anim~=draw]{scale:var(--draw) 1;transform-origin:0 50%}
+[data-anim~=draw] [pathLength]{stroke-dasharray:1;stroke-dashoffset:calc(1 - var(--draw))}
+
+/*! motion: anim count */
+/* the number counts up (motion.js); digits keep their width so the text does not jitter */
+[data-anim~=count]{--m-o:1;font-variant-numeric:tabular-nums}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){:root:not(.m-on) [data-anim~=count]{--m-o:0}}
+
+/*! motion: anim none */
+[data-anim~=none]{--m-o:1}
+
+/*! motion: hover lift */
+@media (hover:hover){[data-hover~=lift]:is(:hover,:focus-visible){transform:translate3d(0,calc(-6px*var(--mh-k)),0);box-shadow:var(--m-lift-shadow,0 1px 2px rgb(0 0 0/.05),0 22px 44px -18px rgb(0 0 0/.3))}}
+[data-hover~=lift]:active{transform:translate3d(0,calc(-2px*var(--mh-k)),0) scale(.98);transition-duration:.12s}
+
+/*! motion: hover glow */
+@media (hover:hover){
+[data-hover~=glow]:is(:hover,:focus-visible){box-shadow:0 0 0 1px color-mix(in srgb,var(--primary,#6d5dfc) 40%,transparent),0 12px 40px -8px color-mix(in srgb,var(--primary,#6d5dfc) 60%,transparent)}
+[data-hover~=glow][data-hover~=lift]:is(:hover,:focus-visible){box-shadow:0 0 0 1px color-mix(in srgb,var(--primary,#6d5dfc) 40%,transparent),0 22px 48px -12px color-mix(in srgb,var(--primary,#6d5dfc) 60%,transparent)}
+}
+
+/*! motion: hover zoom */
+/* the picture inside grows slowly in its frame */
+[data-hover~=zoom]:has(>:is(img,video,picture)),[data-hover~=zoom] :has(>:is(img,video)){overflow:clip}
+[data-hover~=zoom] :is(img,video),:is(img,video)[data-hover~=zoom]{transition:scale calc(1.2s*var(--mh-t)*var(--m-k)) var(--m-out)}
+@media (hover:hover){[data-hover~=zoom]:is(:hover,:focus-within) :is(img,video),:is(img,video)[data-hover~=zoom]:hover{scale:calc(1 + .06*var(--mh-k))}}
+
+/*! motion: hover shine */
+/* a sheen sweeps across once, over the background and under the text */
+:where([data-hover~=shine]){position:relative;overflow:clip;isolation:isolate}
+[data-hover~=shine]::after{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:-50%;width:45%;background:linear-gradient(100deg,transparent,rgb(255 255 255/.5),transparent);transform:translateX(-120%) skewX(-18deg);pointer-events:none}
+@media (hover:hover){[data-hover~=shine]:is(:hover,:focus-visible)::after{transform:translateX(460%) skewX(-18deg);transition:transform calc(.9s*var(--mh-t)*var(--m-k)) var(--m-out)}}
+
+/*! motion: hover tilt */
+/* the element turns toward the pointer (motion.js) and a glare follows it */
+[data-hover~=tilt]{transition-property:box-shadow,background-color,border-color,color}
+:where([data-hover~=tilt]){position:relative}
+.m-hot{will-change:transform}
+.m-glare{position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgb(255 255 255/.28),transparent 55%);opacity:0;transition:opacity .5s}
+.m-hot>.m-glare{opacity:1}
+
+/*! motion: hover underline */
+/* a line grows under the text from the left and leaves to the right */
+[data-hover~=underline]{text-decoration:none;background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;background-position:100% 100%;background-size:0 .08em}
+@media (hover:hover){[data-hover~=underline]:is(:hover,:focus-visible){background-position:0 100%;background-size:100% .08em}}
+
+/*! motion: hover fill */
+/* the primary color fills the element from the bottom */
+[data-hover~=fill]{background-image:linear-gradient(var(--primary,#6d5dfc),var(--primary,#6d5dfc));background-repeat:no-repeat;background-position:0 100%;background-size:100% 0}
+@media (hover:hover){[data-hover~=fill]:is(:hover,:focus-visible){background-size:100% 100%;color:var(--on-primary,#fff)}}
+
+/*! motion: hover magnetic */
+/* motion.js pulls the element toward the pointer with a spring; nothing to style */
+
+/*! motion: loop bob */
+[data-loop~=bob]{--m-a2:m-bob calc(var(--ml-dur,2s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
+@keyframes m-bob{50%{translate:0 calc(6px*var(--m-k))}}
+
+/*! motion: loop float */
+[data-loop~=float]{--m-a2:m-float calc(var(--ml-dur,7s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
+@keyframes m-float{33%{translate:0 calc(-12px*var(--m-k));rotate:-1deg}66%{translate:0 calc(-5px*var(--m-k));rotate:1deg}}
+
+/*! motion: loop pulse */
+[data-loop~=pulse]{--m-a2:m-pulse calc(var(--ml-dur,2.4s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
+@keyframes m-pulse{50%{scale:1.05}}
+
+/*! motion: loop ping */
+/* a copy of the element's background grows and fades, like a live dot */
+:where([data-loop~=ping]){position:relative}
+[data-loop~=ping]::after{content:"";position:absolute;inset:0;border-radius:inherit;background:inherit;pointer-events:none;animation:m-ping calc(var(--ml-dur,2s)*var(--ml-t)) var(--ml-e,cubic-bezier(0,0,.2,1)) var(--ml-d) infinite}
+@keyframes m-ping{0%{transform:scale(1);opacity:.75}80%,100%{transform:scale(2.6);opacity:0}}
+
+/*! motion: loop spin */
+[data-loop~=spin]{--m-a2:m-spin calc(var(--ml-dur,8s)*var(--ml-t)) var(--ml-e,linear) var(--ml-d) infinite}
+@keyframes m-spin{to{rotate:360deg}}
+
+/*! motion: loop shimmer */
+/* a band of light passes over the background, then rests */
+:where([data-loop~=shimmer]){position:relative;overflow:clip;isolation:isolate}
+[data-loop~=shimmer]::before{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(100deg,transparent 25%,rgb(255 255 255/.4) 50%,transparent 75%);translate:-100% 0;pointer-events:none;animation:m-shimmer calc(var(--ml-dur,2.6s)*var(--ml-t)) var(--ml-e,var(--m-out)) var(--ml-d) infinite}
+@keyframes m-shimmer{70%,100%{translate:100% 0}}
+
+/*! motion: loop gradient */
+/* the theme gradient turns slowly; on text it fills the letters */
+@property --m-angle{syntax:"<angle>";inherits:false;initial-value:120deg}
+[data-loop~=gradient]{background-image:linear-gradient(var(--m-angle),var(--primary,#6d5dfc),var(--accent,#f59e0b) 50%,var(--primary,#6d5dfc));--m-a2:m-angle calc(var(--ml-dur,8s)*var(--ml-t)) var(--ml-e,linear) var(--ml-d) infinite}
+:is(h1,h2,h3,h4,h5,h6,p,span,strong,em,b,i,a,small)[data-loop~=gradient]{-webkit-background-clip:text;background-clip:text;color:transparent}
+@keyframes m-angle{to{--m-angle:480deg}}
+
+/*! motion: loop marquee */
+/* an endless strip: the groups slide left forever, pause under the pointer, fade at the edges */
+[data-loop~=marquee]{display:flex;overflow:clip;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+[data-loop~=marquee]>*{flex:none;animation:m-marquee calc(var(--m-mq,38s)*var(--ml-t)) linear var(--ml-d) infinite}
+[data-loop~=marquee]:hover>*{animation-play-state:paused}
+.m-mq{display:flex;align-items:center;gap:var(--m-gap,2.5rem);padding-right:var(--m-gap,2.5rem)}
+@keyframes m-marquee{to{transform:translate3d(-100%,0,0)}}
+
+/*! motion: scroll parallax */
+/* the element moves at a fraction of the scroll speed (`parallax 0.3`), still when centered */
+@supports (animation-timeline:view()){[data-scroll~=parallax]{--m-a3:m-parallax linear both;--m-tl:view()}}
+@keyframes m-parallax{from{transform:translate3d(0,calc((50vh + 50%)*var(--ms-r)*-1),0)}to{transform:translate3d(0,calc((50vh + 50%)*var(--ms-r)),0)}}
+
+/*! motion: scroll fade-out */
+/* fades and drifts up while it leaves the top of the screen */
+@supports (animation-timeline:view()){[data-scroll~=fade-out]{--m-a3:m-fade-out linear both;--m-tl:view();--m-rg:cover 30% cover 80%}}
+@keyframes m-fade-out{to{opacity:0;transform:translate3d(0,-18%,0)}}
+
+/*! motion: scroll scale */
+/* grows to full size while it comes into view */
+@supports (animation-timeline:view()){[data-scroll~=scale]{--m-a3:m-scale var(--m-out) both;--m-tl:view();--m-rg:cover 0% cover 40%}}
+@keyframes m-scale{from{transform:scale(.88)}}
+
+/*! motion: scroll progress */
+/* a bar that fills with the reading progress of the page */
+[data-scroll~=progress]{transform-origin:0 50%}
+@supports (animation-timeline:scroll()){[data-scroll~=progress]{--m-a3:m-progress linear both;--m-tl:scroll()}}
+@keyframes m-progress{from{transform:scaleX(0)}}
+
+/*! motion: transition */
+/* page transitions between the site's pages (cross-document View Transitions, no JS) */
+@view-transition{navigation:auto}
+::view-transition-group(*){animation-duration:.6s;animation-timing-function:var(--m-in-out)}
+@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}
+
+/*! motion: transition fade */
+::view-transition-old(root){animation:m-vt-out .3s var(--m-out) both}
+::view-transition-new(root){animation:m-vt-in .5s var(--m-out) .05s both}
+@keyframes m-vt-out{to{opacity:0}}
+@keyframes m-vt-in{from{opacity:0}}
+
+/*! motion: transition slide */
+::view-transition-old(root){animation:m-vt-slide-out .45s var(--m-in-out) both}
+::view-transition-new(root){animation:m-vt-slide-in .6s var(--m-out) both}
+@keyframes m-vt-slide-out{to{opacity:0;translate:-6% 0}}
+@keyframes m-vt-slide-in{from{opacity:0;translate:8% 0}}
+
+/*! motion: transition rise */
+::view-transition-old(root){animation:m-vt-rise-out .35s var(--m-out) both}
+::view-transition-new(root){animation:m-vt-rise-in .7s var(--m-out) .05s both}
+@keyframes m-vt-rise-out{to{opacity:0;scale:.98}}
+@keyframes m-vt-rise-in{from{opacity:0;translate:0 40px}}
+
+/*! motion: mods */
+[data-anim~=fast]{--ma-t:.6}
+[data-anim~=slow]{--ma-t:1.6}
+[data-hover~=fast]{--mh-t:.6}
+[data-hover~=slow]{--mh-t:1.6}
+[data-loop~=fast]{--ml-t:.5}
+[data-loop~=slow]{--ml-t:2}
+[data-anim~=out]{--ma-e:var(--m-out)}
+[data-anim~=in-out]{--ma-e:var(--m-in-out)}
+[data-anim~=linear]{--ma-e:linear}
+[data-anim~=spring]{--ma-e:var(--m-spring);--m-dur:var(--m-spring-t)}
+[data-anim~=bounce]{--ma-e:var(--m-bounce);--m-dur:var(--m-bounce-t)}
+[data-anim~=snappy]{--ma-e:var(--m-snappy);--m-dur:var(--m-snappy-t)}
+[data-hover~=out]{--mh-e:var(--m-out)}
+[data-hover~=in-out]{--mh-e:var(--m-in-out)}
+[data-hover~=linear]{--mh-e:linear}
+[data-hover~=spring]{--mh-e:var(--m-spring);--mh-dur:var(--m-spring-t)}
+[data-hover~=bounce]{--mh-e:var(--m-bounce);--mh-dur:var(--m-bounce-t)}
+[data-hover~=snappy]{--mh-e:var(--m-snappy);--mh-dur:var(--m-snappy-t)}
+[data-loop~=out]{--ml-e:var(--m-out)}
+[data-loop~=in-out]{--ml-e:var(--m-in-out)}
+[data-loop~=linear]{--ml-e:linear}
+[data-loop~=spring]{--ml-e:var(--m-spring)}
+[data-loop~=bounce]{--ml-e:var(--m-bounce)}
+[data-loop~=snappy]{--ml-e:var(--m-snappy)}

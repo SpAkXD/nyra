@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="motion-check" content="enter">
+<title>motion: speeds and easings</title>
+<link rel="stylesheet" href="fixture.css">
+<link rel="stylesheet" href="../../../src/web/motion.css">
+<style>[data-anim="rise slow 0.4"]{--ma-d:.4s}</style>
+<script src="../../../src/web/motion.js" defer></script>
+</head>
+<body>
+<header class="label"><b>speeds and easings</b></header>
+<div class="grid four">
+  <div class="card" data-anim="rise fast"><h3>fast</h3></div>
+  <div class="card" data-anim="rise slow"><h3>slow</h3></div>
+  <div class="card" data-anim="pop spring"><h3>pop spring</h3></div>
+  <div class="card" data-anim="rise slow 0.4"><h3>slow, 0.4 s later</h3></div>
+</div>
+</body>
+</html>

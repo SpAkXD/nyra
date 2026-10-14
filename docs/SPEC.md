@@ -200,7 +200,8 @@ Parentheses group: `(a + b) * c`. `?:` binds weaker than `||` and groups to the 
 
 ## Strings and chars
 `"{expr}"` inserts any value: `"{name}: {xs.len()} items"`. A brace that starts no value is text:
-`"}"`, `"fn main() {"`, `"{}"` (`{{` and `}}` also give one brace). A `$` is ordinary text: `"cost: ${x}"` prints
+`"}"`, `"fn main() {"`, `"{}"`, CSS such as `"50% { rotate: 3deg }"` (a space after `{`, then `property: value`)
+(`{{` and `}}` also give one brace). A `$` is ordinary text: `"cost: ${x}"` prints
 `cost: $3`, and the compiler warns (E0260) because `${x}` is another language's way to insert a value (see Errors). Strings and chars may appear inside `{ }`: `"{xs.join(", ")}"`.
 A format specifier after a colon shapes the text of a value, with the same result on every backend:
 ```nyra

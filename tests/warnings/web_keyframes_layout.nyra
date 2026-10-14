@@ -1,0 +1,10 @@
+// expect: E0375
+use web
+
+keyframes("grow", "from { width: 0; opacity: 0 } to { width: 100% }")
+
+fn title() -> Node = h1("Bakery", anim: "grow")
+
+page("/", "Bakery") {
+    title()
+}

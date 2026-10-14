@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="motion-check" content="enter">
+<title>motion: anim: 'stagger' and 'stagger zoom'</title>
+<link rel="stylesheet" href="fixture.css">
+<link rel="stylesheet" href="../../../src/web/motion.css">
+<script src="../../../src/web/motion.js" defer></script>
+</head>
+<body>
+<header class="label"><b>anim: "stagger" and "stagger zoom"</b> · children 80 ms apart; the second grid (below) zooms them</header>
+<div class="grid" data-anim="stagger">
+  <div class="card"><span class="num">01</span><h3>Návrh</h3><p>Krátký text o službě.</p></div>
+  <div class="card"><span class="num">02</span><h3>Stavba</h3><p>Krátký text o službě.</p></div>
+  <div class="card"><span class="num">03</span><h3>Revize</h3><p>Krátký text o službě.</p></div>
+  <div class="card"><span class="num">04</span><h3>Servis</h3><p>Krátký text o službě.</p></div>
+  <div class="card"><span class="num">05</span><h3>Prodej</h3><p>Krátký text o službě.</p></div>
+  <div class="card"><span class="num">06</span><h3>Poradenství</h3><p>Krátký text o službě.</p></div>
+</div>
+<div class="spacer"></div>
+<div class="grid" data-anim="stagger zoom">
+  <div class="card"><span class="num">01</span><h3>Kamna a krby</h3><p>Návrh, stavba a revize na klíč.</p></div>
+  <div class="card"><span class="num">02</span><h3>Zahrada</h3><p>Semena, sazenice a nářadí.</p></div>
+  <div class="card"><span class="num">03</span><h3>Včelaři</h3><p>Rámky, mezistěny a vosk.</p></div>
+</div>
+</body>
+</html>

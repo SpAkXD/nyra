@@ -1,0 +1,10 @@
+// expect: E0388
+use web
+
+keyframes("sway", "0%, 100% { rotate: -3deg } 50% { rotat: 3deg }")
+
+fn title() -> Node = h1("Bakery", loop: "sway")
+
+page("/", "Bakery") {
+    title()
+}

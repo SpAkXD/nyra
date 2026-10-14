@@ -39,13 +39,13 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0389 | `use web` (since v0.8; E0375 and E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons and option words, live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387) |
+| E0372-E0389 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons, option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0375, E0385, E0388 and E0389 are kept for `use web`. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0385 and E0389 are kept for `use web`. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -3839,22 +3839,24 @@ page("/", "Home") {
 ```
 - **Related:** E0376, E0384
 
-## E0374: unknown icon or option word
+## E0374: unknown word
 - **Kind:** compile error · **Since:** v0.8
-- **What it means:** A web text names an icon that does not exist (`":phnoe: 123"`, `icon: "phnoe"`), or an option that takes one of a few words got another one (`section(..., bg: "alternative")`). The message names the nearest icon or lists the words. Text that is computed while the site is built is checked then: the build stops with the same code.
-- **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a missing icon or a section without its background is easy to miss on a page and costs a round of looking at screenshots.
+- **What it means:** A web text or option has a word the library does not know: an icon that does not exist (`":phnoe: 123"`, `icon: "phnoe"`), an option word that is not one of its option's few words (`section(..., bg: "alternative")`), or a motion word that is not one of its option's words (`hover: "lfit"`). The motion options `anim:`, `hover:`, `loop:` and `scroll:` each have their own list (see Motion in [WEB.md](WEB.md)), plus the speeds `fast` and `slow`, the easings `out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, one number and one duration (`4s`, `600ms`); a word made with `keyframes` counts in `anim:` and `loop:`. The message names the nearest word or lists the words. A literal is checked when the program compiles; text that is computed while the site is built is checked then, and the build stops with the same code.
+- **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a missing icon, a section without its background or a card that does not move is easy to miss on a page (a misspelled CSS class or animation name fails silently) and costs a round of looking at screenshots. A word is checked like a name in code, before the site is deployed.
 - **Common causes:**
   - an icon name from another set: the icons are [Lucide](https://lucide.dev) names (`phone`, `mail`, `map-pin`, `clock`, `calendar`, `leaf`, `flame`, `house`, `star`, `check`, `send`, `navigation`, `arrow-right`, `chevron-down`, `menu`, `x`, the brand icon `facebook`, ...); `src/std/web_icons.nyra` lists all of them
   - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
   - an option word from CSS (`bg: "gray"`): `bg:` takes `alt`, `white`, `dark`, `primary`, `accent`, `ink`
   - a color that is neither a hex color, a theme color nor a name of `site(palette:)` (found while the site is built)
+  - a typo in a motion word (`hover: "lfit"`), a word of another motion option (`hover: "rise"`: `rise` is an entrance, an `anim:` word) or a word from a CSS library (`fadeInUp`, `bounceIn`)
 - **Wrong:**
 ```rust
 use web
 
-fn phone() -> Node = p(":phnoe: +420 123 456 789")
+fn phone() -> Node = card(title: "Call us", text: ":phnoe: +420 123 456 789", hover: "lfit")
 
-page("/", "Home") {
+page("/", "Bakery") {
+    hero("Bakery Hana")
     phone()
 }
 ```
@@ -3862,13 +3864,48 @@ page("/", "Home") {
 ```rust
 use web
 
-fn phone() -> Node = p(":phone: +420 123 456 789")
+fn phone() -> Node = card(title: "Call us", text: ":phone: +420 123 456 789", hover: "lift")
 
-page("/", "Home") {
+page("/", "Bakery") {
+    hero("Bakery Hana")
     phone()
 }
 ```
-- **Related:** E0381, E0377
+- **Related:** E0381, E0377, E0375, E0388
+
+## E0375: keyframes animate a layout property
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A `keyframes(name, body)` of a `use web` site animates a property that changes the layout (`width`, `height`, `top`, `margin`, `padding`, `font-size`, ...). It works, but the browser lays the page out again on every frame of the animation. The message lists the properties. Moving and growing are smooth with `translate`, `scale`, `rotate`, `opacity`, `filter` and `clip-path`, which the compositor animates without layout.
+- **Why Nyra has this rule:** Every built-in motion word moves only those compositor properties, so motion stays smooth on a slow phone. A custom keyframe is the one place where a janky animation can come in; like Nyra's performance warnings, this one does not stop the build.
+- **Common causes:**
+  - growing a bar with `width` instead of `scale`
+  - moving with `top` or `left` instead of `translate`
+  - a pulse made with `padding` or `font-size`
+- **Wrong:**
+```rust
+use web
+
+keyframes("grow", "from { width: 0 } to { width: 100% }")
+
+fn title() -> Node = h1("Bakery", anim: "grow")
+
+page("/", "Bakery") {
+    title()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+keyframes("grow", "from { scale: 0 1 } to { scale: 1 }")
+
+fn title() -> Node = h1("Bakery", anim: "grow")
+
+page("/", "Bakery") {
+    title()
+}
+```
+- **Related:** E0374, E0388
 
 ## E0376: live view with parameters
 - **Kind:** compile error · **Since:** v0.8
@@ -4270,3 +4307,37 @@ page("/team", "Our team") {
 }
 ```
 - **Related:** E0382
+
+## E0388: a keyframes word that cannot be made
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A `keyframes(name, body)` of a `use web` site cannot become a motion word. Either the name is wrong (it must be lowercase letters, digits and single `-`, start with a letter, and not be a word that exists already, such as `rise` or `slow`), or the body is not a CSS keyframes body: blocks like `0%, 100% { rotate: -3deg } 50% { rotate: 3deg }` (offsets are `from`, `to` or percentages), each with `property: value` lines of properties keyframes can animate, and plain values (no quotes, `url()` or `!important`). The message says which part is wrong, with the nearest property for a typo.
+- **Why Nyra has this rule:** The body goes into the site's CSS file. A broken one would end the CSS early or animate nothing, without an error anywhere; checked when the program compiles (a computed one when the site is built), it is a message with a place.
+- **Common causes:**
+  - the name of a built-in word (`keyframes("rise", ...)`)
+  - a typo in a property (`opacty`)
+  - a block without braces, or a brace not closed
+- **Wrong:**
+```rust
+use web
+
+keyframes("rise", "from { opacity: 0; translate: 0 40px } to { opacity: 1 }")
+
+fn title() -> Node = h1("Bakery", anim: "rise")
+
+page("/", "Bakery") {
+    title()
+}
+```
+- **Fixed:**
+```rust
+use web
+
+keyframes("rise-far", "from { opacity: 0; translate: 0 40px } to { opacity: 1 }")
+
+fn title() -> Node = h1("Bakery", anim: "rise-far")
+
+page("/", "Bakery") {
+    title()
+}
+```
+- **Related:** E0374, E0375

@@ -23,8 +23,14 @@
 
 pub mod assets;
 pub mod client;
+/// Easing presets and springs compiled to CSS `linear()` (WP4).
+pub mod ease;
+/// The gzipped size of a file, for the size budgets.
+pub mod gzip;
 pub mod html;
 pub mod image;
+/// The motion words: their CSS and JS parts, the `keyframes` checks (WP4).
+pub mod motion;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod serve;
 
@@ -546,11 +552,11 @@ impl Site {
         }
 
         // the CSS: the kit's base and used parts, the motion words, custom keyframes, the program's own
-        let mut words: Vec<String> = Vec::new();
+        let mut used: Vec<(String, String)> = Vec::new();
         let mut events = false;
         let mut views: Vec<String> = Vec::new();
         for p in &pages {
-            assets::motion_words(&p.tags, &mut words);
+            assets::motion_attrs(&p.tags, &mut used);
             for t in p.tags.iter().filter(|t| !t.close) {
                 events |= t.has("data-on");
                 if let Some(v) = t.get("data-live") {
@@ -560,19 +566,42 @@ impl Site {
                 }
             }
         }
-        for (n, _) in &web.keyframes {
-            if !words.contains(n) {
-                words.push(n.clone());
+        // `keyframes(name, body)`: a wrong one stops the build (E0388), layout properties warn (E0375)
+        let mut custom: Vec<motion::Keyframes> = Vec::new();
+        for (name, body, span) in &web.keyframes {
+            match motion::check_keyframes(name, body) {
+                Ok(k) => {
+                    // (a literal body was warned about at its place when the program compiled)
+                    if let Some((msg, hint)) = k.layout_warning() {
+                        if !diag::warnings().iter().any(|w| w.code == "E0375" && w.msg == msg) {
+                            warn(Diag::new("E0375", msg, *span).hint(hint));
+                        }
+                    }
+                    custom.push(k);
+                }
+                Err(e) => {
+                    let hint = e.hint.unwrap_or_else(|| {
+                        "a keyframes word is `keyframes(\"sway\", \"0%, 100% { rotate: -3deg } 50% { rotate: 3deg }\")`".to_string()
+                    });
+                    errs.push(Diag::new("E0388", e.message, *span).hint(hint));
+                }
             }
         }
-        if !web.keyframes.is_empty() {
-            words.push("custom".into());
+        // the motion values of the pages (E0374); a keyframes name counts as a word even when its
+        // body was refused above, so one mistake gives one error
+        let names: Vec<&str> = web.keyframes.iter().map(|(n, _, _)| n.as_str()).collect();
+        for (attr, value) in &used {
+            let Some(opt) = motion::Opt::from_name(attr) else { continue };
+            if let Err(e) = motion::parse(opt, value, &names) {
+                let hint = e
+                    .hint()
+                    .unwrap_or_else(|| "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`".to_string());
+                errs.push(Diag::new("E0374", format!("{} (in data-{attr}=\"{value}\")", e.message), at).hint(hint));
+            }
         }
+        let pairs: Vec<(&str, &str)> = used.iter().map(|(a, v)| (a.as_str(), v.as_str())).collect();
         let mut css = assets::pick(assets::KIT_CSS, "chunk", &web.chunks, true);
-        css.push_str(&assets::pick(assets::MOTION_CSS, "motion", &words, false));
-        for (n, body) in &web.keyframes {
-            css.push_str(&format!("\n@keyframes {n} {{{body}}}\n"));
-        }
+        css.push_str(&motion::motion_css(&pairs, &custom));
         for c in &web.css {
             css.push('\n');
             css.push_str(c);
@@ -581,13 +610,12 @@ impl Site {
 
         // the JS: kit behaviors, motion, the program's client code
         let mut js = String::new();
-        for part in
-            [assets::pick(assets::KIT_JS, "chunk", &web.chunks, false), assets::pick(assets::MOTION_JS, "motion", &words, false)]
-        {
-            if !part.trim().is_empty() {
-                js.push_str(&format!("(() => {{\n{}}})();\n", assets::min_js(&part)));
-            }
+        let kit_js = assets::pick(assets::KIT_JS, "chunk", &web.chunks, false);
+        if !kit_js.trim().is_empty() {
+            js.push_str(&format!("(() => {{\n{}}})();\n", assets::min_js(&kit_js)));
         }
+        // the motion script is its own closure already
+        js.push_str(&motion::motion_js(&pairs));
         let client = client::build(prog, &views, events, &web.state, &o.file).map_err(Error::Text)?;
         if let Some(c) = client {
             js.push_str(&assets::min_js(&c));

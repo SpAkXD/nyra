@@ -385,7 +385,10 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
     if !errs.is_empty() {
         return Err(checked(errs));
     }
-    let errs = check::check(&mut prog);
+    // the motion words and `keyframes(...)` of a site, where they are literals (E0374, E0388)
+    let motion = if prog.uses.iter().any(|u| u.module == "web") { webcheck::motion(src) } else { Vec::new() };
+    let mut errs = check::check(&mut prog);
+    errs.extend(motion);
     if !errs.is_empty() {
         return Err(checked(errs));
     }

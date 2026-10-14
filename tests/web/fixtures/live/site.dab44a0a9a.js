@@ -37,6 +37,45 @@ if (first) first.focus();
 });
 })();
 })();
+(()=>{
+if(!globalThis.document)return;
+const D=document,R=D.documentElement,
+RM=matchMedia('(prefers-reduced-motion: reduce)').matches||R.dataset.motion=='off',
+$=(s,r=D)=>[...r.querySelectorAll(s)],
+setup=[],on=[],subs=new Set();
+let raf,last;
+R.classList.add('m-on');
+const frame=(t)=>{
+for(const f of subs)f(Math.min(t-last,50),t)||subs.delete(f);
+last=t;
+raf=subs.size&&!D.hidden&&requestAnimationFrame(frame);
+};
+const wake=()=>raf||D.hidden||(last=performance.now(),raf=requestAnimationFrame(frame));
+const loop=(f)=>{subs.add(f);wake();};
+D.addEventListener('visibilitychange',wake);
+const show=(el)=>{
+if(el.classList.contains('m-in'))return;
+el.classList.add('m-in');
+for(const f of on)f(el);
+const box=el.matches('[data-anim~=stagger],[data-anim~=draw]');
+for(const c of $('[data-anim]',el))
+c.parentElement.closest('[data-anim]')==el&&(box||c.hasAttribute('data-at'))&&show(c);
+};
+const io=new IntersectionObserver((es)=>{
+for(const e of es)if(e.isIntersecting){io.unobserve(e.target);show(e.target);}
+},{rootMargin:'0px 0px -8% 0px'});
+const init=()=>{
+for(const c of $('[data-anim~=stagger],[data-anim~=draw]'))
+[...c.children].forEach((k,i)=>k.style.setProperty('--m-i',i));
+for(const f of setup)f();
+for(const el of $('[data-anim]')){
+if(RM||el.matches('[data-anim~=none]'))show(el);
+else if(!el.hasAttribute('data-at'))io.observe(el);
+else if(!el.parentElement.closest('[data-anim]'))requestAnimationFrame(()=>show(el));
+}
+};
+D.readyState=='loading'?D.addEventListener('DOMContentLoaded',init):init();
+})();
 (() => {
 "use strict";
 const ny_file = "live.nyra";
@@ -62,6 +101,7 @@ const r = a + b;
 return Number.isSafeInteger(r) ? r : ny_int_range(a + " + " + b, r, line, col);
 }
 const NY_SURR = /[\uD800-\uDFFF]/;
+function ny_len(s) { return NY_SURR.test(s) ? Array.from(s).length : s.length; }
 function ny_oob(i, n, line, col) {
 ny_panic("E0240", `index ${i} is out of bounds for length ${n}`,
 "valid indexes are 0 to len - 1; compare with `.len()` first", line, col);
@@ -80,6 +120,11 @@ return s.slice(a, b);
 const cps = Array.from(s);
 ny_range(a, b, cps.length, line, col);
 return cps.slice(a, b).join("");
+}
+function ny_str_index_of(s, t) {
+const j = s.indexOf(t);
+if (j < 0) return -1;
+return NY_SURR.test(s) ? Array.from(s.slice(0, j)).length : j;
 }
 function ny_str_replace(s, old, nw, line, col) {
 if (old === "") ny_panic("E0243", "replace() needs a non-empty pattern", "the text to replace can't be \"\"", line, col);
@@ -428,7 +473,7 @@ ny_t1 = view.html;
 return ny_t1;
 }
 function nyU_web_u2e_grid(cols, widths, gap, numbers, align, id, cls, anim, hover, loop, scroll, at, morph, kids) {
-let c, ny_t15, style, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, h, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34;
+let c, ny_t15, style, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, h, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35;
 c = "grid";
 if (widths !== "") {
 {
@@ -480,27 +525,30 @@ ny_t24 = nyU_web_u2e__ic(c, id, cls);
 ny_t25 = "<div" + ny_t24;
 ny_t26 = nyU_web_u2e__at("style", style);
 ny_t27 = ny_t25 + ny_t26;
-ny_t28 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t28 = nyU_web_u2e__mo(anim, "", loop, scroll, at, morph);
 ny_t29 = ny_t27 + ny_t28;
 ny_t30 = ny_t29 + ">";
-ny_t31 = nyU_web_u2e__html(kids);
-ny_t32 = ny_t30 + ny_t31;
-h = ny_t32 + "</div>";
-ny_t33 = nyU_web_u2e__kits(kids, "");
-ny_t34 = new nyS_Node(h, ny_sh(ny_t33));
-return ny_t34;
+ny_t31 = nyU_web_u2e__hover_each(kids, hover);
+ny_t32 = nyU_web_u2e__html(ny_t31);
+ny_t33 = ny_t30 + ny_t32;
+h = ny_t33 + "</div>";
+ny_t34 = nyU_web_u2e__kits(kids, "");
+ny_t35 = new nyS_Node(h, ny_sh(ny_t34));
+return ny_t35;
 }
 function nyU_web_u2e_stack(gap, align, id, cls, anim, hover, loop, scroll, at, morph, kids) {
-let ny_t11, ny_t12;
-ny_t11 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t12 = nyU_web_u2e__flow("stack", gap, align, id, cls, ny_t11, kids);
-return ny_t12;
+let ny_t11, ny_t12, ny_t13;
+ny_t11 = nyU_web_u2e__mo(anim, "", loop, scroll, at, morph);
+ny_t12 = nyU_web_u2e__hover_each(kids, hover);
+ny_t13 = nyU_web_u2e__flow("stack", gap, align, id, cls, ny_t11, ny_t12);
+return ny_t13;
 }
 function nyU_web_u2e_row(gap, align, id, cls, anim, hover, loop, scroll, at, morph, kids) {
-let ny_t11, ny_t12;
-ny_t11 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t12 = nyU_web_u2e__flow("row", gap, align, id, cls, ny_t11, kids);
-return ny_t12;
+let ny_t11, ny_t12, ny_t13;
+ny_t11 = nyU_web_u2e__mo(anim, "", loop, scroll, at, morph);
+ny_t12 = nyU_web_u2e__hover_each(kids, hover);
+ny_t13 = nyU_web_u2e__flow("row", gap, align, id, cls, ny_t11, ny_t12);
+return ny_t13;
 }
 function nyU_web_u2e__flow(kind, gap, align, id, cls, motion, kids) {
 let c, ny_t8, ny_t9, ny_t10, ny_t11, style, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25;
@@ -1309,6 +1357,62 @@ o += ny_t15;
 }
 ny_t16 = nyU_web_u2e__at("data-morph", morph);
 ny_t17 = o + ny_t16;
+return ny_t17;
+}
+function nyU_web_u2e__hover_each(kids, hover) {
+let ny_t2, out, ny_t4, k, ny_t6, ny_t7;
+if (hover === "") {
+ny_t2 = kids;
+ny_sh(ny_t2);
+return ny_t2;
+}
+out = [];
+ny_t4 = kids;
+ny_sh(ny_t4);
+for (const ny_c1 of ny_t4) {
+k = ny_c1;
+ny_t6 = nyU_web_u2e__first_attr(k.html, "data-hover", hover);
+ny_t7 = new nyS_Node(ny_t6, ny_sh(k.kit));
+{
+if (out.ny_s) out = ny_cp(out);
+out.push(ny_sh(ny_t7));
+}
+}
+return out;
+}
+function nyU_web_u2e__first_attr(html, name, value) {
+let ny_t3, close, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, end, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17;
+if (!html.startsWith("<")) {
+ny_t3 = html;
+return ny_t3;
+}
+close = ny_str_index_of(html, ">");
+ny_t8 = close < 0;
+if (!ny_t8) {
+ny_t5 = ny_str_slice(html, 0, close, 5, 5);
+ny_t6 = " " + name;
+ny_t7 = ny_t6 + "=";
+ny_t8 = ny_t5.includes(ny_t7);
+}
+if (ny_t8) {
+ny_t9 = html;
+return ny_t9;
+}
+end = 1;
+for (;; ) {
+ny_t12 = end < close;
+if (ny_t12) {
+ny_t11 = ny_str_slice(html, end, end + 1, 5, 5);
+ny_t12 = !" \n\t/".includes(ny_t11);
+}
+if (!ny_t12) break;
+end = end + 1;
+}
+ny_t13 = ny_str_slice(html, 0, end, 5, 5);
+ny_t14 = nyU_web_u2e__at(name, value);
+ny_t15 = ny_t13 + ny_t14;
+ny_t16 = ny_str_slice(html, end, ny_len(html), 5, 5);
+ny_t17 = ny_t15 + ny_t16;
 return ny_t17;
 }
 function nyU_web_u2e__html(kids) {

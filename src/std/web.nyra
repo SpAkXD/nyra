@@ -237,20 +237,20 @@ fn grid(cols: int = 0, widths: str = "", gap: str = "", numbers: bool = false, a
     if gap != "" {
         style += "--gap:" + _size(gap) + ";"
     }
-    let h = "<div" + _ic(c, id, cls) + _at("style", style) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _html(kids) + "</div>"
+    let h = "<div" + _ic(c, id, cls) + _at("style", style) + _mo(anim, "", loop, scroll, at, morph) + ">" + _html(_hover_each(kids, hover)) + "</div>"
     return Node(html: h, kit: _kits(kids, ""))
 }
 
 // Children one under another, with the theme's gap.
 fn stack(gap: str = "", align: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
     scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
-    return _flow("stack", gap, align, id, cls, _mo(anim, hover, loop, scroll, at, morph), kids)
+    return _flow("stack", gap, align, id, cls, _mo(anim, "", loop, scroll, at, morph), _hover_each(kids, hover))
 }
 
 // Children side by side, wrapping onto the next line when there is no room.
 fn row(gap: str = "", align: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
     scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
-    return _flow("row", gap, align, id, cls, _mo(anim, hover, loop, scroll, at, morph), kids)
+    return _flow("row", gap, align, id, cls, _mo(anim, "", loop, scroll, at, morph), _hover_each(kids, hover))
 }
 
 fn _flow(kind: str, gap: str, align: str, id: str, cls: str, motion: str, kids: [Node]) -> Node {
@@ -578,13 +578,13 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
     if height == "half" {
         c += " hero-half"
     }
-    var h = "<section" + _ic(c, id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    var h = "<section" + _ic(c, id, cls) + _mo("", hover, loop, scroll, none, morph) + ">"
     if image != "" {
         h += "<div class=\"hero-media\">" + _img_tag(image, alt, "100vw", true) + "</div>"
     }
     h += "<div class=\"hero-shade\" aria-hidden=\"true\"></div><div class=\"hero-body wrap\">"
     if kicker != "" || badge.len() > 0 {
-        h += "<div class=\"hero-meta\">"
+        h += "<div class=\"hero-meta\"" + _seq(anim, at, 0) + ">"
         if kicker != "" {
             h += "<span class=\"hero-kicker\">" + _md(kicker) + "</span>"
         }
@@ -593,12 +593,12 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
         }
         h += "</div>"
     }
-    h += "<h1 class=\"hero-title\">" + _md(title) + "</h1>"
+    h += "<h1 class=\"hero-title\"" + _seq(anim, at, 1) + ">" + _md(title) + "</h1>"
     if text != "" {
-        h += "<p class=\"hero-text\">" + _md(text) + "</p>"
+        h += "<p class=\"hero-text\"" + _seq(anim, at, 2) + ">" + _md(text) + "</p>"
     }
     if buttons.len() > 0 {
-        h += "<div class=\"hero-actions\">"
+        h += "<div class=\"hero-actions\"" + _seq(anim, at, 3) + ">"
         for i, b in buttons {
             h += "<a class=\"btn btn-lg " + (if i == 0 { "btn-accent" } else { "btn-light" }) + "\"" + _link_attrs(b.1) + ">" + _md(b.0) + "</a>"
         }
@@ -626,7 +626,7 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
 // A full-screen choice between subsites: each child (a `card` with `image:` and `href:`) is a panel.
 fn split(id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
     at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
-    return Node(html: "<section" + _ic("split", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">" + _html(kids) + "</section>", kit: _kits(kids, "split"))
+    return Node(html: "<section" + _ic("split", id, cls) + _mo(anim, "", loop, scroll, at, morph) + ">" + _html(_hover_each(kids, hover)) + "</section>", kit: _kits(kids, "split"))
 }
 
 // An endless strip of words in the primary color (`color:` another one).
@@ -1282,6 +1282,45 @@ fn _mo(anim: str, hover: str, loop: str, scroll: str, at: float?, morph: str) ->
         o += " data-at=\"{t}\""
     }
     return o + _at("data-morph", morph)
+}
+
+// A container's `hover:` (grid, stack, row, split): hover words act on the element that has them,
+// so the value is written on each child, unless the child has a `hover:` of its own.
+fn _hover_each(kids: [Node], hover: str) -> [Node] {
+    if hover == "" {
+        return kids
+    }
+    var out: [Node] = []
+    for k in kids {
+        out.push(Node(html: _first_attr(k.html, "data-hover", hover), kit: k.kit))
+    }
+    return out
+}
+
+// `html` with the attribute `name="value"` added to its first tag (if that tag has none yet).
+fn _first_attr(html: str, name: str, value: str) -> str {
+    if !html.starts_with("<") {
+        return html
+    }
+    let close = html.index_of(">")
+    if close < 0 || html[..close].contains(" " + name + "=") {
+        return html
+    }
+    var end = 1
+    while end < close && !" \n\t/".contains(html.slice(end, end + 1)) {
+        end += 1
+    }
+    return html[..end] + _at(name, value) + html[end..]
+}
+
+// The hero's parts, one after another: `hero(anim: "rise")` plays them as a sequence, 0.15 s apart.
+fn _seq(anim: str, at: float?, i: int) -> str {
+    if anim == "" {
+        return ""
+    }
+    let base = at ?? 0.1
+    let t = base + 0.15 * float(i)
+    return _at("data-anim", anim) + " data-at=\"{t:.2}\""
 }
 
 fn _html(kids: [Node]) -> str {

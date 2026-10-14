@@ -184,6 +184,30 @@ pub fn link(prog: &mut Program, at: Span, src: &str, intrinsics: &[String]) -> V
     errs
 }
 
+/// The motion options and `keyframes(...)` calls of a program's source whose values are literals
+/// (`src/web/motion.rs`, `lint`): an unknown motion word is E0374 and a `keyframes` call that
+/// cannot make a word E0388, at the place of the value; a keyframes body that animates a layout
+/// property is warning E0375 (the build gives it for computed bodies, and skips the ones given here).
+pub fn motion(src: &str) -> Vec<Diag> {
+    use crate::web::motion::IssueKind;
+    let mut out = Vec::new();
+    for issue in crate::web::motion::lint_source(src) {
+        let (code, fallback) = match issue.kind {
+            IssueKind::UnknownWord => ("E0374", "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`"),
+            IssueKind::BadKeyframes => {
+                ("E0388", "a keyframes word is `keyframes(\"sway\", \"0%, 100% { rotate: -3deg } 50% { rotate: 3deg }\")`")
+            }
+            IssueKind::LayoutProperty => {
+                let hint = issue.hint.unwrap_or_else(|| "animate `translate`, `scale` or `clip-path` instead".to_string());
+                crate::diag::warn(Diag::new("E0375", issue.message, issue.span).hint(hint));
+                continue;
+            }
+        };
+        out.push(Diag::new(code, issue.message, issue.span).hint(issue.hint.unwrap_or_else(|| fallback.to_string())));
+    }
+    out
+}
+
 /// E0372: a program function, type or script variable with the name of a web function or type.
 fn clashes(prog: &Program, public: &HashSet<String>) -> Vec<Diag> {
     let mut errs = Vec::new();
