@@ -14,11 +14,11 @@
 
 use std::io::{BufRead, Read, Write};
 use std::rc::Rc;
-use std::time::Instant;
 
 use super::interp::{bug, fail, num, shown, Stop, Value};
 use super::StdFn;
 use crate::ast::Span;
+use crate::clock::Instant;
 
 /// Where the program writes: nowhere, a string it keeps, or the process's standard output. A
 /// cap on the bytes stops the program (`Stop::Output`) at the first byte beyond it.
@@ -251,7 +251,7 @@ impl Host {
                 None
             }
             StdFn::TimeNowMs => {
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+                let now = crate::clock::unix_ms();
                 Some(Value::Int(now.saturating_add(self.slept_ms)))
             }
             StdFn::TimeMonoMs => Some(Value::Float(self.start.elapsed().as_nanos() as f64 / 1e6 + self.slept_ms as f64)),
@@ -424,13 +424,9 @@ impl Host {
             s[3] = s[3].rotate_left(11);
             return r;
         }
-        // the standard library's hasher keys come from the operating system's generator
-        use std::hash::{BuildHasher as _, Hasher as _};
         let n = self.os_count;
         self.os_count += 1;
-        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-        h.write_u64(n);
-        (h.finish() >> 16) as u32
+        crate::clock::os_random(n)
     }
 
     /// 53 random bits: the first draw gives the high 27, the second the low 26.

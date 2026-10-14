@@ -1,0 +1,6 @@
+// expect: E0288
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    print(Shape.all())
+}

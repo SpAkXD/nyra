@@ -183,7 +183,8 @@ fn tdesc(t: Ty) -> String {
     }
 }
 
-/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ["a", T], or a struct's class.
+/// The type as the JSON runtime reads it: "i", "f", "b", "c", "s", ["a", T], ["m", K, V], or a
+/// struct's (tuple's, optional's, enum's) class.
 fn jdesc(t: Ty) -> String {
     match t {
         Ty::Int => "\"i\"".into(),
@@ -192,7 +193,33 @@ fn jdesc(t: Ty) -> String {
         Ty::Char => "\"c\"".into(),
         Ty::Str => "\"s\"".into(),
         Ty::Array(_) => format!("[\"a\", {}]", jdesc(t.elem().expect("an array"))),
+        Ty::Map(_) => {
+            let (k, v) = t.map_kv().expect("a map");
+            format!("[\"m\", {}, {}]", jdesc(k), jdesc(v))
+        }
         _ => name(&t.struct_name().expect("a struct")),
+    }
+}
+
+/// What the JSON runtime needs to know about a tuple, an optional or an enum (`@C@` is its class).
+fn jkind(s: &crate::ir::StructInfo) -> Option<String> {
+    if s.tuple {
+        Some("@C@.ny_jk = \"t\";".into())
+    } else if s.option {
+        Some("@C@.ny_jk = \"o\";".into())
+    } else if !s.variants.is_empty() {
+        let vs: Vec<String> = s
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(v, name)| {
+                let idx: Vec<String> = s.slots(v).map(|k| k.to_string()).collect();
+                format!("[{}, [{}]]", crate::diag::json_str(name), idx.join(", "))
+            })
+            .collect();
+        Some(format!("@C@.ny_jk = \"e\"; @C@.ny_jn = {}; @C@.ny_jv = [{}];", crate::diag::json_str(&s.name), vs.join(", ")))
+    } else {
+        None
     }
 }
 
@@ -248,7 +275,19 @@ fn classes(m: &Module, out: &mut String) {
         let head = if s.tuple { String::new() } else { template_text(&s.name) };
         if !s.variants.is_empty() {
             let names: Vec<String> = s.variants.iter().map(|v| crate::diag::json_str(&format!("{}.{v}", s.name))).collect();
-            let _ = writeln!(out, "    ny_fmt(): string {{\n        return [{}][this.{}];\n    }}", names.join(", "), fields[0]);
+            // `Shape.Circle(2)`: the values of a variant that carries any, as a struct prints its fields
+            let mut cases = String::new();
+            for v in (0..s.variants.len()).filter(|v| s.payloads.get(*v).is_some_and(|n| *n > 0)) {
+                let vals: Vec<String> =
+                    s.slots(v).map(|k| format!("${{ny_fmt(this.{}, \"{}\")}}", fields[k], tdesc(s.fields[k].1))).collect();
+                let _ = writeln!(cases, "        if (this.{} === {v}) return `${{n}}({})`;", fields[0], vals.join(", "));
+            }
+            let _ = writeln!(
+                out,
+                "    ny_fmt(): string {{\n        const n = [{}][this.{}];\n{cases}        return n;\n    }}",
+                names.join(", "),
+                fields[0]
+            );
         } else if s.option {
             let _ = writeln!(
                 out,
@@ -296,6 +335,9 @@ pub fn gen(m: &Module, file: &str) -> String {
                 .map(|(f, t)| format!("[{}, \"{}\", {}]", crate::diag::json_str(f), field_name(f), jdesc(*t)))
                 .collect();
             let _ = writeln!(out, "({} as any).ny_jf = [{}];", name(&s.name), fields.join(", "));
+            if let Some(extra) = jkind(s) {
+                let _ = writeln!(out, "{}", extra.replace("@C@", &format!("({} as any)", name(&s.name))));
+            }
         }
         out.push('\n');
     }
@@ -558,8 +600,8 @@ impl Gen<'_> {
                     }
                     RtOp::ArrReverse => format!("{target}.reverse()"),
                     RtOp::ArrAppend => format!("ny_append({target}, {})", a[0]),
-                    RtOp::MapSet => format!("{target}.set({}, {})", a[0], self.owned(&args[1])),
-                    RtOp::MapRemove => format!("{target}.delete({})", a[0]),
+                    RtOp::MapSet => format!("{target}.set(ny_ik({}), {})", a[0], self.owned(&args[1])),
+                    RtOp::MapRemove => format!("{target}.delete(ny_ik({}))", a[0]),
                     RtOp::ArrSwap => format!("ny_swap({target}, {}, {}, {at})", a[0], a[1]),
                     other => unreachable!("{} does not change a place", other.name()),
                 };
@@ -914,7 +956,7 @@ impl Gen<'_> {
                     PureFn::CharIsLower => format!("ny_char_is_lower({})", a[0]),
                     PureFn::CharIsSpace => format!("ny_is_space({})", a[0]),
                     PureFn::MapLen => format!("{}.size", self.expr(&args[0])),
-                    PureFn::MapHas => format!("{}.has({})", self.expr(&args[0]), a[1]),
+                    PureFn::MapHas => format!("{}.has(ny_ik({}))", self.expr(&args[0]), a[1]),
                     PureFn::ArrLen => format!("{}.length", self.expr(&args[0])),
                     PureFn::ArrContains => format!("(ny_index_of({}, {}) >= 0)", a[0], a[1]),
                     PureFn::ArrIndexOf => format!("ny_index_of({}, {})", a[0], a[1]),

@@ -1,4 +1,4 @@
-# Nyra v0.6 — language spec
+# Nyra v0.7 — language spec
 
 This file is the whole language. It is short on purpose: paste it into an AI agent's
 context and the agent can write Nyra. For common mistakes and complete examples, see
@@ -29,11 +29,11 @@ context and the agent can write Nyra. For common mistakes and complete examples,
 | `str` | immutable UTF-8 text: `"hi"`, `""`; escapes `\n \t \r \0 \\ \"` |
 | `char` | one character: `'a'`, `'é'`, `'\n'`, `'\''` |
 | `[T]` | array of `T`: `[1, 2]`, `[[1], []]`; an empty one needs its type: `var xs: [int] = []` |
-| `[K: V]` | map from `K` (`int`, `str`, `char` or `bool`) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
+| `[K: V]` | map from `K` (`int`, `str`, `char`, `bool` or a tuple of those) to `V`: `["a": 1]`; empty: `var m: [str: int] = [:]` |
 | `(T, U)` | tuple of two or more values of any types: `(1, "a")`, read with `t.0`, `t.1` |
 | `T?` | optional: a `T` or `none`: `int?`, `[str]?`, `(int, str)?` |
 | `Point` | a struct you declare |
-| `Dir` | an enum you declare: one of its named cases, `Dir.N` |
+| `Dir` | an enum you declare: one of its named cases, `Dir.N`, which may carry values, `Shape.Circle(2.0)` |
 
 There are no optional types and no null: `int?` and `Option<int>` are E0262. Return a sentinel (`-1`, `""`) or a `bool`.
 
@@ -148,7 +148,8 @@ immutable and may go unused. `for v in xs` loops over `xs` as it was when the lo
 
 `if` can also be a value. It needs an `else`, and each branch is one expression of the same type:
 `let max = if a > b { a } else { b }`. The conditional operator is the same thing: `let max = a > b ? a : b`
-(see Operators).
+(see Operators). So is `if let`: `let n = if let v = m.get(k) { v + 1 } else { 0 }`. A `match` is a value too
+(see Enums and `match`).
 
 ## Operators (high to low precedence)
 | ops | types |
@@ -340,8 +341,8 @@ A comma makes a tuple (`(a + b) * c` is still a grouping). The parts are fixed b
 not `(str, int)`, and `t.2` of a pair is E0273. A pattern must name every part (`_` skips one): a wrong
 count is E0272. Tuples are values like structs: they are copied, compare with `==` and `!=` by content, and
 `<` `<=` `>` `>=` compare the parts in turn when each part is an `int`, `float`, `str`, `char` or `bool`
-(or such a tuple). So `sort()` works on an array of them. A tuple cannot be a map key (use a string or an
-int that stands for it) and `json` cannot read or write one (use a struct).
+(or such a tuple). So `sort()` works on an array of them. A tuple whose parts are
+ints, strs, chars, bools or such tuples can be a map key (`[(int, int): str]`); `json` writes one as an array.
 
 ## Enums and `match`
 ```nyra
@@ -373,16 +374,56 @@ match 7 % 2 {
 ```
 An enum value is one of its variants, always written `Enum.Variant` (a bare `N` is E0278). It prints as
 `Dir.N`, compares with `==` and `!=` by variant, is copied like any value, and can be stored in arrays and
-struct fields; it cannot be ordered, be a map key or go through `json`. `Enum.all()` is the array of all
-variants, in order.
+struct fields; it cannot be ordered or be a map key. `Enum.all()` is the array of all variants, in order.
+
+A variant may carry values, written as types after its name. It is built by calling it, and `match` takes
+the values out by naming them:
+```nyra
+enum Shape { Circle(float), Rect(float, float), Empty }
+
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r      // `r` is the value of the variant
+        Shape.Rect(w, h) => return w * h
+        Shape.Empty => return 0.0
+    }
+}
+
+let c = Shape.Circle(2.0)
+print(c, Shape.Rect(1.0, 2.5), c == Shape.Circle(2.0), area(c))   // Shape.Circle(2) Shape.Rect(1, 2.5) true 12
+```
+A variant that carries values is always written with them (`Shape.Circle` alone is E0286), in the order and
+types it declares (a wrong count is E0204, a wrong type E0203). Values compare with `==` by variant and
+values, and print like a struct's fields: `Token.Pair(3, "x")`. A pattern names every value, `_` for one that is
+not needed (`Shape.Rect(_, h)`; a wrong count or a literal is E0287, and so are names in an arm with several
+patterns). The names are `let`s of that arm. An enum cannot contain itself (E0222): keep recursive data in an
+array, `Node([Tree])`. `Enum.all()` needs variants without values (E0288).
 
 `match value { pattern => body }` picks the first arm whose pattern equals the value. A pattern is a variant
 of the matched enum, or a literal `int`, `str`, `char` or `bool` (a `-` literal cannot start a line:
 `4, -1 =>`); several patterns are separated by commas; `_` takes anything. The body is one statement after
 `=>`, or a block `{ ... }`. All cases must be covered (E0281): for an enum every variant or a `_` arm, for a
 `bool` both values, for an `int`, `str` or `char` a `_` arm. An arm that can never run is E0283, and a
-pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. `match` is a
-statement: to give a value, `ret` it or assign it in the arms.
+pattern of the wrong type, or a value that cannot be matched (a `float`, an array), is E0279. As a
+statement, `match` `return`s a value or assigns it in the arms.
+
+`match` and `if let` also give a value. As a value, each arm is one expression (arms are separated by new
+lines or commas), all of one type (E0212), and the cases must still be covered:
+```nyra
+enum Shape { Circle(float), Rect(float, float), Empty }
+fn size(n: int) -> str = match n { 0 => "none", 1, 2, 3 => "few", _ => "many" }
+
+let s = Shape.Rect(2.0, 3.0)
+let area = match s {
+    Shape.Circle(r) => 3.14 * r * r
+    Shape.Rect(w, h) => w * h
+    Shape.Empty => 0.0
+}
+let k = 2
+print(area, size(k), 10 + match k { 1 => 100, _ => 200 })   // 6 few 210
+```
+The value matched is computed once, and only the chosen arm runs. A statement that starts with `match` is
+the statement form; anywhere else (`let`, `return`, an argument, an operand) it is a value.
 
 ## Optional values
 ```nyra
@@ -411,7 +452,7 @@ plain value: `m.get(k) == 3`). `x ?? d` is `x`'s value, or `d` (evaluated only w
 optional. `if let v = x { ... } else { ... }` binds `v` in the first block only. `x.is_some()`, `x.is_none()` and
 `x.unwrap()` (E0350 at run time when it holds none) are the only methods; to use a field or a method of the
 value, take it out first. `none` needs a known optional type (E0276), `??` and `if let` need an optional on the
-left (E0277). Optionals cannot be map keys or go through `json`.
+left (E0277). Optionals cannot be map keys. In `json` an optional is the value, or `null`.
 
 ## Values and `inout`
 Assigning, passing, returning and storing always copy, so two variables never share data (copies
@@ -463,7 +504,7 @@ print(text.fixed(math.sqrt(2.0), 3))   // 1.414
 | `input` | `line()` the next line of standard input without its line end ("" at the end) · `lines()` all the rest as `[str]` · `all()` the rest as it is · `eof()` |
 | `os` | `args()` the program's arguments, `[str]` · `env(name)` a variable ("" when not set) · `has_env(name)` · `exit(code)` stops now |
 | `fs` | `read(path)` · `write(path, text)` · `append(path, text)` · `exists(path)` · `list(dir)` names, sorted · `remove(path)` a file or empty folder · `mkdir(path)` |
-| `json` | `str(v)` any value as JSON · `parse(text)` reads the type the value goes to: `let p: Point = json.parse(s)` |
+| `json` | `str(v)` any value as JSON (see below) · `parse(text)` reads the type the value goes to: `let p: Point = json.parse(s)` |
 | `time` | `now_ms()` int, since 1970 · `mono_ms()` float, a monotonic clock for timing · `sleep_ms(ms)` |
 | `random` | `random()` a float from 0 up to 1 · `range(lo, hi)` an int from lo to hi - 1 · `seed(n)` |
 | `math` | `pi` `e` `inf` · `sqrt floor ceil round trunc exp log log10 log2 sin cos tan asin acos atan` (float) · `pow(x, y)` · `atan2(y, x)` |
@@ -476,8 +517,65 @@ never clash with the program's (`fn sign`, `let x`, `fn lo` are all fine next to
 unless `random.seed(n)` was called; then they are the same sequence on every backend. `math` gives the
 same digits on every backend; `round` rounds halves away from zero. Paths are relative to the folder the
 program runs in and use `/`. JSON objects are read into structs by field name (other keys are skipped;
-every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`. Text from
+every field must be there), lists into arrays; `json.str` writes infinity and NaN as `null`.
+
+Every type has a JSON form, and `json.parse` reads exactly it:
+
+| Nyra | JSON |
+|---|---|
+| `int` `float` `bool` `str` `char` | a number, a number, `true`/`false`, a string, a one-character string |
+| `[T]` | an array |
+| struct | an object with the fields in order: `{"x":1,"y":2}` |
+| tuple `(A, B)` | an array of the parts: `[1,"a"]` (reading needs the exact length) |
+| optional `T?` | the value, or `null` for `none` |
+| enum variant | the name as a string, `"Empty"`, or with values an object with one key and an array: `{"Rect":[1,2]}` |
+| map `[str: V]` | an object: `{"a":1,"b":2}`; a repeated key keeps its first place and the last value |
+| map with other keys | an array of `[key,value]` pairs: `[[1,"one"],[2,"two"]]` |
+
+```nyra
+use json
+
+enum Shape { Circle(float), Empty }
+
+let data = ["a": (1, Shape.Circle(2.5)), "b": (2, Shape.Empty)]
+let text = json.str(data)
+print(text)                          // {"a":[1,{"Circle":[2.5]}],"b":[2,"Empty"]}
+let back: [str: (int, Shape)] = json.parse(text)
+print(back == data)                  // true
+```
+A shape that does not fit is runtime error E0345 with the path, e.g. `expected an array of 2 elements at $.a` or
+`expected a variant of Shape: a name, or {"Name": [values]} at $.b`. An optional inside an optional writes `null`
+for both `none` and `Some(none)`. Text from
 outside (input, files, arguments) must be UTF-8.
+
+## How `nyra run` runs a program
+`nyra run` does not make you wait for the C compiler. It is *automatic*: a program that ends quickly is
+answered from the interpreter in milliseconds, one that runs long runs as a native executable, and the
+output is the same either way.
+
+1. If a native build of this exact source is already cached, it runs: nothing is faster.
+2. A program that uses `fs` or `os` (it could write a file or stop with a code), that calls
+   `time.sleep_ms` (the interpreter does not wait), or that reads a terminal, goes straight to the C
+   compiler: running it twice could repeat what it does.
+3. Any other program starts in the interpreter with its output kept in memory, a budget of 4,000,000
+   steps and 350 ms, and its standard input read to the end first. After 15 ms the C compiler starts in a background
+   thread, so its work overlaps with the interpreter's.
+   - If the program ends within the budget, the compiler is stopped, the output is printed and the exit
+     code is the program's: the whole run took milliseconds.
+   - If it does not (or it prints more than 8 MiB, needs more than 256 MiB, nests more than 20,000 calls,
+     or does something the interpreter cannot do), the kept output is thrown away, the run waits for the
+     compiler and starts the executable with the same standard input. The output appears once, from the
+     native run.
+
+The output, the exit code and the runtime errors (code, message, position, `--json`) are the same in every
+mode; only the time differs. `--native` skips the interpreter (the plain compile, then run); `--release`
+does too, and optimizes the C more (-O2, like `build`); `--interp`, `--sandbox` and the limit flags run in
+the interpreter only (see below). `--time` says which way a run went. A program that talks to a pipe and
+answers as its input arrives does not wait for the end of the input: when the end does not come within
+40 ms the program runs natively and gets the input as it arrives. Without a C compiler `run` interprets
+the program to its end. The budgets can be changed for tests with the environment variables
+`NYRA_AUTO_STEPS` and `NYRA_AUTO_WALL_MS` (and the delay of the compiler with `NYRA_AUTO_DELAY_MS`). The MCP tool `nyra_run` does
+the same when it is not asked to sandbox (its reply has `"mode":"interp"` when the interpreter answered).
 
 ## Capabilities and the sandbox
 A program says what it touches with its `use` lines, and a run decides what it may touch. The modules

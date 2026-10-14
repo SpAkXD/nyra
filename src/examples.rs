@@ -194,6 +194,7 @@ fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Foral
 }
 
 /// Runs every example, on a thread with a large stack. `None` if that thread cannot run.
+#[cfg(not(target_arch = "wasm32"))]
 fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
     let types = ast::type_tables();
     std::thread::scope(|scope| {
@@ -209,6 +210,13 @@ fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Opt
             .join()
             .ok()
     })
+}
+
+/// Runs every example. WebAssembly has no threads: they run on the caller's stack, which the
+/// build makes large (`tools/build_wasm.py`).
+#[cfg(target_arch = "wasm32")]
+fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
+    Some(plans.iter().map(|p| one(m, p, base)).collect())
 }
 
 fn one(m: &ir::Module, plan: &Plan, base: usize) -> (Res, Option<i64>) {
@@ -423,6 +431,15 @@ fn first_call(e: &Expr, fns: &[&str]) -> Option<String> {
             .or_else(|| lo.as_ref().and_then(|x| first_call(x, fns)))
             .or_else(|| hi.as_ref().and_then(|x| first_call(x, fns))),
         ExprKind::If(c, a, b) => first_call(c, fns).or_else(|| first_call(a, fns)).or_else(|| first_call(b, fns)),
+        ExprKind::Bind(_, v, body) => first_call(v, fns).or_else(|| first_call(body, fns)),
+        ExprKind::Match(scrut, arms) => first_call(scrut, fns).or_else(|| {
+            arms.iter().find_map(|a| {
+                a.body.iter().find_map(|s| match &s.kind {
+                    StmtKind::Expr(x) => first_call(x, fns),
+                    _ => None,
+                })
+            })
+        }),
         ExprKind::Method(r, _, args) => first_call(r, fns).or_else(|| all(args)),
         ExprKind::Array(xs) | ExprKind::Tuple(xs) => all(xs),
         ExprKind::MapLit(kvs) => kvs.iter().find_map(|(k, v)| first_call(k, fns).or_else(|| first_call(v, fns))),
@@ -529,6 +546,8 @@ pub fn source(e: &Expr) -> String {
         }
         ExprKind::Call(n, args) => format!("{n}({})", list(args)),
         ExprKind::If(c, a, b) => format!("if {} {{ {} }} else {{ {} }}", source(c), source(a), source(b)),
+        ExprKind::Bind(_, _, body) => source(body),
+        ExprKind::Match(scrut, _) => format!("match {} {{ ... }}", source(scrut)),
         ExprKind::Array(xs) => format!("[{}]", list(xs)),
         ExprKind::Tuple(xs) => format!("({})", list(xs)),
         ExprKind::Fmt(x, spec) => format!("{}:{}", source(x), spec.text),

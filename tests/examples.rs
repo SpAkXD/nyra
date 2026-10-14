@@ -109,9 +109,12 @@ fn examples_produce_expected_output_on_every_backend() {
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         // (`run` compiles the C with -O1; `--release` is the -O2 of `build`: both must agree)
-        targets.push(("native", &[], "1"));
+        // (`run` is automatic: the interpreter first, the executable if the program runs long;
+        // `--native` is the plain compile, which the leak check needs)
+        targets.push(("native, auto", &[], "1"));
+        targets.push(("native", &["--native"], "1"));
         targets.push(("native, --release", &["--release"], "1"));
-        targets.push(("native, no optimizations", &[], "0"));
+        targets.push(("native, no optimizations", &["--native"], "0"));
     } else {
         missing("no C compiler for the native backend");
     }
@@ -144,6 +147,7 @@ fn runtime_errors_report_code_position_and_exit_101() {
     }
     if std::env::var("NYRA_CC").is_ok() || ["gcc", "clang", "cc", "tcc"].iter().any(|c| available(c)) {
         backends.push(&[]);
+        backends.push(&["--native"]);
         backends.push(&["--release"]);
     } else {
         missing("no C compiler for the native backend");

@@ -294,7 +294,7 @@ fn indented(code: &str) -> String {
     code.lines().map(|l| if l.is_empty() { "\n".to_string() } else { format!("    {l}\n") }).collect()
 }
 
-fn render_entry(e: &Entry, all: &[Entry]) -> String {
+pub fn render_entry(e: &Entry, all: &[Entry]) -> String {
     let mut out = format!("{}: {}\n", e.code, e.title);
     if e.planned {
         out += &format!(

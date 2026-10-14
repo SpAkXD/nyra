@@ -1,0 +1,72 @@
+// Enums that carry values: `Shape.Circle(2.0)`, taken apart with `match`.
+enum Shape {
+    Circle(float)
+    Rect(float, float)
+    Empty
+}
+
+enum Token { Num(int), Word(str), Pair(int, str), Quit }
+
+struct Drawing {
+    name: str
+    shape: Shape
+}
+
+fn area(s: Shape) -> float {
+    match s {
+        Shape.Circle(r) => return 3.0 * r * r
+        Shape.Rect(w, h) => return w * h
+        Shape.Empty => return 0.0
+    }
+}
+
+fn describe(t: Token) -> str {
+    match t {
+        Token.Num(n) => return "number {n}"
+        Token.Word(w) => return "word {w.upper()}"
+        Token.Pair(n, _) => return "pair {n}"
+        Token.Quit => return "quit"
+    }
+}
+
+fn is_round(s: Shape) -> bool {
+    match s {
+        Shape.Circle(_) => return true
+        _ => return false
+    }
+}
+
+let c = Shape.Circle(2.0)
+let r = Shape.Rect(3.0, 4.5)
+print(c, r, Shape.Empty)
+print(area(c), area(r), area(Shape.Empty))
+print(c == Shape.Circle(2.0), c == Shape.Circle(3.0), c != r, r == Shape.Rect(3.0, 4.5))
+print(is_round(c), is_round(r))
+
+let tokens = [Token.Num(7), Token.Word("hi"), Token.Pair(3, "x"), Token.Quit]
+for t in tokens {
+    print(t, "->", describe(t))
+}
+print(tokens)
+print(tokens.contains(Token.Word("hi")), tokens.contains(Token.Word("ho")), tokens.index_of(Token.Quit))
+
+// values inside structs, copies and changes
+var d = Drawing(name: "a", shape: Shape.Circle(1.0))
+let d2 = d
+d.shape = Shape.Rect(2.0, 2.0)
+print(d, d2)
+
+// several arms with the same variant name pattern and a default arm
+fn weight(t: Token) -> int {
+    var w = 0
+    match t {
+        Token.Num(n) => w = n * 2
+        Token.Word(s) => {
+            w = s.len()
+            w += 100
+        }
+        _ => w = -1
+    }
+    return w
+}
+print(weight(Token.Num(4)), weight(Token.Word("abc")), weight(Token.Quit), weight(Token.Pair(1, "q")))

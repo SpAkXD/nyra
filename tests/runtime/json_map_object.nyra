@@ -1,0 +1,9 @@
+// expect: E0345 at 7:30
+// message: json.parse: expected an object at $
+use json
+
+fn main() {
+    print("start")
+    let v: [str: int] = json.parse("[1]")
+    print(v)
+}

@@ -1,0 +1,9 @@
+// expect: E0345 at 7:30
+// message: json.parse: expected an array of 2 elements at $
+use json
+
+fn main() {
+    print("start")
+    let v: (int, str) = json.parse("[1]")
+    print(v)
+}

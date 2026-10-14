@@ -1,0 +1,73 @@
+// JSON for every value type: tuples, optionals, enums and maps. See the encoding in docs/SPEC.md.
+use json
+
+enum Light { Red, Green }
+enum Shape { Circle(float), Rect(float, float), Empty }
+enum Tree { Leaf(int), Node([Tree]) }
+struct Item {
+    name: str
+    shape: Shape
+    tags: [str]
+    best: int?
+}
+
+// tuples are arrays
+print(json.str((1, "a")), json.str(((1, 2.5), 'x', [true, false])))
+let pair: (int, str) = json.parse(" [2, \"b\"] ")
+print(pair, pair == (2, "b"))
+let deep: ((int, float), char, [bool]) = json.parse("[[1, 2.5], \"x\", [true]]")
+print(deep, json.str(deep))
+
+// optionals are the value or null
+let a: int? = 5
+let b: int? = none
+print(json.str(a), json.str(b), json.str([a, b, a]))
+let ys: [int?] = json.parse("[1, null, 3]")
+print(ys, ys[1] == none, ys[2] ?? 0)
+let mixed: (int, str?) = json.parse("[7, null]")
+let sx: str? = "x"
+print(mixed, json.str(mixed), json.str((8, sx)))
+
+// enums: a name, or {"Name": [values]}
+print(json.str(Light.Red), json.str(Light.Green), json.str([Light.Red, Light.Green]))
+print(json.str(Shape.Circle(2.5)), json.str(Shape.Rect(1.0, 2.0)), json.str(Shape.Empty))
+let shapes: [Shape] = json.parse("[\"Empty\", {\"Circle\": [1.5]}, {\"Rect\": [2, 3]}]")
+print(shapes)
+let lights: [Light] = json.parse("[\"Green\", \"Red\"]")
+print(lights, lights == [Light.Green, Light.Red])
+let tree = Tree.Node([Tree.Leaf(1), Tree.Node([]), Tree.Node([Tree.Leaf(2)])])
+let tree_text = json.str(tree)
+print(tree_text)
+let tree_back: Tree = json.parse(tree_text)
+print(tree_back == tree, tree_back)
+
+// structs with all of it
+let it = Item(name: "n \"q\"", shape: Shape.Rect(1.0, 2.0), tags: ["a", "b"], best: 3)
+let it2 = Item(name: "m", shape: Shape.Empty, tags: [], best: none)
+let items = [it, it2]
+let text = json.str(items)
+print(text)
+let back: [Item] = json.parse(text)
+print(back == items, back[1])
+
+// maps: an object for str keys, an array of pairs for any other key
+let m = ["a": 1, "b": 2]
+print(json.str(m), json.str(["x": [1, 2], "y": []]))
+let counts: [str: int] = json.parse("{\"x\": 1, \"y\": 2, \"x\": 3}")
+print(counts, json.str(counts))
+let by_id = [3: "three", 1: "one"]
+print(json.str(by_id), json.str([true: 1, false: 0]), json.str(['a': 1, 'b': 2]))
+let back_ids: [int: str] = json.parse("[[2, \"b\"], [1, \"a\"], [2, \"c\"]]")
+print(back_ids, back_ids.keys())
+let empty: [str: int] = [:]
+let empty_ids: [int: int] = [:]
+print(json.str(empty), json.str(empty_ids))
+let e1: [str: int] = json.parse(" { } ")
+let e2: [int: int] = json.parse("[]")
+print(e1, e2)
+let nested: [str: [Shape]] = json.parse("{\"s\": [{\"Circle\": [1]}, \"Empty\"], \"t\": []}")
+print(nested, json.str(nested))
+let maps_in_arrays: [[str: int?]] = json.parse("[{\"a\": null, \"b\": 2}, {}]")
+print(maps_in_arrays, json.str(maps_in_arrays))
+let inside: [str: (int, Shape?)] = json.parse("{\"k\": [1, {\"Rect\": [1, 2]}], \"j\": [2, null]}")
+print(inside, json.str(inside))

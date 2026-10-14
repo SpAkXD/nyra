@@ -80,7 +80,18 @@ fn struct_table(prog: &ast::Program) -> Structs {
         let managed = fields.iter().any(|(_, t)| table.managed(*t));
         let tuple = Ty::Struct(id).is_tuple();
         let option = Ty::Struct(id).is_option();
-        table.0.push((id, StructInfo { name: def.name.clone(), fields, managed, tuple, option, variants: def.variants.clone() }));
+        table.0.push((
+            id,
+            StructInfo {
+                name: def.name.clone(),
+                fields,
+                managed,
+                tuple,
+                option,
+                variants: def.variants.clone(),
+                payloads: def.payloads.clone(),
+            },
+        ));
     }
     let mut ids: Vec<u32> = defs.keys().copied().collect();
     ids.sort_unstable();
@@ -162,6 +173,8 @@ fn mutates(e: &ast::Expr) -> bool {
         }
         K::Binary(_, a, b) | K::Index(a, b) => mutates(a) || mutates(b),
         K::If(c, a, b) => mutates(c) || mutates(a) || mutates(b),
+        K::Bind(_, v, body) => mutates(v) || mutates(body),
+        K::Match(..) => true,
         K::Array(xs) | K::Tuple(xs) => xs.iter().any(mutates),
         K::Some(x) => mutates(x),
         K::Coalesce(a, b) => mutates(a) || mutates(b),
@@ -189,6 +202,20 @@ fn each_expr(e: &ast::Expr, f: &mut dyn FnMut(&ast::Expr)) {
             each_expr(c, f);
             each_expr(a, f);
             each_expr(b, f);
+        }
+        K::Bind(_, v, body) => {
+            each_expr(v, f);
+            each_expr(body, f);
+        }
+        K::Match(scrut, arms) => {
+            each_expr(scrut, f);
+            for arm in arms {
+                for st in &arm.body {
+                    if let ast::StmtKind::Expr(x) = &st.kind {
+                        each_expr(x, f);
+                    }
+                }
+            }
         }
         K::Call(_, xs) | K::Array(xs) | K::Tuple(xs) => xs.iter().for_each(|x| each_expr(x, f)),
         K::Some(x) => each_expr(x, f),
@@ -1453,6 +1480,22 @@ impl<'a> Lower<'a> {
                 let [a, b]: [Expr; 2] = v.try_into().expect("two operands");
                 self.binop(*op, a, b, l.ty, span, dst, out)
             }
+            ast::ExprKind::Bind(name, value, body) => {
+                // the name keeps the value it has now (a copy unless it is a temporary already)
+                let v = self.expr(value, None, out);
+                let v = self.snapshot(v, value.ty, value.span, out);
+                let l = match v {
+                    Expr::Local(l) => l,
+                    other => {
+                        let t = self.temp(value.ty);
+                        out.push(Stmt { kind: StmtKind::Set(t, other), span });
+                        t
+                    }
+                };
+                self.scopes.last_mut().expect("a scope is open").names.insert(name.clone(), l);
+                self.expr(body, dst, out)
+            }
+            ast::ExprKind::Match(..) => unreachable!("the checker turns `match` into `if`"),
             ast::ExprKind::If(c, a, b) => {
                 let c = self.expr(c, None, out);
                 let saved = std::mem::take(&mut self.pending);
@@ -1820,7 +1863,30 @@ impl<'a> Lower<'a> {
             _ => {
                 let Some(&func) = self.ids.get(name) else {
                     // `Point(x: 1, y: 2)`: the fields in declaration order (the checker made sure)
-                    let fields = self.fields(args, out);
+                    let mut fields = self.fields(args, out);
+                    let info = self.structs.get(e.ty).expect("a struct");
+                    // an enum value: the number of the variant and its values; the other variants' fields hold zeros
+                    if !info.variants.is_empty() && info.fields.len() > fields.len() {
+                        let Some(Expr::Int(k)) = fields.first().cloned() else {
+                            unreachable!("the checker writes the number of the variant")
+                        };
+                        let layout: Vec<(Ty, bool)> = info
+                            .payloads
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(v, _)| info.slots(v).map(move |i| (i, v == k as usize)))
+                            .map(|(i, own)| (info.fields[i].1, own))
+                            .collect();
+                        let mut given = fields.drain(1..).collect::<Vec<_>>().into_iter();
+                        for (t, own) in layout {
+                            let v = if own {
+                                given.next().expect("the checker counted the values")
+                            } else {
+                                self.default_value(t, span, out)
+                            };
+                            fields.push(v);
+                        }
+                    }
                     return self.op(RtOp::StructNew, fields, e.ty, dst, span, out);
                 };
                 let args = self.call_args(name, args, out);

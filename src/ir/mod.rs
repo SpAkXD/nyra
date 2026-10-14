@@ -44,8 +44,24 @@ pub struct StructInfo {
     pub tuple: bool,
     /// An optional value `T?`: the fields `has` and `val`; printed `none` or `Some(v)`.
     pub option: bool,
-    /// An enum: the names of its variants (its one field is the number of the variant); empty for a struct.
+    /// An enum: the names of its variants (its first field is the number of the variant); empty for a struct.
     pub variants: Vec<String>,
+    /// An enum: how many values each variant carries. They are the fields after the first one, the
+    /// first variant's values first (see `slot_starts`).
+    pub payloads: Vec<usize>,
+}
+
+impl StructInfo {
+    /// An enum: the index of the first field of each variant's values.
+    pub fn slot_starts(&self) -> Vec<usize> {
+        crate::ast::StructDef::slot_starts(&self.payloads)
+    }
+
+    /// An enum: the indexes of the fields that hold the values of variant `v`.
+    pub fn slots(&self, v: usize) -> std::ops::Range<usize> {
+        let at = self.slot_starts()[v];
+        at..at + self.payloads[v]
+    }
 }
 
 /// The structs of a program by type id (`Ty::Struct(id)`), in an order where each struct comes

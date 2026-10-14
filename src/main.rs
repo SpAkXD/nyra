@@ -1,6 +1,8 @@
 mod ast;
+mod auto;
 mod caps;
 mod check;
+mod clock;
 mod codegen;
 mod diag;
 mod edit;
@@ -21,6 +23,9 @@ mod parser;
 mod perfwarn;
 mod sandbox;
 mod stdlib;
+// the C-ABI entry points of the WebAssembly build (`src/lib.rs`); natively only for their tests
+#[cfg(any(target_arch = "wasm32", test))]
+mod wasm;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -30,7 +35,8 @@ const USAGE: &str = "\
 nyra - a language for AI agents
 
 usage:
-  nyra run   <file.nyra> [-- args]   compile and run (args after `--` go to the program)
+  nyra run   <file.nyra> [-- args]   run it (args after `--` go to the program): at once in the
+                            interpreter, and natively if it runs long (see `--native`)
   nyra build <file.nyra>    compile to a native executable
   nyra check <file.nyra>    only check for errors (this runs the `ex` examples too)
   nyra fmt   <file.nyra>    rewrite the file in canonical form (fixes applied, `return`, 4 spaces)
@@ -52,8 +58,18 @@ options:
                file back if it then compiles (then run or build it as usual)
   --strict     errors stay errors: without it, an error that has exactly one certain
                fix is repaired in memory (the file is not written) and reported as a warning
-  --release    (run) optimize the generated C like `build` does (-O2); `run` compiles faster
-               by default (-O1), so the first output comes sooner
+  --native     (run) compile with the C compiler and start the executable, with no interpreter
+               first. Without it `run` is automatic: a build of this exact source that is already
+               cached runs at once; otherwise the program starts in the interpreter (milliseconds)
+               with a budget of steps and time, while the C compiler starts in the background. A program
+               that finishes within the budget prints its output right away; one that does not is
+               stopped, its output thrown away, and it runs again natively (same input, so the
+               output appears once). Programs that use `fs` or `os` or call `time.sleep_ms` always
+               run natively (running them twice could repeat their effects); so do programs that
+               read a terminal.
+               The output, the exit code and the runtime errors are the same in every mode.
+  --release    (run) optimize the generated C like `build` does (-O2), and run it natively (as
+               --native); `run` compiles with -O1 by default, so the first output comes sooner
   --time       show how long each step took
 
 safety (for programs you did not write, or agents that run unsupervised):
@@ -159,6 +175,8 @@ struct Opts {
     prog_args: Vec<String>,
     /// `--interp`: run in the interpreter.
     interp: bool,
+    /// `--native`: `run` compiles with the C compiler and starts the executable, with no interpreter first.
+    native: bool,
     /// `--sandbox`: the interpreter, nothing granted but `--allow`, confined files.
     sandbox: bool,
     /// The values of `--allow`.
@@ -212,6 +230,7 @@ fn parse_args() -> Result<Opts, String> {
         release: false,
         prog_args: Vec::new(),
         interp: false,
+        native: false,
         sandbox: false,
         allow: Vec::new(),
         fuel: None,
@@ -243,6 +262,7 @@ fn parse_args() -> Result<Opts, String> {
             "--time" => opts.time = true,
             "--fix" => opts.fix = true,
             "--interp" => opts.interp = true,
+            "--native" => opts.native = true,
             "--sandbox" => opts.sandbox = true,
             "--allow" => opts.allow.push(args.next().ok_or("--allow needs capabilities: `--allow fs,os` (or `all`)")?),
             _ if a.starts_with("--allow=") => opts.allow.push(a["--allow=".len()..].to_string()),
@@ -501,6 +521,11 @@ fn real_main() -> ExitCode {
         return run_interpreted(&opts, &prog);
     }
 
+    // `nyra run` is automatic (see auto.rs) unless it was asked to compile: --native, --release
+    if opts.cmd == "run" && opts.target == Target::Native && !opts.native && !opts.release {
+        return auto::run(&opts, &prog, start);
+    }
+
     let code = match generate(&prog, opts.target, &opts.file) {
         Ok(code) => code,
         Err(msg) => return fail(msg),
@@ -536,25 +561,28 @@ fn test(opts: &Opts, src: &str, mut prog: ast::Program) -> ExitCode {
 /// The back half of the compiler: a checked program to the source code of a target.
 /// `file` is the name the generated code reports in runtime errors.
 fn generate(prog: &ast::Program, target: Target, file: &str) -> Result<String, String> {
-    let mut module = ir::lower::lower(prog).map_err(|what| format!("not supported yet: {what} (coming later in v0.3)"))?;
-    // NYRA_OPT=0 (for tests and debugging) skips the optimization passes
-    if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
-        ir::opt::optimize(&mut module);
-    }
-    if let Err(e) = ir::verify::verify(&module) {
-        return Err(format!("internal error: the compiler produced invalid IR ({e}); please report this bug"));
-    }
+    Ok(emit(&lower(prog)?, target, file))
+}
+
+/// A checked program to IR: lowered, optimized (`NYRA_OPT=0` skips that) and verified.
+fn lower(prog: &ast::Program) -> Result<ir::Module, String> {
+    let module = sandbox::module(prog)?;
     if std::env::var_os("NYRA_DUMP").is_some_and(|v| v == "ir") {
         eprint!("{}", ir::print::print(&module));
     }
-    Ok(match target {
-        Target::Js => codegen::js::gen(&module, file),
-        Target::Py => codegen::py::gen(&module, file),
-        Target::Ts => codegen::ts::gen(&module, file),
-        Target::Rs => codegen::rs::gen(&module, file),
-        Target::Go => codegen::go::gen(&module, file),
-        Target::Native | Target::C => codegen::c::gen(&module, file),
-    })
+    Ok(module)
+}
+
+/// IR to the source code of a target.
+fn emit(module: &ir::Module, target: Target, file: &str) -> String {
+    match target {
+        Target::Js => codegen::js::gen(module, file),
+        Target::Py => codegen::py::gen(module, file),
+        Target::Ts => codegen::ts::gen(module, file),
+        Target::Rs => codegen::rs::gen(module, file),
+        Target::Go => codegen::go::gen(module, file),
+        Target::Native | Target::C => codegen::c::gen(module, file),
+    }
 }
 
 const NO_CC: &str = "no C compiler found (tried gcc, clang, cc, tcc); install one, set NYRA_CC, or use --js";
@@ -637,7 +665,7 @@ fn run_interpreted(opts: &Opts, prog: &ast::Program) -> ExitCode {
 fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     // the tool's own compile step (C, Rust, Go), when there is one: `None` when it was cached
     let mut build_time: Option<Option<Duration>> = None;
-    let mut cmd = match opts.target {
+    let cmd = match opts.target {
         Target::Js | Target::Ts | Target::Py => {
             // named by the code, so two programs with the same name can run at the same time
             let name = format!("{stem}-{:016x}.{}", fnv1a(&[code.as_bytes()]), opts.target.ext());
@@ -680,13 +708,28 @@ fn run(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
         }
     };
 
+    exec(opts, cmd, build_time, nyra_time, None)
+}
+
+/// Starts the program `cmd` with the options' arguments and waits for it. `feed` is the standard
+/// input to give it instead of this process's own (`nyra run` in auto mode has read it already).
+fn exec(
+    opts: &Opts,
+    mut cmd: Command,
+    build_time: Option<Option<Duration>>,
+    nyra_time: Duration,
+    feed: Option<auto::Feed>,
+) -> ExitCode {
     if opts.json {
         // the program's runtime errors are then printed as JSON too
         cmd.env("NYRA_JSON", "1");
     }
     cmd.args(&opts.prog_args);
     let t = Instant::now();
-    let status = cmd.status();
+    let status = match feed {
+        None => cmd.status(),
+        Some(feed) => auto::run_fed(cmd, feed),
+    };
     let run_time = t.elapsed();
     if opts.time {
         let tool = match opts.target {
@@ -773,10 +816,37 @@ fn cc_cached(
     opt: Opt,
     capture: bool,
 ) -> Result<(PathBuf, Option<Duration>), String> {
+    cc_cached_kill(compiler, code, stem, source, dir, opt, capture, None)
+}
+
+/// `cc_cached`, and the C compiler can be cancelled through `killer` (see `auto::Build`).
+#[allow(clippy::too_many_arguments)]
+fn cc_cached_kill(
+    compiler: &str,
+    code: &str,
+    stem: &str,
+    source: &str,
+    dir: &Path,
+    opt: Opt,
+    capture: bool,
+    killer: Option<&auto::Killer>,
+) -> Result<(PathBuf, Option<Duration>), String> {
+    let slot = cc_slot(compiler, code, stem, source, dir, opt);
+    cached(code, "c", slot, dir, |src, exe| cc(compiler, src, exe, opt, capture, killer))
+}
+
+/// Where the executable for `code` is (or will be) kept. The builds of each optimization level
+/// are kept apart, so `run` and `build` of one file do not evict each other.
+fn cc_slot(compiler: &str, code: &str, stem: &str, source: &str, dir: &Path, opt: Opt) -> Slot {
     let key = format!("{compiler} | {} {}", opt.flag(), CC_FLAGS.join(" "));
-    // (the builds of each optimization level are kept apart, so `run` and `build` of one file do not evict each other)
     let variant = if opt == Opt::Fast { "fast" } else { "" };
-    cached(code, stem, source, "c", variant, &key, dir, |src, exe| cc(compiler, src, exe, opt, capture))
+    slot(code, stem, source, "c", variant, &key, dir)
+}
+
+/// The cached executable for `code`, if a build of it exists (nothing is compiled).
+fn cc_lookup(compiler: &str, code: &str, stem: &str, source: &str, dir: &Path, opt: Opt) -> Option<PathBuf> {
+    let slot = cc_slot(compiler, code, stem, source, dir, opt);
+    slot.exe.exists().then_some(slot.exe)
 }
 
 /// Flags for rustc: optimized, and int overflow wraps (Nyra's `int`), as in a release build.
@@ -790,7 +860,8 @@ fn rust_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<
         return Err("no Rust compiler found (tried rustc); install Rust or set NYRA_RUSTC".into());
     }
     let key = format!("{rustc} | {}", RUSTC_FLAGS.join(" "));
-    cached(code, stem, source, "rs", "", &key, &temp_dir(), |src, exe| {
+    let slot = slot(code, stem, source, "rs", "", &key, &temp_dir());
+    cached(code, "rs", slot, &temp_dir(), |src, exe| {
         let t = Instant::now();
         match Command::new(&rustc).args(RUSTC_FLAGS).arg("-o").arg(exe).arg(src).status() {
             Ok(s) if s.success() => Ok(t.elapsed()),
@@ -805,7 +876,8 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
     if !works(&go, &["version"]) {
         return Err("no Go toolchain found (tried go); install Go or set NYRA_GO".into());
     }
-    cached(code, stem, source, "go", "", &go, &temp_dir(), |src, exe| {
+    let slot = slot(code, stem, source, "go", "", &go, &temp_dir());
+    cached(code, "go", slot, &temp_dir(), |src, exe| {
         let t = Instant::now();
         // one file builds without a module (it must end in `.go`)
         match Command::new(&go).args(["build", "-o"]).arg(exe).arg(src).status() {
@@ -815,20 +887,18 @@ fn go_cached(code: &str, stem: &str, source: &str) -> Result<(PathBuf, Option<Du
     })
 }
 
-/// Compiles generated code into an executable in `dir` with `build(source, exe)`. If the same
-/// code was already compiled with the same tool (`key`), the old executable is reused.
-/// Returns the executable and the build time (`None` when cached).
-#[allow(clippy::too_many_arguments)]
-fn cached(
-    code: &str,
-    stem: &str,
-    source: &str,
-    ext: &str,
-    variant: &str,
-    key: &str,
-    dir: &Path,
-    build: impl FnOnce(&Path, &Path) -> Result<Duration, String>,
-) -> Result<(PathBuf, Option<Duration>), String> {
+/// The files of one cached build.
+struct Slot {
+    /// The builds of one source file share a group.
+    group: String,
+    /// The hash of the code and of the tool that compiles it.
+    key: String,
+    src_path: PathBuf,
+    exe: PathBuf,
+}
+
+/// The names of the build of `code` with the tool described by `key`; nothing is read or written.
+fn slot(code: &str, stem: &str, source: &str, ext: &str, variant: &str, key: &str, dir: &Path) -> Slot {
     let key = format!("{:016x}", fnv1a(&[code.as_bytes(), key.as_bytes()]));
     // Builds are grouped per source file, so two projects that both have a
     // `main.nyra` never evict each other's cached executables.
@@ -843,17 +913,39 @@ fn cached(
         parts.push(variant.as_bytes());
     }
     let group = format!("{stem}-{:08x}-", fnv1a(&parts) as u32);
+    let src_path = dir.join(format!("{group}{key}.{ext}"));
+    let exe = src_path.with_file_name(format!("{group}{key}{}", std::env::consts::EXE_SUFFIX));
+    Slot { group, key, src_path, exe }
+}
+
+/// Compiles generated code into the executable of `slot` with `build(source, exe)`. If it already
+/// exists (the same code, compiled with the same tool), it is reused.
+/// Returns the executable and the build time (`None` when cached).
+fn cached(
+    code: &str,
+    ext: &str,
+    slot: Slot,
+    dir: &Path,
+    build: impl FnOnce(&Path, &Path) -> Result<Duration, String>,
+) -> Result<(PathBuf, Option<Duration>), String> {
+    let Slot { group, key, src_path, exe } = slot;
     let exe_suffix = std::env::consts::EXE_SUFFIX;
-    let src_path = write_temp(dir, &format!("{group}{key}.{ext}"), code)?;
-    let exe = src_path.with_file_name(format!("{group}{key}{exe_suffix}"));
     if exe.exists() {
         return Ok((exe, None));
     }
+    let file_name = src_path.file_name().and_then(|n| n.to_str()).unwrap_or("main").to_string();
+    write_temp(dir, &file_name, code)?;
 
     // Build to a temporary, per-process name first so an interrupted or
     // concurrent build never looks cached.
     let partial = src_path.with_file_name(format!("{group}{key}.{}.partial{exe_suffix}", std::process::id()));
-    let t = build(&src_path, &partial)?;
+    let t = match build(&src_path, &partial) {
+        Ok(t) => t,
+        Err(e) => {
+            let _ = std::fs::remove_file(&partial);
+            return Err(e);
+        }
+    };
     if let Err(e) = std::fs::rename(&partial, &exe) {
         let _ = std::fs::remove_file(&partial);
         if !exe.exists() {
@@ -878,7 +970,7 @@ fn cached(
 }
 
 /// Runs the C compiler. Returns how long it took.
-fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool) -> Result<Duration, String> {
+fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool, killer: Option<&auto::Killer>) -> Result<Duration, String> {
     let mut cmd = Command::new(cc);
     // A compiler given by full path needs its own directory on PATH to find its DLLs/tools.
     if let Some(dir) = Path::new(&cc).parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -893,6 +985,9 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool) -> Result<Du
     #[cfg(not(windows))]
     cmd.arg("-lm");
     let failed = format!("`{cc}` failed to compile the generated C (this is a nyra bug)");
+    if let Some(killer) = killer {
+        return cc_killable(cmd, killer, capture, t, failed);
+    }
     if !capture {
         return match cmd.status() {
             Ok(s) if s.success() => Ok(t.elapsed()),
@@ -904,7 +999,46 @@ fn cc(cc: &str, c_path: &Path, exe: &Path, opt: Opt, capture: bool) -> Result<Du
         Ok(out) => {
             let text = String::from_utf8_lossy(&out.stderr);
             let short: String = text.trim().chars().take(2000).collect();
-            Err(if short.is_empty() { failed } else { format!("{failed}:\n{short}") })
+            Err(if short.is_empty() {
+                failed
+            } else {
+                format!(
+                    "{failed}:
+{short}"
+                )
+            })
+        }
+        Err(_) => Err(failed),
+    }
+}
+
+/// Runs a C compiler that `killer` can stop: the compiler with everything it starts is one tree
+/// (see `limits::Tree`), and it gets a temporary folder of its own that the caller removes.
+fn cc_killable(mut cmd: Command, killer: &auto::Killer, capture: bool, t: Instant, failed: String) -> Result<Duration, String> {
+    if killer.cancelled() {
+        return Err(failed);
+    }
+    let _ = std::fs::create_dir_all(killer.tmp());
+    cmd.env("TMPDIR", killer.tmp()).env("TMP", killer.tmp()).env("TEMP", killer.tmp()).stdin(Stdio::null());
+    if capture {
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    }
+    limits::Tree::prepare(&mut cmd);
+    let Ok(child) = cmd.spawn() else { return Err(failed) };
+    killer.attach(&child);
+    match child.wait_with_output() {
+        Ok(out) if out.status.success() => Ok(t.elapsed()),
+        Ok(out) => {
+            let text = String::from_utf8_lossy(&out.stderr);
+            let short: String = text.trim().chars().take(2000).collect();
+            Err(if short.is_empty() {
+                failed
+            } else {
+                format!(
+                    "{failed}:
+{short}"
+                )
+            })
         }
         Err(_) => Err(failed),
     }

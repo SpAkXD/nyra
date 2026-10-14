@@ -1,0 +1,55 @@
+// Tuples as map keys: grids, graphs and counts by pair.
+use json
+
+var grid: [(int, int): char] = [:]
+grid[(0, 0)] = 'a'
+grid[(2, 1)] = 'b'
+grid[(0, 0)] = 'c'
+print(grid, grid.len(), grid[(0, 0)], grid.get((9, 9), '.'))
+print((2, 1) in grid, (1, 2) in grid, grid.has((0, 0)))
+for k in grid {
+    print(k, grid[k])
+}
+print(grid.keys(), grid.values(), grid.items())
+grid.remove((0, 0))
+print(grid, grid.get((2, 1)), grid.get((0, 0)))
+
+// strings, chars and bools in a key; nested tuples; the map is a value
+var seen: [(str, bool): int] = [:]
+seen[("ann", true)] = 1
+seen[("ann", false)] = 2
+seen[("ann", true)] += 10
+let copy = seen
+seen[("bob", true)] = 3
+print(seen, copy, copy == seen, copy.len())
+var deep: [((int, int), char): str] = [((1, 2), 'x'): "one"]
+deep[((1, 2), 'y')] = "two"
+print(deep[((1, 2), 'x')], deep.len(), ((1, 2), 'z') in deep)
+
+// counting pairs, with a map of arrays inside
+var edges: [(int, int): [int]] = [:]
+for (a, b) in [(1, 2), (1, 2), (2, 3)] {
+    if !((a, b) in edges) {
+        edges[(a, b)] = []
+    }
+    edges[(a, b)].push(a * b)
+}
+print(edges)
+
+// a pair from a computed value, and the order of keys
+let key = (3 - 1, 2 + 1)
+print(edges.has(key), edges[key])
+print(json.str(grid), json.str(seen))
+let back: [(int, int): char] = json.parse("[[[5, 6], \"q\"]]")
+print(back)
+
+// a key is a value: changing the variable it came from later does not change the map
+var p = (1, 2)
+var moves: [(int, int): int] = [:]
+moves[p] = 1
+p.0 = 5
+moves[p] = 2
+let first = moves.keys()[0]
+var q = first
+q.1 = 99
+print(moves, first, q, moves.len())

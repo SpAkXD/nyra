@@ -17,7 +17,7 @@ cargo build --release
 python perf/run.py                  # every program, best of 5 runs
 python perf/run.py sieve fib -n 3   # some of them
 python perf/run.py --json out.json  # the timings as JSON too
-python perf/first_output.py         # time to the first output of `nyra run`, cold and warm, -O2 and -O1
+python perf/first_output.py         # time to the first output of `nyra run`: native (before) against auto mode (now)
 ```
 
 The runner checks that every language prints the same output, then times the whole process (start
@@ -72,6 +72,11 @@ indexes that were just checked. What remains is arithmetic on values that come f
 fields, which no analysis of the program text can bound.
 
 ## Time to the first output of `nyra run`
+
+Since v0.7 `nyra run` is automatic: a program that ends within about 4 million steps and 350 ms is answered by the
+interpreter in 16 to 120 ms instead of the 0.5 to 1.2 s the C compiler needs; a longer one runs natively as before, 15 to
+65 ms later. `--native` is the old behavior. The v0.7 table (14 programs, before and after) is in
+[research/SPEED-run.md](../research/SPEED-run.md), section 6. The older numbers below are for `--native`.
 
 `nyra run` compiles with `-O1`, `nyra run --release` and `nyra build` with `-O2`. Wall-clock
 milliseconds of the whole command, best of 5, for programs of `bench/solutions/nyra`. Cold: nothing

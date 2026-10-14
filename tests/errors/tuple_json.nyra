@@ -1,6 +1,0 @@
-// expect: E0309
-use json
-
-fn main() {
-    print(json.str((1, 2)))
-}

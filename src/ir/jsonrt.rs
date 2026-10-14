@@ -3,19 +3,19 @@
 
 use std::rc::Rc;
 
-use super::interp::{fail, num, Stop, Value};
+use super::interp::{fail, num, MapVal, Stop, Value};
 use super::{Module, Ty};
 use crate::ast::Span;
 
-/// `json.str(v)`: the compact JSON text of a value. A map never gets here (the checker refuses it).
+/// `json.str(v)`: the compact JSON text of a value of type `ty`.
 /// Values nested deeper than `MAX_DEPTH` (a tree built by a loop) are written as `null`.
-pub fn encode(m: &Module, v: &Value, out: &mut String) {
-    encode_at(m, v, out, 0);
+pub fn encode(m: &Module, ty: Ty, v: &Value, out: &mut String) {
+    encode_at(m, ty, v, out, 0);
 }
 
 const MAX_DEPTH: usize = 20_000;
 
-fn encode_at(m: &Module, v: &Value, out: &mut String, depth: usize) {
+fn encode_at(m: &Module, ty: Ty, v: &Value, out: &mut String, depth: usize) {
     if depth > MAX_DEPTH {
         out.push_str("null");
         return;
@@ -27,29 +27,96 @@ fn encode_at(m: &Module, v: &Value, out: &mut String, depth: usize) {
         Value::Char(c) => string(&c.to_string(), out),
         Value::Str(s) => string(s, out),
         Value::Arr(xs) => {
+            let elem = ty.elem().unwrap_or(Ty::Unknown);
             out.push('[');
             for (i, x) in xs.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
                 }
-                encode_at(m, x, out, depth + 1);
+                encode_at(m, elem, x, out, depth + 1);
             }
             out.push(']');
         }
         Value::Struct(id, fields) => {
-            let names = m.structs.get(Ty::Struct(*id)).map(|s| &s.fields[..]).unwrap_or(&[]);
-            if fields.is_empty() {
-                out.push('{');
+            let Some(info) = m.structs.get(Ty::Struct(*id)) else {
+                out.push_str("null");
+                return;
+            };
+            let part = |k: usize| info.fields.get(k).map_or(Ty::Unknown, |f| f.1);
+            if info.tuple {
+                out.push('[');
+                for (k, x) in fields.iter().enumerate() {
+                    if k > 0 {
+                        out.push(',');
+                    }
+                    encode_at(m, part(k), x, out, depth + 1);
+                }
+                out.push(']');
+            } else if info.option {
+                match fields.first() {
+                    Some(Value::Bool(true)) => encode_at(m, part(1), &fields[1], out, depth + 1),
+                    _ => out.push_str("null"),
+                }
+            } else if !info.variants.is_empty() {
+                let k = match fields.first() {
+                    Some(Value::Int(k)) if (*k as usize) < info.variants.len() => *k as usize,
+                    _ => {
+                        out.push_str("null");
+                        return;
+                    }
+                };
+                let name = crate::diag::json_str(&info.variants[k]);
+                if info.payloads[k] == 0 {
+                    out.push_str(&name);
+                } else {
+                    out.push('{');
+                    out.push_str(&name);
+                    out.push_str(":[");
+                    for (j, i) in info.slots(k).enumerate() {
+                        if j > 0 {
+                            out.push(',');
+                        }
+                        encode_at(m, part(i), &fields[i], out, depth + 1);
+                    }
+                    out.push_str("]}");
+                }
+            } else {
+                if fields.is_empty() {
+                    out.push('{');
+                }
+                for (k, ((name, ft), x)) in info.fields.iter().zip(fields.iter()).enumerate() {
+                    out.push(if k == 0 { '{' } else { ',' });
+                    out.push_str(&crate::diag::json_str(name));
+                    out.push(':');
+                    encode_at(m, *ft, x, out, depth + 1);
+                }
+                out.push('}');
             }
-            for (k, ((name, _), x)) in names.iter().zip(fields.iter()).enumerate() {
-                out.push(if k == 0 { '{' } else { ',' });
-                out.push_str(&crate::diag::json_str(name));
-                out.push(':');
-                encode_at(m, x, out, depth + 1);
-            }
-            out.push('}');
         }
-        Value::Map(_) | Value::Unset => out.push_str("null"),
+        Value::Map(mv) => {
+            let (kt, vt) = ty.map_kv().unwrap_or((Ty::Unknown, Ty::Unknown));
+            let obj = kt == Ty::Str;
+            out.push(if obj { '{' } else { '[' });
+            for (i, (k, x)) in mv.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                if obj {
+                    encode_at(m, kt, k, out, depth + 1);
+                    out.push(':');
+                } else {
+                    out.push('[');
+                    encode_at(m, kt, k, out, depth + 1);
+                    out.push(',');
+                }
+                encode_at(m, vt, x, out, depth + 1);
+                if !obj {
+                    out.push(']');
+                }
+            }
+            out.push(if obj { '}' } else { ']' });
+        }
+        Value::Unset => out.push_str("null"),
     }
 }
 
@@ -119,6 +186,50 @@ impl Parser<'_> {
             "the JSON object must have every field of the struct",
             self.span,
         )
+    }
+
+    /// The error for an array of the wrong length (or no array at all) where `n` elements belong.
+    fn count_err(&self, n: usize) -> Stop {
+        self.type_err(&format!("an array of {n} elements"))
+    }
+
+    /// `[` of an array of exactly `n` (at least 1) elements: another value, or an empty array, is an error.
+    fn fixed_open(&mut self, n: usize) -> Result<(), Stop> {
+        if self.start()? != b'[' || !self.open(b'[', "")? {
+            return Err(self.count_err(n));
+        }
+        Ok(())
+    }
+
+    /// After an element of such an array: another one follows unless it was the `last`.
+    fn fixed_next(&mut self, n: usize, last: bool) -> Result<(), Stop> {
+        if self.next(b']')? == last {
+            return Err(self.count_err(n));
+        }
+        Ok(())
+    }
+
+    fn variant_err(&self, name: &str) -> Stop {
+        self.type_err(&format!("a variant of {name}: a name, or {{\"Name\": [values]}}"))
+    }
+
+    /// The value that holds nothing: zero, an empty string, array or map, a struct of such (what
+    /// `none` holds, and the fields of the variants an enum value is not).
+    fn default_of(&self, ty: Ty) -> Value {
+        match ty {
+            Ty::Int => Value::Int(0),
+            Ty::Float => Value::Float(0.0),
+            Ty::Bool => Value::Bool(false),
+            Ty::Char => Value::Char('\0'),
+            Ty::Str => Value::Str(Rc::new(String::new())),
+            Ty::Array(_) => Value::arr(Vec::new()),
+            Ty::Map(_) => Value::Map(Rc::new(MapVal::default())),
+            Ty::Struct(id) => match self.m.structs.get(ty) {
+                Some(info) => Value::strukt(id, info.fields.iter().map(|f| self.default_of(f.1)).collect()),
+                None => Value::Int(0),
+            },
+            _ => Value::Int(0),
+        }
     }
 
     fn peek(&self) -> Option<u8> {
@@ -406,6 +517,106 @@ impl Parser<'_> {
                     }
                 }
                 Ok(Value::arr(v))
+            }
+            Ty::Map(_) => {
+                let (kt, vt) = ty.map_kv().unwrap_or((Ty::Unknown, Ty::Unknown));
+                let mut mv = MapVal::default();
+                if kt == Ty::Str {
+                    if self.open(b'{', "an object")? {
+                        loop {
+                            let k = self.key()?;
+                            self.path.push(format!(".{k}"));
+                            let v = self.value(vt)?;
+                            self.path.pop();
+                            mv.set(Value::Str(Rc::new(k)), v)?;
+                            if !self.next(b'}')? {
+                                break;
+                            }
+                        }
+                    }
+                } else if self.open(b'[', "an array")? {
+                    let mut i = 0;
+                    loop {
+                        self.path.push(format!("[{i}]"));
+                        self.fixed_open(2)?;
+                        self.path.push("[0]".to_string());
+                        let k = self.value(kt)?;
+                        self.path.pop();
+                        self.fixed_next(2, false)?;
+                        self.path.push("[1]".to_string());
+                        let v = self.value(vt)?;
+                        self.path.pop();
+                        self.fixed_next(2, true)?;
+                        self.path.pop();
+                        mv.set(k, v)?;
+                        i += 1;
+                        if !self.next(b']')? {
+                            break;
+                        }
+                    }
+                }
+                Ok(Value::Map(Rc::new(mv)))
+            }
+            Ty::Struct(id) if self.m.structs.get(ty).is_some_and(|s| s.tuple) => {
+                let info = self.m.structs.get(ty).expect("checked");
+                let n = info.fields.len();
+                let mut fields = Vec::with_capacity(n);
+                self.fixed_open(n)?;
+                for (i, (_, ft)) in info.fields.iter().enumerate() {
+                    self.path.push(format!("[{i}]"));
+                    fields.push(self.value(*ft)?);
+                    self.path.pop();
+                    self.fixed_next(n, i + 1 == n)?;
+                }
+                Ok(Value::strukt(id, fields))
+            }
+            Ty::Struct(id) if self.m.structs.get(ty).is_some_and(|s| s.option) => {
+                let info = self.m.structs.get(ty).expect("checked");
+                let inner = info.fields[1].1;
+                if self.start()? == b'n' {
+                    self.literal()?;
+                    return Ok(Value::strukt(id, vec![Value::Bool(false), self.default_of(inner)]));
+                }
+                let v = self.value(inner)?;
+                Ok(Value::strukt(id, vec![Value::Bool(true), v]))
+            }
+            Ty::Struct(id) if self.m.structs.get(ty).is_some_and(|s| !s.variants.is_empty()) => {
+                let info = self.m.structs.get(ty).expect("checked");
+                let mut fields: Vec<Value> = info.fields.iter().map(|f| self.default_of(f.1)).collect();
+                match self.start()? {
+                    b'"' => {
+                        let name = self.string()?;
+                        match info.variants.iter().enumerate().position(|(k, v)| *v == name && info.payloads[k] == 0) {
+                            Some(k) => fields[0] = Value::Int(k as i64),
+                            None => return Err(self.variant_err(&info.name)),
+                        }
+                    }
+                    b'{' => {
+                        if !self.open(b'{', "")? {
+                            return Err(self.variant_err(&info.name));
+                        }
+                        let name = self.key()?;
+                        let Some(k) = info.variants.iter().enumerate().position(|(k, v)| *v == name && info.payloads[k] > 0) else {
+                            return Err(self.variant_err(&info.name));
+                        };
+                        fields[0] = Value::Int(k as i64);
+                        let n = info.payloads[k];
+                        self.path.push(format!(".{name}"));
+                        self.fixed_open(n)?;
+                        for (j, i) in info.slots(k).enumerate() {
+                            self.path.push(format!("[{j}]"));
+                            fields[i] = self.value(info.fields[i].1)?;
+                            self.path.pop();
+                            self.fixed_next(n, j + 1 == n)?;
+                        }
+                        self.path.pop();
+                        if self.next(b'}')? {
+                            return Err(self.variant_err(&info.name));
+                        }
+                    }
+                    _ => return Err(self.variant_err(&info.name)),
+                }
+                Ok(Value::strukt(id, fields))
             }
             Ty::Struct(id) => {
                 let Some(info) = self.m.structs.get(ty) else { return Err(self.type_err("a known struct")) };

@@ -1,0 +1,5 @@
+// expect: E0218
+fn main() {
+    var seen: [(int, float): bool] = [:]
+    print(seen.len())
+}

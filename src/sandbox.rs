@@ -16,9 +16,8 @@
 //! to the folder the program runs in. `time.sleep_ms` does not wait: it moves a virtual clock and
 //! costs steps (see `ir/host.rs`).
 
-use std::time::Instant;
-
 use crate::ast::Program;
+use crate::clock::Instant;
 use crate::ir::host::{Host, Out};
 use crate::ir::interp::{Interp, Limits, RuntimeError, Stop};
 use crate::ir::{self};

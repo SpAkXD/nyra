@@ -2,8 +2,14 @@
 // ---- json: `json.str(v)` and `json.parse(text)` by the value's type ----
 
 trait NyJson: Sized {
+    /// Only `str`: a map with this key type is a JSON object.
+    const STR_KEY: bool = false;
     fn ny_jenc(&self, out: &mut String);
     fn ny_jdec(p: &mut NyJP) -> Self;
+    /// Only `str`: a key of a JSON object.
+    fn ny_jfrom_key(_: String) -> Self {
+        unreachable!("only a str is a key of a JSON object")
+    }
 }
 
 fn ny_jstr<T: NyJson>(v: &T) -> Str {
@@ -70,6 +76,45 @@ impl NyJP<'_> {
             self.line,
             self.col,
         )
+    }
+
+    /// A tuple, the values of a variant or a map pair: an array of exactly `n` elements; this opens it.
+    fn seq_open(&mut self, n: usize) {
+        if !self.open(b'[', &format!("an array of {n} elements")) {
+            self.type_err(&format!("an array of {n} elements"));
+        }
+    }
+
+    /// After the element `k` of `n`: the array must go on, or end, as the length says.
+    fn seq_after(&mut self, k: usize, n: usize) {
+        if self.next(b']') != (k + 1 < n) {
+            self.type_err(&format!("an array of {n} elements"));
+        }
+    }
+
+    fn variant_err(&self, en: &str) -> ! {
+        self.type_err(&format!("a variant of {en}: a name, or {{\"Name\": [values]}}"))
+    }
+
+    /// An enum: a variant's name, and true if it was the key of an object (the position is after its `:`).
+    fn variant(&mut self, en: &str) -> (String, bool) {
+        match self.start() {
+            b'"' => (self.string(), false),
+            b'{' => {
+                if !self.open(b'{', "") {
+                    self.variant_err(en);
+                }
+                (self.key(), true)
+            }
+            _ => self.variant_err(en),
+        }
+    }
+
+    /// After the values of a variant that was an object's key: nothing else may follow in the object.
+    fn variant_end(&mut self, en: &str) {
+        if self.next(b'}') {
+            self.variant_err(en);
+        }
     }
 
     fn missing(&self, field: &str) -> ! {
@@ -371,6 +416,10 @@ impl NyJson for char {
 }
 
 impl NyJson for Str {
+    const STR_KEY: bool = true;
+    fn ny_jfrom_key(k: String) -> Self {
+        Rc::new(k)
+    }
     fn ny_jenc(&self, out: &mut String) {
         ny_jenc_str(self, out);
     }
@@ -406,5 +455,67 @@ impl<T: NyJson + Clone> NyJson for Rc<Vec<T>> {
             }
         }
         Rc::new(v)
+    }
+}
+
+impl<K: NyJson + Clone + Eq + std::hash::Hash, V: NyJson + Clone> NyJson for Rc<NyMap<K, V>> {
+    fn ny_jenc(&self, out: &mut String) {
+        out.push(if K::STR_KEY { '{' } else { '[' });
+        for (i, (k, v)) in self.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            if K::STR_KEY {
+                k.ny_jenc(out);
+                out.push(':');
+            } else {
+                out.push('[');
+                k.ny_jenc(out);
+                out.push(',');
+            }
+            v.ny_jenc(out);
+            if !K::STR_KEY {
+                out.push(']');
+            }
+        }
+        out.push(if K::STR_KEY { '}' } else { ']' });
+    }
+    fn ny_jdec(p: &mut NyJP) -> Self {
+        let mut m: NyMap<K, V> = NyMap::default();
+        if K::STR_KEY {
+            if p.open(b'{', "an object") {
+                loop {
+                    let k = p.key();
+                    p.path.push(format!(".{k}"));
+                    let v = V::ny_jdec(p);
+                    p.path.pop();
+                    m.set(K::ny_jfrom_key(k), v);
+                    if !p.next(b'}') {
+                        break;
+                    }
+                }
+            }
+        } else if p.open(b'[', "an array") {
+            let mut i = 0;
+            loop {
+                p.path.push(format!("[{i}]"));
+                p.seq_open(2);
+                p.path.push("[0]".to_string());
+                let k = K::ny_jdec(p);
+                p.path.pop();
+                p.seq_after(0, 2);
+                p.path.push("[1]".to_string());
+                let v = V::ny_jdec(p);
+                p.path.pop();
+                p.seq_after(1, 2);
+                p.path.pop();
+                m.set(k, v);
+                i += 1;
+                if !p.next(b']') {
+                    break;
+                }
+            }
+        }
+        Rc::new(m)
     }
 }

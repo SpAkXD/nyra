@@ -1,0 +1,10 @@
+// expect: E0345 at 8:25
+// message: json.parse: expected a variant of Shape: a name, or {"Name": [values]} at $
+use json
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    print("start")
+    let v: Shape = json.parse("{{\"Empty\": [], \"Circle\": [1]}}")
+    print(v)
+}

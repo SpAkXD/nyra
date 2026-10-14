@@ -1,0 +1,7 @@
+// expect: E0204
+enum Shape { Circle(float), Empty }
+
+fn main() {
+    let s = Shape.Empty(1)
+    print(s)
+}

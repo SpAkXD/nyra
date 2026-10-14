@@ -288,6 +288,90 @@ static void nyrt_jdec_arr(nyrt_jp *p, void *out, const nyrt_type *ty, void (*dec
     }
     *(nyrt_arr **)out = a;
 }
+// ---- tuples, optionals, enums and maps ---------------------------------------------------------
+// `[`: an array of exactly `n` (>= 1) elements follows; any other value, or an empty array, is an error.
+static void nyrt_jcount(nyrt_jp *p, int n) {
+    char w[64];
+    snprintf(w, sizeof w, "an array of %d elements", n);
+    nyrt_jtype(p, w);
+}
+static void nyrt_jfixed_open(nyrt_jp *p, int n) {
+    if (nyrt_jstart(p) != '[') nyrt_jcount(p, n);
+    if (!nyrt_jopen(p, '[', "")) nyrt_jcount(p, n);
+}
+// After an element of such an array: another one follows unless it was the `last`.
+static void nyrt_jfixed_next(nyrt_jp *p, int n, bool last) {
+    if (nyrt_jnext(p, ']') == last) nyrt_jcount(p, n);
+}
+// `null` (true; consumed), or any other value (false; not consumed).
+static bool nyrt_jnull(nyrt_jp *p) {
+    if (nyrt_jstart(p) != 'n') return false;
+    nyrt_jliteral(p);
+    return true;
+}
+static void nyrt_jvariant(nyrt_jp *p, const char *name) {
+    nyrt_buf b = nyrt_buf_new();
+    nyrt_buf_cstr(&b, "a variant of ");
+    nyrt_buf_cstr(&b, name);
+    nyrt_buf_cstr(&b, ": a name, or {\"Name\": [values]}");
+    nyrt_jtype(p, nyrt_buf_done(&b)->data);
+}
+static void nyrt_jenc_map(nyrt_buf *b, const void *v, void (*enck)(nyrt_buf *, const void *), void (*encv)(nyrt_buf *, const void *)) {
+    const nyrt_map *m = *(nyrt_map *const *)v;
+    NYRT_LIVE(m);
+    bool obj = m->kt == &nyrt_T_str, first = true;
+    nyrt_buf_add(b, obj ? "{" : "[", 1);
+    for (int64_t i = 0; i < m->n; i++) {
+        if (!m->alive[i]) continue;
+        if (!first) nyrt_buf_add(b, ",", 1);
+        first = false;
+        if (!obj) nyrt_buf_add(b, "[", 1);
+        enck(b, nyrt_map_ent(m, i));
+        nyrt_buf_add(b, obj ? ":" : ",", 1);
+        encv(b, nyrt_map_ent(m, i) + m->koff);
+        if (!obj) nyrt_buf_add(b, "]", 1);
+    }
+    nyrt_buf_add(b, obj ? "}" : "]", 1);
+}
+static void nyrt_jdec_map(nyrt_jp *p, void *out, const nyrt_type *kt, const nyrt_type *vt, void (*deck)(nyrt_jp *, void *), void (*decv)(nyrt_jp *, void *)) {
+    nyrt_map *m = nyrt_map_new(kt, vt);
+    char *kb = malloc((size_t)kt->size + 8), *vb = malloc((size_t)vt->size + 8);
+    if (!kb || !vb) nyrt_oom(p->line, p->col);
+    if (kt == &nyrt_T_str) {
+        if (nyrt_jopen(p, '{', "an object")) {
+            do {
+                nyrt_str *k = nyrt_jkey(p);
+                nyrt_jpush_key(p, k->data);
+                decv(p, vb);
+                nyrt_jpop(p);
+                nyrt_map_set(&m, &k, vb);
+                nyrt_str_release(k);
+                if (vt->release) vt->release(vb);
+            } while (nyrt_jnext(p, '}'));
+        }
+    } else if (nyrt_jopen(p, '[', "an array")) {
+        int64_t i = 0;
+        do {
+            nyrt_jpush_index(p, i++);
+            nyrt_jfixed_open(p, 2);
+            nyrt_jpush_index(p, 0);
+            deck(p, kb);
+            nyrt_jpop(p);
+            nyrt_jfixed_next(p, 2, false);
+            nyrt_jpush_index(p, 1);
+            decv(p, vb);
+            nyrt_jpop(p);
+            nyrt_jfixed_next(p, 2, true);
+            nyrt_jpop(p);
+            nyrt_map_set(&m, kb, vb);
+            if (kt->release) kt->release(kb);
+            if (vt->release) vt->release(vb);
+        } while (nyrt_jnext(p, ']'));
+    }
+    free(kb);
+    free(vb);
+    *(nyrt_map **)out = m;
+}
 static void nyrt_jparse(const nyrt_str *text, void (*dec)(nyrt_jp *, void *), void *out, int line, int col) {
     nyrt_jp *p = malloc(sizeof(nyrt_jp));
     if (!p) nyrt_oom(line, col);

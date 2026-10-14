@@ -1,0 +1,6 @@
+// expect: E0102
+enum Shape { Circle(Radius), Empty }
+
+fn main() {
+    print(Shape.Empty)
+}

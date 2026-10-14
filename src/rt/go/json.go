@@ -30,6 +30,45 @@ func nyJEnc(b *strings.Builder, v any) {
 	}
 }
 
+// A map with str keys is an object, with any other key an array of [key, value] pairs.
+func (m *Map[K, V]) nyJEnc(b *strings.Builder) {
+	var zk K
+	_, obj := any(zk).(string)
+	if obj {
+		b.WriteByte('{')
+	} else {
+		b.WriteByte('[')
+	}
+	first := true
+	for i, k := range m.keys {
+		if !m.alive[i] {
+			continue
+		}
+		if !first {
+			b.WriteByte(',')
+		}
+		first = false
+		if !obj {
+			b.WriteByte('[')
+		}
+		nyJEnc(b, any(k))
+		if obj {
+			b.WriteByte(':')
+		} else {
+			b.WriteByte(',')
+		}
+		nyJEnc(b, any(m.vals[i]))
+		if !obj {
+			b.WriteByte(']')
+		}
+	}
+	if obj {
+		b.WriteByte('}')
+	} else {
+		b.WriteByte(']')
+	}
+}
+
 func (a *Array[T]) nyJEnc(b *strings.Builder) {
 	b.WriteByte('[')
 	for i, x := range a.items {
@@ -99,6 +138,47 @@ func (p *nyJP) syntax(what string) {
 func (p *nyJP) typeErr(what string) {
 	nyFail("E0345", "json.parse: expected "+what+" at $"+strings.Join(p.path, ""),
 		"the JSON text must have the shape of the type it is read into", p.line, p.col)
+}
+
+// seqOpen: a tuple, the values of a variant or a map pair is an array of exactly n elements; this opens it.
+func (p *nyJP) seqOpen(n int) {
+	what := "an array of " + strconv.Itoa(n) + " elements"
+	if !p.open('[', what) {
+		p.typeErr(what)
+	}
+}
+
+// seqAfter: after the element k of n, the array must go on, or end, as the length says.
+func (p *nyJP) seqAfter(k, n int) {
+	if p.next(']') != (k+1 < n) {
+		p.typeErr("an array of " + strconv.Itoa(n) + " elements")
+	}
+}
+
+func (p *nyJP) variantErr(en string) {
+	p.typeErr("a variant of " + en + ": a name, or {\"Name\": [values]}")
+}
+
+// variant: an enum's variant name, and true if it was the key of an object (the position is after its `:`).
+func (p *nyJP) variant(en string) (string, bool) {
+	switch p.start() {
+	case '"':
+		return p.str(), false
+	case '{':
+		if !p.open('{', "") {
+			p.variantErr(en)
+		}
+		return p.key(), true
+	}
+	p.variantErr(en)
+	return "", false
+}
+
+// variantEnd: after the values of a variant that was an object's key, nothing else may follow in the object.
+func (p *nyJP) variantEnd(en string) {
+	if p.next('}') {
+		p.variantErr(en)
+	}
 }
 
 func (p *nyJP) missing(field string) {
@@ -412,5 +492,50 @@ func nyJArr[T any](dec func(*nyJP) T) func(*nyJP) *Array[T] {
 			}
 		}
 		return &Array[T]{items: items}
+	}
+}
+
+func nyJMapObj[V any](dec func(*nyJP) V) func(*nyJP) *Map[string, V] {
+	return func(p *nyJP) *Map[string, V] {
+		m := &Map[string, V]{index: map[string]int{}}
+		if p.open('{', "an object") {
+			for {
+				k := p.key()
+				p.path = append(p.path, "."+k)
+				v := dec(p)
+				p.path = p.path[:len(p.path)-1]
+				m.set(k, v)
+				if !p.next('}') {
+					break
+				}
+			}
+		}
+		return m
+	}
+}
+
+func nyJMapPairs[K comparable, V any](kdec func(*nyJP) K, vdec func(*nyJP) V) func(*nyJP) *Map[K, V] {
+	return func(p *nyJP) *Map[K, V] {
+		m := &Map[K, V]{index: map[K]int{}}
+		if p.open('[', "an array") {
+			for i := 0; ; i++ {
+				p.path = append(p.path, "["+strconv.Itoa(i)+"]")
+				p.seqOpen(2)
+				p.path = append(p.path, "[0]")
+				k := kdec(p)
+				p.path = p.path[:len(p.path)-1]
+				p.seqAfter(0, 2)
+				p.path = append(p.path, "[1]")
+				v := vdec(p)
+				p.path = p.path[:len(p.path)-1]
+				p.seqAfter(1, 2)
+				p.path = p.path[:len(p.path)-1]
+				m.set(k, v)
+				if !p.next(']') {
+					break
+				}
+			}
+		}
+		return m
 	}
 }

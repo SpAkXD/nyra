@@ -1,8 +1,10 @@
 
 
 # ---- json: `json.str(v)` and `json.parse(text)` by the value's type ----
-# A type is "i" int, "f" float, "b" bool, "c" char, "s" str, ("a", T) an array of T, or the class
-# of a struct (its `ny_jf` lists (JSON name, attribute, type) of every field, in order).
+# A type is "i" int, "f" float, "b" bool, "c" char, "s" str, ("a", T) an array of T, ("m", K, V) a map,
+# or the class of a struct, tuple, optional or enum (its `ny_jf` lists (JSON name, attribute, type) of
+# every field, in order; `ny_jk` is "t" for a tuple, "o" for an optional, "e" for an enum, which has
+# `ny_jn` its name and `ny_jv` (variant name, indexes of the fields that hold its values) per variant).
 
 NY_JESC = {8: "\\b", 12: "\\f", 10: "\\n", 13: "\\r", 9: "\\t"}
 
@@ -25,7 +27,22 @@ def ny_jenc_str(s):
 
 def ny_jenc(v, d):
     if isinstance(d, type):
-        return "{" + ",".join(ny_jenc_str(n) + ":" + ny_jenc(getattr(v, a), t) for n, a, t in d.ny_jf) + "}"
+        k = getattr(d, "ny_jk", "")
+        fs = d.ny_jf
+        if k == "t":
+            return "[" + ",".join(ny_jenc(getattr(v, a), t) for n, a, t in fs) + "]"
+        if k == "o":
+            return ny_jenc(getattr(v, fs[1][1]), fs[1][2]) if getattr(v, fs[0][1]) else "null"
+        if k == "e":
+            name, idx = d.ny_jv[getattr(v, fs[0][1])]
+            if not idx:
+                return ny_jenc_str(name)
+            return "{" + ny_jenc_str(name) + ":[" + ",".join(ny_jenc(getattr(v, fs[i][1]), fs[i][2]) for i in idx) + "]}"
+        return "{" + ",".join(ny_jenc_str(n) + ":" + ny_jenc(getattr(v, a), t) for n, a, t in fs) + "}"
+    if isinstance(d, tuple) and d[0] == "m":
+        if d[1] == "s":
+            return "{" + ",".join(ny_jenc_str(k) + ":" + ny_jenc(x, d[2]) for k, x in v.items()) + "}"
+        return "[" + ",".join("[" + ny_jenc(k, d[1]) + "," + ny_jenc(x, d[2]) + "]" for k, x in v.items()) + "]"
     if isinstance(d, tuple):
         return "[" + ",".join(ny_jenc(x, d[1]) for x in v) + "]"
     if d == "i":
@@ -237,8 +254,118 @@ def ny_jskip(p):
         ny_jliteral(p)
 
 
+def ny_jdef(d):
+    """The value a type holds when nothing was read into it (an unused slot of an enum, the `val` of a `none`)."""
+    if isinstance(d, type):
+        return d(*[ny_jdef(f[2]) for f in d.ny_jf])
+    if isinstance(d, tuple):
+        return NyDict() if d[0] == "m" else NyList()
+    return {"s": "", "c": "\x00", "b": False, "f": 0.0}.get(d, 0)
+
+
+def ny_jfixed(p, n, each):
+    """An array of exactly n elements: `each(i)` reads the i-th one (its path is already set)."""
+    what = f"an array of {n} elements"
+    if not ny_jopen(p, "[", what):
+        ny_jtype(p, what)
+    i = 0
+    while True:
+        if i >= n:
+            ny_jtype(p, what)
+        p.path.append(i)
+        each(i)
+        p.path.pop()
+        i += 1
+        if not ny_jnext(p, "]"):
+            break
+    if i < n:
+        ny_jtype(p, what)
+
+
+def ny_jenum(p, d, c):
+    fs, vs = d.ny_jf, d.ny_jv
+
+    def bad():
+        ny_jtype(p, "a variant of " + d.ny_jn + ': a name, or {"Name": [values]}')
+
+    def make(v, vals):
+        a = [ny_jdef(f[2]) for f in fs]
+        a[0] = v
+        for j, k in enumerate(vs[v][1]):
+            a[k] = vals[j]
+        return d(*a)
+
+    if c == '"':
+        name = ny_jstring(p)
+        v = next((i for i, x in enumerate(vs) if x[0] == name and not x[1]), -1)
+        if v < 0:
+            bad()
+        return make(v, [])
+    if c != "{" or not ny_jopen(p, "{", ""):
+        bad()
+    name = ny_jkey(p)
+    v = next((i for i, x in enumerate(vs) if x[0] == name and x[1]), -1)
+    if v < 0:
+        bad()
+    idx = vs[v][1]
+    vals = [None] * len(idx)
+
+    def read(i):
+        vals[i] = ny_jdec(p, fs[idx[i]][2])
+
+    p.path.append(name)
+    ny_jfixed(p, len(idx), read)
+    p.path.pop()
+    if ny_jnext(p, "}"):
+        bad()
+    return make(v, vals)
+
+
 def ny_jdec(p, d):
     c = ny_jstart(p)
+    k = getattr(d, "ny_jk", "") if isinstance(d, type) else ""
+    if k == "e":
+        return ny_jenum(p, d, c)
+    if k == "o":
+        if c == "n":
+            ny_jliteral(p)
+            return d(False, ny_jdef(d.ny_jf[1][2]))
+        return d(True, ny_jdec(p, d.ny_jf[1][2]))
+    if k == "t":
+        vals = [None] * len(d.ny_jf)
+
+        def read(i):
+            vals[i] = ny_jdec(p, d.ny_jf[i][2])
+
+        ny_jfixed(p, len(vals), read)
+        return d(*vals)
+    if isinstance(d, tuple) and d[0] == "m":
+        m = NyDict()
+        if d[1] == "s":
+            if ny_jopen(p, "{", "an object"):
+                while True:
+                    key = ny_jkey(p)
+                    p.path.append(key)
+                    m[key] = ny_jdec(p, d[2])
+                    p.path.pop()
+                    if not ny_jnext(p, "}"):
+                        break
+        elif ny_jopen(p, "[", "an array"):
+            n = 0
+            while True:
+                pair = [None, None]
+
+                def read(i):
+                    pair[i] = ny_jdec(p, d[1 + i])
+
+                p.path.append(n)
+                n += 1
+                ny_jfixed(p, 2, read)
+                p.path.pop()
+                m[pair[0]] = pair[1]
+                if not ny_jnext(p, "]"):
+                    break
+        return m
     if isinstance(d, type):
         fs = d.ny_jf
         vals, seen = [None] * len(fs), [False] * len(fs)
