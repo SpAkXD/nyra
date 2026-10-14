@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="motion-check" content="loop">
+<title>motion: keyframes('sway', ...)</title>
+<link rel="stylesheet" href="fixture.css">
+<link rel="stylesheet" href="../../../src/web/motion.css">
+<style>
+@keyframes m-k-sway{0%,100%{rotate:-3deg}50%{rotate:3deg}}
+[data-anim~=sway]{--m-o:1}
+@media (scripting:enabled) and (prefers-reduced-motion:no-preference){:root:not([data-motion=off]) [data-anim~=sway]:not(.m-in){--m-a1:m-k-sway 1s paused both}}
+[data-anim~=sway].m-in{--m-a1:m-k-sway calc(var(--m-dur,1s)*var(--ma-t)*var(--m-k)) var(--ma-e) calc(var(--m-at) + var(--ma-d) + var(--m-i,0)*var(--m-step,0s)) both}
+[data-loop~=sway]{--m-a2:m-k-sway calc(var(--ml-dur,2s)*var(--ml-t)) var(--ml-e,ease-in-out) var(--ml-d) infinite}
+[data-loop="sway 4s in-out"]{--ml-dur:4s}
+</style>
+<script src="../../../src/web/motion.js" defer></script>
+</head>
+<body>
+<header class="label"><b>keyframes("sway", ...)</b> · keyframes("sway", "0%, 100% { rotate: -3deg } 50% { rotate: 3deg }") with the CSS motion_css() writes for it</header>
+<div class="photo small" data-loop="sway 4s in-out" style="width:220px;transform-origin:50% 0"></div><div class="card" data-anim="sway" style="max-width:360px;margin-top:40px"><h3>anim: "sway"</h3></div>
+</body>
+</html>
