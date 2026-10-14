@@ -1,0 +1,8 @@
+// expect: E0374
+use web
+
+page("/", "Home") {
+    section("about", "About us", bg: "alternative") {
+        p("Since 1991.")
+    }
+}

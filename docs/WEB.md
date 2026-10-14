@@ -1,8 +1,10 @@
 # Nyra on the web (design for v0.8)
 
-Status: **design.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
-E0371) are built and documented in [SPEC.md](SPEC.md); the rest is not built yet, and its error codes are reserved,
-not emitted. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
+Status: **being built.** The two language additions (WP1: default values, named arguments, child blocks; E0370 and
+E0371) are built and documented in [SPEC.md](SPEC.md). The web library and the kit (WP2, WP3) are built: see
+[The web library as built](#the-web-library-as-built-wp2-wp3) for where they differ from this design, and the
+[Build contract](#build-contract) for what `nyra build` reads. Motion (WP4) and the build itself (WP5) are not
+built yet. The owner's decisions on the open questions are recorded in [Decisions](#decisions).
 
 Today Nyra cannot make a web page: there is no DOM, HTML, CSS or events. This document designs `use web`: a way for an
 agent to write a whole website (pages, theme, sections, motion, interactivity) in Nyra, and get a fast static site out of
@@ -29,7 +31,9 @@ classes, data reused, links and icons in text). 70% of the remaining Nyra tokens
 10. [Token measurement](#token-measurement)
 11. [Clone from a URL (later)](#clone-from-a-url-later)
 12. [Implementation plan](#implementation-plan)
-13. [Open questions and risks](#open-questions-and-risks)
+13. [Build contract](#build-contract)
+14. [The web library as built](#the-web-library-as-built-wp2-wp3)
+15. [Open questions and risks](#open-questions-and-risks)
 
 ## One example
 
@@ -708,6 +712,125 @@ calls); WP2 to WP5 then run in parallel; WP6 closes.
 - `bench/web/`: the A/B experiment: a mock-site spec, the two prompts (plain HTML/CSS/JS, Nyra with both cards), the
   same model, several runs each; reported: output and input tokens, cost, first-try build success, screenshot
   similarity to the spec, Lighthouse scores.
+
+## Build contract
+
+What `nyra build` (WP5, `src/web.rs`) gets from the web library (WP2) and the kit (WP3). It is all the build
+needs to know; nothing else couples them.
+
+**1. Run the program, read its output.** The build runs the program once in the IR interpreter and reads what
+it prints. The library prints *records*; each starts on a line of its own:
+
+```
+<!--nyra:css theme-->            the site's theme, from site(...): one `:root{...}` rule
+:root{--primary:#2D5A1B;...}
+<!--nyra:end-->
+<!--nyra:css user-->             the text of one css("...") call, in program order
+...
+<!--nyra:end-->
+<!--nyra:page /flora base nav hero hours marquee-->     one per page(...) call
+<!doctype html>
+...the whole document...
+<!--nyra:end-->
+<!--nyra:error E0381 the link `javascript:x` uses ...-->  a build error found while rendering (one line)
+```
+
+- A `page` header is the page's path, then its kit chunks, separated by spaces. The first chunk is always `base`;
+  the others are sorted. The path is what the program wrote (`/`, `/flora`); `/flora` is served as
+  `dist/flora/index.html`. Two pages with one path, or a path that does not start with `/`, is E0387 (the build's).
+- The body of a record runs to the next line that is exactly `<!--nyra:end-->`. A page's HTML never contains that
+  line (text is escaped, and a record is never nested).
+- Any `error` record fails the build: print `error[CODE]: message` and exit as for a compile error. Today the
+  library reports E0381 (a computed link with a forbidden scheme) and E0374 (a computed unknown icon or color).
+- Lines that are not records (the program's own `print`s) are not part of the site; the build may show them.
+- `keyframes(name, body)` calls `_keyframes(name, body)`, a stub in `src/std/web.nyra` that the motion package
+  (WP4) owns; how it reports its CSS is WP4's to add (a `css` record is the natural way).
+
+**2. Fill the two markers of each page.** Every page has exactly one `<!--nyra:head-->` (the last line of
+`<head>`) and one `<!--nyra:body-->` (the last line of `<body>`). The build replaces the first with the
+stylesheet link and the Content-Security-Policy `<meta>`, the second with the script tag (or nothing when the
+page needs no JavaScript).
+
+**3. Assemble CSS and JS from the chunks.** The kit is two files, `src/web/kit.css` and `src/web/kit.js`, split
+into chunks by marker lines:
+
+```
+/*! chunk: NAME */
+```
+
+A chunk runs from its marker to the next marker or the end of the file; the text before the first marker is a
+comment. The site's CSS is: the `base` chunk, then every other chunk of `kit.css` that some page names, in file
+order, then the `theme` record, then the `user` records. The site's JS is every chunk of `kit.js` that some page
+names, in file order; a chunk name may exist in only one of the files (`nav` has CSS and JS, `stat` only CSS).
+When no page names a JS chunk, and the program has no client code, there is no JS file. Each JS chunk is a
+self-contained IIFE that waits for nothing (the script is loaded with `defer`) and delegates its clicks to the
+document, so it also works on a region the runtime renders again. Chunk names today: `base table chip embed
+quote nav hero hours map form steps stat foot marquee gallery split` (CSS) and `nav hours map form gallery` (JS).
+
+**4. Images.** A local image (`img("a.jpg", ...)`, `image:`, `photos`, a logo) is written as `/img/a.jpg`: the
+file `assets/a.jpg` served under `dist/img/`. The build copies it (or writes its WebP variants) and may add
+`width`, `height`, `srcset` to any `<img>` whose `src` starts with `/img/`; the library already writes `alt`,
+`sizes`, `loading="lazy"` and `decoding="async"`. The page's priority image (a hero's) is the one
+`<img fetchpriority="high" ...>`; it is preloaded with `<link rel="preload" as="image" href="/img/...">` and is
+the default `og:image` (made absolute with `site(url:)`). `https://` images are left as they are.
+
+**5. What the pages contain, for the CSP.** Scripts: none inline, none from other sites. Styles: the stylesheet,
+Google Fonts (`fonts.googleapis.com`, fonts from `fonts.gstatic.com`) when the theme has fonts, and `style`
+attributes that set custom properties (`style="--tint:var(--c-krby)"`, `--ratio`, `--widths`, the page's
+`--primary`), so `style-src` needs `'unsafe-inline'` for attributes (or `'unsafe-hashes'`). Frames:
+`https://www.google.com` when a page has the `map` chunk, and the URL of each `embed`. Forms post only where
+`form(to:)` says; `mailto:` forms are composed by the `form` chunk.
+
+**6. Interactivity (for the client runtime).** An event is `data-on="JSON"` on a `button`, a `form` or a `field`:
+the JSON of the `Msg` value as `json.str` writes it (`{"Show":["vše"]}`, `"Clear"`). A form whose variant carries
+the fields (`form(on: Msg.Send)` with `Send([str: str])`) has `data-on="{"Send":[]}"`: the runtime puts the
+fields in. A button with `on:` also has `aria-pressed`. A live region is `<div class="live" data-live="NAME">`
+around the HTML of the call `NAME()`: the compiler finds them (a function without parameters that returns a
+`Node` and reads a script variable that `update` changes) and wraps their calls in `web._live`. The site lives in
+the script variable `_web` (a `WebConfig`), declared before the program's first statement, so code compiled for
+the browser that calls the library must run the program's `site(...)` call first (or start from the same value).
+Motion options are attributes, written as given: `data-anim`, `data-hover`, `data-loop`, `data-scroll`, `data-at`
+(the number), `data-morph`, and `data-motion` and `data-transition` on `<html>` from `site(motion:, transition:)`.
+
+## The web library as built (WP2, WP3)
+
+The library is `src/std/web.nyra` (elements, kit components, text, `<head>`), `src/std/web_icons.nyra` (generated
+by `tools/gen_web_icons.py`: 208 Lucide icons, ISC license, plus the Facebook icon from Simple Icons, CC0) and
+`src/webcheck.rs` (linking, names, compile-time checks, live regions). The kit is `src/web/kit.css` and
+`src/web/kit.js`. `examples/web/` has a program per area with its expected records (`tests/web.rs`), and
+`tests/web/fixtures/` a static page per component made from them with `tools/web_preview.py`.
+
+Where the build differs from the design above, and why:
+
+- **The page registry is printed records**, not an intrinsic `_emit`: printing works on every backend with no
+  runtime code, the interpreter can keep the output, and the records are easy to test.
+- **E0372 is for functions, types and script variables** (a `let` or `var` at the top level). Variables inside
+  functions, loop variables and parameters may have a web function's name (`for p in items` is in the web card's
+  own example); a call is always a function, so there is no ambiguity.
+- **`gallery(photos)`** takes `(image, alt, tag)` triples and `filters: [(tag, label)]`; the first tab ("all")
+  is added, its label from `all:` or the kit words. A tag that is a `palette` name colors its label.
+- **`split { ... }`** takes its panels as a child block of `card(title, text, image:, href:, color:)`.
+- **`footer(brand:, text:, links:, links_title:, contact:, contact_title:, small:, top:)`**: `contact` and `small`
+  are lines of text; the default small print is `© <year> <site name>`.
+- **`hours(rows)`**: days are numbers, 1 (Monday) to 7 (Sunday): `"1-5 8:00-16:00"`, `"6 8:30-11:30"`,
+  `"1,3 9:00-12:00 13:00-17:00"`; `""` is closed. The open/closed badge is hidden until the script sets it, so a
+  page without JavaScript never shows a wrong state.
+- **Added:** `quote(text, name, place:, tag:, stars:, color:)` (testimonials), `chip`'s `color:`, `card`'s `tag:`,
+  `items:` (a two-column list of dots, as flora's product cards) and `ratio:`, `button`'s `icon:` and `label:`,
+  `list(icon:, ordered:, cols:)`, `section(width: "narrow")`, `hero(next:, height: "half")`, `site(logo:)`,
+  `navbar(logo:)`, and the helpers `maps(address)` and `year()`.
+- **The kit's words** (`say:` keys, English and Czech built in): `open closed shut hours more down map show go
+  menu close nav skip back all filter zoom prev next dismiss send mail_note done done_text edit top links contact`.
+- **Motion words are not checked here**: the words, their defaults per component and E0375 are WP4's; this
+  package writes the options as attributes. The kit has only the movement that is part of a component's look:
+  hover colors and shadows, the marquee loop, the badge ping, the scroll cue, the mobile menu and lightbox
+  openings; `prefers-reduced-motion` stops them.
+- **`css("...")` is Nyra text**, so a brace is written `{{` and `}}` (`css("a {{ color: red }}")`).
+- **A string on its own line of a block of nodes is a paragraph** (`<p class="t">`), made by `web._text`.
+- **Style presets** `soft` (default), `sharp`, `editorial` (Fraunces headings unless `display:` is given) and
+  `dark` set defaults on `<html data-style>`; the theme's own values win over them.
+- One sample was changed: in `3-contact.nyra` the fields of `struct Shop` are declared in the order the two
+  values give them (`pay` before `foot`), which Nyra requires (E0225).
 
 ## Decisions
 

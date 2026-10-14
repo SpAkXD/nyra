@@ -1,0 +1,8 @@
+// expect: E0378
+use web
+
+let name = "Ann"
+
+page("/", "Home") {
+    html("<b>" + name + "</b>")
+}

@@ -6482,3 +6482,178 @@ error[E0371]: `str` takes no child block
   = explain: nyra explain E0371
 
 nyra: 1 error(s)
+==== web_name_clash
+use web
+
+fn hero(title: str) -> Node = h1(title)
+
+page("/", "Home") {
+    hero("Hello")
+}
+----
+error[E0372]: `fn hero` has the name of the web function `hero`
+  --> case.nyra:3:4
+  |
+3 | fn hero(title: str) -> Node = h1(title)
+  |    ^
+  = hint: rename your function, e.g. `fn my_hero`: in a program with `use web` the web functions are called by their bare names
+  = explain: nyra explain E0372
+
+nyra: 1 error(s)
+==== web_on_without_update
+use web
+
+enum Msg { Add }
+
+page("/", "Home") {
+    button("Add", on: Msg.Add)
+}
+----
+error[E0373]: `on:` sends a `Msg` to `update`, but the program has no `fn update(m: Msg)`
+  --> case.nyra:6:27
+  |
+6 |     button("Add", on: Msg.Add)
+  |                           ^
+  = hint: declare the events and what they do: `enum Msg { Show(str) }` and `fn update(m: Msg) { match m { Msg.Show(k) => kind = k } }`
+  = explain: nyra explain E0373
+
+nyra: 1 error(s)
+==== web_unknown_icon
+use web
+
+page("/", "Home") {
+    p(":phnoe: +420 123 456 789")
+}
+----
+error[E0374]: unknown icon `phnoe`
+  --> case.nyra:4:7
+  |
+4 |     p(":phnoe: +420 123 456 789")
+  |       ^
+  = hint: did you mean `phone`? The icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them
+  = explain: nyra explain E0374
+
+nyra: 1 error(s)
+==== web_unknown_word
+use web
+
+page("/", "Home") {
+    section("about", "About us", bg: "alternative") {
+        p("Since 1991.")
+    }
+}
+----
+error[E0374]: unknown word `alternative` for `bg:` of `section`
+  --> case.nyra:4:38
+  |
+4 |     section("about", "About us", bg: "alternative") {
+  |                                      ^
+  = hint: the words of `bg:` are `accent`, `alt`, `dark`, `ink`, `primary`, `white`
+  = explain: nyra explain E0374
+
+nyra: 1 error(s)
+==== web_live_view_params
+use web
+
+enum Msg { Add }
+var clicks = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Add => clicks += 1
+    }
+}
+
+fn counter(label: str) -> Node = p("{label}: {clicks}")
+
+page("/", "Home") {
+    counter("Clicks")
+    button("Add", on: Msg.Add)
+}
+----
+error[E0376]: `counter` reads state that `update` changes, so it must render again in the browser, but it has parameters
+  --> case.nyra:14:5
+   |
+14 |     counter("Clicks")
+   |     ^
+  = hint: give `fn counter` no parameters and let it read the script variables it needs: the browser calls a live view again with no arguments
+  = explain: nyra explain E0376
+
+nyra: 1 error(s)
+==== web_icon_button_label
+use web
+
+page("/", "Home") {
+    button(":phone:", href: "tel:+420123456789")
+}
+----
+error[E0377]: this `button` shows only an icon, so a screen reader has nothing to read
+  --> case.nyra:4:5
+  |
+4 |     button(":phone:", href: "tel:+420123456789")
+  |     ^
+  = hint: say what it does with `label:`, e.g. `button(..., label: "Call us")`
+  = explain: nyra explain E0377
+
+nyra: 1 error(s)
+==== web_raw_html_not_literal
+use web
+
+let name = "Ann"
+
+page("/", "Home") {
+    html("<b>" + name + "</b>")
+}
+----
+error[E0378]: `html(...)` takes only a string literal
+  --> case.nyra:6:23
+  |
+6 |     html("<b>" + name + "</b>")
+  |                       ^
+  = hint: write the markup out as one literal without `{ }`: data never becomes markup; for text from data use the elements (`p(text)`), which escape it
+  = explain: nyra explain E0378
+
+nyra: 1 error(s)
+==== web_javascript_link
+use web
+
+page("/", "Home") {
+    link("Click me", "javascript:alert(1)")
+}
+----
+error[E0381]: the link `javascript:alert(1)` uses the scheme `javascript:`, which a page may not link to
+  --> case.nyra:4:22
+  |
+4 |     link("Click me", "javascript:alert(1)")
+  |                      ^
+  = hint: link to `https://...`, `mailto:...`, `tel:...`, a path (`/about`) or an anchor (`#contact`); `javascript:` and `data:` run or carry code
+  = explain: nyra explain E0381
+
+nyra: 1 error(s)
+==== web_client_uses_fs
+use web
+use fs
+
+enum Msg { Load }
+var doc = ""
+fn update(m: Msg) {
+    match m {
+        Msg.Load => doc = fs.read("notes.txt")
+    }
+}
+
+fn notes() -> Node = p(doc)
+
+page("/", "Home") {
+    notes()
+    button("Load", on: Msg.Load)
+}
+----
+error[E0384]: `update` runs in the browser (as `update`, a live view or a function they call), but it uses `fs.read`
+  --> case.nyra:8:30
+  |
+8 |         Msg.Load => doc = fs.read("notes.txt")
+  |                              ^
+  = hint: the browser has no files, arguments or standard input for `fs.read`: read them while the site is built, into a script variable, and use that
+  = explain: nyra explain E0384
+
+nyra: 1 error(s)

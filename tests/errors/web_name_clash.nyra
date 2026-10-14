@@ -1,0 +1,8 @@
+// expect: E0372
+use web
+
+fn hero(title: str) -> Node = h1(title)
+
+page("/", "Home") {
+    hero("Hello")
+}

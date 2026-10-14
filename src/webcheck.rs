@@ -127,8 +127,8 @@ fn kind(func: &str, param: &str, elem: Option<usize>) -> Kind {
         (
             "id" | "cls" | "anim" | "hover" | "loop" | "scroll" | "morph" | "bg" | "tone" | "align" | "width" | "widths" | "gap"
             | "ratio" | "fit" | "style" | "size" | "type" | "auto" | "value" | "options" | "color" | "path" | "lang" | "tz"
-            | "primary" | "accent" | "alt" | "ink" | "muted" | "palette" | "font" | "display" | "motion" | "transition"
-            | "height" | "next" | "say" | "raw" | "body",
+            | "primary" | "accent" | "alt" | "ink" | "muted" | "palette" | "font" | "display" | "motion" | "transition" | "height"
+            | "next" | "say" | "raw" | "body",
             _,
         ) => Kind::Plain,
         _ if func == "css" || func == "html" || func == "keyframes" => Kind::Plain,
@@ -237,10 +237,16 @@ struct MsgInfo {
 
 impl MsgInfo {
     fn of(prog: &Program) -> MsgInfo {
-        let variants =
-            prog.enums.iter().find(|e| e.name == "Msg").map(|e| e.variants.iter().map(|v| (v.name.clone(), !v.fields.is_empty())).collect());
+        let variants = prog
+            .enums
+            .iter()
+            .find(|e| e.name == "Msg")
+            .map(|e| e.variants.iter().map(|v| (v.name.clone(), !v.fields.is_empty())).collect());
         let update = variants.is_some()
-            && prog.funcs.iter().any(|f| f.name == "update" && f.params.len() == 1 && f.params[0].ty.name() == "Msg" && !f.params[0].inout);
+            && prog
+                .funcs
+                .iter()
+                .any(|f| f.name == "update" && f.params.len() == 1 && f.params[0].ty.name() == "Msg" && !f.params[0].inout);
         MsgInfo { variants, update }
     }
 }
@@ -271,7 +277,8 @@ impl Ctx<'_> {
         let func = name.clone();
         *name = format!("web.{func}");
         let names = &self.params[&func];
-        let given: Vec<String> = args.iter().map(|a| if let ExprKind::Labeled(l, _) = &a.kind { l.clone() } else { String::new() }).collect();
+        let given: Vec<String> =
+            args.iter().map(|a| if let ExprKind::Labeled(l, _) = &a.kind { l.clone() } else { String::new() }).collect();
         for (i, a) in args.iter_mut().enumerate() {
             let (param, value) = match &mut a.kind {
                 ExprKind::Labeled(l, v) => (l.clone(), &mut **v),
@@ -365,11 +372,11 @@ impl Ctx<'_> {
                     errs.push(scheme_error(&bad, s, span));
                 }
             }
-            Kind::Icon if start && !s.is_empty() && !self.icons.contains(s) => errs.push(unknown_icon(s, span, &self.icons)),
+            Kind::Icon if start && !s.is_empty() && !self.icons.contains(s) => errs.push(unknown_icon(s, span, self.icons)),
             Kind::Text => {
                 for name in icon_names(s) {
                     if !self.icons.contains(&name) {
-                        errs.push(unknown_icon(&name, span, &self.icons));
+                        errs.push(unknown_icon(&name, span, self.icons));
                     }
                 }
                 for url in md_links(s) {
@@ -404,11 +411,34 @@ fn raw_needs_literal(func: &str, span: Span, errs: &mut Vec<Diag>) {
 }
 
 fn unknown_icon(name: &str, span: Span, icons: &HashSet<String>) -> Diag {
-    let hint = match suggest(name, icons.iter().map(String::as_str)) {
+    let near = icons.iter().map(|i| (edits(name, i), i)).filter(|(d, _)| *d <= 2).min();
+    let hint = match near.map(|(_, i)| format!("did you mean `{i}`?")).or_else(|| suggest(name, icons.iter().map(String::as_str))) {
         Some(h) => format!("{h} The icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them"),
-        None => "the icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them; write `\\:` for a colon that starts no icon".to_string(),
+        None => "the icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them; write `\\\\:` in the string for a colon that starts no icon".to_string(),
     };
     Diag::new("E0374", format!("unknown icon `{name}`"), span).hint(hint)
+}
+
+/// The edit distance of two names (a swap of neighbours counts as one edit).
+fn edits(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+    for (i, row) in d.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
+    }
+    for i in 1..=a.len() {
+        for j in 1..=b.len() {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            d[i][j] = (d[i - 1][j] + 1).min(d[i][j - 1] + 1).min(d[i - 1][j - 1] + cost);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
+            }
+        }
+    }
+    d[a.len()][b.len()]
 }
 
 fn scheme_error(scheme: &str, url: &str, span: Span) -> Diag {
@@ -538,7 +568,9 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
         return errs;
     }
     let globals: HashSet<String> = match prog.funcs.iter().find(|f| f.name == "main") {
-        Some(m) => m.body.iter().filter_map(|s| if let StmtKind::Let { name, .. } = &s.kind { Some(name.clone()) } else { None }).collect(),
+        Some(m) => {
+            m.body.iter().filter_map(|s| if let StmtKind::Let { name, .. } = &s.kind { Some(name.clone()) } else { None }).collect()
+        }
         None => return errs,
     };
     let names: HashSet<String> = prog.funcs.iter().map(|f| f.name.clone()).collect();
@@ -593,8 +625,8 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
         if let Some(fa) = facts.get(&n) {
             for (m, span) in &fa.effects {
                 errs.push(
-                    Diag::new("E0384", format!("`{n}` runs in the browser (it is part of `update` or a live view) but uses `{m}`"), *span).hint(
-                        format!("the browser has no `{m}`: read files and arguments while the site is built, into a script variable, and use that"),
+                    Diag::new("E0384", format!("`{n}` runs in the browser (as `update`, a live view or a function they call), but it uses `{m}`"), *span).hint(
+                        format!("the browser has no files, arguments or standard input for `{m}`: read them while the site is built, into a script variable, and use that"),
                     ),
                 );
             }

@@ -1,0 +1,17 @@
+// expect: E0376
+use web
+
+enum Msg { Add }
+var clicks = 0
+fn update(m: Msg) {
+    match m {
+        Msg.Add => clicks += 1
+    }
+}
+
+fn counter(label: str) -> Node = p("{label}: {clicks}")
+
+page("/", "Home") {
+    counter("Clicks")
+    button("Add", on: Msg.Add)
+}

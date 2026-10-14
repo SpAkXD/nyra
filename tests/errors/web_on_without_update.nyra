@@ -1,0 +1,8 @@
+// expect: E0373
+use web
+
+enum Msg { Add }
+
+page("/", "Home") {
+    button("Add", on: Msg.Add)
+}
