@@ -577,10 +577,19 @@ impl<'a> Reader<'a> {
             return true;
         }
         let classes = d.classes(id);
-        if classes
-            .iter()
-            .any(|c| matches!(*c, "sr-only" | "visually-hidden" | "screen-reader-text" | "visuallyhidden" | "skip-link" | "skip" | "skip-to-content" | "skiplink"))
-        {
+        if classes.iter().any(|c| {
+            matches!(
+                *c,
+                "sr-only"
+                    | "visually-hidden"
+                    | "screen-reader-text"
+                    | "visuallyhidden"
+                    | "skip-link"
+                    | "skip"
+                    | "skip-to-content"
+                    | "skiplink"
+            )
+        }) {
             return true;
         }
         // a "Skip to content" link (the kit has its own)
@@ -1449,7 +1458,14 @@ impl<'a> Reader<'a> {
                 None => {
                     let poster = d.attr(id, "poster").map(|p| css::resolve(&self.base, p));
                     match poster.and_then(|p| self.asset(&p)) {
-                        Some(src) => out.push(Item::Img { src, alt: String::new(), caption: String::new(), mo: Mo::default(), width: String::new(), px: 0 }),
+                        Some(src) => out.push(Item::Img {
+                            src,
+                            alt: String::new(),
+                            caption: String::new(),
+                            mo: Mo::default(),
+                            width: String::new(),
+                            px: 0,
+                        }),
                         None => self.count("videos streamed by scripts"),
                     }
                 }
@@ -1503,7 +1519,9 @@ impl<'a> Reader<'a> {
                 }
                 if let Some(f) = self.form(id) {
                     out.push(Item::Form(f));
-                } else if let Some(i) = d.descendants(id).into_iter().find(|&k| self.visible(k) && d.tag(k) == "input" && self.searchish(k)) {
+                } else if let Some(i) =
+                    d.descendants(id).into_iter().find(|&k| self.visible(k) && d.tag(k) == "input" && self.searchish(k))
+                {
                     // a search form of this part of the page: the clone filters what follows it
                     let hint = d.attr(i, "placeholder").or_else(|| d.attr(i, "aria-label")).map(collapse).unwrap_or_default();
                     out.push(Item::Search(hint));
@@ -1538,10 +1556,17 @@ impl<'a> Reader<'a> {
                 // an action of the page's scripts (Subscribe, Share, Save): a static button that
                 // goes to the original page, when it has a short label
                 let label = collapse(&d.nodes[id].kids.iter().map(|&k| self.drawn_text(k)).collect::<Vec<_>>().join(" "));
-                let generic = ["menu", "close", "next", "previous", "prev", "toggle", "search", "more", "less", "×", "x", "ok", "play", "pause", "mute"];
+                let generic = [
+                    "menu", "close", "next", "previous", "prev", "toggle", "search", "more", "less", "×", "x", "ok", "play", "pause",
+                    "mute",
+                ];
                 let page_url = (self.base.starts_with("http")).then(|| self.base.clone());
-                if !label.is_empty() && words(&label) <= 3 && label.chars().count() <= 24 && !generic.contains(&label.to_lowercase().as_str()) && page_url.is_some() {
-                    let b = (md_escape(&label), page_url.unwrap());
+                let short = !label.is_empty()
+                    && words(&label) <= 3
+                    && label.chars().count() <= 24
+                    && !generic.contains(&label.to_lowercase().as_str());
+                if let (true, Some(url)) = (short, page_url) {
+                    let b = (md_escape(&label), url);
                     if let Some(Item::Buttons(v)) = out.last_mut() {
                         v.push(b);
                     } else {
@@ -2243,7 +2268,9 @@ impl<'a> Reader<'a> {
             .count();
         // quotes
         let quoted = kids.iter().filter(|&&k| d.find(k, "blockquote").is_some()).count();
-        if (quoted == kids.len() || named(&["testimonial", "review", "quote", "comment"])) && kids.iter().all(|&k| self.count_words(k) >= 6) {
+        if (quoted == kids.len() || named(&["testimonial", "review", "quote", "comment"]))
+            && kids.iter().all(|&k| self.count_words(k) >= 6)
+        {
             let mut qs: Vec<Quote> = kids.iter().map(|&k| self.quote_card(k)).collect();
             qs.iter_mut().for_each(split_name);
             return Some(Item::Quotes(qs));
@@ -3101,9 +3128,21 @@ impl Reader<'_> {
                 names.push(i.to_ascii_lowercase());
             }
             let named = names.iter().any(|c| {
-                ["sidebar", "side-bar", "sidenav", "side-nav", "side_nav", "leftnav", "left-nav", "leftmenu", "left-menu", "docs-nav", "docsnav"]
-                    .iter()
-                    .any(|w| c.contains(w))
+                [
+                    "sidebar",
+                    "side-bar",
+                    "sidenav",
+                    "side-nav",
+                    "side_nav",
+                    "leftnav",
+                    "left-nav",
+                    "leftmenu",
+                    "left-menu",
+                    "docs-nav",
+                    "docsnav",
+                ]
+                .iter()
+                .any(|w| c.contains(w))
                     || c == "guide"
             });
             if !named || names.iter().any(|c| c.contains("right")) {
@@ -3173,7 +3212,8 @@ impl Reader<'_> {
                 continue;
             }
             let has_link = d.find(k, "a").is_some();
-            if heading_level(t).is_some() || (!has_link && self.count_words(k) > 0 && (!self.blocky[k] || d.find(k, "img").is_none())) {
+            if heading_level(t).is_some() || (!has_link && self.count_words(k) > 0 && (!self.blocky[k] || d.find(k, "img").is_none()))
+            {
                 let l = collapse(&self.text_of(k));
                 if !l.is_empty() && !has_link {
                     out.push((md_escape(&l), String::new()));
@@ -3190,7 +3230,9 @@ impl Reader<'_> {
     fn has_icon(&self, a: usize) -> bool {
         let d = self.dom;
         d.descendants(a).into_iter().any(|k| {
-            matches!(d.tag(k), "svg" | "yt-icon" | "i") || (d.tag(k) == "img" && self.is_icon(k)) || class_has(&d.classes(k), &["icon"])
+            matches!(d.tag(k), "svg" | "yt-icon" | "i")
+                || (d.tag(k) == "img" && self.is_icon(k))
+                || class_has(&d.classes(k), &["icon"])
         })
     }
 
@@ -3221,7 +3263,9 @@ impl Reader<'_> {
             if tag == "input" && ty == "file" {
                 add("uploads");
             }
-            if (tag == "form" && (d.attr(k, "role") == Some("search") || d.attr(k, "action").is_some_and(|a| a.contains("search") || a.contains("result"))))
+            if (tag == "form"
+                && (d.attr(k, "role") == Some("search")
+                    || d.attr(k, "action").is_some_and(|a| a.contains("search") || a.contains("result"))))
                 || (tag == "input" && self.searchish(k) && self.inside(k, &["header", "nav", "form"]))
             {
                 add("search over the whole site");
@@ -3231,12 +3275,28 @@ impl Reader<'_> {
             }
             if matches!(tag, "a" | "button") || d.attr(k, "role") == Some("button") {
                 let label = collapse(&self.text_of(k)).to_lowercase();
-                let label = if label.is_empty() { d.attr(k, "aria-label").map(|l| l.to_lowercase()).unwrap_or_default() } else { label };
+                let label =
+                    if label.is_empty() { d.attr(k, "aria-label").map(|l| l.to_lowercase()).unwrap_or_default() } else { label };
                 let label = label.trim();
                 let href = d.attr(k, "href").unwrap_or("").to_ascii_lowercase();
                 if [
-                    "sign in", "sign up", "log in", "login", "register", "create account", "my account", "account", "přihlásit", "přihlásit se",
-                    "registrace", "anmelden", "registrieren", "connexion", "se connecter", "iniciar sesión", "accedi",
+                    "sign in",
+                    "sign up",
+                    "log in",
+                    "login",
+                    "register",
+                    "create account",
+                    "my account",
+                    "account",
+                    "přihlásit",
+                    "přihlásit se",
+                    "registrace",
+                    "anmelden",
+                    "registrieren",
+                    "connexion",
+                    "se connecter",
+                    "iniciar sesión",
+                    "accedi",
                 ]
                 .contains(&label)
                     || href.contains("/login")
@@ -3248,9 +3308,24 @@ impl Reader<'_> {
                 if ["subscribe", "like", "dislike", "follow", "odebírat", "sledovat", "abonnieren", "join"].contains(&label) {
                     add("subscriptions and likes");
                 }
-                if ["add to cart", "add to basket", "add to bag", "buy now", "buy", "checkout", "cart", "basket", "do košíku", "košík", "koupit", "in den warenkorb", "warenkorb", "panier"]
-                    .iter()
-                    .any(|w| label == *w || label.starts_with(&format!("{w} ")))
+                if [
+                    "add to cart",
+                    "add to basket",
+                    "add to bag",
+                    "buy now",
+                    "buy",
+                    "checkout",
+                    "cart",
+                    "basket",
+                    "do košíku",
+                    "košík",
+                    "koupit",
+                    "in den warenkorb",
+                    "warenkorb",
+                    "panier",
+                ]
+                .iter()
+                .any(|w| label == *w || label.starts_with(&format!("{w} ")))
                     || href.contains("/cart")
                     || href.contains("/checkout")
                     || href.contains("basket")
@@ -3276,8 +3351,11 @@ impl Reader<'_> {
         let tag = d.tag(id);
         let ident = d.attr(id, "id").unwrap_or("").to_ascii_lowercase();
         let classes = d.classes(id);
-        if tag == "ytd-comments" || matches!(ident.as_str(), "comments" | "comment-section" | "disqus_thread" | "respond")
-            || classes.iter().any(|c| matches!(c.to_ascii_lowercase().as_str(), "comments" | "comments-area" | "comment-list" | "commentlist"))
+        if tag == "ytd-comments"
+            || matches!(ident.as_str(), "comments" | "comment-section" | "disqus_thread" | "respond")
+            || classes
+                .iter()
+                .any(|c| matches!(c.to_ascii_lowercase().as_str(), "comments" | "comments-area" | "comment-list" | "commentlist"))
         {
             return Some("comments");
         }
@@ -3328,7 +3406,14 @@ impl Reader<'_> {
         }
         let mut names: Vec<String> = d.classes(id).iter().map(|c| c.to_ascii_lowercase()).collect();
         names.push(d.attr(id, "id").unwrap_or("").to_ascii_lowercase());
-        let named = names.iter().any(|c| c.contains("video-player") || c.contains("html5-video-player") || c == "movie_player" || c == "player" || c.starts_with("vjs") || c.contains("plyr"));
+        let named = names.iter().any(|c| {
+            c.contains("video-player")
+                || c.contains("html5-video-player")
+                || c == "movie_player"
+                || c == "player"
+                || c.starts_with("vjs")
+                || c.contains("plyr")
+        });
         named && d.find(id, "video").is_some()
     }
 
@@ -3343,7 +3428,11 @@ impl Reader<'_> {
             .map(str::to_string)
             .or_else(|| d.find_all(v, "source").into_iter().find_map(|s| d.attr(s, "src").map(str::to_string)))
             .unwrap_or_default();
-        let src = if src.is_empty() || src.starts_with("blob:") || src.starts_with("data:") { String::new() } else { css::resolve(&self.base, &src) };
+        let src = if src.is_empty() || src.starts_with("blob:") || src.starts_with("data:") {
+            String::new()
+        } else {
+            css::resolve(&self.base, &src)
+        };
         let title = d.attr(v, "title").or_else(|| d.attr(v, "aria-label")).map(collapse).unwrap_or_default();
         let page_title = short_title(&self.title.replace(" - YouTube", ""));
         if src.starts_with("https://") || src.starts_with("http://") {
@@ -3388,7 +3477,12 @@ impl Reader<'_> {
                 .attr(t, "aria-controls")
                 .map(str::to_string)
                 .or_else(|| d.attr(t, "href").and_then(|h| h.strip_prefix('#')).map(str::to_string))
-                .or_else(|| d.attr(t, "data-bs-target").or_else(|| d.attr(t, "data-target")).and_then(|h| h.strip_prefix('#')).map(str::to_string));
+                .or_else(|| {
+                    d.attr(t, "data-bs-target")
+                        .or_else(|| d.attr(t, "data-target"))
+                        .and_then(|h| h.strip_prefix('#'))
+                        .map(str::to_string)
+                });
             let Some(target) = target else { return false };
             let Some(p) = desc.iter().copied().find(|&k| d.attr(k, "id") == Some(target.as_str())) else { return false };
             panels.push(p);
@@ -3439,7 +3533,13 @@ impl Reader<'_> {
                 continue;
             }
             let link = if d.tag(t) == "a" { Some(t) } else { d.find(t, "a") };
-            let href = link.and_then(|a| d.attr(a, "href")).and_then(|h| self.href(h)).unwrap_or_else(|| if self.base.is_empty() { "#top".into() } else { self.base.clone() });
+            let href = link.and_then(|a| d.attr(a, "href")).and_then(|h| self.href(h)).unwrap_or_else(|| {
+                if self.base.is_empty() {
+                    "#top".into()
+                } else {
+                    self.base.clone()
+                }
+            });
             out.push((md_escape(&label), href, d.attr(t, "aria-selected") == Some("true")));
         }
         (out.len() >= 2).then_some(Item::TabLinks(out))
@@ -3470,7 +3570,11 @@ impl Reader<'_> {
             || names.iter().any(|c| {
                 ["carousel", "swiper", "slick-slider", "splide", "glide", "owl-carousel", "flickity", "embla", "slideshow", "slider"]
                     .iter()
-                    .any(|w| c == w || c.starts_with(&format!("{w}-container")) || (c.contains(w) && !c.contains("item") && !c.contains("slide-") && !c.contains("range")))
+                    .any(|w| {
+                        c == w
+                            || c.starts_with(&format!("{w}-container"))
+                            || (c.contains(w) && !c.contains("item") && !c.contains("slide-") && !c.contains("range"))
+                    })
             });
         if !named || d.find(id, "h1").is_some() {
             return None;
@@ -3609,7 +3713,10 @@ impl Reader<'_> {
                 for k in d.descendants(n).into_iter().take(400) {
                     let x = self.mo.get(k);
                     let word = crate::web::motion::ANIM.contains(&x.anim.as_str()) && !matches!(x.anim.as_str(), "count" | "none");
-                    if word && self.drawn(k) && (heading_level(d.tag(k)).is_some() || matches!(d.tag(k), "p" | "div" | "section" | "header")) {
+                    if word
+                        && self.drawn(k)
+                        && (heading_level(d.tag(k)).is_some() || matches!(d.tag(k), "p" | "div" | "section" | "header"))
+                    {
                         m.anim = x.anim.clone();
                         break;
                     }
@@ -3663,9 +3770,17 @@ impl Reader<'_> {
                 continue;
             }
             // a line of separate pieces (`<p><span>Channel</span> <span>12K views</span></p>`)
-            let pieces: Vec<usize> = d.elems(n).into_iter().filter(|&c| self.drawn(c) && !self.drawn_text(c).trim().is_empty()).collect();
+            let pieces: Vec<usize> =
+                d.elems(n).into_iter().filter(|&c| self.drawn(c) && !self.drawn_text(c).trim().is_empty()).collect();
             let loose_text = d.nodes[n].kids.iter().any(|&c| d.tag(c) == "#text" && !d.nodes[c].text.trim().is_empty());
-            if n != k && !self.blocky[n] && d.is_elem(n) && pieces.len() >= 2 && !loose_text && d.tag(n) != "a" && heading_level(d.tag(n)).is_none() {
+            if n != k
+                && !self.blocky[n]
+                && d.is_elem(n)
+                && pieces.len() >= 2
+                && !loose_text
+                && d.tag(n) != "a"
+                && heading_level(d.tag(n)).is_none()
+            {
                 for &c in pieces.iter().rev() {
                     todo.push(c);
                 }
@@ -3680,7 +3795,8 @@ impl Reader<'_> {
                 if !raw.is_empty() {
                     let label = d.attr(n, "aria-label").unwrap_or("").to_lowercase();
                     // "90K" with the label "90 thousand views"
-                    let t = if label.ends_with(" views") && !raw.to_lowercase().contains("view") { format!("{raw} views") } else { raw };
+                    let t =
+                        if label.ends_with(" views") && !raw.to_lowercase().contains("view") { format!("{raw} views") } else { raw };
                     out.push((n, t));
                 }
                 continue;
@@ -3728,7 +3844,8 @@ impl Reader<'_> {
             let title_node = self.title_node(k);
             it.title = title_node.map(|t| collapse(&self.text_of(t))).unwrap_or_default();
             let leaves = self.leaf_texts(k);
-            let links: Vec<usize> = std::iter::once(k).chain(d.descendants(k)).filter(|&x| d.tag(x) == "a" && d.attr(x, "href").is_some()).collect();
+            let links: Vec<usize> =
+                std::iter::once(k).chain(d.descendants(k)).filter(|&x| d.tag(x) == "a" && d.attr(x, "href").is_some()).collect();
             if it.title.is_empty() {
                 it.title = links.iter().map(|&a| collapse(&self.text_of(a))).max_by_key(|t| t.len()).unwrap_or_default();
             }
@@ -3737,7 +3854,9 @@ impl Reader<'_> {
                 continue;
             }
             let title_link = links.iter().copied().find(|&a| title_node.is_some_and(|t| d.within(t, a) || d.within(a, t)));
-            let video_link = links.iter().copied().find(|&a| d.attr(a, "href").and_then(|h| self.href(h)).is_some_and(|h| !yt_id(&h).is_empty() || vimeo_id(&h).is_some()));
+            let video_link = links.iter().copied().find(|&a| {
+                d.attr(a, "href").and_then(|h| self.href(h)).is_some_and(|h| !yt_id(&h).is_empty() || vimeo_id(&h).is_some())
+            });
             let picture_link = imgs.first().and_then(|&i| links.iter().copied().find(|&a| d.within(i, a)));
             let plain_link = links.iter().copied().find(|&a| !self.looks_like_button(a));
             let link = video_link.or(title_link).or(picture_link).or(plain_link).or(links.first().copied());
@@ -3774,7 +3893,9 @@ impl Reader<'_> {
             if !it.badge.is_empty()
                 || !yt_id(&it.href).is_empty()
                 || vimeo_id(&it.href).is_some()
-                || ["views", "view", "zhlédnutí", "aufrufe", "vues", "visualizaciones"].iter().any(|w| low.split(|c: char| !c.is_alphanumeric()).any(|x| x == *w))
+                || ["views", "view", "zhlédnutí", "aufrufe", "vues", "visualizaciones"]
+                    .iter()
+                    .any(|w| low.split(|c: char| !c.is_alphanumeric()).any(|x| x == *w))
             {
                 videoish += 1;
             }
@@ -3813,7 +3934,9 @@ impl Reader<'_> {
     /// server) becomes a search over the biggest grid of the page.
     fn place_search(&mut self, page: &mut Page) {
         let grid = |i: &Item| match i {
-            Item::Moved { item, .. } => matches!(**item, Item::Cards { .. } | Item::Media { .. } | Item::Gallery(_) | Item::List { .. } | Item::Table { .. }),
+            Item::Moved { item, .. } => {
+                matches!(**item, Item::Cards { .. } | Item::Media { .. } | Item::Gallery(_) | Item::List { .. } | Item::Table { .. })
+            }
             Item::Cards { .. } | Item::Media { .. } | Item::Gallery(_) | Item::List { .. } | Item::Table { .. } => true,
             _ => false,
         };
@@ -3874,14 +3997,24 @@ impl Reader<'_> {
 /// The note in the program for a feature that needs a server.
 fn todo_text(feature: &str) -> String {
     match feature {
-        "sign-in and accounts" => "sign-in and accounts need a server (users, sessions); the links still go to the original site".into(),
-        "subscriptions and likes" => "subscriptions, likes and follows need accounts and a database on a server; the counts here are a static copy".into(),
-        "search over the whole site" => "a search over the whole site needs a server with an index; the search box here filters this page only".into(),
+        "sign-in and accounts" => {
+            "sign-in and accounts need a server (users, sessions); the links still go to the original site".into()
+        }
+        "subscriptions and likes" => {
+            "subscriptions, likes and follows need accounts and a database on a server; the counts here are a static copy".into()
+        }
+        "search over the whole site" => {
+            "a search over the whole site needs a server with an index; the search box here filters this page only".into()
+        }
         "comments" => "comments need a server (accounts, a database, moderation); below is a static copy of the comments shown".into(),
         "recommendations" => "recommendations are chosen per visitor by a server; this is a static copy of the list shown".into(),
-        "a cart and payments" => "a cart, orders and payments need a server (stock, orders, a payment provider); prices here are a static copy".into(),
+        "a cart and payments" => {
+            "a cart, orders and payments need a server (stock, orders, a payment provider); prices here are a static copy".into()
+        }
         "uploads" => "uploads need a server that receives and stores the files".into(),
-        "video streaming" => "this video is streamed by the original site's server; host the file (or a YouTube or Vimeo copy) to play it here".into(),
+        "video streaming" => {
+            "this video is streamed by the original site's server; host the file (or a YouTube or Vimeo copy) to play it here".into()
+        }
         f => format!("{f} needs a server"),
     }
 }
@@ -3981,7 +4114,9 @@ fn is_price(t: &str) -> bool {
     }
     let l = t.to_lowercase();
     ['£', '$', '€', '¥', '₹', '₽'].iter().any(|c| t.contains(*c))
-        || [" kč", "kč", " czk", " eur", "eur ", " usd", "usd ", " zł", " kr", " chf", " gbp"].iter().any(|w| l.ends_with(w.trim_start()) || l.starts_with(w.trim_end()))
+        || [" kč", "kč", " czk", " eur", "eur ", " usd", "usd ", " zł", " kr", " chf", " gbp"]
+            .iter()
+            .any(|w| l.ends_with(w.trim_start()) || l.starts_with(w.trim_end()))
 }
 
 // ---- free helpers -----------------------------------------------------------------------------------

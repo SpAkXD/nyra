@@ -179,8 +179,10 @@ impl Parser<'_> {
                         }
                     }
                 }
-            } else if let Some(name) =
-                lower.strip_prefix("@keyframes").or_else(|| lower.strip_prefix("@-webkit-keyframes")).or_else(|| lower.strip_prefix("@-moz-keyframes"))
+            } else if let Some(name) = lower
+                .strip_prefix("@keyframes")
+                .or_else(|| lower.strip_prefix("@-webkit-keyframes"))
+                .or_else(|| lower.strip_prefix("@-moz-keyframes"))
             {
                 let name = prelude[prelude.len() - name.len()..].trim().trim_matches(|c| c == '"' || c == '\'').to_string();
                 let body = self.raw_body();
@@ -286,7 +288,8 @@ impl Parser<'_> {
 /// selector up to the compound with `:hover`, without the state) and the declarations that move
 /// something; `--nyra-inner` says the change is on an element inside the hovered one.
 fn hover_rule(sheet: &mut Sheet, prelude: &str, body: &str, base: &str) {
-    let kept: Vec<(String, String, bool)> = decls(body, base).into_iter().filter(|(k, _, _)| HOVER_KEEP.contains(&k.as_str())).collect();
+    let kept: Vec<(String, String, bool)> =
+        decls(body, base).into_iter().filter(|(k, _, _)| HOVER_KEEP.contains(&k.as_str())).collect();
     if kept.is_empty() {
         return;
     }

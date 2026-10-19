@@ -123,8 +123,11 @@ impl Frames {
     fn body(&self) -> String {
         let mut parts = Vec::new();
         for (o, d) in &self.frames {
-            let decls: Vec<String> =
-                d.iter().filter(|(k, _)| !k.starts_with('-')).map(|(k, v)| format!("{k}: {}", v.replace(['{', '}', ';', '"'], ""))).collect();
+            let decls: Vec<String> = d
+                .iter()
+                .filter(|(k, _)| !k.starts_with('-'))
+                .map(|(k, v)| format!("{k}: {}", v.replace(['{', '}', ';', '"'], "")))
+                .collect();
             if !decls.is_empty() {
                 parts.push(format!("{}% {{ {} }}", (o * 100.0).round(), decls.join("; ")));
             }
@@ -239,7 +242,9 @@ fn scale(d: &[(String, String)]) -> Option<f64> {
 }
 
 fn rotate(d: &[(String, String)]) -> Option<f64> {
-    let v = get(d, "rotate").map(str::to_string).or_else(|| get(d, "transform").and_then(|t| func_args(t, "rotate").or_else(|| func_args(t, "rotateZ")).map(|a| a[0].to_string())))?;
+    let v = get(d, "rotate").map(str::to_string).or_else(|| {
+        get(d, "transform").and_then(|t| func_args(t, "rotate").or_else(|| func_args(t, "rotateZ")).map(|a| a[0].to_string()))
+    })?;
     let v = v.trim();
     if let Some(n) = v.strip_suffix("deg") {
         return n.trim().parse().ok();
@@ -274,11 +279,19 @@ fn classify(body: &str, infinite: bool, duration_ms: f64) -> Option<(&'static st
     if f.frames.is_empty() {
         return None;
     }
-    let xs = f.values(|d| translate(d).map(|t| t.0));
-    let ys = f.values(|d| translate(d).map(|t| t.1));
-    let ss = f.values(scale);
-    let rs = f.values(rotate);
-    let os = f.values(opacity);
+    // a missing `from` or `to` frame is the element's own state
+    let open = f.frames.first().is_some_and(|x| x.0 > 0.0) || f.frames.last().is_some_and(|x| x.0 < 1.0);
+    let base = |mut v: Vec<f64>, at: f64| {
+        if open && !v.is_empty() {
+            v.push(at);
+        }
+        v
+    };
+    let xs = base(f.values(|d| translate(d).map(|t| t.0)), 0.0);
+    let ys = base(f.values(|d| translate(d).map(|t| t.1)), 0.0);
+    let ss = base(f.values(scale), 1.0);
+    let rs = base(f.values(rotate), 0.0);
+    let os = base(f.values(opacity), 1.0);
     let pcts = f.values(translate_pct);
     let bgpos = f.frames.iter().filter(|(_, d)| get(d, "background-position").is_some()).count() >= 2;
     let dash = f.frames.iter().any(|(_, d)| get(d, "stroke-dashoffset").is_some());
@@ -375,11 +388,41 @@ fn reveal_word(v: &str) -> Option<&'static str> {
 fn reveal_class(classes: &[&str]) -> Option<(String, &'static str)> {
     for c in classes {
         let l = c.to_ascii_lowercase();
-        let animate_css = l.strip_prefix("animate__").filter(|r| !matches!(*r, "animated" | "delay-1s" | "delay-2s" | "faster" | "slow" | "slower" | "fast"));
+        let animate_css = l
+            .strip_prefix("animate__")
+            .filter(|r| !matches!(*r, "animated" | "delay-1s" | "delay-2s" | "faster" | "slow" | "slower" | "fast"));
         let named = [
-            "reveal", "reveal-up", "scroll-reveal", "js-reveal", "sr", "sr-item", "fade-in", "fade-up", "fade-in-up", "fadein", "fade-in-bottom",
-            "animate-on-scroll", "anim-up", "slide-up", "slide-in", "appear", "zoom-in", "fadeinup", "fadeinleft", "fadeinright", "fadeindown", "fadein",
-            "zoomin", "slideinup", "slideinleft", "slideinright", "bouncein", "gsap-reveal", "gs-reveal", "inview", "in-view-animate",
+            "reveal",
+            "reveal-up",
+            "scroll-reveal",
+            "js-reveal",
+            "sr",
+            "sr-item",
+            "fade-in",
+            "fade-up",
+            "fade-in-up",
+            "fadein",
+            "fade-in-bottom",
+            "animate-on-scroll",
+            "anim-up",
+            "slide-up",
+            "slide-in",
+            "appear",
+            "zoom-in",
+            "fadeinup",
+            "fadeinleft",
+            "fadeinright",
+            "fadeindown",
+            "fadein",
+            "zoomin",
+            "slideinup",
+            "slideinleft",
+            "slideinright",
+            "bouncein",
+            "gsap-reveal",
+            "gs-reveal",
+            "inview",
+            "in-view-animate",
         ];
         if let Some(r) = animate_css {
             if let Some(w) = reveal_word(r) {
@@ -395,9 +438,13 @@ fn reveal_class(classes: &[&str]) -> Option<(String, &'static str)> {
 }
 
 fn counter_like(dom: &Dom, id: usize, classes: &[&str]) -> Option<String> {
-    for a in ["data-purecounter-end", "data-count", "data-countup", "data-count-to", "data-to", "data-target", "data-number", "data-value"] {
+    for a in
+        ["data-purecounter-end", "data-count", "data-countup", "data-count-to", "data-to", "data-target", "data-number", "data-value"]
+    {
         if let Some(v) = dom.attr(id, a) {
-            if v.trim().replace([',', '.', ' '], "").parse::<f64>().is_ok() && dom.nodes[id].kids.iter().any(|&k| dom.tag(k) == "#text") {
+            if v.trim().replace([',', '.', ' '], "").parse::<f64>().is_ok()
+                && dom.nodes[id].kids.iter().any(|&k| dom.tag(k) == "#text")
+            {
                 return Some(format!("`{a}`"));
             }
         }
@@ -406,7 +453,9 @@ fn counter_like(dom: &Dom, id: usize, classes: &[&str]) -> Option<String> {
         .iter()
         .find(|c| {
             let l = c.to_ascii_lowercase();
-            ["counter", "count-up", "countup", "odometer", "purecounter", "js-count", "number-count", "stat-count"].iter().any(|w| l == *w || l.ends_with(&format!("-{w}")) || l.starts_with(&format!("{w}-")))
+            ["counter", "count-up", "countup", "odometer", "purecounter", "js-count", "number-count", "stat-count"]
+                .iter()
+                .any(|w| l == *w || l.ends_with(&format!("-{w}")) || l.starts_with(&format!("{w}-")))
         })
         .map(|c| format!("class `{c}`"))
 }
@@ -426,33 +475,34 @@ pub fn detect(dom: &Dom, st: &Styles, sheet: &Sheet) -> Motions {
         }
     }
     let mut custom: Vec<(String, String)> = Vec::new();
-    let mut word_of_keyframes = |name: &str, infinite: bool, ms: f64, found: &mut BTreeMap<(String, String), usize>| -> Option<(&'static str, String)> {
-        let body = frames.iter().find(|(n, _)| n == name).map(|(_, b)| b.clone())?;
-        let what = format!("@keyframes {name}{}", if infinite { " (endless)" } else { "" });
-        if let Some((opt, w)) = classify(&body, infinite, ms) {
-            *found.entry((what, format!("{opt}: \"{w}\""))).or_default() += 1;
-            return Some((opt, w.to_string()));
-        }
-        // a word of its own: the keyframes in the program
-        let opt = if infinite { "loop" } else { "anim" };
-        let word = custom_name(name);
-        if let Some((_, _)) = custom.iter().find(|(n, _)| *n == word) {
+    let mut word_of_keyframes =
+        |name: &str, infinite: bool, ms: f64, found: &mut BTreeMap<(String, String), usize>| -> Option<(&'static str, String)> {
+            let body = frames.iter().find(|(n, _)| n == name).map(|(_, b)| b.clone())?;
+            let what = format!("@keyframes {name}{}", if infinite { " (endless)" } else { "" });
+            if let Some((opt, w)) = classify(&body, infinite, ms) {
+                *found.entry((what, format!("{opt}: \"{w}\""))).or_default() += 1;
+                return Some((opt, w.to_string()));
+            }
+            // a word of its own: the keyframes in the program
+            let opt = if infinite { "loop" } else { "anim" };
+            let word = custom_name(name);
+            if let Some((_, _)) = custom.iter().find(|(n, _)| *n == word) {
+                *found.entry((what, format!("{opt}: \"{word}\" (keyframes)"))).or_default() += 1;
+                return Some((opt, word));
+            }
+            if custom.len() >= 6 {
+                return None;
+            }
+            let clean = Frames::parse(&body).body();
+            // only keyframes the build takes without a warning (no layout properties)
+            match crate::web::motion::check_keyframes(&word, &clean) {
+                Ok(kf) if !clean.is_empty() && clean.len() <= 600 && kf.layout_warning().is_none() => {}
+                _ => return None,
+            }
+            custom.push((word.clone(), clean));
             *found.entry((what, format!("{opt}: \"{word}\" (keyframes)"))).or_default() += 1;
-            return Some((opt, word));
-        }
-        if custom.len() >= 6 {
-            return None;
-        }
-        let clean = Frames::parse(&body).body();
-        // only keyframes the build takes without a warning (no layout properties)
-        match crate::web::motion::check_keyframes(&word, &clean) {
-            Ok(kf) if !clean.is_empty() && clean.len() <= 600 && kf.layout_warning().is_none() => {}
-            _ => return None,
-        }
-        custom.push((word.clone(), clean));
-        *found.entry((what, format!("{opt}: \"{word}\" (keyframes)"))).or_default() += 1;
-        Some((opt, word))
-    };
+            Some((opt, word))
+        };
     for id in 0..dom.nodes.len() {
         if !dom.is_elem(id) || matches!(dom.tag(id), "html" | "head" | "body" | "script" | "style" | "meta" | "link") {
             continue;
@@ -526,21 +576,33 @@ pub fn detect(dom: &Dom, st: &Styles, sheet: &Sheet) -> Motions {
             }
         }
         // typing effects and split text
-        if mo.anim.is_empty() && classes.iter().any(|c| matches!(c.to_ascii_lowercase().as_str(), "typed" | "typewriter" | "typing" | "type-effect")) {
+        if mo.anim.is_empty()
+            && classes.iter().any(|c| matches!(c.to_ascii_lowercase().as_str(), "typed" | "typewriter" | "typing" | "type-effect"))
+        {
             note(&mut here, "a typing effect".into(), "anim: \"letters\"".into());
             mo.anim = "letters".into();
         }
         if mo.anim.is_empty()
-            && (dom.attr(id, "data-splitting").is_some() || classes.iter().any(|c| matches!(c.to_ascii_lowercase().as_str(), "split-text" | "splitting" | "split-words")))
+            && (dom.attr(id, "data-splitting").is_some()
+                || classes.iter().any(|c| matches!(c.to_ascii_lowercase().as_str(), "split-text" | "splitting" | "split-words")))
         {
             note(&mut here, "split text".into(), "anim: \"words\"".into());
             mo.anim = "words".into();
         }
         // parallax
-        let parallax_attr = ["data-speed", "data-scroll-speed", "data-rellax-speed", "data-parallax", "data-jarallax", "data-stellar-background-ratio"]
-            .iter()
-            .find(|a| dom.attr(id, a).is_some());
-        let parallax_class = classes.iter().find(|c| matches!(c.to_ascii_lowercase().as_str(), "parallax" | "rellax" | "jarallax" | "parallax-bg" | "parallax-window"));
+        let parallax_attr = [
+            "data-speed",
+            "data-scroll-speed",
+            "data-rellax-speed",
+            "data-parallax",
+            "data-jarallax",
+            "data-stellar-background-ratio",
+        ]
+        .iter()
+        .find(|a| dom.attr(id, a).is_some());
+        let parallax_class = classes.iter().find(|c| {
+            matches!(c.to_ascii_lowercase().as_str(), "parallax" | "rellax" | "jarallax" | "parallax-bg" | "parallax-window")
+        });
         if let Some(a) = parallax_attr {
             note(&mut here, format!("parallax (`{a}`)"), "scroll: \"parallax\"".into());
             mo.scroll = "parallax".into();
@@ -553,13 +615,22 @@ pub fn detect(dom: &Dom, st: &Styles, sheet: &Sheet) -> Motions {
         }
         // CSS animations
         if let Some(anim) = st.own(dom, id, "animation-name").or_else(|| st.own(dom, id, "animation")) {
-            let infinite = anim.contains("infinite") || st.own(dom, id, "animation-iteration-count").is_some_and(|v| v.contains("infinite"));
+            let infinite =
+                anim.contains("infinite") || st.own(dom, id, "animation-iteration-count").is_some_and(|v| v.contains("infinite"));
             let ms = anim
                 .split(|c: char| c.is_whitespace() || c == ',')
                 .chain(st.own(dom, id, "animation-duration").as_deref().unwrap_or("").split_whitespace())
-                .find_map(|t| t.strip_suffix("ms").and_then(|n| n.parse::<f64>().ok()).or_else(|| t.strip_suffix('s').and_then(|n| n.parse::<f64>().ok()).map(|s| s * 1000.0)))
+                .find_map(|t| {
+                    t.strip_suffix("ms")
+                        .and_then(|n| n.parse::<f64>().ok())
+                        .or_else(|| t.strip_suffix('s').and_then(|n| n.parse::<f64>().ok()).map(|s| s * 1000.0))
+                })
                 .unwrap_or(1000.0);
-            let names: Vec<String> = anim.split(|c: char| c.is_whitespace() || c == ',').filter(|t| frames.iter().any(|(n, _)| n == t)).map(str::to_string).collect();
+            let names: Vec<String> = anim
+                .split(|c: char| c.is_whitespace() || c == ',')
+                .filter(|t| frames.iter().any(|(n, _)| n == t))
+                .map(str::to_string)
+                .collect();
             if let Some(name) = names.first() {
                 if let Some((o, w)) = word_of_keyframes(name, infinite, ms, &mut here) {
                     if (o == "anim" && mo.anim.is_empty()) || (o == "loop" && mo.looping.is_empty()) {
@@ -575,7 +646,14 @@ pub fn detect(dom: &Dom, st: &Styles, sheet: &Sheet) -> Motions {
             let has = |k: &str| hov.iter().any(|(x, _)| x == k);
             let val = |k: &str| hov.iter().rev().find(|(x, _)| x == k).map(|(_, v)| v.as_str()).unwrap_or("");
             let t = format!("{} {}", val("transform"), val("translate"));
-            let up = t.contains("translateY(-") || t.contains("translate(0,-") || t.contains("translate(0, -") || t.contains("translate3d(0,-") || t.contains("translate3d(0, -") || val("translate").trim().split_whitespace().nth(1).is_some_and(|y| y.starts_with('-')) || val("top").starts_with('-') || val("margin-top").starts_with('-');
+            let up = t.contains("translateY(-")
+                || t.contains("translate(0,-")
+                || t.contains("translate(0, -")
+                || t.contains("translate3d(0,-")
+                || t.contains("translate3d(0, -")
+                || val("translate").split_whitespace().nth(1).is_some_and(|y| y.starts_with('-'))
+                || val("top").starts_with('-')
+                || val("margin-top").starts_with('-');
             let grows = t.contains("scale(") || has("scale");
             let word = if up {
                 Some(("translateY up", "lift"))
@@ -585,7 +663,11 @@ pub fn detect(dom: &Dom, st: &Styles, sheet: &Sheet) -> Motions {
                 Some(("scale", "lift"))
             } else if has("box-shadow") {
                 Some(("box-shadow", "glow"))
-            } else if (val("text-decoration").contains("underline") || val("text-decoration-line").contains("underline") || has("background-size")) && matches!(dom.tag(id), "a" | "span" | "button") {
+            } else if (val("text-decoration").contains("underline")
+                || val("text-decoration-line").contains("underline")
+                || has("background-size"))
+                && matches!(dom.tag(id), "a" | "span" | "button")
+            {
                 Some(("underline", "underline"))
             } else {
                 None
@@ -620,12 +702,17 @@ fn set(mo: &mut Mo, opt: &str, w: &str) {
 /// A keyframes name usable as a word: letters, digits and dashes, starting with a letter, not a
 /// built-in word.
 fn custom_name(name: &str) -> String {
-    let mut s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' }).collect();
+    let mut s: String =
+        name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' }).collect();
     s = s.trim_matches('-').to_string();
     if !s.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
         s = format!("k-{s}");
     }
-    let builtin = crate::web::motion::ANIM.iter().chain(crate::web::motion::HOVER).chain(crate::web::motion::LOOP).chain(crate::web::motion::SCROLL);
+    let builtin = crate::web::motion::ANIM
+        .iter()
+        .chain(crate::web::motion::HOVER)
+        .chain(crate::web::motion::LOOP)
+        .chain(crate::web::motion::SCROLL);
     if builtin.clone().any(|w| *w == s) || ["fast", "slow", "spring"].contains(&s.as_str()) {
         s = format!("site-{s}");
     }
@@ -638,15 +725,37 @@ mod tests {
 
     #[test]
     fn keyframes_become_words() {
-        assert_eq!(classify("from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: none }", false, 600.0), Some(("anim", "rise")));
-        assert_eq!(classify("0% { opacity: 0; transform: translateX(-40px) } 100% { opacity: 1 }", false, 600.0), Some(("anim", "slide")));
+        assert_eq!(
+            classify("from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: none }", false, 600.0),
+            Some(("anim", "rise"))
+        );
+        assert_eq!(
+            classify("0% { opacity: 0; transform: translateX(-40px) } 100% { opacity: 1 }", false, 600.0),
+            Some(("anim", "slide"))
+        );
         assert_eq!(classify("from { opacity: 0 } to { opacity: 1 }", false, 400.0), Some(("anim", "fade")));
-        assert_eq!(classify("0% { transform: scale(.5) } 70% { transform: scale(1.1) } 100% { transform: scale(1) }", false, 400.0), Some(("anim", "pop")));
+        assert_eq!(
+            classify("0% { transform: scale(.5) } 70% { transform: scale(1.1) } 100% { transform: scale(1) }", false, 400.0),
+            Some(("anim", "pop"))
+        );
         assert_eq!(classify("to { transform: rotate(360deg) }", true, 2000.0), Some(("loop", "spin")));
-        assert_eq!(classify("0% { transform: translateX(0) } 100% { transform: translateX(-50%) }", true, 20000.0), Some(("loop", "marquee")));
-        assert_eq!(classify("0%,100% { transform: translateY(0) } 50% { transform: translateY(-12px) }", true, 4000.0), Some(("loop", "float")));
+        assert_eq!(
+            classify("0% { transform: translateX(0) } 100% { transform: translateX(-50%) }", true, 20000.0),
+            Some(("loop", "marquee"))
+        );
+        assert_eq!(
+            classify("0%,100% { transform: translateY(0) } 50% { transform: translateY(-12px) }", true, 4000.0),
+            Some(("loop", "float"))
+        );
         assert_eq!(classify("0%,100% { transform: scale(1) } 50% { transform: scale(1.06) }", true, 2000.0), Some(("loop", "pulse")));
-        assert_eq!(classify("0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% }", true, 8000.0), Some(("loop", "gradient")));
+        assert_eq!(
+            classify(
+                "0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% }",
+                true,
+                8000.0
+            ),
+            Some(("loop", "gradient"))
+        );
         assert_eq!(classify("0% { width: 10px } 100% { width: 50px }", false, 400.0), None);
     }
 

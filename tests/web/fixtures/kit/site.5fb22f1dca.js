@@ -273,4 +273,53 @@ next.focus();
 filter(next);
 });
 })();
+(() => {
+const select = (box, tab, focus) => {
+for (const t of box.querySelectorAll(':scope > .tabs > a')) {
+const on = t === tab;
+t.setAttribute('aria-selected', String(on));
+t.tabIndex = on ? 0 : -1;
+const p = document.getElementById(t.getAttribute('href').slice(1));
+if (p) p.hidden = !on;
+}
+if (focus) tab.focus();
+};
+for (const box of document.querySelectorAll('.tabbed')) {
+const nav = box.querySelector(':scope > .tabs');
+const tabs = nav ? [...nav.querySelectorAll(':scope > a')] : [];
+if (!tabs.length) continue;
+nav.setAttribute('role', 'tablist');
+for (const t of tabs) {
+const id = t.getAttribute('href').slice(1);
+t.setAttribute('role', 'tab');
+t.id = id + '-tab';
+t.setAttribute('aria-controls', id);
+t.removeAttribute('aria-current');
+const p = document.getElementById(id);
+if (p) {
+p.setAttribute('role', 'tabpanel');
+p.setAttribute('aria-labelledby', t.id);
+p.tabIndex = 0;
+}
+}
+box.dataset.ready = '';
+select(box, tabs.find((t) => t.getAttribute('href') === location.hash) || tabs[0], false);
+}
+document.addEventListener('click', (e) => {
+const t = e.target.closest('.tabbed[data-ready] > .tabs > a');
+if (!t) return;
+e.preventDefault();
+select(t.closest('.tabbed'), t, false);
+});
+document.addEventListener('keydown', (e) => {
+const t = e.target.closest && e.target.closest('.tabbed[data-ready] > .tabs > a');
+if (!t || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+e.preventDefault();
+const all = [...t.parentElement.children];
+const i = all.indexOf(t);
+const step = e.key === 'ArrowRight' ? 1 : -1;
+const next = e.key === 'Home' ? all[0] : e.key === 'End' ? all[all.length - 1] : all[(i + step + all.length) % all.length];
+select(t.closest('.tabbed'), next, true);
+});
+})();
 })();

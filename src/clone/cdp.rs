@@ -155,7 +155,7 @@ impl Ws {
             }
             self.buf.drain(..at + len);
             match b0 & 0x0f {
-                0 | 1 | 2 => {
+                0..=2 => {
                     message.extend_from_slice(&payload);
                     if b0 & 0x80 != 0 {
                         return Ok(Some(String::from_utf8_lossy(&message).to_string()));
@@ -614,17 +614,6 @@ pub const HINTS_JS: &str = r#"(() => {
   return hidden + (side ? ' sidebar' : '') + ' ' + css.length;
 })()"#;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn escaped_text_from_the_browser() {
-        let j = Json::parse(r#"{"result":{"result":{"type":"string","value":"x£51 ♡"}}}"#).unwrap();
-        assert_eq!(j.get("result").and_then(|r| r.get("result")).and_then(|r| r.get("value")).and_then(Json::as_str), Some("x£51 ♡"));
-    }
-}
-
 /// Scrolls down the page a screen at a time (lazy images and lists load when seen), at most
 /// `steps` screens, then back to the top.
 pub const SCROLL_JS: &str = r#"(async (steps) => {
@@ -640,3 +629,14 @@ pub const SCROLL_JS: &str = r#"(async (steps) => {
   await wait(300);
   return String(y);
 })(STEPS)"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escaped_text_from_the_browser() {
+        let j = Json::parse(r#"{"result":{"result":{"type":"string","value":"x£51 ♡"}}}"#).unwrap();
+        assert_eq!(j.get("result").and_then(|r| r.get("result")).and_then(|r| r.get("value")).and_then(Json::as_str), Some("x£51 ♡"));
+    }
+}

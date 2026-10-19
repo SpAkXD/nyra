@@ -124,7 +124,10 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
         let (id, title) = match *p {
             write::NAV => (String::new(), page.nav.as_ref().map(|n| read::md_plain(&n.brand)).unwrap_or_default()),
             write::FOOT => (page.footer.as_ref().map(|f| f.id.clone()).unwrap_or_default(), String::new()),
-            write::SIDE => (String::new(), format!("{} links", page.side.as_ref().map_or(0, |sd| sd.links.iter().filter(|l| !l.1.is_empty()).count()))),
+            write::SIDE => (
+                String::new(),
+                format!("{} links", page.side.as_ref().map_or(0, |sd| sd.links.iter().filter(|l| !l.1.is_empty()).count())),
+            ),
             i => {
                 let s = &page.sections[i];
                 let title = if s.kind == read::Kind::Split { format!("{} panels", s.panels.len()) } else { read::md_plain(&s.title) };
@@ -180,7 +183,6 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
         consent: String::new(),
     }
 }
-
 
 /// (words of the page, how many of them the program has): words are compared as lowercase runs
 /// of letters and digits, so Markdown and escapes do not count against the program.
@@ -305,7 +307,8 @@ opening hours, maps and the footer, with all of the page's text, images and link
 
   -o FILE      the program to write (default: site.nyra); images of a local page go to assets/ next to it
   --browser    load the page in a headless Chrome, Edge, Brave or Chromium and read the DOM it renders
-               (for sites built by JavaScript); NYRA_BROWSER names the browser
+               (for sites built by JavaScript): cookie dialogs are turned down (never accepted), the page
+               is scrolled so lazy content loads, its motion is observed; NYRA_BROWSER names the browser
   --base URL   the address of a local page, so its relative links and images point to the site
   --json       print the summary as JSON
   --no-check   do not compile and build the program in memory (the check simplifies parts that fail)
@@ -557,7 +560,7 @@ fn summary(r: &CloneResult, out: &str, target: &str, html: usize, css: usize) ->
     }
     if !r.motion.is_empty() {
         let mut found: Vec<&(String, String, usize)> = r.motion.iter().collect();
-        found.sort_by(|a, b| b.2.cmp(&a.2));
+        found.sort_by_key(|a| std::cmp::Reverse(a.2));
         let list: Vec<String> = found.iter().take(8).map(|(what, word, n)| format!("{what} x{n} -> {word}")).collect();
         let more = if found.len() > 8 { format!(", and {} more", found.len() - 8) } else { String::new() };
         s.push_str(&format!("  motion    {}{more}; the program has {} motion options\n", list.join(", "), r.motion_used));

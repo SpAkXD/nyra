@@ -219,7 +219,13 @@ pub fn write(page: &Page, levels: &Levels, source: &str) -> Written {
     lines.push(String::new());
     lines.push(w.site());
     // the custom motion words the program uses
-    let used: String = body.iter().flat_map(|(_, b)| b.iter()).chain(w.decls.iter().flat_map(|(_, d)| d.iter())).cloned().collect::<Vec<_>>().join("\n");
+    let used: String = body
+        .iter()
+        .flat_map(|(_, b)| b.iter())
+        .chain(w.decls.iter().flat_map(|(_, d)| d.iter()))
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
     for (name, kf) in &page.keyframes {
         if used.contains(&format!("\"{name}\"")) || used.contains(&format!(" {name}\"")) {
             lines.push(format!("keyframes({}, {})", lit(name), lit(kf)));
@@ -698,7 +704,8 @@ impl W<'_> {
                     inner => {
                         let mut lines = Vec::new();
                         self.item(part, inner, ind, level, &mut lines, s);
-                        let mut lines: Vec<String> = lines.into_iter().flat_map(|l| l.split('\n').map(String::from).collect::<Vec<_>>()).collect();
+                        let mut lines: Vec<String> =
+                            lines.into_iter().flat_map(|l| l.split('\n').map(String::from).collect::<Vec<_>>()).collect();
                         inject(&mut lines, &mo.args());
                         out.extend(lines);
                     }
@@ -972,7 +979,17 @@ impl W<'_> {
     /// A grid of thumbnails: with four or more, a struct, an array and a loop; with categories,
     /// buttons that filter it (a live view: `enum Msg`, `fn update`).
     #[allow(clippy::too_many_arguments)]
-    fn media(&mut self, part: usize, cols: usize, items: &[MediaItem], cats: &[String], mo: &Mo, ind: &str, out: &mut Vec<String>, s: &Section) {
+    fn media(
+        &mut self,
+        part: usize,
+        cols: usize,
+        items: &[MediaItem],
+        cats: &[String],
+        mo: &Mo,
+        ind: &str,
+        out: &mut Vec<String>,
+        s: &Section,
+    ) {
         let priced = items.iter().any(|m| !m.price.is_empty());
         let ratio = if priced { ", ratio: \"1/1\"" } else { "" };
         let grid_args = {
@@ -1034,7 +1051,8 @@ impl W<'_> {
             return;
         }
         let (ty, var) = self.data_names(s);
-        let mut decl = vec![format!("struct {ty} {{ {} }}", fields.iter().map(|f| format!("{f}: str")).collect::<Vec<_>>().join(", "))];
+        let mut decl =
+            vec![format!("struct {ty} {{ {} }}", fields.iter().map(|f| format!("{f}: str")).collect::<Vec<_>>().join(", "))];
         decl.push(format!("let {var} = ["));
         for (k, m) in items.iter().enumerate() {
             let vals: Vec<String> = fields.iter().map(|f| format!("{f}: {}", lit(&field(m, f)))).collect();

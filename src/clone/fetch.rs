@@ -169,43 +169,59 @@ pub fn rendered(url: &str, timeout_s: u64) -> Result<Fetched, String> {
 /// private choice), scrolled a few screens so lazy images and lists load, its motion observed,
 /// then its DOM.
 fn devtools(browser: &Path, profile: &Path, url: &str) -> Result<Fetched, String> {
+    // a browser that just closed may still hold its profile: one more try
+    let mut last = String::new();
+    for _ in 0..2 {
+        let mut b = match super::cdp::launch(browser, profile) {
+            Ok(b) => b,
+            Err(e) => {
+                last = e;
+                std::thread::sleep(Duration::from_millis(1500));
+                continue;
+            }
+        };
+        let result = read_page(&mut b, url);
+        b.close();
+        match result {
+            Ok(f) => return Ok(f),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+fn read_page(b: &mut super::cdp::Browser, url: &str) -> Result<Fetched, String> {
     use super::cdp;
-    let mut b = cdp::launch(browser, profile)?;
-    let result = (|| {
-        b.navigate(url)?;
+    b.navigate(url)?;
+    b.settle(Duration::from_millis(1200), Duration::from_secs(15));
+    let mut consent = String::new();
+    for _ in 0..2 {
+        let got = b.reject_consent();
+        if got.is_empty() {
+            break;
+        }
+        consent = got;
+        std::thread::sleep(Duration::from_millis(1500));
         b.settle(Duration::from_millis(1200), Duration::from_secs(15));
-        let mut consent = String::new();
-        for _ in 0..2 {
-            let got = b.reject_consent();
-            if got.is_empty() {
-                break;
-            }
-            consent = got;
-            std::thread::sleep(Duration::from_millis(1500));
-            b.settle(Duration::from_millis(1200), Duration::from_secs(15));
+    }
+    b.eval(cdp::MOTION_BEFORE_JS);
+    b.eval(&cdp::SCROLL_JS.replace("STEPS", "10"));
+    b.settle(Duration::from_millis(1000), Duration::from_secs(10));
+    b.eval(cdp::MOTION_AFTER_JS);
+    b.eval(cdp::HINTS_JS);
+    let mut html = b.eval("document.documentElement.outerHTML");
+    if !html.contains('<') {
+        return Err("the browser gave no page".to_string());
+    }
+    let at = b.eval("location.href");
+    if html.len() > MAX_PAGE {
+        let mut cut = MAX_PAGE;
+        while !html.is_char_boundary(cut) {
+            cut -= 1;
         }
-        b.eval(cdp::MOTION_BEFORE_JS);
-        b.eval(&cdp::SCROLL_JS.replace("STEPS", "10"));
-        b.settle(Duration::from_millis(1000), Duration::from_secs(10));
-        b.eval(cdp::MOTION_AFTER_JS);
-        b.eval(cdp::HINTS_JS);
-        let html = b.eval("document.documentElement.outerHTML");
-        if !html.contains('<') {
-            return Err("the browser gave no page".to_string());
-        }
-        let at = b.eval("location.href");
-        let mut html = html;
-        if html.len() > MAX_PAGE {
-            let mut cut = MAX_PAGE;
-            while !html.is_char_boundary(cut) {
-                cut -= 1;
-            }
-            html.truncate(cut);
-        }
-        Ok(Fetched { text: format!("<!doctype html>\n{html}"), url: if at.starts_with("http") { at } else { url.to_string() }, consent })
-    })();
-    b.close();
-    result
+        html.truncate(cut);
+    }
+    Ok(Fetched { text: format!("<!doctype html>\n{html}"), url: if at.starts_with("http") { at } else { url.to_string() }, consent })
 }
 
 fn dump(browser: &Path, profile: &Path, url: &str, wait: &str, timeout_s: u64) -> Result<String, String> {

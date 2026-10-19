@@ -373,7 +373,13 @@ fn app_pages_keep_their_features_and_name_what_needs_a_server() {
     // the shop: the categories filter the products in the browser (a live view)
     let (program, _) = clone("videos");
     let page = build(&program);
-    for part in ["data-live=", "data-on=", "class=\"video\"", "data-embed=\"https://player.vimeo.com/video/76979871?autoplay=1&amp;dnt=1\"", "<video controls"] {
+    for part in [
+        "data-live=",
+        "data-on=",
+        "class=\"video\"",
+        "data-embed=\"https://player.vimeo.com/video/76979871?autoplay=1&amp;dnt=1\"",
+        "<video controls",
+    ] {
         assert!(page.contains(part), "the shop page has no `{part}`");
     }
     assert!(page.contains("media-src https://media.fernhill.example"), "{page}");
