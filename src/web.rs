@@ -811,7 +811,15 @@ fn page_policy(p: &Page, scripts: bool, chunks: &[String]) -> Policy {
             "img" | "source" | "video" => {
                 for a in ["src", "srcset", "poster"] {
                     if let Some(x) = o(a) {
-                        pol.add(if t.name == "video" && a == "src" { "media-src" } else { "img-src" }, &x);
+                        if t.name == "video" && a == "src" {
+                            pol.add("media-src", &x);
+                        } else if x.starts_with("https://") {
+                            // image hosts and CDNs redirect (picsum.photos -> fastly.picsum.photos), so a remote
+                            // image allows any https image; an image cannot run code
+                            pol.add("img-src", "https:");
+                        } else {
+                            pol.add("img-src", &x);
+                        }
                     }
                 }
             }
