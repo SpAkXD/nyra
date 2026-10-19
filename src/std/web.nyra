@@ -233,6 +233,7 @@ fn grid(cols: int = 0, widths: str = "", gap: str = "", numbers: bool = false, a
     }
     if cols > 6 {
         style += "--cols:{cols};"
+        c += " grid-cols"
     }
     if gap != "" {
         style += "--gap:" + _size(gap) + ";"
@@ -390,6 +391,9 @@ fn img(src: str, alt: str, ratio: str = "", caption: str = "", fit: str = "", wi
     var c = "fig"
     if fit == "contain" {
         c += " fig-contain"
+    }
+    if ratio != "" {
+        c += " fig-ratio"
     }
     var style = if ratio != "" { "--ratio:" + ratio + ";" } else { "" }
     if width != "" {
@@ -890,7 +894,8 @@ fn media(title: str, image: str = "", href: str = "", meta: str = "", badge: str
     var h = "<article" + _ic("media", id, cls) + _at("data-tag", tag) + _mo(anim, hover, loop, scroll, at, morph) + ">"
     if image != "" {
         let shape = if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" }
-        let open = if href != "" { "<a class=\"media-thumb\"" + _link_attrs(href) + _at("data-embed", play) + " tabindex=\"-1\"" } else { "<div class=\"media-thumb\"" }
+        let thumb = if ratio != "" { "media-thumb media-fit" } else { "media-thumb" }
+        let open = if href != "" { "<a class=\"" + thumb + "\"" + _link_attrs(href) + _at("data-embed", play) + " tabindex=\"-1\"" } else { "<div class=\"" + thumb + "\"" }
         h += open + shape + ">" + _img_tag(image, if alt != "" { alt } else { title }, "(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw", false)
         if play != "" {
             h += "<span class=\"media-play\" aria-hidden=\"true\">" + _icon("play") + "</span>"

@@ -376,7 +376,7 @@ fn app_pages_keep_their_features_and_name_what_needs_a_server() {
     for part in [
         "data-live=",
         "data-on=",
-        "class=\"video\"",
+        "class=\"video",
         "data-embed=\"https://player.vimeo.com/video/76979871?autoplay=1&amp;dnt=1\"",
         "<video controls",
     ] {

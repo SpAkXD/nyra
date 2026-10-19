@@ -813,6 +813,9 @@ ny_t19 = `--cols:${cols};`;
 {
 style += ny_t19;
 }
+{
+c += " grid-cols";
+}
 }
 if (gap !== "") {
 ny_t20 = nyU_web_u2e__size(gap);
