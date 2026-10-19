@@ -361,7 +361,7 @@ fn the_web_card_example_builds() {
     assert!(codes.iter().all(|c| *c == "E0386"), "the web card's example builds with warnings {codes:?}\n{json}");
     // and it is a live site: its buttons send messages and its view is redrawn
     let page = std::fs::read_to_string(dir.join("dist").join("index.html")).unwrap();
-    for part in ["data-on=", "data-live=", "class=\"nav\"", "class=\"hero\"", "data-anim=\"rise\""] {
+    for part in ["data-on=", "data-live=", "class=\"nav\"", "class=\"hero hero-in\"", "data-anim=\"rise\""] {
         assert!(page.contains(part), "the example's page has no `{part}`");
     }
 }

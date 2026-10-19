@@ -1,5 +1,137 @@
 (() => {
 (() => {
+const nav = document.querySelector('.nav');
+if (!nav) return;
+const bar = nav.querySelector('.nav-progress');
+let queued = false;
+const onScroll = () => {
+queued = false;
+const y = window.scrollY;
+nav.classList.toggle('is-scrolled', y > 40);
+if (bar) {
+const max = document.documentElement.scrollHeight - window.innerHeight;
+bar.style.setProperty('--progress', max > 0 ? Math.min(y / max, 1).toFixed(4) : '0');
+}
+};
+window.addEventListener('scroll', () => {
+if (!queued) {
+queued = true;
+requestAnimationFrame(onScroll);
+}
+}, { passive: true });
+onScroll();
+const more = nav.querySelector('.nav-more');
+if (more) {
+const toggle = more.querySelector('.nav-toggle');
+more.addEventListener('toggle', () => {
+toggle.setAttribute('aria-label', more.open ? toggle.dataset.close : toggle.dataset.open);
+toggle.setAttribute('aria-expanded', String(more.open));
+});
+toggle.setAttribute('aria-expanded', 'false');
+more.addEventListener('click', (e) => {
+if (e.target.closest('.nav-menu a')) more.open = false;
+});
+document.addEventListener('keydown', (e) => {
+if (e.key === 'Escape' && more.open) {
+more.open = false;
+toggle.focus();
+}
+});
+document.addEventListener('click', (e) => {
+if (more.open && !nav.contains(e.target)) more.open = false;
+});
+window.matchMedia('(min-width: 1024px)').addEventListener('change', (m) => {
+if (m.matches) more.open = false;
+});
+}
+const links = [...nav.querySelectorAll('.nav-links a, .nav-menu ul a')].filter((a) => /^#./.test(a.getAttribute('href')));
+const sections = [...new Set(links.map((a) => a.getAttribute('href').slice(1)))]
+.map((id) => document.getElementById(id))
+.filter(Boolean);
+if (!sections.length || !('IntersectionObserver' in window)) return;
+const io = new IntersectionObserver((entries) => {
+for (const e of entries) {
+if (!e.isIntersecting) continue;
+for (const a of links) {
+if (a.getAttribute('href') === '#' + e.target.id) a.setAttribute('aria-current', 'true');
+else a.removeAttribute('aria-current');
+}
+}
+}, { rootMargin: '-35% 0px -60% 0px' });
+sections.forEach((s) => io.observe(s));
+})();
+(() => {
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const now = (tz) => {
+try {
+const parts = new Intl.DateTimeFormat('en-GB', {
+timeZone: tz || undefined, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).formatToParts(new Date());
+const get = (t) => (parts.find((p) => p.type === t) || {}).value;
+const d = DAYS.indexOf(get('weekday'));
+return { day: d === 0 ? 7 : d, min: Number(get('hour')) * 60 + Number(get('minute')) };
+} catch {
+const d = new Date();
+return { day: d.getDay() || 7, min: d.getHours() * 60 + d.getMinutes() };
+}
+};
+const days = (spec) => {
+const out = new Set();
+for (const part of spec.split(',')) {
+const [a, b] = part.split('-').map(Number);
+if (Number.isNaN(a)) continue;
+for (let d = a; d <= (Number.isNaN(b) || b === undefined ? a : b); d++) out.add(d === 0 ? 7 : d);
+}
+return out;
+};
+const mins = (t) => {
+const [h, m] = t.split(':').map(Number);
+return h * 60 + (m || 0);
+};
+const inRange = (r, m) => {
+const [a, b] = r.split('-');
+if (!a || !b) return false;
+const from = mins(a);
+const to = mins(b);
+return to > from ? m >= from && m < to : m >= from || m < to;
+};
+const openOn = (row, t) => {
+const [d, ...ranges] = row.trim().split(/\s+/);
+return days(d).has(t.day) && ranges.some((r) => inRange(r, t.min));
+};
+const update = () => {
+for (const b of document.querySelectorAll('.badge[data-hours]')) {
+const t = now(b.dataset.tz);
+const open = b.dataset.hours.split('|').some((row) => row && openOn(row, t));
+b.dataset.state = open ? 'open' : 'closed';
+const label = b.querySelector('.badge-label');
+if (label) label.textContent = open ? b.dataset.open : b.dataset.closed;
+}
+for (const card of document.querySelectorAll('.hours')) {
+const badge = card.querySelector('.badge');
+const t = now(badge && badge.dataset.tz);
+for (const tr of card.querySelectorAll('tr[data-days]')) tr.classList.toggle('is-today', days(tr.dataset.days).has(t.day));
+}
+};
+update();
+setInterval(update, 60000);
+})();
+(() => {
+document.addEventListener('click', (e) => {
+const link = e.target.closest('.map-load');
+const frame = link && link.closest('.map-frame');
+if (!frame || !frame.dataset.src || e.metaKey || e.ctrlKey) return;
+e.preventDefault();
+const f = document.createElement('iframe');
+f.src = frame.dataset.src;
+f.title = frame.dataset.title || '';
+f.loading = 'lazy';
+f.referrerPolicy = 'no-referrer-when-downgrade';
+f.allowFullscreen = true;
+frame.replaceChildren(f);
+});
+})();
+(() => {
 document.addEventListener('submit', (e) => {
 const form = e.target.closest && e.target.closest('.form-body[data-mailto]');
 if (!form) return;
@@ -34,6 +166,111 @@ card.querySelector('.form-body').hidden = false;
 card.querySelector('.form-done').hidden = true;
 const first = card.querySelector('input, textarea, select');
 if (first) first.focus();
+});
+})();
+(() => {
+const ICON = {
+x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+prev: '<path d="m15 18-6-6 6-6"/>',
+next: '<path d="m9 18 6-6-6-6"/>',
+};
+const svg = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+for (const tabs of document.querySelectorAll('.gallery .tabs')) tabs.hidden = false;
+const filter = (tab) => {
+const g = tab.closest('.gallery');
+const f = tab.dataset.filter;
+for (const t of g.querySelectorAll('.tabs [data-filter]')) {
+t.setAttribute('aria-selected', String(t === tab));
+t.tabIndex = t === tab ? 0 : -1;
+}
+for (const it of g.querySelectorAll('.gallery-item')) it.hidden = Boolean(f) && it.dataset.tag !== f;
+};
+for (const t of document.querySelectorAll('.gallery .tabs [data-filter]')) t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1;
+let box = null;
+let items = [];
+let index = 0;
+let opener = null;
+const show = (dir) => {
+const it = items[index];
+const img = it.querySelector('img');
+const big = document.createElement('img');
+big.src = it.getAttribute('href');
+big.alt = img ? img.alt : '';
+big.style.setProperty('--dir', String(dir));
+box.querySelector('.lb-stage').replaceChildren(big);
+box.querySelector('.lb-text').textContent = big.alt;
+box.querySelector('.lb-count').textContent = `${index + 1} / ${items.length}`;
+box.setAttribute('aria-label', big.alt);
+};
+const step = (d) => {
+index = (index + d + items.length) % items.length;
+show(d);
+};
+const build = (g) => {
+box = document.createElement('dialog');
+box.className = 'lightbox';
+box.innerHTML = '<div class="lb-stage"></div><p class="lb-cap"><span class="lb-text"></span><span class="lb-count"></span></p>'
++ `<button type="button" class="lb-btn lb-close">${svg('x')}</button>`
++ `<button type="button" class="lb-btn lb-prev">${svg('prev')}</button>`
++ `<button type="button" class="lb-btn lb-next">${svg('next')}</button>`;
+box.querySelector('.lb-close').setAttribute('aria-label', g.dataset.dismiss || 'Close');
+box.querySelector('.lb-prev').setAttribute('aria-label', g.dataset.prev || 'Previous');
+box.querySelector('.lb-next').setAttribute('aria-label', g.dataset.next || 'Next');
+box.addEventListener('click', (e) => {
+if (e.target.closest('.lb-close')) box.close();
+else if (e.target.closest('.lb-prev')) step(-1);
+else if (e.target.closest('.lb-next')) step(1);
+else if (!e.target.closest('img, .lb-cap')) box.close();
+});
+box.addEventListener('keydown', (e) => {
+if (e.key === 'ArrowRight') step(1);
+if (e.key === 'ArrowLeft') step(-1);
+});
+let x0 = null;
+box.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+box.addEventListener('touchend', (e) => {
+if (x0 === null) return;
+const dx = e.changedTouches[0].clientX - x0;
+x0 = null;
+if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+});
+box.addEventListener('close', () => {
+document.documentElement.style.overflow = '';
+if (opener) opener.focus();
+});
+document.body.append(box);
+};
+const open = (item) => {
+const g = item.closest('.gallery');
+items = [...g.querySelectorAll('.gallery-item:not([hidden])')];
+index = items.indexOf(item);
+opener = item;
+if (!box) build(g);
+show(0);
+if (box.showModal) box.showModal();
+else box.setAttribute('open', '');
+document.documentElement.style.overflow = 'hidden';
+box.querySelector('.lb-close').focus();
+};
+document.addEventListener('click', (e) => {
+const tab = e.target.closest('.gallery .tabs [data-filter]');
+if (tab) {
+filter(tab);
+return;
+}
+const item = e.target.closest('.gallery-item');
+if (item && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+e.preventDefault();
+open(item);
+}
+});
+document.addEventListener('keydown', (e) => {
+const tab = e.target.closest && e.target.closest('.gallery .tabs [data-filter]');
+if (!tab || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
+const all = [...tab.parentElement.querySelectorAll('[data-filter]')];
+const next = all[(all.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+next.focus();
+filter(next);
 });
 })();
 })();
@@ -74,11 +311,60 @@ else if(!el.hasAttribute('data-at'))io.observe(el);
 else if(!el.parentElement.closest('[data-anim]'))requestAnimationFrame(()=>show(el));
 }
 };
+setup.push(()=>{
+if(RM)return;
+for(const el of $('[data-anim~=words],[data-anim~=letters]')){
+const L=el.matches('[data-anim~=letters]');
+let j=0;
+if(L)el.setAttribute('aria-label',el.textContent.trim());
+const span=(c,t)=>{
+const s=D.createElement('span');
+s.className=c;
+if(t){s.textContent=t;s.style.setProperty('--m-j',j++);}
+return s;
+};
+const walk=(n)=>{
+for(const c of[...n.childNodes]){
+if(c.nodeType==1){walk(c);continue;}
+if(c.nodeType!=3)continue;
+const f=D.createDocumentFragment();
+for(const p of c.data.split(/([ \t\n\r]+)/)){
+if(!p||/^[ \t\n\r]/.test(p)){f.append(p);continue;}
+const w=span(L?'m-lw':'m-w');
+if(L){w.ariaHidden='true';for(const ch of p)w.append(span('m-li',ch));}
+else w.append(span('m-wi',p));
+f.append(w);
+}
+c.replaceWith(f);
+}
+};
+walk(el);
+}
+});
+on.push((el)=>{
+if(RM||!el.matches('[data-anim~=count]'))return;
+const w=D.createTreeWalker(el,4);
+let n,m;
+while((n=w.nextNode())&&!(m=/(\d{1,3}(?:([   ,.])\d{3})+(?!\d)|\d+)([.,]\d+)?/.exec(n.data)));
+if(!m)return;
+const[all,int,sep,dec='']=m,pre=n.data.slice(0,m.index),post=n.data.slice(m.index+all.length),
+end=+(int.replace(/\D/g,'')+'.'+(dec.slice(1)||0)),
+t0=performance.now()+(1000*parseFloat(getComputedStyle(el).animationDelay)||0),
+fmt=(v)=>{
+const[a,b]=v.toFixed(dec.length&&dec.length-1).split('.');
+return pre+(sep?a.replace(/\B(?=(\d{3})+$)/g,sep):a)+(b?dec[0]+b:'')+post;
+};
+loop((dt,t)=>{
+const p=Math.min(Math.max((t-t0)/1600,0),1);
+n.data=fmt(p<1?end*(1-Math.pow(2,-10*p)):end);
+return p<1;
+});
+});
 D.readyState=='loading'?D.addEventListener('DOMContentLoaded',init):init();
 })();
 (() => {
 "use strict";
-const ny_file = "live.nyra";
+const ny_file = "bakery.nyra";
 class NyPanic extends Error {}
 function ny_panic(code, msg, hint, line, col) {
 const json = typeof process !== "undefined" && process.env.NYRA_JSON;
@@ -206,11 +492,6 @@ NY_KEYS.set(s, c);
 }
 return c;
 }
-function ny_mnew(kv) {
-const m = new Map();
-for (let i = 0; i < kv.length; i += 2) m.set(ny_ik(kv[i]), kv[i + 1]);
-return m;
-}
 function ny_aindex(a, v) {
 for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
 return -1;
@@ -314,10 +595,10 @@ if (typeof d !== "string") return d[0] === "m" ? new Map() : [];
 return d === "s" ? "" : d === "b" ? false : 0;
 }
 class nyS_Msg {
-constructor(p0, p1, p2) { this.tag = p0; this.Show_0 = p1; this.Send_0 = p2; }
-ny_cp() { return new nyS_Msg(this.tag, this.Show_0, ny_sh(this.Send_0)); }
-ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0 && ny_eq(this.Send_0, o.Send_0); }
-ny_fmt() { const n = ["Msg.Show", "Msg.Send", "Msg.Clear"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; if (this.tag === 1) return n + "(" + ny_fmt(this.Send_0, "{ss") + ")"; return n; }
+constructor(p0, p1) { this.tag = p0; this.Show_0 = p1; }
+ny_cp() { return new nyS_Msg(this.tag, this.Show_0); }
+ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0; }
+ny_fmt() { const n = ["Msg.Show"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; return n; }
 }
 class nyS_Node {
 constructor(p0, p1) { this.html = p0; this.kit = p1; }
@@ -355,14 +636,14 @@ ny_cp() { return new nyS_Tup_t3sss(this._0, this._1, this._2); }
 ny_eq(o) { return this._0 === o._0 && this._1 === o._1 && this._2 === o._2; }
 ny_fmt() { return "(" + ny_fmt(this._0, "s") + ", " + ny_fmt(this._1, "s") + ", " + ny_fmt(this._2, "s") + ")"; }
 }
-class nyS_Bread {
-constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.price = p2; }
-ny_cp() { return new nyS_Bread(this.name, this.kind, this.price); }
-ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.price === o.price; }
-ny_fmt() { return "Bread(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "price: " + ny_fmt(this.price, "i") + ")"; }
+class nyS_Product {
+constructor(p0, p1, p2, p3, p4) { this.name = p0; this.cat = p1; this.text = p2; this.image = p3; this.tag = p4; }
+ny_cp() { return new nyS_Product(this.name, this.cat, this.text, this.image, this.tag); }
+ny_eq(o) { return this.name === o.name && this.cat === o.cat && this.text === o.text && this.image === o.image && this.tag === o.tag; }
+ny_fmt() { return "Product(" + "name: " + ny_fmt(this.name, "s") + ", " + "cat: " + ny_fmt(this.cat, "s") + ", " + "text: " + ny_fmt(this.text, "s") + ", " + "image: " + ny_fmt(this.image, "s") + ", " + "tag: " + ny_fmt(this.tag, "s") + ")"; }
 }
-nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"], ["Send_0", "Send_0", ["m", "s", "s"]]];
-nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Send", [2]], ["Clear", []]];
+nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"]];
+nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]]];
 nyS_Node.ny_jf = [["html", "html", "s"], ["kit", "kit", ["a", "s"]]];
 nyS_WebConfig.ny_jf = [["name", "name", "s"], ["url", "url", "s"], ["lang", "lang", "s"], ["tz", "tz", "s"], ["desc", "desc", "s"], ["share", "share", "s"], ["style", "style", "s"], ["motion", "motion", "s"], ["transition", "transition", "s"], ["font", "font", "s"], ["display", "display", "s"], ["primary", "primary", "s"], ["logo", "logo", "s"], ["say", "say", ["m", "s", "s"]], ["palette", "palette", ["m", "s", "s"]]];
 nyS_Opt_of.ny_jf = [["has", "has", "b"], ["val", "val", "f"]];
@@ -373,99 +654,70 @@ nyS_Opt_ot2ss.ny_jf = [["has", "has", "b"], ["val", "val", nyS_Tup_t2ss]];
 nyS_Opt_ot2ss.ny_jk = "o";
 nyS_Tup_t3sss.ny_jf = [["_0", "_0", "s"], ["_1", "_1", "s"], ["_2", "_2", "s"]];
 nyS_Tup_t3sss.ny_jk = "t";
-nyS_Bread.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["price", "price", "i"]];
-function update(m, kind, sent) {
-let nyU__ub7_m1, k, ny_t5, fields;
+nyS_Product.ny_jf = [["name", "name", "s"], ["cat", "cat", "s"], ["text", "text", "s"], ["image", "image", "s"], ["tag", "tag", "s"]];
+function update(m, cat_now) {
+let nyU__ub7_m1, k, ny_t4;
 nyU__ub7_m1 = m;
 ny_sh(nyU__ub7_m1);
-if (nyU__ub7_m1.tag === 0) {
 k = nyU__ub7_m1.Show_0;
-ny_t5 = k;
-kind.v = ny_t5;
-} else if (nyU__ub7_m1.tag === 1) {
-fields = nyU__ub7_m1.Send_0;
-ny_sh(fields);
-sent.v = ny_add(sent.v, fields.size, 19, 29);
-} else {
-kind.v = "vše";
+ny_t4 = k;
+cat_now.v = ny_t4;
 }
-}
-function menu(_web, breads, kind) {
-let ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, k, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, b, ny_t24, ny_b_2, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32;
-ny_t3 = new nyS_Opt_of(false, 0.0);
-ny_t4 = [];
-ny_t5 = new nyS_Opt_of(false, 0.0);
-ny_t6 = [];
-ny_t7 = ["vše", "chléb", "sladké"];
-for (const ny_c1 of ny_t7) {
-k = ny_c1;
-ny_t9 = ny_mnew([]);
-ny_t10 = new nyS_Msg(0, k, ny_sh(ny_t9));
+function product_grid(_web, products, product_tabs, cat_now) {
+let ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, t, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, x, ny_t19, d, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26;
+ny_t4 = new nyS_Opt_of(false, 0.0);
+ny_t5 = [];
+ny_t6 = new nyS_Opt_of(false, 0.0);
+ny_t7 = [];
+ny_t8 = product_tabs;
+ny_sh(ny_t8);
+for (const ny_c1 of ny_t8) {
+t = ny_c1;
+ny_t10 = new nyS_Msg(0, t._0);
 ny_t11 = nyU_web_u2e__on(ny_t10);
 ny_t12 = new nyS_Opt_of(false, 0.0);
-ny_t13 = nyU_web_u2e_button(k, "", "", ny_t11, k === kind, "", "", "", "", "", "", "", "", "", ny_t12, "");
+ny_t13 = nyU_web_u2e_button(t._1, "", "", ny_t11, t._0 === cat_now, "", "", "", "", "", "", "", "", "", ny_t12, "");
 {
-if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
-ny_t6.push(ny_sh(ny_t13));
+if (ny_t7.ny_s) ny_t7 = ny_cp(ny_t7);
+ny_t7.push(ny_sh(ny_t13));
 }
 }
-ny_t14 = ny_mnew([]);
-ny_t15 = new nyS_Msg(2, "", ny_sh(ny_t14));
-ny_t16 = nyU_web_u2e__on(ny_t15);
-ny_t17 = new nyS_Opt_of(false, 0.0);
-ny_t18 = nyU_web_u2e_button("Zrušit filtr", "", "ghost", ny_t16, false, "", "", "", "", "", "", "", "", "", ny_t17, "");
+ny_t14 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t6, "", ny_t7);
 {
-if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
-ny_t6.push(ny_sh(ny_t18));
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t14));
 }
-ny_t19 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t5, "", ny_t6);
+ny_t15 = new nyS_Opt_of(false, 0.0);
+ny_t16 = [];
+ny_t17 = [];
+for (const ny_c2 of products) {
+x = ny_c2;
+if ((cat_now === "all") || (x.cat === cat_now)) {
 {
-if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
-ny_t4.push(ny_sh(ny_t19));
+if (ny_t17.ny_s) ny_t17 = ny_cp(ny_t17);
+ny_t17.push(ny_sh(x));
 }
-ny_t20 = new nyS_Opt_of(false, 0.0);
+}
+}
+ny_t19 = ny_t17;
+for (const ny_c3 of ny_t19) {
+d = ny_c3;
 ny_t21 = [];
-ny_t22 = [];
-for (const ny_c2 of breads) {
-b = ny_c2;
-if ((kind === "vše") || (b.kind === kind)) {
+ny_t22 = new nyS_Opt_of(false, 0.0);
+ny_t23 = [];
+ny_t24 = nyU_web_u2e_card(d.name, d.text, "", d.image, "", false, "", "", d.tag, ny_t21, "", "", "", "", "", "", "", ny_t22, "", ny_t23, _web);
 {
-if (ny_t22.ny_s) ny_t22 = ny_cp(ny_t22);
-ny_t22.push(ny_sh(b));
+if (ny_t16.ny_s) ny_t16 = ny_cp(ny_t16);
+ny_t16.push(ny_sh(ny_t24));
 }
 }
-}
-ny_t24 = ny_t22;
-for (const ny_c3 of ny_t24) {
-ny_b_2 = ny_c3;
-ny_t26 = `${ny_b_2.price} Kč`;
-ny_t27 = [];
-ny_t28 = new nyS_Opt_of(false, 0.0);
-ny_t29 = [];
-ny_t30 = nyU_web_u2e_card(ny_b_2.name, ny_t26, "", "", "", false, "", "", "", ny_t27, "", "", "", "", "", "", "", ny_t28, "", ny_t29, _web);
+ny_t25 = nyU_web_u2e_grid(4, "", "", false, "", "", "", "stagger", "lift", "", "", ny_t15, "", ny_t16);
 {
-if (ny_t21.ny_s) ny_t21 = ny_cp(ny_t21);
-ny_t21.push(ny_sh(ny_t30));
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t25));
 }
-}
-ny_t31 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "stagger", "lift", "", "", ny_t20, "", ny_t21);
-{
-if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
-ny_t4.push(ny_sh(ny_t31));
-}
-ny_t32 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t3, "", ny_t4);
-return ny_t32;
-}
-function thanks(sent) {
-let ny_t1, ny_t2, ny_t3;
-if (sent > 0) {
-ny_t1 = new nyS_Opt_of(false, 0.0);
-ny_t3 = nyU_web_u2e_p("Děkujeme za zprávu.", "", "", "", "", "", "", "", ny_t1, "");
-} else {
-ny_t2 = new nyS_Opt_of(false, 0.0);
-ny_t3 = nyU_web_u2e_p("", "", "", "", "", "", "", "", ny_t2, "");
-}
-return ny_t3;
+ny_t26 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t4, "", ny_t5);
+return ny_t26;
 }
 function nyU_web_u2e__render(view) {
 let ny_t1;
@@ -730,26 +982,6 @@ ny_t63 = nyU_web_u2e__kits(kids, "");
 ny_t64 = new nyS_Node(h, ny_sh(ny_t63));
 return ny_t64;
 }
-function nyU_web_u2e_p(text, size, id, cls, anim, hover, loop, scroll, at, morph) {
-let c, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21;
-if (size !== "") {
-ny_t11 = nyU_web_u2e__word(size);
-c = "p p-" + ny_t11;
-} else {
-c = "p";
-}
-ny_t12 = nyU_web_u2e__ic(c, id, cls);
-ny_t13 = "<p" + ny_t12;
-ny_t14 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t15 = ny_t13 + ny_t14;
-ny_t16 = ny_t15 + ">";
-ny_t17 = nyU_web_u2e__md(text);
-ny_t18 = ny_t16 + ny_t17;
-ny_t19 = ny_t18 + "</p>";
-ny_t20 = [];
-ny_t21 = new nyS_Node(ny_t19, ny_sh(ny_t20));
-return ny_t21;
-}
 function nyU_web_u2e_button(text, href, style, on, active, icon, label, size, id, cls, anim, hover, loop, scroll, at, morph) {
 let c, ny_t17, ny_t18, ny_t19, inner, ny_t21, ny_t22, motion, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, h, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49;
 if (style !== "") {
@@ -816,11 +1048,11 @@ return ny_t49;
 }
 function nyU_web_u2e__esc(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5;
-ny_t1 = ny_str_replace(s, "&", "&amp;", 5, 5);
-ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 5, 5);
-ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 5, 5);
-ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 5, 5);
-ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 5, 5);
+ny_t1 = ny_str_replace(s, "&", "&amp;", 4, 5);
+ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 4, 5);
+ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 4, 5);
+ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 4, 5);
+ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 4, 5);
 return ny_t5;
 }
 function nyU_web_u2e__attr(s) {
@@ -850,9 +1082,9 @@ i = 0;
 bold = false;
 em = false;
 while (i < n) {
-c = ny_get(cs, i, 5, 5);
+c = ny_get(cs, i, 4, 5);
 if ((c === 92) && ((i + 1) < n)) {
-ny_t8 = ny_get(cs, i + 1, 5, 5);
+ny_t8 = ny_get(cs, i + 1, 4, 5);
 ny_t9 = `${ny_char_str(ny_t8)}`;
 ny_t10 = nyU_web_u2e__esc(ny_t9);
 {
@@ -862,22 +1094,22 @@ i = i + 2;
 } else {
 ny_t12 = c === 42;
 if (ny_t12) {
-ny_t11 = ny_add(i, 1, 5, 5);
+ny_t11 = ny_add(i, 1, 4, 5);
 ny_t12 = ny_t11 < n;
 }
 ny_t15 = ny_t12;
 if (ny_t15) {
-ny_t13 = ny_add(i, 1, 5, 5);
-ny_t14 = ny_get(cs, ny_t13, 5, 5);
+ny_t13 = ny_add(i, 1, 4, 5);
+ny_t14 = ny_get(cs, ny_t13, 4, 5);
 ny_t15 = ny_t14 === 42;
 }
 ny_t20 = ny_t15;
 if (ny_t20) {
 ny_t19 = bold;
 if (!ny_t19) {
-ny_t16 = ny_add(i, 2, 5, 5);
+ny_t16 = ny_add(i, 2, 4, 5);
 ny_t17 = nyU_web_u2e__find(cs, ny_t16, "**");
-ny_t18 = ny_add(i, 2, 5, 5);
+ny_t18 = ny_add(i, 2, 4, 5);
 ny_t19 = ny_t17 > ny_t18;
 }
 ny_t20 = ny_t19;
@@ -887,24 +1119,24 @@ if (ny_t20) {
 o += bold ? "</strong>" : "<strong>";
 }
 bold = !bold;
-i = ny_add(i, 2, 5, 5);
+i = ny_add(i, 2, 4, 5);
 } else {
 ny_t30 = c === 42;
 if (ny_t30) {
 ny_t29 = em;
 if (!ny_t29) {
-ny_t21 = ny_add(i, 1, 5, 5);
+ny_t21 = ny_add(i, 1, 4, 5);
 ny_t24 = ny_t21 < n;
 if (ny_t24) {
-ny_t22 = ny_add(i, 1, 5, 5);
-ny_t23 = ny_get(cs, ny_t22, 5, 5);
+ny_t22 = ny_add(i, 1, 4, 5);
+ny_t23 = ny_get(cs, ny_t22, 4, 5);
 ny_t24 = ny_t23 !== 32;
 }
 ny_t28 = ny_t24;
 if (ny_t28) {
-ny_t25 = ny_add(i, 1, 5, 5);
+ny_t25 = ny_add(i, 1, 4, 5);
 ny_t26 = nyU_web_u2e__find(cs, ny_t25, "*");
-ny_t27 = ny_add(i, 1, 5, 5);
+ny_t27 = ny_add(i, 1, 4, 5);
 ny_t28 = ny_t26 > ny_t27;
 }
 ny_t29 = ny_t28;
@@ -916,26 +1148,26 @@ if (ny_t30) {
 o += em ? "</em>" : "<em>";
 }
 em = !em;
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 4, 5);
 } else {
 ny_t33 = c === 96;
 if (ny_t33) {
-ny_t31 = ny_add(i, 1, 5, 5);
+ny_t31 = ny_add(i, 1, 4, 5);
 ny_t32 = nyU_web_u2e__find(cs, ny_t31, "`");
                         ny_t33 = ny_t32 > i;
                     }
                     if (ny_t33) {
-                        ny_t35 = ny_add(i, 1, 5, 5);
+                        ny_t35 = ny_add(i, 1, 4, 5);
                         j = nyU_web_u2e__find(cs, ny_t35, "`");
-ny_t36 = ny_add(i, 1, 5, 5);
-ny_t37 = ny_str_slice(s, ny_t36, j, 5, 5);
+ny_t36 = ny_add(i, 1, 4, 5);
+ny_t37 = ny_str_slice(s, ny_t36, j, 4, 5);
 ny_t38 = nyU_web_u2e__esc(ny_t37);
 ny_t39 = "<code>" + ny_t38;
 ny_t40 = ny_t39 + "</code>";
 {
 o += ny_t40;
 }
-i = ny_add(j, 1, 5, 5);
+i = ny_add(j, 1, 4, 5);
 } else {
 ny_t42 = c === 91;
 if (ny_t42) {
@@ -943,23 +1175,23 @@ ny_t41 = nyU_web_u2e__link_end(cs, i);
 ny_t42 = ny_t41 > i;
 }
 if (ny_t42) {
-ny_t44 = ny_add(i, 1, 5, 5);
+ny_t44 = ny_add(i, 1, 4, 5);
 mid = nyU_web_u2e__find(cs, ny_t44, "](");
 end = nyU_web_u2e__link_end(cs, i);
-ny_t47 = ny_add(mid, 2, 5, 5);
-url = ny_str_slice(s, ny_t47, end, 5, 5);
+ny_t47 = ny_add(mid, 2, 4, 5);
+url = ny_str_slice(s, ny_t47, end, 4, 5);
 ny_t48 = nyU_web_u2e__link_attrs(url);
 ny_t49 = "<a" + ny_t48;
 ny_t50 = ny_t49 + ">";
-ny_t51 = ny_add(i, 1, 5, 5);
-ny_t52 = ny_str_slice(s, ny_t51, mid, 5, 5);
+ny_t51 = ny_add(i, 1, 4, 5);
+ny_t52 = ny_str_slice(s, ny_t51, mid, 4, 5);
 ny_t53 = nyU_web_u2e__md(ny_t52);
 ny_t54 = ny_t50 + ny_t53;
 ny_t55 = ny_t54 + "</a>";
 {
 o += ny_t55;
 }
-i = ny_add(end, 1, 5, 5);
+i = ny_add(end, 1, 4, 5);
 } else {
 ny_t57 = c === 58;
 if (ny_t57) {
@@ -968,15 +1200,15 @@ ny_t57 = ny_t56 > i;
 }
 if (ny_t57) {
 ny_j_2 = nyU_web_u2e__icon_end(cs, i);
-ny_t60 = ny_add(i, 1, 5, 5);
-name = ny_str_slice(s, ny_t60, ny_j_2, 5, 5);
+ny_t60 = ny_add(i, 1, 4, 5);
+name = ny_str_slice(s, ny_t60, ny_j_2, 4, 5);
 ny_t61 = nyU_web_u2e__icon_kind(name);
 if (ny_t61 > 0) {
 ny_t62 = nyU_web_u2e__icon(name);
 {
 o += ny_t62;
 }
-i = ny_add(ny_j_2, 1, 5, 5);
+i = ny_add(ny_j_2, 1, 4, 5);
 } else {
 ny_t63 = "unknown icon `:" + name;
                                     ny_t64 = ny_t63 + ":` in the text \"";
@@ -988,7 +1220,7 @@ ny_t68 = nyU_web_u2e__esc(ny_t67);
 {
 o += ny_t68;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 4, 5);
 }
 } else {
 ny_t69 = `${ny_char_str(c)}`;
@@ -996,7 +1228,7 @@ ny_t70 = nyU_web_u2e__esc(ny_t69);
 {
 o += ny_t70;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 4, 5);
 }
 }
 }
@@ -1021,15 +1253,15 @@ let ps, i, ny_t5, ok, k, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13;
 ps = ny_chars(pat);
 i = from;
 for (;; ) {
-ny_t5 = ny_add(i, ps.length, 5, 5);
+ny_t5 = ny_add(i, ps.length, 4, 5);
 if (!(ny_t5 <= cs.length)) break;
 ok = true;
 k = 0;
 ny_t8 = ps.length;
 for (; k < ny_t8; k = k + 1) {
-ny_t9 = ny_add(i, k, 5, 5);
-ny_t10 = ny_get(cs, ny_t9, 5, 5);
-ny_t11 = ny_get(ps, k, 5, 5);
+ny_t9 = ny_add(i, k, 4, 5);
+ny_t10 = ny_get(cs, ny_t9, 4, 5);
+ny_t11 = ny_get(ps, k, 4, 5);
 if (ny_t10 !== ny_t11) {
 ok = false;
 break;
@@ -1039,22 +1271,22 @@ if (ok) {
 ny_t12 = i;
 return ny_t12;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 4, 5);
 }
 ny_t13 = -1 + 0;
 return ny_t13;
 }
 function nyU_web_u2e__link_end(cs, at) {
 let mid, ny_t3, depth, k, c;
-ny_t3 = ny_add(at, 1, 5, 5);
+ny_t3 = ny_add(at, 1, 4, 5);
 mid = nyU_web_u2e__find(cs, ny_t3, "](");
 if (mid < 0) {
 return -1 + 0;
 }
 depth = 0;
-k = ny_add(mid, 2, 5, 5);
+k = ny_add(mid, 2, 4, 5);
 while (k < cs.length) {
-c = ny_get(cs, k, 5, 5);
+c = ny_get(cs, k, 4, 5);
 if (c === 10) {
 return -1 + 0;
 }
@@ -1072,41 +1304,41 @@ return -1 + 0;
 }
 function nyU_web_u2e__icon_end(cs, at) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, j, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16;
-ny_t2 = ny_add(at, 1, 5, 5);
+ny_t2 = ny_add(at, 1, 4, 5);
 ny_t6 = ny_t2 >= cs.length;
 if (!ny_t6) {
-ny_t3 = ny_add(at, 1, 5, 5);
-ny_t4 = ny_get(cs, ny_t3, 5, 5);
+ny_t3 = ny_add(at, 1, 4, 5);
+ny_t4 = ny_get(cs, ny_t3, 4, 5);
 ny_t5 = nyU_web_u2e__lower(ny_t4);
 ny_t6 = !ny_t5;
 }
 if (ny_t6) {
 return -1 + 0;
 }
-j = ny_add(at, 1, 5, 5);
+j = ny_add(at, 1, 4, 5);
 for (;; ) {
 ny_t14 = j < cs.length;
 if (ny_t14) {
-ny_t8 = ny_get(cs, j, 5, 5);
+ny_t8 = ny_get(cs, j, 4, 5);
 ny_t9 = nyU_web_u2e__lower(ny_t8);
 ny_t11 = ny_t9;
 if (!ny_t11) {
-ny_t10 = ny_get(cs, j, 5, 5);
+ny_t10 = ny_get(cs, j, 4, 5);
 ny_t11 = ny_char_is_digit(ny_t10);
 }
 ny_t13 = ny_t11;
 if (!ny_t13) {
-ny_t12 = ny_get(cs, j, 5, 5);
+ny_t12 = ny_get(cs, j, 4, 5);
 ny_t13 = ny_t12 === 45;
 }
 ny_t14 = ny_t13;
 }
 if (!ny_t14) break;
-j = ny_add(j, 1, 5, 5);
+j = ny_add(j, 1, 4, 5);
 }
 ny_t16 = j < cs.length;
 if (ny_t16) {
-ny_t15 = ny_get(cs, j, 5, 5);
+ny_t15 = ny_get(cs, j, 4, 5);
 ny_t16 = ny_t15 === 58;
 }
 if (ny_t16) {
@@ -1150,7 +1382,7 @@ ny_t7 = "#";
 return ny_t7;
 }
 if (scheme === "tel") {
-ny_t8 = ny_str_replace(u, " ", "", 5, 5);
+ny_t8 = ny_str_replace(u, " ", "", 4, 5);
 ny_t9 = nyU_web_u2e__attr(ny_t8);
 return ny_t9;
 }
@@ -1178,10 +1410,10 @@ let cs, i, c, ny_t4, ny_t5, ny_t6, ny_t7;
 cs = ny_chars(u);
 i = 0;
 while (i < cs.length) {
-c = ny_get(cs, i, 5, 5);
+c = ny_get(cs, i, 4, 5);
 if (c === 58) {
 if (i > 0) {
-ny_t4 = ny_str_slice(u, 0, i, 5, 5);
+ny_t4 = ny_str_slice(u, 0, i, 4, 5);
 ny_t5 = ny_str_lower(ny_t4);
 } else {
 ny_t5 = "";
@@ -1243,11 +1475,11 @@ function nyU_web_u2e__err(code, msg) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:error " + code;
 ny_t3 = ny_t2 + " ";
-ny_t4 = ny_str_replace(msg, "*/", "* /", 5, 5);
-ny_t5 = ny_str_replace(ny_t4, "\n", " ", 5, 5);
+ny_t4 = ny_str_replace(msg, "*/", "* /", 4, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 4, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
-ny_std_web__css(ny_t7, 5, 5);
+ny_std_web__css(ny_t7, 4, 5);
 }
 function nyU_web_u2e__color(c, _web) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10;
@@ -1277,10 +1509,10 @@ return ny_t10;
 }
 function nyU_web_u2e__css_value(v) {
 let ny_t1, ny_t2, ny_t3, ny_t4;
-ny_t1 = ny_str_replace(v, ";", "", 5, 5);
-ny_t2 = ny_str_replace(ny_t1, "}", "", 5, 5);
-ny_t3 = ny_str_replace(ny_t2, "{", "", 5, 5);
-ny_t4 = ny_str_replace(ny_t3, "<", "", 5, 5);
+ny_t1 = ny_str_replace(v, ";", "", 4, 5);
+ny_t2 = ny_str_replace(ny_t1, "}", "", 4, 5);
+ny_t3 = ny_str_replace(ny_t2, "{", "", 4, 5);
+ny_t4 = ny_str_replace(ny_t3, "<", "", 4, 5);
 return ny_t4;
 }
 function nyU_web_u2e__word(w) {
@@ -1302,9 +1534,9 @@ return o;
 }
 function nyU_web_u2e__size(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5, ny_t6;
-ny_t1 = ny_std_text_is_float(s, 5, 5);
+ny_t1 = ny_std_text_is_float(s, 4, 5);
 if (ny_t1) {
-ny_t3 = ny_str_to_float(s, 5, 5);
+ny_t3 = ny_str_to_float(s, 4, 5);
 ny_t2 = new nyS_Opt_of(true, ny_t3);
 } else {
 ny_t2 = new nyS_Opt_of(false, 0.0);
@@ -1314,7 +1546,7 @@ if (!ny_eq(ny_t2, ny_t4)) {
 ny_t6 = s + "rem";
 } else {
 ny_t5 = nyU_web_u2e__css_value(s);
-ny_t6 = ny_str_replace(ny_t5, "\"", "", 5, 5);
+ny_t6 = ny_str_replace(ny_t5, "\"", "", 4, 5);
 }
 return ny_t6;
 }
@@ -1389,7 +1621,7 @@ return ny_t3;
 close = ny_str_index_of(html, ">");
 ny_t8 = close < 0;
 if (!ny_t8) {
-ny_t5 = ny_str_slice(html, 0, close, 5, 5);
+ny_t5 = ny_str_slice(html, 0, close, 4, 5);
 ny_t6 = " " + name;
 ny_t7 = ny_t6 + "=";
 ny_t8 = ny_t5.includes(ny_t7);
@@ -1402,16 +1634,16 @@ end = 1;
 for (;; ) {
 ny_t12 = end < close;
 if (ny_t12) {
-ny_t11 = ny_str_slice(html, end, end + 1, 5, 5);
+ny_t11 = ny_str_slice(html, end, end + 1, 4, 5);
 ny_t12 = !" \n\t/".includes(ny_t11);
 }
 if (!ny_t12) break;
 end = end + 1;
 }
-ny_t13 = ny_str_slice(html, 0, end, 5, 5);
+ny_t13 = ny_str_slice(html, 0, end, 4, 5);
 ny_t14 = nyU_web_u2e__at(name, value);
 ny_t15 = ny_t13 + ny_t14;
-ny_t16 = ny_str_slice(html, end, ny_len(html), 5, 5);
+ny_t16 = ny_str_slice(html, end, ny_len(html), 4, 5);
 ny_t17 = ny_t15 + ny_t16;
 return ny_t17;
 }
@@ -1472,27 +1704,21 @@ ny_t1 = ny_jenc(m, nyS_Msg);
 return ny_t1;
 }
 const ny_st = {
-"kind": ny_from("vše", "s"),
-"sent": ny_from(0, "i"),
-"_web": ny_from({"name":"Pekárna Hana","url":"","lang":"cs","tz":"","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#7A3E1D","logo":"","say":{},"palette":{}}, nyS_WebConfig),
-"breads": ny_from([{"name":"Kváskový chléb","kind":"chléb","price":89},{"name":"Croissant","kind":"sladké","price":35},{"name":"Bageta","kind":"chléb","price":29}], ["a", nyS_Bread]),
+"cat_now": ny_from("all", "s"),
+"_web": ny_from({"name":"Hana's Bakery","url":"","lang":"en","tz":"Europe/Prague","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"Playfair Display","primary":"#B5651D","logo":"","say":{},"palette":{}}, nyS_WebConfig),
+"products": ny_from([{"name":"Sourdough loaf","cat":"bread","text":"Slow-risen for 24 hours with a crackling crust.","image":"photo-2.svg","tag":"Bread"},{"name":"Rye and caraway","cat":"bread","text":"A dense, aromatic loaf from our grandmother's recipe.","image":"photo-3.svg","tag":"Bread"},{"name":"Seeded rolls","cat":"bread","text":"Crunchy rolls with sunflower, flax and sesame.","image":"photo-4.svg","tag":"Bread"},{"name":"Butter croissant","cat":"pastry","text":"Laminated by hand, golden and flaky.","image":"photo-5.svg","tag":"Pastry"},{"name":"Cinnamon roll","cat":"pastry","text":"Soft, warm and generously glazed.","image":"photo-6.svg","tag":"Pastry"},{"name":"Apple strudel","cat":"pastry","text":"Thin pastry, local apples and a hint of rum.","image":"photo-2.svg","tag":"Pastry"},{"name":"Honey cake","cat":"cakes","text":"Layers of honey sponge and soft cream.","image":"photo-3.svg","tag":"Cake"},{"name":"Poppy seed cake","cat":"cakes","text":"A Moravian classic with plum jam.","image":"photo-4.svg","tag":"Cake"}], ["a", nyS_Product]),
+"product_tabs": ny_from([["all","All"],["bread","Bread"],["pastry","Pastry"],["cakes","Cakes"]], ["a", nyS_Tup_t2ss]),
 };
 const ny_web = {
 update(text) {
 const ny_m = ny_from(JSON.parse(text), nyS_Msg);
-const ny_b0 = {v: ny_st["kind"]};
-const ny_b1 = {v: ny_st["sent"]};
-update(ny_m, ny_b0, ny_b1);
-ny_st["kind"] = ny_b0.v;
-ny_st["sent"] = ny_b1.v;
+const ny_b0 = {v: ny_st["cat_now"]};
+update(ny_m, ny_b0);
+ny_st["cat_now"] = ny_b0.v;
 },
 views: {
-"menu": () => {
-const ny_r = nyU_web_u2e__render(menu(ny_st["_web"], ny_st["breads"], ny_st["kind"]));
-return ny_r;
-},
-"thanks": () => {
-const ny_r = nyU_web_u2e__render(thanks(ny_st["sent"]));
+"product_grid": () => {
+const ny_r = nyU_web_u2e__render(product_grid(ny_st["_web"], ny_st["products"], ny_st["product_tabs"], ny_st["cat_now"]));
 return ny_r;
 },
 },
@@ -1551,6 +1777,7 @@ const used = new Set(pairs.map((p) => p[1]));
 for (const c of Array.from(old.childNodes)) if (!used.has(c)) old.removeChild(c);
 let prev = null;
 for (const [n, m] of pairs) {
+if (!m) ny_restyle(n);
 const node = m || n, want = prev ? prev.nextSibling : old.firstChild;
 if (node !== want) old.insertBefore(node, want);
 if (m) ny_patch(m, n);
@@ -1567,20 +1794,45 @@ const c = (e.getAttribute("class") || "").split(/\s+/).filter(Boolean);
 const more = add.filter((x) => !c.includes(x));
 if (more.length) e.setAttribute("class", c.concat(more).join(" "));
 }
+function ny_style(e, text) {
+const want = new Map();
+for (const d of (text || "").split(";")) {
+const i = d.indexOf(":");
+if (i > 0) want.set(d.slice(0, i).trim(), d.slice(i + 1).trim());
+}
+const s = e.style;
+if (!s) {
+const order = /--m-i:\s*([^;]+)/.exec(e.getAttribute("style") || "");
+if (order && !want.has("--m-i")) want.set("--m-i", order[1].trim());
+const t = Array.from(want, ([p, v]) => p + ":" + v).join(";");
+if (t) e.setAttribute("style", t);
+else e.removeAttribute("style");
+return;
+}
+for (const p of Array.from(s)) if (!want.has(p) && p !== "--m-i") s.removeProperty(p);
+for (const [p, v] of want) if (s.getPropertyValue(p).trim() !== v) s.setProperty(p, v);
+}
+function ny_restyle(n) {
+if (n.nodeType !== 1 || !n.querySelectorAll) return;
+for (const e of [n, ...n.querySelectorAll("[style]")]) {
+if (!e.hasAttribute("style")) continue;
+const t = e.getAttribute("style");
+e.removeAttribute("style");
+ny_style(e, t);
+}
+}
 function ny_patch(a, b) {
 if (a.nodeType !== 1) {
 if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
 return;
 }
 const motion = (a.getAttribute("class") || "").split(/\s+/).filter((c) => c.startsWith("m-"));
-const order = /--m-i:\s*([^;]+)/.exec(a.getAttribute("style") || "");
 const busy = a === a.ownerDocument.activeElement;
 const was = [a.getAttribute("value"), a.hasAttribute("checked")];
-for (const at of Array.from(a.attributes)) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
-for (const at of Array.from(b.attributes)) if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+for (const at of Array.from(a.attributes)) if (at.name !== "style" && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
+for (const at of Array.from(b.attributes)) if (at.name !== "style" && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
 ny_class(a, motion);
-const style = a.getAttribute("style") || "";
-if (order && !style.includes("--m-i:")) a.setAttribute("style", (style ? style + ";" : "") + "--m-i:" + order[1].trim());
+ny_style(a, b.getAttribute("style"));
 if (!busy && was[0] !== a.getAttribute("value")) a.value = a.getAttribute("value") || "";
 if (was[1] !== a.hasAttribute("checked")) a.checked = a.hasAttribute("checked");
 if (!(busy && a.nodeName === "TEXTAREA")) ny_morph(a, b);

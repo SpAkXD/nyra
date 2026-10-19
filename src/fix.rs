@@ -98,6 +98,23 @@ pub fn apply(src: &str, edits: &[Edit]) -> Option<String> {
 /// `` `ret x` ``, or `` `a`, `b` (on separate lines) ``, or `` delete `;` ``.
 pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     let first = fix.iter().map(|e| e.start.line).min()?;
+    // edits within lines, on lines apart (a function renamed with its calls): the lines they
+    // change, not the lines between them
+    let mut touched: Vec<usize> = fix.iter().map(|e| e.start.line).collect();
+    touched.sort_unstable();
+    touched.dedup();
+    let within = fix.iter().all(|e| e.start.line == e.end.line && !e.text.contains('\n'));
+    if within && touched.windows(2).any(|w| w[1] > w[0] + 1) {
+        let fixed = apply(src, fix)?;
+        let lines: Vec<&str> = fixed.lines().collect();
+        let shown: Vec<String> = touched.iter().take(3).map(|l| format!("`{}`", lines.get(l - 1).unwrap_or(&"").trim())).collect();
+        let more = touched.len().saturating_sub(3);
+        let nums: Vec<String> = touched.iter().take(3).map(usize::to_string).collect();
+        return Some(match more {
+            0 => format!("{} (lines {})", shown.join(", "), nums.join(", ")),
+            n => format!("{} (lines {}) and {n} more line{}", shown.join(", "), nums.join(", "), if n == 1 { "" } else { "s" }),
+        });
+    }
     // an edit of whole lines (from the start of one line to the start of another) does not
     // touch the line it ends at
     let whole_lines =

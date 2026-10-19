@@ -336,6 +336,63 @@ impl Policy {
     }
 }
 
+// ---- style attributes --------------------------------------------------------------------------------
+
+/// The class that stands for the declarations of a `style` attribute, and its rule for the site's
+/// CSS, or `None` when the declarations cannot go into a CSS file as they are (a brace, a comment, an
+/// at-sign or a backslash could end the rule). The declarations are `!important`, so they beat the
+/// kit's rules as the attribute did.
+fn style_rule(style: &str) -> Option<(String, String)> {
+    let style = style.trim().trim_end_matches(';').trim();
+    if style.is_empty() || style.contains(['{', '}', '<', '@', '\\']) || style.contains("/*") {
+        return None;
+    }
+    let mut decls = Vec::new();
+    let (mut depth, mut quote, mut from) = (0i32, None::<char>, 0);
+    let mut parts = Vec::new();
+    for (i, c) in style.char_indices() {
+        match (c, quote) {
+            ('"' | '\'', None) => quote = Some(c),
+            (q, Some(open)) if q == open => quote = None,
+            (_, Some(_)) => {}
+            ('(', None) => depth += 1,
+            (')', None) => depth -= 1,
+            (';', None) if depth == 0 => {
+                parts.push(&style[from..i]);
+                from = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&style[from..]);
+    for d in parts.iter().map(|d| d.trim()).filter(|d| !d.is_empty()) {
+        let (name, value) = d.split_once(':')?;
+        let value = value.trim();
+        let value = value.strip_suffix("!important").map_or(value, str::trim_end);
+        decls.push(format!("{}:{value} !important", name.trim()));
+    }
+    let body = decls.join(";");
+    let class = format!("s-{}", &hash(body.as_bytes())[..8]);
+    Some((class.clone(), format!(".{class}{{{body}}}")))
+}
+
+/// The page with each `style` attribute replaced by its class (`style_rule`), whose rule goes into
+/// `rules`: a page's policy then needs no `'unsafe-inline'` for its styles. An attribute that cannot
+/// be a rule stays (and the page's policy allows it).
+fn style_classes(page: &str, rules: &mut BTreeMap<String, String>) -> String {
+    let mut edits = Vec::new();
+    for t in html::tags(page).into_iter().filter(|t| !t.close && t.has("style")) {
+        let Some((class, rule)) = style_rule(t.get("style").unwrap_or("")) else { continue };
+        let mut changed = t.clone();
+        changed.attrs.retain(|(n, _)| n != "style");
+        let classes = t.get("class").map_or(class.clone(), |c| format!("{c} {class}"));
+        changed.set("class", &classes);
+        rules.insert(class, rule);
+        edits.push((t.start, t.end, changed.render()));
+    }
+    html::apply(page, edits)
+}
+
 /// `https://host[:port]` of an absolute http(s) URL.
 fn origin(url: &str) -> Option<String> {
     let rest = url.strip_prefix("https://").map(|r| ("https", r)).or_else(|| url.strip_prefix("http://").map(|r| ("http", r)))?;
@@ -618,6 +675,14 @@ impl Site {
             );
         }
 
+        // the pages with their images, and their `style` attributes as classes of the CSS
+        let mut style_rules: BTreeMap<String, String> = BTreeMap::new();
+        let bodies: Vec<String> = pages
+            .iter()
+            .enumerate()
+            .map(|(pi, p)| style_classes(&html::apply(&p.html, std::mem::take(&mut edits[pi])), &mut style_rules))
+            .collect();
+
         // the CSS: the kit's base and used parts, the motion words, custom keyframes, the program's own
         let mut used: Vec<(String, String)> = Vec::new();
         let mut events = false;
@@ -673,6 +738,10 @@ impl Site {
             css.push('\n');
             css.push_str(c);
         }
+        for rule in style_rules.values() {
+            css.push('\n');
+            css.push_str(rule);
+        }
         let css = css_files(&assets::min_css(&css), &o.dir, &mut files);
 
         // the JS: kit behaviors, motion, the program's client code
@@ -704,8 +773,9 @@ impl Site {
         let mut all = Policy::default();
         let base = base_url(&pages);
         let mut sitemap = Vec::new();
-        for (pi, p) in pages.iter().enumerate() {
-            let mut policy = page_policy(p, js_file.is_some() || o.dev, &web.chunks);
+        for (pi, (p, body)) in pages.iter().zip(bodies).enumerate() {
+            let styles = html::tags(&body).iter().any(|t| !t.close && t.has("style"));
+            let mut policy = page_policy(p, js_file.is_some() || o.dev, &web.chunks, styles);
             // the previews: one inline style, allowed by its hash (unless inline styles are allowed anyway)
             let mut style = String::new();
             if !previews[pi].is_empty() {
@@ -717,8 +787,7 @@ impl Site {
                 style = format!("<style>{css}</style>");
             }
             all.merge(&policy);
-            let mut html = html::apply(&p.html, std::mem::take(&mut edits[pi]));
-            html = inject(&html, &policy.text(), &p.up, css_file.as_deref(), js_file.as_deref(), o.dev, &style);
+            let html = inject(&body, &policy.text(), &p.up, css_file.as_deref(), js_file.as_deref(), o.dev, &style);
             files.insert(p.file.clone(), html.into_bytes());
             let noindex = p.tags.iter().any(|t| {
                 t.name == "meta" && t.get("name") == Some("robots") && t.get("content").is_some_and(|c| c.contains("noindex"))
@@ -955,8 +1024,9 @@ fn site_url(pages: &[Page], file: &str) -> Option<String> {
     base_url(pages).map(|b| format!("{b}/{file}"))
 }
 
-/// The Content-Security-Policy of a page, from what it uses.
-fn page_policy(p: &Page, scripts: bool, chunks: &[String]) -> Policy {
+/// The Content-Security-Policy of a page, from what it uses. `styles`: the page still has `style`
+/// attributes (the build makes the others classes, `style_classes`).
+fn page_policy(p: &Page, scripts: bool, chunks: &[String], styles: bool) -> Policy {
     let mut pol = Policy::default();
     pol.add("default-src", "'self'");
     pol.add("script-src", if scripts { "'self'" } else { "'none'" });
@@ -971,8 +1041,11 @@ fn page_policy(p: &Page, scripts: bool, chunks: &[String]) -> Policy {
         pol.add("frame-src", "https://www.google.com");
         pol.add("frame-src", "https://maps.google.com");
     }
+    if styles {
+        pol.add("style-src", "'unsafe-inline'");
+    }
     for t in p.tags.iter().filter(|t| !t.close) {
-        if t.has("style") || t.name == "style" {
+        if t.name == "style" {
             pol.add("style-src", "'unsafe-inline'");
         }
         let o = |a: &str| t.get(a).and_then(origin);
@@ -1342,5 +1415,24 @@ mod tests {
         assert_eq!(origin("/a"), None);
         assert!(uses_web("// x\nuse web\n") && uses_web("use  web;") && !uses_web("use webby\n"));
         assert!(local_ref("a.png") && local_ref("/img/a.png") && !local_ref("https://x/a.png") && !local_ref("data:x"));
+    }
+
+    #[test]
+    fn style_attributes_become_classes() {
+        let (class, rule) = style_rule("--tint:#c00; --ratio: 4/3;").unwrap();
+        assert!(class.starts_with("s-") && class.len() == 10, "{class}");
+        assert_eq!(rule, format!(".{class}{{--tint:#c00 !important;--ratio:4/3 !important}}"));
+        // the same declarations, the same class; a `;` inside quotes or parentheses is not the end of one
+        assert_eq!(style_rule("--tint:#c00;--ratio:4/3").unwrap().0, class);
+        assert!(style_rule("background:url(\"a;b.png\")").unwrap().1.contains("url(\"a;b.png\") !important"));
+        // what could end the rule stays an attribute
+        for bad in ["color:red}body{color:blue", "--x:1/*", "--x:\\7d", "", "@import x"] {
+            assert!(style_rule(bad).is_none(), "{bad}");
+        }
+        let mut rules = BTreeMap::new();
+        let page = style_classes("<p class=\"a\" style=\"--tint:#c00\">x</p><i style=\"--x:1\"></i><b style=\"a}\"></b>", &mut rules);
+        let (tint, x) = (style_rule("--tint:#c00").unwrap().0, style_rule("--x:1").unwrap().0);
+        assert_eq!(page, format!("<p class=\"a {tint}\">x</p><i class=\"{x}\"></i><b style=\"a}}\"></b>"));
+        assert_eq!(rules.len(), 2);
     }
 }

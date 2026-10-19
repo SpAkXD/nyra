@@ -6496,7 +6496,8 @@ error[E0372]: `fn hero` has the name of the web function `hero`
   |
 3 | fn hero(title: str) -> Node = h1(title)
   |    ^
-  = hint: rename your function, e.g. `fn my_hero`: in a program with `use web` the web functions are called by their bare names
+  = hint: rename your function, e.g. `fn my_hero`, and its calls: in a program with `use web` the web functions are called by their bare names
+  = fix: `fn my_hero(title: str) -> Node = h1(title)`, `my_hero("Hello")` (lines 3, 6)
   = explain: nyra explain E0372
 
 nyra: 1 error(s)
@@ -6725,3 +6726,113 @@ error[E0387]: page path "/a b" is not a path of the site: a page path has only l
   = explain: nyra explain E0387
 
 nyra: 2 error(s)
+==== web_number_for_text
+use web
+
+page("/", "Home") {
+    h1("Bakery")
+    stat(28, "years of baking")
+}
+----
+error[E0203]: type mismatch in argument 1 (`value`) of `stat`: expected `str`, found `int`
+  --> case.nyra:5:10
+  |
+5 |     stat(28, "years of baking")
+  |          ^
+  = hint: `value` is text: write the number in quotes, `"28"`
+  = fix: `stat("28", "years of baking")`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== web_pixels_as_text
+use web
+
+site("Bakery", radius: "16px")
+
+page("/", "Home") {
+    h1("Bakery")
+}
+----
+error[E0203]: type mismatch in argument 16 (`radius`) of `site`: expected `int`, found `str`
+  --> case.nyra:3:24
+  |
+3 | site("Bakery", radius: "16px")
+  |                        ^
+  = hint: `radius:` is the corner radius in pixels, a number: `radius: 16`
+  = fix: `site("Bakery", radius: 16)`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== web_icon_in_colons
+use web
+
+page("/", "Home") {
+    h1("Bakery")
+    card("Opening hours", "Mon-Fri 8-16", icon: ":clock:")
+}
+----
+error[E0374]: unknown icon `:clock:`
+  --> case.nyra:5:49
+  |
+5 |     card("Opening hours", "Mon-Fri 8-16", icon: ":clock:")
+  |                                                 ^
+  = hint: `icon:` takes the icon's name without colons: `icon: "clock"` (colons mark an icon inside text)
+  = fix: `card("Opening hours", "Mon-Fri 8-16", icon: "clock")`
+  = explain: nyra explain E0374
+
+nyra: 1 error(s)
+==== web_line_for_list
+use web
+
+page("/", "Home") {
+    h1("Bakery")
+    footer(small: "© 2026 Bakery")
+}
+----
+error[E0203]: type mismatch in argument 7 (`small`) of `footer`: expected `[str]`, found `str`
+  --> case.nyra:5:19
+  |
+5 |     footer(small: "© 2026 Bakery")
+  |                   ^
+  = hint: a list of lines of text: `["one", "two"]`
+  = fix: `footer(small: ["© 2026 Bakery"])`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== web_hours_as_badge
+use web
+
+page("/", "Home") {
+    hero("Bakery", badge: hours([("Mon-Fri", "1-5 8:00-16:00")]))
+}
+----
+error[E0203]: type mismatch in argument 7 (`badge`) of `hero`: expected `[(str, str)]`, found `Node`
+  --> case.nyra:4:27
+  |
+4 |     hero("Bakery", badge: hours([("Mon-Fri", "1-5 8:00-16:00")]))
+  |                           ^
+  = hint: `badge:` takes the rows of the opening hours, not the `hours(...)` element: `badge: [("Mon–Fri", "1-5 8:00-16:00")]`
+  = explain: nyra explain E0203
+
+nyra: 1 error(s)
+==== web_name_clash_renamed
+use web
+
+fn img(n: int) -> str = "https://example.com/{n}.jpg"
+
+page("/", "Home") {
+    h1("Bakery")
+    card("Bread", "Fresh", image: img(1))
+    card("Cake", "Sweet", image: img(2))
+}
+----
+error[E0372]: `fn img` has the name of the web function `img`
+  --> case.nyra:3:4
+  |
+3 | fn img(n: int) -> str = "https://example.com/{n}.jpg"
+  |    ^
+  = hint: rename your function, e.g. `fn photo`, and its calls: in a program with `use web` the web functions are called by their bare names
+  = fix: `fn photo(n: int) -> str = "https://example.com/{n}.jpg"`, `card("Bread", "Fresh", image: photo(1))`, `card("Cake", "Sweet", image: photo(2))` (lines 3, 7, 8)
+  = explain: nyra explain E0372
+
+nyra: 1 error(s)
