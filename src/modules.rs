@@ -27,6 +27,64 @@ pub fn set_main(path: Option<&Path>) {
     MAIN.with(|m| *m.borrow_mut() = path.map(Path::to_path_buf));
 }
 
+thread_local! {
+    /// Texts that replace files on disk, by `overlay_key`: the unsaved buffers of an editor
+    /// (`nyra lsp`). A file that is here is imported from here, even if it is not on disk yet.
+    static OVERLAY: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+}
+
+/// Makes the loader read `path` as `text` instead of the file on disk (`None`: the disk again).
+pub fn set_overlay(path: &Path, text: Option<String>) {
+    let key = overlay_key(path);
+    OVERLAY.with(|o| match text {
+        Some(t) => {
+            o.borrow_mut().insert(key, t);
+        }
+        None => {
+            o.borrow_mut().remove(&key);
+        }
+    });
+}
+
+/// One spelling of a path for the overlay: absolute, `.` and `..` resolved, `/` separators, no
+/// `\\?\` prefix, and lower case on Windows (where file names ignore case).
+pub fn overlay_key(path: &Path) -> String {
+    let abs = if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(path) };
+    use std::path::Component;
+    let mut prefix = String::new();
+    let mut parts: Vec<String> = Vec::new();
+    for c in abs.components() {
+        match c {
+            Component::Prefix(p) => {
+                let p = p.as_os_str().to_string_lossy();
+                prefix =
+                    p.strip_prefix(r"\\?\UNC\").map(|r| format!("//{r}")).unwrap_or_else(|| p.trim_start_matches(r"\\?\").to_string());
+            }
+            Component::RootDir | Component::CurDir => {}
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::Normal(n) => parts.push(n.to_string_lossy().into_owned()),
+        }
+    }
+    let mut key = format!("{}/{}", prefix.replace('\\', "/"), parts.join("/"));
+    if cfg!(windows) {
+        key = key.to_lowercase();
+    }
+    key
+}
+
+/// The overlay's text for `path`, if an editor holds it.
+pub fn overlay_text(path: &Path) -> Option<String> {
+    OVERLAY.with(|o| {
+        let o = o.borrow();
+        if o.is_empty() {
+            return None;
+        }
+        o.get(&overlay_key(path)).cloned()
+    })
+}
+
 /// What other files may know about a loaded module.
 struct Loaded {
     file: PathBuf,
@@ -140,7 +198,15 @@ impl Loader {
             return None;
         }
         let file = tidy(&from.parent().unwrap_or(Path::new(".")).join(format!("{path}.nyra")));
-        let Ok(canon) = file.canonicalize() else {
+        // an editor's unsaved text of the file, if it has one (`nyra lsp`)
+        let held = overlay_text(&file);
+        let canon = match (file.canonicalize(), &held) {
+            (Ok(c), _) => Ok(c),
+            // a file that is only in the editor so far
+            (Err(_), Some(_)) => Ok(PathBuf::from(overlay_key(&file))),
+            (Err(e), None) => Err(e),
+        };
+        let Ok(canon) = canon else {
             self.err(
                 "E0300",
                 format!("module `{name}` not found: there is no file `{}`", slashes(&file)),
@@ -186,7 +252,7 @@ impl Loader {
             return None;
         }
         let shown_file = slashes(&file);
-        let text = match std::fs::read_to_string(&canon) {
+        let text = match held.map_or_else(|| std::fs::read_to_string(&canon), Ok) {
             Ok(t) => t,
             Err(e) => {
                 self.err(

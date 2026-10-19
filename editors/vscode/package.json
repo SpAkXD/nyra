@@ -1,8 +1,8 @@
 {
     "name": "nyra",
     "displayName": "Nyra",
-    "description": "Syntax highlighting and the file icon for the Nyra programming language",
-    "version": "0.4.0",
+    "description": "Nyra for VS Code: errors as you type, hover, completion, go to definition, formatting and quick fixes (through `nyra lsp`), syntax highlighting and the file icon",
+    "version": "0.5.0",
     "publisher": "spakxd",
     "license": "MIT",
     "icon": "icons/nyra-128.png",
@@ -14,7 +14,13 @@
         "vscode": "^1.80.0"
     },
     "categories": [
-        "Programming Languages"
+        "Programming Languages",
+        "Linters",
+        "Formatters"
+    ],
+    "main": "./extension.js",
+    "activationEvents": [
+        "onLanguage:nyra"
     ],
     "contributes": {
         "languages": [
@@ -35,6 +41,33 @@
                 "scopeName": "source.nyra",
                 "path": "./syntaxes/nyra.tmLanguage.json"
             }
-        ]
+        ],
+        "commands": [
+            {
+                "command": "nyra.restartServer",
+                "title": "Nyra: Restart the language server"
+            }
+        ],
+        "configuration": {
+            "title": "Nyra",
+            "properties": {
+                "nyra.path": {
+                    "type": "string",
+                    "default": "nyra",
+                    "markdownDescription": "The `nyra` executable that runs the language server (`nyra lsp`, Nyra 0.9 or later). The default finds it on `PATH`; give a full path otherwise."
+                },
+                "nyra.lsp.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Start the language server: errors as you type, hover, completion, go to definition, formatting and quick fixes."
+                },
+                "nyra.formatOnSave": {
+                    "type": "boolean",
+                    "default": false,
+                    "scope": "resource",
+                    "markdownDescription": "Format Nyra files when they are saved (`nyra fmt`). VS Code's own `editor.formatOnSave` works too."
+                }
+            }
+        }
     }
 }

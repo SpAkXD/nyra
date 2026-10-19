@@ -16,6 +16,9 @@ mod ir;
 mod json;
 mod lexer;
 mod limits;
+// the language server for editors; it needs threads and standard input, so not in the WebAssembly build
+#[cfg(not(target_arch = "wasm32"))]
+mod lsp;
 mod mcp;
 mod mem;
 mod modules;
@@ -45,6 +48,7 @@ usage:
   nyra test  <file.nyra>    run the `ex` examples and report each one that fails
   nyra explain [CODE]       explain an error code (without CODE: list the codes)
   nyra mcp                  serve AI agents over the Model Context Protocol (stdio)
+  nyra lsp                  serve editors over the Language Server Protocol (stdio, docs/EDITORS.md)
   nyra outline <file.nyra>  list the functions and structs with their lines
   nyra show <file.nyra> <name>    print one function, struct or Struct.field
   nyra edit <file.nyra>     change symbols by name (`nyra edit --help`)
@@ -424,6 +428,10 @@ fn real_main() -> ExitCode {
     }
     if std::env::args().nth(1).as_deref() == Some("mcp") {
         return mcp::run(std::env::args().skip(2).collect());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::args().nth(1).as_deref() == Some("lsp") {
+        return lsp::run(std::env::args().skip(2).collect());
     }
     if let Some(cmd @ ("outline" | "show" | "edit")) = std::env::args().nth(1).as_deref() {
         return edit::run(cmd, std::env::args().skip(2).collect());

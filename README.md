@@ -120,7 +120,9 @@ To run programs natively Nyra needs a C compiler: `gcc`, `clang` or `tcc`, found
 one; on Windows, [MSYS2](https://www.msys2.org)'s gcc works out of the box). Without one, `nyra run` uses its
 interpreter. The JavaScript backend (`--js`) needs [Node.js](https://nodejs.org). Websites need neither.
 
-**Editors.** VS Code: syntax highlighting and the file icon are in [`editors/vscode`](editors/vscode). Windows:
+**Editors.** `nyra lsp` is a language server: errors as you type, hover, completion, go to definition, formatting
+and quick fixes in VS Code (the extension in [`editors/vscode`](editors/vscode)), Neovim, Helix and other editors
+([docs/EDITORS.md](docs/EDITORS.md)). Windows:
 give `.nyra` files the Nyra icon in Explorer (per user, no admin rights, your editor stays the default):
 
 ```
@@ -525,6 +527,7 @@ instead of rounding. Details: [known differences](docs/SPEC.md#known-differences
 | `nyra fmt <file>` | rewrite the file in canonical form (`-o -` prints instead) |
 | `nyra explain [CODE]` | explain an error code; without a code, list them |
 | `nyra mcp` | the [MCP server](#mcp-server) on stdin/stdout |
+| `nyra lsp` | the language server for editors on stdin/stdout ([docs/EDITORS.md](docs/EDITORS.md)) |
 | `nyra outline <file>`, `nyra show <file> <name>`, `nyra edit <file>` | [work by symbol](#editing-by-symbol) (`nyra edit --help`) |
 
 | Option | Meaning |
