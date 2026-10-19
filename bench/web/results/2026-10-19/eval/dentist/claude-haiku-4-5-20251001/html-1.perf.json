@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-haiku-4-5-20251001/html-1/",
+ "runs": 3,
+ "fcp_ms": 364,
+ "lcp_ms": 628,
+ "cls": 0.001,
+ "load_ms": 665,
+ "kb": 767.8,
+ "requests": 18,
+ "kb_by_type_first_run": {
+  "Document": 9.5,
+  "Stylesheet": 10.3,
+  "Image": 276.3,
+  "Font": 177.1,
+  "Script": 293.9,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  632,
+  628,
+  628
+ ]
+}

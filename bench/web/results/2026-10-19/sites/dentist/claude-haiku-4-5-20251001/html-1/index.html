@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Family dental practice on Horní náměstí in Olomouc: check-ups, hygiene, fillings, whitening and children's dentistry. New patients welcome.">
+  <title>Zelená Dental – gentle dentistry in Olomouc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "Inter", sans-serif;
+      color: #14302C;
+      background: #F7FAF9;
+      line-height: 1.6;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: "Outfit", sans-serif;
+      font-weight: 700;
+    }
+
+    a {
+      color: #0F766E;
+      text-decoration: none;
+    }
+
+    a:focus {
+      outline: 2px solid #0F766E;
+      outline-offset: 2px;
+    }
+
+    button {
+      font-family: "Inter", sans-serif;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    button:focus {
+      outline: 2px solid #0F766E;
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: #0F766E;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0D6057;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #0F766E;
+      border: 2px solid #0F766E;
+    }
+
+    .btn-secondary:hover {
+      background: #F7FAF9;
+      transform: translateY(-2px);
+    }
+
+    .kicker {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #F59E0B;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+      color: #14302C;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: "Outfit", sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0F766E;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-weight: 500;
+      color: #14302C;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: #0F766E;
+    }
+
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .menu-toggle svg {
+      width: 24px;
+      height: 24px;
+      stroke: #14302C;
+      stroke-width: 2;
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      background-image: linear-gradient(135deg, rgba(15, 118, 110, 0.7) 0%, rgba(245, 158, 11, 0.3) 100%), url('https://picsum.photos/seed/zelena-hero/1600/1000');
+      background-size: cover;
+      background-position: center;
+      height: 600px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      color: white;
+      padding: 2rem;
+      margin-top: 60px;
+    }
+
+    .hero-content {
+      max-width: 700px;
+    }
+
+    .hero-kicker {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+      opacity: 0;
+      animation: slideInUp 0.6s ease 0.2s forwards;
+    }
+
+    .hero-title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      opacity: 0;
+      animation: slideInUp 0.6s ease 0.4s forwards;
+    }
+
+    .hero-text {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      margin-bottom: 32px;
+      opacity: 0;
+      animation: slideInUp 0.6s ease 0.6s forwards;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: slideInUp 0.6s ease 0.8s forwards;
+    }
+
+    .hero-buttons button {
+      padding: 14px 32px;
+      font-size: 1rem;
+    }
+
+    .hero-badge {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: white;
+      color: #0F766E;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      opacity: 0;
+      animation: slideInUp 0.6s ease 0.3s forwards;
+    }
+
+    @keyframes slideInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
+      .hero-kicker, .hero-title, .hero-text, .hero-buttons, .hero-badge {
+        opacity: 1 !important;
+      }
+    }
+
+    /* Sections */
+    section {
+      padding: 4rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    /* Numbers */
+    .numbers-section {
+      background: #0F766E;
+      color: white;
+      padding: 4rem 2rem;
+      text-align: center;
+    }
+
+    .numbers-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .number-item h3 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: #F59E0B;
+    }
+
+    .number-item p {
+      font-size: 1.125rem;
+      opacity: 0.95;
+    }
+
+    /* Services */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .service-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .service-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .service-card:nth-child(1) { animation-delay: 0.1s; }
+    .service-card:nth-child(2) { animation-delay: 0.2s; }
+    .service-card:nth-child(3) { animation-delay: 0.3s; }
+    .service-card:nth-child(4) { animation-delay: 0.4s; }
+    .service-card:nth-child(5) { animation-delay: 0.5s; }
+    .service-card:nth-child(6) { animation-delay: 0.6s; }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .service-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 1rem;
+      color: #0F766E;
+    }
+
+    .service-card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .service-card p {
+      font-size: 0.95rem;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* Team */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .team-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .team-card:nth-child(1) { animation-delay: 0.1s; }
+    .team-card:nth-child(2) { animation-delay: 0.2s; }
+    .team-card:nth-child(3) { animation-delay: 0.3s; }
+    .team-card:nth-child(4) { animation-delay: 0.4s; }
+
+    .team-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .team-card img {
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .team-card-content {
+      padding: 1.5rem;
+    }
+
+    .team-card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .team-card .role {
+      font-size: 0.875rem;
+      color: #0F766E;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+
+    .team-card p {
+      font-size: 0.95rem;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* Prices */
+    .prices-table {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+
+    .prices-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .prices-table th,
+    .prices-table td {
+      padding: 1rem 1.5rem;
+      text-align: left;
+      border-bottom: 1px solid #E5E7EB;
+    }
+
+    .prices-table th {
+      background: #0F766E;
+      color: white;
+      font-weight: 600;
+    }
+
+    .prices-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .prices-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+      color: #0F766E;
+    }
+
+    /* Testimonials */
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .testimonial-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      border-left: 4px solid #F59E0B;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .testimonial-card:nth-child(1) { animation-delay: 0.1s; }
+    .testimonial-card:nth-child(2) { animation-delay: 0.2s; }
+    .testimonial-card:nth-child(3) { animation-delay: 0.3s; }
+
+    .testimonial-card p {
+      font-size: 1.025rem;
+      line-height: 1.8;
+      color: #14302C;
+      margin-bottom: 1rem;
+    }
+
+    .testimonial-author {
+      font-weight: 600;
+      color: #666;
+      font-size: 0.95rem;
+    }
+
+    /* Booking Form */
+    .booking-form {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .booking-form label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      color: #14302C;
+    }
+
+    .booking-form input,
+    .booking-form select,
+    .booking-form textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #D1D5DB;
+      border-radius: 8px;
+      font-family: "Inter", sans-serif;
+      font-size: 1rem;
+      color: #14302C;
+      transition: border-color 0.2s ease;
+    }
+
+    .booking-form input:focus,
+    .booking-form select:focus,
+    .booking-form textarea:focus {
+      outline: none;
+      border-color: #0F766E;
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+    }
+
+    .booking-form textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .booking-form button {
+      width: 100%;
+      background: #0F766E;
+      color: white;
+      font-weight: 600;
+    }
+
+    .booking-form button:hover {
+      background: #0D6057;
+    }
+
+    /* FAQ */
+    .faq-container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .faq-item {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .faq-item:nth-child(1) { animation-delay: 0.1s; }
+    .faq-item:nth-child(2) { animation-delay: 0.2s; }
+    .faq-item:nth-child(3) { animation-delay: 0.3s; }
+    .faq-item:nth-child(4) { animation-delay: 0.4s; }
+    .faq-item:nth-child(5) { animation-delay: 0.5s; }
+
+    .faq-question {
+      padding: 1.5rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      border: none;
+      width: 100%;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #14302C;
+      transition: all 0.2s ease;
+    }
+
+    .faq-question:hover {
+      background: #F7FAF9;
+    }
+
+    .faq-question:focus {
+      outline: 2px solid #0F766E;
+      outline-offset: -2px;
+    }
+
+    .faq-toggle {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0F766E;
+      flex-shrink: 0;
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      padding: 0 1.5rem;
+    }
+
+    .faq-answer.open {
+      max-height: 500px;
+      padding: 0 1.5rem 1.5rem;
+    }
+
+    .faq-answer p {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* Contact */
+    .contact-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      margin-bottom: 2rem;
+    }
+
+    .contact-info h3 {
+      font-size: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .hours-table {
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+
+    .hours-table tr {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #E5E7EB;
+    }
+
+    .hours-table tr.today {
+      background: #F7FAF9;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .hours-table td:first-child {
+      font-weight: 500;
+    }
+
+    .contact-details {
+      margin-bottom: 1rem;
+    }
+
+    .contact-details a {
+      display: inline-block;
+      margin-right: 1rem;
+      font-weight: 500;
+    }
+
+    .contact-map {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      height: 400px;
+    }
+
+    .contact-map iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Footer */
+    footer {
+      background: #14302C;
+      color: white;
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+
+    footer p {
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    footer .footer-links {
+      margin: 1.5rem 0;
+    }
+
+    footer .footer-links a {
+      color: #F59E0B;
+      margin: 0 1rem;
+      font-size: 0.9rem;
+    }
+
+    footer .footer-links a:hover {
+      text-decoration: underline;
+    }
+
+    footer .copyright {
+      margin-top: 2rem;
+      font-size: 0.875rem;
+      opacity: 0.8;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .nav-links.active {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 60px;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 1.5rem 2rem;
+        gap: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .hero {
+        height: 500px;
+        margin-top: 50px;
+      }
+
+      .hero-title {
+        font-size: 2.5rem;
+      }
+
+      .hero-text {
+        font-size: 1rem;
+      }
+
+      .section-title {
+        font-size: 2rem;
+      }
+
+      .contact-content {
+        grid-template-columns: 1fr;
+      }
+
+      .contact-map {
+        height: 300px;
+      }
+
+      section {
+        padding: 3rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-container">
+      <div class="nav-brand">Zelená Dental</div>
+      <button class="menu-toggle" aria-label="Toggle menu">
+        <svg fill="none" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <ul class="nav-links">
+        <li><a href="#services">Services</a></li>
+        <li><a href="#team">Team</a></li>
+        <li><a href="#prices">Prices</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#booking" class="btn-primary" style="display: inline-block; padding: 10px 24px; font-size: 0.9rem;">Book a visit</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-kicker">Olomouc · Horní náměstí 21</div>
+      <h1 class="hero-title">Gentle dentistry for the whole family</h1>
+      <p class="hero-text">Check-ups, hygiene and modern treatment without the stress. New patients welcome, children from 3 years.</p>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="window.location.href='#booking'">Book a visit</button>
+        <button class="btn-secondary" onclick="window.location.href='#prices'">See prices</button>
+      </div>
+    </div>
+    <div class="hero-badge" id="heroBadge">Open now</div>
+  </section>
+
+  <!-- Numbers -->
+  <section class="numbers-section">
+    <div class="numbers-grid">
+      <div class="number-item">
+        <h3 data-target="15">15</h3>
+        <p>years in Olomouc</p>
+      </div>
+      <div class="number-item">
+        <h3 data-target="4800">4,800</h3>
+        <p>patients</p>
+      </div>
+      <div class="number-item">
+        <h3 data-target="98">98</h3>
+        <p>% would recommend us</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Services -->
+  <section id="services">
+    <div class="section-header">
+      <div class="kicker">What we do</div>
+      <h2 class="section-title">Care for every smile</h2>
+    </div>
+    <div class="services-grid">
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+        </svg>
+        <h3>Check-ups</h3>
+        <p>A thorough exam every six months, with digital X-rays only when needed.</p>
+      </div>
+
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 6v6l4 2"></path>
+        </svg>
+        <h3>Dental hygiene</h3>
+        <p>Scaling, polishing and airflow cleaning by our hygienist.</p>
+      </div>
+
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"></path>
+          <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" fill="currentColor" opacity="0.3"></path>
+        </svg>
+        <h3>Fillings</h3>
+        <p>Tooth-coloured composite fillings that last.</p>
+      </div>
+
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"></path>
+          <path d="M12 8v4l3 2" stroke-linecap="round"></path>
+        </svg>
+        <h3>Whitening</h3>
+        <p>Safe in-office or at-home whitening for a brighter smile.</p>
+      </div>
+
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
+        </svg>
+        <h3>Children's dentistry</h3>
+        <p>Calm first visits and sealants for kids from 3 years.</p>
+      </div>
+
+      <div class="service-card">
+        <svg class="service-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path>
+        </svg>
+        <h3>Emergency care</h3>
+        <p>Toothache? Call before 10 a.m. and we will see you the same day.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team -->
+  <section id="team">
+    <div class="section-header">
+      <div class="kicker">Our team</div>
+      <h2 class="section-title">People who take their time</h2>
+    </div>
+    <div class="team-grid">
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/zelena-team-1/600/600" alt="Dr. Petra Zelená">
+        <div class="team-card-content">
+          <h3>Dr. Petra Zelená</h3>
+          <div class="role">Dentist, founder</div>
+          <p>Twenty years of practice and a soft spot for nervous patients.</p>
+        </div>
+      </div>
+
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/zelena-team-2/600/600" alt="Dr. Martin Kovář">
+        <div class="team-card-content">
+          <h3>Dr. Martin Kovář</h3>
+          <div class="role">Dentist</div>
+          <p>Fillings, root canals and crowns, done carefully and explained clearly.</p>
+        </div>
+      </div>
+
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/zelena-team-3/600/600" alt="Lucie Horáková">
+        <div class="team-card-content">
+          <h3>Lucie Horáková</h3>
+          <div class="role">Dental hygienist</div>
+          <p>Makes cleanings painless and teaches the tricks that keep teeth healthy.</p>
+        </div>
+      </div>
+
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/zelena-team-4/600/600" alt="Eva Šimková">
+        <div class="team-card-content">
+          <h3>Eva Šimková</h3>
+          <div class="role">Receptionist</div>
+          <p>Finds you a time that works and answers every question about insurance.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Prices -->
+  <section id="prices">
+    <div class="section-header">
+      <div class="kicker">Prices</div>
+      <h2 class="section-title">Clear prices, no surprises</h2>
+      <p class="section-subtitle">Prices in CZK. Check-ups are covered by public health insurance.</p>
+    </div>
+    <div class="prices-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Treatment</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Check-up (insured)</td>
+            <td>0 Kč</td>
+          </tr>
+          <tr>
+            <td>Check-up (self-paying)</td>
+            <td>900 Kč</td>
+          </tr>
+          <tr>
+            <td>Dental hygiene</td>
+            <td>1,600 Kč</td>
+          </tr>
+          <tr>
+            <td>Composite filling</td>
+            <td>from 1,900 Kč</td>
+          </tr>
+          <tr>
+            <td>Root canal treatment</td>
+            <td>from 4,500 Kč</td>
+          </tr>
+          <tr>
+            <td>In-office whitening</td>
+            <td>6,900 Kč</td>
+          </tr>
+          <tr>
+            <td>Children's check-up</td>
+            <td>0 Kč</td>
+          </tr>
+          <tr>
+            <td>Emergency visit</td>
+            <td>1,200 Kč</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section>
+    <div class="section-header">
+      <h2 class="section-title">What our patients say</h2>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card">
+        <p>"I used to dread the dentist. Here I actually relax."</p>
+        <div class="testimonial-author">— Jana P.</div>
+      </div>
+      <div class="testimonial-card">
+        <p>"They fitted in my son the same morning he broke a tooth."</p>
+        <div class="testimonial-author">— Tomáš R.</div>
+      </div>
+      <div class="testimonial-card">
+        <p>"Clear prices and a hygienist who really knows her job."</p>
+        <div class="testimonial-author">— Markéta V.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Booking -->
+  <section id="booking">
+    <div class="section-header">
+      <div class="kicker">Book a visit</div>
+      <h2 class="section-title">Request an appointment</h2>
+      <p class="section-subtitle">Send us your request and we will call you back within one working day to confirm the time.</p>
+    </div>
+    <form class="booking-form" onsubmit="handleBooking(event)">
+      <div class="form-group">
+        <label for="name">Name *</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone *</label>
+        <input type="tel" id="phone" name="phone" required>
+      </div>
+      <div class="form-group">
+        <label for="email">E-mail *</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      <div class="form-group">
+        <label for="treatment">Treatment *</label>
+        <select id="treatment" name="treatment" required>
+          <option value="">— Select a treatment —</option>
+          <option value="Check-up">Check-up</option>
+          <option value="Dental hygiene">Dental hygiene</option>
+          <option value="Filling">Filling</option>
+          <option value="Whitening">Whitening</option>
+          <option value="Children's check-up">Children's check-up</option>
+          <option value="Emergency">Emergency</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="date">Preferred date *</label>
+        <input type="date" id="date" name="date" required>
+      </div>
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" name="message"></textarea>
+      </div>
+      <button type="submit">Send request</button>
+    </form>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="section-header">
+      <div class="kicker">FAQ</div>
+      <h2 class="section-title">Questions we hear often</h2>
+    </div>
+    <div class="faq-container">
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          Do you accept new patients?
+          <span class="faq-toggle">+</span>
+        </button>
+        <div class="faq-answer">
+          <p>Yes. We accept new adult patients and children from 3 years. Book a first check-up with the form above.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          Which insurance companies do you work with?
+          <span class="faq-toggle">+</span>
+        </button>
+        <div class="faq-answer">
+          <p>All Czech public health insurers, including VZP, ČPZP and OZP.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          What should I bring to my first visit?
+          <span class="faq-toggle">+</span>
+        </button>
+        <div class="faq-answer">
+          <p>Your insurance card, an ID and a list of any medicines you take.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          Does dental hygiene hurt?
+          <span class="faq-toggle">+</span>
+        </button>
+        <div class="faq-answer">
+          <p>Usually not. If your gums are sensitive, we use a numbing gel at no extra cost.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          How do I cancel an appointment?
+          <span class="faq-toggle">+</span>
+        </button>
+        <div class="faq-answer">
+          <p>Call us at least 24 hours ahead so that someone else can take your time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section id="contact">
+    <div class="section-header">
+      <div class="kicker">Contact</div>
+      <h2 class="section-title">Find us on the main square</h2>
+    </div>
+    <div class="contact-content">
+      <div class="contact-info">
+        <h3>Opening hours</h3>
+        <table class="hours-table">
+          <tbody>
+            <tr id="mon">
+              <td>Monday</td>
+              <td>8:00–18:00</td>
+            </tr>
+            <tr id="tue">
+              <td>Tuesday</td>
+              <td>8:00–18:00</td>
+            </tr>
+            <tr id="wed">
+              <td>Wednesday</td>
+              <td>8:00–18:00</td>
+            </tr>
+            <tr id="thu">
+              <td>Thursday</td>
+              <td>8:00–18:00</td>
+            </tr>
+            <tr id="fri">
+              <td>Friday</td>
+              <td>8:00–14:00</td>
+            </tr>
+            <tr id="sat">
+              <td>Saturday</td>
+              <td>closed</td>
+            </tr>
+            <tr id="sun">
+              <td>Sunday</td>
+              <td>closed</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="contact-details">
+          <div><strong>Address</strong></div>
+          <p>Horní náměstí 21, 779 00 Olomouc</p>
+          <a href="https://maps.google.com/?q=Horní+náměstí+21,+Olomouc" target="_blank">Open in Google Maps</a>
+        </div>
+
+        <div class="contact-details">
+          <div><strong>Phone</strong></div>
+          <a href="tel:+420585000321">+420 585 000 321</a>
+        </div>
+
+        <div class="contact-details">
+          <div><strong>E-mail</strong></div>
+          <a href="mailto:recepce@zelenadental.cz">recepce@zelenadental.cz</a>
+        </div>
+      </div>
+
+      <div class="contact-map">
+        <iframe title="Map of Zelená Dental" src="https://www.openstreetmap.org/export/embed.html?bbox=17.2459%2C49.5913%2C17.2559%2C49.5963&layer=mapnik&marker=49.5938%2C17.2509"></iframe>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p><strong>Zelená Dental</strong></p>
+    <p>Horní náměstí 21, 779 00 Olomouc</p>
+    <div class="footer-links">
+      <a href="#services">Services</a>
+      <a href="#team">Team</a>
+      <a href="#prices">Prices</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div class="copyright">© 2026 Zelená Dental s.r.o.</div>
+  </footer>
+
+  <script>
+    // Mobile menu toggle
+    document.querySelector('.menu-toggle').addEventListener('click', function() {
+      const navLinks = document.querySelector('.nav-links');
+      navLinks.classList.toggle('active');
+    });
+
+    // Close menu when a link is clicked
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      link.addEventListener('click', function() {
+        document.querySelector('.nav-links').classList.remove('active');
+      });
+    });
+
+    // Opening hours and badge
+    function updateOpenStatus() {
+      const hours = {
+        0: { name: 'Sunday', times: [] },
+        1: { name: 'Monday', times: [8, 18] },
+        2: { name: 'Tuesday', times: [8, 18] },
+        3: { name: 'Wednesday', times: [8, 18] },
+        4: { name: 'Thursday', times: [8, 18] },
+        5: { name: 'Friday', times: [8, 14] },
+        6: { name: 'Saturday', times: [] }
+      };
+
+      const now = new Date();
+      const day = now.getDay();
+      const hour = now.getHours();
+      const minute = now.getMinutes();
+
+      const dayHours = hours[day];
+      let isOpen = false;
+
+      if (dayHours.times.length > 0) {
+        const [openHour, closeHour] = dayHours.times;
+        const currentMinutes = hour * 60 + minute;
+        const openMinutes = openHour * 60;
+        const closeMinutes = closeHour * 60;
+        isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+      }
+
+      // Update badge
+      const badge = document.getElementById('heroBadge');
+      if (badge) {
+        badge.textContent = isOpen ? 'Open now' : 'Closed now';
+      }
+
+      // Highlight today's row
+      const dayRowIds = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const rows = document.querySelectorAll('.hours-table tr');
+      rows.forEach(row => row.classList.remove('today'));
+
+      const todayRow = document.getElementById(dayRowIds[day]);
+      if (todayRow) {
+        todayRow.classList.add('today');
+        // Add badge to today's row
+        let badge = todayRow.querySelector('.today-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'today-badge';
+          badge.style.marginLeft = '1rem';
+          badge.style.background = isOpen ? '#0F766E' : '#666';
+          badge.style.color = 'white';
+          badge.style.padding = '4px 12px';
+          badge.style.borderRadius = '12px';
+          badge.style.fontSize = '0.75rem';
+          badge.style.fontWeight = '600';
+          badge.textContent = isOpen ? 'Open now' : 'Closed now';
+          const timeCell = todayRow.querySelector('td:last-child');
+          timeCell.appendChild(badge);
+        }
+      }
+    }
+
+    updateOpenStatus();
+    setInterval(updateOpenStatus, 60000);
+
+    // Number counter animation
+    function animateNumbers() {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const numbers = document.querySelectorAll('.number-item h3');
+
+      numbers.forEach(element => {
+        const target = parseInt(element.dataset.target);
+        
+        if (prefersReducedMotion) {
+          element.textContent = target.toLocaleString('cs-CZ');
+        } else {
+          let current = 0;
+          const duration = 2000;
+          const start = Date.now();
+
+          function update() {
+            const elapsed = Date.now() - start;
+            const progress = Math.min(elapsed / duration, 1);
+            current = Math.floor(target * progress);
+            element.textContent = current.toLocaleString('cs-CZ');
+
+            if (progress < 1) {
+              requestAnimationFrame(update);
+            } else {
+              element.textContent = target.toLocaleString('cs-CZ');
+            }
+          }
+
+          update();
+        }
+      });
+    }
+
+    // Intersection observer for animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          if (entry.target.classList.contains('numbers-section')) {
+            animateNumbers();
+            observer.unobserve(entry.target);
+          }
+        }
+      });
+    }, observerOptions);
+
+    observer.observe(document.querySelector('.numbers-section'));
+
+    // FAQ toggle
+    function toggleFAQ(button) {
+      const answer = button.nextElementSibling;
+      const toggle = button.querySelector('.faq-toggle');
+      const isOpen = answer.classList.contains('open');
+
+      document.querySelectorAll('.faq-answer').forEach(a => a.classList.remove('open'));
+      document.querySelectorAll('.faq-toggle').forEach(t => t.textContent = '+');
+
+      if (!isOpen) {
+        answer.classList.add('open');
+        toggle.textContent = '−';
+      }
+    }
+
+    // Booking form
+    function handleBooking(event) {
+      event.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const phone = document.getElementById('phone').value;
+      const email = document.getElementById('email').value;
+      const treatment = document.getElementById('treatment').value;
+      const date = document.getElementById('date').value;
+      const message = document.getElementById('message').value;
+
+      const body = `Appointment Request\n\n` +
+        `Name: ${name}\n` +
+        `Phone: ${phone}\n` +
+        `E-mail: ${email}\n` +
+        `Treatment: ${treatment}\n` +
+        `Preferred date: ${date}\n` +
+        `Message: ${message || '(none)'}`;
+
+      const mailtoLink = `mailto:recepce@zelenadental.cz?subject=${encodeURIComponent('Appointment request')}&body=${encodeURIComponent(body)}`;
+
+      window.location.href = mailtoLink;
+    }
+  </script>
+</body>
+</html>

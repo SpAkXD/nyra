@@ -1,0 +1,38 @@
+{
+ "brief": "dentist",
+ "model": "claude-sonnet-5-5",
+ "lang": "html",
+ "run": 3,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 53.7,
+  "input_tokens": 2981,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 2977,
+  "output_tokens": 10000,
+  "cost_usd": 0.100306,
+  "visible_tokens": 9998,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": null,
+ "site": "sites/dentist/claude-sonnet-5-5/html-3",
+ "final_file": "raw/dentist/claude-sonnet-5-5/html-3.html",
+ "code_tokens": 9993,
+ "code_bytes": 20946,
+ "code_tokens_first": 9993,
+ "total": {
+  "input_tokens": 2981,
+  "cache_write": 0,
+  "cache_read": 2977,
+  "output_tokens": 10000,
+  "cost_usd": 0.100306,
+  "seconds": 53.7,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}

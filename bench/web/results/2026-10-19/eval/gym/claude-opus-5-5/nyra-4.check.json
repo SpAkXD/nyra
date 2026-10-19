@@ -1,0 +1,119 @@
+{
+ "url": "http://127.0.0.1:50146/gym/claude-opus-5-5/nyra-4/",
+ "score": 0.9444444444444444,
+ "passed": 17,
+ "total": 18,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "counters",
+   "name": "counters end on the final number",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "filter",
+   "name": "day filter shows the right classes",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "toggle",
+   "name": "monthly/yearly switch changes the prices",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "lb_open",
+   "name": "lightbox opens on click",
+   "pass": true,
+   "detail": "lightbox shows image 0"
+  },
+  {
+   "id": "lb_nav",
+   "name": "lightbox next/previous buttons",
+   "pass": true,
+   "detail": "next button true -> image 1, previous button true -> image 0"
+  },
+  {
+   "id": "lb_close",
+   "name": "lightbox closes with its button",
+   "pass": true,
+   "detail": "close button true, lightbox still showing image -1"
+  },
+  {
+   "id": "lb_keys",
+   "name": "lightbox keyboard: arrows move, Escape closes",
+   "pass": true,
+   "detail": "open 0, ArrowRight 1, ArrowLeft 0, Escape closed"
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": false,
+   "detail": "body lacks Jana Testová, jana.testova@example.com, +420 777 123 456, Personal training, Testing the form, please ignore. (body: \"\") [1 mailto navigation(s), last: mailto:hello@forgefitness.cz?subject=Free%20trial%20request?body=Testing%20the%20form%2C%20please%20ignore.%0A%0A%E2%80%94%0AJana%20Testov%C3%A1%0Ajana.testova%]"
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "csp_violations": [],
+ "checker_notes": []
+}

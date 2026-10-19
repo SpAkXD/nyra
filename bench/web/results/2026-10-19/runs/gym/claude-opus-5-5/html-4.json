@@ -1,0 +1,38 @@
+{
+ "brief": "gym",
+ "model": "claude-opus-5-5",
+ "lang": "html",
+ "run": 4,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 203.2,
+  "input_tokens": 2975,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 2971,
+  "output_tokens": 28372,
+  "cost_usd": 0.56805,
+  "visible_tokens": 26713,
+  "thinking_tokens_est": 1659
+ },
+ "builds_first": null,
+ "site": "sites/gym/claude-opus-5-5/html-4",
+ "final_file": "raw/gym/claude-opus-5-5/html-4.html",
+ "code_tokens": 26708,
+ "code_bytes": 59784,
+ "code_tokens_first": 26708,
+ "total": {
+  "input_tokens": 2975,
+  "cache_write": 0,
+  "cache_read": 2971,
+  "output_tokens": 28372,
+  "cost_usd": 0.56805,
+  "seconds": 203.2,
+  "thinking_tokens_est": 1659,
+  "calls": 1
+ }
+}

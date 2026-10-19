@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-opus-5-5/nyra-3/",
+ "runs": 3,
+ "fcp_ms": 684,
+ "lcp_ms": 684,
+ "cls": 0,
+ "load_ms": 726,
+ "kb": 317,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 5.7,
+  "Stylesheet": 9.8,
+  "Script": 16.5,
+  "Image": 107.3,
+  "Font": 177.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  2884,
+  548,
+  684
+ ]
+}

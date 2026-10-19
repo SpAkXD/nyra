@@ -1,0 +1,113 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-haiku-4-5-20251001/html-2/",
+ "score": 0.8235294117647058,
+ "passed": 14,
+ "total": 17,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "map",
+   "name": "map embed shows",
+   "pass": true,
+   "detail": "size 476x745, visible true, frame loaded true (https://www.openstreetmap.org/export/embed.html?bbox=17.2459%2C49.5913%2C17.2559%2C49.5963&layer=mapnik&marker=49.5938%2)"
+  },
+  {
+   "id": "counters",
+   "name": "counters end on the final number",
+   "pass": false,
+   "detail": "patients shows \"193 patients\""
+  },
+  {
+   "id": "badge_open",
+   "name": "live badge says \"Open now\" while open",
+   "pass": true,
+   "detail": "\"Open now\" visible true, \"Closed now\" visible false"
+  },
+  {
+   "id": "today",
+   "name": "today's row highlighted",
+   "pass": false,
+   "detail": "the row of Wednesday looks like the row of Monday"
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "faq",
+   "name": "FAQ items open and close",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "badge_closed",
+   "name": "live badge says \"Closed now\" while closed",
+   "pass": true,
+   "detail": "\"Closed now\" visible true, \"Open now\" visible false"
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": false,
+   "detail": "28 animations, e.g. CSSTransition transform 600 ms, CSSTransition transform 800 ms, CSSTransition transform 300 ms"
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "csp_violations": [],
+ "checker_notes": []
+}

@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-sonnet-5-5/nyra-3/",
+ "runs": 3,
+ "fcp_ms": 600,
+ "lcp_ms": 600,
+ "cls": 0,
+ "load_ms": 565,
+ "kb": 314.9,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 5.4,
+  "Stylesheet": 9.8,
+  "Script": 14.7,
+  "Image": 107.3,
+  "Font": 177.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  604,
+  588,
+  600
+ ]
+}

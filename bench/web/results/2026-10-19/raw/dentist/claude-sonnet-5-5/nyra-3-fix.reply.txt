@@ -1,0 +1,123 @@
+```nyra
+use web
+site("Zelená Dental", primary: "#0F766E", accent: "#F59E0B", bg: "#F7FAF9", font: "Inter", display: "Outfit", radius: 16, style: "soft", lang: "en", tz: "Europe/Prague")
+
+let openRows = [("Monday", "1 8:00-18:00"), ("Tuesday", "2 8:00-18:00"), ("Wednesday", "3 8:00-18:00"), ("Thursday", "4 8:00-18:00"), ("Friday", "5 8:00-14:00"), ("Saturday", ""), ("Sunday", "")]
+
+let services = [
+    ("Check-ups", "A thorough exam every six months, with digital X-rays only when needed.", "stethoscope"),
+    ("Dental hygiene", "Scaling, polishing and airflow cleaning by our hygienist.", "sparkles"),
+    ("Fillings", "Tooth-coloured composite fillings that last.", "shield-check"),
+    ("Whitening", "Safe in-office or at-home whitening for a brighter smile.", "sun"),
+    ("Children's dentistry", "Calm first visits and sealants for kids from 3 years.", "smile"),
+    ("Emergency care", "Toothache? Call before 10 a.m. and we will see you the same day.", "phone-call")
+]
+
+let team = [
+    ("Dr. Petra Zelená", "Dentist, founder", "Twenty years of practice and a soft spot for nervous patients.", "https://picsum.photos/seed/zelena-team-1/600/600"),
+    ("Dr. Martin Kovář", "Dentist", "Fillings, root canals and crowns, done carefully and explained clearly.", "https://picsum.photos/seed/zelena-team-2/600/600"),
+    ("Lucie Horáková", "Dental hygienist", "Makes cleanings painless and teaches the tricks that keep teeth healthy.", "https://picsum.photos/seed/zelena-team-3/600/600"),
+    ("Eva Šimková", "Receptionist", "Finds you a time that works and answers every question about insurance.", "https://picsum.photos/seed/zelena-team-4/600/600")
+]
+
+let priceRows = [
+    ["Check-up (insured)", "0 Kč"],
+    ["Check-up (self-paying)", "900 Kč"],
+    ["Dental hygiene", "1,600 Kč"],
+    ["Composite filling", "from 1,900 Kč"],
+    ["Root canal treatment", "from 4,500 Kč"],
+    ["In-office whitening", "6,900 Kč"],
+    ["Children's check-up", "0 Kč"],
+    ["Emergency visit", "1,200 Kč"]
+]
+
+let faqs = [
+    ("Do you accept new patients?", "Yes. We accept new adult patients and children from 3 years. Book a first check-up with the form above."),
+    ("Which insurance companies do you work with?", "All Czech public health insurers, including VZP, ČPZP and OZP."),
+    ("What should I bring to my first visit?", "Your insurance card, an ID and a list of any medicines you take."),
+    ("Does dental hygiene hurt?", "Usually not. If your gums are sensitive, we use a numbing gel at no extra cost."),
+    ("How do I cancel an appointment?", "Call us at least 24 hours ahead so that someone else can take your time.")
+]
+
+var openFaq = -1
+enum Msg { Toggle(int) }
+fn update(m: Msg) {
+    match m {
+        Msg.Toggle(i) => openFaq = if openFaq == i { -1 } else { i }
+    }
+}
+
+fn faqList() -> Node = stack {
+    for i, f in faqs {
+        button(f.0, on: Msg.Toggle(i), active: openFaq == i, style: "outline", icon: if openFaq == i { "chevron-up" } else { "chevron-down" })
+        if openFaq == i {
+            p(f.1)
+        }
+    }
+}
+
+page("/", "Zelená Dental – gentle dentistry in Olomouc", desc: "Family dental practice on Horní náměstí in Olomouc: check-ups, hygiene, fillings, whitening and children's dentistry. New patients welcome.") {
+    navbar("Zelená Dental", [("Services", "#services"), ("Team", "#team"), ("Prices", "#prices"), ("FAQ", "#faq"), ("Contact", "#contact")], cta: ("Book a visit", "#booking"))
+    hero("Gentle dentistry for the whole family", kicker: "Olomouc · Horní náměstí 21", text: "Check-ups, hygiene and modern treatment without the stress. New patients welcome, children from 3 years.", image: "https://picsum.photos/seed/zelena-hero/1600/1000", alt: "The bright treatment room of Zelená Dental", buttons: [("Book a visit", "#booking"), ("See prices", "#prices")], badge: openRows, anim: "rise")
+    section("numbers", "", bg: "white", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            stat("15", "years in Olomouc")
+            stat("4,800", "patients")
+            stat("98 %", "would recommend us")
+        }
+    }
+    section("services", "Care for every smile", kicker: "What we do", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            for s in services {
+                card(s.0, s.1, icon: s.2)
+            }
+        }
+    }
+    section("team", "People who take their time", kicker: "Our team", bg: "alt", anim: "rise") {
+        grid(4, anim: "stagger", hover: "lift") {
+            for t in team {
+                card(t.0, t.2, image: t.3, alt: t.0, tag: t.1)
+            }
+        }
+    }
+    section("prices", "Clear prices, no surprises", kicker: "Prices", text: "Prices in CZK. Check-ups are covered by public health insurance.", anim: "rise") {
+        table(priceRows, head: ["Treatment", "Price"])
+    }
+    section("testimonials", "What our patients say", bg: "alt", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            quote("I used to dread the dentist. Here I actually relax.", "Jana P.")
+            quote("They fitted in my son the same morning he broke a tooth.", "Tomáš R.")
+            quote("Clear prices and a hygienist who really knows her job.", "Markéta V.")
+        }
+    }
+    section("booking", "Request an appointment", kicker: "Book a visit", text: "Send us your request and we will call you back within one working day to confirm the time.", anim: "rise") {
+        form("Request an appointment", mailto: "recepce@zelenadental.cz") {
+            field("name", "Name", type: "text", req: true)
+            field("phone", "Phone", type: "tel", req: true)
+            field("email", "E-mail", type: "email", req: true)
+            field("treatment", "Treatment", type: "select", req: true, options: ["Check-up", "Dental hygiene", "Filling", "Whitening", "Children's check-up", "Emergency"])
+            field("date", "Preferred date", type: "date", req: true)
+            field("message", "Message", type: "area")
+            button("Send request", style: "primary")
+        }
+    }
+    section("faq", "Questions we hear often", kicker: "FAQ", bg: "alt", anim: "rise") {
+        faqList()
+    }
+    section("contact", "Find us on the main square", kicker: "Contact", anim: "rise") {
+        grid(2, anim: "stagger") {
+            stack {
+                hours(openRows)
+                address {
+                    "Horní náměstí 21, 779 00 Olomouc"
+                    link("Open in Google Maps", "https://maps.google.com/?q=Horní+náměstí+21,+Olomouc")
+                    link("+420 585 000 321", "tel:+420585000321")
+                    link("recepce@zelenadental.cz", "mailto:recepce@zelenadental.cz")
+                }
+            }
+            embed("https://www.openstreetmap.org/export/embed.html?bbox=17.2459%2C49.5913%2C17.2559%2C49.5963&layer=mapnik&marker=49.5938%2C17.2509", "Map of Zelená Dental")
+        }
+    }
+    footer(text: "© 2026 Zelená Dental s.r.o.", links: [("Services", "#services"), ("Team", "#team"), ("Prices", "#prices"), ("FAQ", "#faq"), ("Contact", "#contact")], contact: ["Zelená Dental", "Horní náměstí 21, 779 00 Olomouc"])
+}
+```

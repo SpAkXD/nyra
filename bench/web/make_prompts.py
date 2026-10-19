@@ -1,12 +1,14 @@
 """Writes the two prompts of the web A/B test from one brief, so they differ only in the language.
 
-    python bench/web/make_prompts.py
+    python bench/web/make_prompts.py                        # brief.md -> prompt_html.md, prompt_nyra.md (here)
+    python bench/web/make_prompts.py briefs/dentist.md      # -> prompts/dentist/prompt_html.md, prompt_nyra.md
 
 prompt_html.md: the brief + "write one site.html". prompt_nyra.md: the brief + the two Nyra cards + "write one
 site.nyra". Paste either into a chat with any model; the answer is one file.
 """
 import pathlib
 import re
+import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -20,7 +22,9 @@ def card(name: str) -> str:
     return COMMENT.sub("", path.read_text(encoding="utf-8")).strip()
 
 
-brief = (HERE / "brief.md").read_text(encoding="utf-8").strip()
+BRIEF = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else HERE / "brief.md"
+OUT = HERE if BRIEF == HERE / "brief.md" else HERE / "prompts" / BRIEF.stem
+brief = BRIEF.read_text(encoding="utf-8").strip()
 
 html = f"""You are a senior front-end developer. Build the website described below as **one single file, `site.html`**, that works when opened directly in a browser.
 
@@ -65,6 +69,7 @@ You have not seen Nyra before. Everything you need is in the two reference cards
 Reply with the complete `site.nyra` in one code block and nothing else: no explanation before or after, no "rest of the code here" placeholders.
 """
 
-(HERE / "prompt_html.md").write_text(html, encoding="utf-8", newline="\n")
-(HERE / "prompt_nyra.md").write_text(nyra, encoding="utf-8", newline="\n")
-print(f"prompt_html.md {len(html)} chars, prompt_nyra.md {len(nyra)} chars")
+OUT.mkdir(parents=True, exist_ok=True)
+(OUT / "prompt_html.md").write_text(html, encoding="utf-8", newline="\n")
+(OUT / "prompt_nyra.md").write_text(nyra, encoding="utf-8", newline="\n")
+print(f"{OUT.relative_to(HERE)}: prompt_html.md {len(html)} chars, prompt_nyra.md {len(nyra)} chars")

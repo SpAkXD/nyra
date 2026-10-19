@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-opus-5-5/html-4/",
+ "runs": 3,
+ "fcp_ms": 600,
+ "lcp_ms": 636,
+ "cls": 0,
+ "load_ms": 582,
+ "kb": 469.1,
+ "requests": 14,
+ "kb_by_type_first_run": {
+  "Document": 13.8,
+  "Stylesheet": 1.2,
+  "Image": 276.3,
+  "Font": 177.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  616,
+  644,
+  636
+ ]
+}

@@ -1,0 +1,1664 @@
+```html
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.">
+  <title>Forge Fitness Studio – strength, conditioning and yoga in Brno</title>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #111315;
+      color: #F2F2F0;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Animations */
+    @media (prefers-reduced-motion: no-preference) {
+      @keyframes slideInUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes slideInLeft {
+        from {
+          opacity: 0;
+          transform: translateX(-30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes countUp {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background-color: rgba(17, 19, 21, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(228, 87, 46, 0.1);
+      padding: 1rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #E4572E;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: #F2F2F0;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus {
+      color: #E4572E;
+      outline: none;
+    }
+
+    .nav-button {
+      background-color: #E4572E;
+      color: #111315;
+      border: none;
+      padding: 0.6rem 1.4rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    .nav-button:hover,
+    .nav-button:focus {
+      background-color: #F3C969;
+      transform: translateY(-2px);
+      outline: none;
+    }
+
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+
+    .menu-toggle:focus {
+      outline: 2px solid #E4572E;
+      outline-offset: 2px;
+    }
+
+    /* Mobile menu */
+    .nav-links.active {
+      display: flex;
+    }
+
+    @media (max-width: 768px) {
+      .menu-toggle {
+        display: block;
+      }
+
+      .nav-links {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: rgba(27, 30, 34, 0.98);
+        flex-direction: column;
+        gap: 0;
+        display: none;
+        padding: 1rem;
+        border-bottom: 1px solid rgba(228, 87, 46, 0.1);
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .nav-links a {
+        padding: 0.75rem;
+        border-radius: 6px;
+      }
+
+      .nav-links a:hover {
+        background-color: rgba(228, 87, 46, 0.1);
+      }
+
+      .nav-button {
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      height: 100vh;
+      background-image: url('https://picsum.photos/seed/forge-hero/1600/1000');
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #F2F2F0;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(17, 19, 21, 0.7) 0%, rgba(27, 30, 34, 0.5) 100%);
+      z-index: 1;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 700px;
+      padding: 2rem;
+    }
+
+    .hero-kicker {
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #F3C969;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero-kicker {
+        animation: slideInUp 0.8s ease forwards;
+      }
+    }
+
+    .hero-title {
+      font-family: 'Archivo', sans-serif;
+      font-size: clamp(2.5rem, 8vw, 4rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero-title {
+        animation: slideInUp 0.8s ease 0.2s forwards;
+        opacity: 0;
+      }
+    }
+
+    .hero-text {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      color: rgba(242, 242, 240, 0.9);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero-text {
+        animation: slideInUp 0.8s ease 0.4s forwards;
+        opacity: 0;
+      }
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero-buttons {
+        animation: slideInUp 0.8s ease 0.6s forwards;
+        opacity: 0;
+      }
+    }
+
+    .btn {
+      padding: 0.85rem 2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      border: 2px solid transparent;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-primary {
+      background-color: #E4572E;
+      color: #111315;
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus {
+      background-color: #F3C969;
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(228, 87, 46, 0.3);
+      outline: none;
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: #F2F2F0;
+      border-color: #F2F2F0;
+    }
+
+    .btn-secondary:hover,
+    .btn-secondary:focus {
+      background-color: rgba(228, 87, 46, 0.2);
+      border-color: #E4572E;
+      color: #F3C969;
+      transform: translateY(-3px);
+      outline: none;
+    }
+
+    /* Section styles */
+    section {
+      padding: 5rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-kicker {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #F3C969;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-title {
+      font-family: 'Archivo', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: rgba(242, 242, 240, 0.8);
+      margin-bottom: 2rem;
+    }
+
+    /* Numbers section */
+    .numbers {
+      background-color: #1B1E22;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+    }
+
+    .number-item {
+      text-align: center;
+    }
+
+    .number-value {
+      font-family: 'Archivo', sans-serif;
+      font-size: 3rem;
+      font-weight: 700;
+      color: #E4572E;
+      margin-bottom: 0.5rem;
+    }
+
+    .number-label {
+      font-size: 0.95rem;
+      color: rgba(242, 242, 240, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Classes section */
+    .filter-buttons {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.6rem 1.2rem;
+      border: 2px solid rgba(228, 87, 46, 0.3);
+      background-color: transparent;
+      color: #F2F2F0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .filter-btn:hover,
+    .filter-btn:focus {
+      border-color: #E4572E;
+      color: #E4572E;
+      outline: none;
+    }
+
+    .filter-btn.active {
+      background-color: #E4572E;
+      border-color: #E4572E;
+      color: #111315;
+    }
+
+    .classes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .class-card {
+      background-color: #1B1E22;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+      border-radius: 12px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .class-card {
+        animation: slideInUp 0.6s ease forwards;
+        opacity: 0;
+      }
+    }
+
+    .class-card:hover {
+      border-color: rgba(228, 87, 46, 0.3);
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(228, 87, 46, 0.1);
+    }
+
+    .class-day {
+      font-size: 0.85rem;
+      color: #F3C969;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .class-time {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .class-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .class-coach {
+      font-size: 0.9rem;
+      color: rgba(242, 242, 240, 0.8);
+      margin-bottom: 0.5rem;
+    }
+
+    .class-level {
+      display: inline-block;
+      font-size: 0.8rem;
+      color: #111315;
+      background-color: rgba(243, 201, 105, 0.2);
+      padding: 0.3rem 0.8rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .class-card.hidden {
+      display: none;
+    }
+
+    /* Trainers section */
+    .trainers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .trainer-card {
+      background-color: #1B1E22;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .trainer-card {
+        animation: slideInUp 0.6s ease forwards;
+        opacity: 0;
+      }
+    }
+
+    .trainer-card:hover {
+      border-color: rgba(228, 87, 46, 0.3);
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(228, 87, 46, 0.1);
+    }
+
+    .trainer-image {
+      width: 100%;
+      height: 300px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .trainer-info {
+      padding: 2rem;
+    }
+
+    .trainer-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    .trainer-specialty {
+      font-size: 0.9rem;
+      color: #F3C969;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .trainer-bio {
+      font-size: 0.95rem;
+      color: rgba(242, 242, 240, 0.8);
+      line-height: 1.5;
+    }
+
+    /* Membership section */
+    .membership-toggle {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 3rem;
+      width: fit-content;
+    }
+
+    .toggle-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 60px;
+      height: 30px;
+      background-color: rgba(228, 87, 46, 0.3);
+      border-radius: 15px;
+      cursor: pointer;
+      border: 2px solid rgba(228, 87, 46, 0.5);
+      transition: all 0.3s ease;
+    }
+
+    .toggle-switch.active {
+      background-color: #E4572E;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 22px;
+      height: 22px;
+      background-color: #F2F2F0;
+      border-radius: 50%;
+      transition: left 0.3s ease;
+    }
+
+    .toggle-switch.active .toggle-slider {
+      left: 30px;
+    }
+
+    .membership-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .plan-card {
+      background-color: #1B1E22;
+      border: 2px solid rgba(228, 87, 46, 0.1);
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .plan-card {
+        animation: slideInUp 0.6s ease forwards;
+        opacity: 0;
+      }
+    }
+
+    .plan-card.popular {
+      border-color: #E4572E;
+      background: linear-gradient(135deg, rgba(228, 87, 46, 0.1) 0%, rgba(27, 30, 34, 0) 100%);
+      transform: scale(1.05);
+    }
+
+    .plan-card:hover:not(.popular),
+    .plan-card.popular:hover {
+      border-color: rgba(228, 87, 46, 0.5);
+      transform: translateY(-8px) scale(1);
+      box-shadow: 0 20px 40px rgba(228, 87, 46, 0.15);
+    }
+
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #E4572E;
+      color: #111315;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .plan-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .plan-price {
+      font-family: 'Archivo', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #E4572E;
+      margin-bottom: 0.25rem;
+    }
+
+    .plan-period {
+      font-size: 0.9rem;
+      color: rgba(242, 242, 240, 0.6);
+      margin-bottom: 2rem;
+    }
+
+    .plan-features {
+      list-style: none;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+
+    .plan-features li {
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(228, 87, 46, 0.1);
+      font-size: 0.95rem;
+      color: rgba(242, 242, 240, 0.8);
+    }
+
+    .plan-features li:last-child {
+      border-bottom: none;
+    }
+
+    /* Testimonials section */
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .testimonial-card {
+      background-color: #1B1E22;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+      border-radius: 12px;
+      padding: 2rem;
+      border-left: 4px solid #E4572E;
+      transition: all 0.3s ease;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .testimonial-card {
+        animation: slideInUp 0.6s ease forwards;
+        opacity: 0;
+      }
+    }
+
+    .testimonial-card:hover {
+      border-color: rgba(228, 87, 46, 0.3);
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(228, 87, 46, 0.1);
+    }
+
+    .testimonial-text {
+      font-size: 1.05rem;
+      font-style: italic;
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+
+    .testimonial-author {
+      font-weight: 600;
+      color: #F3C969;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    /* Gallery section */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .gallery-item {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      aspect-ratio: 4 / 3;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .gallery-item:hover {
+      border-color: rgba(228, 87, 46, 0.3);
+      transform: translateY(-8px);
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .gallery-item::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(228, 87, 46, 0);
+      transition: background 0.3s ease;
+    }
+
+    .gallery-item:hover::after {
+      background: rgba(228, 87, 46, 0.2);
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(17, 19, 21, 0.95);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      position: relative;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox-image {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 2rem;
+      cursor: pointer;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.3s ease;
+    }
+
+    .lightbox-close:hover,
+    .lightbox-close:focus {
+      color: #E4572E;
+      outline: none;
+    }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 1rem;
+      transition: color 0.3s ease;
+      z-index: 2001;
+    }
+
+    .lightbox-nav:hover,
+    .lightbox-nav:focus {
+      color: #E4572E;
+      outline: none;
+    }
+
+    .lightbox-prev {
+      left: 20px;
+    }
+
+    .lightbox-next {
+      right: 20px;
+    }
+
+    /* Contact section */
+    .contact-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .contact-item h3 {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .contact-item p {
+      margin-bottom: 0.5rem;
+      color: rgba(242, 242, 240, 0.8);
+    }
+
+    .contact-item a {
+      color: #E4572E;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .contact-item a:hover,
+    .contact-item a:focus {
+      color: #F3C969;
+      outline: none;
+    }
+
+    .contact-form {
+      background-color: #1B1E22;
+      border: 1px solid rgba(228, 87, 46, 0.1);
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 600px;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: rgba(242, 242, 240, 0.05);
+      border: 1px solid rgba(228, 87, 46, 0.2);
+      border-radius: 6px;
+      color: #F2F2F0;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      background-color: rgba(242, 242, 240, 0.08);
+      border-color: #E4572E;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(228, 87, 46, 0.1);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-submit {
+      background-color: #E4572E;
+      color: #111315;
+      border: none;
+      padding: 0.85rem 2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+
+    .form-submit:hover,
+    .form-submit:focus {
+      background-color: #F3C969;
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(228, 87, 46, 0.3);
+      outline: none;
+    }
+
+    /* Footer */
+    footer {
+      background-color: #1B1E22;
+      border-top: 1px solid rgba(228, 87, 46, 0.1);
+      padding: 3rem 2rem;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .footer-section h3 {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .footer-section ul {
+      list-style: none;
+    }
+
+    .footer-section ul li {
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-section a {
+      color: rgba(242, 242, 240, 0.8);
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .footer-section a:hover,
+    .footer-section a:focus {
+      color: #E4572E;
+      outline: none;
+    }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(228, 87, 46, 0.1);
+      padding-top: 2rem;
+      text-align: center;
+      color: rgba(242, 242, 240, 0.6);
+      font-size: 0.9rem;
+    }
+
+    /* Intersection Observer animations */
+    .fade-in {
+      opacity: 0;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-in.in-view {
+        animation: slideInUp 0.6s ease forwards;
+      }
+
+      .fade-in.in-view:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+
+      .fade-in.in-view:nth-child(3) {
+        animation-delay: 0.2s;
+      }
+
+      .fade-in.in-view:nth-child(4) {
+        animation-delay: 0.3s;
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      section {
+        padding: 3rem 1.5rem;
+      }
+
+      .section-title {
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+      }
+
+      .hero-buttons {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+        text-align: center;
+      }
+
+      .membership-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .plan-card.popular {
+        transform: scale(1);
+      }
+
+      .contact-form {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-container">
+      <div class="nav-brand">Forge Fitness</div>
+      <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#classes">Classes</a></li>
+        <li><a href="#trainers">Trainers</a></li>
+        <li><a href="#membership">Membership</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#contact" class="nav-button">Free trial</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-kicker">Brno · Veveří 54 · since 2016</div>
+      <h1 class="hero-title">Train hard. Feel at home.</h1>
+      <p class="hero-text">Strength, conditioning and yoga classes in small groups, with coaches who know your name.</p>
+      <div class="hero-buttons">
+        <a href="#classes" class="btn btn-primary">See the schedule</a>
+        <a href="#contact" class="btn btn-secondary">Free trial</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Numbers -->
+  <section>
+    <div class="numbers">
+      <div class="number-item">
+        <div class="number-value" data-target="12">0</div>
+        <div class="number-label">Coaches</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="45">0</div>
+        <div class="number-label">Classes a week</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="2300">0</div>
+        <div class="number-label">Members</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value">6 a.m.</div>
+        <div class="number-label">First class</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Classes -->
+  <section id="classes">
+    <div class="section-kicker">Schedule</div>
+    <h2 class="section-title">Classes this week</h2>
+    <p class="section-subtitle">Book through the app or at the front desk. Max 12 people per class.</p>
+
+    <div class="filter-buttons">
+      <button class="filter-btn active" data-day="all">All</button>
+      <button class="filter-btn" data-day="Mon">Mon</button>
+      <button class="filter-btn" data-day="Tue">Tue</button>
+      <button class="filter-btn" data-day="Wed">Wed</button>
+      <button class="filter-btn" data-day="Thu">Thu</button>
+      <button class="filter-btn" data-day="Fri">Fri</button>
+      <button class="filter-btn" data-day="Sat">Sat</button>
+    </div>
+
+    <div class="classes-grid" id="classesGrid">
+      <!-- Classes will be populated by JS -->
+    </div>
+  </section>
+
+  <!-- Trainers -->
+  <section id="trainers">
+    <div class="section-kicker">Coaches</div>
+    <h2 class="section-title">Meet the team</h2>
+    <div class="trainers-grid" id="trainersGrid">
+      <!-- Trainers will be populated by JS -->
+    </div>
+  </section>
+
+  <!-- Membership -->
+  <section id="membership">
+    <div class="section-kicker">Membership</div>
+    <h2 class="section-title">Pick your plan</h2>
+
+    <div class="membership-toggle">
+      <span class="toggle-label">Monthly</span>
+      <div class="toggle-switch active" id="membershipToggle">
+        <div class="toggle-slider"></div>
+      </div>
+      <span class="toggle-label">Yearly</span>
+    </div>
+
+    <div class="membership-grid" id="membershipGrid">
+      <!-- Plans will be populated by JS -->
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section>
+    <h2 class="section-title">Members say</h2>
+    <div class="testimonials-grid" id="testimonialsGrid">
+      <!-- Testimonials will be populated by JS -->
+    </div>
+  </section>
+
+  <!-- Gallery -->
+  <section id="gallery">
+    <div class="section-kicker">Gallery</div>
+    <h2 class="section-title">Inside the studio</h2>
+    <div class="gallery-grid" id="galleryGrid">
+      <!-- Gallery will be populated by JS -->
+    </div>
+  </section>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <div class="lightbox-content">
+      <img src="" alt="" class="lightbox-image" id="lightboxImage">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close gallery">✕</button>
+      <button class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Previous image">‹</button>
+      <button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next image">›</button>
+    </div>
+  </div>
+
+  <!-- Contact -->
+  <section id="contact">
+    <div class="section-kicker">Contact</div>
+    <h2 class="section-title">Come for a free trial</h2>
+
+    <div class="contact-info">
+      <div class="contact-item">
+        <h3>Address</h3>
+        <p>Veveří 54, 602 00 Brno</p>
+        <p><a href="https://maps.google.com/?q=Veveří+54,+Brno" target="_blank">Open in Google Maps</a></p>
+      </div>
+
+      <div class="contact-item">
+        <h3>Get in touch</h3>
+        <p><a href="tel:+420541000777">+420 541 000 777</a></p>
+        <p><a href="mailto:hello@forgefitness.cz">hello@forgefitness.cz</a></p>
+      </div>
+
+      <div class="contact-item">
+        <h3>Hours</h3>
+        <p>Mon–Fri: 6:00–22:00</p>
+        <p>Sat–Sun: 8:00–20:00</p>
+      </div>
+    </div>
+
+    <form class="contact-form" id="contactForm">
+      <div class="form-group">
+        <label for="name">Name *</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">E-mail *</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone" name="phone">
+      </div>
+
+      <div class="form-group">
+        <label for="interested">Interested in *</label>
+        <select id="interested" name="interested" required>
+          <option value="">Select an option</option>
+          <option value="Free trial">Free trial</option>
+          <option value="Membership">Membership</option>
+          <option value="Personal training">Personal training</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="message">Message *</label>
+        <textarea id="message" name="message" required></textarea>
+      </div>
+
+      <button type="submit" class="form-submit">Send</button>
+    </form>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>Forge Fitness Studio</h3>
+        <p>Veveří 54, 602 00 Brno</p>
+      </div>
+
+      <div class="footer-section">
+        <h3>Navigation</h3>
+        <ul>
+          <li><a href="#classes">Classes</a></li>
+          <li><a href="#trainers">Trainers</a></li>
+          <li><a href="#membership">Membership</a></li>
+          <li><a href="#gallery">Gallery</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      © 2026 Forge Fitness Studio
+    </div>
+  </footer>
+
+  <script>
+    // Mobile menu
+    const menuToggle = document.getElementById('menuToggle');
+    const navLinks = document.getElementById('navLinks');
+
+    menuToggle.addEventListener('click', () => {
+      navLinks.classList.toggle('active');
+    });
+
+    // Close mobile menu when link is clicked
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('active');
+      });
+    });
+
+    // Classes data
+    const classesData = [
+      { day: 'Mon', time: '6:00', name: 'Sunrise Strength', coach: 'Coach Adam', level: 'All levels' },
+      { day: 'Mon', time: '18:00', name: 'Kettlebell Basics', coach: 'Coach Klára', level: 'Beginner' },
+      { day: 'Tue', time: '7:00', name: 'Mobility Flow', coach: 'Coach Tereza', level: 'All levels' },
+      { day: 'Tue', time: '19:00', name: 'Power Circuit', coach: 'Coach Ondřej', level: 'Advanced' },
+      { day: 'Wed', time: '6:00', name: 'Engine Builder', coach: 'Coach Adam', level: 'Intermediate' },
+      { day: 'Wed', time: '17:30', name: 'Vinyasa Yoga', coach: 'Coach Tereza', level: 'All levels' },
+      { day: 'Thu', time: '7:00', name: 'Olympic Lifting', coach: 'Coach Ondřej', level: 'Advanced' },
+      { day: 'Thu', time: '18:30', name: 'Core & Conditioning', coach: 'Coach Klára', level: 'Intermediate' },
+      { day: 'Fri', time: '6:00', name: 'Friday Burn', coach: 'Coach Adam', level: 'Intermediate' },
+      { day: 'Fri', time: '17:00', name: 'Stretch & Restore', coach: 'Coach Tereza', level: 'Beginner' },
+      { day: 'Sat', time: '9:00', name: 'Team WOD', coach: 'Coach Ondřej', level: 'All levels' },
+      { day: 'Sat', time: '10:30', name: 'Weekend Yoga', coach: 'Coach Tereza', level: 'Beginner' }
+    ];
+
+    // Populate classes
+    function renderClasses(filter = 'all') {
+      const grid = document.getElementById('classesGrid');
+      grid.innerHTML = '';
+
+      const filtered = filter === 'all' 
+        ? classesData 
+        : classesData.filter(c => c.day === filter);
+
+      filtered.forEach((cls, index) => {
+        const card = document.createElement('div');
+        card.className = 'class-card fade-in';
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.innerHTML = `
+          <div class="class-day">${cls.day}</div>
+          <div class="class-time">${cls.time}</div>
+          <div class="class-name">${cls.name}</div>
+          <div class="class-coach">${cls.coach}</div>
+          <span class="class-level">${cls.level}</span>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Trigger observer for new elements
+      observeElements();
+    }
+
+    // Class filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderClasses(btn.dataset.day);
+      });
+    });
+
+    renderClasses();
+
+    // Trainers data
+    const trainersData = [
+      {
+        name: 'Adam Novotný',
+        specialty: 'Strength & conditioning',
+        bio: 'Former rower who builds engines that last.',
+        photo: 'https://picsum.photos/seed/forge-coach-1/600/700'
+      },
+      {
+        name: 'Klára Benešová',
+        specialty: 'Kettlebells & core',
+        bio: 'Turns nervous beginners into confident lifters.',
+        photo: 'https://picsum.photos/seed/forge-coach-2/600/700'
+      },
+      {
+        name: 'Tereza Malá',
+        specialty: 'Yoga & mobility',
+        bio: 'Helps you move better so you can train longer.',
+        photo: 'https://picsum.photos/seed/forge-coach-3/600/700'
+      },
+      {
+        name: 'Ondřej Černý',
+        specialty: 'Olympic lifting',
+        bio: 'National-level lifter with an eye for technique.',
+        photo: 'https://picsum.photos/seed/forge-coach-4/600/700'
+      }
+    ];
+
+    // Populate trainers
+    const trainersGrid = document.getElementById('trainersGrid');
+    trainersData.forEach((trainer, index) => {
+      const card = document.createElement('div');
+      card.className = 'trainer-card fade-in';
+      card.style.animationDelay = `${index * 0.1}s`;
+      card.innerHTML = `
+        <img src="${trainer.photo}" alt="${trainer.name}" class="trainer-image">
+        <div class="trainer-info">
+          <h3 class="trainer-name">${trainer.name}</h3>
+          <p class="trainer-specialty">${trainer.specialty}</p>
+          <p class="trainer-bio">${trainer.bio}</p>
+        </div>
+      `;
+      trainersGrid.appendChild(card);
+    });
+
+    // Membership data
+    const plansData = [
+      {
+        name: 'Basic',
+        monthly: 790,
+        yearly: 7900,
+        features: ['Gym floor access', '2 classes a week', 'App booking'],
+        popular: false
+      },
+      {
+        name: 'Unlimited',
+        monthly: 1290,
+        yearly: 12900,
+        features: ['Gym floor access', 'Unlimited classes', 'App booking', '1 coaching session a month'],
+        popular: true
+      },
+      {
+        name: 'Premium',
+        monthly: 1990,
+        yearly: 19900,
+        features: ['Everything in Unlimited', 'Weekly personal training', 'Towel and locker service'],
+        popular: false
+      }
+    ];
+
+    let isYearly = false;
+
+    function renderPlans() {
+      const grid = document.getElementById('membershipGrid');
+      grid.innerHTML = '';
+
+      plansData.forEach((plan, index) => {
+        const price = isYearly ? plan.yearly : plan.monthly;
+        const period = isYearly ? 'year' : 'month';
+        const badge = plan.popular ? '<div class="plan-badge">Most popular</div>' : '';
+        const features = plan.features.map(f => `<li>${f}</li>`).join('');
+
+        const card = document.createElement('div');
+        card.className = `plan-card fade-in ${plan.popular ? 'popular' : ''}`;
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.innerHTML = `
+          ${badge}
+          <h3 class="plan-name">${plan.name}</h3>
+          <div class="plan-price">${price.toLocaleString('cs-CZ')} Kč</div>
+          <p class="plan-period">per ${period}</p>
+          <ul class="plan-features">
+            ${features}
+          </ul>
+          <a href="#contact" class="btn btn-primary">Join now</a>
+        `;
+        grid.appendChild(card);
+      });
+
+      observeElements();
+    }
+
+    // Membership toggle
+    const toggle = document.getElementById('membershipToggle');
+    toggle.addEventListener('click', () => {
+      isYearly = !isYearly;
+      toggle.classList.toggle('active');
+      renderPlans();
+    });
+
+    renderPlans();
+
+    // Testimonials data
+    const testimonialsData = [
+      {
+        text: 'I came for the free trial and stayed for the people.',
+        author: 'Lenka M.'
+      },
+      {
+        text: 'Adam fixed my squat in two sessions after years of knee pain.',
+        author: 'Jakub S.'
+      },
+      {
+        text: 'The only gym where the 6 a.m. class feels like a party.',
+        author: 'Veronika D.'
+      }
+    ];
+
+    // Populate testimonials
+    const testimonialsGrid = document.getElementById('testimonialsGrid');
+    testimonialsData.forEach((testimonial, index) => {
+      const card = document.createElement('div');
+      card.className = 'testimonial-card fade-in';
+      card.style.animationDelay = `${index * 0.1}s`;
+      card.innerHTML = `
+        <p class="testimonial-text">"${testimonial.text}"</p>
+        <p class="testimonial-author">— ${testimonial.author}</p>
+      `;
+      testimonialsGrid.appendChild(card);
+    });
+
+    // Gallery data
+    const galleryData = [
+      { src: 'https://picsum.photos/seed/forge-g1/1200/800', alt: 'The main training floor' },
+      { src: 'https://picsum.photos/seed/forge-g2/1200/800', alt: 'Kettlebells lined up' },
+      { src: 'https://picsum.photos/seed/forge-g3/1200/800', alt: 'A yoga class at sunset' },
+      { src: 'https://picsum.photos/seed/forge-g4/1200/800', alt: 'Barbells and plates' },
+      { src: 'https://picsum.photos/seed/forge-g5/1200/800', alt: 'The rowing machines' },
+      { src: 'https://picsum.photos/seed/forge-g6/1200/800', alt: 'A coach helping a member' },
+      { src: 'https://picsum.photos/seed/forge-g7/1200/800', alt: 'The stretching corner' },
+      { src: 'https://picsum.photos/seed/forge-g8/1200/800', alt: 'The front desk and café' }
+    ];
+
+    // Populate gallery
+    const galleryGrid = document.getElementById('galleryGrid');
+    galleryData.forEach((item, index) => {
+      const galleryItem = document.createElement('div');
+      galleryItem.className = 'gallery-item fade-in';
+      galleryItem.style.animationDelay = `${index * 0.1}s`;
+      galleryItem.innerHTML = `<img src="${item.src}" alt="${item.alt}">`;
+      galleryItem.addEventListener('click', () => openLightbox(index));
+      galleryGrid.appendChild(galleryItem);
+    });
+
+    // Lightbox
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImage = document.getElementById('lightboxImage');
+    const lightboxClose = document.getElementById('lightboxClose');
+    const lightboxPrev = document.getElementById('lightboxPrev');
+    const lightboxNext = document.getElementById('lightboxNext');
+    let currentImageIndex = 0;
+
+    function openLightbox(index) {
+      currentImageIndex = index;
+      lightboxImage.src = galleryData[index].src;
+      lightboxImage.alt = galleryData[index].alt;
+      lightbox.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function showPrevImage() {
+      currentImageIndex = (currentImageIndex - 1 + galleryData.length) % galleryData.length;
+      lightboxImage.src = galleryData[currentImageIndex].src;
+      lightboxImage.alt = galleryData[currentImageIndex].alt;
+    }
+
+    function showNextImage() {
+      currentImageIndex = (currentImageIndex + 1) % galleryData.length;
+      lightboxImage.src = galleryData[currentImageIndex].src;
+      lightboxImage.alt = galleryData[currentImageIndex].alt;
+    }
+
+    lightboxClose.addEventListener('click', closeLightbox);
+    lightboxPrev.addEventListener('click', showPrevImage);
+    lightboxNext.addEventListener('click', showNextImage);
+
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!lightbox.classList.contains('active')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') showPrevImage();
+      if (e.key === 'ArrowRight') showNextImage();
+    });
+
+    // Contact form
+    const contactForm = document.getElementById('contactForm');
+    contactForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const phone = document.getElementById('phone').value;
+      const interested = document.getElementById('interested').value;
+      const message = document.getElementById('message').value;
+
+      const body = `Name: ${name}\nE-mail: ${email}\nPhone: ${phone}\nInterested in: ${interested}\nMessage: ${message}`;
+
+      const mailtoLink = `mailto:hello@forgefitness.cz?subject=Free trial request&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+
+      contactForm.reset();
+    });
+
+    // Number counter
+    function animateCounter() {
+      const counters = document.querySelectorAll('.number-value[data-target]');
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      counters.forEach(counter => {
+        const target = parseInt(counter.dataset.target);
+        if (prefersReducedMotion) {
+          counter.textContent = target.toLocaleString('cs-CZ');
+        } else {
+          let current = 0;
+          const increment = target / 30;
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+              counter.textContent = target.toLocaleString('cs-CZ');
+              clearInterval(timer);
+            } else {
+              counter.textContent = Math.floor(current).toLocaleString('cs-CZ');
+            }
+          }, 30);
+        }
+      });
+    }
+
+    // Intersection Observer for scroll animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          if (entry.target.classList.contains('number-value')) {
+            animateCounter();
+          } else {
+            entry.target.classList.add('in-view');
+          }
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    function observeElements() {
+      document.querySelectorAll('.fade-in, .number-value[data-target], .trainer-card, .plan-card, .testimonial-card').forEach(el => {
+        observer.observe(el);
+      });
+    }
+
+    observeElements();
+
+    // Observe numbers section
+    const numbersSection = document.querySelector('.numbers');
+    if (numbersSection) {
+      observer.observe(numbersSection);
+    }
+  </script>
+</body>
+</html>
+```
