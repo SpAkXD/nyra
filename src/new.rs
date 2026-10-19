@@ -268,29 +268,64 @@ const SITE: &str = r##"// __NAME__: a one-page website. `nyra run main.nyra` ser
 use web
 
 site("__TITLE__", desc: "A small, fast website made with Nyra.", primary: "#2F4B7C", accent: "#E07A1F",
-    font: "Inter", radius: 16)
+    display: "Fraunces", style: "soft", lang: "en")
 
-let features = [("zap", "Fast", "Plain HTML and a little CSS: every page loads at once."),
-    ("smartphone", "On every screen", "From a phone to a wide monitor, with nothing to configure."),
-    ("pencil", "Easy to change", "One short file. Edit a line, save, and the page reloads.")]
+struct Service { name: str, kind: str, text: str, icon: str }
 
-page("/", "__TITLE__") {
-    hero("__TITLE__", kicker: "Made with Nyra", text: "A one-page site you can change in minutes.",
-        buttons: [("What you get", "#features"), ("Contact", "#contact")])
-    section("features", "What you get", kicker: "Features", anim: "rise") {
-        grid(3, hover: "lift") {
-            for f in features {
-                card(f.1, f.2, icon: f.0)
-            }
+let services = [
+    Service(name: "Websites", kind: "web", text: "Fast pages that are easy to change.", icon: "monitor"),
+    Service(name: "Online shops", kind: "web", text: "A small catalog with a simple order form.", icon: "shopping-cart"),
+    Service(name: "Logos", kind: "brand", text: "A mark and colors that fit you.", icon: "palette"),
+    Service(name: "Print", kind: "brand", text: "Business cards, flyers and posters.", icon: "printer")
+]
+let kinds = [("all", "All"), ("web", "Web"), ("brand", "Brand")]
+let links = [("Services", "#services"), ("Hours", "#hours"), ("Contact", "#contact")]
+let opening = [("Monday - Friday", "1-5 9:00-17:00"), ("Saturday", "6 10:00-13:00"), ("Sunday", "")]
+
+// The filter buttons change `shown`; `services_grid()` reads it, so it updates in the browser.
+enum Msg { Show(str) }
+var shown = "all"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => shown = k
+    }
+}
+
+fn services_grid() -> Node = stack {
+    row {
+        for k in kinds {
+            button(k.1, on: Msg.Show(k.0), active: k.0 == shown)
         }
     }
-    section("contact", "Say hello", bg: "alt", width: "narrow", text: "We answer within a day.") {
-        row {
-            button("Write to us", href: "mailto:hello@example.com", icon: "mail")
-            button("Call us", href: "tel:+420777123456", style: "outline", icon: "phone")
+    grid(2, anim: "stagger", hover: "lift") {
+        for s in services.filter(x => shown == "all" || x.kind == shown) {
+            card(s.name, s.text, icon: s.icon)
         }
     }
-    footer(text: "Made with [Nyra](https://nyralang.dev)")
+}
+
+page("/", "__TITLE__", desc: "Websites, logos and print for small businesses.") {
+    navbar("__TITLE__", links, cta: ("Write to us", "#contact"))
+    hero("Clear design for small businesses", kicker: "__TITLE__", anim: "rise",
+        text: "We make websites, logos and print that are simple to use and easy to change.",
+        buttons: [("Our services", "#services"), ("Contact", "#contact")], badge: opening)
+    section("services", "What we do", kicker: "Services", text: "Pick a kind to filter the list.", anim: "rise") {
+        services_grid()
+    }
+    section("hours", "Opening hours", kicker: "Visit us", bg: "alt", anim: "rise") {
+        grid(2, widths: "3fr 2fr") {
+            hours(opening)
+            card("Good to know", "Call ahead and we will have coffee ready.", icon: "coffee")
+        }
+    }
+    section("contact", "Write to us", kicker: "Contact", width: "narrow", text: "We answer within a day.") {
+        form("Send a message", mailto: "hello@example.com") {
+            field("name", "Your name", req: true)
+            field("email", "E-mail", type: "email", req: true)
+            field("message", "Message", type: "area", req: true)
+        }
+    }
+    footer(text: "__TITLE__ - made with [Nyra](https://nyralang.dev).", links: links, small: ["Copyright 2026 __TITLE__"])
 }
 "##;
 
@@ -314,7 +349,9 @@ nyra build main.nyra
 ## Next
 
 Change the texts and colors in `main.nyra`, add a `section`, or put images in an `assets/` folder and
-show them with `img("photo.jpg", "what it shows")`. The building blocks: `docs/WEB.md` in the Nyra repository.
+show them with `img("photo.jpg", "what it shows")`. The filter buttons show how a page reacts to clicks:
+state in a `var`, an `enum Msg`, and `fn update`. The building blocks: `docs/WEB_CARD.md` (short) and
+`docs/WEB.md` in the Nyra repository.
 An AI agent working here should read AGENTS.md first.
 "##;
 

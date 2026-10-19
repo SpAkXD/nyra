@@ -166,7 +166,7 @@ fn the_site_starter_builds_and_serves() {
     }
     let html = std::fs::read_to_string(p.join("dist/index.html")).unwrap();
     assert!(html.contains("<title>My Site</title>") || html.contains("My Site"), "{html}");
-    assert!(html.contains("What you get") && html.contains("Made with"), "{html}");
+    assert!(html.contains("What we do") && html.contains("data-live") && html.contains("nyralang.dev"), "{html}");
 }
 
 /// `nyra run main.nyra` of a site serves it: start it on a free port, fetch the page, stop it.
