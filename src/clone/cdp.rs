@@ -625,6 +625,11 @@ pub const SCROLL_JS: &str = r#"(async (steps) => {
     await wait(350);
     if (y + innerHeight >= document.documentElement.scrollHeight) break;
   }
+  // and back up a screen at a time: what loaded meanwhile (more of an endless list) comes into view
+  for (let up = y; up > 0; up -= Math.round(innerHeight * 0.85)) {
+    scrollTo(0, up);
+    await wait(250);
+  }
   scrollTo(0, 0);
   await wait(300);
   return String(y);

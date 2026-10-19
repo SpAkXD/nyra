@@ -3909,7 +3909,8 @@ impl Reader<'_> {
         }
         let n = items.len();
         let pictured = items.iter().filter(|(_, m)| !m.image.is_empty()).count();
-        if n < 3 || n * 4 < kids.len() * 3 || pictured * 4 < n * 3 || (videoish * 4 < n * 3 && priced * 5 < n * 3) {
+        // (lazy pictures far down a long grid may not have loaded: half of them is enough)
+        if n < 3 || n * 4 < kids.len() * 3 || pictured * 2 < n || (videoish * 4 < n * 3 && priced * 5 < n * 3) {
             return None;
         }
         // the categories, when each product names one
