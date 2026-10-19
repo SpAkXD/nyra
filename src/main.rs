@@ -3,6 +3,9 @@ mod auto;
 mod caps;
 mod check;
 mod clock;
+// `nyra clone` runs curl and browsers: not part of the WebAssembly build
+#[cfg(not(target_arch = "wasm32"))]
+mod clone;
 mod codegen;
 mod diag;
 mod edit;
@@ -89,6 +92,7 @@ websites (a program with `use web`, see docs/WEB.md):
   nyra build site.nyra      write the site to `dist/` next to the program (`-o DIR` for another folder)
   nyra run site.nyra        serve it on http://127.0.0.1:8000 and rebuild and reload when a file changes
   nyra check site.nyra      also run the site's checks (anchors, images, headings, contrast); writes nothing
+  nyra clone <url>          write site.nyra that recreates a page (`nyra clone --help`, docs/CLONE.md)
   --port N        (run) the port; 0 lets the system choose
   --image-tool T  cwebp, magick, vips or none: the tool for WebP image variants (default: the first found)
   A web program gets no capability (fs, os, ...) unless --allow names it.
@@ -439,6 +443,10 @@ fn real_main() -> ExitCode {
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::args().nth(1).as_deref() == Some("lsp") {
         return lsp::run(std::env::args().skip(2).collect());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::args().nth(1).as_deref() == Some("clone") {
+        return clone::cli(std::env::args().skip(2).collect());
     }
     if let Some(cmd @ ("outline" | "show" | "edit")) = std::env::args().nth(1).as_deref() {
         return edit::run(cmd, std::env::args().skip(2).collect());
