@@ -170,7 +170,8 @@ pub fn pred4(mode: u8, y: &[u8; S * 17], b: usize, out: &mut [u8; 16]) {
             }
         }
         B_VE => {
-            let vals = [avg3(x, top(0), top(1)), avg3(top(0), top(1), top(2)), avg3(top(1), top(2), top(3)), avg3(top(2), top(3), top(4))];
+            let vals =
+                [avg3(x, top(0), top(1)), avg3(top(0), top(1), top(2)), avg3(top(1), top(2), top(3)), avg3(top(2), top(3), top(4))];
             for r in 0..4 {
                 for c in 0..4 {
                     set(c, r, vals[c]);
@@ -489,7 +490,13 @@ impl FilterParams {
         FilterParams {
             limit: (2 * level + ilevel) as u8,
             ilevel: ilevel as u8,
-            hev: if level >= 40 { 2 } else if level >= 15 { 1 } else { 0 },
+            hev: if level >= 40 {
+                2
+            } else if level >= 15 {
+                1
+            } else {
+                0
+            },
             inner,
         }
     }
@@ -601,7 +608,15 @@ fn simple_edge(p: &mut [u8], at: usize, step: usize, along: usize, n: usize, lim
 /// inner vertical edges, top edge, inner horizontal edges), as a decoder does. `params` has one
 /// entry per macroblock; `simple` selects the simple filter (luma only). Without `chroma` (the U
 /// and V planes and their stride) only luma is filtered.
-pub fn filter_frame(y: &mut [u8], ys: usize, mut chroma: Option<(&mut [u8], &mut [u8], usize)>, mbw: usize, mbh: usize, params: &[FilterParams], simple: bool) {
+pub fn filter_frame(
+    y: &mut [u8],
+    ys: usize,
+    mut chroma: Option<(&mut [u8], &mut [u8], usize)>,
+    mbw: usize,
+    mbh: usize,
+    params: &[FilterParams],
+    simple: bool,
+) {
     for my in 0..mbh {
         for mx in 0..mbw {
             let f = &params[my * mbw + mx];

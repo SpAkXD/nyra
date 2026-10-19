@@ -14,7 +14,8 @@
 //! 2. Each page is checked: `#anchor` links (E0382), its headings (E0379), its images (E0383), and
 //!    the theme's contrast once (E0380). Two pages with one path, or a bad path, is E0387.
 //! 3. Images are copied to `img/` with a content hash, get `width`/`height`, `loading="lazy"` and
-//!    `decoding="async"`, and WebP variants with `srcset` when an image tool is there (else E0386).
+//!    `decoding="async"`, WebP variants with `srcset` and a blurred preview from the built-in codec (`web/img/`;
+//!    E0386 for a file it cannot read).
 //! 4. One CSS file and one JS file are assembled from only the used parts (`web/assets.rs`) and the
 //!    client code (`web/client.rs`), named by a hash of their content.
 //! 5. Each page gets a Content-Security-Policy `<meta>` computed from what it uses, the CSS and JS
@@ -23,14 +24,14 @@
 
 pub mod assets;
 pub mod client;
+/// SHA-256 and Base64 (the hash of an inline style in the policy, `data:` URLs).
+pub mod digest;
 /// Easing presets and springs compiled to CSS `linear()` (WP4).
 pub mod ease;
 /// The gzipped size of a file, for the size budgets.
 pub mod gzip;
 pub mod html;
 pub mod image;
-/// SHA-256 and Base64 (the hash of an inline style in the policy, `data:` URLs).
-pub mod digest;
 /// The built-in image codec (not in the WebAssembly playground, which converts no images).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod img;
@@ -488,16 +489,20 @@ impl Site {
         // images: every one the pages show is loaded (and its variants made) first, in parallel
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let tool = image::find_tool(o.image_tool.as_deref());
-        let mut wanted: Vec<(String, bool)> = Vec::new();
+        // (each with: shown by a page, used by a `<meta>`)
+        let mut wanted: Vec<(String, bool, bool)> = Vec::new();
         for p in &pages {
             for t in p.tags.iter().filter(|t| !t.close) {
                 for (name, value) in &t.attrs {
                     let Some(v) = value else { continue };
                     if image_ref(t, name, v) {
                         let meta = name == "content";
-                        match wanted.iter_mut().find(|(w, _)| w == v) {
-                            Some(w) => w.1 |= meta,
-                            None => wanted.push((v.clone(), meta)),
+                        match wanted.iter_mut().find(|(w, _, _)| w == v) {
+                            Some(w) => {
+                                w.1 |= !meta;
+                                w.2 |= meta;
+                            }
+                            None => wanted.push((v.clone(), !meta, meta)),
                         }
                     }
                 }
@@ -704,7 +709,8 @@ impl Site {
             // the previews: one inline style, allowed by its hash (unless inline styles are allowed anyway)
             let mut style = String::new();
             if !previews[pi].is_empty() {
-                let css: String = previews[pi].iter().map(|(c, u)| format!(".{c}{{background:url({u}) 50%/cover no-repeat}}")).collect();
+                let css: String =
+                    previews[pi].iter().map(|(c, u)| format!(".{c}{{background:url({u}) 50%/cover no-repeat}}")).collect();
                 if !policy.has("style-src", "'unsafe-inline'") {
                     policy.add("style-src", &format!("'sha256-{}'", digest::base64(&digest::sha256(css.as_bytes()))));
                 }
@@ -768,14 +774,15 @@ fn image_ref(t: &html::Tag, name: &str, v: &str) -> bool {
     is_ref && local_ref(v) && image::is_image(v.split(['?', '#']).next().unwrap_or(v))
 }
 
-/// Loads the images `wanted` (each with whether a `<meta>` uses it), copies them into `files` and
+/// Loads the images `wanted` (each with whether a page shows it and whether a `<meta>` uses it),
+/// copies them into `files` and
 /// makes their variants. Returns each one's `Img` (`None`: there is no such file), how many were
 /// copied without variants because of `--image-tool none`, and the files the built-in codec could
 /// not read (with the reason).
 #[allow(clippy::type_complexity)]
 fn load_images(
     dir: &Path,
-    wanted: &[(String, bool)],
+    wanted: &[(String, bool, bool)],
     tool: Option<&image::Tool>,
     convert: bool,
     files: &mut BTreeMap<String, Vec<u8>>,
@@ -785,7 +792,7 @@ fn load_images(
     let mut failed = Vec::new();
     // read the files, and with the built-in codec make the variants on several threads
     let found: Vec<Option<(PathBuf, Vec<u8>)>> =
-        wanted.iter().map(|(r, _)| find_asset(dir, r).and_then(|p| std::fs::read(&p).ok().map(|b| (p, b)))).collect();
+        wanted.iter().map(|(r, _, _)| find_asset(dir, r).and_then(|p| std::fs::read(&p).ok().map(|b| (p, b)))).collect();
     let builtin = convert && tool == Some(&image::Tool::Builtin);
     let mut made: Vec<Option<Result<image::Made, String>>> = (0..wanted.len()).map(|_| None).collect();
     if builtin {
@@ -804,8 +811,10 @@ fn load_images(
                             let Some(&i) = jobs.get(k) else { break };
                             let (_, bytes) = found[i].as_ref().expect("a found file");
                             // a panic in the codec is a bug; it must not take the build down
-                            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| image::builtin(bytes, wanted[i].1)))
-                                .unwrap_or_else(|_| Err("the image codec failed on it".into()));
+                            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                image::builtin(bytes, wanted[i].1, wanted[i].2)
+                            }))
+                            .unwrap_or_else(|_| Err("the image codec failed on it".into()));
                             done.push((i, r));
                         }
                         done
@@ -818,7 +827,7 @@ fn load_images(
             made[i] = Some(r);
         }
     }
-    for (i, ((r, _), f)) in wanted.iter().zip(found).enumerate() {
+    for (i, ((r, _, _), f)) in wanted.iter().zip(found).enumerate() {
         let Some((path, bytes)) = f else {
             out.insert(r.clone(), None);
             continue;
@@ -842,11 +851,9 @@ fn load_images(
                     files.insert(name.clone(), data);
                     og = Some(name);
                 }
-                if m.replace {
-                    // the widest variant stands in for the original
-                    if let Some((name, _)) = variants.last() {
-                        file = name.clone();
-                    }
+                if m.replace && (!variants.is_empty() || og.is_some()) {
+                    // the widest variant (or, for a `<meta>` only, the JPEG copy) stands in for the original
+                    file = variants.last().map(|v| &v.0).or(og.as_ref()).cloned().unwrap_or(file);
                 } else {
                     if m.original_top {
                         if let Some((w, _)) = size {

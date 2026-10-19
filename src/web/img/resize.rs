@@ -83,7 +83,7 @@ fn weights(src: usize, dst: usize) -> Vec<(usize, Vec<f32>)> {
 /// One row of the source as premultiplied linear RGBA.
 fn linear_row(img: &Image, y: usize, lin: &[f32; 256], out: &mut [f32]) {
     let row = &img.px[y * img.w * 4..(y + 1) * img.w * 4];
-    for (o, p) in out.chunks_exact_mut(4).zip(row.chunks_exact(4)) {
+    for (o, p) in out.as_chunks_mut::<4>().0.iter_mut().zip(row.as_chunks::<4>().0) {
         let a = p[3] as f32 / 255.0;
         o[0] = lin[p[0] as usize] * a;
         o[1] = lin[p[1] as usize] * a;
@@ -94,10 +94,10 @@ fn linear_row(img: &Image, y: usize, lin: &[f32; 256], out: &mut [f32]) {
 
 /// Premultiplied linear RGBA back to straight sRGB RGBA8.
 fn store(px: &[f32], srgb: &[u8], out: &mut [u8]) {
-    for (o, p) in out.chunks_exact_mut(4).zip(px.chunks_exact(4)) {
+    for (o, p) in out.as_chunks_mut::<4>().0.iter_mut().zip(px.as_chunks::<4>().0) {
         let a = p[3].clamp(0.0, 1.0);
         if a < 1.0 / 512.0 {
-            o.copy_from_slice(&[0, 0, 0, 0]);
+            *o = [0, 0, 0, 0];
             continue;
         }
         let inv = 1.0 / a;
@@ -205,10 +205,6 @@ impl Pyramid {
         Pyramid { levels: vec![src] }
     }
 
-    pub fn source(&self) -> &Image {
-        &self.levels[0]
-    }
-
     /// The image `dw` px wide (the height keeps the aspect ratio; at least 1).
     pub fn width(&mut self, dw: usize) -> Image {
         loop {
@@ -245,7 +241,7 @@ mod tests {
         let src = img(37, 23, |_, _| [200, 100, 50, 255]);
         let out = resize(&src, 10, 6);
         assert_eq!((out.w, out.h), (10, 6));
-        for p in out.px.chunks_exact(4) {
+        for p in out.px.as_chunks::<4>().0 {
             assert!(p.iter().zip([200u8, 100, 50, 255]).all(|(a, b)| (*a as i32 - b as i32).abs() <= 1), "{p:?}");
         }
         // never up
@@ -258,7 +254,7 @@ mod tests {
         let src = img(64, 4, |x, _| if x % 2 == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
         let out = resize(&src, 8, 1);
         // (the edges repeat the outermost column, so look inside)
-        assert!(out.px.chunks_exact(4).skip(2).take(4).all(|p| (p[0] as i32 - 188).abs() <= 2), "{:?}", &out.px);
+        assert!(out.px.as_chunks::<4>().0.iter().skip(2).take(4).all(|p| (p[0] as i32 - 188).abs() <= 2), "{:?}", out.px);
         // a transparent red half does not tint the opaque green half
         let src = img(64, 4, |x, _| if x < 32 { [255, 0, 0, 0] } else { [0, 255, 0, 255] });
         let out = half(&half(&src));

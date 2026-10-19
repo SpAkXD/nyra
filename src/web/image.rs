@@ -176,10 +176,11 @@ fn cache_dir() -> std::path::PathBuf {
 }
 
 /// The variants of an image made by the built-in codec (read from the cache when it has them).
-/// `for_meta`: the image is also an `og:image`. An animation gives no variants (it is kept as it
-/// is); an error says why the file could not be read.
+/// `for_pages`: a page shows the image (it gets variants and a preview); `for_meta`: it is an
+/// `og:image`. An animation gives no variants (it is kept as it is); an error says why the file
+/// could not be read.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
+pub fn builtin(bytes: &[u8], for_pages: bool, for_meta: bool) -> Result<Made, String> {
     use super::img::{self, Kind};
     if img::animated(bytes) {
         return Ok(Made::default());
@@ -190,10 +191,13 @@ pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
     }
     let (w, _) = size(bytes).ok_or("its header has no size")?;
     let w = w as usize;
-    let top = w.min(MAX_WIDTH);
+    let top = w.min(if for_pages { MAX_WIDTH } else { 1200 });
     // the standard widths below the widest, skipping one that is almost as wide
-    let mut widths: Vec<usize> = WIDTHS.iter().map(|&x| x as usize).chain([2400]).filter(|&x| x < top && x * 100 <= top * 85).collect();
-    widths.push(top);
+    let mut widths: Vec<usize> = Vec::new();
+    if for_pages {
+        widths.extend(WIDTHS.iter().map(|&x| x as usize).chain([2400]).filter(|&x| x < top && x * 100 <= top * 85));
+        widths.push(top);
+    }
     let replace = kind == Kind::Bmp || w > MAX_WIDTH;
     let og_needed = for_meta && (!matches!(kind, Kind::Jpeg | Kind::Png) || w > 2400 || bytes.len() > 1_500_000);
 
@@ -205,7 +209,7 @@ pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
     let mut outs: Vec<Option<Vec<u8>>> = names.iter().map(|n| std::fs::read(dir.join(n)).ok()).collect();
     let mut og = if og_needed { std::fs::read(dir.join(&og_name)).ok() } else { None };
     // (an empty cached preview: the image has transparency and gets none)
-    let mut preview = std::fs::read(dir.join(&ph_name)).ok();
+    let mut preview = if for_pages { std::fs::read(dir.join(&ph_name)).ok() } else { Some(Vec::new()) };
     if outs.iter().any(Option::is_none) || (og_needed && og.is_none()) || preview.is_none() {
         let src = img::decode(bytes, top)?;
         let opaque = !src.has_alpha();
@@ -213,8 +217,7 @@ pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
         let mut pyramid = img::resize::Pyramid::new(src);
         if preview.is_none() {
             let data = if opaque { img::preview(&pyramid.width((sw * 24).div_ceil(sw.max(sh)).max(1))) } else { Vec::new() };
-            let _ = std::fs::create_dir_all(&dir);
-            let _ = std::fs::write(dir.join(&ph_name), &data);
+            store(&dir, &ph_name, &data);
             preview = Some(data);
         }
         // the sizes to encode, widest first; then each is encoded on its own thread
@@ -231,21 +234,18 @@ pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
         let done: Vec<(Option<usize>, Vec<u8>)> = std::thread::scope(|s| {
             let handles: Vec<_> = jobs
                 .iter()
-                .map(|(i, im)| s.spawn(move || (*i, if i.is_some() { img::webp(im, WEBP_QUALITY) } else { img::jpeg(im, JPEG_QUALITY) })))
+                .map(|(i, im)| {
+                    s.spawn(move || (*i, if i.is_some() { img::webp(im, WEBP_QUALITY) } else { img::jpeg(im, JPEG_QUALITY) }))
+                })
                 .collect();
             handles.into_iter().filter_map(|h| h.join().ok()).collect()
         });
-        let _ = std::fs::create_dir_all(&dir);
         for (i, data) in done {
             let name = match i {
                 Some(i) => &names[i],
                 None => &og_name,
             };
-            // write then rename, so a parallel build never reads half a file
-            let part = dir.join(format!("{name}.{}.partial", std::process::id()));
-            if std::fs::write(&part, &data).is_ok() && std::fs::rename(&part, dir.join(name)).is_err() {
-                let _ = std::fs::remove_file(&part);
-            }
+            store(&dir, name, &data);
             match i {
                 Some(i) => outs[i] = Some(data),
                 None => og = Some(data),
@@ -275,9 +275,20 @@ pub fn builtin(bytes: &[u8], for_meta: bool) -> Result<Made, String> {
     Ok(Made { variants, original_top, replace, og, preview: preview.filter(|p| !p.is_empty()) })
 }
 
+/// Writes a file of the cache: first under another name, then renamed, so a build running at the
+/// same time never reads half a file.
+#[cfg(not(target_arch = "wasm32"))]
+fn store(dir: &std::path::Path, name: &str, data: &[u8]) {
+    let _ = std::fs::create_dir_all(dir);
+    let part = dir.join(format!("{name}.{}.partial", std::process::id()));
+    if std::fs::write(&part, data).is_ok() && std::fs::rename(&part, dir.join(name)).is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+}
+
 /// The WebAssembly build (the playground) does not convert images.
 #[cfg(target_arch = "wasm32")]
-pub fn builtin(_: &[u8], _: bool) -> Result<Made, String> {
+pub fn builtin(_: &[u8], _: bool, _: bool) -> Result<Made, String> {
     Err("the playground does not convert images".into())
 }
 

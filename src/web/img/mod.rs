@@ -12,6 +12,9 @@
 //! This file picks the decoder by the file's first bytes and chooses between lossy and lossless
 //! WebP for each image.
 
+// Codec code indexes blocks and planes by position; the index loops read like the format's spec.
+#![allow(clippy::needless_range_loop)]
+
 pub mod bmp;
 pub mod common;
 pub mod gif;
@@ -160,7 +163,7 @@ fn decode_webp(b: &[u8]) -> Res<Image> {
     let mut px = frame.to_rgba();
     if let Some(a) = find(b"ALPH") {
         let alpha = decode_alph(a, frame.w, frame.h)?;
-        for (p, a) in px.chunks_exact_mut(4).zip(alpha) {
+        for (p, a) in px.as_chunks_mut::<4>().0.iter_mut().zip(alpha) {
             p[3] = a;
         }
     }
@@ -224,20 +227,28 @@ pub fn webp(img: &Image, quality: f32) -> Vec<u8> {
     let frame = vp8::encode(&yuv, &vp8::Options::new(quality));
     let alph = alpha.then(|| {
         let a: Vec<u8> = img.px.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
-        let mut d = vec![1u8]; // VP8L compression, no filter, no pre-processing
-        d.extend(vp8l::encode_alpha(img.w, img.h, &a));
+        let (filter, data) = vp8l::encode_alpha_filtered(img.w, img.h, &a);
+        // VP8L compression (1), the filter in bits 2-3, no pre-processing
+        let mut d = vec![1 | filter << 2];
+        d.extend(data);
         d
     });
     let icc = img.icc.as_deref().filter(|p| !srgb_profile(p));
     let lossy = webp::lossy(img.w, img.h, &frame, alph.as_deref(), icc);
     let small = img.w * img.h <= 64 * 64;
-    if !(small || graphic(img)) {
+    let graphic = graphic(img);
+    if !(small || graphic) {
         return lossy;
     }
-    let argb: Vec<u32> =
-        img.px.as_chunks::<4>().0.iter().map(|p| (p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32).collect();
+    let argb: Vec<u32> = img
+        .px
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|p| (p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
+        .collect();
     let ll = webp::lossless(img.w, img.h, &vp8l::encode(img.w, img.h, &argb), alpha, icc);
-    let limit = if graphic(img) { lossy.len() + lossy.len() / 4 } else { lossy.len() };
+    let limit = if graphic { lossy.len() + lossy.len() / 4 } else { lossy.len() };
     if ll.len() <= limit {
         ll
     } else {
@@ -251,7 +262,7 @@ pub fn jpeg(img: &Image, quality: u8) -> Vec<u8> {
         return jpeg_enc::encode(img, quality);
     }
     let mut flat = img.clone();
-    for p in flat.px.chunks_exact_mut(4) {
+    for p in flat.px.as_chunks_mut::<4>().0 {
         let a = p[3] as u32;
         for c in &mut p[..3] {
             *c = ((*c as u32 * a + 255 * (255 - a) + 127) / 255) as u8;
@@ -309,7 +320,7 @@ mod tests {
             assert!(err < 12.0, "{w}x{h}: mean error {err}");
             if alpha {
                 // the alpha plane is lossless
-                assert!(img.px.chunks_exact(4).zip(back.px.chunks_exact(4)).all(|(a, b)| a[3] == b[3]));
+                assert!(img.px.as_chunks::<4>().0.iter().zip(back.px.as_chunks::<4>().0).all(|(a, b)| a[3] == b[3]));
             }
         }
     }

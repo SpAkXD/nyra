@@ -119,7 +119,8 @@ impl Frame {
                 let cx = x / 2;
                 let fx = if x % 2 == 1 { (cx + 1).min(cw - 1) } else { cx.saturating_sub(1) };
                 let up = |p: &[u8]| {
-                    (9 * p[cy * cs + cx] as u32 + 3 * p[cy * cs + fx] as u32 + 3 * p[fy * cs + cx] as u32 + p[fy * cs + fx] as u32 + 8) >> 4
+                    (9 * p[cy * cs + cx] as u32 + 3 * p[cy * cs + fx] as u32 + 3 * p[fy * cs + cx] as u32 + p[fy * cs + fx] as u32 + 8)
+                        >> 4
                 };
                 let (u, v) = (up(&self.u) as i32, up(&self.v) as i32);
                 let yy = self.y[y * ys + x] as i32;
@@ -521,4 +522,54 @@ pub fn decode(data: &[u8]) -> Res<Frame> {
         dsp::filter_frame(&mut fy, ys, Some((&mut fu, &mut fv, cs)), mbw, mbh, &fparams, simple);
     }
     Ok(Frame { w, h, mbw, y: fy, u: fu, v: fv })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::vp8::{self, BoolWriter};
+    use super::*;
+
+    #[test]
+    fn the_boolean_coder_round_trips() {
+        let mut w = BoolWriter::new();
+        let mut seed = 99u32;
+        let mut bits = Vec::new();
+        for i in 0..5000u32 {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+            let p = ((seed >> 16) % 255 + 1) as u8;
+            let b = (seed >> 8) % 256 < p as u32 / (1 + i % 3);
+            w.put(b, p);
+            bits.push((b, p));
+        }
+        w.literal(0x2a5, 10);
+        let data = w.finish();
+        let mut r = BoolReader::new(&data);
+        for (b, p) in bits {
+            assert_eq!(r.get(p), b);
+        }
+        assert_eq!(r.literal(10), 0x2a5);
+        assert!(!r.eof);
+    }
+
+    #[test]
+    fn decodes_what_the_encoder_wrote() {
+        // gradients with a sharp edge, an odd size, low to top quality
+        let (w, h) = (45, 29);
+        let mut px = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                let edge = if x > 20 { 120 } else { 0 };
+                px.extend_from_slice(&[(x * 5 + edge) as u8, (y * 8) as u8, ((x + y) * 3) as u8, 255]);
+            }
+        }
+        for q in [5.0, 50.0, 90.0, 100.0] {
+            let yuv = vp8::Yuv::from_rgba(w, h, &px);
+            let frame = decode(&vp8::encode(&yuv, &vp8::Options::new(q))).unwrap();
+            assert_eq!((frame.w, frame.h), (w, h));
+            let rgba = frame.to_rgba();
+            let mse: f64 = px.iter().zip(&rgba).map(|(a, b)| (*a as f64 - *b as f64).powi(2)).sum::<f64>() / px.len() as f64;
+            let psnr = 10.0 * (255.0f64 * 255.0 / mse.max(1e-9)).log10();
+            assert!(psnr > if q > 80.0 { 28.0 } else { 20.0 }, "q{q}: PSNR {psnr}");
+        }
+    }
 }

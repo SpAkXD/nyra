@@ -79,6 +79,7 @@ pub fn encode(w: usize, h: usize, argb: &[u32]) -> Vec<u8> {
 /// method 0, pre-processing 0 (header byte 1). [`encode_alpha_filtered`] is often smaller.
 ///
 /// Panics if `w` or `h` is 0 or above 16384, or `alpha.len() != w * h`.
+#[cfg(test)]
 pub fn encode_alpha(w: usize, h: usize, alpha: &[u8]) -> Vec<u8> {
     check_dims(w, h, alpha.len());
     let px: Vec<u32> = alpha.iter().map(|&a| 0xff00_0000 | (a as u32) << 8).collect();
@@ -155,10 +156,10 @@ impl BitWriter {
     fn put(&mut self, v: u32, bits: u32) {
         self.acc |= (v as u64) << self.n;
         self.n += bits;
-        while self.n >= 8 {
-            self.out.push(self.acc as u8);
-            self.acc >>= 8;
-            self.n -= 8;
+        if self.n >= 32 {
+            self.out.extend_from_slice(&(self.acc as u32).to_le_bytes());
+            self.acc >>= 32;
+            self.n -= 32;
         }
     }
 
@@ -179,8 +180,10 @@ impl BitWriter {
     }
 
     fn finish(mut self) -> Vec<u8> {
-        if self.n > 0 {
+        while self.n > 0 {
             self.out.push(self.acc as u8);
+            self.acc >>= 8;
+            self.n = self.n.saturating_sub(8);
         }
         self.out
     }
@@ -212,8 +215,10 @@ fn encode_stream(w: usize, h: usize, px: &[u32], free_rgb: bool) -> Vec<u8> {
     }
     if repeats < 0.25 && w * h > 1 << 16 {
         picks.truncate(1);
-    } else if let Some(&Mode::Spatial { green, .. }) = picks.iter().find(|m| matches!(m, Mode::Spatial { .. })) {
-        // Smooth graphics: the left or the top predictor everywhere.
+    } else if let Some(&Mode::Spatial { green, .. }) =
+        picks.iter().find(|m| matches!(m, Mode::Spatial { .. })).filter(|_| w * h <= 1 << 20)
+    {
+        // Smooth graphics up to a megapixel: the left or the top predictor everywhere.
         picks.push(Mode::Spatial { green, uniform: Some(1) });
         picks.push(Mode::Spatial { green, uniform: Some(2) });
     }
@@ -556,8 +561,8 @@ fn predictor_transform(px: &mut Vec<u32>, w: usize, h: usize, bits: u32, free_rg
     let mut hist = [[0u32; 256]; 4];
     let mut costs = [[0u16; 256]; 4];
     cost_tables(&hist, &mut costs);
-    // Large tiles are judged by every other row.
-    let ystep = if bits >= 5 || (w * h > 1 << 21 && bits >= 4) { 2 } else { 1 };
+    // Large tiles and large images are judged by every other row.
+    let ystep = if bits >= 5 || w * h > 1 << 22 { 2 } else { 1 };
     let mut ctx = Vec::new();
     for ty in 0..if uniform.is_some() { 0 } else { th } {
         for tx in 0..tw {
@@ -796,8 +801,8 @@ fn prefix(v: u32) -> (usize, u32, u32) {
 }
 
 #[inline]
-fn pair_hash(a: u32, b: u32) -> usize {
-    ((b.wrapping_mul(0xc6a4_a793) ^ a.wrapping_mul(0x5bd1_e996)) >> (32 - HASH_BITS)) as usize
+fn pair_hash(a: u32, b: u32, bits: u32) -> usize {
+    ((b.wrapping_mul(0xc6a4_a793) ^ a.wrapping_mul(0x5bd1_e996)) >> (32 - bits)) as usize
 }
 
 #[inline]
@@ -814,7 +819,9 @@ fn hash_chain(px: &[u32], w: usize, iters: u32, window: usize) -> Vec<u32> {
         return out;
     }
     let mut chain = vec![-1i32; n];
-    let mut head = vec![-1i32; 1 << HASH_BITS];
+    // A hash table about as large as the image (small sub-images need no big one).
+    let hb = (usize::BITS - n.leading_zeros()).clamp(8, HASH_BITS);
+    let mut head = vec![-1i32; 1 << hb];
     let mut same = px[0] == px[1];
     let mut pos = 0;
     while pos < n - 2 {
@@ -830,7 +837,7 @@ fn hash_chain(px: &[u32], w: usize, iters: u32, window: usize) -> Vec<u32> {
                 len = MAX_LENGTH;
             }
             while len > 0 {
-                let hh = pair_hash(px[pos], len as u32);
+                let hh = pair_hash(px[pos], len as u32, hb);
                 chain[pos] = head[hh];
                 head[hh] = pos as i32;
                 pos += 1;
@@ -838,14 +845,14 @@ fn hash_chain(px: &[u32], w: usize, iters: u32, window: usize) -> Vec<u32> {
             }
             same = false;
         } else {
-            let hh = pair_hash(px[pos], px[pos + 1]);
+            let hh = pair_hash(px[pos], px[pos + 1], hb);
             chain[pos] = head[hh];
             head[hh] = pos as i32;
             pos += 1;
             same = same_next;
         }
     }
-    chain[pos] = head[pair_hash(px[pos], px[pos + 1])];
+    chain[pos] = head[pair_hash(px[pos], px[pos + 1], hb)];
     drop(head);
 
     let mut base = n - 2;
@@ -986,13 +993,14 @@ fn apply_cache(px: &[u32], refs: &mut [Ref], bits: u32) {
 }
 
 /// The color cache sizes (0..=10 bits) whose literals have the smallest entropy: for the parse
-/// `refs`, and for every pixel a literal. One pass; large images count every n-th pixel (the
-/// caches still see every pixel).
+/// `refs`, and for every pixel a literal, in one pass.
 fn best_cache_bits(px: &[u32], refs: &[Ref]) -> (u32, u32) {
-    let mut caches: Vec<Vec<u32>> = (1..=MAX_CACHE_BITS).map(|b| vec![0u32; 1 << b]).collect();
+    // No cache larger than the image.
+    let max = MAX_CACHE_BITS.min(usize::BITS - px.len().leading_zeros()) as usize;
+    let mut caches: Vec<Vec<u32>> = (1..=max).map(|b| vec![0u32; 1 << b]).collect();
     // Per parse and cache size: green (with cache symbols), red, blue, alpha.
     let new_hists = || -> Vec<[Vec<u32>; 4]> {
-        (0..=MAX_CACHE_BITS).map(|b| [vec![0u32; green_alphabet(b)], vec![0u32; 256], vec![0u32; 256], vec![0u32; 256]]).collect()
+        (0..=max as u32).map(|b| [vec![0u32; green_alphabet(b)], vec![0u32; 256], vec![0u32; 256], vec![0u32; 256]]).collect()
     };
     let mut hists = [new_hists(), new_hists()];
     let mut lengths = vec![0u32; NUM_LENGTH_CODES];
@@ -1004,7 +1012,7 @@ fn best_cache_bits(px: &[u32], refs: &[Ref]) -> (u32, u32) {
         if i == next {
             match refs.next() {
                 Some(&Ref::Copy { len, .. }) => {
-                    if i % sample == 0 {
+                    if (i >> 16) % sample == 0 {
                         lengths[prefix(len).0] += 1;
                     }
                     next += len as usize;
@@ -1015,9 +1023,15 @@ fn best_cache_bits(px: &[u32], refs: &[Ref]) -> (u32, u32) {
                 }
             }
         }
+        // Large images are judged by every n-th chunk of 64K pixels (the chunk before each warms
+        // the caches up).
+        let chunk = i >> 16;
+        if chunk % sample != 0 && (chunk + 1) % sample != 0 {
+            continue;
+        }
         let key = p.wrapping_mul(0x1e35_a7bd);
-        if i % sample == 0 {
-            for b in 0..=MAX_CACHE_BITS as usize {
+        if chunk % sample == 0 {
+            for b in 0..=max {
                 let hit = b > 0 && caches[b - 1][(key >> (32 - b)) as usize] == p;
                 for (k, h) in hists.iter_mut().enumerate() {
                     if k == 0 && !literal {
@@ -1035,7 +1049,7 @@ fn best_cache_bits(px: &[u32], refs: &[Ref]) -> (u32, u32) {
                 }
             }
         }
-        for b in 1..=MAX_CACHE_BITS as usize {
+        for b in 1..=max {
             caches[b - 1][(key >> (32 - b)) as usize] = p;
         }
     }
@@ -1955,7 +1969,8 @@ mod tests {
                 .map(|i| 0xff00_0000 | ((i % w * 5) as u32 & 255) << 16 | ((i / w * 3) as u32 & 255) << 8 | (i as u32 & 255))
                 .collect();
             out.push(("gradient".to_string(), w, h, grad));
-            for colors in [2, 3, 4, 11, 16, 17, 200, 256, 300] {
+            // 8, 4, 2 and 1 pixels per byte, and no palette.
+            for colors in [2, 4, 16, 17, 256, 300] {
                 let pal: Vec<u32> = (0..colors).map(|_| rng.next() | 0xff00_0000).collect();
                 let px = (0..w * h).map(|i| pal[(i / 3 + i / w) % colors]).collect();
                 out.push((format!("{colors}-colors"), w, h, px));

@@ -107,7 +107,7 @@ writes:
 | `dist/<path>/index.html` | One per `page`: the prerendered HTML, `<head>` with title, description, Open Graph, canonical, preload of the first image, the font links |
 | `dist/site.<hash>.css` | The theme as CSS variables, then the CSS of only the components and motion words the pages used, then any raw `css(...)` |
 | `dist/site.<hash>.js` | Only when needed: the kit behaviors the pages used (menu, lightbox, reveal, ...), and the program's own client code (below). Absent for a page with nothing interactive |
-| `dist/img/<name>-<width>-<hash>.webp` | Image variants for `srcset`, when an image tool is available (see Images) |
+| `dist/img/<name>-<width>-<hash>.webp` | Image variants for `srcset`, made by the compiler's own codec (see [Images](#images)) |
 | `dist/sitemap.xml`, `dist/robots.txt` | From `site(url: ...)` and the pages |
 
 **In the browser** nothing is rendered on load: the HTML is already there. The JS file only attaches behavior. If the
@@ -120,12 +120,10 @@ under 8 KB gzipped for a subsite, Lighthouse performance 95+ on a mid-range phon
 React, motion and the Tailwind output; it loads a JS bundle before anything shows (its `index.html` has an empty
 `#root`).
 
-**Images.** The compiler has no crates, so it does not decode or encode JPEG/WebP itself. It reads the width and
-height from the file header (PNG, JPEG, WebP, AVIF headers are simple) so every `<img>` gets `width`/`height` and no
-layout shift. If `cwebp`, `magick` or `vips` is on the PATH (like the C compiler for native builds), the build also
-writes 480/800/1200/1600 px WebP variants and a tiny blurred preview, and emits `srcset`/`sizes`. Without a tool the
-original file is copied and a warning (E0386) says what was skipped. Images are read only from the folder `assets/`
-next to the program; the build needs no `--allow fs`.
+**Images.** The compiler decodes and encodes images itself (zero crates, `src/web/img/`), so every photo gets
+`width`/`height`, smaller WebP variants with `srcset`, and a tiny blurred preview while it loads, with no tool to
+install. See [Images](#images) for what it reads and how the variants are chosen. Images are read only from the
+folder `assets/` next to the program; the build needs no `--allow fs`.
 
 **Fonts** come from Google Fonts with `display=swap`, loaded without blocking the first paint (as flora does), or
 from `assets/fonts/` when the files are there.
@@ -492,7 +490,7 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 | E0383 | build (built) | An image that is not in `assets/`, or that cannot be read (a warning in the dev server and MCP) |
 | E0384 | compile (built) | Client code (`update`, a live view, what they call) uses `fs`, `os` or `input` |
 | E0385 | compile | A node made but not used (a node expression outside a child block, not returned or passed) |
-| E0386 | warning (built) | No image tool found: images copied without `srcset` variants |
+| E0386 | warning (built) | Images copied without `srcset` variants: the built-in codec cannot read the file, or `--image-tool none` |
 | E0387 | build (built) | Two pages with the same path, or a path that is not `/...` |
 | E0388 | compile / build (built) | A `keyframes(name, body)` that cannot be a word: a bad or taken name, a body that does not parse, an unknown property, a value that is not plain CSS |
 | E0389 | | free |
@@ -677,8 +675,8 @@ and the web library (WP2), the kit files (WP3) and the motion files (WP4).
 | `nyra build site.nyra` | Runs the program, writes the site to `dist/` next to the program. `-o DIR` writes elsewhere. `--json` prints `{ok, out, pages, files: [{path, bytes}], warnings}` |
 | `nyra run site.nyra` | The dev server: builds in memory, serves on `http://127.0.0.1:8000` (`--port N`; `--port 0` lets the system choose, the port is printed), rebuilds when the program, a file it imports or a file below `assets/` changes, and reloads the open pages. A failed build shows its errors in the browser and the terminal |
 | `nyra check site.nyra` | Compiles and runs the build in memory for its checks; writes nothing |
-| `--image-tool T` | `cwebp`, `magick`, `vips` (or the path of one) or `none`; default: the first one found on the PATH |
-| MCP `nyra_build` | For a program with `use web` (or `target: "web"`): builds in memory and returns `{ok, target: "web", pages, files, warnings}`; a missing image is a warning there, and no image tool runs |
+| `--image-tool T` | `builtin` (the default: the compiler's own codec), `cwebp`, `magick`, `vips` (or the path of one), or `none` (copy the originals) |
+| MCP `nyra_build` | For a program with `use web` (or `target: "web"`): builds in memory and returns `{ok, target: "web", pages, files, warnings}`; a missing image is a warning there, and no image is converted |
 
 A `use web` program gets no capability (`fs`, `os`, `input`, `net`) unless `--allow` names it, and only the build
 writes files, and only into the output folder. The output folder must be empty, missing, or written by an earlier
@@ -730,7 +728,7 @@ The build reads the finished HTML of each page, so the library is free in how it
 - Before `</head>`: `<link rel="stylesheet" href="site.<hash>.css">` and `<script src="site.<hash>.js" defer>`
   (relative, so the site also works from a sub-folder), and with `nyra run` the reload script.
 - On each `<img>`: `width` and `height` from the file's header when neither is set, `loading="lazy"` (unless
-  `loading` is set or `fetchpriority="high"`), `decoding="async"`, and with an image tool `srcset` and
+  `loading` is set or `fetchpriority="high"`), `decoding="async"`, and with the variants `srcset` and
   `sizes="100vw"` (unless set).
 
 ### Files of the site
@@ -740,7 +738,7 @@ The build reads the finished HTML of each page, so the library is free in how it
 | `<path>/index.html` | Each page: `/` is `index.html`, `/about` and `/about/` are `about/index.html`, `/404` is `404.html`, a path ending in `.html` is that file |
 | `site.<hash>.css` | The kit's base CSS (before its first marker), the used kit chunks, the used motion chunks, the keyframes, then the `_css` texts; comments and spaces removed |
 | `site.<hash>.js` | Only when needed: the used kit JS chunks (in their own function scope), the used motion parts (one function scope of their own), then the client code |
-| `img/<name>-<hash>.<ext>`, `img/<name>-<width>-<hash>.webp` | The images and, with a tool, WebP variants 480/800/1200/1600 px wide (only those smaller than the image) |
+| `img/<name>-<hash>.<ext>`, `img/<name>-<width>-<hash>.webp`, `img/<name>-og-<hash>.jpg` | The images, their WebP variants (see [Images](#images)) and a JPEG copy for `og:image` when the original does not suit |
 | `files/<name>-<hash>.<ext>` | Other files that the CSS refers to (fonts) |
 | `sitemap.xml`, `robots.txt` | See above; `robots.txt` names the sitemap |
 | `_headers` | The pages' policies joined, plus `frame-ancestors 'self'`, `X-Content-Type-Options` and `Referrer-Policy`, in the format of Netlify and Cloudflare Pages (the dev server sends the same header) |
@@ -776,7 +774,7 @@ when a page has a `data-on`:
   hands out `globalThis.nyra_web = {web, morph, msg}` for such tests. Sizes on that site: the JS file is about 4.5 KB
   gzipped.
 
-Not built yet: the browser effects of `update` (`go`, `scroll_to`, `after`, `copy`), blurred image previews, and a
+Not built yet: the browser effects of `update` (`go`, `scroll_to`, `after`, `copy`), and a
 headless-browser click-through test (no browser on the build machine; the Node.js test covers update, views, morph
 and messages).
 
@@ -988,8 +986,8 @@ calls); WP2 to WP5 then run in parallel; WP6 closes.
 
 **WP5: Build, serve, client code.**
 - `src/web.rs`: `nyra build` for `use web` programs (run in the interpreter, collect pages, assemble and hash CSS/JS
-  from the used parts, `sitemap.xml`, `robots.txt`, the CSP), images (header parsing for sizes, optional
-  `cwebp`/`magick`/`vips` variants and previews, E0383, E0386, E0387), anchor checks (E0382), contrast and heading
+  from the used parts, `sitemap.xml`, `robots.txt`, the CSP), images (sizes, WebP variants and previews from
+  the built-in codec, or `cwebp`/`magick`/`vips`, E0383, E0386, E0387), anchor checks (E0382), contrast and heading
   checks (E0379, E0380); `nyra run` dev server with live reload (`std::net`, zero crates); client code: the JS backend
   compiles `update`, live views and what they call plus `src/web/runtime.js` (event delegation, keyed morph);
   `nyra_build` in MCP.
@@ -1033,8 +1031,8 @@ Taken by the owner after this design was written:
    real sites.
 5. **First-try correctness is unknown.** Models have never seen Nyra web. Named options and words are checked at
    compile time with nearest-match hints, but the benchmark must measure pass@1 before any claim.
-6. **Images without crates** depend on an external tool for `srcset` and WebP. A small built-in PNG/JPEG decoder and
-   resizer is possible later; a WebP encoder is not small.
+6. **Images without crates**: solved by the built-in codec (decoders for JPEG, PNG, GIF, BMP and WebP, a resizer, and
+   lossy and lossless WebP and JPEG encoders, see [Images](#images)); an outside tool is optional.
 7. **Browser support**: CSS scroll-driven animations and cross-document View Transitions are not in every browser
    (the fallbacks are a JS loop and plain navigation); `linear()` easing has a cubic-bezier fallback.
 8. **Values that change with time** (years since 1991) are computed at build time unless the kit offers a live

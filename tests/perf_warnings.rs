@@ -15,13 +15,18 @@ fn programs(dir: &str) -> Vec<PathBuf> {
     v
 }
 
-/// The flags the program asks for: `--go` after `// target: go`.
-fn flags(text: &str) -> Vec<&'static str> {
-    if text.lines().take(3).any(|l| l.trim() == "// target: go") {
-        vec!["--go"]
-    } else {
-        vec![]
+/// The flags the program asks for: `--go` after `// target: go`, and those of a `// flags: ...` line.
+fn flags(text: &str) -> Vec<&str> {
+    let mut f = Vec::new();
+    for l in text.lines().take(3) {
+        if l.trim() == "// target: go" {
+            f.push("--go");
+        }
+        if let Some(rest) = l.trim().strip_prefix("// flags:") {
+            f.extend(rest.split_whitespace());
+        }
     }
+    f
 }
 
 fn warnings_of(path: &Path, flags: &[&str]) -> Vec<Json> {

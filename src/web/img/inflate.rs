@@ -49,6 +49,7 @@ pub fn zlib(data: &[u8], limit: usize) -> Res<Vec<u8>> {
 }
 
 /// Decompresses raw DEFLATE data (no header) into at most `limit` bytes.
+#[cfg(test)]
 pub fn inflate(data: &[u8], limit: usize) -> Res<Vec<u8>> {
     let mut out = Vec::with_capacity(first_capacity(data.len(), limit));
     inflate_to(data, &mut out, limit)?;

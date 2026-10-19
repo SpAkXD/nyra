@@ -395,11 +395,12 @@ fn the_built_in_codec_makes_variants_and_previews() {
     let mut seed = 7u32;
     let photo = real_png(1000, 700, |x, y| {
         seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
-        let n = (seed >> 27) as u32;
+        let n = seed >> 27;
         [(x / 4 + n) as u8, (y / 3 + n) as u8, ((x + y) / 7) as u8, 255]
     });
     std::fs::write(dir.join("assets/photo.png"), &photo).unwrap();
-    std::fs::write(dir.join("assets/logo.png"), real_png(40, 20, |x, _| if x < 20 { [200, 30, 30, 255] } else { [0, 0, 0, 0] })).unwrap();
+    std::fs::write(dir.join("assets/logo.png"), real_png(40, 20, |x, _| if x < 20 { [200, 30, 30, 255] } else { [0, 0, 0, 0] }))
+        .unwrap();
     std::fs::write(dir.join("assets/broken.jpg"), b"\xFF\xD8\xFF\xE0 not really a JPEG").unwrap();
     std::fs::write(
         dir.join("site.nyra"),

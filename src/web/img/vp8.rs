@@ -2,13 +2,15 @@
 //!
 //! How it works:
 //! - RGB is converted to YUV 4:2:0 (BT.601, studio range, as decoders expect); chroma is averaged
-//!   over 2x2 pixels weighted by alpha, and fully transparent pixels do not count as distortion.
+//!   over 2x2 pixels weighted by alpha; fully transparent pixels do not count as distortion and
+//!   fully transparent blocks are made flat, so they cost almost nothing.
 //! - Each macroblock is classified by how busy it is and put in one of up to 4 segments; busy
 //!   segments get a coarser quantizer than smooth ones, where errors show more (like libwebp's
 //!   "spatial noise shaping").
 //! - Each macroblock picks its prediction (16x16 or sixteen 4x4 blocks, and the chroma mode) by
-//!   rate-distortion: distortion (squared error, plus a term that keeps texture energy) plus a
+//!   rate-distortion: the squared error (optionally plus a term that keeps texture energy) plus a
 //!   lambda times the bits the boolean coder will spend, estimated from the token probabilities.
+//!   The reconstruction is bit-exact with libwebp's decoder (checked against Pillow).
 //! - Coefficients are quantized with a dead zone, then the token probabilities are optimized for
 //!   the image and sent in the frame header when that saves bits.
 //! - The loop filter level of each segment is chosen by trying levels on the reconstruction.
@@ -41,8 +43,6 @@ pub struct Options {
     pub passes: usize,
     /// How many 4x4 modes (of 10, ranked by a quick estimate) get the full rate-distortion test.
     pub i4_candidates: usize,
-    /// Trellis quantization: the lambda as a multiple of the mode decisions' (0 disables it).
-    pub trellis: f32,
 }
 
 impl Options {
@@ -59,7 +59,6 @@ impl Options {
             search_filter: true,
             passes: 1,
             i4_candidates: 10,
-            trellis: 0.0,
         }
     }
 }
@@ -89,7 +88,7 @@ impl Yuv {
         let mut y = vec![0u8; ys * mbh * 16];
         let mut u = vec![0u8; cs * mbh * 8];
         let mut v = vec![0u8; cs * mbh * 8];
-        let has_alpha = px.chunks_exact(4).any(|p| p[3] != 255);
+        let has_alpha = px.as_chunks::<4>().0.iter().any(|p| p[3] != 255);
         let mut mask = has_alpha.then(|| vec![1u8; ys * mbh * 16]);
         let mut cmask = has_alpha.then(|| vec![1u8; cs * mbh * 8]);
         for r in 0..mbh * 16 {
@@ -666,7 +665,9 @@ impl Trees {
 fn sse(a: &[u8], b: &[u8], mask: Option<&[u8]>) -> u64 {
     match mask {
         None => a.iter().zip(b).map(|(&x, &y)| ((x as i32 - y as i32) * (x as i32 - y as i32)) as u64).sum(),
-        Some(m) => a.iter().zip(b).zip(m).map(|((&x, &y), &k)| (((x as i32 - y as i32) * (x as i32 - y as i32)) as u64) * k as u64).sum(),
+        Some(m) => {
+            a.iter().zip(b).zip(m).map(|((&x, &y), &k)| (((x as i32 - y as i32) * (x as i32 - y as i32)) as u64) * k as u64).sum()
+        }
     }
 }
 
@@ -734,6 +735,9 @@ struct UvTry {
     any: bool,
 }
 
+/// The best 4x4 mode so far: score, mode, levels, reconstruction, a level is not zero.
+type Best4 = (u64, u8, [i16; 16], [u8; 16], bool);
+
 /// One candidate's result for the luma of a macroblock.
 struct LumaTry {
     score: u64,
@@ -749,97 +753,6 @@ struct LumaTry {
 }
 
 impl<'a> Enc<'a> {
-    /// Quantizes a block, by plain rounding or (with `trellis` on) by choosing each level among the
-    /// rounded value and the one below it so that distortion plus lambda times bits is least,
-    /// including where the block ends. Returns true if a level is not zero.
-    #[allow(clippy::too_many_arguments)]
-    fn quant(&self, seg: &Segment, m: &QMat, coef: &[i16; 16], first: usize, ty: usize, ctx: usize, lv: &mut [i16; 16], deq: &mut [i16; 16]) -> bool {
-        let nz = m.quantize(coef, first, lv, deq);
-        if !nz || self.opts.trellis <= 0.0 {
-            return nz;
-        }
-        // states before a position: 0 after a zero token, 1 after a 1, 2 after a larger level, 3 at
-        // the start (context `ctx`, and the "more" bit is coded)
-        const INF: u64 = u64::MAX / 4;
-        let lambda = (seg.lambda as f64 * self.opts.trellis as f64) as u64;
-        let c = &self.costs;
-        // distortion units: score = 256 * pixel SSE, and pixel SSE = coefficient error^2 / 4
-        let dist = |n: usize, l: i32| -> u64 {
-            let j = ZIGZAG[n];
-            let q = m.q[(n > 0) as usize] as i64;
-            let e = (coef[j] as i64).abs() - l as i64 * q;
-            (e * e * 64) as u64
-        };
-        // the distortion of zeroing every position from n on
-        let mut tail = [0u64; 17];
-        for n in (first..16).rev() {
-            tail[n] = tail[n + 1] + dist(n, 0);
-        }
-        let mut best: [[u64; 4]; 17] = [[INF; 4]; 17];
-        let mut back: [[(u8, i16); 4]; 17] = [[(0, 0); 4]; 17];
-        best[first][3] = 0;
-        let mut end = (INF, 0usize, 0u8); // (cost, position, state) of the best place to stop
-        for n in first..16 {
-            let b = BANDS[n];
-            let base = (lv[n] as i32).abs();
-            for s in 0..4 {
-                let cost = best[n][s];
-                if cost >= INF {
-                    continue;
-                }
-                let x = if s == 3 { ctx } else { s };
-                // stop before n (not right after a zero token)
-                if s != 0 {
-                    let e = cost + lambda * c.eob[ty][b][x] as u64 + tail[n];
-                    if e < end.0 {
-                        end = (e, n, s as u8);
-                    }
-                }
-                let more = if s == 0 { 0 } else { c.more[ty][b][x] as u64 };
-                for l in [base, base - 1] {
-                    if l < 0 || (l == base - 1 && base == 0) {
-                        continue;
-                    }
-                    let rate = more + if l == 0 { c.zero[ty][b][x] as u64 } else { c.level(ty, b, x, l) as u64 };
-                    let total = cost + lambda * rate + dist(n, l);
-                    let ns = match l {
-                        0 => 0,
-                        1 => 1,
-                        _ => 2,
-                    };
-                    if total < best[n + 1][ns] {
-                        best[n + 1][ns] = total;
-                        back[n + 1][ns] = (s as u8, l as i16);
-                    }
-                }
-            }
-        }
-        // ending at the last position after a nonzero level needs no end-of-block token
-        for s in [1, 2] {
-            if best[16][s] < end.0 {
-                end = (best[16][s], 16, s as u8);
-            }
-        }
-        let (_, stop, mut s) = end;
-        let mut out = [0i16; 16];
-        let mut n = stop;
-        while n > first {
-            let (ps, l) = back[n][s as usize];
-            out[n - 1] = l;
-            s = ps;
-            n -= 1;
-        }
-        let mut any = false;
-        for n in first..16 {
-            let j = ZIGZAG[n];
-            let l = if coef[j] < 0 { -out[n] } else { out[n] };
-            lv[n] = l;
-            deq[j] = (l as i32 * m.q[(n > 0) as usize] as i32) as i16;
-            any |= l != 0;
-        }
-        any
-    }
-
     fn mb_src(&self, mx: usize, my: usize) -> ([u8; 256], [u8; 64], [u8; 64], Option<[u8; 256]>) {
         let yuv = self.yuv;
         let (ys, cs) = (yuv.mbw * 16, yuv.mbw * 8);
@@ -858,7 +771,17 @@ impl<'a> Enc<'a> {
 
     /// The best 16x16 luma prediction.
     #[allow(clippy::too_many_arguments)]
-    fn try_i16(&self, seg: &Segment, ctx: &Ctx, src: &[u8; 256], mask: Option<&[u8; 256]>, top: &Nz, left: &Nz, mx: usize, my: usize) -> LumaTry {
+    fn try_i16(
+        &self,
+        seg: &Segment,
+        ctx: &Ctx,
+        src: &[u8; 256],
+        mask: Option<&[u8; 256]>,
+        top: &Nz,
+        left: &Nz,
+        mx: usize,
+        my: usize,
+    ) -> LumaTry {
         let mut best: Option<LumaTry> = None;
         for mode in [DC_PRED, V_PRED, H_PRED, TM_PRED] {
             if (mode == V_PRED && my == 0) || (mode == H_PRED && mx == 0) {
@@ -896,7 +819,7 @@ impl<'a> Enc<'a> {
             for b in 0..16 {
                 let (bx, by) = (b % 4, b / 4);
                 let mut deq = [0i16; 16];
-                let nz = self.quant(seg, &seg.y1, &coefs[b], 1, 0, (nz_top[bx] + nz_left[by]) as usize, &mut levels[b], &mut deq);
+                let nz = seg.y1.quantize(&coefs[b], 1, &mut levels[b], &mut deq);
                 deq[0] = dcs[b];
                 rate += self.costs.block(&levels[b], 1, 0, (nz_top[bx] + nz_left[by]) as usize);
                 nz_top[bx] = nz as u8;
@@ -966,7 +889,7 @@ impl<'a> Enc<'a> {
             let s4 = block4(src, 16, bx, by);
             let m4: Option<[u8; 16]> = mask.map(|m| block4(m, 16, bx, by));
             let ctxn = (t.nz_bottom[bx] + t.nz_right[by]) as usize;
-            let mut best: Option<(u64, u8, [i16; 16], [u8; 16], bool)> = None;
+            let mut best: Option<Best4> = None;
             // rank the modes by a quick estimate (the transformed residual's magnitude plus the
             // mode's bits), then decide among the best few by the real rate and distortion
             let mut cand: [(u64, u8, [u8; 16], [i16; 16]); 10] = [(0, 0, [0; 16], [0; 16]); 10];
@@ -985,7 +908,7 @@ impl<'a> Enc<'a> {
             for &(_, mode, p4, coef) in &cand[..keep] {
                 let mut lv = [0i16; 16];
                 let mut deq = [0i16; 16];
-                let nz = self.quant(seg, &seg.y1, &coef, 0, 3, ctxn, &mut lv, &mut deq);
+                let nz = seg.y1.quantize(&coef, 0, &mut lv, &mut deq);
                 let mut r4 = [0u8; 16];
                 dsp::idct_add(&deq, &p4, &mut r4);
                 let rate = self.trees.bmode_cost[above as usize][leftm as usize][mode as usize] + self.costs.block(&lv, 0, 3, ctxn);
@@ -1041,7 +964,7 @@ impl<'a> Enc<'a> {
                     let coef = dsp::fdct(&s4, &p4);
                     let mut deq = [0i16; 16];
                     let lv = &mut levels[pi * 4 + b];
-                    let nz = self.quant(seg, &seg.uv, &coef, 0, 2, (nt[bx] + nl[by]) as usize, lv, &mut deq);
+                    let nz = seg.uv.quantize(&coef, 0, lv, &mut deq);
                     rate += self.costs.block(lv, 0, 2, (nt[bx] + nl[by]) as usize);
                     nt[bx] = nz as u8;
                     nl[by] = nz as u8;
@@ -1238,7 +1161,8 @@ fn segments(yuv: &Yuv, opts: &Options) -> (Vec<Segment>, Vec<u8>) {
             map[i] = (0..n).min_by(|&x, &y| (a - centers[x]).abs().total_cmp(&(a - centers[y]).abs())).unwrap_or(0) as u8;
         }
         for (s, c) in centers.iter_mut().enumerate() {
-            let (sum, cnt) = act.iter().zip(&map).filter(|(_, &m)| m as usize == s).fold((0.0, 0usize), |(a, k), (&x, _)| (a + x, k + 1));
+            let (sum, cnt) =
+                act.iter().zip(&map).filter(|(_, &m)| m as usize == s).fold((0.0, 0usize), |(a, k), (&x, _)| (a + x, k + 1));
             if cnt > 0 {
                 *c = sum / cnt as f64;
             }
@@ -1262,7 +1186,8 @@ fn segments(yuv: &Yuv, opts: &Options) -> (Vec<Segment>, Vec<u8>) {
 
 fn make_segment(q: i32, opts: &Options) -> Segment {
     let y1 = QMat::new(DC_Q[clip_q(q)] as u32, AC_Q[clip_q(q)] as u32, opts.bias_dc, opts.bias_ac, true);
-    let y2 = QMat::new((DC_Q[clip_q(q)] * 2) as u32, ((AC_Q[clip_q(q)] as u32 * 101581) >> 16).max(8), opts.bias_dc, opts.bias_ac, false);
+    let y2 =
+        QMat::new((DC_Q[clip_q(q)] * 2) as u32, ((AC_Q[clip_q(q)] as u32 * 101581) >> 16).max(8), opts.bias_dc, opts.bias_ac, false);
     let uv = QMat::new(DC_Q[clip_q(q + UV_DC_DELTA).min(117)] as u32, AC_Q[clip_q(q)] as u32, opts.bias_dc, opts.bias_ac, false);
     let qac = AC_Q[clip_q(q)] as f64;
     let lambda = (opts.lambda as f64 * qac * qac).max(1.0) as u64;
@@ -1284,7 +1209,12 @@ fn mb_sse(a: &[u8], b: &[u8], ys: usize, mbw: usize, mbh: usize, mask: Option<&[
             let (x, y) = (&a[at..at + 16], &b[at..at + 16]);
             let s: u32 = match mask {
                 None => x.iter().zip(y).map(|(&p, &q)| ((p as i32 - q as i32) * (p as i32 - q as i32)) as u32).sum(),
-                Some(m) => x.iter().zip(y).zip(&m[at..at + 16]).map(|((&p, &q), &k)| ((p as i32 - q as i32) * (p as i32 - q as i32)) as u32 * k as u32).sum(),
+                Some(m) => x
+                    .iter()
+                    .zip(y)
+                    .zip(&m[at..at + 16])
+                    .map(|((&p, &q), &k)| ((p as i32 - q as i32) * (p as i32 - q as i32)) as u32 * k as u32)
+                    .sum(),
             };
             out[(r / 16) * mbw + mx] += s as u64;
         }
@@ -1295,7 +1225,7 @@ fn mb_sse(a: &[u8], b: &[u8], ys: usize, mbw: usize, mbh: usize, mask: Option<&[
 /// Encodes the image as a VP8 key frame; returns the `VP8 ` chunk payload.
 pub fn encode(yuv: &Yuv, opts: &Options) -> Vec<u8> {
     let (mbw, mbh) = (yuv.mbw, yuv.mbh);
-    let (ys, cs) = (mbw * 16, mbw * 8);
+    let ys = mbw * 16;
     let (segs, seg_map) = segments(yuv, opts);
     let trees = Trees::new();
     let costs = Costs::new(&COEFF_PROBS, &trees.bits);
@@ -1310,11 +1240,7 @@ pub fn encode(yuv: &Yuv, opts: &Options) -> Vec<u8> {
         ru: vec![0; yuv.u.len()],
         rv: vec![0; yuv.v.len()],
     };
-    let t0 = std::time::Instant::now();
     let mut mbs = enc.encode_frame();
-    if std::env::var("VP8_TIMING").is_ok() {
-        eprintln!("frame {:?}", t0.elapsed());
-    }
     let mut stats: Box<Stats> = Box::new([[[[[0; 2]; 11]; 3]; 8]; 4]);
     walk_tokens(&mbs, mbw, |lv, first, ty, ctx| count_block(&mut stats, lv, first, ty, ctx));
     let mut probs = optimize_probs(&stats, &enc.trees.bits);
@@ -1347,7 +1273,7 @@ pub fn encode(yuv: &Yuv, opts: &Options) -> Vec<u8> {
             per
         };
         let mut best: Vec<(u64, i32)> = vec![(u64::MAX, 0); nseg];
-        let mut consider = |lv: &[i32], best: &mut Vec<(u64, i32)>| {
+        let consider = |lv: &[i32], best: &mut Vec<(u64, i32)>| {
             let per = try_levels(lv);
             for s in 0..nseg {
                 if per[s] < best[s].0 {
@@ -1367,7 +1293,8 @@ pub fn encode(yuv: &Yuv, opts: &Options) -> Vec<u8> {
         }
         for (s, lv) in levels.iter_mut().enumerate() {
             *lv = best[s].1;
-        }    } else {
+        }
+    } else {
         for (s, lv) in levels.iter_mut().enumerate() {
             let q = AC_Q[clip_q(enc.segs[s].q)] as i32 >> 2;
             *lv = (q * 6 / 5).clamp(0, 63);
@@ -1376,15 +1303,8 @@ pub fn encode(yuv: &Yuv, opts: &Options) -> Vec<u8> {
     for (s, seg) in enc.segs.iter_mut().enumerate() {
         seg.filter = levels[s];
     }
-    if std::env::var("VP8_TIMING").is_ok() {
-        eprintln!("filter done {:?}", t0.elapsed());
-    }
 
-    let out = write_frame(yuv, &enc.segs, &enc.seg_map, &mbs, &probs, sharpness, &enc.trees);
-    if std::env::var("VP8_TIMING").is_ok() {
-        eprintln!("written {:?}", t0.elapsed());
-    }
-    out
+    write_frame(yuv, &enc.segs, &enc.seg_map, &mbs, &probs, sharpness, &enc.trees)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1401,7 +1321,7 @@ fn write_frame(yuv: &Yuv, segs: &[Segment], seg_map: &[u8], mbs: &[Mb], probs: &
         for &s in seg_map {
             cnt[s as usize] += 1;
         }
-        let pr = |a: u64, b: u64| if a + b == 0 { 255 } else { ((a * 256 + (a + b) / 2) / (a + b)).clamp(1, 255) as u8 };
+        let pr = |a: u64, b: u64| (a * 256 + (a + b) / 2).checked_div(a + b).map_or(255, |p| p.clamp(1, 255) as u8);
         seg_probs = [pr(cnt[0] + cnt[1], cnt[2] + cnt[3]), pr(cnt[0], cnt[1]), pr(cnt[2], cnt[3])];
     }
     if bw.flag(use_segments) {
@@ -1491,7 +1411,8 @@ fn write_frame(yuv: &Yuv, segs: &[Segment], seg_map: &[u8], mbs: &[Mb], probs: &
     let part1 = tw.finish();
 
     let mut out = Vec::with_capacity(10 + part0.len() + part1.len());
-    let tag = (0u32) | (1 << 4) | ((part0.len() as u32) << 5); // key frame, version 0, shown
+    // bit 0: a key frame (0), bits 1-3: version 0, bit 4: shown, then the first partition's size
+    let tag = (1u32 << 4) | ((part0.len() as u32) << 5);
     out.extend_from_slice(&tag.to_le_bytes()[..3]);
     out.extend_from_slice(&[0x9d, 0x01, 0x2a]);
     out.extend_from_slice(&(yuv.w as u16).to_le_bytes());
@@ -1500,5 +1421,3 @@ fn write_frame(yuv: &Yuv, segs: &[Segment], seg_map: &[u8], mbs: &[Mb], probs: &
     out.extend_from_slice(&part1);
     out
 }
-
-

@@ -20,6 +20,7 @@ pub struct Image {
 
 impl Image {
     /// A new image of `w` x `h` pixels, all `rgba`. An error over [`MAX_PIXELS`] or for a zero size.
+    #[cfg(test)]
     pub fn new(w: usize, h: usize, rgba: [u8; 4]) -> Res<Image> {
         check_size(w, h)?;
         Ok(Image { w, h, px: rgba.repeat(w * h), icc: None })
