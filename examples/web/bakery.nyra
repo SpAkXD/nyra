@@ -1,0 +1,119 @@
+// A bakery's one-page site, written blind by a model that had only docs/AGENT_CARD.md and
+// docs/WEB_CARD.md (the web card's check, see tests/docs.rs); it built on the first try.
+// `nyra build examples/web/bakery.nyra` makes the site; tests/web.rs compares it with tests/web/fixtures/bakery.
+use web
+
+site("Hana's Bakery", primary: "#B5651D", accent: "#E8A13A", display: "Playfair Display", style: "soft", lang: "en", tz: "Europe/Prague")
+
+keyframes("sway", "50% { rotate: 3deg }")
+
+struct Product { name: str, cat: str, text: str, image: str, tag: str }
+
+let products = [
+    Product(name: "Sourdough loaf", cat: "bread", text: "Slow-risen for 24 hours with a crackling crust.", image: "photo-2.svg", tag: "Bread"),
+    Product(name: "Rye and caraway", cat: "bread", text: "A dense, aromatic loaf from our grandmother's recipe.", image: "photo-3.svg", tag: "Bread"),
+    Product(name: "Seeded rolls", cat: "bread", text: "Crunchy rolls with sunflower, flax and sesame.", image: "photo-4.svg", tag: "Bread"),
+    Product(name: "Butter croissant", cat: "pastry", text: "Laminated by hand, golden and flaky.", image: "photo-5.svg", tag: "Pastry"),
+    Product(name: "Cinnamon roll", cat: "pastry", text: "Soft, warm and generously glazed.", image: "photo-6.svg", tag: "Pastry"),
+    Product(name: "Apple strudel", cat: "pastry", text: "Thin pastry, local apples and a hint of rum.", image: "photo-2.svg", tag: "Pastry"),
+    Product(name: "Honey cake", cat: "cakes", text: "Layers of honey sponge and soft cream.", image: "photo-3.svg", tag: "Cake"),
+    Product(name: "Poppy seed cake", cat: "cakes", text: "A Moravian classic with plum jam.", image: "photo-4.svg", tag: "Cake")
+]
+
+let product_tabs = [("all", "All"), ("bread", "Bread"), ("pastry", "Pastry"), ("cakes", "Cakes")]
+
+let shots = [
+    ("photo-2.svg", "Fresh loaves on the counter", "bread"),
+    ("photo-3.svg", "Rye bread cooling", "bread"),
+    ("photo-4.svg", "Croissants from the oven", "pastry"),
+    ("photo-5.svg", "Cinnamon rolls", "pastry"),
+    ("photo-6.svg", "A birthday cake", "cakes"),
+    ("photo-2.svg", "Honey cake slices", "cakes")
+]
+
+let opening = [("Monday - Friday", "1-5 6:00-18:00"), ("Saturday", "6 7:00-12:00"), ("Sunday", "")]
+
+enum Msg { Show(str) }
+
+var cat_now = "all"
+
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => cat_now = k
+    }
+}
+
+fn product_grid() -> Node = stack {
+    row {
+        for t in product_tabs {
+            button(t.1, on: Msg.Show(t.0), active: t.0 == cat_now)
+        }
+    }
+    grid(4, anim: "stagger", hover: "lift") {
+        for d in products.filter(x => cat_now == "all" || x.cat == cat_now) {
+            card(d.name, d.text, image: d.image, tag: d.tag)
+        }
+    }
+}
+
+page("/", "Hana's Bakery - Brno", desc: "A family bakery in Brno: sourdough, pastries and cakes baked fresh every morning.") {
+    navbar("Hana's Bakery", [("About", "#about"), ("Products", "#products"), ("Gallery", "#gallery"), ("Hours", "#opening"), ("Contact", "#contact")], cta: ("Order a cake", "#contact"))
+
+    hero("Bread baked with love, every morning", kicker: "Family bakery in Brno", text: "Three generations, one oven, and a very early start. Come in for warm bread and a smile.", image: "photo-1.svg", alt: "A sunny garden behind the bakery", buttons: [("See our products", "#products"), ("Visit us", "#visit")], badge: opening, anim: "rise")
+
+    marquee(["Fresh sourdough", "Butter croissants", "Honey cake", "Rye and caraway", "Apple strudel", "Made in Brno"])
+
+    section("about", "About us", kicker: "Our story", bg: "alt", anim: "rise") {
+        grid(2, widths: "1fr 1fr") {
+            img("photo-2.svg", "Hana in the bakery with fresh loaves", ratio: "4/3", caption: "Hana and the first batch of the day", loop: "sway")
+            stack {
+                h2("Baked with patience, shared with love", anim: "words")
+                "Hana's Bakery began in 1989 in a tiny kitchen in Brno. Today the whole family bakes together, using local flour, real butter and no shortcuts."
+                "Our dough rests overnight, our ovens start before sunrise, and every loaf is shaped by hand."
+                grid(3) {
+                    stat("35+", "years of baking", anim: "count")
+                    stat("12", "daily recipes", anim: "count")
+                    stat("4000+", "happy regulars", anim: "count")
+                }
+            }
+        }
+    }
+
+    section("products", "Fresh from the oven", kicker: "Our products", text: "Pick a category to see what is on the shelves today.", anim: "rise") {
+        product_grid()
+    }
+
+    section("gallery", "A look inside", kicker: "Gallery", bg: "alt", anim: "rise") {
+        gallery(shots, filters: [("bread", "Bread"), ("pastry", "Pastry"), ("cakes", "Cakes")])
+    }
+
+    section("reviews", "Kind words", kicker: "Testimonials", bg: "dark", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            quote("The best sourdough in Brno. I come every Saturday morning, and the line is always worth it.", "Petra N.", place: "Brno-Kralovo Pole", stars: 5)
+            quote("Hana made our wedding cake and it was perfect. Everyone asked for the recipe.", "Tomas and Eva", place: "Brno-Zabrdovice", stars: 5)
+            quote("The croissants taste like the ones I had in Paris, but they are five minutes from my office.", "Martin K.", place: "Brno-Stred", stars: 5)
+        }
+    }
+
+    section("opening", "Opening hours", kicker: "Come by", anim: "rise") {
+        grid(2, widths: "3fr 2fr") {
+            hours(opening)
+            card("Good to know", "Popular loaves sell out by noon, so come early. Cakes need to be ordered two days ahead.", icon: "clock")
+        }
+    }
+
+    section("visit", "Find us", kicker: "Visit", bg: "alt", anim: "rise") {
+        map("Udolni 12, 602 00 Brno, Czechia")
+    }
+
+    section("contact", "Write to us", kicker: "Contact", text: "Ordering a cake, planning an event or just saying hello? We read every message.", anim: "rise") {
+        form("Send us a message", mailto: "hello@hanasbakery.cz") {
+            field("name", "Your name", req: true)
+            field("email", "E-mail", type: "email", req: true)
+            field("topic", "Topic", type: "select", options: ["Order a cake", "Catering", "Feedback", "Something else"])
+            field("message", "Message", type: "area", req: true, hint: "Tell us what you need")
+        }
+    }
+
+    footer(text: "Hana's Bakery - a family bakery in Brno since 1989.", links: [("About", "#about"), ("Products", "#products"), ("Gallery", "#gallery"), ("Hours", "#opening"), ("Contact", "#contact")], contact: ["Udolni 12, 602 00 Brno", "+420 541 000 000", "hello@hanasbakery.cz"], small: ["Copyright 2026 Hana's Bakery"])
+}

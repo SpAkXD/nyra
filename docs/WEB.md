@@ -513,6 +513,10 @@ The agent card has a hard budget of 1,400 tokens and must not grow for web work 
 A web request therefore carries about 2,700 tokens of cards as input (cacheable), against the thousands of output
 tokens it saves per section.
 
+The card as built is [`WEB_CARD.md`](WEB_CARD.md) (1,397 tokens; `tests/docs.rs` builds its example and checks every
+function and option it names against the library). The draft below, written before the library, is kept as history:
+the library differs from it (see [The web library as built](#the-web-library-as-built-wp2-wp3)).
+
 <details>
 <summary>Draft of the web card</summary>
 
@@ -779,7 +783,7 @@ and messages).
 ## The web library as built (WP2, WP3)
 
 The library is `src/std/web.nyra` (elements, kit components, text, `<head>`), `src/std/web_icons.nyra` (generated
-by `tools/gen_web_icons.py`: 208 Lucide icons, ISC license, plus the Facebook icon from Simple Icons, CC0) and
+by `tools/gen_web_icons.py`: 216 Lucide icons, ISC license, plus the Facebook icon from Simple Icons, CC0) and
 `src/webcheck.rs` (linking, bare names, compile-time checks, live regions). The kit is `src/web/kit.css` and
 `src/web/kit.js`. `examples/web/` has a program per area (elements, kit components, interactivity, escaping) with
 its images in `examples/web/assets/`; `tests/web.rs` builds each one and compares the site with

@@ -75,6 +75,17 @@ assert.strictEqual(kids[3], field, "the field with the focus stays");
 assert.strictEqual(field.value, "typed by the user", "what the user is typing stays");
 assert(!kids.includes(a), "a node that is gone is removed");
 
+// what the motion script added stays: a revealed grid (`m-in`) and a stagger child's place (`--m-i`);
+// a new node that moves is shown at once (it is on screen: nothing would reveal it)
+const card = el("ARTICLE", { class: "card", style: "--m-i: 2" }, "old");
+const grid = el("DIV", { class: "grid g3 m-in", "data-anim": "stagger" }, card);
+const box = el("DIV", { "data-live": "menu" }, grid);
+morph(box, el("#fragment", {}, el("DIV", { class: "grid g3", "data-anim": "stagger" }, el("ARTICLE", { class: "card" }, "new")), el("H3", { "data-anim": "rise" }, "t")));
+assert.strictEqual(grid.getAttribute("class"), "grid g3 m-in", "a revealed grid stays revealed");
+assert.strictEqual(card.getAttribute("style"), "--m-i:2");
+assert.strictEqual(card.childNodes[0].nodeValue, "new");
+assert.strictEqual(box.childNodes[1].getAttribute("class"), "m-in", "a new element with motion is revealed");
+
 // a form whose `data-on` is a variant name sends that variant with its value
 const input = el("INPUT", { "data-on": '"Typed"' });
 input.value = "hi";
