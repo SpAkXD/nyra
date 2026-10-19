@@ -306,3 +306,230 @@ fn the_agent_card_keeps_its_token_budget() {
         "the card has {chars} characters, more than the {MAX_CHARS} that fit the {BUDGET}-token budget: cut something (or re-measure with python tools/card_tokens.py and move MAX_CHARS)"
     );
 }
+
+// ---- docs/WEB_CARD.md: the web card, `use web` for websites (`nyra_spec` with `topic: "web"`), read with the agent card ----
+
+/// The web card as a model sees it: the file without its metadata comment.
+fn web_card() -> String {
+    let file = std::fs::read_to_string("docs/WEB_CARD.md").unwrap().replace("\r\n", "\n");
+    let (comment, body) = file.split_once("-->\n").expect("docs/WEB_CARD.md starts with a metadata comment");
+    assert!(comment.starts_with("<!--"), "docs/WEB_CARD.md must start with its metadata comment");
+    body.to_string()
+}
+
+/// The quoted names of local images in a program (`"hero.jpg"`), which the build looks up in `assets/`.
+fn local_images(source: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for part in source.split('"').skip(1).step_by(2) {
+        let image = [".jpg", ".jpeg", ".png", ".webp", ".svg", ".gif", ".avif"].iter().any(|e| part.to_lowercase().ends_with(e));
+        if image && !part.contains("://") && !part.contains(' ') && !out.iter().any(|o| o == part) {
+            out.push(part.to_string());
+        }
+    }
+    out
+}
+
+#[test]
+fn the_web_card_example_builds() {
+    let card = web_card();
+    let blocks = blocks(&card, "nyra");
+    assert_eq!(blocks.len(), 1, "the web card has exactly one example program");
+    let source = &blocks[0];
+    assert!(source.starts_with("use web\n"), "the web card's example is a site");
+    // the site's folder: the program and, in `assets/`, the images it names
+    let dir = std::env::temp_dir().join("nyra-web-card-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("assets")).unwrap();
+    let images = local_images(source);
+    assert!(!images.is_empty(), "the example shows a local image");
+    let jpeg = std::fs::read("tests/warnings/assets/counter.jpg").unwrap();
+    for img in &images {
+        std::fs::write(dir.join("assets").join(img), &jpeg).unwrap();
+    }
+    std::fs::write(dir.join("site.nyra"), source).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_nyra"))
+        .args(["build", "--strict", "--json", "--image-tool", "none"])
+        .arg(dir.join("site.nyra"))
+        .arg("-o")
+        .arg(dir.join("dist"))
+        .output()
+        .unwrap();
+    let json = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(out.status.success(), "the web card's example does not build\n{source}\n{json}{}", String::from_utf8_lossy(&out.stderr));
+    // cleanly: the only warning allowed is the missing image tool (E0386), which this test turns off
+    let codes: Vec<&str> = json.split("\"code\":\"").skip(1).map(|s| &s[..5]).collect();
+    assert!(codes.iter().all(|c| *c == "E0386"), "the web card's example builds with warnings {codes:?}\n{json}");
+    // and it is a live site: its buttons send messages and its view is redrawn
+    let page = std::fs::read_to_string(dir.join("dist").join("index.html")).unwrap();
+    for part in ["data-on=", "data-live=", "class=\"nav\"", "class=\"hero\"", "data-anim=\"rise\""] {
+        assert!(page.contains(part), "the example's page has no `{part}`");
+    }
+}
+
+/// The parameters of each public function of the web library (`src/std/web.nyra`), in order.
+fn web_functions() -> Vec<(String, Vec<String>)> {
+    let src = std::fs::read_to_string("src/std/web.nyra").unwrap().replace("\r\n", "\n");
+    let mut out = Vec::new();
+    for part in src.split("\nfn ").skip(1) {
+        let name: String = part.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+        if name.starts_with('_') {
+            continue;
+        }
+        // the parameter list, up to the `)` that closes it (types have parentheses and brackets of their own)
+        let mut depth = 0;
+        let mut params = vec![String::new()];
+        for c in part[name.len() + 1..].chars() {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' if depth == 0 => break,
+                ')' | ']' => depth -= 1,
+                ',' if depth == 0 => {
+                    params.push(String::new());
+                    continue;
+                }
+                _ => {}
+            }
+            params.last_mut().unwrap().push(c);
+        }
+        let names: Vec<String> =
+            params.iter().map(|p| p.trim().split(':').next().unwrap().trim().to_string()).filter(|p| !p.is_empty()).collect();
+        out.push((name, names));
+    }
+    assert!(out.len() > 30, "only {} web functions found", out.len());
+    out
+}
+
+/// The calls of a line of the card's element list, `name(args)`, with the names before the `(`: `h1 h2 h3(text)`
+/// shows three functions.
+fn shown_calls(line: &str) -> Vec<(Vec<String>, String)> {
+    let mut out = Vec::new();
+    let mut rest = line;
+    while let Some(open) = rest.find('(') {
+        let mut names: Vec<String> = rest[..open]
+            .split_whitespace()
+            .rev()
+            .take_while(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+            .map(String::from)
+            .collect();
+        names.reverse();
+        let mut depth = 0;
+        let mut end = rest.len();
+        for (i, c) in rest[open + 1..].char_indices() {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' if depth == 0 => {
+                    end = open + 1 + i;
+                    break;
+                }
+                ')' | ']' => depth -= 1,
+                _ => {}
+            }
+        }
+        if !names.is_empty() {
+            out.push((names, rest[open + 1..end].to_string()));
+        }
+        rest = &rest[(end + 1).min(rest.len())..];
+    }
+    out
+}
+
+#[test]
+fn the_web_card_lists_the_web_functions_as_they_are() {
+    let card = web_card();
+    let functions = web_functions();
+    let list = card.split("## Elements\n").nth(1).and_then(|s| s.split("\n## ").next()).expect("no `## Elements` section");
+    let mut shown: Vec<String> = Vec::new();
+    for line in list.lines().filter(|l| !l.starts_with("```")) {
+        for (names, args) in shown_calls(line) {
+            // what is inside quotes is a value (`css(".x { color: red }")`), not parameters
+            let args = args.split('"').step_by(2).collect::<Vec<_>>().join("\"\"");
+            // `h1 h2 h3(...)`: every name that is a web function; else the last word is the call (`days 1-7`)
+            let fs: Vec<&String> = names.iter().filter(|n| functions.iter().any(|(f, _)| f == *n)).collect();
+            let fs = if fs.is_empty() { vec![names.last().unwrap()] } else { fs };
+            for f in fs {
+                let have = &functions
+                    .iter()
+                    .find(|(n, _)| n == f)
+                    .unwrap_or_else(|| panic!("the web card shows `{f}(...)`, which the library does not have"))
+                    .1;
+                // named: each `word:` is a parameter of that name
+                for w in args.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':')) {
+                    if let Some(p) = w.strip_suffix(':').filter(|p| !p.is_empty() && !p.contains(':')) {
+                        assert!(
+                            have.iter().any(|h| h == p),
+                            "the web card gives `{f}` the option `{p}:`, which it does not have: {have:?}"
+                        );
+                    }
+                }
+                // positional: the arguments before the first `name:`, in order
+                let mut positional: Vec<String> = Vec::new();
+                let mut depth = 0;
+                let mut cur = String::new();
+                for c in args.chars() {
+                    match c {
+                        '(' | '[' => depth += 1,
+                        ')' | ']' => depth -= 1,
+                        _ => {}
+                    }
+                    if c == ',' && depth == 0 {
+                        positional.push(std::mem::take(&mut cur).trim().to_string());
+                    } else {
+                        cur.push(c);
+                    }
+                }
+                positional.push(cur.trim().to_string());
+                positional.retain(|p| !p.is_empty() && !p.contains(':') && !p.starts_with('"'));
+                assert!(
+                    positional.len() <= have.len(),
+                    "the web card gives `{f}` {} positional parameters: {have:?}",
+                    positional.len()
+                );
+                for (i, p) in positional.iter().enumerate() {
+                    // a placeholder may name the value (`rows`, `[(label, href)]`), but not another parameter
+                    let plain = p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                    assert!(
+                        !plain || have[i] == *p || !have.contains(p),
+                        "the web card shows `{p}` as parameter {} of `{f}`, which is `{}`: {have:?}",
+                        i + 1,
+                        have[i]
+                    );
+                }
+                shown.push(f.clone());
+            }
+        }
+    }
+    // every public web function is on the card, but the helpers left out on purpose
+    let left_out = ["html", "maps", "year"];
+    for (f, _) in &functions {
+        if !left_out.contains(&f.as_str()) {
+            // a call shown with only a block (`stack {}`) counts too
+            let block = list.contains(&format!("{f} {{")) && !list.contains(&format!("_{f} {{"));
+            assert!(shown.contains(f) || block || card.contains(&format!("`{f}(")), "the web function `{f}` is not on the web card");
+        }
+    }
+}
+
+#[test]
+fn the_web_card_keeps_its_token_budget() {
+    // As for the agent card: `python tools/card_tokens.py --card web --write` measures it on Claude's tokenizer and
+    // writes the counts into the header; this test checks the header and that the card did not grow since.
+    const BUDGET: usize = 1400;
+    const MAX_CHARS: usize = 3050; // measured: 3,019 characters = 1,397 tokens on claude-sonnet-5-5
+    let file = std::fs::read_to_string("docs/WEB_CARD.md").unwrap().replace("\r\n", "\n");
+    let header: &str = file.split_once("-->\n").unwrap().0;
+    assert!(header.contains("The card has a hard budget: a feature that needs card text must displace something."));
+    let tokens = |model: &str| -> usize {
+        let tail = header.split_once("TOKENS: ").expect("no TOKENS in the header").1;
+        let at = tail.find(&format!(" on {model}")).unwrap_or_else(|| panic!("no count for {model} in the header"));
+        let start = tail[..at].rfind(|c: char| !c.is_ascii_digit()).map_or(0, |i| i + 1);
+        tail[start..at].parse().unwrap()
+    };
+    let sonnet = tokens("claude-sonnet-5-5");
+    assert!(sonnet > 0 && sonnet <= BUDGET, "the header says {sonnet} tokens: the budget is {BUDGET}");
+    assert!(tokens("claude-haiku-4-5") > 0);
+    let chars = web_card().chars().count();
+    assert!(
+        chars <= MAX_CHARS,
+        "the web card has {chars} characters, more than the {MAX_CHARS} that fit the {BUDGET}-token budget: cut something (or re-measure with python tools/card_tokens.py --card web and move MAX_CHARS)"
+    );
+}

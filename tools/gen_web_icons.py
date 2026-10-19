@@ -28,6 +28,7 @@ user users baby dog cat bike car truck bus train-front plane ship fuel
 shopping-bag shopping-cart package credit-card banknote wallet receipt tag percent euro
 dollar-sign coins piggy-bank chart-column chart-line trending-up target rocket lightbulb
 coffee cup-soda utensils chef-hat pizza cake-slice wine beer apple carrot cherry croissant
+wheat cookie donut sandwich egg ice-cream-cone candy cake
 scale stethoscope pill activity dumbbell syringe
 camera image images video film play music headphones mic tv monitor laptop wifi
 code terminal cpu database server cloud-upload download upload link link-2 external-link

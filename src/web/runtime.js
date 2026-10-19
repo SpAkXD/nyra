@@ -64,20 +64,40 @@ function ny_morph(old, fresh) {
         const node = m || n, want = prev ? prev.nextSibling : old.firstChild;
         if (node !== want) old.insertBefore(node, want);
         if (m) ny_patch(m, n);
+        else if (n.nodeType === 1) ny_shown(n);
         prev = node;
     }
+}
+// A new node of a live region is on screen already: its motion words play now (the motion script
+// reveals an element once, when it scrolls into view, by the class `m-in`).
+function ny_shown(n) {
+    const all = n.querySelectorAll ? [n, ...n.querySelectorAll("[data-anim]")] : [n];
+    for (const e of all) if (e.hasAttribute("data-anim")) ny_class(e, ["m-in"]);
+}
+// Adds classes to an element (by its attribute: the runtime's tests run without a browser).
+function ny_class(e, add) {
+    const c = (e.getAttribute("class") || "").split(/\s+/).filter(Boolean);
+    const more = add.filter((x) => !c.includes(x));
+    if (more.length) e.setAttribute("class", c.concat(more).join(" "));
 }
 function ny_patch(a, b) {
     if (a.nodeType !== 1) {
         if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
         return;
     }
+    // what the motion script added is state, not markup: an element it revealed (`m-in`) stays
+    // revealed, a stagger child keeps its place (`--m-i`)
+    const motion = (a.getAttribute("class") || "").split(/\s+/).filter((c) => c.startsWith("m-"));
+    const order = /--m-i:\s*([^;]+)/.exec(a.getAttribute("style") || "");
     // what the user typed or ticked is a property: it follows the new HTML only where the HTML
     // changed it, and never in the field that has the focus
     const busy = a === a.ownerDocument.activeElement;
     const was = [a.getAttribute("value"), a.hasAttribute("checked")];
     for (const at of Array.from(a.attributes)) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
     for (const at of Array.from(b.attributes)) if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+    ny_class(a, motion);
+    const style = a.getAttribute("style") || "";
+    if (order && !style.includes("--m-i:")) a.setAttribute("style", (style ? style + ";" : "") + "--m-i:" + order[1].trim());
     if (!busy && was[0] !== a.getAttribute("value")) a.value = a.getAttribute("value") || "";
     if (was[1] !== a.hasAttribute("checked")) a.checked = a.hasAttribute("checked");
     if (!(busy && a.nodeName === "TEXTAREA")) ny_morph(a, b);

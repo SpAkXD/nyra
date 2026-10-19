@@ -145,6 +145,8 @@ fn a_whole_session() {
         call(28, "nyra_spec", r#"{"full":"yes"}"#),
         call(29, "nyra_spec", r#"{"part":"spec","full":false}"#),
         request(30, "resources/read", r#"{"uri":"nyra://card"}"#),
+        call(31, "nyra_spec", r#"{"topic":"web"}"#),
+        call(32, "nyra_spec", r#"{"topic":"css"}"#),
     ];
     let replies = session(&requests);
     // one reply per request: none for the notification, one (id null) for the parse error
@@ -276,6 +278,14 @@ fn a_whole_session() {
     assert!(is_error);
     assert!(bad.get("error").and_then(Json::as_str).unwrap().contains("full"));
     assert_eq!(tool_text(&replies, 29), (false, card.to_string()));
+    // topic "web": the web card, also without its metadata comment
+    let web_file = std::fs::read_to_string("docs/WEB_CARD.md").unwrap().replace("\r\n", "\n");
+    let web_card = web_file.split_once("-->\n").expect("the web card starts with a metadata comment").1;
+    assert!(web_file.starts_with("<!--") && !web_card.contains("<!--") && web_card.starts_with("# Nyra web card"));
+    assert_eq!(tool_text(&replies, 31), (false, web_card.to_string()));
+    let (is_error, bad) = tool_json(&replies, 32);
+    assert!(is_error);
+    assert!(bad.get("error").and_then(Json::as_str).unwrap().contains("topic"));
     let (is_error, built) = tool_json(&replies, 12);
     assert!(!is_error);
     assert_eq!(built.get("target").and_then(Json::as_str), Some("js"));
