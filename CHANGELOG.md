@@ -16,7 +16,7 @@ Editors
   arguments. Also signature help, go to definition (functions, structs, enums, fields, variants, variables, `use
   ./file`), the outline, formatting (`nyra fmt`), and the certain fixes of `nyra check --fix` as quick fixes. It works
   on unsaved buffers, programs of several files included: `use ./name` reads an open buffer before the file on disk.
-  A buffer is checked again 150 ms after the last change; a 2,000-line file takes a few milliseconds. See
+  A buffer is checked again 150 ms after the last change; a 2,000-line file is checked, and a hover or completion on it answered, in about 20 ms. See
   docs/EDITORS.md.
 - **The VS Code extension (0.5.0) uses it**: diagnostics, hover, completion, signature help, go to definition, the
   outline, formatting (`nyra.formatOnSave`) and quick fixes. Its client is a small JSON-RPC client of its own, so the
