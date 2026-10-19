@@ -4234,11 +4234,11 @@ page("/", "Home") {
 
 ## E0386: images copied without WebP variants
 - **Kind:** warning · **Since:** v0.8
-- **What it means:** The site has photos (PNG, JPEG or WebP), and no image tool was found on the PATH (`cwebp`, `magick` or `vips`), or `--image-tool none` was given. The build copies the originals with their width and height, `loading="lazy"` and `decoding="async"`, but cannot make the smaller WebP variants and the `srcset` that let phones load less. The site works; it is only heavier. Vector images (SVG) and GIFs never need variants.
-- **Why Nyra has this rule:** The compiler has no image codecs of its own, so it uses a tool when there is one, like the C compiler for native programs. The build never fails over images, so the warning is the only sign that the photos are full size.
+- **What it means:** Some photos were copied as they are, without the smaller WebP variants and the `srcset` that let phones load less. Either the compiler's own image codec could not read them (the warning names each file and why: a damaged file, a JPEG with arithmetic coding or 12-bit samples, a format other than JPEG, PNG, GIF, BMP and WebP), or `--image-tool none` was given. The originals still get their width and height, `loading="lazy"` and `decoding="async"`; the site works, it is only heavier. SVG, AVIF, icons and animations never get variants and are not reported.
+- **Why Nyra has this rule:** The build never fails over images, so the warning is the only sign that some photos are full size.
 - **Common causes:**
-  - no image tool installed: install cwebp (libwebp), ImageMagick 7 or libvips
-  - a CI machine without the tool that the developer's machine has
+  - a damaged or truncated file (it may still show in a browser, which shows what it can)
+  - an unusual JPEG (arithmetic coding, 12-bit, lossless): save it again from an image editor as a plain JPEG
   - `--image-tool none` left in a build script
 - **Wrong:**
 ```rust
@@ -4258,7 +4258,6 @@ page("/", "Bakery") {
 - **Fixed:**
 ```rust
 // main.nyra
-// flags: --image-tool cwebp
 use web
 
 fn counter() -> Node = img("counter.jpg", "The counter")

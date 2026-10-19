@@ -1,6 +1,6 @@
-//! Images of a site: their width and height read from the file header (PNG, JPEG, GIF, WebP,
-//! AVIF, SVG; the compiler has no crates and decodes nothing), and WebP variants for `srcset` made
-//! by an image tool on the PATH (`cwebp`, `magick` or `vips`), when there is one.
+//! Images of a site: their width and height read from the file header (PNG, JPEG, GIF, BMP, WebP,
+//! AVIF, SVG), and the WebP variants for `srcset`, made by the compiler's own codec (`img/`, see
+//! [`builtin`]) or by an image tool the build is told to use (`cwebp`, `magick` or `vips`).
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -22,6 +22,14 @@ pub fn resizable(path: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "webp")
 }
 
+/// A raster image the built-in codec turns into WebP variants (it also reads BMP and the first
+/// frame of a GIF; an animated GIF or WebP is kept as it is).
+pub fn decodable(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    let ext = lower.rsplit('.').next().unwrap_or("");
+    matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp")
+}
+
 /// Width and height from the first bytes of an image file.
 pub fn size(bytes: &[u8]) -> Option<(u32, u32)> {
     let be16 = |i: usize| -> Option<u32> { Some(u16::from_be_bytes([*bytes.get(i)?, *bytes.get(i + 1)?]) as u32) };
@@ -33,6 +41,20 @@ pub fn size(bytes: &[u8]) -> Option<(u32, u32)> {
     }
     if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
         return Some((le16(6)?, le16(8)?));
+    }
+    if bytes.starts_with(b"BM") && bytes.len() > 26 {
+        let le32 = |i: usize| -> Option<i32> { Some(i32::from_le_bytes(bytes.get(i..i + 4)?.try_into().ok()?)) };
+        return match le32(14)? {
+            12 => Some((le16(18)?, le16(20)?)),
+            _ => Some((le32(18)?.unsigned_abs(), le32(22)?.unsigned_abs())),
+        };
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        // JPEG: the size as shown, after the EXIF orientation
+        if let Some((w, h)) = super::img::size(bytes) {
+            return Some((w as u32, h as u32));
+        }
     }
     if bytes.starts_with(&[0xFF, 0xD8]) {
         // JPEG: walk the segments to the first start-of-frame
@@ -98,25 +120,176 @@ fn svg_size(text: &str) -> Option<(u32, u32)> {
     }
 }
 
-/// The image tools the build knows, in the order it tries them.
+/// The outside image tools the build can use instead of its own codec (`--image-tool`).
 pub const TOOLS: [&str; 3] = ["cwebp", "magick", "vips"];
 
-/// The image tool to use: `choice` (`--image-tool`: a name or `none`), else the first one on the PATH.
-pub fn find_tool(choice: Option<&str>) -> Option<String> {
+/// How the build makes image variants.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Tool {
+    /// The compiler's own codec (the default).
+    Builtin,
+    /// An outside tool: its name or path.
+    External(String),
+}
+
+/// The tool for `--image-tool` (`none`: no variants; `builtin` or nothing: the built-in codec).
+pub fn find_tool(choice: Option<&str>) -> Option<Tool> {
     match choice {
         Some("none") => None,
-        Some(name) => Some(name.to_string()),
-        None => TOOLS.iter().find(|t| runs(t)).map(|t| t.to_string()),
+        None | Some("builtin") => Some(Tool::Builtin),
+        Some(name) => Some(Tool::External(name.to_string())),
     }
 }
 
-fn runs(tool: &str) -> bool {
-    let arg = match tool {
-        "cwebp" => "-version",
-        "magick" => "-version",
-        _ => "--version",
-    };
-    Command::new(tool).arg(arg).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+// ---- the built-in codec ------------------------------------------------------------------------------
+
+/// The widest variant (and the widest a replaced original may be).
+pub const MAX_WIDTH: usize = 2560;
+/// The quality of the WebP variants (libwebp's scale) and of JPEG copies.
+const WEBP_QUALITY: f32 = 80.0;
+const JPEG_QUALITY: u8 = 85;
+/// Part of each cache file's name: a new one when the codec's output changes.
+const CODEC_VERSION: &str = "c1";
+
+/// What the built-in codec makes of one image.
+#[derive(Default, Debug)]
+pub struct Made {
+    /// WebP variants (width, bytes), narrowest first.
+    pub variants: Vec<(u32, Vec<u8>)>,
+    /// The original file stays the widest `srcset` entry (a WebP of its size was not smaller).
+    pub original_top: bool,
+    /// The original is not copied (a BMP, or wider than [`MAX_WIDTH`]): the widest variant takes
+    /// its place.
+    pub replace: bool,
+    /// A JPEG of at most 1200 px for `og:image`, when the original is not a JPEG or PNG of a fitting
+    /// size.
+    pub og: Option<Vec<u8>>,
+    /// A tiny WebP (at most 24 px) shown blurred while the image loads; none for an image with
+    /// transparency.
+    pub preview: Option<Vec<u8>>,
+}
+
+/// The cache of encoded files, by the content of the source, so a rebuild does not encode again.
+#[cfg(not(target_arch = "wasm32"))]
+fn cache_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join("nyra").join("web-img")
+}
+
+/// The variants of an image made by the built-in codec (read from the cache when it has them).
+/// `for_pages`: a page shows the image (it gets variants and a preview); `for_meta`: it is an
+/// `og:image`. An animation gives no variants (it is kept as it is); an error says why the file
+/// could not be read.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn builtin(bytes: &[u8], for_pages: bool, for_meta: bool) -> Result<Made, String> {
+    use super::img::{self, Kind};
+    if img::animated(bytes) {
+        return Ok(Made::default());
+    }
+    let kind = img::kind(bytes);
+    if kind == Kind::Other {
+        return Err("not a JPEG, PNG, GIF, BMP or WebP file".into());
+    }
+    let (w, _) = size(bytes).ok_or("its header has no size")?;
+    let w = w as usize;
+    let top = w.min(if for_pages { MAX_WIDTH } else { 1200 });
+    // the standard widths below the widest, skipping one that is almost as wide
+    let mut widths: Vec<usize> = Vec::new();
+    if for_pages {
+        widths.extend(WIDTHS.iter().map(|&x| x as usize).chain([2400]).filter(|&x| x < top && x * 100 <= top * 85));
+        widths.push(top);
+    }
+    let replace = kind == Kind::Bmp || w > MAX_WIDTH;
+    let og_needed = for_meta && (!matches!(kind, Kind::Jpeg | Kind::Png) || w > 2400 || bytes.len() > 1_500_000);
+
+    let key = super::hash(bytes);
+    let dir = cache_dir();
+    let names: Vec<String> = widths.iter().map(|vw| format!("{key}-{vw}-{CODEC_VERSION}.webp")).collect();
+    let og_name = format!("{key}-og-{CODEC_VERSION}.jpg");
+    let ph_name = format!("{key}-ph-{CODEC_VERSION}.webp");
+    let mut outs: Vec<Option<Vec<u8>>> = names.iter().map(|n| std::fs::read(dir.join(n)).ok()).collect();
+    let mut og = if og_needed { std::fs::read(dir.join(&og_name)).ok() } else { None };
+    // (an empty cached preview: the image has transparency and gets none)
+    let mut preview = if for_pages { std::fs::read(dir.join(&ph_name)).ok() } else { Some(Vec::new()) };
+    if outs.iter().any(Option::is_none) || (og_needed && og.is_none()) || preview.is_none() {
+        let src = img::decode(bytes, top)?;
+        let opaque = !src.has_alpha();
+        let (sw, sh) = (src.w, src.h);
+        let mut pyramid = img::resize::Pyramid::new(src);
+        if preview.is_none() {
+            let data = if opaque { img::preview(&pyramid.width((sw * 24).div_ceil(sw.max(sh)).max(1))) } else { Vec::new() };
+            store(&dir, &ph_name, &data);
+            preview = Some(data);
+        }
+        // the sizes to encode, widest first; then each is encoded on its own thread
+        let mut jobs: Vec<(Option<usize>, img::Image)> = Vec::new();
+        for (i, &vw) in widths.iter().enumerate().rev() {
+            if outs[i].is_none() {
+                jobs.push((Some(i), pyramid.width(vw)));
+            }
+        }
+        if og_needed && og.is_none() {
+            jobs.push((None, pyramid.width(w.min(1200))));
+        }
+        drop(pyramid);
+        let done: Vec<(Option<usize>, Vec<u8>)> = std::thread::scope(|s| {
+            let handles: Vec<_> = jobs
+                .iter()
+                .map(|(i, im)| {
+                    s.spawn(move || (*i, if i.is_some() { img::webp(im, WEBP_QUALITY) } else { img::jpeg(im, JPEG_QUALITY) }))
+                })
+                .collect();
+            handles.into_iter().filter_map(|h| h.join().ok()).collect()
+        });
+        for (i, data) in done {
+            let name = match i {
+                Some(i) => &names[i],
+                None => &og_name,
+            };
+            store(&dir, name, &data);
+            match i {
+                Some(i) => outs[i] = Some(data),
+                None => og = Some(data),
+            }
+        }
+    }
+    let mut all: Vec<(u32, Vec<u8>)> = Vec::with_capacity(widths.len());
+    for (vw, data) in widths.iter().zip(outs) {
+        all.push((*vw as u32, data.ok_or("the encoder stopped")?));
+    }
+    // the original stays the widest entry when its WebP is not smaller
+    let mut original_top = false;
+    if !replace && all.last().is_some_and(|t| t.1.len() >= bytes.len()) {
+        all.pop();
+        original_top = true;
+    }
+    // a variant that is not smaller than the next wider one is left out
+    let mut limit = if original_top { bytes.len() } else { usize::MAX };
+    let mut variants = Vec::with_capacity(all.len());
+    for v in all.into_iter().rev() {
+        if v.1.len() < limit {
+            limit = v.1.len();
+            variants.push(v);
+        }
+    }
+    variants.reverse();
+    Ok(Made { variants, original_top, replace, og, preview: preview.filter(|p| !p.is_empty()) })
+}
+
+/// Writes a file of the cache: first under another name, then renamed, so a build running at the
+/// same time never reads half a file.
+#[cfg(not(target_arch = "wasm32"))]
+fn store(dir: &std::path::Path, name: &str, data: &[u8]) {
+    let _ = std::fs::create_dir_all(dir);
+    let part = dir.join(format!("{name}.{}.partial", std::process::id()));
+    if std::fs::write(&part, data).is_ok() && std::fs::rename(&part, dir.join(name)).is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+}
+
+/// The WebAssembly build (the playground) does not convert images.
+#[cfg(target_arch = "wasm32")]
+pub fn builtin(_: &[u8], _: bool, _: bool) -> Result<Made, String> {
+    Err("the playground does not convert images".into())
 }
 
 /// Writes a WebP of `src` scaled to `width` px to `out` with `tool`. False if the tool failed.

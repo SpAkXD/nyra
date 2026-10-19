@@ -536,7 +536,7 @@ instead of rounding. Details: [known differences](docs/SPEC.md#known-differences
 | `--native`, `--release`, `--time` | with `run`: always compile; compile with `-O2`; show how long each step took |
 | `--allow LIST`, `--sandbox`, `--interp` | [capabilities and the sandbox](#safe-to-run-unsupervised) |
 | `--fuel` `--max-memory` `--max-output` `--max-depth` `--max-time` | the limits of an interpreted run (any of them implies `--interp`) |
-| `--port N`, `--image-tool T` | websites: the dev server's port (`0`: any free one); `cwebp`, `magick`, `vips` or `none` for WebP image variants |
+| `--port N`, `--image-tool T` | websites: the dev server's port (`0`: any free one); what makes the WebP image variants: `builtin` (the default), `cwebp`, `magick`, `vips` or `none` |
 
 Exit codes: `0` success, `1` compile errors, `2` usage or tool problem, `101` runtime error (for example an index
 out of bounds, E0240, with the file and position), `120` to `124` a limit of the interpreter. `NYRA_CC`,

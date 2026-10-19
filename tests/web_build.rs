@@ -335,6 +335,105 @@ fn images_get_webp_variants_with_an_image_tool() {
     );
 }
 
+/// A real PNG (stored deflate blocks, so the test needs no compressor): `w` x `h` pixels of
+/// `px(x, y)` as RGBA.
+fn real_png(w: u32, h: u32, mut px: impl FnMut(u32, u32) -> [u8; 4]) -> Vec<u8> {
+    fn crc(data: &[u8]) -> u32 {
+        let mut c = 0xFFFF_FFFFu32;
+        for &b in data {
+            c ^= b as u32;
+            for _ in 0..8 {
+                c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            }
+        }
+        !c
+    }
+    fn chunk(out: &mut Vec<u8>, id: &[u8], data: &[u8]) {
+        out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        let mut body = id.to_vec();
+        body.extend_from_slice(data);
+        out.extend_from_slice(&body);
+        out.extend_from_slice(&crc(&body).to_be_bytes());
+    }
+    let mut raw = Vec::new();
+    for y in 0..h {
+        raw.push(0);
+        for x in 0..w {
+            raw.extend_from_slice(&px(x, y));
+        }
+    }
+    let mut z = vec![0x78, 0x01];
+    for (i, part) in raw.chunks(65535).enumerate() {
+        let last = (i + 1) * 65535 >= raw.len();
+        z.push(last as u8);
+        z.extend_from_slice(&(part.len() as u16).to_le_bytes());
+        z.extend_from_slice(&(!(part.len() as u16)).to_le_bytes());
+        z.extend_from_slice(part);
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &v in &raw {
+        a = (a + v as u32) % 65521;
+        b = (b + a) % 65521;
+    }
+    z.extend_from_slice(&(b << 16 | a).to_be_bytes());
+    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut ihdr = w.to_be_bytes().to_vec();
+    ihdr.extend_from_slice(&h.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+    chunk(&mut out, b"IHDR", &ihdr);
+    chunk(&mut out, b"IDAT", &z);
+    chunk(&mut out, b"IEND", &[]);
+    out
+}
+
+#[test]
+fn the_built_in_codec_makes_variants_and_previews() {
+    let dir = scratch("web-codec");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("assets")).unwrap();
+    // a photo-like picture (gradients and noise), a small logo with transparency, a broken file
+    let mut seed = 7u32;
+    let photo = real_png(1000, 700, |x, y| {
+        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+        let n = seed >> 27;
+        [(x / 4 + n) as u8, (y / 3 + n) as u8, ((x + y) / 7) as u8, 255]
+    });
+    std::fs::write(dir.join("assets/photo.png"), &photo).unwrap();
+    std::fs::write(dir.join("assets/logo.png"), real_png(40, 20, |x, _| if x < 20 { [200, 30, 30, 255] } else { [0, 0, 0, 0] }))
+        .unwrap();
+    std::fs::write(dir.join("assets/broken.jpg"), b"\xFF\xD8\xFF\xE0 not really a JPEG").unwrap();
+    std::fs::write(
+        dir.join("site.nyra"),
+        "use web\nweb.site()\nweb.page(\"/\", \"Shop\", [web.h1(\"Shop\"), web.img(\"photo.png\", \"Counter\"), \
+         web.img(\"logo.png\", \"Logo\"), web.img(\"broken.jpg\", \"Broken\")])\n",
+    )
+    .unwrap();
+    let out = nyra().current_dir(&dir).args(["build", "site.nyra"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    // only the broken file is reported
+    let err = stderr(&out);
+    assert!(err.contains("warning[E0386]") && err.contains("assets/broken.jpg") && !err.contains("photo.png"), "{err}");
+    let names: Vec<String> =
+        std::fs::read_dir(dir.join("dist/img")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    for w in ["480", "800", "1000"] {
+        let f = names.iter().find(|n| n.starts_with(&format!("photo-{w}-")) && n.ends_with(".webp"));
+        let f = f.unwrap_or_else(|| panic!("no {w} px variant in {names:?}"));
+        let data = std::fs::read(dir.join("dist/img").join(f)).unwrap();
+        assert!(data.starts_with(b"RIFF") && &data[8..12] == b"WEBP", "{f}");
+    }
+    let home = read(&dir.join("dist/index.html"));
+    assert!(home.contains("srcset=\"img/photo-480-") && home.contains(".webp 1000w\""), "{home}");
+    // the photo gets a preview class, and its inline style is allowed by its hash
+    let style = home.split("<style>").nth(1).and_then(|s| s.split("</style>").next()).expect("a <style> with the previews");
+    assert!(style.starts_with(".ph-") && style.contains("url(data:image/webp;base64,"), "{style}");
+    assert!(home.contains("class=\"ph-"), "{home}");
+    assert!(home.contains("style-src 'self' 'sha256-") && !home.contains("unsafe-inline"), "{home}");
+    // a rebuild reads the variants from the cache and writes the same files
+    let again = nyra().current_dir(&dir).args(["build", "site.nyra"]).output().unwrap();
+    assert!(again.status.success());
+    assert_eq!(read(&dir.join("dist/index.html")), home);
+}
+
 /// Reads one HTTP response (the server closes the connection after it).
 fn get(port: u16, path: &str) -> (u16, String) {
     let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
