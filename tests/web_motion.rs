@@ -1,7 +1,8 @@
 //! The motion fixtures (`tests/web/motion/*.html`) in a headless Chrome: every word reveals and ends
 //! in place, counters end on their text, there are no script errors, and with reduced motion (or
-//! `data-motion="off"`) nothing animates longer than 10 ms. The browser is `NYRA_CHROME`, else a
-//! Chrome or Edge in the usual places; without one (or without Node.js) the test is skipped.
+//! `data-motion="off"`) nothing animates longer than 10 ms. And a live site clicked through: its filter
+//! buttons change the cards, and every card shown is visible. The browser is `NYRA_CHROME`, else a
+//! Chrome, Edge or Brave in the usual places; without one (or without Node.js) the tests are skipped.
 
 mod common;
 
@@ -17,9 +18,11 @@ fn chrome() -> Option<PathBuf> {
         "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
         "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
         "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+        "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe",
         "/usr/bin/google-chrome",
         "/usr/bin/chromium",
         "/usr/bin/chromium-browser",
+        "/usr/bin/brave-browser",
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     ]
     .iter()
@@ -54,6 +57,29 @@ fn motion_fixtures_in_a_browser() {
         return;
     };
     let out = Command::new("node").arg("tests/web/motion/check.mjs").arg(&chrome).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    if out.status.code() == Some(2) {
+        common::missing(&format!("the browser did not start: {text}"));
+        return;
+    }
+    assert!(out.status.success(), "{text}");
+}
+
+/// The live example's site (`examples/web/live.nyra`, built as tests/web/fixtures/live) clicked
+/// through: each filter button shows its cards, and they are visible, also when the grid's entrance
+/// (`anim: "stagger"`) played before the re-render.
+#[test]
+fn the_live_filter_works_in_a_browser() {
+    if Command::new("node").arg("--version").output().is_err() {
+        common::missing("no Node.js to drive the browser for the live site");
+        return;
+    }
+    let Some(chrome) = chrome() else {
+        common::missing("no Chrome, Edge or Brave for the live site (set NYRA_CHROME)");
+        return;
+    };
+    let out =
+        Command::new("node").arg("tests/web/live_check.mjs").arg(&chrome).arg("tests/web/fixtures/live/index.html").output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     if out.status.code() == Some(2) {
         common::missing(&format!("the browser did not start: {text}"));
