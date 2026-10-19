@@ -1,10 +1,11 @@
 {
     "name": "nyra",
     "displayName": "Nyra",
-    "description": "Syntax highlighting for the Nyra programming language",
-    "version": "0.3.0",
+    "description": "Syntax highlighting and the file icon for the Nyra programming language",
+    "version": "0.4.0",
     "publisher": "spakxd",
     "license": "MIT",
+    "icon": "icons/nyra-128.png",
     "repository": {
         "type": "git",
         "url": "https://github.com/SpAkXD/nyra"
@@ -21,7 +22,11 @@
                 "id": "nyra",
                 "aliases": ["Nyra", "nyra"],
                 "extensions": [".nyra"],
-                "configuration": "./language-configuration.json"
+                "configuration": "./language-configuration.json",
+                "icon": {
+                    "light": "./icons/nyra.svg",
+                    "dark": "./icons/nyra.svg"
+                }
             }
         ],
         "grammars": [
