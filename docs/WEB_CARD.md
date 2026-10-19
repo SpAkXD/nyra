@@ -1,5 +1,5 @@
 <!-- Metadata: this comment is not part of the card (nyra_spec with topic "web" and the tests strip it).
-TOKENS: 1396 on claude-sonnet-5-5, 1114 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
+TOKENS: 1393 on claude-sonnet-5-5, 1111 on claude-haiku-4-5 (estimated: 3,007 characters, scaled from the last measurement of 3,014 characters = 1,396 tokens; no API key at hand when sidebar/media/video/tabs/search were added. Re-measure: python tools/card_tokens.py --card web --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The library is src/std/web.nyra; this card must describe it exactly (tests/docs.rs builds its example). Read with docs/AGENT_CARD.md. -->
 # Nyra web card
@@ -7,7 +7,7 @@ The library is src/std/web.nyra; this card must describe it exactly (tests/docs.
 
 ```nyra
 use web
-site("Brew & Co", primary: "#3B2A1A", display: "Playfair Display")
+site("Brew & Co", primary: "#3B2A1A")
 let drinks = [("Latte", "hot", "latte.jpg"), ("Cold brew", "cold", "cold.jpg")]
 enum Msg { Show(str) }
 var kind = "all"
@@ -39,26 +39,26 @@ page("/", "Brew & Co") {
 ```
 site(name, primary: accent: bg: font: display: radius: 16 style: soft|sharp|editorial|dark lang: tz:)
 page(path, title, desc:) {}
-section(id, title, kicker: text: bg: alt|dark|white|primary|accent) {}
+section(id, title, kicker: text: bg: alt|dark|primary) {}
 grid(cols, widths: "1fr 2fr") {}   stack {}   row {}
 card(title, text, icon: image: tag: items: fill: href:) {}
-h1 h2 h3(text, icon:)   p small note(text)   link(text, href)   img(src, alt, ratio: "4/3" caption:)
-button(text, href, style: primary|accent|outline|ghost|light on: active: icon:)
+h1 h2 h3(text, icon:)   p small note(text)   link(text, href)   img(src, alt, ratio: "4/3" caption: width:)
+button(text, href, style: primary|outline|ghost on: active: icon:)
 list(items, icon:)   table(rows, head:)   address {}   chip(title, text, icon:)   embed(url, title)
 quote(text, name, place: stars:)   stat(value, label)   steps([(label, text)])   marquee(words)
 navbar(brand, [(label, href)], cta: (label, href))
-hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: rows) {}   badge: hours rows, shows open/closed now
-gallery([(image, alt, tag)], filters: [(tag, label)])
-hours(rows)   rows: [(label, "1-5 8:00-16:00")], days 1-7 = Mon-Sun, "" closed
+hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: rows) {}
+gallery([(image, alt, tag)], filters: [(tag, label)])   hours(rows)   rows: [(label, "1-5 8:00-16:00")], days 1-7
 map(address)   split { card(...) }   footer(text: links: contact: [str] small: [str]) {}
+sidebar([(label, href)]) {}   app nav, ("Group", "") a heading   tabs([label]) {}   search(hint)
+media(title, image: href: meta: badge: price:)   video(src, poster: title:)   YouTube/Vimeo play here
 form(title, mailto: | on:) {}   field(name, label, type: text|email|tel|date|area|select|check req: hint: options: [str])
 css(".x { color: red }")
 ```
 
 ## Motion
-- `anim:` fade rise zoom pop words count stagger; `hover:` lift glow zoom tilt; `loop:` float pulse; `scroll:` parallax; modifiers: `"rise slow 0.2 spring"`. `keyframes("sway", "50% { rotate: 3deg }")` adds a word.
-- Nothing moves unasked: give sections and the hero `anim: "rise"`.
+- `anim:` fade rise slide zoom pop count stagger; `hover:` lift glow zoom; `loop:` float pulse marquee; `scroll:` parallax; `"rise slow 0.2"`. `keyframes("sway", "50% { rotate: 3deg }")` adds a word.
 
 ## Mistakes
 - No JSX, tags, `class:`, CSS `style:` or handler fns: `on:` takes a `Msg`.
-- E0372: a fn or script variable named like a web function (`page hours map list`).
+- E0372: a fn or script var named like a web function (`page map list`).

@@ -53,6 +53,22 @@ Web
   its local images copied into `assets/`. The summary (`--json` for agents) lists the parts, what was dropped, how
   many words and images were kept, and the size against the original HTML and CSS. No dependencies: the HTML
   tokenizer, the tree builder and the CSS reader are new and small (`src/clone/`).
+- **`nyra clone` for app-like sites and motion.** `--browser` drives the browser over the DevTools protocol (a small
+  WebSocket client, no crates): it turns down cookie and consent dialogs with their most private choice ("Reject
+  all", "Odmítnout vše", "Alle ablehnen", ...; never "Accept"), scrolls so lazy content loads, and watches what moves.
+  Side navigations become `sidebar`, grids of video and product thumbnails `media` cards (a YouTube or Vimeo
+  thumbnail plays in place), players and embeds `video(...)` playing the same video, tabs `tabs`, search boxes over
+  lists a working `search`, carousels `gallery`, endless strips `marquee`, products with categories a live filter
+  (`enum Msg`, `fn update`). Motion is mapped to the kit's words: AOS, sal.js, WOW/Animate.css, ScrollReveal, Framer
+  Motion start states, CSS `@keyframes` (fade, slide, rise, zoom, pop, spin, pulse, float, marquee, gradient, ...),
+  `:hover` rules (lift, glow, zoom, underline), counters, parallax, staggered grids, and keyframes no word fits as
+  `keyframes(name, body)`. What needs a server (sign-in, comments, recommendations, a site search, carts, uploads,
+  streaming) is named in the summary and marked `// TODO(server)` in the program; CLONE.md sketches what a future
+  `use server` would need.
+- New kit components: `sidebar(links) { ... }` (an app layout with a drawer on phones), `media(title, image:, href:,
+  meta:, badge:, price:)`, `video(src, poster:, title:)` (a file, or a click-to-load YouTube (youtube-nocookie) or
+  Vimeo player, allowed by the page's policy), `tabs([label]) { ... }` (links to the panels without JavaScript),
+  `search(hint)` (filters the cards after it), and `img(..., width:)` for small pictures.
 
 ## Unreleased (v0.8)
 

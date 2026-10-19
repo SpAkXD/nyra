@@ -1,0 +1,40 @@
+// An app layout: `sidebar(links) { ... }` puts a column of links beside the content (a drawer on
+// phones), `media` cards make a grid of thumbnails (a YouTube or Vimeo link plays in place),
+// `video` plays a file or a YouTube video, `tabs` switch panels, `search` filters the cards after it.
+use web
+
+site("Clipshelf", primary: "#C2410C")
+
+struct Clip { title: str, image: str, href: str, meta: str, badge: str }
+let clips = [
+    Clip(title: "Restoring a hand plane", image: "photo-1.svg", href: "https://www.youtube.com/watch?v=aqz-KE-bpKQ", meta: "Oak & Iron · 12K views", badge: "9:56"),
+    Clip(title: "Hand-cut dovetails", image: "photo-2.svg", href: "https://vimeo.com/76979871", meta: "Bench Notes · 48K views", badge: "14:03"),
+    Clip(title: "Sharpening chisels", image: "photo-3.svg", href: "https://example.com/sharpening", meta: "Edge Lab · 9K views", badge: "3:33")
+]
+
+page("/", "Clipshelf") {
+    navbar("Clipshelf", [("Videos", "#videos"), ("Shop", "#shop")])
+    sidebar([(":house: Home", "#videos"), (":history: History", "#watch"), ("Explore", ""), (":music: Music", "https://example.com/music"),
+        ("Sign in to like videos and comment.", "")]) {
+        section("videos", "Latest videos", anim: "rise") {
+            search("Search videos")
+            grid(3, anim: "stagger", hover: "lift") {
+                for c in clips { media(c.title, image: c.image, href: c.href, meta: c.meta, badge: c.badge) }
+            }
+        }
+        section("watch", "Watch") {
+            h1("Restoring a hand plane")
+            video("https://www.youtube.com/watch?v=aqz-KE-bpKQ", poster: "photo-4.svg", title: "Restoring a hand plane")
+            video("https://example.com/films/kiln.mp4", poster: "photo-5.svg", title: "Opening the kiln")
+        }
+        section("shop", "Shop") {
+            tabs(["Tools", "Books"]) {
+                grid(2) {
+                    media("Block plane", image: "photo-6.svg", price: "€89", meta: "In stock", ratio: "1/1")
+                    media("Marking gauge", image: "photo-1.svg", price: "€35", meta: "In stock", ratio: "1/1")
+                }
+                p("Books arrive in spring.")
+            }
+        }
+    }
+}

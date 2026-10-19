@@ -22,6 +22,8 @@ pub struct Fetched {
     pub text: String,
     /// The final URL after redirects (the base for relative links), or the file's path.
     pub url: String,
+    /// The label of the cookie or consent button `--browser` clicked to turn the dialog down.
+    pub consent: String,
 }
 
 pub fn is_url(s: &str) -> bool {
@@ -63,7 +65,11 @@ pub fn get(url: &str, limit: usize, timeout_s: u64) -> Result<Fetched, String> {
         return Err(format!("cannot fetch {url}: the server answered HTTP {code}"));
     }
     let bytes = if bytes.len() > limit { bytes[..limit].to_vec() } else { bytes };
-    Ok(Fetched { text: decode_bytes(&bytes, &ctype), url: if final_url.is_empty() { url.to_string() } else { final_url } })
+    Ok(Fetched {
+        text: decode_bytes(&bytes, &ctype),
+        url: if final_url.is_empty() { url.to_string() } else { final_url },
+        consent: String::new(),
+    })
 }
 
 /// Text from bytes: UTF-8 unless the content type or a `<meta charset>` says a Latin charset.
@@ -83,7 +89,7 @@ pub fn decode_bytes(bytes: &[u8], ctype: &str) -> String {
 pub fn read_file(path: &Path, limit: usize) -> Result<Fetched, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("cannot read `{}`: {e}", path.display()))?;
     let bytes = if bytes.len() > limit { &bytes[..limit] } else { &bytes[..] };
-    Ok(Fetched { text: decode_bytes(bytes, ""), url: path.display().to_string() })
+    Ok(Fetched { text: decode_bytes(bytes, ""), url: path.display().to_string(), consent: String::new() })
 }
 
 /// The browsers that can dump a rendered page, in the order they are tried.
@@ -135,6 +141,13 @@ pub fn rendered(url: &str, timeout_s: u64) -> Result<Fetched, String> {
         return Err("--browser needs Chrome, Edge, Brave or Chromium installed (or NYRA_BROWSER set to one)".into());
     };
     let profile = std::env::temp_dir().join("nyra-clone-browser");
+    // the DevTools protocol: consent dialogs turned down, lazy content scrolled into view, motion
+    // observed; `--dump-dom` is the fallback for a browser that does not speak it
+    let _ = std::fs::remove_dir_all(profile.join("Default").join("Service Worker"));
+    let first = match devtools(browser, &profile, url) {
+        Ok(f) => return Ok(f),
+        Err(e) => e,
+    };
     let mut last = String::new();
     // First with virtual time, so timers and lazy content settle; a page that animates without
     // end never lets virtual time run out, so then without it. A new profile's first start may
@@ -143,13 +156,72 @@ pub fn rendered(url: &str, timeout_s: u64) -> Result<Fetched, String> {
         let _ = std::fs::remove_dir_all(profile.join("Default").join("Service Worker"));
         match dump(browser, &profile, url, wait, timeout_s) {
             Ok(html) if html.contains('<') => {
-                return Ok(Fetched { text: html, url: url.to_string() });
+                return Ok(Fetched { text: html, url: url.to_string(), consent: String::new() });
             }
             Ok(_) => last = "the browser printed no page".into(),
             Err(e) => last = e,
         }
     }
-    Err(format!("{} could not render {url}: {last}", browser.display()))
+    Err(format!("{} could not render {url}: {first}; with --dump-dom: {last}", browser.display()))
+}
+
+/// The page through the DevTools protocol: opened, its consent dialog turned down (the most
+/// private choice), scrolled a few screens so lazy images and lists load, its motion observed,
+/// then its DOM.
+fn devtools(browser: &Path, profile: &Path, url: &str) -> Result<Fetched, String> {
+    // a browser that just closed may still hold its profile: one more try
+    let mut last = String::new();
+    for _ in 0..2 {
+        let mut b = match super::cdp::launch(browser, profile) {
+            Ok(b) => b,
+            Err(e) => {
+                last = e;
+                std::thread::sleep(Duration::from_millis(1500));
+                continue;
+            }
+        };
+        let result = read_page(&mut b, url);
+        b.close();
+        match result {
+            Ok(f) => return Ok(f),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+fn read_page(b: &mut super::cdp::Browser, url: &str) -> Result<Fetched, String> {
+    use super::cdp;
+    b.navigate(url)?;
+    b.settle(Duration::from_millis(1200), Duration::from_secs(15));
+    let mut consent = String::new();
+    for _ in 0..2 {
+        let got = b.reject_consent();
+        if got.is_empty() {
+            break;
+        }
+        consent = got;
+        std::thread::sleep(Duration::from_millis(1500));
+        b.settle(Duration::from_millis(1200), Duration::from_secs(15));
+    }
+    b.eval(cdp::MOTION_BEFORE_JS);
+    b.eval(&cdp::SCROLL_JS.replace("STEPS", "10"));
+    b.settle(Duration::from_millis(1000), Duration::from_secs(10));
+    b.eval(cdp::MOTION_AFTER_JS);
+    b.eval(cdp::HINTS_JS);
+    let mut html = b.eval("document.documentElement.outerHTML");
+    if !html.contains('<') {
+        return Err("the browser gave no page".to_string());
+    }
+    let at = b.eval("location.href");
+    if html.len() > MAX_PAGE {
+        let mut cut = MAX_PAGE;
+        while !html.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        html.truncate(cut);
+    }
+    Ok(Fetched { text: format!("<!doctype html>\n{html}"), url: if at.starts_with("http") { at } else { url.to_string() }, consent })
 }
 
 fn dump(browser: &Path, profile: &Path, url: &str, wait: &str, timeout_s: u64) -> Result<String, String> {

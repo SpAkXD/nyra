@@ -236,7 +236,7 @@ Text is always escaped: `"<b>"` shows `<b>`. Markdown is the only markup, and it
 | `stack { }`, `row { }` | Vertical / horizontal (wrapping) flow with the theme's gap | `gap:`, `align:` |
 | `card(title, text) { }` | Surface with radius and shadow; an `icon:` card is a feature card, an `image:` card a product card | `icon:`, `image:`, `fill: true` (primary background), `href:` |
 | `h1`, `h2`, `h3`, `p`, `small` | Text | `icon:`, `sub:` (h3), `size: "lg"` |
-| `img(src, alt)` | Responsive image; `alt` is required, `""` marks a decorative one | `ratio: "16/10"`, `caption:`, `fit:` |
+| `img(src, alt)` | Responsive image; `alt` is required, `""` marks a decorative one | `ratio: "16/10"`, `caption:`, `fit:`, `width: "160px"` (a small picture: an avatar, a logo) |
 | `link(text, href)`, `button(text, href)` | A link; a button-styled link or an action | `style: "primary" | "outline" | "ghost"`, `on:` (action) |
 | `list(items)`, `table(rows)`, `address { }`, `note(text)` | Lists, tables, contact block, a small line with a divider | |
 | `chip(title, text)` | Pill with an icon, a title and a line | `icon:` |
@@ -262,6 +262,11 @@ Each one is the look and behavior of a well-made modern site with no styling cod
 | `steps(items)` | Vertical timeline of (label, text) | Drawn line, staggered items |
 | `stat(value, label)` | Big number with a label | Counts up when seen |
 | `footer(...)` | Columns of brand text, links, contacts, small print | Back-to-top |
+| `sidebar(links) { ... }` | An app layout: a column of links (`(label, href)`; an empty href is a group heading, or a note when long) beside the content of its block | Sticky on desktops, a drawer behind a menu button on phones (a checkbox: no JavaScript needed), closes on a link or Escape |
+| `media(title, image:, href:, meta:, badge:, price:)` | A thumbnail card for grids of videos and products: the picture with a corner badge (a video's length), the title, a price and a meta line (`"Channel · 1.2M views · 3 days ago"`); `ratio:`, `tag:` | A YouTube or Vimeo `href:` plays in place when the picture is clicked (youtube-nocookie.com, no request before the click) |
+| `video(src, poster:, title:)` | An mp4 or webm file in `<video controls>`, or a YouTube or Vimeo address as a poster with a play button; `ratio:` | The player loads only when clicked; the page's policy allows its frame and media origins |
+| `tabs([label]) { ... }` | One panel per child | Without JavaScript the labels are links to the panels, which all show; with it a tab list with arrow keys |
+| `search(hint)` | A search box | Filters the cards (or list items, rows) of the element right after it as one types, accents ignored; hidden without JavaScript |
 
 Helpers: `maps(address)` gives a Google Maps search URL, `year()` the current year (at build time).
 
@@ -847,7 +852,8 @@ its images in `examples/web/assets/`; `tests/web.rs` builds each one and compare
   and the kit chunks it needs. `page(path, title) { ... }` puts the document together (head, sprite, skip link,
   the navbar before `<main>`, the footer after it), calls `_uses(chunk)` for the chunks of its children and
   `_emit(path, html)` once. The chunk names are the markers of `kit.css` and `kit.js`: `table chip embed quote nav
-  hero hours map form steps stat foot marquee gallery split` (CSS) and `nav hours map form gallery` (JS); the text
+  hero hours map form steps stat foot marquee gallery split tabs app media video search` (CSS) and `nav hours map form
+  gallery tabs app video search` (JS); the text
   before the first marker of `kit.css` is the base (theme defaults, type, layout, cards, buttons, lists).
 - `site(...)` gives the theme to `_css` as one `:root{...}` rule with the variables `--primary`, `--accent`, `--bg`,
   `--alt`, `--ink`, `--muted` (what the contrast check reads), `--c-NAME` for each palette color, `--on-primary`,
@@ -887,7 +893,8 @@ Where the build differs from the design above, and why:
   `list(icon:, ordered:, cols:)`, `section(width: "narrow")`, `hero(next:, height: "half")`, `site(logo:)`,
   `navbar(logo:)`, and the helpers `maps(address)` and `year()`.
 - **The kit's words** (`say:` keys, English and Czech built in): `open closed shut hours more down map show go
-  menu close nav skip back all filter zoom prev next dismiss send mail_note done done_text edit top links contact`.
+  menu close nav skip back all filter zoom prev next dismiss send mail_note done done_text edit top links contact side
+  play search none`.
 - **Motion**: every element and component takes `anim:`, `hover:`, `loop:`, `scroll:`, `at:` and `morph:`, written
   as the attributes of the [Motion build contract](#motion-build-contract); `site(motion:, transition:)` are
   `data-motion` and `data-transition` on `<html>`. Literal values are checked when the program compiles
