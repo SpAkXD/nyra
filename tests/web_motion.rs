@@ -1,7 +1,8 @@
 //! The motion fixtures (`tests/web/motion/*.html`) in a headless Chrome: every word reveals and ends
 //! in place, counters end on their text, there are no script errors, and with reduced motion (or
 //! `data-motion="off"`) nothing animates longer than 10 ms. And a live site clicked through: its filter
-//! buttons change the cards, and every card shown is visible. The browser is `NYRA_CHROME`, else a
+//! buttons change the cards, and every card shown is visible. And every fixture page keeps its
+//! Content-Security-Policy (no violation, also after a live region renders again). The browser is `NYRA_CHROME`, else a
 //! Chrome, Edge or Brave in the usual places; without one (or without Node.js) the tests are skipped.
 
 mod common;
@@ -80,6 +81,28 @@ fn the_live_filter_works_in_a_browser() {
     };
     let out =
         Command::new("node").arg("tests/web/live_check.mjs").arg(&chrome).arg("tests/web/fixtures/live/index.html").output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    if out.status.code() == Some(2) {
+        common::missing(&format!("the browser did not start: {text}"));
+        return;
+    }
+    assert!(out.status.success(), "{text}");
+}
+
+/// Every page of the built fixtures (tests/web/fixtures) served with its Content-Security-Policy,
+/// scrolled to the end and its live regions clicked through: no CSP violation (a style attribute set
+/// by a script, an inline style the policy does not allow) and no script error.
+#[test]
+fn the_fixture_pages_keep_their_policy_in_a_browser() {
+    if Command::new("node").arg("--version").output().is_err() {
+        common::missing("no Node.js to drive the browser for the CSP check");
+        return;
+    }
+    let Some(chrome) = chrome() else {
+        common::missing("no Chrome, Edge or Brave for the CSP check (set NYRA_CHROME)");
+        return;
+    };
+    let out = Command::new("node").arg("tests/web/csp_check.mjs").arg(&chrome).arg("tests/web/fixtures").output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     if out.status.code() == Some(2) {
         common::missing(&format!("the browser did not start: {text}"));
