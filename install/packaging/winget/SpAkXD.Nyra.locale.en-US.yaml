@@ -1,0 +1,30 @@
+# winget default locale manifest (made from install/packaging/winget/ by install/packaging/fill.sh)
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: SpAkXD.Nyra
+PackageVersion: {{VERSION}}
+PackageLocale: en-US
+Publisher: SpAkXD
+PublisherUrl: https://github.com/SpAkXD
+PublisherSupportUrl: https://github.com/SpAkXD/nyra/issues
+PackageName: Nyra
+PackageUrl: https://nyralang.dev
+License: MIT
+LicenseUrl: https://github.com/SpAkXD/nyra/blob/main/LICENSE
+ShortDescription: A compact, strictly-typed programming language designed to be written by AI agents.
+Description: |-
+  Nyra is a small, strict programming language made for AI agents to write. Its compiler checks a program in
+  milliseconds, reports errors with stable codes and fixes (also as JSON), runs programs in an interpreter or
+  natively through C, and builds websites. Native programs need a C compiler (gcc or clang); the interpreter
+  and the JavaScript target do not.
+Moniker: nyra
+Tags:
+  - programming-language
+  - compiler
+  - ai
+  - llm
+ReleaseNotesUrl: https://github.com/SpAkXD/nyra/releases/tag/v{{VERSION}}
+Documentations:
+  - DocumentLabel: Install
+    DocumentUrl: https://github.com/SpAkXD/nyra/blob/main/docs/INSTALL.md
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

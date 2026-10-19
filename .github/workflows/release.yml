@@ -58,6 +58,12 @@ jobs:
           cp "target/${{ matrix.target }}/release/$exe" LICENSE README.md "$name/"
           cp -r docs examples "$name/"
           if [ "${{ matrix.archive }}" = "zip" ]; then
+            # the Explorer file icon that install/install.ps1 registers (the script finds ..\..\assets\nyra.ico)
+            mkdir -p "$name/tools" "$name/assets"
+            cp -r tools/windows "$name/tools/"
+            cp assets/nyra.ico "$name/assets/"
+          fi
+          if [ "${{ matrix.archive }}" = "zip" ]; then
             7z a -tzip "dist/$name.zip" "$name"
           else
             tar -czf "dist/$name.tar.gz" "$name"
@@ -84,6 +90,18 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum nyra-* > SHA256SUMS.txt
+
+      # The install scripts and the package manifests (winget, Homebrew) filled for this release, as release
+      # assets: https://github.com/SpAkXD/nyra/releases/latest/download/install.sh always has the newest
+      # script. The manifests are not submitted anywhere (see docs/INSTALL.md).
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Install scripts and package manifests
+        run: |
+          cp repo/install/install.sh repo/install/install.ps1 dist/
+          sh repo/install/packaging/fill.sh "$GITHUB_REF_NAME" dist/SHA256SUMS.txt dist
 
       - uses: softprops/action-gh-release@v2
         with:
