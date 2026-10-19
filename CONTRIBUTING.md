@@ -35,18 +35,25 @@ hand to check one program the same way.
 | `src/check.rs`, `src/check/` | type checker, and most error codes |
 | `src/ir/` | the intermediate representation: lowering (evaluation order, reference counting), checks, optimizations; `interp.rs`, `host.rs`, `jsonrt.rs`: the interpreter that `--sandbox` and the `ex` examples use |
 | `src/caps.rs`, `src/sandbox.rs`, `src/mem.rs` | capabilities (`use fs` needs `--allow fs`, E0290), the sandboxed run with its limits, the heap counter |
-| `src/codegen/c.rs`, `src/codegen/js.rs` | the two backends |
+| `src/codegen/c.rs`, `src/codegen/js.rs` | the two supported backends (`py.rs`, `ts.rs`, `rs.rs`, `go.rs` are the experimental ones) |
 | `src/rt/c/`, `src/rt/js/` | the runtime code each backend embeds (strings, arrays, printing, runtime errors) |
 | `src/diag.rs`, `src/hints.rs` | error rendering, for humans and as JSON, and the hints that name the likely fix |
 | `src/fix.rs` | `--fix`: validates, applies and repeats the fixes that errors carry |
 | `src/explain.rs`, `docs/ERRORS.md` | `nyra explain` and the error database it prints |
+| `src/mcp.rs`, `src/edit.rs`, `src/auto.rs` | the MCP server; outline, show and edit by symbol; the automatic `nyra run` (interpreter first, native when it runs long) |
+| `src/web.rs`, `src/web/`, `src/webcheck.rs`, `src/std/web.nyra` | websites (`use web`): the build and the dev server, the kit and motion CSS/JS, the compile-time web checks, the `web` library written in Nyra ([`docs/WEB.md`](docs/WEB.md) describes the contracts between them) |
+| `src/wasm.rs`, `tools/build_wasm.py` | the compiler as WebAssembly, for the browser playground |
 | `docs/SPEC.md` | the language spec (the source of truth) |
 | `docs/AGENT_CARD.md` | the agent card: the compact spec `nyra_spec` serves. **Hard token budget** (1,400 on Claude's tokenizer, measured with `python tools/card_tokens.py`): a feature that needs card text must displace something. `tests/docs.rs` runs its example, checks its name lists against the compiler and its "Not in Nyra" list against the checker |
+| `docs/WEB_CARD.md` | the web card, read with the agent card for `use web` programs; the same hard budget |
 | `docs/AI_GUIDE.md`, `llms.txt` | what AIs read before writing Nyra |
-| `examples/` | `name.nyra` plus `name.out`, the exact expected output |
+| `docs/AGENTS.md` | the `AGENTS.md` users copy into their own projects (not the maintainers' file) |
+| `examples/` | `name.nyra` plus `name.out`, the exact expected output; `examples/web/` the web examples |
 | `tests/errors/` | one small program per error code |
 | `tests/messages.txt` | every message and hint, word for word (see below) |
-| `editors/vscode/` | VS Code syntax highlighting |
+| `tests/web.rs`, `tests/web_build.rs`, `tests/web_motion.rs` | the web library against the fixture sites in `tests/web/` (`NYRA_BLESS=1 cargo test --release --test web` rewrites them; review the diff), the build and its client code, the motion words |
+| `editors/vscode/` | the VS Code extension: syntax highlighting and the file icon |
+| `assets/nyra.ico`, `tools/gen_icon.py`, `tools/windows/` | the file icon, the script that draws it, and the per-user Windows install and uninstall scripts |
 
 ## Adding a language feature
 
@@ -65,7 +72,8 @@ hand to check one program the same way.
 ## Adding an error code
 
 - Codes are stable: never renumber or reuse one. Take the next free number in its group (`E00xx`
-  lexer, `E01xx` parser, `E02xx` checker).
+  lexer, `E01xx` parser, `E02xx` checker, `E03xx` modules, the standard library, the sandbox limits, performance
+  warnings and the web, whose block from E0370 on is listed in `docs/WEB.md`).
 - Create it with `Diag::new("E0xxx", message, span).hint("how to fix it")`. The message says what is
   wrong with the names and types involved (what was expected, what was found); the hint says how to fix
   it, with corrected code where possible. Every error needs a hint: agents rely on it.
