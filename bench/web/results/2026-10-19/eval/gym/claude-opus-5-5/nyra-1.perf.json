@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/gym/claude-opus-5-5/nyra-1/",
+ "runs": 3,
+ "fcp_ms": 732,
+ "lcp_ms": 732,
+ "cls": 0,
+ "load_ms": 694,
+ "kb": 382,
+ "requests": 10,
+ "kb_by_type_first_run": {
+  "Document": 5.4,
+  "Stylesheet": 10.4,
+  "Script": 19.1,
+  "Font": 197.1,
+  "Image": 149.3,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  732,
+  616,
+  760
+ ]
+}

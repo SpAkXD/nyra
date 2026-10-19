@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zelená Dental – gentle dentistry in Olomouc</title>
+<meta name="description" content="Family dental practice on Horní náměstí in Olomouc: check-ups, hygiene, fillings, whitening and children's dentistry. New patients welcome.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--p:#0F766E;--pd:#0b5a54;--a:#F59E0B;--bg:#F7FAF9;--t:#14302C;--card:#fff;--mut:#4d6762;--sh:0 6px 24px rgba(20,48,44,.08)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--t);line-height:1.6}
+h1,h2,h3{font-family:Outfit,sans-serif;line-height:1.15;margin:0}
+a{color:var(--p)}
+:focus-visible{outline:3px solid var(--a);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+section{padding:88px 0}
+.kicker{color:var(--p);font-weight:600;text-transform:uppercase;letter-spacing:.12em;font-size:.8rem;margin:0 0 10px}
+h2{font-size:clamp(1.8rem,4vw,2.6rem);margin-bottom:14px}
+.sub{color:var(--mut);max-width:620px;margin:0 0 40px}
+.btn{display:inline-block;padding:13px 24px;border-radius:999px;font-weight:600;text-decoration:none;border:2px solid var(--p);background:var(--p);color:#fff;cursor:pointer;font:600 1rem Inter,sans-serif;transition:transform .2s,background .2s}
+.btn:hover{transform:translateY(-2px);background:var(--pd)}
+.btn.amber{background:var(--a);border-color:var(--a);color:#14302C}
+.btn.amber:hover{background:#e08e00}
+.btn.out{background:transparent;border-color:#fff;color:#fff}
+.btn.out:hover{background:rgba(255,255,255,.15)}
+header{position:sticky;top:0;z-index:50;background:rgba(247,250,249,.92);backdrop-filter:blur(10px);border-bottom:1px solid #e0ebe8}
+nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.brand{font:700 1.4rem Outfit,sans-serif;color:var(--p);text-decoration:none}
+.links{display:flex;align-items:center;gap:26px}
+.links a{text-decoration:none;color:var(--t);font-weight:500}
+.links a:hover{color:var(--p)}
+.links a.btn{color:#14302C;padding:9px 20px}
+#menuBtn{display:none;background:none;border:0;padding:8px;cursor:pointer;color:var(--t)}
+.hero{position:relative;min-height:88vh;display:flex;align-items:center;color:#fff;padding:80px 0;background:#0b2f2b}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,28,25,.88),rgba(6,28,25,.5) 60%,rgba(6,28,25,.25));z-index:1}
+.hero .wrap{position:relative;z-index:2}
+.hero h1{font-size:clamp(2.4rem,6vw,4.4rem);max-width:760px;margin-bottom:18px}
+.hero p.lead{font-size:1.15rem;max-width:540px;opacity:.95}
+.hero .kick{font-weight:600;letter-spacing:.08em;color:#fcd34d;margin:0 0 14px}
+.cta{display:flex;gap:14px;flex-wrap:wrap;margin:28px 0}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.18);font-weight:600;font-size:.9rem}
+.badge:before{content:"";width:9px;height:9px;border-radius:50%;background:#9ca3af}
+.badge.open:before{background:#34d399;box-shadow:0 0 0 4px rgba(52,211,153,.3)}
+.badge.closed:before{background:#f87171}
+.hours .badge{background:#e6f2ef;color:var(--t)}
+.nums{padding:50px 0 0}
+.numgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:-0px}
+.num{background:var(--card);border-radius:22px;box-shadow:var(--sh);padding:30px;text-align:center}
+.num b{display:block;font:700 clamp(2.2rem,5vw,3.4rem) Outfit,sans-serif;color:var(--p)}
+.num span{color:var(--mut)}
+.grid{display:grid;gap:22px}
+.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border-radius:22px;box-shadow:var(--sh);padding:28px;transition:transform .25s,box-shadow .25s}
+.card:hover{transform:translateY(-6px);box-shadow:0 14px 34px rgba(20,48,44,.14)}
+.ico{width:52px;height:52px;border-radius:14px;background:#e1f1ee;color:var(--p);display:grid;place-items:center;margin-bottom:16px}
+.card h3{font-size:1.25rem;margin-bottom:6px}
+.card p{margin:0;color:var(--mut)}
+.person{padding:0;overflow:hidden}
+.person img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.person div{padding:20px 22px 24px}
+.role{color:var(--p);font-weight:600;font-size:.9rem;margin-bottom:8px!important}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:22px;box-shadow:var(--sh);overflow:hidden;max-width:760px}
+th,td{text-align:left;padding:16px 24px}
+th{background:var(--p);color:#fff;font-family:Outfit,sans-serif}
+td:last-child,th:last-child{text-align:right;white-space:nowrap}
+tbody tr:nth-child(even){background:#f3f9f8}
+.testi{background:#e9f3f1}
+blockquote{margin:0}
+blockquote p{font:500 1.15rem Outfit,sans-serif;color:var(--t);margin-bottom:14px}
+blockquote footer{background:none;border:0;color:var(--p);font-weight:600}
+.stars{color:var(--a);letter-spacing:3px;margin-bottom:10px}
+form{background:#fff;border-radius:22px;box-shadow:var(--sh);padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:820px}
+.f{display:flex;flex-direction:column;gap:6px}.f.full{grid-column:1/-1}
+label{font-weight:600;font-size:.9rem}
+input,select,textarea{font:inherit;padding:12px 14px;border:1.5px solid #c9dad6;border-radius:12px;background:#fbfdfc;color:var(--t)}
+input:focus,select:focus,textarea:focus{outline:3px solid rgba(15,118,110,.3);border-color:var(--p)}
+.faq{max-width:780px}
+.q{background:#fff;border-radius:16px;box-shadow:var(--sh);margin-bottom:12px}
+.q button{width:100%;text-align:left;background:none;border:0;padding:18px 22px;font:600 1.05rem Outfit,sans-serif;color:var(--t);cursor:pointer;display:flex;justify-content:space-between;gap:14px;border-radius:16px}
+.q button:after{content:"+";font-size:1.5rem;color:var(--p);transition:transform .25s;line-height:1}
+.q button[aria-expanded=true]:after{transform:rotate(45deg)}
+.ans{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s}
+.ans.open{grid-template-rows:1fr}
+.ans>div{overflow:hidden}
+.ans p{margin:0;padding:0 22px 20px;color:var(--mut)}
+.contact{display:grid;grid-template-columns:1fr 1.2fr;gap:30px}
+.hours ul{list-style:none;padding:0;margin:14px 0 22px}
+.hours li{display:flex;justify-content:space-between;padding:9px 12px;border-radius:10px}
+.hours li.today{background:#fef3c7;font-weight:600}
+.map{border:0;width:100%;height:100%;min-height:340px;border-radius:22px;box-shadow:var(--sh)}
+.info p{margin:6px 0}
+footer.site{background:#0d2623;color:#cfe3df;padding:48px 0 30px}
+footer.site a{color:#cfe3df;text-decoration:none}footer.site a:hover{color:#fff}
+.fgrid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+.fgrid strong{font:700 1.3rem Outfit,sans-serif;color:#fff}
+.flinks{display:flex;gap:18px;flex-wrap:wrap}
+.copy{margin-top:30px;font-size:.85rem;opacity:.7}
+/* motion */
+.rv{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease;transition-delay:var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+.hi{opacity:0;transform:translateY(22px);animation:up .8s ease forwards;animation-delay:var(--d)}
+@keyframes up{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.rv,.hi{opacity:1;transform:none;transition:none;animation:none}html{scroll-behavior:auto}.card,.btn,.ans{transition:none}}
+@media(max-width:900px){.g3{grid-template-columns:1fr 1fr}.g4{grid-template-columns:1fr 1fr}.contact{grid-template-columns:1fr}}
+@media(max-width:720px){
+section{padding:64px 0}
+#menuBtn{display:block}
+.links{display:none;position:absolute;top:68px;left:0;right:0;background:var(--bg);flex-direction:column;align-items:stretch;padding:16px 20px 22px;gap:14px;border-bottom:1px solid #e0ebe8}
+.links.show{display:flex}
+.links a.btn{text-align:center}
+.g3,.g4,.numgrid,form{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<header>
+<div class="wrap"><nav aria-label="Main">
+<a class="brand" href="#top">Zelená Dental</a>
+<button id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="links"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<div class="links" id="links">
+<a href="#services">Services</a><a href="#team">Team</a><a href="#prices">Prices</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>
+<a class="btn amber" href="#booking">Book a visit</a>
+</div></nav></div>
+</header>
+<main id="top">
+<div class="hero">
+<img src="https://picsum.photos/seed/zelena-hero/1600/1000" alt="The bright treatment room of Zelená Dental">
+<div class="wrap">
+<p class="kick hi" style="--d:.1s">Olomouc · Horní náměstí 21</p>
+<h1 class="hi" style="--d:.3s">Gentle dentistry for the whole family</h1>
+<p class="lead hi" style="--d:.5s">Check-ups, hygiene and modern treatment without the stress. New patients welcome, children from 3 years.</p>
+<div class="cta hi" style="--d:.7s"><a class="btn amber" href="#booking">Book a visit</a><a class="btn out" href="#prices">See prices</a></div>
+<span class="badge hi" style="--d:.9s" data-badge>Closed now</span>
+</div>
+</div>
+
+<div class="nums"><div class="wrap numgrid">
+<div class="num rv"><b data-count="15">15</b><span>years in Olomouc</span></div>
+<div class="num rv" style="--d:.15s"><b data-count="4800">4,800</b><span>patients</span></div>
+<div class="num rv" style="--d:.3s"><b data-count="98" data-suffix=" %">98 %</b><span>would recommend us</span></div>
+</div></div>
+
+<section id="services"><div class="wrap">
+<div class="rv"><p class="kicker">What we do</p><h2>Care for every smile</h2></div>
+<div class="grid g3" style="margin-top:30px">
+<article class="card rv"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><h3>Check-ups</h3><p>A thorough exam every six months, with digital X-rays only when needed.</p></article>
+<article class="card rv" style="--d:.1s"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div><h3>Dental hygiene</h3><p>Scaling, polishing and airflow cleaning by our hygienist.</p></article>
+<article class="card rv" style="--d:.2s"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3c-2.5 0-4 2-4 4.5 0 2 1 3 1.5 5S5.5 21 7.5 21c2 0 1.5-5 4.5-5s2.5 5 4.5 5c2 0 2-4.500 3-8.500.5-2 1.500-3 1.500-5C21 5 19.500 3 17 3c-2 0-3 1-5 1S9 3 7 3z"/></svg></div><h3>Fillings</h3><p>Tooth-coloured composite fillings that last.</p></article>
+<article class="card rv"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg></div><h3>Whitening</h3><p>Safe in-office or at-home whitening for a brighter smile.</p></article>
+<article class="card rv" style="--d:.1s"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14c1 1.500 2.300 2 4 2s3-.5 4-2"/><path d="M9 9.500h.01M15 9.500h.01"/></svg></div><h3>Children's dentistry</h3><p>Calm first visits and sealants for kids from 3 years.</p></article>
+<article class="card rv" style="--d:.2s"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v8M8 12h8"/><rect x="3" y="3" width="18" height="18" rx="5"/></svg></div><h3>Emergency care</h3><p>Toothache? Call before 10 a.m. and we will see you the same day.</p></article>
+</div></div></section>
+
+<section id="team" style="padding-top:20px"><div class="wrap">
+<div class="rv"><p class="kicker">Our team</p><h2>People who take their time</h2></div>
+<div class="grid g4" style="margin-top:30px">
+<article class="card person rv"><img src="https://picsum.photos/seed/zelena-team-1/600/600" alt="Dr. Petra Zelená" loading="lazy"><div><h3>Dr. Petra Zelená</h3><p class="role">Dentist, founder</p><p>Twenty years of practice and a soft spot for nervous patients.</p></div></article>
+<article class="card person rv" style="--d:.1s"><img src="https://picsum.photos/seed/zelena-team-2/600/600" alt="Dr. Martin Kovář" loading="lazy"><div><h3>Dr. Martin Kovář</h3><p class="role">Dentist</p><p>Fillings, root canals and crowns, done carefully and explained clearly.</p></div></article>
+<article class="card person rv" style="--d:.2s"><img src="https://picsum.photos/seed/zelena-team-3/600/600" alt="Lucie Horáková" loading="lazy"><div><h3>Lucie Horáková</h3><p class="role">Dental hygienist</p><p>Makes cleanings painless and teaches the tricks that keep teeth healthy.</p></div></article>
+<article class="card person rv" style="--d:.3s"><img src="https://picsum.photos/seed/zelena-team-4/600/600" alt="Eva Šimková" loading="lazy"><div><h3>Eva Šimková</h3><p class="role">Receptionist</p><p>Finds you a time that works and answers every question about insurance.</p></div></article>
+</div></div></section>
+
+<section id="prices" style="padding-top:20px"><div class="wrap">
+<div class="rv"><p class="kicker">Prices</p><h2>Clear prices, no surprises</h2><p class="sub">Prices in CZK. Check-ups are covered by public health insurance.</p></div>
+<table class="rv"><thead><tr><th scope="col">Treatment</th><th scope="col">Price</th></tr></thead><tbody>
+<tr><td>Check-up (insured)</td><td>0 Kč</td></tr>
+<tr><td>Check-up (self-paying)</td><td>900 Kč</td></tr>
+<tr><td>Dental hygiene</td><td>1,600 Kč</td></tr>
+<tr><td>Composite filling</td><td>from 1,900 Kč</td></tr>
+<tr><td>Root canal treatment</td><td>from 4,500 Kč</td></tr>
+<tr><td>In-office whitening</td><td>6,900 Kč</td></tr>
+<tr><td>Children's check-up</td><td>0 Kč</td></tr>
+<tr><td>Emergency visit</td><td>1,200 Kč</td></tr>
+</tbody></table></div></section>
+
+<section class="testi"><div class="wrap">
+<div class="rv"><h2>What our patients say</h2></div>
+<div class="grid g3" style="margin-top:30px">
+<blockquote class="card rv"><div class="stars" aria-hidden="true">★★★★★</div><p>“I used to dread the dentist. Here I actually relax.”</p><footer>— Jana P.</footer></blockquote>
+<blockquote class="card rv" style="--d:.1s"><div class="stars" aria-hidden="true">★★★★★</div><p>“They fitted in my son the same morning he broke a tooth.”</p><footer>— Tomáš R.</footer></blockquote>
+<blockquote class="card rv" style="--d:.2s"><div class="stars" aria-hidden="true">★★★★★</div><p>“Clear prices and a hygienist who really knows her job.”</p><footer>— Markéta V.</footer></blockquote>
+</div></div></section>
+
+<section id="booking"><div class="wrap">
+<div class="rv"><p class="kicker">Book a visit</p><h2>Request an appointment</h2><p class="sub">Send us your request and we will call you back within one working day to confirm the time.</p></div>
+<form id="bookForm" class="rv">
+<div class="f"><label for="name">Name</label><input id="name" name="name" required autocomplete="name"></div>
+<div class="f"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" required autocomplete="tel"></div>
+<div class="f"><label for="email">E-mail</label><input id="email" name="email" type="email" required autocomplete="email"></div>
+<div class="f"><label for="treat">Treatment</label><select id="treat" name="treat" required><option value="">Choose…</option><option>Check-up</option><option>Dental hygiene</option><option>Filling</option><option>Whitening</option><option>Children's check-up</option><option>Emergency</option></select></div>
+<div class="f full"><label for="date">Preferred date</label><input id="date" name="date" type="date" required></div>
+<div class="f full"><label for="msg">Message (optional)</label><textarea id="msg" name="msg" rows="4"></textarea></div>
+<div class="f full"><button class="btn" type="submit">Send request</button></div>
+</form></div></section>
+
+<section id="faq" style="padding-top:20px"><div class="wrap">
+<div class="rv"><p class="kicker">FAQ</p><h2>Questions we hear often</h2></div>
+<div class="faq" style="margin-top:30px" id="faqList"></div>
+</div></section>
+
+<section id="contact" style="padding-top:20px"><div class="wrap">
+<div class="rv"><p class="kicker">Contact</p><h2>Find us on the main square</h2></div>
+<div class="contact" style="margin-top:30px">
+<div class="card hours rv">
+<h3>Opening hours</h3>
+<ul id="hoursList" style="margin-bottom:14px"></ul>
+<span class="badge" data-badge>Closed now</span>
+<div class="info" style="margin-top:22px">
+<p><strong>Horní náměstí 21, 779 00 Olomouc</strong><br><a href="https://maps.google.com/?q=Horní+náměstí+21,+Olomouc" target="_blank" rel="noopener">Open in Google Maps</a></p>
+<p>Phone: <a href="tel:+420585000321">+420 585 000 321</a></p>
+<p>E-mail: <a href="mailto:recepce@zelenadental.cz">recepce@zelenadental.cz</a></p>
+</div></div>
+<div class="rv" style="--d:.15s"><iframe class="map" title="Map of Zelená Dental" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=17.2459%2C49.5913%2C17.2559%2C49.5963&layer=mapnik&marker=49.5938%2C17.2509"></iframe></div>
+</div></div></section>
+</main>
+
+<footer class="site"><div class="wrap">
+<div class="fgrid">
+<div><strong>Zelená Dental</strong><br>Horní náměstí 21, 779 00 Olomouc</div>
+<nav class="flinks" aria-label="Footer"><a href="#services">Services</a><a href="#team">Team</a><a href="#prices">Prices</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></nav>
+</div>
+<p class="copy">© 2026 Zelená Dental s.r.o.</p>
+</div></footer>
+
+<script>
+(function(){
+var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+// menu
+var mb=document.getElementById('menuBtn'),lk=document.getElementById('links');
+mb.addEventListener('click',function(){var s=lk.classList.toggle('show');mb.setAttribute('aria-expanded',s)});
+lk.addEventListener('click',function(e){if(e.target.tagName==='A'){lk.classList.remove('show');mb.setAttribute('aria-expanded','false')}});
+// hours
+var days=[["Sunday",null],["Monday",[8,18]],["Tuesday",[8,18]],["Wednesday",[8,18]],["Thursday",[8,18]],["Friday",[8,14]],["Saturday",null]];
+var order=[1,2,3,4,5,6,0];
+var ul=document.getElementById('hoursList');
+order.forEach(function(i){var d=days[i],li=document.createElement('li');li.dataset.d=i;
+li.innerHTML='<span>'+d[0]+'</span><span>'+(d[1]?d[1][0]+':00–'+d[1][1]+':00':'closed')+'</span>';ul.appendChild(li)});
+function status(){
+var n=new Date(),d=n.getDay(),h=n.getHours()+n.getMinutes()/60,r=days[d][1];
+var open=!!r&&h>=r[0]&&h<r[1];
+document.querySelectorAll('[data-badge]').forEach(function(b){b.textContent=open?'Open now':'Closed now';b.classList.toggle('open',open);b.classList.toggle('closed',!open)});
+ul.querySelectorAll('li').forEach(function(li){li.classList.toggle('today',+li.dataset.d===d)});
+}
+status();setInterval(status,60000);
+// FAQ
+var faq=[["Do you accept new patients?","Yes. We accept new adult patients and children from 3 years. Book a first check-up with the form above."],["Which insurance companies do you work with?","All Czech public health insurers, including VZP, ČPZP and OZP."],["What should I bring to my first visit?","Your insurance card, an ID and a list of any medicines you take."],["Does dental hygiene hurt?","Usually not. If your gums are sensitive, we use a numbing gel at no extra cost."],["How do I cancel an appointment?","Call us at least 24 hours ahead so that someone else can take your time."]];
+var fl=document.getElementById('faqList');
+faq.forEach(function(f,i){
+var q=document.createElement('div');q.className='q rv';q.style.setProperty('--d',(i*.08)+'s');
+q.innerHTML='<h3><button type="button" aria-expanded="false" aria-controls="a'+i+'" id="b'+i+'">'+f[0]+'</button></h3><div class="ans" id="a'+i+'" role="region" aria-labelledby="b'+i+'"><div><p>'+f[1]+'</p></div></div>';
+fl.appendChild(q);
+var b=q.querySelector('button'),a=q.querySelector('.ans');
+b.addEventListener('click',function(){var o=a.classList.toggle('open');b.setAttribute('aria-expanded',o)});
+});
+q=null;
+// reveal
+var rv=document.querySelectorAll('.rv');
+if(reduce||!('IntersectionObserver' in window)){rv.forEach(function(e){e.classList.add('in')})}
+else{var io=new IntersectionObserver(function(en){en.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}})},{threshold:.12});rv.forEach(function(e){io.observe(e)})}
+// count up
+function fmt(v,el){return v.toLocaleString('en-US')+(el.dataset.suffix||'')}
+var cs=document.querySelectorAll('[data-count]');
+function run(el){var t=+el.dataset.count,s=null;
+function st(ts){if(!s)s=ts;var p=Math.min((ts-s)/1600,1),e=1-Math.pow(1-p,3);el.textContent=fmt(Math.round(t*e),el);if(p<1)requestAnimationFrame(st)}
+requestAnimationFrame(st)}
+if(reduce||!('IntersectionObserver' in window)){cs.forEach(function(el){el.textContent=fmt(+el.dataset.count,el)})}
+else{cs.forEach(function(el){el.textContent=fmt(0,el)});
+var co=new IntersectionObserver(function(en){en.forEach(function(x){if(x.isIntersecting){run(x.target);co.unobserve(x.target)}})},{threshold:.5});cs.forEach(function(el){co.observe(el)})}
+// form
+var dt=document.getElementById('date');dt.min=new Date().toISOString().slice(0,10);
+document.getElementById('bookForm').addEventListener('submit',function(e){
+e.preventDefault();var g=function(id){return document.getElementById(id).value.trim()};
+var body='Name: '+g('name')+'\nPhone: '+g('phone')+'\nE-mail: '+g('email')+'\nTreatment: '+g('treat')+'\nPreferred date: '+g('date')+'\nMessage: '+g('msg');
+location.href='mailto:recepce@zelenadental.cz?subject='+encodeURIComponent('Appointment request')+'&body='+encodeURIComponent(body);
+});
+})();
+</script>
+</body>
+</html>

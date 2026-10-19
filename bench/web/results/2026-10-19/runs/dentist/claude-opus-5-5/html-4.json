@@ -1,0 +1,38 @@
+{
+ "brief": "dentist",
+ "model": "claude-opus-5-5",
+ "lang": "html",
+ "run": 4,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 220.5,
+  "input_tokens": 2981,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 2977,
+  "output_tokens": 29477,
+  "cost_usd": 0.590151,
+  "visible_tokens": 26712,
+  "thinking_tokens_est": 2765
+ },
+ "builds_first": null,
+ "site": "sites/dentist/claude-opus-5-5/html-4",
+ "final_file": "raw/dentist/claude-opus-5-5/html-4.html",
+ "code_tokens": 26707,
+ "code_bytes": 58341,
+ "code_tokens_first": 26707,
+ "total": {
+  "input_tokens": 2981,
+  "cache_write": 0,
+  "cache_read": 2977,
+  "output_tokens": 29477,
+  "cost_usd": 0.590151,
+  "seconds": 220.5,
+  "thinking_tokens_est": 2765,
+  "calls": 1
+ }
+}

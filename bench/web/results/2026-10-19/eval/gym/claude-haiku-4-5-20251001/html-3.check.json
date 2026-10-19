@@ -1,0 +1,126 @@
+{
+ "url": "http://127.0.0.1:50146/gym/claude-haiku-4-5-20251001/html-3/",
+ "score": 0.3888888888888889,
+ "passed": 7,
+ "total": 18,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": false,
+   "detail": "missing: Adam Novotný | Strength & conditioning | Former rower who builds engines that last. | Klára Benešová | Kettlebells & core | Turns nervous beginners into confident lifters. | Tereza Malá | Yoga & mobility | Helps you move better so you can train longer. | Ondřej Černý | National-level lifter with an eye for technique. | Unlimited | Most popular | Premium | Gym floor access | 2 classes a week | App booking | Unlimited classes | 1 coaching session a month | Everything in Unlimited | Weekly personal training | Towel and locker service | Join now | I came for the free trial and stayed for the people. | Lenka M. | Adam fixed my squat in two sessions after years of knee pain. | Jakub S. | The only gym where the 6 a.m. class feels like a party. | Veronika D."
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": false,
+   "detail": "missing: forge-coach-1, forge-coach-2, forge-coach-3, forge-coach-4, forge-g1, forge-g2, forge-g3, forge-g4, forge-g5, forge-g6, forge-g7, forge-g8"
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "counters",
+   "name": "counters end on the final number",
+   "pass": false,
+   "detail": "coaches shows \"0 coaches\"; classes a week shows \"0 classes a week\"; members shows \"0 members\""
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "filter",
+   "name": "day filter shows the right classes",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "toggle",
+   "name": "monthly/yearly switch changes the prices",
+   "pass": false,
+   "detail": "on load: monthly shown false,false,false, yearly shown false,false,false; after \"Yearly\": monthly shown false,false,false, yearly shown false,false,false; after \"Monthly\": monthly shown false,false,false, yearly shown false,false,false"
+  },
+  {
+   "id": "lb_open",
+   "name": "lightbox opens on click",
+   "pass": false,
+   "detail": "no gallery image found"
+  },
+  {
+   "id": "lb_nav",
+   "name": "lightbox next/previous buttons",
+   "pass": false,
+   "detail": "next button false -> image -1, previous button false -> image -1"
+  },
+  {
+   "id": "lb_close",
+   "name": "lightbox closes with its button",
+   "pass": false,
+   "detail": "close button false, lightbox still showing image -1"
+  },
+  {
+   "id": "lb_keys",
+   "name": "lightbox keyboard: arrows move, Escape closes",
+   "pass": false,
+   "detail": "open -1, ArrowRight -1, ArrowLeft -1, Escape closed"
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": false,
+   "detail": "no mailto: navigation after submit (navigated to http://127.0.0.1:50146/gym/claude-haiku-4-5-20251001/html-3/?name=Jana+Testov%C3)"
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": false,
+   "detail": "counters not final at once: coaches shows \"0 coaches\", classes a week shows \"0 classes a week\", members shows \"0 members\"; invisible with reduced motion: Sunrise Strength | Kettlebell Basics | Mobility Flow | Power Circuit | Engine Builder | Vinyasa Yoga"
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": false,
+   "detail": "exception: ReferenceError: Cannot access 'observer' before initialization | exception: ReferenceError: Cannot access 'observer' before initialization | exception: ReferenceError: Cannot access 'observer' before initialization | exception: ReferenceError: Cannot access 'observer' before initialization | exception: ReferenceError: Cannot access 'observer' before initialization"
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [
+  "exception: ReferenceError: Cannot access 'observer' before initialization",
+  "exception: ReferenceError: Cannot access 'observer' before initialization",
+  "exception: ReferenceError: Cannot access 'observer' before initialization",
+  "exception: ReferenceError: Cannot access 'observer' before initialization",
+  "exception: ReferenceError: Cannot access 'observer' before initialization",
+  "exception: ReferenceError: Cannot access 'observer' before initialization"
+ ],
+ "csp_violations": [],
+ "checker_notes": []
+}

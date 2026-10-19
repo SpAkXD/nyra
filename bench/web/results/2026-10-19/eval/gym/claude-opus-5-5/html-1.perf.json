@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:60407/gym/claude-opus-5-5/html-1/",
+ "runs": 3,
+ "fcp_ms": 688,
+ "lcp_ms": 724,
+ "cls": 0,
+ "load_ms": 628,
+ "kb": 361.7,
+ "requests": 9,
+ "kb_by_type_first_run": {
+  "Document": 13.4,
+  "Stylesheet": 1.3,
+  "Image": 149.3,
+  "Font": 197.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  808,
+  724,
+  708
+ ]
+}

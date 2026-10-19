@@ -1,0 +1,38 @@
+{
+ "brief": "gym",
+ "model": "claude-sonnet-5-5",
+ "lang": "html",
+ "run": 4,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 49.2,
+  "input_tokens": 2975,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 2971,
+  "output_tokens": 9652,
+  "cost_usd": 0.096825,
+  "visible_tokens": 9650,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": null,
+ "site": "sites/gym/claude-sonnet-5-5/html-4",
+ "final_file": "raw/gym/claude-sonnet-5-5/html-4.html",
+ "code_tokens": 9645,
+ "code_bytes": 20336,
+ "code_tokens_first": 9645,
+ "total": {
+  "input_tokens": 2975,
+  "cache_write": 0,
+  "cache_read": 2971,
+  "output_tokens": 9652,
+  "cost_usd": 0.096825,
+  "seconds": 49.2,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}

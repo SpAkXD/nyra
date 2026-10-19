@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.">
+    <title>Forge Fitness Studio – strength, conditioning and yoga in Brno</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: #111315;
+            color: #F2F2F0;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+        }
+
+        /* Navigation */
+        nav {
+            position: sticky;
+            top: 0;
+            background-color: rgba(17, 19, 21, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            border-bottom: 1px solid rgba(228, 87, 46, 0.1);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #E4572E;
+            letter-spacing: 0.05em;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #F2F2F0;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: #E4572E;
+        }
+
+        .nav-links a:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .nav-cta {
+            background-color: #E4572E;
+            color: #111315;
+            padding: 0.65rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .nav-cta:hover {
+            background-color: #F3C969;
+        }
+
+        .nav-cta:focus {
+            outline: 2px solid #F3C969;
+            outline-offset: 2px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #F2F2F0;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        .menu-toggle:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 60px;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                gap: 0;
+                background-color: #1B1E22;
+                border-bottom: 1px solid rgba(228, 87, 46, 0.1);
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .nav-links a {
+                padding: 1rem 2rem;
+                border-bottom: 1px solid rgba(228, 87, 46, 0.05);
+            }
+
+            .nav-links .nav-cta {
+                margin: 1rem 2rem;
+                text-align: center;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+        }
+
+        /* Hero */
+        .hero {
+            height: 100vh;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .hero-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(17, 19, 21, 0.6) 0%, rgba(27, 30, 34, 0.4) 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            max-width: 700px;
+            padding: 2rem;
+        }
+
+        .hero-kicker {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #F3C969;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .hero-kicker {
+                animation: slideInUp 0.6s ease-out forwards;
+            }
+        }
+
+        .hero-title {
+            font-family: 'Archivo', sans-serif;
+            font-size: clamp(2rem, 8vw, 4rem);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .hero-title {
+                animation: slideInUp 0.6s ease-out 0.2s forwards;
+            }
+        }
+
+        .hero-text {
+            font-size: 1.125rem;
+            color: #F2F2F0;
+            margin-bottom: 2.5rem;
+            opacity: 0;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .hero-text {
+                animation: slideInUp 0.6s ease-out 0.4s forwards;
+            }
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            opacity: 0;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .hero-buttons {
+                animation: slideInUp 0.6s ease-out 0.6s forwards;
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            display: inline-block;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-filled {
+            background-color: #E4572E;
+            color: #111315;
+        }
+
+        .btn-filled:hover {
+            background-color: #F3C969;
+        }
+
+        .btn-filled:focus {
+            outline: 2px solid #F3C969;
+            outline-offset: 2px;
+        }
+
+        .btn-outlined {
+            background-color: transparent;
+            color: #F2F2F0;
+            border-color: #F2F2F0;
+        }
+
+        .btn-outlined:hover {
+            background-color: #F2F2F0;
+            color: #111315;
+        }
+
+        .btn-outlined:focus {
+            outline: 2px solid #F3C969;
+            outline-offset: 2px;
+        }
+
+        /* Sections */
+        section {
+            padding: 5rem 2rem;
+        }
+
+        .section-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-kicker {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #F3C969;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-family: 'Archivo', sans-serif;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            font-size: 1.1rem;
+            color: #B8B8B6;
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+        }
+
+        /* Numbers Section */
+        .numbers {
+            background-color: #1B1E22;
+            padding: 4rem 2rem;
+        }
+
+        .numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .number-card {
+            text-align: center;
+        }
+
+        .number-value {
+            font-family: 'Archivo', sans-serif;
+            font-size: clamp(2.5rem, 8vw, 4rem);
+            font-weight: 700;
+            color: #E4572E;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .number-label {
+            font-size: 1rem;
+            color: #B8B8B6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .number-card {
+                animation: fadeIn 0.8s ease-out forwards;
+                opacity: 0;
+            }
+
+            .number-card:nth-child(1) {
+                animation-delay: 0.2s;
+            }
+
+            .number-card:nth-child(2) {
+                animation-delay: 0.4s;
+            }
+
+            .number-card:nth-child(3) {
+                animation-delay: 0.6s;
+            }
+
+            .number-card:nth-child(4) {
+                animation-delay: 0.8s;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Classes Section */
+        .classes {
+            background-color: #111315;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.65rem 1.5rem;
+            background-color: transparent;
+            color: #F2F2F0;
+            border: 1px solid #3D4048;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn:hover {
+            border-color: #E4572E;
+            color: #E4572E;
+        }
+
+        .filter-btn:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .filter-btn.active {
+            background-color: #E4572E;
+            color: #111315;
+            border-color: #E4572E;
+        }
+
+        .classes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .class-card {
+            background-color: #1B1E22;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            border: 1px solid #3D4048;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .class-card {
+                animation: slideInUp 0.6s ease-out forwards;
+                opacity: 0;
+            }
+        }
+
+        .class-card:hover {
+            transform: translateY(-8px);
+            border-color: #E4572E;
+            background-color: rgba(228, 87, 46, 0.05);
+        }
+
+        .class-card:focus-within {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .class-day {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #F3C969;
+            margin-bottom: 0.5rem;
+        }
+
+        .class-time {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .class-name {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .class-coach {
+            color: #B8B8B6;
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .class-level {
+            font-size: 0.85rem;
+            color: #8E8E8C;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .class-card.hidden {
+            display: none;
+        }
+
+        /* Trainers Section */
+        .trainers {
+            background-color: #1B1E22;
+        }
+
+        .trainers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .trainer-card {
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .trainer-card {
+                animation: fadeIn 0.8s ease-out forwards;
+                opacity: 0;
+            }
+
+            .trainer-card:nth-child(1) {
+                animation-delay: 0.2s;
+            }
+
+            .trainer-card:nth-child(2) {
+                animation-delay: 0.4s;
+            }
+
+            .trainer-card:nth-child(3) {
+                animation-delay: 0.6s;
+            }
+
+            .trainer-card:nth-child(4) {
+                animation-delay: 0.8s;
+            }
+        }
+
+        .trainer-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .trainer-image {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 2 / 2.4;
+            object-fit: cover;
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .trainer-name {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .trainer-specialty {
+            font-size: 0.95rem;
+            color: #F3C969;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .trainer-bio {
+            font-size: 0.95rem;
+            color: #B8B8B6;
+            line-height: 1.6;
+        }
+
+        /* Membership Section */
+        .membership {
+            background-color: #111315;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 32px;
+            background-color: #3D4048;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .toggle-switch.yearly {
+            background-color: #E4572E;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 26px;
+            height: 26px;
+            background-color: #F2F2F0;
+            border-radius: 50%;
+            transition: left 0.3s ease;
+        }
+
+        .toggle-switch.yearly .toggle-slider {
+            left: 31px;
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-label.inactive {
+            color: #8E8E8C;
+        }
+
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .plan-card {
+            background-color: #1B1E22;
+            padding: 2.5rem;
+            border-radius: 0.75rem;
+            border: 1px solid #3D4048;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .plan-card {
+                animation: slideInUp 0.6s ease-out forwards;
+                opacity: 0;
+            }
+
+            .plan-card:nth-child(1) {
+                animation-delay: 0.2s;
+            }
+
+            .plan-card:nth-child(2) {
+                animation-delay: 0.4s;
+            }
+
+            .plan-card:nth-child(3) {
+                animation-delay: 0.6s;
+            }
+        }
+
+        .plan-card:hover {
+            transform: translateY(-8px);
+            border-color: #E4572E;
+            background-color: rgba(228, 87, 46, 0.05);
+        }
+
+        .plan-card.popular {
+            border-color: #E4572E;
+            background-color: rgba(228, 87, 46, 0.1);
+        }
+
+        .plan-popular-badge {
+            position: absolute;
+            top: 0;
+            right: 1.5rem;
+            background-color: #E4572E;
+            color: #111315;
+            padding: 0.5rem 1rem;
+            border-radius: 0 0 0.5rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .plan-name {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-price {
+            font-family: 'Archivo', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #E4572E;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-period {
+            font-size: 0.9rem;
+            color: #B8B8B6;
+            margin-bottom: 2rem;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+
+        .plan-features li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #3D4048;
+            font-size: 0.95rem;
+            color: #B8B8B6;
+        }
+
+        .plan-features li:last-child {
+            border-bottom: none;
+        }
+
+        .plan-cta {
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Testimonials Section */
+        .testimonials {
+            background-color: #1B1E22;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .testimonial-card {
+            background-color: #111315;
+            padding: 2.5rem;
+            border-radius: 0.75rem;
+            border: 1px solid #3D4048;
+            transition: all 0.3s ease;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .testimonial-card {
+                animation: slideInUp 0.6s ease-out forwards;
+                opacity: 0;
+            }
+
+            .testimonial-card:nth-child(1) {
+                animation-delay: 0.2s;
+            }
+
+            .testimonial-card:nth-child(2) {
+                animation-delay: 0.4s;
+            }
+
+            .testimonial-card:nth-child(3) {
+                animation-delay: 0.6s;
+            }
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-8px);
+            border-color: #E4572E;
+        }
+
+        .testimonial-quote {
+            font-size: 1.1rem;
+            font-style: italic;
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+        }
+
+        .testimonial-author {
+            font-weight: 600;
+            color: #F3C969;
+        }
+
+        /* Gallery Section */
+        .gallery {
+            background-color: #111315;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem;
+            aspect-ratio: 3 / 2;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .gallery-item {
+                animation: fadeIn 0.8s ease-out forwards;
+                opacity: 0;
+            }
+
+            .gallery-item:nth-child(1) {
+                animation-delay: 0.1s;
+            }
+
+            .gallery-item:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .gallery-item:nth-child(3) {
+                animation-delay: 0.3s;
+            }
+
+            .gallery-item:nth-child(4) {
+                animation-delay: 0.4s;
+            }
+
+            .gallery-item:nth-child(5) {
+                animation-delay: 0.5s;
+            }
+
+            .gallery-item:nth-child(6) {
+                animation-delay: 0.6s;
+            }
+
+            .gallery-item:nth-child(7) {
+                animation-delay: 0.7s;
+            }
+
+            .gallery-item:nth-child(8) {
+                animation-delay: 0.8s;
+            }
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(228, 87, 46, 0);
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-item:hover .gallery-overlay {
+            background-color: rgba(228, 87, 46, 0.3);
+        }
+
+        .gallery-icon {
+            color: #F2F2F0;
+            font-size: 2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .gallery-item:hover .gallery-icon {
+            opacity: 1;
+        }
+
+        .gallery-item:focus-within .gallery-overlay {
+            background-color: rgba(228, 87, 46, 0.3);
+        }
+
+        .gallery-item:focus-within .gallery-icon {
+            opacity: 1;
+        }
+
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(17, 19, 21, 0.95);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox-content {
+            position: relative;
+            width: 90%;
+            max-width: 900px;
+            height: 80vh;
+        }
+
+        .lightbox-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: -50px;
+            right: 0;
+            background: none;
+            border: none;
+            color: #F2F2F0;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        .lightbox-close:hover {
+            color: #E4572E;
+        }
+
+        .lightbox-close:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .lightbox-nav {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .lightbox-prev,
+        .lightbox-next {
+            background-color: rgba(228, 87, 46, 0.9);
+            color: #111315;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: background-color 0.3s ease;
+        }
+
+        .lightbox-prev:hover,
+        .lightbox-next:hover {
+            background-color: #F3C969;
+        }
+
+        .lightbox-prev:focus,
+        .lightbox-next:focus {
+            outline: 2px solid #F3C969;
+            outline-offset: 2px;
+        }
+
+        /* Contact Section */
+        .contact {
+            background-color: #1B1E22;
+        }
+
+        .contact-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        .contact-info-block {
+            flex: 1;
+        }
+
+        .contact-info-label {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #F3C969;
+            margin-bottom: 1rem;
+        }
+
+        .contact-address {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .contact-link {
+            color: #E4572E;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            display: inline-block;
+        }
+
+        .contact-link:hover {
+            color: #F3C969;
+        }
+
+        .contact-link:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .contact-phone,
+        .contact-email {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .contact-hours {
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            color: #B8B8B6;
+            line-height: 1.7;
+        }
+
+        .contact-form {
+            max-width: 600px;
+            background-color: #111315;
+            padding: 2.5rem;
+            border-radius: 0.75rem;
+            border: 1px solid #3D4048;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .contact-form {
+                animation: slideInUp 0.6s ease-out forwards;
+                opacity: 0;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background-color: #1B1E22;
+            border: 1px solid #3D4048;
+            border-radius: 0.5rem;
+            color: #F2F2F0;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #E4572E;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: #8E8E8C;
+        }
+
+        .required::after {
+            content: " *";
+            color: #E4572E;
+        }
+
+        .form-submit {
+            width: 100%;
+        }
+
+        /* Footer */
+        footer {
+            background-color: #0D0E10;
+            border-top: 1px solid #3D4048;
+            padding: 3rem 2rem;
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section h3 {
+            font-family: 'Archivo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-section ul {
+            list-style: none;
+        }
+
+        .footer-section ul li {
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-section a {
+            color: #B8B8B6;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-section a:hover {
+            color: #E4572E;
+        }
+
+        .footer-section a:focus {
+            outline: 2px solid #E4572E;
+            outline-offset: 2px;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid #3D4048;
+            color: #8E8E8C;
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            section {
+                padding: 3rem 1.5rem;
+            }
+
+            .section-title {
+                font-size: 1.75rem;
+            }
+
+            .hero-title {
+                font-size: 1.75rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .numbers-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .classes-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-buttons {
+                justify-content: flex-start;
+                overflow-x: auto;
+            }
+
+            .toggle-container {
+                flex-direction: column;
+            }
+        }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <div class="nav-brand">Forge Fitness</div>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#classes">Classes</a></li>
+                <li><a href="#trainers">Trainers</a></li>
+                <li><a href="#membership">Membership</a></li>
+                <li><a href="#gallery">Gallery</a></li>
+                <li><a href="#contact">Contact</a></li>
+                <li><a href="#contact" class="nav-cta">Free trial</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <img src="https://picsum.photos/seed/forge-hero/1600/1000" alt="Athletes training with kettlebells at Forge" class="hero-image">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <div class="hero-kicker">Brno · Veveří 54 · since 2016</div>
+            <h1 class="hero-title">Train hard. Feel at home.</h1>
+            <p class="hero-text">Strength, conditioning and yoga classes in small groups, with coaches who know your name.</p>
+            <div class="hero-buttons">
+                <a href="#classes" class="btn btn-filled">See the schedule</a>
+                <a href="#contact" class="btn btn-outlined">Free trial</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Numbers -->
+    <section class="numbers">
+        <div class="numbers-grid">
+            <div class="number-card">
+                <div class="number-value" data-number="12">12</div>
+                <div class="number-label">Coaches</div>
+            </div>
+            <div class="number-card">
+                <div class="number-value" data-number="45">45</div>
+                <div class="number-label">Classes a week</div>
+            </div>
+            <div class="number-card">
+                <div class="number-value" data-number="2300">2,300</div>
+                <div class="number-label">Members</div>
+            </div>
+            <div class="number-card">
+                <div class="number-value">6 a.m.</div>
+                <div class="number-label">First class</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Classes -->
+    <section id="classes" class="classes">
+        <div class="section-container">
+            <div class="section-kicker">Schedule</div>
+            <h2 class="section-title">Classes this week</h2>
+            <p class="section-subtitle">Book through the app or at the front desk. Max 12 people per class.</p>
+            
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="Mon">Mon</button>
+                <button class="filter-btn" data-filter="Tue">Tue</button>
+                <button class="filter-btn" data-filter="Wed">Wed</button>
+                <button class="filter-btn" data-filter="Thu">Thu</button>
+                <button class="filter-btn" data-filter="Fri">Fri</button>
+                <button class="filter-btn" data-filter="Sat">Sat</button>
+            </div>
+
+            <div class="classes-grid" id="classesGrid">
+                <div class="class-card" data-day="Mon">
+                    <div class="class-day">Mon</div>
+                    <div class="class-time">6:00</div>
+                    <div class="class-name">Sunrise Strength</div>
+                    <div class="class-coach">Coach Adam</div>
+                    <div class="class-level">All levels</div>
+                </div>
+                <div class="class-card" data-day="Mon">
+                    <div class="class-day">Mon</div>
+                    <div class="class-time">18:00</div>
+                    <div class="class-name">Kettlebell Basics</div>
+                    <div class="class-coach">Coach Klára</div>
+                    <div class="class-level">Beginner</div>
+                </div>
+                <div class="class-card" data-day="Tue">
+                    <div class="class-day">Tue</div>
+                    <div class="class-time">7:00</div>
+                    <div class="class-name">Mobility Flow</div>
+                    <div class="class-coach">Coach Tereza</div>
+                    <div class="class-level">All levels</div>
+                </div>
+                <div class="class-card" data-day="Tue">
+                    <div class="class-day">Tue</div>
+                    <div class="class-time">19:00</div>
+                    <div class="class-name">Power Circuit</div>
+                    <div class="class-coach">Coach Ondřej</div>
+                    <div class="class-level">Advanced</div>
+                </div>
+                <div class="class-card" data-day="Wed">
+                    <div class="class-day">Wed</div>
+                    <div class="class-time">6:00</div>
+                    <div class="class-name">Engine Builder</div>
+                    <div class="class-coach">Coach Adam</div>
+                    <div class="class-level">Intermediate</div>
+                </div>
+                <div class="class-card" data-day="Wed">
+                    <div class="class-day">Wed</div>
+                    <div class="class-time">17:30</div>
+                    <div class="class-name">Vinyasa Yoga</div>
+                    <div class="class-coach">Coach Tereza</div>
+                    <div class="class-level">All levels</div>
+                </div>
+                <div class="class-card" data-day="Thu">
+                    <div class="class-day">Thu</div>
+                    <div class="class-time">7:00</div>
+                    <div class="class-name">Olympic Lifting</div>
+                    <div class="class-coach">Coach Ondřej</div>
+                    <div class="class-level">Advanced</div>
+                </div>
+                <div class="class-card" data-day="Thu">
+                    <div class="class-day">Thu</div>
+                    <div class="class-time">18:30</div>
+                    <div class="class-name">Core & Conditioning</div>
+                    <div class="class-coach">Coach Klára</div>
+                    <div class="class-level">Intermediate</div>
+                </div>
+                <div class="class-card" data-day="Fri">
+                    <div class="class-day">Fri</div>
+                    <div class="class-time">6:00</div>
+                    <div class="class-name">Friday Burn</div>
+                    <div class="class-coach">Coach Adam</div>
+                    <div class="class-level">Intermediate</div>
+                </div>
+                <div class="class-card" data-day="Fri">
+                    <div class="class-day">Fri</div>
+                    <div class="class-time">17:00</div>
+                    <div class="class-name">Stretch & Restore</div>
+                    <div class="class-coach">Coach Tereza</div>
+                    <div class="class-level">Beginner</div>
+                </div>
+                <div class="class-card" data-day="Sat">
+                    <div class="class-day">Sat</div>
+                    <div class="class-time">9:00</div>
+                    <div class="class-name">Team WOD</div>
+                    <div class="class-coach">Coach Ondřej</div>
+                    <div class="class-level">All levels</div>
+                </div>
+                <div class="class-card" data-day="Sat">
+                    <div class="class-day">Sat</div>
+                    <div class="class-time">10:30</div>
+                    <div class="class-name">Weekend Yoga</div>
+                    <div class="class-coach">Coach Tereza</div>
+                    <div class="class-level">Beginner</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trainers -->
+    <section id="trainers" class="trainers">
+        <div class="section-container">
+            <div class="section-kicker">Coaches</div>
+            <h2 class="section-title">Meet the team</h2>
+            
+            <div class="trainers-grid">
+                <div class="trainer-card">
+                    <img src="https://picsum.photos/seed/forge-coach-1/600/700" alt="Adam Novotný" class="trainer-image">
+                    <h3 class="trainer-name">Adam Novotný</h3>
+                    <div class="trainer-specialty">Strength & conditioning</div>
+                    <p class="trainer-bio">Former rower who builds engines that last.</p>
+                </div>
+                <div class="trainer-card">
+                    <img src="https://picsum.photos/seed/forge-coach-2/600/700" alt="Klára Benešová" class="trainer-image">
+                    <h3 class="trainer-name">Klára Benešová</h3>
+                    <div class="trainer-specialty">Kettlebells & core</div>
+                    <p class="trainer-bio">Turns nervous beginners into confident lifters.</p>
+                </div>
+                <div class="trainer-card">
+                    <img src="https://picsum.photos/seed/forge-coach-3/600/700" alt="Tereza Malá" class="trainer-image">
+                    <h3 class="trainer-name">Tereza Malá</h3>
+                    <div class="trainer-specialty">Yoga & mobility</div>
+                    <p class="trainer-bio">Helps you move better so you can train longer.</p>
+                </div>
+                <div class="trainer-card">
+                    <img src="https://picsum.photos/seed/forge-coach-4/600/700" alt="Ondřej Černý" class="trainer-image">
+                    <h3 class="trainer-name">Ondřej Černý</h3>
+                    <div class="trainer-specialty">Olympic lifting</div>
+                    <p class="trainer-bio">National-level lifter with an eye for technique.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Membership -->
+    <section id="membership" class="membership">
+        <div class="section-container">
+            <div class="section-kicker">Membership</div>
+            <h2 class="section-title">Pick your plan</h2>
+            
+            <div class="toggle-container">
+                <label class="toggle-label">Monthly</label>
+                <div class="toggle-switch" id="toggleSwitch">
+                    <div class="toggle-slider"></div>
+                </div>
+                <label class="toggle-label inactive" id="yearlyLabel">Yearly</label>
+            </div>
+
+            <div class="plans-grid">
+                <div class="plan-card">
+                    <h3 class="plan-name">Basic</h3>
+                    <div class="plan-price" data-price-monthly="790" data-price-yearly="7900">790</div>
+                    <div class="plan-period">Kč per month</div>
+                    <ul class="plan-features">
+                        <li>Gym floor access</li>
+                        <li>2 classes a week</li>
+                        <li>App booking</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-outlined plan-cta">Join now</a>
+                </div>
+
+                <div class="plan-card popular">
+                    <div class="plan-popular-badge">Most popular</div>
+                    <h3 class="plan-name">Unlimited</h3>
+                    <div class="plan-price" data-price-monthly="1290" data-price-yearly="12900">1290</div>
+                    <div class="plan-period">Kč per month</div>
+                    <ul class="plan-features">
+                        <li>Gym floor access</li>
+                        <li>Unlimited classes</li>
+                        <li>App booking</li>
+                        <li>1 coaching session a month</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-filled plan-cta">Join now</a>
+                </div>
+
+                <div class="plan-card">
+                    <h3 class="plan-name">Premium</h3>
+                    <div class="plan-price" data-price-monthly="1990" data-price-yearly="19900">1990</div>
+                    <div class="plan-period">Kč per month</div>
+                    <ul class="plan-features">
+                        <li>Everything in Unlimited</li>
+                        <li>Weekly personal training</li>
+                        <li>Towel and locker service</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-outlined plan-cta">Join now</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+        <div class="section-container">
+            <h2 class="section-title">Members say</h2>
+            
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <p class="testimonial-quote">"I came for the free trial and stayed for the people."</p>
+                    <p class="testimonial-author">— Lenka M.</p>
+                </div>
+                <div class="testimonial-card">
+                    <p class="testimonial-quote">"Adam fixed my squat in two sessions after years of knee pain."</p>
+                    <p class="testimonial-author">— Jakub S.</p>
+                </div>
+                <div class="testimonial-card">
+                    <p class="testimonial-quote">"The only gym where the 6 a.m. class feels like a party."</p>
+                    <p class="testimonial-author">— Veronika D.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Gallery -->
+    <section id="gallery" class="gallery">
+        <div class="section-container">
+            <div class="section-kicker">Gallery</div>
+            <h2 class="section-title">Inside the studio</h2>
+            
+            <div class="gallery-grid">
+                <button class="gallery-item" data-index="0">
+                    <img src="https://picsum.photos/seed/forge-g1/1200/800" alt="The main training floor">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="1">
+                    <img src="https://picsum.photos/seed/forge-g2/1200/800" alt="Kettlebells lined up">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="2">
+                    <img src="https://picsum.photos/seed/forge-g3/1200/800" alt="A yoga class at sunset">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="3">
+                    <img src="https://picsum.photos/seed/forge-g4/1200/800" alt="Barbells and plates">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="4">
+                    <img src="https://picsum.photos/seed/forge-g5/1200/800" alt="The rowing machines">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="5">
+                    <img src="https://picsum.photos/seed/forge-g6/1200/800" alt="A coach helping a member">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="6">
+                    <img src="https://picsum.photos/seed/forge-g7/1200/800" alt="The stretching corner">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+                <button class="gallery-item" data-index="7">
+                    <img src="https://picsum.photos/seed/forge-g8/1200/800" alt="The front desk and café">
+                    <div class="gallery-overlay">
+                        <span class="gallery-icon">🔍</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-content">
+            <button class="lightbox-close" id="lightboxClose" aria-label="Close lightbox">✕</button>
+            <img id="lightboxImage" class="lightbox-image" src="" alt="">
+            <div class="lightbox-nav">
+                <button class="lightbox-prev" id="lightboxPrev" aria-label="Previous image">←</button>
+                <button class="lightbox-next" id="lightboxNext" aria-label="Next image">→</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact -->
+    <section id="contact" class="contact">
+        <div class="section-container">
+            <div class="section-kicker">Contact</div>
+            <h2 class="section-title">Come for a free trial</h2>
+            
+            <div class="contact-info">
+                <div class="contact-info-block">
+                    <div class="contact-info-label">Address</div>
+                    <p class="contact-address">Veveří 54, 602 00 Brno</p>
+                    <a href="https://maps.google.com/?q=Veveří+54,+Brno" class="contact-link" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+                </div>
+                <div class="contact-info-block">
+                    <div class="contact-info-label">Get in touch</div>
+                    <a href="tel:+420541000777" class="contact-phone contact-link">+420 541 000 777</a>
+                    <a href="mailto:hello@forgefitness.cz" class="contact-email contact-link">hello@forgefitness.cz</a>
+                </div>
+                <div class="contact-info-block">
+                    <div class="contact-info-label">Hours</div>
+                    <div class="contact-hours">
+                        Monday–Friday<br>6:00–22:00<br>
+                        <br>
+                        Saturday–Sunday<br>8:00–20:00
+                    </div>
+                </div>
+            </div>
+
+            <form class="contact-form" id="contactForm">
+                <div class="form-group">
+                    <label for="name" class="required">Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email" class="required">E-mail</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input type="tel" id="phone" name="phone">
+                </div>
+
+                <div class="form-group">
+                    <label for="interest" class="required">Interested in</label>
+                    <select id="interest" name="interest" required>
+                        <option value="">Select an option</option>
+                        <option value="Free trial">Free trial</option>
+                        <option value="Membership">Membership</option>
+                        <option value="Personal training">Personal training</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="message" class="required">Message</label>
+                    <textarea id="message" name="message" required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-filled form-submit">Send</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>Forge Fitness</h3>
+                <p>Veveří 54, 602 00 Brno</p>
+            </div>
+            <div class="footer-section">
+                <h3>Navigation</h3>
+                <ul>
+                    <li><a href="#classes">Classes</a></li>
+                    <li><a href="#trainers">Trainers</a></li>
+                    <li><a href="#membership">Membership</a></li>
+                    <li><a href="#gallery">Gallery</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            © 2026 Forge Fitness Studio
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const navLinks = document.getElementById('navLinks');
+
+        menuToggle.addEventListener('click', () => {
+            const isActive = navLinks.classList.toggle('active');
+            menuToggle.setAttribute('aria-expanded', isActive);
+        });
+
+        // Close menu when a link is clicked
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                menuToggle.setAttribute('aria-expanded', false);
+            });
+        });
+
+        // Intersection Observer for scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.class-card, .trainer-card, .testimonial-card, .gallery-item, .plan-card, .contact-form').forEach(el => {
+            if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+                observer.observe(el);
+            }
+        });
+
+        // Number counter
+        function animateNumber(element) {
+            const target = parseInt(element.dataset.number);
+            const duration = 2000;
+            const increment = target / (duration / 16);
+            let current = 0;
+
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    current = target;
+                    clearInterval(timer);
+                }
+                element.textContent = Math.floor(current).toLocaleString('cs-CZ');
+            }, 16);
+        }
+
+        const numberObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const numberElement = entry.target.querySelector('[data-number]');
+                    if (numberElement && !numberElement.dataset.animated) {
+                        numberElement.dataset.animated = 'true';
+                        if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+                            animateNumber(numberElement);
+                        }
+                    }
+                    numberObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelector('.numbers') && numberObserver.observe(document.querySelector('.numbers'));
+
+        // Class filtering
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const classCards = document.querySelectorAll('.class-card');
+
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                const filter = button.dataset.filter;
+
+                classCards.forEach((card, index) => {
+                    if (filter === 'all' || card.dataset.day === filter) {
+                        card.classList.remove('hidden');
+                        if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+                            card.style.animation = `slideInUp 0.6s ease-out ${index * 0.05}s forwards`;
+                        }
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
+        // Membership toggle
+        const toggleSwitch = document.getElementById('toggleSwitch');
+        const yearlyLabel = document.getElementById('yearlyLabel');
+        const priceElements = document.querySelectorAll('.plan-price');
+        const planPeriods = document.querySelectorAll('.plan-period');
+        let isYearly = false;
+
+        toggleSwitch.addEventListener('click', () => {
+            isYearly = !isYearly;
+            toggleSwitch.classList.toggle('yearly');
+            yearlyLabel.classList.toggle('inactive');
+
+            priceElements.forEach(element => {
+                const monthlyPrice = element.dataset.priceMonthly;
+                const yearlyPrice = element.dataset.priceYearly;
+                element.textContent = isYearly ? yearlyPrice : monthlyPrice;
+            });
+
+            planPeriods.forEach(element => {
+                element.textContent = isYearly ? 'Kč per year' : 'Kč per month';
+            });
+        });
+
+        // Gallery lightbox
+        const galleryItems = document.querySelectorAll('.gallery-item');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImage = document.getElementById('lightboxImage');
+        const lightboxClose = document.getElementById('lightboxClose');
+        const lightboxPrev = document.getElementById('lightboxPrev');
+        const lightboxNext = document.getElementById('lightboxNext');
+        let currentImageIndex = 0;
+        const galleryImages = [
+            'https://picsum.photos/seed/forge-g1/1200/800',
+            'https://picsum.photos/seed/forge-g2/1200/800',
+            'https://picsum.photos/seed/forge-g3/1200/800',
+            'https://picsum.photos/seed/forge-g4/1200/800',
+            'https://picsum.photos/seed/forge-g5/1200/800',
+            'https://picsum.photos/seed/forge-g6/1200/800',
+            'https://picsum.photos/seed/forge-g7/1200/800',
+            'https://picsum.photos/seed/forge-g8/1200/800'
+        ];
+        const galleryAlts = [
+            'The main training floor',
+            'Kettlebells lined up',
+            'A yoga class at sunset',
+            'Barbells and plates',
+            'The rowing machines',
+            'A coach helping a member',
+            'The stretching corner',
+            'The front desk and café'
+        ];
+
+        galleryItems.forEach(item => {
+            item.addEventListener('click', () => {
+                currentImageIndex = parseInt(item.dataset.index);
+                openLightbox();
+            });
+        });
+
+        function openLightbox() {
+            lightbox.classList.add('active');
+            lightboxImage.src = galleryImages[currentImageIndex];
+            lightboxImage.alt = galleryAlts[currentImageIndex];
+        }
+
+        function closeLightbox() {
+            lightbox.classList.remove('active');
+        }
+
+        lightboxClose.addEventListener('click', closeLightbox);
+
+        lightboxPrev.addEventListener('click', () => {
+            currentImageIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+            lightboxImage.src = galleryImages[currentImageIndex];
+            lightboxImage.alt = galleryAlts[currentImageIndex];
+        });
+
+        lightboxNext.addEventListener('click', () => {
+            currentImageIndex = (currentImageIndex + 1) % galleryImages.length;
+            lightboxImage.src = galleryImages[currentImageIndex];
+            lightboxImage.alt = galleryAlts[currentImageIndex];
+        });
+
+        // Keyboard navigation for lightbox
+        document.addEventListener('keydown', (e) => {
+            if (lightbox.classList.contains('active')) {
+                if (e.key === 'Escape') {
+                    closeLightbox();
+                } else if (e.key === 'ArrowLeft') {
+                    lightboxPrev.click();
+                } else if (e.key === 'ArrowRight') {
+                    lightboxNext.click();
+                }
+            }
+        });
+
+        // Contact form
+        const contactForm = document.getElementById('contactForm');
+        contactForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const interest = document.getElementById('interest').value;
+            const message = document.getElementById('message').value;
+
+            const subject = 'Free trial request';
+            const body = `Name: ${name}\nE-mail: ${email}\nPhone: ${phone}\nInterested in: ${interest}\nMessage: ${message}`;
+
+            const mailtoLink = `mailto:hello@forgefitness.cz?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+            window.location.href = mailtoLink;
+        });
+
+        // Ensure keyboard focus for gallery items
+        galleryItems.forEach(item => {
+            item.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    currentImageIndex = parseInt(item.dataset.index);
+                    openLightbox();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-sonnet-5-5/nyra-3/",
+ "score": 0.9411764705882353,
+ "passed": 16,
+ "total": 17,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "map",
+   "name": "map embed shows",
+   "pass": true,
+   "detail": "size 595x335, visible true, frame loaded true (https://www.openstreetmap.org/export/embed.html?bbox=17.2459%2C49.5913%2C17.2559%2C49.5963&layer=mapnik&marker=49.5938%2)"
+  },
+  {
+   "id": "counters",
+   "name": "counters end on the final number",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "badge_open",
+   "name": "live badge says \"Open now\" while open",
+   "pass": true,
+   "detail": "\"Open now\" visible true, \"Closed now\" visible false"
+  },
+  {
+   "id": "today",
+   "name": "today's row highlighted",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "faq",
+   "name": "FAQ items open and close",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": false,
+   "detail": "subject \"\" [1 mailto navigation(s), last: mailto:recepce@zelenadental.cz?body=Testing%20the%20form%2C%20please%20ignore.%0A%0A%E2%80%94%0AJana%20Testov%C3%A1%0A%2B420%20777%20123%20456%0Ajana.testova%40]"
+  },
+  {
+   "id": "badge_closed",
+   "name": "live badge says \"Closed now\" while closed",
+   "pass": true,
+   "detail": "\"Closed now\" visible true, \"Open now\" visible false"
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "csp_violations": [],
+ "checker_notes": []
+}
