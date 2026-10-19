@@ -1,0 +1,296 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge Fitness Studio – strength, conditioning and yoga in Brno</title>
+<meta name="description" content="Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#111315;--sf:#1B1E22;--tx:#F2F2F0;--pr:#E4572E;--ac:#F3C969;--bd:rgba(255,255,255,.09);--mut:#a9abad}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Inter,sans-serif;line-height:1.6}
+h1,h2,h3,h4{font-family:Archivo,sans-serif;text-transform:uppercase;line-height:1.05;margin:0}
+a{color:inherit}
+img{display:block;max-width:100%}
+:focus-visible{outline:3px solid var(--ac);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+section{padding:96px 0}
+.kicker{color:var(--ac);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:.8rem;margin:0 0 10px}
+.title{font-size:clamp(2rem,5vw,3.4rem);font-weight:800;margin-bottom:12px}
+.sub{color:var(--mut);margin:0 0 36px;max-width:620px}
+.btn{display:inline-block;padding:14px 26px;border-radius:999px;font-weight:600;text-decoration:none;border:2px solid var(--pr);background:var(--pr);color:#fff;cursor:pointer;font:600 1rem Inter,sans-serif;transition:transform .2s,background .2s}
+.btn:hover{transform:translateY(-2px)}
+.btn.out{background:transparent;color:var(--tx);border-color:var(--tx)}
+.btn.out:hover{background:var(--tx);color:var(--bg)}
+/* nav */
+nav{position:sticky;top:0;z-index:50;background:rgba(17,19,21,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{font:900 1.3rem Archivo,sans-serif;text-transform:uppercase;text-decoration:none;letter-spacing:.04em}
+.brand span{color:var(--pr)}
+.links{display:flex;gap:26px;align-items:center}
+.links a{text-decoration:none;font-weight:500;font-size:.95rem}
+.links a:hover{color:var(--ac)}
+.links .btn{padding:9px 20px;font-size:.9rem;color:#fff}
+.links .btn:hover{color:#fff}
+#menuBtn{display:none;background:none;border:1px solid var(--bd);color:var(--tx);border-radius:10px;padding:8px 10px;cursor:pointer}
+/* hero */
+.hero{min-height:100vh;min-height:100svh;display:flex;align-items:center;padding:60px 0;background:linear-gradient(90deg,rgba(17,19,21,.92),rgba(17,19,21,.45)),linear-gradient(0deg,#111315,transparent 40%),url(https://picsum.photos/seed/forge-hero/1600/1000) center/cover #111315;position:relative}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(17,19,21,.92),rgba(17,19,21,.4)),linear-gradient(0deg,#111315,transparent 40%);z-index:-1}
+.hero{background:none;isolation:isolate}
+.hero h1{font-size:clamp(2.8rem,9vw,6.5rem);font-weight:900;max-width:850px;margin-bottom:20px}
+.hero h1 em{font-style:normal;color:var(--pr)}
+.hero p.lead{font-size:1.2rem;max-width:520px;color:#ddd;margin:0 0 30px}
+.hero .btns{display:flex;gap:14px;flex-wrap:wrap}
+.hi{opacity:0;transform:translateY(24px);animation:up .8s forwards}
+@keyframes up{to{opacity:1;transform:none}}
+/* numbers */
+.nums{padding:0;margin-top:-1px}
+.ng{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:40px 0}
+.nb{background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:28px 20px;text-align:center}
+.nb b{display:block;font:900 clamp(2rem,4.5vw,3.2rem) Archivo,sans-serif;color:var(--pr)}
+.nb span{color:var(--mut);text-transform:uppercase;font-size:.8rem;letter-spacing:.1em}
+/* cards */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:20px;transition:transform .25s,border-color .25s,box-shadow .25s}
+.card:hover{transform:translateY(-6px);border-color:var(--pr);box-shadow:0 14px 34px rgba(0,0,0,.4)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+.filters button{background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:999px;padding:9px 20px;font:600 .9rem Inter,sans-serif;cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--pr);border-color:var(--pr);color:#fff}
+.grid{display:grid;gap:20px}
+.classes{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.cl{padding:24px}
+.cl .d{display:flex;justify-content:space-between;color:var(--ac);font-weight:600;font-size:.9rem;margin-bottom:14px}
+.cl h3{font-size:1.4rem;margin-bottom:8px}
+.cl p{margin:0;color:var(--mut);font-size:.95rem}
+.lv{display:inline-block;margin-top:14px;font-size:.78rem;border:1px solid var(--bd);border-radius:999px;padding:3px 12px}
+.cl[hidden]{display:none}
+.coaches{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.coach{overflow:hidden}
+.coach img{width:100%;aspect-ratio:6/7;object-fit:cover}
+.coach div{padding:20px}
+.coach h3{font-size:1.2rem}
+.coach h4{color:var(--ac);font-size:.8rem;letter-spacing:.08em;margin:6px 0 10px;font-weight:700}
+.coach p{margin:0;color:var(--mut);font-size:.95rem}
+/* plans */
+.sw{display:inline-flex;background:var(--sf);border:1px solid var(--bd);border-radius:999px;padding:4px;margin-bottom:34px}
+.sw button{border:0;background:none;color:var(--tx);padding:10px 26px;border-radius:999px;font:600 .95rem Inter,sans-serif;cursor:pointer}
+.sw button[aria-pressed=true]{background:var(--pr);color:#fff}
+.plans{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+.plan{padding:32px;display:flex;flex-direction:column;position:relative}
+.plan.hot{border-color:var(--pr);background:linear-gradient(180deg,rgba(228,87,46,.16),var(--sf))}
+.tag{position:absolute;top:-13px;left:32px;background:var(--ac);color:#111;font-weight:700;font-size:.75rem;padding:4px 14px;border-radius:999px;text-transform:uppercase}
+.plan h3{font-size:1.5rem}
+.price{font:900 2.8rem Archivo,sans-serif;margin:14px 0 0}
+.per{color:var(--mut);margin:0 0 20px}
+.plan ul{list-style:none;padding:0;margin:0 0 28px;flex:1}
+.plan li{padding:8px 0 8px 26px;border-top:1px solid var(--bd);position:relative}
+.plan li::before{content:"✓";position:absolute;left:0;color:var(--pr);font-weight:700}
+.plan .btn{text-align:center}
+.tg{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.tq{padding:30px}
+.tq p{font-size:1.15rem;margin:0 0 18px}
+.tq p::before{content:"“";display:block;font:900 3rem/1 Archivo;color:var(--pr)}
+.tq cite{color:var(--ac);font-style:normal;font-weight:600}
+.gal{grid-template-columns:repeat(4,1fr);gap:14px}
+.gal button{padding:0;border:1px solid var(--bd);border-radius:16px;overflow:hidden;cursor:pointer;background:var(--sf);aspect-ratio:4/3;transition:transform .25s}
+.gal button:hover{transform:translateY(-4px)}
+.gal img{width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.gal button:hover img{transform:scale(1.06)}
+.lb{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:none;align-items:center;justify-content:center;padding:60px 20px}
+.lb.open{display:flex}
+.lb img{max-height:100%;max-width:100%;border-radius:12px}
+.lb button{position:absolute;background:var(--sf);color:var(--tx);border:1px solid var(--bd);width:48px;height:48px;border-radius:50%;font-size:1.4rem;cursor:pointer}
+.lb .x{top:14px;right:14px}.lb .pv{left:14px;top:50%}.lb .nx{right:14px;top:50%}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.info p{margin:0 0 18px}
+.info b{display:block;color:var(--ac);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em}
+.info a{color:var(--tx)}
+form{background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:28px;display:grid;gap:16px}
+label{display:grid;gap:6px;font-weight:500;font-size:.9rem}
+input,select,textarea{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;font:1rem Inter,sans-serif;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--pr)}
+footer{border-top:1px solid var(--bd);padding:48px 0 30px;color:var(--mut)}
+.fg{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;margin-bottom:28px}
+footer strong{color:var(--tx);font:800 1.2rem Archivo;text-transform:uppercase}
+footer ul{list-style:none;display:flex;gap:18px;flex-wrap:wrap;padding:0;margin:0}
+footer a{text-decoration:none}footer a:hover{color:var(--ac)}
+.rv{opacity:0;transform:translateY(30px);transition:opacity .7s,transform .7s}
+.rv.in{opacity:1;transform:none}
+.card.rv.in:hover{transform:translateY(-6px)}
+@media(max-width:860px){
+.ng{grid-template-columns:1fr 1fr}.gal{grid-template-columns:1fr 1fr}.cg{grid-template-columns:1fr}
+#menuBtn{display:block}
+.links{display:none;position:absolute;top:66px;left:0;right:0;background:var(--bg);flex-direction:column;align-items:stretch;padding:20px;border-bottom:1px solid var(--bd);gap:16px}
+.links.open{display:flex}.links .btn{text-align:center}
+section{padding:70px 0}}
+@media(prefers-reduced-motion:reduce){
+html{scroll-behavior:auto}
+*{transition:none!important;animation:none!important}
+.hi,.rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<nav aria-label="Main">
+<div class="wrap nav">
+<a class="brand" href="#top">Forge <span>Fitness</span></a>
+<button id="menuBtn" aria-expanded="false" aria-controls="links" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+<div class="links" id="links">
+<a href="#classes">Classes</a><a href="#trainers">Trainers</a><a href="#membership">Membership</a><a href="#gallery">Gallery</a><a href="#contact">Contact</a>
+<a class="btn" href="#contact">Free trial</a>
+</div></div>
+</nav>
+
+<header class="hero" id="top">
+<img src="https://picsum.photos/seed/forge-hero/1600/1000" alt="Athletes training with kettlebells at Forge">
+<div class="wrap">
+<p class="kicker hi" style="animation-delay:.1s">Brno · Veveří 54 · since 2016</p>
+<h1 class="hi" style="animation-delay:.3s">Train hard. <em>Feel at home.</em></h1>
+<p class="lead hi" style="animation-delay:.5s">Strength, conditioning and yoga classes in small groups, with coaches who know your name.</p>
+<div class="btns hi" style="animation-delay:.7s"><a class="btn" href="#classes">See the schedule</a><a class="btn out" href="#contact">Free trial</a></div>
+</div>
+</header>
+
+<main>
+<div class="nums"><div class="wrap ng">
+<div class="nb rv"><b data-count="12">12</b><span>coaches</span></div>
+<div class="nb rv"><b data-count="45">45</b><span>classes a week</span></div>
+<div class="nb rv"><b data-count="2300">2,300</b><span>members</span></div>
+<div class="nb rv"><b>6 a.m.</b><span>first class</span></div>
+</div></div>
+
+<section id="classes"><div class="wrap">
+<div class="rv"><p class="kicker">Schedule</p><h2 class="title">Classes this week</h2><p class="sub">Book through the app or at the front desk. Max 12 people per class.</p></div>
+<div class="filters rv" role="group" aria-label="Filter classes by day">
+<button aria-pressed="true" data-d="All">All</button><button aria-pressed="false" data-d="Mon">Mon</button><button aria-pressed="false" data-d="Tue">Tue</button><button aria-pressed="false" data-d="Wed">Wed</button><button aria-pressed="false" data-d="Thu">Thu</button><button aria-pressed="false" data-d="Fri">Fri</button><button aria-pressed="false" data-d="Sat">Sat</button>
+</div>
+<div class="grid classes" id="cls"></div>
+</div></section>
+
+<section id="trainers" style="background:#15171a"><div class="wrap">
+<div class="rv"><p class="kicker">Coaches</p><h2 class="title">Meet the team</h2></div>
+<div class="grid coaches" style="margin-top:30px">
+<article class="card coach rv"><img src="https://picsum.photos/seed/forge-coach-1/600/700" alt="Adam Novotný" loading="lazy"><div><h3>Adam Novotný</h3><h4>Strength &amp; conditioning</h4><p>Former rower who builds engines that last.</p></div></article>
+<article class="card coach rv"><img src="https://picsum.photos/seed/forge-coach-2/600/700" alt="Klára Benešová" loading="lazy"><div><h3>Klára Benešová</h3><h4>Kettlebells &amp; core</h4><p>Turns nervous beginners into confident lifters.</p></div></article>
+<article class="card coach rv"><img src="https://picsum.photos/seed/forge-coach-3/600/700" alt="Tereza Malá" loading="lazy"><div><h3>Tereza Malá</h3><h4>Yoga &amp; mobility</h4><p>Helps you move better so you can train longer.</p></div></article>
+<article class="card coach rv"><img src="https://picsum.photos/seed/forge-coach-4/600/700" alt="Ondřej Černý" loading="lazy"><div><h3>Ondřej Černý</h3><h4>Olympic lifting</h4><p>National-level lifter with an eye for technique.</p></div></article>
+</div></div></section>
+
+<section id="membership"><div class="wrap">
+<div class="rv"><p class="kicker">Membership</p><h2 class="title">Pick your plan</h2></div>
+<div class="sw rv" role="group" aria-label="Billing period"><button aria-pressed="true" data-p="m">Monthly</button><button aria-pressed="false" data-p="y">Yearly</button></div>
+<div class="grid plans">
+<article class="card plan rv"><h3>Basic</h3><p class="price" data-m="790" data-y="7,900">790 Kč</p><p class="per">per month</p><ul><li>Gym floor access</li><li>2 classes a week</li><li>App booking</li></ul><a class="btn out" href="#contact">Join now</a></article>
+<article class="card plan hot rv"><span class="tag">Most popular</span><h3>Unlimited</h3><p class="price" data-m="1,290" data-y="12,900">1,290 Kč</p><p class="per">per month</p><ul><li>Gym floor access</li><li>Unlimited classes</li><li>App booking</li><li>1 coaching session a month</li></ul><a class="btn" href="#contact">Join now</a></article>
+<article class="card plan rv"><h3>Premium</h3><p class="price" data-m="1,990" data-y="19,900">1,990 Kč</p><p class="per">per month</p><ul><li>Everything in Unlimited</li><li>Weekly personal training</li><li>Towel and locker service</li></ul><a class="btn out" href="#contact">Join now</a></article>
+</div></div></section>
+
+<section style="background:#15171a"><div class="wrap">
+<div class="rv"><h2 class="title" style="margin-bottom:30px">Members say</h2></div>
+<div class="grid tg">
+<figure class="card tq rv" style="margin:0"><p>I came for the free trial and stayed for the people.</p><cite>Lenka M.</cite></figure>
+<figure class="card tq rv" style="margin:0"><p>Adam fixed my squat in two sessions after years of knee pain.</p><cite>Jakub S.</cite></figure>
+<figure class="card tq rv" style="margin:0"><p>The only gym where the 6 a.m. class feels like a party.</p><cite>Veronika D.</cite></figure>
+</div></div></section>
+
+<section id="gallery"><div class="wrap">
+<div class="rv"><p class="kicker">Gallery</p><h2 class="title">Inside the studio</h2></div>
+<div class="grid gal" id="gal" style="margin-top:30px"></div>
+</div></section>
+
+<section id="contact" style="background:#15171a"><div class="wrap">
+<div class="rv"><p class="kicker">Contact</p><h2 class="title">Come for a free trial</h2></div>
+<div class="cg" style="margin-top:30px">
+<div class="info rv">
+<p><b>Address</b>Veveří 54, 602 00 Brno<br><a href="https://maps.google.com/?q=Veveří+54,+Brno" target="_blank" rel="noopener">Open in Google Maps</a></p>
+<p><b>Phone</b><a href="tel:+420541000777">+420 541 000 777</a></p>
+<p><b>E-mail</b><a href="mailto:hello@forgefitness.cz">hello@forgefitness.cz</a></p>
+<p><b>Opening hours</b>Monday–Friday 6:00–22:00<br>Saturday–Sunday 8:00–20:00</p>
+</div>
+<form id="f" class="rv">
+<label for="n">Name<input id="n" required autocomplete="name"></label>
+<label for="e">E-mail<input id="e" type="email" required autocomplete="email"></label>
+<label for="p">Phone (optional)<input id="p" type="tel" autocomplete="tel"></label>
+<label for="i">Interested in<select id="i" required><option>Free trial</option><option>Membership</option><option>Personal training</option></select></label>
+<label for="m">Message<textarea id="m" rows="4" required></textarea></label>
+<button class="btn" type="submit">Send</button>
+</form>
+</div></div></section>
+</main>
+
+<footer><div class="wrap">
+<div class="fg">
+<div><strong>Forge Fitness Studio</strong><p>Veveří 54, 602 00 Brno</p></div>
+<ul><li><a href="#classes">Classes</a></li><li><a href="#trainers">Trainers</a></li><li><a href="#membership">Membership</a></li><li><a href="#gallery">Gallery</a></li><li><a href="#contact">Contact</a></li></ul>
+</div>
+<small>© 2026 Forge Fitness Studio</small>
+</div></footer>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer">
+<button class="x" aria-label="Close">✕</button><button class="pv" aria-label="Previous photo">‹</button>
+<img id="lbi" alt=""><button class="nx" aria-label="Next photo">›</button>
+</div>
+
+<script>
+(function(){
+var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+var $=function(s,r){return(r||document).querySelector(s)},$$=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};
+// menu
+var mb=$('#menuBtn'),lk=$('#links');
+mb.onclick=function(){var o=lk.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+$$('a',lk).forEach(function(a){a.onclick=function(){lk.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+// classes
+var C=[["Mon","6:00","Sunrise Strength","Adam","All levels"],["Mon","18:00","Kettlebell Basics","Klára","Beginner"],["Tue","7:00","Mobility Flow","Tereza","All levels"],["Tue","19:00","Power Circuit","Ondřej","Advanced"],["Wed","6:00","Engine Builder","Adam","Intermediate"],["Wed","17:30","Vinyasa Yoga","Tereza","All levels"],["Thu","7:00","Olympic Lifting","Ondřej","Advanced"],["Thu","18:30","Core & Conditioning","Klára","Intermediate"],["Fri","6:00","Friday Burn","Adam","Intermediate"],["Fri","17:00","Stretch & Restore","Tereza","Beginner"],["Sat","9:00","Team WOD","Ondřej","All levels"],["Sat","10:30","Weekend Yoga","Tereza","Beginner"]];
+var cls=$('#cls');
+C.forEach(function(c){var a=document.createElement('article');a.className='card cl rv';a.dataset.d=c[0];
+a.innerHTML='<div class="d"><span>'+c[0]+'</span><span>'+c[1]+'</span></div><h3></h3><p>Coach '+c[3]+'</p><span class="lv">'+c[4]+'</span>';
+$('h3',a).textContent=c[2];cls.appendChild(a)});
+$$('.filters button').forEach(function(b){b.onclick=function(){
+$$('.filters button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});
+$$('.cl').forEach(function(c){c.hidden=!(b.dataset.d==='All'||c.dataset.d===b.dataset.d);if(!c.hidden)c.classList.add('in')})}});
+// plans
+$$('.sw button').forEach(function(b){b.onclick=function(){
+$$('.sw button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});
+var y=b.dataset.p==='y';
+$$('.price').forEach(function(p){p.textContent=(y?p.dataset.y:p.dataset.m)+' Kč'});
+$$('.per').forEach(function(p){p.textContent=y?'per year':'per month'})}});
+// gallery
+var A=["The main training floor","Kettlebells lined up","A yoga class at sunset","Barbells and plates","The rowing machines","A coach helping a member","The stretching corner","The front desk and café"];
+var g=$('#gal'),lb=$('#lb'),li=$('#lbi'),cur=0,last=null;
+A.forEach(function(t,i){var b=document.createElement('button');b.setAttribute('aria-label','Open photo: '+t);b.className='rv';
+b.innerHTML='<img loading="lazy" src="https://picsum.photos/seed/forge-g'+(i+1)+'/1200/800" alt="'+t+'">';
+b.onclick=function(){last=b;show(i);lb.classList.add('open');$('.x',lb).focus()};g.appendChild(b)});
+function show(i){cur=(i+A.length)%A.length;li.src='https://picsum.photos/seed/forge-g'+(cur+1)+'/1200/800';li.alt=A[cur]}
+function close(){lb.classList.remove('open');if(last)last.focus()}
+$('.x',lb).onclick=close;$('.pv',lb).onclick=function(){show(cur-1)};$('.nx',lb).onclick=function(){show(cur+1)};
+lb.onclick=function(e){if(e.target===lb)close()};
+document.addEventListener('keydown',function(e){if(!lb.classList.contains('open'))return;
+if(e.key==='Escape')close();else if(e.key==='ArrowLeft')show(cur-1);else if(e.key==='ArrowRight')show(cur+1)});
+// form
+$('#f').onsubmit=function(e){e.preventDefault();
+var body='Name: '+$('#n').value+'\nE-mail: '+$('#e').value+'\nPhone: '+($('#p').value||'-')+'\nInterested in: '+$('#i').value+'\n\nMessage:\n'+$('#m').value;
+location.href='mailto:hello@forgefitness.cz?subject='+encodeURIComponent('Free trial request')+'&body='+encodeURIComponent(body)};
+// reveal + count
+function count(el){var t=+el.dataset.count;if(rm){return}
+var s=null;el.textContent='0';
+function f(ts){if(!s)s=ts;var p=Math.min((ts-s)/1600,1);el.textContent=Math.round(t*(1-Math.pow(1-p,3))).toLocaleString('en-US');if(p<1)requestAnimationFrame(f)}
+requestAnimationFrame(f)}
+var all=$$('.rv');
+if(rm||!('IntersectionObserver' in window)){all.forEach(function(x){x.classList.add('in')})}
+else{
+var cnt=0,io=new IntersectionObserver(function(es){es.forEach(function(en){if(!en.isIntersecting)return;
+var el=en.target;io.unobserve(el);
+var sib=$$('.rv',el.parentElement),idx=Math.max(0,sib.indexOf(el));
+el.style.transitionDelay=Math.min(idx,6)*90+'ms';
+el.classList.add('in');
+var n=$('[data-count]',el);if(n)count(n)})},{threshold:.15});
+all.forEach(function(x){io.observe(x)})}
+})();
+</script>
+</body>
+</html>
+```

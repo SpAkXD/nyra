@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/gym/claude-sonnet-5-5/nyra-2/",
+ "runs": 3,
+ "fcp_ms": 656,
+ "lcp_ms": 656,
+ "cls": 0,
+ "load_ms": 623,
+ "kb": 379.9,
+ "requests": 10,
+ "kb_by_type_first_run": {
+  "Document": 4.8,
+  "Stylesheet": 10,
+  "Script": 18,
+  "Font": 197.1,
+  "Image": 149.3,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  668,
+  596,
+  656
+ ]
+}

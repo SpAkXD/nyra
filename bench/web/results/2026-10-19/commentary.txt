@@ -1,0 +1,104 @@
+## What the numbers say
+
+**Plain HTML wins this round on the thing that matters most: a working site.** Counting a Nyra file that never
+built as a site with nothing working, HTML scored 95% of the checklist and Nyra 51%. Every one of the 24 HTML
+answers produced a usable site; Opus 5.5 and Sonnet 5.5 passed **every** check on all 16 of their HTML sites. Only
+13 of 24 Nyra answers built at all, even with a repair turn that HTML never got.
+
+- **Builds.** Nyra built first try in 6/24 runs (25%) and after one repair in 13/24 (54%). By model: Opus 3/8 then
+  7/8, Sonnet 3/8 then 5/8, Haiku 0/8 then 1/8. That is no better than round 2 on the old, now-overfitted bakery
+  brief (4/12 first try); on the held-out dentist brief no model built a single Nyra file first try (0/12).
+- **When Nyra built, the site worked about as well as hand-written HTML, with one exception.** Built Nyra sites
+  scored 94% (Opus, Sonnet) and 82% (Haiku's one site), against 100% / 100% / 86% for HTML. All 13 built Nyra
+  sites failed the same item: the contact form does not open a correctly filled e-mail (a kit problem, see below).
+  Apart from that item, every check (filter, monthly/yearly switch, lightbox with buttons and keys, FAQ, live
+  open/closed badge at a fixed clock, today's row, counters, nav, CSP, reduced motion) passed on every built Nyra
+  site except Haiku's (its hours rows lack the day numbers the kit expects, see below).
+- **Where Nyra is clearly better: size, tokens, time and money per answer.** The final Nyra file is 3,283 tokens on
+  average against 17,559 for HTML (5.3x smaller; 7.4x against Opus's HTML). Output tokens per run, thinking and the
+  repair turn included: 6,623 vs 17,472 (2.6x fewer). Time per run: 60 s vs 132 s. Cost per run: $0.101 vs $0.245.
+  The built pages transfer less (351 KB vs 633 KB, mostly because the kit lazy-loads images below the fold).
+- **But per working site, most of the saving disappears.** Dividing what each cell cost by the sites that built:
+  Sonnet Nyra $0.10 per built site (at 94%) vs Sonnet HTML $0.10 per site (at 100%); Opus Nyra $0.24 vs Opus HTML
+  $0.56; Haiku Nyra $0.26 for its single site vs Haiku HTML $0.08. Only for Opus is Nyra clearly cheaper per working
+  site, and Opus's HTML never failed a check.
+- **Input is the other side of the token story.** Nyra's prompt carries the two cards: about 12,800 input tokens per
+  run (with the repair turn) against 2,700 for HTML. With prompt caching most of it is billed at 5% (Opus, Sonnet)
+  or 10% (Haiku), so it is cheap in dollars, but it is not free in context.
+- **Speed of the page.** LCP is about the same and slightly better for HTML (625 ms vs 668 ms on average, desktop,
+  unthrottled); Sonnet's HTML was the fastest (581 ms). Nyra's pages are lighter but load a CSS and a JS file next to
+  the HTML.
+- **Where HTML loses.** All HTML failures are Haiku 4.5's: reduced motion (6 of 8 Haiku sites: transitions still
+  running, or content left at `opacity: 0` because the reveal animation was switched off), today's row not
+  highlighted (2), a counter stuck at 193 of 4,800, the "Free trial" button missing from the top bar, a form that
+  submitted to the page instead of `mailto:`, and one site (gym run 3) where a JavaScript error (`Cannot access
+  'observer' before initialization`) killed the trainers, gallery, prices and counters (7/18). Nyra's kit got
+  reduced motion and the CSP right on every site it built.
+
+**In one sentence:** with the strong models, one-file HTML gave a perfect site every time at a higher token cost,
+while Nyra gave a nearly perfect site from a fifth of the code when it compiled, and it often did not compile.
+
+## Top failure causes
+
+### Nyra (11 of 24 runs without a site; 13 of 13 built sites with a broken form e-mail)
+
+1. **Unknown Lucide icon names fail the whole build** (E0374): `siren` (all 4 Opus dentist answers, and 3 Sonnet
+   dentist repairs), `alert-circle` / `alert` (Haiku), `gauge` (Opus gym). When the name comes from a data list
+   (`("siren", "Emergency care", ...)` then `icon: s.0`), the error points at `use web` (line 1, column 5) and gives
+   no nearest name, so the model has to guess again (Haiku replaced `alert-circle` with `alert`, also unknown).
+2. **Errors arrive in stages, so one repair turn is often not enough.** The first message of Sonnet's dentist files
+   listed up to 11 errors (unknown parameters, types, undefined names) but not the unknown icon; Sonnet fixed all of
+   them and the next build stopped at `siren`. Opus gym run 3 fixed its icon and then met an E0371 that had not been
+   reported. Parse errors (E0101) hide every later error.
+3. **The card's notation is copied literally.** `type: text|email|tel|...` and `style: soft|sharp|...` on the web card
+   made Sonnet write `type: tel`, `style: soft` without quotes (E0201 undefined variable `tel`, `soft`, `email`,
+   `select`, `date`, `text`).
+4. **A comma after a match arm** (`Msg.Day(d) => day = d,`): 3 of 4 Haiku gym first answers (the 4th had a `;`
+   first and the comma after its repair) and one Sonnet gym answer (E0101). The hint, "one statement per line: start
+   `,` on a new line", points the wrong way; three of Haiku's four gym repairs still had the comma.
+5. **APIs the card suggests but the kit does not have, or types that surprise:** `card(..., on:)` for a clickable
+   filter card (E0226), `hero(..., rows:)` (the card's `badge: rows` reads like a parameter), `table` wanting
+   `[[str]]` where models pass a list of tuples (E0203), `css(...)` written as the last line inside `page { }`
+   (E0371: the card says "`css(...)` last").
+6. Model mistakes: Haiku's only built site (dentist run 1) wrote the hours as `("Monday", "8:00–18:00")` instead of
+   the card's `("Monday", "1 8:00-18:00")`, so the hours table shows no times and the badge says "Closed now" on a
+   Wednesday morning (it also wrote an unused "open now" function using `time.now_ms()` at build time); in the pilot
+   Haiku once translated the whole site into Czech.
+
+### HTML (only Haiku 4.5 failed checks)
+
+1. Reduced motion (6/8 Haiku sites).
+2. One fatal JavaScript ordering bug (1 site, 11 checks lost).
+3. Small misses: today's row not highlighted (2), a counter that stops early (1), the top-bar button missing (1), a
+   form that does not build a `mailto:` (1).
+
+## Nyra bugs and gaps found (not fixed here: no compiler or kit code was changed)
+
+1. **`form(mailto:)` with a subject is broken.** The kit already has `form(subject:, send:)`, but the web card does
+   not mention them, so models put the subject into the address (`mailto: "a@b.cz?subject=..."`). The submit script
+   then builds `mailto:a@b.cz?subject=...?body=...`: a mail client reads the whole body into the subject and the body
+   is empty. Models that left the subject out got a correct body but no subject. Result: 0 of 13 built Nyra sites
+   pass the e-mail check. Fix: document `subject:` (and `send:`), and split a `?` in `mailto:` into the address and
+   its query.
+2. **Undocumented `send:` leads to a dead button.** Because the card does not say how to label the submit button,
+   models add `button("Send")` inside the form; it is `type="button"` and does nothing, next to the kit's own "Send
+   message" button (visible in the gym screenshots).
+3. **E0374 for an icon name that flows through a variable is reported at 1:5 (`use web`), without a suggestion.**
+   AGENTS.md promises "E0374 with the nearest name"; here there is none, and the location does not help.
+4. **An unknown icon is a hard build error.** A decorative icon could fall back to none with a warning, instead of
+   failing a site that is otherwise correct (all 4 Opus dentist first tries).
+5. **Icon and E0371 checks run only after the type checks pass,** so a repair turn cannot see them (cause 2 above).
+6. **The E0101 hint for a comma after a match arm is misleading** ("start `,` on a new line"); in one repair the
+   compiler gave a better message ("expected a new line after the arm, found `,`") for the same mistake.
+7. **Hours rows in the wrong format compile silently.** `hours`/`badge:` rows without the day numbers build without
+   an error or warning and render empty times and a badge that is always "Closed now" (Haiku dentist run 1).
+8. **Card wording:** `a|b|c` enumerations read as bare names; `badge: rows` reads as a `rows:` parameter of `hero`;
+   "`css(...)` last" reads as "the last line of `page { }`". Old Lucide names (`alert-circle`) are not aliased.
+
+## What this round does not show
+
+- How good the sites look. The screenshots in `shots/` are worth a look: both sides look like real small-business
+  sites; the Nyra sites look more alike from run to run (they share the kit), the HTML ones follow the brief's dark,
+  uppercase gym look more literally.
+- Phones, slow networks and accessibility audits; and more than one repair turn, which would likely lift Nyra's
+  build rate (cause 2) at a further token cost.

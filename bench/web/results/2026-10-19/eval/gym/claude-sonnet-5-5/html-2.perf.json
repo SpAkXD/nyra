@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:60407/gym/claude-sonnet-5-5/html-2/",
+ "runs": 3,
+ "fcp_ms": 364,
+ "lcp_ms": 580,
+ "cls": 0,
+ "load_ms": 497,
+ "kb": 355.5,
+ "requests": 8,
+ "kb_by_type_first_run": {
+  "Document": 7.1,
+  "Stylesheet": 1.3,
+  "Font": 197.1,
+  "Image": 149.3,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  576,
+  644,
+  580
+ ]
+}

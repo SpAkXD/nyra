@@ -1,0 +1,38 @@
+{
+ "brief": "dentist",
+ "model": "claude-haiku-4-5-20251001",
+ "lang": "html",
+ "run": 3,
+ "effort": null,
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-haiku-4-5-20251001",
+  "request_id": null,
+  "seconds": 106.2,
+  "input_tokens": 2283,
+  "input_fresh": 2283,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 14428,
+  "cost_usd": 0.074423,
+  "visible_tokens": 14425,
+  "thinking_tokens_est": 3
+ },
+ "builds_first": null,
+ "site": "sites/dentist/claude-haiku-4-5-20251001/html-3",
+ "final_file": "raw/dentist/claude-haiku-4-5-20251001/html-3.html",
+ "code_tokens": 16825,
+ "code_bytes": 48430,
+ "code_tokens_first": 16825,
+ "total": {
+  "input_tokens": 2283,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 14428,
+  "cost_usd": 0.074423,
+  "seconds": 106.2,
+  "thinking_tokens_est": 3,
+  "calls": 1
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:60407/gym/claude-haiku-4-5-20251001/html-1/",
+ "runs": 3,
+ "fcp_ms": 392,
+ "lcp_ms": 628,
+ "cls": 0,
+ "load_ms": 675,
+ "kb": 1608.1,
+ "requests": 20,
+ "kb_by_type_first_run": {
+  "Document": 8.2,
+  "Stylesheet": 1.3,
+  "Font": 158.3,
+  "Image": 1439.8,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  628,
+  584,
+  2240
+ ]
+}

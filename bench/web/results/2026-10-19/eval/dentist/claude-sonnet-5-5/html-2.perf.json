@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-sonnet-5-5/html-2/",
+ "runs": 3,
+ "fcp_ms": 388,
+ "lcp_ms": 592,
+ "cls": 0,
+ "load_ms": 495,
+ "kb": 462.9,
+ "requests": 13,
+ "kb_by_type_first_run": {
+  "Document": 7.5,
+  "Stylesheet": 1.2,
+  "Image": 276.3,
+  "Font": 177.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  536,
+  592,
+  596
+ ]
+}

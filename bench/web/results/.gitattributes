@@ -1,0 +1,4 @@
+# Screenshots are binary (bench/.gitattributes makes every file text with LF endings).
+*.jpg binary
+*.png binary
+*.webp binary
