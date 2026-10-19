@@ -29,6 +29,11 @@ pub mod ease;
 pub mod gzip;
 pub mod html;
 pub mod image;
+/// SHA-256 and Base64 (the hash of an inline style in the policy, `data:` URLs).
+pub mod digest;
+/// The built-in image codec (not in the WebAssembly playground, which converts no images).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod img;
 /// The motion words: their CSS and JS parts, the `keyframes` checks (WP4).
 pub mod motion;
 #[cfg(not(target_arch = "wasm32"))]
@@ -242,6 +247,10 @@ struct Img {
     size: Option<(u32, u32)>,
     /// `srcset` entries (file, width), when there are WebP variants.
     variants: Vec<(String, u32)>,
+    /// A JPEG copy for `og:image`, when the file itself does not suit.
+    og: Option<String>,
+    /// A `data:` URL of a tiny preview, shown blurred behind the image while it loads.
+    preview: Option<String>,
 }
 
 /// The file of a relative reference: in `assets/` of the program's folder, else in the folder.
@@ -298,6 +307,18 @@ impl Policy {
         let e = self.0.entry(k).or_insert_with(|| (directive.to_string(), Vec::new()));
         if !e.1.iter().any(|s| s == source) {
             e.1.push(source.to_string());
+        }
+    }
+
+    fn has(&self, directive: &str, source: &str) -> bool {
+        self.0.values().any(|(d, s)| d == directive && s.iter().any(|x| x == source))
+    }
+
+    fn remove_hashes(&mut self, directive: &str) {
+        for (d, s) in self.0.values_mut() {
+            if d == directive {
+                s.retain(|x| !x.starts_with("'sha256-"));
+            }
         }
     }
 
@@ -464,32 +485,41 @@ impl Site {
         // the theme's contrast (E0380)
         contrast(&web.css, at, &mut warn);
 
-        // images
+        // images: every one the pages show is loaded (and its variants made) first, in parallel
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let tool = image::find_tool(o.image_tool.as_deref());
-        let mut images: HashMap<String, Option<Img>> = HashMap::new();
-        let mut unscaled = 0;
+        let mut wanted: Vec<(String, bool)> = Vec::new();
+        for p in &pages {
+            for t in p.tags.iter().filter(|t| !t.close) {
+                for (name, value) in &t.attrs {
+                    let Some(v) = value else { continue };
+                    if image_ref(t, name, v) {
+                        let meta = name == "content";
+                        match wanted.iter_mut().find(|(w, _)| w == v) {
+                            Some(w) => w.1 |= meta,
+                            None => wanted.push((v.clone(), meta)),
+                        }
+                    }
+                }
+            }
+        }
+        let (images, unscaled, failed) = load_images(&o.dir, &wanted, tool.as_ref(), o.convert, &mut files);
+        let mut reported: Vec<&str> = Vec::new();
         let mut edits: Vec<Vec<(usize, usize, String)>> = vec![Vec::new(); pages.len()];
+        // per page: the preview classes it uses (class, `data:` URL)
+        let mut previews: Vec<Vec<(String, String)>> = vec![Vec::new(); pages.len()];
         for (pi, p) in pages.iter().enumerate() {
             for t in p.tags.iter().filter(|t| !t.close) {
                 let mut changed = t.clone();
                 let mut any = false;
                 for (name, value) in &t.attrs {
                     let Some(v) = value else { continue };
-                    let is_ref = match name.as_str() {
-                        "src" | "poster" | "data-src" | "data-full" | "data-bg" | "data-image" => true,
-                        "href" => t.name == "a" || t.name == "link",
-                        "content" => {
-                            t.name == "meta" && matches!(t.get("property").or(t.get("name")), Some("og:image" | "twitter:image"))
-                        }
-                        _ => false,
-                    };
-                    if !is_ref || !local_ref(v) || !image::is_image(v.split(['?', '#']).next().unwrap_or(v)) {
+                    if !image_ref(t, name, v) {
                         continue;
                     }
-                    if !images.contains_key(v) {
-                        let img = load_image(&o.dir, v, tool.as_deref(), o.convert, &mut files, &mut unscaled);
-                        if img.is_none() {
+                    if !reported.contains(&v.as_str()) {
+                        reported.push(v);
+                        if images.get(v).is_none_or(Option::is_none) {
                             let msg =
                                 format!("page \"{}\" shows the image \"{v}\", which is not in `assets/` next to the program", p.path);
                             let d = Diag::new("E0383", msg, p.span).hint(format!(
@@ -502,11 +532,11 @@ impl Site {
                                 warn(d);
                             }
                         }
-                        images.insert(v.clone(), img);
                     }
                     let Some(Some(img)) = images.get(v) else { continue };
                     let url = if name == "content" {
-                        site_url(&pages, &img.file).unwrap_or(format!("/{}", img.file))
+                        let file = img.og.as_ref().unwrap_or(&img.file);
+                        site_url(&pages, file).unwrap_or(format!("/{file}"))
                     } else {
                         format!("{}{}", p.up, img.file)
                     };
@@ -524,6 +554,19 @@ impl Site {
                             changed.set("srcset", &set.join(", "));
                             if !t.has("sizes") {
                                 changed.set("sizes", "100vw");
+                            }
+                        }
+                        // a lazy image shows its blurred preview until it loads (the first image is
+                        // preloaded and needs none)
+                        if let Some(uri) = img.preview.as_ref().filter(|_| t.get("fetchpriority") != Some("high")) {
+                            let cls = format!("ph-{}", &hash(uri.as_bytes())[..8]);
+                            let classes = match changed.get("class") {
+                                Some(c) if !c.is_empty() => format!("{c} {cls}"),
+                                _ => cls.clone(),
+                            };
+                            changed.set("class", &classes);
+                            if !previews[pi].iter().any(|(c, _)| *c == cls) {
+                                previews[pi].push((cls, uri.clone()));
                             }
                         }
                     }
@@ -553,13 +596,21 @@ impl Site {
             }
         }
         if unscaled > 0 {
-            let why = match o.image_tool.as_deref() {
-                Some("none") => "--image-tool none".to_string(),
-                _ => format!("no image tool found: {}", image::TOOLS.join(", ")),
-            };
-            warn(Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` ({why})"), at).hint(
-                "install cwebp (libwebp), ImageMagick 7 (`magick`) or libvips (`vips`) and build again; the site works without them, with larger images on phones",
+            warn(Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` (--image-tool none)"), at).hint(
+                "build without `--image-tool none` to make WebP variants with the built-in codec; the site works without them, with larger images on phones",
             ));
+        }
+        if !failed.is_empty() {
+            let list: Vec<String> = failed.iter().take(5).map(|(f, why)| format!("`{f}` ({why})")).collect();
+            let more = if failed.len() > 5 { format!(" and {} more", failed.len() - 5) } else { String::new() };
+            warn(
+                Diag::new(
+                    "E0386",
+                    format!("{} image(s) copied without WebP variants: the built-in codec cannot read {}{more}", failed.len(), list.join(", ")),
+                    at,
+                )
+                .hint("save the file again as a plain JPEG, PNG or WebP (an image editor's \"export\"); the site still shows the original"),
+            );
         }
 
         // the CSS: the kit's base and used parts, the motion words, custom keyframes, the program's own
@@ -649,10 +700,19 @@ impl Site {
         let base = base_url(&pages);
         let mut sitemap = Vec::new();
         for (pi, p) in pages.iter().enumerate() {
-            let policy = page_policy(p, js_file.is_some() || o.dev, &web.chunks);
+            let mut policy = page_policy(p, js_file.is_some() || o.dev, &web.chunks);
+            // the previews: one inline style, allowed by its hash (unless inline styles are allowed anyway)
+            let mut style = String::new();
+            if !previews[pi].is_empty() {
+                let css: String = previews[pi].iter().map(|(c, u)| format!(".{c}{{background:url({u}) 50%/cover no-repeat}}")).collect();
+                if !policy.has("style-src", "'unsafe-inline'") {
+                    policy.add("style-src", &format!("'sha256-{}'", digest::base64(&digest::sha256(css.as_bytes()))));
+                }
+                style = format!("<style>{css}</style>");
+            }
             all.merge(&policy);
             let mut html = html::apply(&p.html, std::mem::take(&mut edits[pi]));
-            html = inject(&html, &policy.text(), &p.up, css_file.as_deref(), js_file.as_deref(), o.dev);
+            html = inject(&html, &policy.text(), &p.up, css_file.as_deref(), js_file.as_deref(), o.dev, &style);
             files.insert(p.file.clone(), html.into_bytes());
             let noindex = p.tags.iter().any(|t| {
                 t.name == "meta" && t.get("name") == Some("robots") && t.get("content").is_some_and(|c| c.contains("noindex"))
@@ -670,6 +730,10 @@ impl Site {
             }
         }
         all.add("frame-ancestors", "'self'");
+        // a hash in the site-wide policy would turn off `'unsafe-inline'` that another page needs
+        if all.has("style-src", "'unsafe-inline'") {
+            all.remove_hashes("style-src");
+        }
         let mut robots = String::from("User-agent: *\nAllow: /\n");
         if let Some(b) = &base {
             let mut xml = String::from(
@@ -692,40 +756,139 @@ impl Site {
     }
 }
 
-/// Copies an image (and makes its variants) into `files`. `None`: there is no such file.
-fn load_image(
+/// True if attribute `name` of tag `t` with value `v` refers to an image of the site (see
+/// docs/WEB.md, "Build contract").
+fn image_ref(t: &html::Tag, name: &str, v: &str) -> bool {
+    let is_ref = match name {
+        "src" | "poster" | "data-src" | "data-full" | "data-bg" | "data-image" => true,
+        "href" => t.name == "a" || t.name == "link",
+        "content" => t.name == "meta" && matches!(t.get("property").or(t.get("name")), Some("og:image" | "twitter:image")),
+        _ => false,
+    };
+    is_ref && local_ref(v) && image::is_image(v.split(['?', '#']).next().unwrap_or(v))
+}
+
+/// Loads the images `wanted` (each with whether a `<meta>` uses it), copies them into `files` and
+/// makes their variants. Returns each one's `Img` (`None`: there is no such file), how many were
+/// copied without variants because of `--image-tool none`, and the files the built-in codec could
+/// not read (with the reason).
+#[allow(clippy::type_complexity)]
+fn load_images(
     dir: &Path,
-    r: &str,
-    tool: Option<&str>,
+    wanted: &[(String, bool)],
+    tool: Option<&image::Tool>,
     convert: bool,
     files: &mut BTreeMap<String, Vec<u8>>,
-    unscaled: &mut usize,
-) -> Option<Img> {
-    let path = find_asset(dir, r)?;
-    let bytes = std::fs::read(&path).ok()?;
-    let size = image::size(&bytes);
-    let file = format!("img/{}", hashed(&path, &bytes, ""));
-    let mut variants = Vec::new();
-    if image::resizable(r) {
-        match (tool, size) {
-            (Some(tool), Some((w, _))) if convert => {
-                for vw in image::WIDTHS.iter().copied().filter(|vw| *vw < w) {
-                    let name = format!("img/{}", hashed(&path.with_extension("webp"), &bytes, &format!("-{vw}")));
-                    if let Some(data) = variant(tool, &path, &bytes, vw) {
-                        files.insert(name.clone(), data);
-                        variants.push((name, vw));
-                    }
-                }
-                if !variants.is_empty() {
-                    variants.push((file.clone(), w));
-                }
-            }
-            (None, _) => *unscaled += 1,
-            _ => {}
+) -> (HashMap<String, Option<Img>>, usize, Vec<(String, String)>) {
+    let mut out = HashMap::new();
+    let mut unscaled = 0;
+    let mut failed = Vec::new();
+    // read the files, and with the built-in codec make the variants on several threads
+    let found: Vec<Option<(PathBuf, Vec<u8>)>> =
+        wanted.iter().map(|(r, _)| find_asset(dir, r).and_then(|p| std::fs::read(&p).ok().map(|b| (p, b)))).collect();
+    let builtin = convert && tool == Some(&image::Tool::Builtin);
+    let mut made: Vec<Option<Result<image::Made, String>>> = (0..wanted.len()).map(|_| None).collect();
+    if builtin {
+        let jobs: Vec<usize> = (0..wanted.len())
+            .filter(|&i| found[i].is_some() && image::decodable(wanted[i].0.split(['?', '#']).next().unwrap_or("")))
+            .collect();
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).clamp(1, 4).min(jobs.len().max(1));
+        let results: Vec<(usize, Result<image::Made, String>)> = std::thread::scope(|s| {
+            let workers: Vec<_> = (0..threads)
+                .map(|_| {
+                    s.spawn(|| {
+                        let mut done = Vec::new();
+                        loop {
+                            let k = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let Some(&i) = jobs.get(k) else { break };
+                            let (_, bytes) = found[i].as_ref().expect("a found file");
+                            // a panic in the codec is a bug; it must not take the build down
+                            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| image::builtin(bytes, wanted[i].1)))
+                                .unwrap_or_else(|_| Err("the image codec failed on it".into()));
+                            done.push((i, r));
+                        }
+                        done
+                    })
+                })
+                .collect();
+            workers.into_iter().flat_map(|w| w.join().unwrap_or_default()).collect()
+        });
+        for (i, r) in results {
+            made[i] = Some(r);
         }
     }
-    files.insert(file.clone(), bytes);
-    Some(Img { file, size, variants })
+    for (i, ((r, _), f)) in wanted.iter().zip(found).enumerate() {
+        let Some((path, bytes)) = f else {
+            out.insert(r.clone(), None);
+            continue;
+        };
+        let size = image::size(&bytes);
+        let mut file = format!("img/{}", hashed(&path, &bytes, ""));
+        let mut variants = Vec::new();
+        let mut og = None;
+        let mut preview = None;
+        match made[i].take() {
+            Some(Ok(m)) => {
+                preview = m.preview.map(|p| format!("data:image/webp;base64,{}", digest::base64(&p)));
+                let webp = path.with_extension("webp");
+                for (vw, data) in m.variants {
+                    let name = format!("img/{}", hashed(&webp, &bytes, &format!("-{vw}")));
+                    files.insert(name.clone(), data);
+                    variants.push((name, vw));
+                }
+                if let Some(data) = m.og {
+                    let name = format!("img/{}", hashed(&path.with_extension("jpg"), &bytes, "-og"));
+                    files.insert(name.clone(), data);
+                    og = Some(name);
+                }
+                if m.replace {
+                    // the widest variant stands in for the original
+                    if let Some((name, _)) = variants.last() {
+                        file = name.clone();
+                    }
+                } else {
+                    if m.original_top {
+                        if let Some((w, _)) = size {
+                            variants.push((file.clone(), w));
+                        }
+                    }
+                    files.insert(file.clone(), bytes);
+                }
+                if variants.len() == 1 && variants[0].0 == file {
+                    // the file alone needs no `srcset`
+                    variants.clear();
+                }
+            }
+            Some(Err(why)) => {
+                failed.push((format!("assets/{}", r.trim_start_matches("./").trim_start_matches('/')), why));
+                files.insert(file.clone(), bytes);
+            }
+            None => {
+                if image::resizable(r) {
+                    match (tool, size) {
+                        (Some(image::Tool::External(tool)), Some((w, _))) if convert => {
+                            for vw in image::WIDTHS.iter().copied().filter(|vw| *vw < w) {
+                                let name = format!("img/{}", hashed(&path.with_extension("webp"), &bytes, &format!("-{vw}")));
+                                if let Some(data) = variant(tool, &path, &bytes, vw) {
+                                    files.insert(name.clone(), data);
+                                    variants.push((name, vw));
+                                }
+                            }
+                            if !variants.is_empty() {
+                                variants.push((file.clone(), w));
+                            }
+                        }
+                        (None, _) => unscaled += 1,
+                        _ => {}
+                    }
+                }
+                files.insert(file.clone(), bytes);
+            }
+        }
+        out.insert(r.clone(), Some(Img { file, size, variants, og, preview }));
+    }
+    (out, unscaled, failed)
 }
 
 /// A WebP of `src` at `width`, made by `tool`, kept in a cache in the temp folder (by the content).
@@ -743,7 +906,6 @@ fn variant(tool: &str, src: &Path, bytes: &[u8], width: u32) -> Option<Vec<u8>> 
     }
     std::fs::read(out).ok()
 }
-
 /// The CSS with each `url(...)` of a file in `assets/` copied to the site and pointed at the copy.
 fn css_files(css: &str, dir: &Path, files: &mut BTreeMap<String, Vec<u8>>) -> String {
     let mut out = String::with_capacity(css.len());
@@ -866,7 +1028,7 @@ fn page_policy(p: &Page, scripts: bool, chunks: &[String]) -> Policy {
 
 /// The page with its policy, the CSS and JS links and (dev) the reload script in its `<head>`.
 /// A page without `<head>` is wrapped in a whole document.
-fn inject(page: &str, policy: &str, up: &str, css: Option<&str>, js: Option<&str>, dev: bool) -> String {
+fn inject(page: &str, policy: &str, up: &str, css: Option<&str>, js: Option<&str>, dev: bool, style: &str) -> String {
     let meta = format!("<meta http-equiv=\"Content-Security-Policy\" content=\"{}\">", html::attr(policy));
     let mut tail = String::new();
     if let Some(c) = css {
@@ -878,6 +1040,7 @@ fn inject(page: &str, policy: &str, up: &str, css: Option<&str>, js: Option<&str
     if dev {
         tail.push_str(&format!("<script src=\"{RELOAD_JS}\" defer></script>"));
     }
+    tail.push_str(style);
     let tags = html::tags(page);
     let Some(head) = tags.iter().find(|t| t.name == "head" && !t.close) else {
         return format!(
@@ -1157,12 +1320,12 @@ mod tests {
     #[test]
     fn the_head_gets_the_policy_first_and_the_files_last() {
         let page = "<!doctype html><html><head><meta charset=\"utf-8\"><title>x</title></head><body></body></html>";
-        let out = inject(page, "default-src 'self'", "../", Some("site.a.css"), Some("site.b.js"), false);
+        let out = inject(page, "default-src 'self'", "../", Some("site.a.css"), Some("site.b.js"), false, "");
         assert_eq!(
             out,
             "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'\"><title>x</title><link rel=\"stylesheet\" href=\"../site.a.css\"><script src=\"../site.b.js\" defer></script></head><body></body></html>"
         );
-        let bare = inject("<h1>Hi</h1>", "p", "", None, None, true);
+        let bare = inject("<h1>Hi</h1>", "p", "", None, None, true, "");
         assert!(bare.starts_with("<!doctype html>") && bare.contains("<h1>Hi</h1>") && bare.contains(RELOAD_JS));
     }
 
