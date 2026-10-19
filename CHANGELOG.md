@@ -95,6 +95,15 @@ Web
   body)` for words of your own, page transitions and `morph:`; CSS first, with a small script only for the words
   that need one, and `prefers-reduced-motion` respected. New codes E0375 (warning: a keyframe animates layout) and
   E0388 (a bad `keyframes`).
+- **Images without outside tools.** `nyra build` of a `use web` site has its own image codec (zero crates,
+  `src/web/img/`): decoders for JPEG (baseline and progressive, any subsampling, EXIF orientation, CMYK, decoding at
+  1/2 to 1/8 scale for huge photos), PNG (all types, 16-bit, interlaced), GIF, BMP and WebP; a Lanczos3 resizer in
+  linear light; and encoders for lossy WebP (VP8, with a lossless alpha plane), lossless WebP (VP8L, chosen for
+  graphics) and baseline JPEG (for `og:image`). Each photo gets WebP variants (480 to 2400 px and its own width up to
+  2560 px, never larger than the source) with `srcset`, and a ~150-byte blurred preview behind lazy images (one inline
+  `<style>` allowed by its hash in the page's policy). At equal SSIM the lossy WebP files are within 1% of libwebp's size on average.
+  Encoded files are cached by content, so rebuilds are instant. `--image-tool builtin` is the default; `cwebp`,
+  `magick` and `vips` still work on request. E0386 now means a file the codec cannot read, or `--image-tool none`.
 - A `match` on a string whose pattern was longer than 16 characters was wrongly reported as E0279; fixed.
 
 Editors and docs

@@ -94,7 +94,7 @@ websites (a program with `use web`, see docs/WEB.md):
   nyra check site.nyra      also run the site's checks (anchors, images, headings, contrast); writes nothing
   nyra clone <url>          write site.nyra that recreates a page (`nyra clone --help`, docs/CLONE.md)
   --port N        (run) the port; 0 lets the system choose
-  --image-tool T  cwebp, magick, vips or none: the tool for WebP image variants (default: the first found)
+  --image-tool T  builtin (the default), cwebp, magick, vips or none: what makes the WebP image variants
   A web program gets no capability (fs, os, ...) unless --allow names it.
 
 safety (for programs you did not write, or agents that run unsupervised):
@@ -328,11 +328,11 @@ fn parse_args() -> Result<Opts, String> {
                 opts.port = Some(v.parse().map_err(|_| format!("--port needs a port number (0 to 65535), found `{v}`"))?);
             }
             "--image-tool" => {
-                let t = args.next().ok_or("--image-tool needs a name: cwebp, magick, vips or none")?;
+                let t = args.next().ok_or("--image-tool needs a name: builtin, cwebp, magick, vips or none")?;
                 // a name, or the path of one (`C:\tools\cwebp.exe`)
                 let stem = Path::new(&t).file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if !web::image::TOOLS.contains(&stem) && t != "none" {
-                    return Err(format!("unknown image tool `{t}`: use cwebp, magick, vips or none (or the path of one)"));
+                if !web::image::TOOLS.contains(&stem) && t != "none" && t != "builtin" {
+                    return Err(format!("unknown image tool `{t}`: use builtin, cwebp, magick, vips or none (or the path of one)"));
                 }
                 opts.image_tool = Some(t);
             }
