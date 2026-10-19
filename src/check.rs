@@ -152,6 +152,8 @@ struct Checker {
     chain: Option<(Vec<Span>, Option<String>)>,
     /// How many `arena` blocks enclose the current statement.
     arena_depth: usize,
+    /// the loops `for i, x in xs` over pairs (tuples) being checked: (i, x), for the hint when `i` was meant as part of the pair
+    pair_loops: Vec<(String, String)>,
     /// Variables that were freed with `free(x)` and not assigned since.
     freed: HashMap<String, Freed>,
     /// How many lambdas enclose the current expression: inside one, nothing can be changed.
@@ -193,6 +195,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         decls: Vec::new(),
         chain: None,
         arena_depth: 0,
+        pair_loops: Vec::new(),
         freed: HashMap::new(),
         lambda_depth: 0,
         modules: Vec::new(),
@@ -1121,13 +1124,14 @@ impl Checker {
             Ctx::Let(name, ty) => format!("`let {name}: {}`", ty.name()),
             Ctx::Assign(name) => format!("the assignment to `{name}`"),
             Ctx::AssignTo(target) => format!("the assignment to `{target}`"),
-            Ctx::Arg { f, idx, param } => format!("argument {} (`{param}`) of `{f}`", idx + 1),
+            // a web function is called by its bare name (`site`, not `web.site`)
+            Ctx::Arg { f, idx, param } => format!("argument {} (`{param}`) of `{}`", idx + 1, f.strip_prefix("web.").unwrap_or(f)),
             Ctx::MethodArg { m, idx } => format!("argument {} of `.{m}(...)`", idx + 1),
             Ctx::Field { s, f } => format!("field `{f}` of `{s}(...)`"),
             Ctx::Ret => format!("the return value of `{}`", self.fname),
             Ctx::Range(which) => format!("the {which} of a range"),
             Ctx::Default { f, param } => format!("the default value of `{param}` in `fn {f}`"),
-            Ctx::Kid(f) => format!("a line of the child block of `{f}`"),
+            Ctx::Kid(f) => format!("a line of the child block of `{}`", f.strip_prefix("web.").unwrap_or(f)),
         };
         if got == Type::Void {
             self.errs.push(
@@ -1170,6 +1174,38 @@ impl Checker {
     fn mismatch_hint(&self, want: Type, got: Type, e: &Expr, ctx: &Ctx) -> String {
         use Type::{Bool, Char, Float, Int, Str};
         let s = show(e);
+        // `for k, label in pairs`: `k` is the position and `label` the whole pair
+        if let ExprKind::Var(n) = &e.kind {
+            if let Some((i, x)) = self.pair_loops.iter().rev().find(|(i, x)| i == n || x == n) {
+                return format!(
+                    "`for {i}, {x} in ...` gives the position `{i}` and the whole element `{x}`: to take each pair apart write `for ({i}, {x}) in ...`"
+                );
+            }
+        }
+        // the web functions' parameters whose shape a program guesses wrong most (`use web`)
+        if let Ctx::Arg { f, param, .. } = ctx {
+            let web = match (f.strip_prefix("web.").unwrap_or(""), *param) {
+                ("site", "radius") => Some("`radius:` is the corner radius in pixels, a number: `radius: 16`"),
+                ("gallery", "photos") => Some(
+                    "`photos` is a list of (image, alt, tag) triples: `[(\"bread.jpg\", \"Fresh bread\", \"bread\")]`; the tag may be `\"\"`",
+                ),
+                ("gallery", "filters") => Some("`filters:` is a list of (tag, label) pairs: `[(\"bread\", \"Bread\")]`"),
+                ("hero", "badge") => Some(
+                    "`badge:` takes the rows of `hours(...)` and shows open or closed now: `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`",
+                ),
+                ("hours", "rows") => Some("`hours` takes (label, days and times) rows: `[(\"Mon–Fri\", \"1-5 8:00-16:00\"), (\"Sun\", \"\")]`"),
+                ("navbar" | "footer", "links") | ("hero", "buttons") => Some("a list of (label, href) pairs: `[(\"Menu\", \"#menu\")]`"),
+                ("navbar", "cta") => Some("`cta:` is one (label, href) pair: `cta: (\"Order\", \"#contact\")`"),
+                ("footer", "contact" | "small") | ("field", "options") | ("list", "items") | ("marquee", "items") => {
+                    Some("a list of lines of text: `[\"one\", \"two\"]`")
+                }
+                ("steps", "items") => Some("a list of (label, text) pairs: `[(\"1998\", \"We opened.\")]`"),
+                _ => None,
+            };
+            if let Some(h) = web {
+                return h.to_string();
+            }
+        }
         match (want, got) {
             (Float, Int) => match (&e.kind, &s) {
                 (ExprKind::Int(n), _) => return format!("write the number as a float: `{n}.0`"),
@@ -1258,6 +1294,10 @@ impl Checker {
                 format!("`{name}` holds {} values: assign {}, or declare `{name}` with the type you need", want.name(), article(want))
             }
             Ctx::AssignTo(target) => format!("`{target}` holds {} values: assign {}", want.name(), article(want)),
+            // a standard function (`web.hero`, `math.pow`) is not the program's to change
+            Ctx::Arg { f, param, .. } if f.split_once('.').is_some_and(|(m, _)| crate::stdlib::MODULES.contains(&m)) => {
+                format!("`{param}` takes {}: pass one", article(want))
+            }
             Ctx::Arg { f, param, .. } => format!("pass {} for `{param}`, or change the parameter type in `fn {f}`", article(want)),
             Ctx::MethodArg { m, .. } => format!("`.{m}(...)` needs {} here", article(want)),
             Ctx::Field { s, f } => {
@@ -1266,7 +1306,11 @@ impl Checker {
             Ctx::Ret => format!("return {}, or change the return type of `{}` to `{}`", article(want), self.fname, got.name()),
             Ctx::Range(_) => "the bounds of a range are `int` values: `for i in 0..10`".to_string(),
             Ctx::Default { param, .. } => format!("give `{param}` a default of its type, {}", article(want)),
-            Ctx::Kid(f) => format!("each line of the child block of `{f}` is one element of {}: make it one", article(want)),
+            Ctx::Kid(f) => format!(
+                "each line of the child block of `{}` is one element of {}: make it one",
+                f.strip_prefix("web.").unwrap_or(f),
+                article(want)
+            ),
         }
     }
 
@@ -1538,7 +1582,16 @@ impl Checker {
                     }
                 };
                 match index {
-                    Some(i) => self.loop_body(body, &[(i, Type::Int, span), (var, elem, span)]),
+                    Some(i) => {
+                        let pair = elem.is_tuple();
+                        if pair {
+                            self.pair_loops.push((i.clone(), var.clone()));
+                        }
+                        self.loop_body(body, &[(i, Type::Int, span), (var, elem, span)]);
+                        if pair {
+                            self.pair_loops.pop();
+                        }
+                    }
                     None => self.loop_body(body, &[(var, elem, span)]),
                 }
             }
@@ -4221,7 +4274,14 @@ impl Checker {
             let text = std::mem::replace(v, Expr::new(ExprKind::None, span));
             *v = Expr::new(ExprKind::Call("web._text".to_string(), vec![text]), span);
         }
-        let t = self.expr_with(v, Some(elem));
+        let mut t = self.expr_with(v, Some(elem));
+        // ... and so is any other text: a `str` value (`p.price`) on its own line
+        if t == Type::Str && elem.struct_name().as_deref() == Some("Node") && self.fns.contains_key("web._text") {
+            let span = v.span;
+            let text = std::mem::replace(v, Expr::new(ExprKind::None, span));
+            *v = Expr::new(ExprKind::Call("web._text".to_string(), vec![text]), span);
+            t = self.expr_with(v, Some(elem));
+        }
         let t = self.coerce(v, elem, t);
         if t == Type::Void {
             self.errs.push(

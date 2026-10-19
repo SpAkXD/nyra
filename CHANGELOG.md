@@ -31,7 +31,29 @@ Web
   `enum Msg` and `fn update`), E0374 (unknown icon or option word), E0376 (a live view with parameters), E0377 (an
   icon-only button without a label), E0378 (raw HTML or CSS that is not a literal), E0381 (a `javascript:` or `data:`
   link), E0384 (browser code that uses `fs`, `os` or `input`).
+- **`nyra build` and `nyra run` for sites.** `nyra build site.nyra` writes `dist/`: one prerendered HTML file per
+  page, one hashed CSS file with the theme and only the kit parts the pages use, a JS file only when something is
+  interactive, a computed Content-Security-Policy, `sitemap.xml`, `robots.txt` and `_headers`; images from
+  `assets/` get their sizes (and WebP variants with `cwebp`, `magick` or `vips`, `--image-tool`). `nyra run
+  site.nyra` is a dev server on http://127.0.0.1:8000 (`--port`) that rebuilds and reloads on save. Interactive
+  state (`enum Msg`, `fn update`, live views) is compiled to JavaScript and re-rendered in the browser. The MCP
+  tool `nyra_build` builds a site in memory. New codes E0379, E0380 (warnings: headings, contrast), E0382 (broken
+  `#anchor`), E0383 (missing image), E0386 (warning: no image tool), E0387 (bad or repeated page path).
+- **Motion.** `anim:`, `hover:`, `loop:`, `scroll:` words on any element (`anim: "rise"`, `hover: "lift"`,
+  `scroll: "parallax"`), with speeds, delays, easings and build-time springs, `at:` sequences, `keyframes(name,
+  body)` for words of your own, page transitions and `morph:`; CSS first, with a small script only for the words
+  that need one, and `prefers-reduced-motion` respected. New codes E0375 (warning: a keyframe animates layout) and
+  E0388 (a bad `keyframes`).
 - A `match` on a string whose pattern was longer than 16 characters was wrongly reported as E0279; fixed.
+
+Editors and docs
+- **The Nyra file icon.** `assets/nyra.ico` (16 to 256 px, drawn by `tools/gen_icon.py`) and, on Windows,
+  `powershell -ExecutionPolicy Bypass -File tools\windows\install-file-icon.ps1` gives `.nyra` files that icon and
+  the type name "Nyra source file" in Explorer, per user and without admin rights; the editor that opens them
+  stays the same (`uninstall-file-icon.ps1` undoes it). The VS Code extension (0.4.0) shows the icon for `.nyra`
+  files too.
+- `docs/AGENTS.md`: an `AGENTS.md` to copy into your own project, so coding agents (Codex, Cursor, Claude Code
+  through `CLAUDE.md`, ...) know how to check, run and fix Nyra and which mistakes to avoid.
 
 ## v0.7.0 (2026-10-10)
 

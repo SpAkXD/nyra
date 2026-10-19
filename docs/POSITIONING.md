@@ -2,8 +2,9 @@
 
 What Nyra is for, what we claim, what we do not claim, and where it can lose. Every number here comes
 from [`bench/published/`](../bench/published) (83 tasks, run on 2026-10-09 with Claude Opus 5.5,
-Sonnet 5.5 and Haiku 4.5) or from [`perf/`](../perf). If a number in another document disagrees with
-this one, the published benchmark wins.
+Sonnet 5.5 and Haiku 4.5) or from [`perf/`](../perf); the website numbers come from the Flora port
+and one A/B run (v0.8). If a number in another document disagrees with this one, the published
+benchmark wins.
 
 ## The pitch
 
@@ -13,8 +14,8 @@ this one, the published benchmark wins.
 Agents now write code and also run it. Today that means either trusting generated code with the
 machine it runs on, or starting a VM or container for every call. Nyra is a language for that
 code-execution step. It is small enough to sit in a prompt, it compiles to a native executable in
-milliseconds of run time, its errors tell the agent exactly what to fix, and (from v0.6) a program can
-use only the capabilities it declares.
+milliseconds of run time, its errors tell the agent exactly what to fix, and a program can use only
+the capabilities it declares (since v0.6).
 
 The order matters. We lead with **safety** and **speed**, because those are what a harness builder
 cannot get from Python. **Cost** is a condition, not a selling point: we claim it only as "near Python,
@@ -29,13 +30,14 @@ below Rust", and never as "cheaper than Python".
 | Right on the first try: Opus 98%, Sonnet 96%, Haiku 4.5 66% of 83 tasks (Python: 100%, 99%, 78%) | Measured (v0.5) |
 | A compiler that repairs: `--fix` fixes an unambiguous mistake without a model call | Built (v0.4), numbers published |
 | Examples as part of the type check: `ex` conditions are evaluated while compiling | Built (v0.5) |
-| Unable to touch anything it didn't declare: capabilities (`--allow fs`), deny by default, as compile errors | **Coming in v0.6.** Not built when this was written. Until it ships, a Nyra program has the rights of its process |
+| Unable to touch anything it didn't declare: capabilities (`--allow fs`), deny by default, as compile errors; a sandboxed interpreter with limits (`--sandbox`) | Built (v0.6). Not independently reviewed; plain `nyra run` still grants everything |
+| Websites: a whole site from a short program, about 0.15x the source tokens of a React original, a faster first paint | Measured on one real site and one A/B run (v0.8, not released yet) |
 
 ## Who it is for
 
 1. **People building agent harnesses** who need a code-execution tool and do not want a VM or
    container per call. The harness hands the model one small spec, runs the result as a native
-   process in milliseconds, and (from v0.6) grants it only the capabilities the task needs.
+   process in milliseconds, and grants it only the capabilities the task needs.
 2. **Teams running cheap models at volume.** A small model fails less often when the language has one
    way to do each thing, strict types and errors with a stated fix, and a failure costs less when the
    compiler repairs the mistake itself. This is the group where the evidence is weakest today (see
@@ -44,8 +46,8 @@ below Rust", and never as "cheaper than Python".
    every backend byte for byte, ints that never wrap, no hidden state (a program is deterministic
    unless it uses `random` or `time`), and an `ex` example that pins down what a function should do.
 
-It is not for: people who want to write programs by hand for a large codebase (no modules of your own
-yet, no packages, a 0.x syntax that may still change), or anyone who needs a library ecosystem.
+It is not for: people who want to write programs by hand for a large codebase (no packages, a 0.x
+syntax that may still change), or anyone who needs a library ecosystem.
 
 ## What we claim, and what we do not
 
@@ -59,9 +61,10 @@ yet, no packages, a 0.x syntax that may still change), or anyone who needs a lib
   model (Opus 2.9 ms vs 5.4, Sonnet 5.0 vs 6.4, Haiku 10 vs 32), and those programs were written by
   the models, so they differ per language. "As fast as Rust" means the same class (native code, no
   interpreter, no garbage collector), not equal.
-- **Not claimed:** low latency to the first result. A native build calls a C compiler (0.5-1.5 s with
-  gcc on the author's PC, skipped when the program is unchanged; `--js` needs only Node.js). The
-  run is fast; the first build is not.
+- Latency to the first result: since v0.7 `nyra run` answers a short program from the interpreter in
+  milliseconds while the C compiler starts in the background. **Not claimed:** a fast first native
+  build. A long-running program waits for the C compiler (0.5-1.5 s with gcc on the author's PC,
+  skipped when the program is unchanged).
 
 ### Cost (claimed carefully)
 
@@ -75,7 +78,7 @@ yet, no packages, a 0.x syntax that may still change), or anyone who needs a lib
   has not seen. It is also not below Rust in billed output tokens for Opus (691 vs 605). "Below Rust"
   holds for the program itself, in code tokens.
 - The honest summary is: you pay a premium over Python for the spec and the extra thinking, and get
-  speed and (from v0.6) containment in return.
+  speed and containment in return.
 
 ### Correctness (claimed with the weak spot named)
 
@@ -98,14 +101,31 @@ yet, no packages, a 0.x syntax that may still change), or anyone who needs a lib
 
 ### Safety (claimed as a design, not yet as a fact)
 
-- Capabilities (`--allow fs`, deny by default) are being built for v0.6. Until they ship, **a Nyra
-  program is not sandboxed**: `nyra mcp` limits memory and CPU time but a program can still read and
-  write files and use the network. For code you do not trust, use a container or VM today.
-- When they ship, the claim is narrower than "secure": a program that does not declare a capability
-  cannot use it, and trying is a compile error with a code and a fix hint, found before anything runs.
-  It is language-level least privilege. It is not a substitute for kernel isolation against a
-  determined attacker, and it has to be reviewed like any security boundary before anyone relies on
-  it alone.
+- Capabilities shipped in v0.6: `fs`, `input` and `os` must be granted (`--allow fs`), or the program
+  does not compile (E0290); `--sandbox` runs it in the interpreter with nothing but what `--allow`
+  grants, files confined to the working folder, and limits on steps, memory, output, call depth and
+  time. Over MCP, `nyra_run` grants only standard input unless asked for more.
+- The claim is narrower than "secure": a program that does not declare a capability cannot use it,
+  and trying is a compile error with a code and a fix hint, found before anything runs. It is
+  language-level least privilege. Plain `nyra run` still grants everything, and a compiled program
+  that was granted a capability is an ordinary process. It is not a substitute for kernel isolation
+  against a determined attacker, and nobody outside the project has reviewed it: for code you do not
+  trust, use `--sandbox`, and a container or VM around it.
+
+### Websites (claimed as a first measurement; v0.8, not released yet)
+
+- `use web` builds a static site (prerendered HTML, one CSS file, a small JS file only when needed)
+  from a program that names components and motion words instead of writing HTML, CSS and JS.
+- On one real site, Flora (React + Tailwind), rebuilt with the same features: 34,928 -> 5,209 source
+  tokens (0.15x); first contentful paint on a throttled phone 4.9 s -> 2.4 s; JS 120 KB -> 4.6 KB;
+  29 -> 12 requests. The 3D showroom, the opening screen and the testimonials are left out of both.
+- In one A/B run, Gemini 3.8 Flash (high effort) wrote the same brief as one-file HTML in 27,167
+  output tokens and in Nyra in 3,032 (0.11x, Claude's tokenizer), and the Nyra file compiled on the
+  first try. The Nyra prompt was larger (6,233 vs 2,684 input tokens) because it carries the two cards.
+- **Not claimed:** a general ratio. Most of the saving comes from the kit, not the syntax: against
+  markup over a ready-made component kit the design samples give 0.48x, not 0.19x
+  ([`WEB.md`](WEB.md#where-the-savings-come-from)). A site the kit does not fit costs more, and
+  first-try correctness on web tasks has one data point so far.
 
 ## Against "Python in a sandbox VM"
 
@@ -188,9 +208,9 @@ published.
   task needs a reason beyond tokens, which is why the pitch leads with safety and speed.
 - **Small models.** Haiku 4.5 is at 66%. If the "cheap models at volume" user cannot get that
   closer to Python, the second audience falls away.
-- **Ecosystem.** No modules of your own, no packages yet, 0.x syntax that may change, and a solo
+- **Ecosystem.** No packages yet, 0.x syntax that may change, and a solo
   maintainer. A harness builder who needs a library has to write it in Nyra or go elsewhere.
 - **Credibility.** The numbers are small-sample, Nyra-authored tasks. A reviewer who runs a
   different task set may get different numbers. The defense is to keep publishing everything,
-  including the results that do not flatter the language, and to say "coming in v0.6" until it
-  ships.
+  including the results that do not flatter the language, and to mark what is not released as
+  such.
