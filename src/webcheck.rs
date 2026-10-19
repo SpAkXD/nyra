@@ -20,7 +20,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ast::*;
-use crate::diag::{suggest, Diag};
+use crate::diag::{suggest, Diag, Edit};
 
 /// The library: the elements and kit components, then the generated icon set.
 pub const SOURCE: &str = concat!(include_str!("std/web.nyra"), "\n", include_str!("std/web_icons.nyra"));
@@ -213,11 +213,13 @@ fn clashes(prog: &Program, public: &HashSet<String>) -> Vec<Diag> {
     let mut errs = Vec::new();
     for f in &prog.funcs {
         if public.contains(&f.name) && !prog.files.contains_key(&f.name) {
+            let new = new_name(&f.name);
             errs.push(
-                Diag::new("E0372", format!("`fn {}` has the name of the web function `{}`", f.name, f.name), f.span).hint(format!(
-                    "rename your function, e.g. `fn my_{}`: in a program with `use web` the web functions are called by their bare names",
-                    f.name
-                )),
+                Diag::new("E0372", format!("`fn {}` has the name of the web function `{}`", f.name, f.name), f.span)
+                    .hint(format!(
+                        "rename your function, e.g. `fn {new}`, and its calls: in a program with `use web` the web functions are called by their bare names"
+                    ))
+                    .fix(rename(prog, f, &new, public).unwrap_or_default()),
             );
         }
     }
@@ -246,6 +248,64 @@ fn clashes(prog: &Program, public: &HashSet<String>) -> Vec<Diag> {
         }
     }
     errs
+}
+
+/// The name E0372 suggests for a program function named like a web function.
+fn new_name(name: &str) -> String {
+    match name {
+        "img" | "image" => "photo".to_string(),
+        _ => format!("my_{name}"),
+    }
+}
+
+/// The edits that rename the program's `fn old` (named like a web function) to `new`, and every call
+/// of it, or `None` when that is not certain: a call whose argument count does not fit the
+/// function (it may mean the web function), the old name used as a variable, `new` already a name
+/// of the program, or a program of several files.
+fn rename(prog: &Program, f: &Func, new: &str, public: &HashSet<String>) -> Option<Vec<Edit>> {
+    if !prog.files.is_empty() || public.contains(new) {
+        return None;
+    }
+    let old = f.name.as_str();
+    let required = f.params.iter().filter(|p| p.default.is_none()).count();
+    let mut edits = vec![Edit::replace(f.span, old, new)];
+    // every name the program uses or declares, apart from the calls of `old`
+    let mut names: HashSet<String> = HashSet::new();
+    let mut certain = true;
+    let mut visit = |e: &mut Expr| match &e.kind {
+        ExprKind::Call(n, args) if n == old => {
+            let fits = args.len() >= required && args.len() <= f.params.len();
+            certain &= fits && !args.iter().any(|a| matches!(a.kind, ExprKind::Inout(_)));
+            edits.push(Edit::replace(e.span, old, new));
+        }
+        ExprKind::Call(n, _) | ExprKind::Var(n) | ExprKind::Bind(n, ..) => {
+            names.insert(n.clone());
+        }
+        ExprKind::Lambda(ps, _) => names.extend(ps.iter().map(|(p, _)| p.clone())),
+        _ => {}
+    };
+    let own = || prog.funcs.iter().filter(|g| !g.name.contains('.'));
+    let fns: Vec<&str> = own().map(|g| g.name.as_str()).collect();
+    let mut bound: Vec<String> = own().flat_map(|g| g.params.iter().map(|p| p.name.clone())).collect();
+    let mut stmt = |s: &mut Stmt| match &s.kind {
+        StmtKind::Let { name, .. } | StmtKind::For { var: name, .. } => bound.push(name.clone()),
+        StmtKind::ForEach { var, index, .. } => bound.extend(std::iter::once(var.clone()).chain(index.clone())),
+        _ => {}
+    };
+    for g in own() {
+        let mut body = g.body.clone();
+        each_stmt_mut(&mut body, &mut stmt, &mut visit);
+    }
+    for ex in &prog.examples {
+        ex.expr.clone().each_mut(&mut visit);
+    }
+    names.extend(bound);
+    names.extend(prog.structs.iter().map(|s| s.name.clone()).chain(prog.enums.iter().map(|e| e.name.clone())));
+    // `old` as a variable or a parameter is not the function (a local may have a web function's name)
+    if !certain || names.contains(old) || names.contains(new) || fns.contains(&new) || fns.iter().filter(|g| **g == old).count() > 1 {
+        return None;
+    }
+    Some(edits)
 }
 
 /// What the program declares for events: `enum Msg` and its variants, and `fn update(m: Msg)`.
@@ -309,6 +369,9 @@ impl Ctx<'_> {
                 *used_on = true;
                 self.on(&func, value, errs);
                 continue;
+            }
+            if func == "gallery" && param == "photos" {
+                tag_pairs(value);
             }
             self.literal(&func, &param, value, None, errs);
         }
@@ -392,7 +455,18 @@ impl Ctx<'_> {
                     errs.push(scheme_error(&bad, s, span));
                 }
             }
-            Kind::Icon if start && !s.is_empty() && !self.icons.contains(s) => errs.push(unknown_icon(s, span, self.icons)),
+            Kind::Icon if start && !s.is_empty() && !self.icons.contains(s) => {
+                // `icon: ":clock:"`: the colons that mark an icon in text, around a known name
+                let bare = s.strip_prefix(':').and_then(|x| x.strip_suffix(':')).filter(|x| self.icons.contains(*x));
+                errs.push(match bare {
+                    Some(name) => Diag::new("E0374", format!("unknown icon `{s}`"), span)
+                        .hint(format!(
+                            "`{param}:` takes the icon's name without colons: `{param}: \"{name}\"` (colons mark an icon inside text)"
+                        ))
+                        .fix(vec![Edit::replace(span, &format!("\"{s}\""), format!("\"{name}\""))]),
+                    None => unknown_icon(s, span, self.icons),
+                })
+            }
             Kind::Text => {
                 for name in icon_names(s) {
                     if !self.icons.contains(&name) {
@@ -417,6 +491,21 @@ impl Ctx<'_> {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+/// `gallery([(image, alt), ...])`: a literal list of pairs, each completed with the empty tag (a
+/// list of pairs in a variable is mapped by the checker, `photo_pairs`).
+fn tag_pairs(value: &mut Expr) {
+    let ExprKind::Array(items) = &mut value.kind else { return };
+    if items.is_empty() || !items.iter().all(|x| matches!(&x.kind, ExprKind::Tuple(parts) if parts.len() == 2)) {
+        return;
+    }
+    for x in items.iter_mut() {
+        let at = x.span;
+        if let ExprKind::Tuple(parts) = &mut x.kind {
+            parts.push(Expr::new(ExprKind::Str(String::new()), at));
         }
     }
 }

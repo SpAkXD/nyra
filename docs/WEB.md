@@ -727,7 +727,9 @@ The build reads the finished HTML of each page, so the library is free in how it
 
 - Right after `<meta charset>` (or `<head>`): `<meta http-equiv="Content-Security-Policy">` computed from the page:
   `default-src 'self'`, `script-src 'self'` (or `'none'` without JS), `style-src 'self'` plus `'unsafe-inline'` only
-  when the page has `style` attributes or a `<style>`, Google Fonts when linked, `img-src 'self' data:` plus external
+  when the page has a `<style>` or a `style` attribute that cannot be a CSS rule (each `style` attribute becomes a
+  class `s-<hash>` of the site's CSS, its declarations `!important`; the kit, the motion script and the live
+  regions set styles only through the CSSOM), Google Fonts when linked, `img-src 'self' data:` plus external
   image origins, `frame-src` for iframes, `data-src`/`data-embed`/`data-frame` URLs and Google Maps when the `map`
   chunk is used, `form-action 'self'` plus form targets, `base-uri 'self'`, `object-src 'none'`. No inline scripts.
 - Before `</head>`: `<link rel="stylesheet" href="site.<hash>.css">` and `<script src="site.<hash>.js" defer>`
@@ -875,7 +877,8 @@ Where the build differs from the design above, and why:
 - **E0372 is for functions, types and script variables** (a `let` or `var` at the top level). Variables inside
   functions, loop variables and parameters may have a web function's name (`for p in items` is in the web card's
   own example); a call is always a function, so there is no ambiguity.
-- **`gallery(photos)`** takes `(image, alt, tag)` triples and `filters: [(tag, label)]`; the first tab ("all")
+- **`gallery(photos)`** takes `(image, alt, tag)` triples (`(image, alt)` pairs too: their tag is `""`) and
+  `filters: [(tag, label)]`; the first tab ("all")
   is added, its label from `all:` or the kit words. A tag that is a `palette` name colors its label.
 - **`split { ... }`** takes its panels as a child block of `card(title, text, image:, href:, color:)`.
 - **`footer(brand:, text:, links:, links_title:, contact:, contact_title:, small:, top:)`**: `contact` and `small`
@@ -898,8 +901,10 @@ Where the build differs from the design above, and why:
   (`webcheck::motion`, which runs `web::motion::lint` on the source: E0374, E0388, E0375 at the value), computed
   ones by the build. Containers: `grid`, `stack`, `row` and `split` write their `hover:` on each child (a child's
   own `hover:` wins), the rest of their options on themselves (`anim: "stagger"` then moves the children).
-  `hero(anim: "rise")` is the hero's sequence: its kicker and badge, title, text and buttons each get the word,
-  0.15 s apart from `at:` (default 0.1). There are no per-component defaults yet: an element moves only with the
+  `hero(anim: "rise")` is the hero's sequence: its kicker and badge, text and buttons each get the word, 0.15 s
+  apart from `at:` (default 0.1). The title and the photo are on screen from the first frame (they are the largest
+  things there, so the page's Largest Contentful Paint does not wait for an entrance); the photo settles from a 4%
+  zoom. There are no per-component defaults yet: an element moves only with the
   words written on it. Without motion words the kit has only the movement that is part of a component's look:
   hover colors and shadows, the marquee loop, the badge ping, the scroll cue, the mobile menu and lightbox
   openings; `prefers-reduced-motion` stops them.

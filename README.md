@@ -261,27 +261,34 @@ the same features (the 3D showroom, the opening screen and the testimonials are 
 | JavaScript | 120 KB | 4.6 KB |
 | Requests | 29 | 12 |
 
-**A/B test: the same site brief, two answers.** Gemini 3.8 Flash (high effort) wrote the site once as plain
-one-file HTML and once in Nyra. The HTML answer was 27,167 output tokens, the Nyra one 3,032 (0.11x; Claude's
-tokenizer), and the Nyra file compiled on the first try. The Nyra prompt is larger, 6,233 input tokens against
-2,684, because it carries the two reference cards.
+**A/B test: one-file HTML vs one-file Nyra (honest round, 2026-10-19).** Two new site briefs (a dentist practice
+and a gym) that Nyra was not tuned for, Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5, 4 runs each, 48 sites. One
+checklist for both languages, clicked through in a headless browser: navigation, filters, toggles, lightbox, FAQ,
+live opening badge, form, counters, all text and images, console and CSP errors, reduced motion. A Nyra file that
+did not compile got one repair turn with the compiler's message (its cost is included); HTML has no compiler.
 
-Four more models on OpenRouter, three runs each at medium reasoning effort (code tokens on Claude's tokenizer; time
-and cost as billed, averages):
+| | HTML | Nyra |
+|---|---:|---:|
+| Built on the first try | (always) | 6/24 |
+| Built after one repair | (always) | 13/24 |
+| Checklist score (a failed build scores 0) | **95%** | 51% |
+| Checklist score of the sites that built | 95% | 93% |
+| Code tokens per site | 17,559 | **3,283** |
+| Cost per answer | $0.245 | **$0.101** |
+| Page weight | 633 KB | **351 KB** |
 
-| Model | Code tokens, HTML → Nyra | Time, HTML → Nyra | Cost, HTML → Nyra | Nyra built first try |
-|---|---|---|---|:-:|
-| DeepSeek v4.1 Flash | 20,685 → 2,927 (0.14x) | 126 s → 33 s | $0.0031 → $0.0091 | 1/3 |
-| GPT-6 Luna | 20,224 → 3,037 (0.15x) | 109 s → 44 s | $0.0074 → $0.0025 | 1/3 |
-| GLM 5.3 | 15,252 → 3,043 (0.20x) | 45 s → 14 s | $0.0154 → $0.0051 | 2/3 |
-| GLM 5.3 Flash | 10,796 → 2,968 (0.27x) | 31 s → 18 s | $0.0015 → $0.0008 | 1/3 |
+**Today plain HTML is the more reliable choice:** Opus and Sonnet passed every check on all their HTML sites, while
+fewer than half of the Nyra answers compiled on the first try (none on the dentist brief). When a Nyra site builds,
+it is nearly as complete from a fifth of the code, at about 40% of the cost per answer, but counted per *working*
+site the cost advantage mostly disappears. The causes are known and fixable (unknown icon names failing the build,
+errors that only appear after earlier ones are fixed, notation copied literally from the web card, a broken
+`mailto:` subject in forms): see [the full report](bench/web/results/2026-10-19/REPORT.md), with every raw model
+output, the failures and the method.
 
-The honest part: every HTML answer worked (13 of 13), but only 7 of 13 Nyra files built on the first try, each
-failure a gap between the first web card and the kit, and the menu filter did not work in the Nyra builds (a kit
-bug). DeepSeek's Nyra cost is higher because one run spent 11,500 tokens reasoning. These are being fixed, and the
-test will be repeated with one repair round from the compiler's messages, the way agents use Nyra.
+Earlier, smaller tests (the bakery brief, Gemini 3.8 Flash and four OpenRouter models) measured 0.11x to 0.27x the
+code tokens; the kit was then fixed by studying those outputs, so they are not used as evidence here.
 
-One site and a few model runs are not a benchmark: treat these as a first measurement, not a general ratio. The
+Two briefs and 48 sites are still a small sample: treat these as one measurement, not a general ratio. The
 design document's own samples give 0.19x against plain HTML/CSS/JS and 0.48x against markup that uses a
 ready-made component kit ([Token measurement](docs/WEB.md#token-measurement)).
 

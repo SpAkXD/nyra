@@ -1,0 +1,118 @@
+{
+  "brief": "briefs/gym.md",
+  "comment": "The functional checklist of the gym brief, the same for the HTML and the Nyra version. check.js reads it. Every item is derived from a requirement of the brief; the method section of results/2026-10-19/REPORT.md says how each kind is checked.",
+  "title": "Forge Fitness Studio – strength, conditioning and yoga in Brno",
+  "description": "Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.",
+  "clock": {"tz": "Europe/Prague", "at": "2026-10-21T10:00:00+02:00", "note": "a fixed clock, so every run sees the same day"},
+  "nav": [
+    {"label": "Classes", "href": "#classes"},
+    {"label": "Trainers", "href": "#trainers"},
+    {"label": "Membership", "href": "#membership"},
+    {"label": "Gallery", "href": "#gallery"},
+    {"label": "Contact", "href": "#contact"},
+    {"label": "Free trial", "href": "#contact"}
+  ],
+  "text": [
+    "Brno · Veveří 54 · since 2016",
+    "Train hard. Feel at home.",
+    "Strength, conditioning and yoga classes in small groups, with coaches who know your name.",
+    "coaches", "classes a week", "members", "6 a.m.", "first class",
+    "Classes this week", "Book through the app or at the front desk. Max 12 people per class.",
+    "Sunrise Strength", "Kettlebell Basics", "Mobility Flow", "Power Circuit", "Engine Builder", "Vinyasa Yoga",
+    "Olympic Lifting", "Core & Conditioning", "Friday Burn", "Stretch & Restore", "Team WOD", "Weekend Yoga",
+    "Coach Adam", "Coach Klára", "Coach Tereza", "Coach Ondřej", "All levels", "Beginner", "Intermediate", "Advanced",
+    "18:00", "17:30", "18:30", "10:30",
+    "Meet the team",
+    "Adam Novotný", "Strength & conditioning", "Former rower who builds engines that last.",
+    "Klára Benešová", "Kettlebells & core", "Turns nervous beginners into confident lifters.",
+    "Tereza Malá", "Yoga & mobility", "Helps you move better so you can train longer.",
+    "Ondřej Černý", "Olympic lifting", "National-level lifter with an eye for technique.",
+    "Pick your plan", "Monthly", "Yearly",
+    "Basic", "Unlimited", "Most popular", "Premium",
+    "Gym floor access", "2 classes a week", "App booking", "Unlimited classes", "1 coaching session a month",
+    "Everything in Unlimited", "Weekly personal training", "Towel and locker service", "Join now",
+    "Members say",
+    "I came for the free trial and stayed for the people.", "Lenka M.",
+    "Adam fixed my squat in two sessions after years of knee pain.", "Jakub S.",
+    "The only gym where the 6 a.m. class feels like a party.", "Veronika D.",
+    "Inside the studio",
+    "Come for a free trial",
+    "Veveří 54, 602 00 Brno", "Open in Google Maps", "+420 541 000 777", "hello@forgefitness.cz",
+    "6:00–22:00", "8:00–20:00",
+    "© 2026 Forge Fitness Studio"
+  ],
+  "hidden_text": [],
+  "images": [
+    {"seed": "forge-hero", "alt": "Athletes training with kettlebells at Forge"},
+    {"seed": "forge-coach-1", "alt": "Adam Novotný"},
+    {"seed": "forge-coach-2", "alt": "Klára Benešová"},
+    {"seed": "forge-coach-3", "alt": "Tereza Malá"},
+    {"seed": "forge-coach-4", "alt": "Ondřej Černý"},
+    {"seed": "forge-g1", "alt": "The main training floor"},
+    {"seed": "forge-g2", "alt": "Kettlebells lined up"},
+    {"seed": "forge-g3", "alt": "A yoga class at sunset"},
+    {"seed": "forge-g4", "alt": "Barbells and plates"},
+    {"seed": "forge-g5", "alt": "The rowing machines"},
+    {"seed": "forge-g6", "alt": "A coach helping a member"},
+    {"seed": "forge-g7", "alt": "The stretching corner"},
+    {"seed": "forge-g8", "alt": "The front desk and café"}
+  ],
+  "counters": [
+    {"value": "12", "label": "coaches"},
+    {"value": "45", "label": "classes a week"},
+    {"value": "2,300", "label": "members"}
+  ],
+  "filter": {
+    "section": "classes",
+    "items": [
+      {"name": "Sunrise Strength", "day": "Mon"}, {"name": "Kettlebell Basics", "day": "Mon"},
+      {"name": "Mobility Flow", "day": "Tue"}, {"name": "Power Circuit", "day": "Tue"},
+      {"name": "Engine Builder", "day": "Wed"}, {"name": "Vinyasa Yoga", "day": "Wed"},
+      {"name": "Olympic Lifting", "day": "Thu"}, {"name": "Core & Conditioning", "day": "Thu"},
+      {"name": "Friday Burn", "day": "Fri"}, {"name": "Stretch & Restore", "day": "Fri"},
+      {"name": "Team WOD", "day": "Sat"}, {"name": "Weekend Yoga", "day": "Sat"}
+    ],
+    "try": [
+      {"button": "Tue", "full": "Tuesday"},
+      {"button": "Sat", "full": "Saturday"},
+      {"button": "All", "full": "All"}
+    ]
+  },
+  "toggle": {
+    "section": "membership",
+    "a": {"button": "Monthly", "prices": ["790", "1,290", "1,990"]},
+    "b": {"button": "Yearly", "prices": ["7,900", "12,900", "19,900"]}
+  },
+  "lightbox": {
+    "section": "gallery",
+    "images": [
+      {"seed": "forge-g1", "alt": "The main training floor"},
+      {"seed": "forge-g2", "alt": "Kettlebells lined up"},
+      {"seed": "forge-g3", "alt": "A yoga class at sunset"},
+      {"seed": "forge-g4", "alt": "Barbells and plates"},
+      {"seed": "forge-g5", "alt": "The rowing machines"},
+      {"seed": "forge-g6", "alt": "A coach helping a member"},
+      {"seed": "forge-g7", "alt": "The stretching corner"},
+      {"seed": "forge-g8", "alt": "The front desk and café"}
+    ]
+  },
+  "form": {
+    "section": "contact",
+    "submit": "Send",
+    "mailto": "hello@forgefitness.cz",
+    "subject": "Free trial request",
+    "fields": [
+      {"label": "Name", "required": true, "value": "Jana Testová"},
+      {"label": "E-mail", "required": true, "value": "jana.testova@example.com"},
+      {"label": "Phone", "required": false, "value": "+420 777 123 456"},
+      {"label": "Interested in", "required": true, "value": "Personal training",
+       "options": ["Free trial", "Membership", "Personal training"]},
+      {"label": "Message", "required": true, "value": "Testing the form, please ignore."}
+    ]
+  },
+  "links": [
+    {"href_prefix": "tel:", "digits": "420541000777"},
+    {"href_prefix": "mailto:", "address": "hello@forgefitness.cz"},
+    {"text": "Open in Google Maps", "href_any": ["maps.google.com", "google.com/maps"]}
+  ]
+}

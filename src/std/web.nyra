@@ -584,6 +584,11 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
     if height == "half" {
         c += " hero-half"
     }
+    // with an entrance the photo settles (it is painted from the first frame, as is the title: the
+    // largest things on the screen are there at once) and the kicker, text and buttons rise
+    if anim != "" && image != "" {
+        c += " hero-in"
+    }
     var h = "<section" + _ic(c, id, cls) + _mo("", hover, loop, scroll, none, morph) + ">"
     if image != "" {
         h += "<div class=\"hero-media\">" + _img_tag(image, alt, "100vw", true) + "</div>"
@@ -599,12 +604,12 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
         }
         h += "</div>"
     }
-    h += "<h1 class=\"hero-title\"" + _seq(anim, at, 1) + ">" + _md(title) + "</h1>"
+    h += "<h1 class=\"hero-title\">" + _md(title) + "</h1>"
     if text != "" {
-        h += "<p class=\"hero-text\"" + _seq(anim, at, 2) + ">" + _md(text) + "</p>"
+        h += "<p class=\"hero-text\"" + _seq(anim, at, 1) + ">" + _md(text) + "</p>"
     }
     if buttons.len() > 0 {
-        h += "<div class=\"hero-actions\"" + _seq(anim, at, 3) + ">"
+        h += "<div class=\"hero-actions\"" + _seq(anim, at, 2) + ">"
         for i, b in buttons {
             h += "<a class=\"btn btn-lg " + (if i == 0 { "btn-accent" } else { "btn-light" }) + "\"" + _link_attrs(b.1) + ">" + _md(b.0) + "</a>"
         }
@@ -1503,7 +1508,8 @@ fn _first_attr(html: str, name: str, value: str) -> str {
     return html[..end] + _at(name, value) + html[end..]
 }
 
-// The hero's parts, one after another: `hero(anim: "rise")` plays them as a sequence, 0.15 s apart.
+// The hero's parts, one after another: `hero(anim: "rise")` plays them as a sequence, 0.15 s apart
+// (the kicker, the text, the buttons: the title is on screen from the start).
 fn _seq(anim: str, at: float?, i: int) -> str {
     if anim == "" {
         return ""

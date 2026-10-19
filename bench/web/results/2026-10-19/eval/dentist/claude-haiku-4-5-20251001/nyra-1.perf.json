@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:60407/dentist/claude-haiku-4-5-20251001/nyra-1/",
+ "runs": 3,
+ "fcp_ms": 600,
+ "lcp_ms": 600,
+ "cls": 0,
+ "load_ms": 567,
+ "kb": 314.3,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 4.7,
+  "Stylesheet": 9.8,
+  "Script": 14.7,
+  "Image": 107.3,
+  "Font": 177.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  580,
+  616,
+  600
+ ]
+}

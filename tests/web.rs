@@ -184,6 +184,45 @@ fn every_page_is_a_whole_document() {
     }
 }
 
+/// A page's `style` attributes become classes of the site's CSS, so no page's policy needs
+/// `'unsafe-inline'` for them; and the hero's title is painted from the first frame (no entrance
+/// hides it), while its photo settles.
+#[test]
+fn style_attributes_become_classes_and_the_hero_title_is_not_hidden() {
+    let mut with_class = 0;
+    for (label, html) in pages() {
+        let body = &html[html.find("<body").unwrap()..];
+        assert!(!body.contains(" style=\""), "{label}: a style attribute");
+        let policy = &html[html.find("Content-Security-Policy\" content=\"").unwrap()..];
+        let policy = &policy[..policy.find("\">").unwrap()];
+        assert!(!policy.contains("unsafe-inline"), "{label}: {policy}");
+        with_class += usize::from(body.contains(" s-"));
+        if let Some(i) = body.find("class=\"hero-title\"") {
+            let tag = &body[body[..i].rfind('<').unwrap()..i + body[i..].find('>').unwrap()];
+            assert!(!tag.contains("data-anim"), "{label}: the hero title has an entrance: {tag}");
+        }
+    }
+    assert!(with_class > 0, "no fixture page had a style attribute to turn into a class");
+    let css: String =
+        files(Path::new("tests/web/fixtures/kit")).into_iter().filter(|(f, _)| f.ends_with(".css")).map(|(_, b)| text(&b)).collect();
+    assert!(css.contains(".s-") && css.contains("!important"), "the rules of the style attributes are in the CSS");
+}
+
+/// `gallery` takes (image, alt) pairs too, written out or from a variable or a function: the tag
+/// is `""`.
+#[test]
+fn a_gallery_takes_pairs_too() {
+    let dir = scratch("web-gallery-pairs");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = "use web\n\nlet shots = [(\"https://example.com/a.jpg\", \"A\"), (\"https://example.com/b.jpg\", \"B\")]\nfn more() -> [(str, str)] = shots\n\npage(\"/\", \"Home\") {\n    h1(\"Photos\")\n    gallery([(\"https://example.com/c.jpg\", \"C\")])\n    gallery(shots)\n    gallery(more())\n}\n";
+    std::fs::write(dir.join("g.nyra"), src).unwrap();
+    let out = nyra().current_dir(&dir).args(["build", "g.nyra", "-o", "out", "--image-tool", "none"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let page = text(&std::fs::read(dir.join("out/index.html")).unwrap());
+    assert_eq!(page.matches("class=\"gallery-item\"").count(), 5, "{page}");
+}
+
 #[test]
 fn text_never_becomes_markup() {
     let page = text(&std::fs::read("tests/web/fixtures/escaping/index.html").unwrap());

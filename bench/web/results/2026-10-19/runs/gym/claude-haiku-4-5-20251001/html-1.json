@@ -1,0 +1,38 @@
+{
+ "brief": "gym",
+ "model": "claude-haiku-4-5-20251001",
+ "lang": "html",
+ "run": 1,
+ "effort": null,
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-haiku-4-5-20251001",
+  "request_id": null,
+  "seconds": 104.0,
+  "input_tokens": 2201,
+  "input_fresh": 2201,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 14246,
+  "cost_usd": 0.073431,
+  "visible_tokens": 14243,
+  "thinking_tokens_est": 3
+ },
+ "builds_first": null,
+ "site": "sites/gym/claude-haiku-4-5-20251001/html-1",
+ "final_file": "raw/gym/claude-haiku-4-5-20251001/html-1.html",
+ "code_tokens": 17259,
+ "code_bytes": 40971,
+ "code_tokens_first": 17259,
+ "total": {
+  "input_tokens": 2201,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 14246,
+  "cost_usd": 0.073431,
+  "seconds": 104.0,
+  "thinking_tokens_est": 3,
+  "calls": 1
+ }
+}

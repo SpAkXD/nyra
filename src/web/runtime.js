@@ -61,6 +61,7 @@ function ny_morph(old, fresh) {
     for (const c of Array.from(old.childNodes)) if (!used.has(c)) old.removeChild(c);
     let prev = null;
     for (const [n, m] of pairs) {
+        if (!m) ny_restyle(n);
         const node = m || n, want = prev ? prev.nextSibling : old.firstChild;
         if (node !== want) old.insertBefore(node, want);
         if (m) ny_patch(m, n);
@@ -80,6 +81,39 @@ function ny_class(e, add) {
     const more = add.filter((x) => !c.includes(x));
     if (more.length) e.setAttribute("class", c.concat(more).join(" "));
 }
+// Gives an element the declarations of a `style` attribute (`text`, or none) through the CSSOM: a
+// page's policy forbids style attributes set by a script (no 'unsafe-inline'), never the CSSOM. A
+// stagger child keeps its place (`--m-i`, set by the motion script).
+function ny_style(e, text) {
+    const want = new Map();
+    for (const d of (text || "").split(";")) {
+        const i = d.indexOf(":");
+        if (i > 0) want.set(d.slice(0, i).trim(), d.slice(i + 1).trim());
+    }
+    const s = e.style;
+    if (!s) {
+        // no page (the runtime's tests): the attribute stands for the declarations
+        const order = /--m-i:\s*([^;]+)/.exec(e.getAttribute("style") || "");
+        if (order && !want.has("--m-i")) want.set("--m-i", order[1].trim());
+        const t = Array.from(want, ([p, v]) => p + ":" + v).join(";");
+        if (t) e.setAttribute("style", t);
+        else e.removeAttribute("style");
+        return;
+    }
+    for (const p of Array.from(s)) if (!want.has(p) && p !== "--m-i") s.removeProperty(p);
+    for (const [p, v] of want) if (s.getPropertyValue(p).trim() !== v) s.setProperty(p, v);
+}
+// A new element of a live region, before it goes on the page: its style attributes (and those
+// inside it) become CSSOM declarations.
+function ny_restyle(n) {
+    if (n.nodeType !== 1 || !n.querySelectorAll) return;
+    for (const e of [n, ...n.querySelectorAll("[style]")]) {
+        if (!e.hasAttribute("style")) continue;
+        const t = e.getAttribute("style");
+        e.removeAttribute("style");
+        ny_style(e, t);
+    }
+}
 function ny_patch(a, b) {
     if (a.nodeType !== 1) {
         if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
@@ -88,16 +122,14 @@ function ny_patch(a, b) {
     // what the motion script added is state, not markup: an element it revealed (`m-in`) stays
     // revealed, a stagger child keeps its place (`--m-i`)
     const motion = (a.getAttribute("class") || "").split(/\s+/).filter((c) => c.startsWith("m-"));
-    const order = /--m-i:\s*([^;]+)/.exec(a.getAttribute("style") || "");
     // what the user typed or ticked is a property: it follows the new HTML only where the HTML
     // changed it, and never in the field that has the focus
     const busy = a === a.ownerDocument.activeElement;
     const was = [a.getAttribute("value"), a.hasAttribute("checked")];
-    for (const at of Array.from(a.attributes)) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
-    for (const at of Array.from(b.attributes)) if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+    for (const at of Array.from(a.attributes)) if (at.name !== "style" && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
+    for (const at of Array.from(b.attributes)) if (at.name !== "style" && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
     ny_class(a, motion);
-    const style = a.getAttribute("style") || "";
-    if (order && !style.includes("--m-i:")) a.setAttribute("style", (style ? style + ";" : "") + "--m-i:" + order[1].trim());
+    ny_style(a, b.getAttribute("style"));
     if (!busy && was[0] !== a.getAttribute("value")) a.value = a.getAttribute("value") || "";
     if (was[1] !== a.hasAttribute("checked")) a.checked = a.hasAttribute("checked");
     if (!(busy && a.nodeName === "TEXTAREA")) ny_morph(a, b);

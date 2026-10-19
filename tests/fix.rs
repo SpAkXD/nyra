@@ -56,6 +56,13 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("methods of other languages", "fn main() {\n    var xs = [3, 1]\n    xs.append(2)\n    let s = \"Hi\"\n    print(xs.length() + xs.size + s.length)\n    print(s.toUpperCase().startsWith(\"H\") && s[0].isdigit())\n    let n = xs.len\n    print(s.substring(0, 1) + n.to_string())\n}\n", "fn main() {\n    var xs = [3, 1]\n    xs.push(2)\n    let s = \"Hi\"\n    print(xs.len() + xs.len() + s.len())\n    print(s.upper().starts_with(\"H\") && s[0].is_digit())\n    let n = xs.len()\n    print(s.slice(0, 1) + str(n))\n}\n"),
     ("print functions of other languages", "fn main() {\n    console.log(1)\n    println(2)\n    fmt.Println(3)\n    puts(4)\n}\n", "fn main() {\n    print(1)\n    print(2)\n    print(3)\n    print(4)\n}\n"),
     ("len()", "fn main() {\n    let xs = [1, 2]\n    let s = \"abc\"\n    print(len(xs) + len(s))\n}\n", "fn main() {\n    let xs = [1, 2]\n    let s = \"abc\"\n    print(xs.len() + s.len())\n}\n"),
+    // ---- the web functions' literals (`use web`)
+    ("web: a number for text", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    stat(28, \"years\")\n    stat(4.9, \"stars\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    stat(\"28\", \"years\")\n    stat(\"4.9\", \"stars\")\n}\n"),
+    ("web: pixels as text", "use web\n\nsite(\"Bakery\", radius: \"16px\")\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n}\n", "use web\n\nsite(\"Bakery\", radius: 16)\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n}\n"),
+    ("web: an icon option in colons", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Hours\", \"8-16\", icon: \":clock:\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Hours\", \"8-16\", icon: \"clock\")\n}\n"),
+    ("web: one line for a list", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    footer(small: \"© 2026 Bakery\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    footer(small: [\"© 2026 Bakery\"])\n}\n"),
+    ("web: the hours element as a badge", "use web\n\nlet rows = [(\"Mon-Fri\", \"1-5 8:00-16:00\")]\n\npage(\"/\", \"Home\") {\n    hero(\"Bakery\", badge: hours(rows))\n}\n", "use web\n\nlet rows = [(\"Mon-Fri\", \"1-5 8:00-16:00\")]\n\npage(\"/\", \"Home\") {\n    hero(\"Bakery\", badge: rows)\n}\n"),
+    ("web: a function named like a web function", "use web\n\nfn img(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: img(1))\n    card(\"Cake\", \"Sweet\", image: img(2))\n}\n", "use web\n\nfn photo(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: photo(1))\n    card(\"Cake\", \"Sweet\", image: photo(2))\n}\n"),
     // ---- several stages at once: characters, then syntax, then types
     ("python and javascript habits together", "fn add(a: int, b: int) -> int {\n    return a + b;\n}\n\nfn main() {\n    let total = add(1, 2);\n    if total > 2 and True {\n        print \"big\"\n    } elif total == 0 {\n        print(total)\n    }\n    let xs = [1, 2, 3]\n    xs.append(4)\n    print(xs.length())\n}\n", "fn add(a: int, b: int) -> int {\n    return a + b\n}\n\nfn main() {\n    let total = add(1, 2)\n    if total > 2 && true {\n        print(\"big\")\n    } else if total == 0 {\n        print(total)\n    }\n    var xs = [1, 2, 3]\n    xs.push(4)\n    print(xs.len())\n}\n"),
 ];
@@ -75,6 +82,7 @@ const NO_FIX: &[(&str, &str)] = &[
     ("a variable that could be a float", "fn main() {\n    let n = 2\n    print(n + 0.5)\n}\n"),
     ("a parameter that changes", "fn f(n: int) {\n    n = 1\n}\nfn main() {\n}\n"),
     ("brace on the next line after a comment", "fn main() // entry\n{\n}\n"),
+    ("a function named like a web function, also called as that one", "use web\n\nfn img(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: img(1))\n    img(\"https://example.com/a.jpg\", \"A loaf\")\n}\n"),
 ];
 
 fn write(dir: &Path, name: &str, text: &str) {

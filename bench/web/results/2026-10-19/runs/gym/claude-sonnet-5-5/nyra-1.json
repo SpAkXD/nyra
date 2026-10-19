@@ -1,0 +1,40 @@
+{
+ "brief": "gym",
+ "model": "claude-sonnet-5-5",
+ "lang": "nyra",
+ "run": 1,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 149.7,
+  "input_tokens": 5887,
+  "input_fresh": 4,
+  "cache_write": 5883,
+  "cache_read": 0,
+  "output_tokens": 4306,
+  "cost_usd": 0.057776,
+  "visible_tokens": 3164,
+  "thinking_tokens_est": 1142
+ },
+ "builds_first": true,
+ "build_message_first": "nyra: built 1 page(s) into dist (5 files, 123.2 KB, site.92c63a4809.css 39.3 KB, site.25e4928382.js 60.7 KB) (99.78 ms)",
+ "builds_after_repair": true,
+ "site": "sites/gym/claude-sonnet-5-5/nyra-1",
+ "final_file": "raw/gym/claude-sonnet-5-5/nyra-1.nyra",
+ "code_tokens": 3157,
+ "code_bytes": 7313,
+ "code_tokens_first": 3157,
+ "total": {
+  "input_tokens": 5887,
+  "cache_write": 5883,
+  "cache_read": 0,
+  "output_tokens": 4306,
+  "cost_usd": 0.057776,
+  "seconds": 149.7,
+  "thinking_tokens_est": 1142,
+  "calls": 1
+ }
+}

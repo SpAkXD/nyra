@@ -1,0 +1,1514 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge Fitness Studio – strength, conditioning and yoga in Brno</title>
+  <meta name="description" content="Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #111315;
+      color: #F2F2F0;
+      line-height: 1.6;
+    }
+
+    a {
+      color: #E4572E;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    a:hover {
+      color: #F3C969;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: inherit;
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: #111315;
+      border-bottom: 1px solid #1B1E22;
+      padding: 1.25rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #F2F2F0;
+      letter-spacing: 0.05em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: #F2F2F0;
+      font-size: 0.95rem;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover {
+      color: #E4572E;
+    }
+
+    .nav-btn {
+      background: #E4572E;
+      color: #111315;
+      padding: 0.6rem 1.5rem;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .nav-btn:hover {
+      background: #F3C969;
+    }
+
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    /* Hero */
+    .hero {
+      height: 100vh;
+      background: linear-gradient(rgba(17, 19, 21, 0.6), rgba(17, 19, 21, 0.6)), url('https://picsum.photos/seed/forge-hero/1600/1000');
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-content {
+      max-width: 700px;
+      padding: 2rem;
+    }
+
+    .hero-kicker {
+      font-size: 0.9rem;
+      color: #F3C969;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.2s forwards;
+    }
+
+    .hero-title {
+      font-family: 'Archivo', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.4s forwards;
+    }
+
+    .hero-text {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      color: #D0CFCC;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.6s forwards;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.8s forwards;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 0.9rem 2rem;
+      border: 2px solid;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.95rem;
+    }
+
+    .btn-filled {
+      background: #E4572E;
+      color: #111315;
+      border-color: #E4572E;
+    }
+
+    .btn-filled:hover {
+      background: #F3C969;
+      border-color: #F3C969;
+    }
+
+    .btn-outlined {
+      background: transparent;
+      color: #F2F2F0;
+      border-color: #F2F2F0;
+    }
+
+    .btn-outlined:hover {
+      background: #E4572E;
+      border-color: #E4572E;
+      color: #111315;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      .hero-kicker,
+      .hero-title,
+      .hero-text,
+      .hero-buttons {
+        animation: none;
+        opacity: 1;
+      }
+    }
+
+    /* Numbers */
+    .numbers {
+      background: #1B1E22;
+      padding: 4rem 2rem;
+    }
+
+    .numbers-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      text-align: center;
+    }
+
+    .number-item {
+      opacity: 0;
+      animation: fadeInUp 0.8s ease forwards;
+    }
+
+    .number-value {
+      font-family: 'Archivo', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: #E4572E;
+      margin-bottom: 0.5rem;
+    }
+
+    .number-label {
+      font-size: 1rem;
+      color: #D0CFCC;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Section styling */
+    section {
+      padding: 5rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    section:nth-child(n+2) {
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-kicker {
+      font-size: 0.9rem;
+      color: #F3C969;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-title {
+      font-family: 'Archivo', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-subtitle {
+      font-size: 1.1rem;
+      color: #D0CFCC;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Classes */
+    .classes-filters {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+    }
+
+    .filter-btn {
+      padding: 0.7rem 1.5rem;
+      background: transparent;
+      border: 1px solid #1B1E22;
+      color: #F2F2F0;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    .filter-btn:hover {
+      border-color: #E4572E;
+    }
+
+    .filter-btn.active {
+      background: #E4572E;
+      border-color: #E4572E;
+      color: #111315;
+    }
+
+    .classes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .class-card {
+      background: #1B1E22;
+      border: 1px solid #2A2D32;
+      border-radius: 0.75rem;
+      padding: 2rem;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .class-card:hover {
+      transform: translateY(-8px);
+      border-color: #E4572E;
+      box-shadow: 0 12px 24px rgba(228, 87, 46, 0.1);
+    }
+
+    .class-card.hidden {
+      display: none;
+    }
+
+    .class-day {
+      color: #F3C969;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .class-time {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      color: #F2F2F0;
+    }
+
+    .class-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #F2F2F0;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+
+    .class-coach {
+      font-size: 0.95rem;
+      color: #D0CFCC;
+      margin-bottom: 0.5rem;
+    }
+
+    .class-level {
+      display: inline-block;
+      background: #E4572E;
+      color: #111315;
+      padding: 0.4rem 0.8rem;
+      border-radius: 0.3rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    /* Trainers */
+    .trainers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .trainer-card {
+      background: #1B1E22;
+      border: 1px solid #2A2D32;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+      transition: all 0.3s ease;
+    }
+
+    .trainer-card:hover {
+      transform: translateY(-8px);
+      border-color: #E4572E;
+      box-shadow: 0 12px 24px rgba(228, 87, 46, 0.1);
+    }
+
+    .trainer-image {
+      width: 100%;
+      height: 350px;
+      object-fit: cover;
+    }
+
+    .trainer-content {
+      padding: 2rem;
+    }
+
+    .trainer-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+    }
+
+    .trainer-specialty {
+      color: #F3C969;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .trainer-bio {
+      font-size: 0.95rem;
+      color: #D0CFCC;
+      line-height: 1.6;
+    }
+
+    /* Membership */
+    .membership-toggle {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1.5rem;
+      margin: 2rem 0 3rem;
+    }
+
+    .toggle-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    .toggle {
+      position: relative;
+      width: 60px;
+      height: 32px;
+      background: #2A2D32;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .toggle.active {
+      background: #E4572E;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 28px;
+      height: 28px;
+      background: #F2F2F0;
+      border-radius: 14px;
+      transition: left 0.3s ease;
+    }
+
+    .toggle.active .toggle-slider {
+      left: 30px;
+    }
+
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 2rem;
+    }
+
+    .plan-card {
+      background: #1B1E22;
+      border: 1px solid #2A2D32;
+      border-radius: 0.75rem;
+      padding: 2.5rem;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .plan-card.popular {
+      border-color: #E4572E;
+      transform: scale(1.05);
+    }
+
+    .plan-card:hover:not(.popular) {
+      transform: translateY(-8px);
+      border-color: #E4572E;
+    }
+
+    .plan-card:hover.popular {
+      transform: scale(1.05) translateY(-8px);
+    }
+
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #E4572E;
+      color: #111315;
+      padding: 0.4rem 1rem;
+      border-radius: 0.3rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .plan-name {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+
+    .plan-price {
+      font-family: 'Archivo', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #E4572E;
+      margin-bottom: 0.25rem;
+    }
+
+    .plan-period {
+      font-size: 0.9rem;
+      color: #D0CFCC;
+      margin-bottom: 2rem;
+    }
+
+    .plan-features {
+      list-style: none;
+      margin-bottom: 2rem;
+    }
+
+    .plan-features li {
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #2A2D32;
+      color: #D0CFCC;
+      font-size: 0.95rem;
+    }
+
+    .plan-features li:last-child {
+      border-bottom: none;
+    }
+
+    .plan-btn {
+      width: 100%;
+    }
+
+    /* Testimonials */
+    .testimonials {
+      background: #1B1E22;
+      border-radius: 0.75rem;
+      padding: 3rem 2rem;
+    }
+
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .testimonial-card {
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .testimonial-text {
+      font-size: 1.05rem;
+      color: #F2F2F0;
+      margin-bottom: 1rem;
+      line-height: 1.8;
+      font-style: italic;
+    }
+
+    .testimonial-author {
+      color: #F3C969;
+      font-weight: 600;
+    }
+
+    /* Gallery */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .gallery-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: 0.75rem;
+      aspect-ratio: 4/3;
+      cursor: pointer;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+      transition: transform 0.3s ease;
+    }
+
+    .gallery-item:hover {
+      transform: scale(1.05);
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(17, 19, 21, 0.95);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      position: relative;
+      max-width: 90%;
+      max-height: 90vh;
+    }
+
+    .lightbox-image {
+      max-width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+      border-radius: 0.75rem;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: -40px;
+      right: 0;
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 2rem;
+      cursor: pointer;
+      z-index: 2001;
+    }
+
+    .lightbox-close:hover {
+      color: #E4572E;
+    }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #F2F2F0;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 1rem;
+      z-index: 2001;
+      transition: color 0.3s ease;
+    }
+
+    .lightbox-nav:hover {
+      color: #E4572E;
+    }
+
+    .lightbox-prev {
+      left: -80px;
+    }
+
+    .lightbox-next {
+      right: -80px;
+    }
+
+    /* Contact */
+    .contact-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .contact-block {
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .contact-label {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #F3C969;
+      margin-bottom: 0.75rem;
+    }
+
+    .contact-content {
+      color: #D0CFCC;
+      line-height: 1.8;
+    }
+
+    .contact-content a {
+      display: inline-block;
+      margin-top: 0.5rem;
+    }
+
+    .contact-form {
+      background: #1B1E22;
+      border: 1px solid #2A2D32;
+      border-radius: 0.75rem;
+      padding: 2.5rem;
+      max-width: 600px;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      background: #111315;
+      border: 1px solid #2A2D32;
+      border-radius: 0.4rem;
+      color: #F2F2F0;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #E4572E;
+      box-shadow: 0 0 0 3px rgba(228, 87, 46, 0.1);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-group input::placeholder {
+      color: #666;
+    }
+
+    .form-submit {
+      width: 100%;
+      padding: 0.9rem;
+      background: #E4572E;
+      color: #111315;
+      border: none;
+      border-radius: 0.4rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .form-submit:hover {
+      background: #F3C969;
+    }
+
+    /* Footer */
+    footer {
+      background: #1B1E22;
+      border-top: 1px solid #2A2D32;
+      padding: 3rem 2rem;
+      margin-top: 5rem;
+    }
+
+    .footer-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .footer-brand {
+      font-family: 'Archivo', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      letter-spacing: 0.05em;
+    }
+
+    .footer-address {
+      color: #D0CFCC;
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: #F2F2F0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+    }
+
+    .footer-copyright {
+      color: #666;
+      font-size: 0.85rem;
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid #2A2D32;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #1B1E22;
+        flex-direction: column;
+        gap: 0;
+        padding: 1rem 0;
+        border-bottom: 1px solid #2A2D32;
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .nav-links li {
+        padding: 1rem 2rem;
+        border-bottom: 1px solid #2A2D32;
+      }
+
+      .nav-links li:last-child {
+        border-bottom: none;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .hero-title {
+        font-size: 2.5rem;
+      }
+
+      .hero-text {
+        font-size: 1rem;
+      }
+
+      .section-title {
+        font-size: 1.75rem;
+      }
+
+      .plan-card.popular {
+        transform: scale(1);
+      }
+
+      .plan-card:hover.popular {
+        transform: translateY(-8px);
+      }
+
+      .lightbox-prev {
+        left: -30px;
+        font-size: 1.5rem;
+      }
+
+      .lightbox-next {
+        right: -30px;
+        font-size: 1.5rem;
+      }
+
+      .contact-form {
+        padding: 1.5rem;
+      }
+
+      .footer-links {
+        gap: 1rem;
+        font-size: 0.8rem;
+      }
+    }
+
+    /* Scroll animations - staggered */
+    .classes-grid .class-card:nth-child(1) { animation-delay: 0.1s; }
+    .classes-grid .class-card:nth-child(2) { animation-delay: 0.2s; }
+    .classes-grid .class-card:nth-child(3) { animation-delay: 0.3s; }
+    .classes-grid .class-card:nth-child(4) { animation-delay: 0.4s; }
+    .classes-grid .class-card:nth-child(5) { animation-delay: 0.5s; }
+    .classes-grid .class-card:nth-child(6) { animation-delay: 0.6s; }
+    .classes-grid .class-card:nth-child(7) { animation-delay: 0.1s; }
+    .classes-grid .class-card:nth-child(8) { animation-delay: 0.2s; }
+    .classes-grid .class-card:nth-child(9) { animation-delay: 0.3s; }
+    .classes-grid .class-card:nth-child(10) { animation-delay: 0.4s; }
+    .classes-grid .class-card:nth-child(11) { animation-delay: 0.5s; }
+    .classes-grid .class-card:nth-child(12) { animation-delay: 0.6s; }
+
+    .trainers-grid .trainer-card:nth-child(1) { animation-delay: 0.1s; }
+    .trainers-grid .trainer-card:nth-child(2) { animation-delay: 0.2s; }
+    .trainers-grid .trainer-card:nth-child(3) { animation-delay: 0.3s; }
+    .trainers-grid .trainer-card:nth-child(4) { animation-delay: 0.4s; }
+
+    .plans-grid .plan-card:nth-child(1) { animation-delay: 0.1s; }
+    .plans-grid .plan-card:nth-child(2) { animation-delay: 0.2s; }
+    .plans-grid .plan-card:nth-child(3) { animation-delay: 0.3s; }
+
+    .testimonials-grid .testimonial-card:nth-child(1) { animation-delay: 0.1s; }
+    .testimonials-grid .testimonial-card:nth-child(2) { animation-delay: 0.2s; }
+    .testimonials-grid .testimonial-card:nth-child(3) { animation-delay: 0.3s; }
+
+    .gallery-grid .gallery-item:nth-child(1) { animation-delay: 0.1s; }
+    .gallery-grid .gallery-item:nth-child(2) { animation-delay: 0.2s; }
+    .gallery-grid .gallery-item:nth-child(3) { animation-delay: 0.3s; }
+    .gallery-grid .gallery-item:nth-child(4) { animation-delay: 0.4s; }
+    .gallery-grid .gallery-item:nth-child(5) { animation-delay: 0.1s; }
+    .gallery-grid .gallery-item:nth-child(6) { animation-delay: 0.2s; }
+    .gallery-grid .gallery-item:nth-child(7) { animation-delay: 0.3s; }
+    .gallery-grid .gallery-item:nth-child(8) { animation-delay: 0.4s; }
+
+    .contact-info .contact-block:nth-child(1) { animation-delay: 0.1s; }
+    .contact-info .contact-block:nth-child(2) { animation-delay: 0.2s; }
+    .contact-info .contact-block:nth-child(3) { animation-delay: 0.3s; }
+
+    .number-item:nth-child(1) { animation-delay: 0.1s; }
+    .number-item:nth-child(2) { animation-delay: 0.2s; }
+    .number-item:nth-child(3) { animation-delay: 0.3s; }
+    .number-item:nth-child(4) { animation-delay: 0.4s; }
+
+    section:nth-child(3) { animation-delay: 0.2s; }
+    section:nth-child(4) { animation-delay: 0.2s; }
+    section:nth-child(5) { animation-delay: 0.2s; }
+    section:nth-child(6) { animation-delay: 0.2s; }
+    section:nth-child(7) { animation-delay: 0.2s; }
+    section:nth-child(8) { animation-delay: 0.2s; }
+    section:nth-child(9) { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-container">
+      <div class="nav-brand">Forge Fitness</div>
+      <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#classes">Classes</a></li>
+        <li><a href="#trainers">Trainers</a></li>
+        <li><a href="#membership">Membership</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><button class="nav-btn" onclick="document.location='#contact'">Free trial</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-kicker">Brno · Veveří 54 · since 2016</div>
+      <h1 class="hero-title">Train hard. Feel at home.</h1>
+      <p class="hero-text">Strength, conditioning and yoga classes in small groups, with coaches who know your name.</p>
+      <div class="hero-buttons">
+        <a href="#classes" class="btn btn-filled">See the schedule</a>
+        <a href="#contact" class="btn btn-outlined">Free trial</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Numbers -->
+  <section class="numbers">
+    <div class="numbers-container">
+      <div class="number-item">
+        <div class="number-value" data-target="12">0</div>
+        <div class="number-label">Coaches</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="45">0</div>
+        <div class="number-label">Classes a week</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="2300">0</div>
+        <div class="number-label">Members</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value">6 a.m.</div>
+        <div class="number-label">First class</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Classes -->
+  <section id="classes">
+    <div class="section-header">
+      <div class="section-kicker">Schedule</div>
+      <h2 class="section-title">Classes this week</h2>
+      <p class="section-subtitle">Book through the app or at the front desk. Max 12 people per class.</p>
+    </div>
+
+    <div class="classes-filters">
+      <button class="filter-btn active" data-day="all">All</button>
+      <button class="filter-btn" data-day="mon">Mon</button>
+      <button class="filter-btn" data-day="tue">Tue</button>
+      <button class="filter-btn" data-day="wed">Wed</button>
+      <button class="filter-btn" data-day="thu">Thu</button>
+      <button class="filter-btn" data-day="fri">Fri</button>
+      <button class="filter-btn" data-day="sat">Sat</button>
+    </div>
+
+    <div class="classes-grid" id="classesGrid">
+      <!-- Generated by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Trainers -->
+  <section id="trainers">
+    <div class="section-header">
+      <div class="section-kicker">Coaches</div>
+      <h2 class="section-title">Meet the team</h2>
+    </div>
+
+    <div class="trainers-grid" id="trainersGrid">
+      <!-- Generated by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Membership -->
+  <section id="membership">
+    <div class="section-header">
+      <div class="section-kicker">Membership</div>
+      <h2 class="section-title">Pick your plan</h2>
+    </div>
+
+    <div class="membership-toggle">
+      <span class="toggle-label">Monthly</span>
+      <div class="toggle" id="billingToggle">
+        <div class="toggle-slider"></div>
+      </div>
+      <span class="toggle-label">Yearly</span>
+    </div>
+
+    <div class="plans-grid" id="plansGrid">
+      <!-- Generated by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section>
+    <div class="section-header">
+      <h2 class="section-title">Members say</h2>
+    </div>
+
+    <div class="testimonials">
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <p class="testimonial-text">"I came for the free trial and stayed for the people."</p>
+          <p class="testimonial-author">— Lenka M.</p>
+        </div>
+        <div class="testimonial-card">
+          <p class="testimonial-text">"Adam fixed my squat in two sessions after years of knee pain."</p>
+          <p class="testimonial-author">— Jakub S.</p>
+        </div>
+        <div class="testimonial-card">
+          <p class="testimonial-text">"The only gym where the 6 a.m. class feels like a party."</p>
+          <p class="testimonial-author">— Veronika D.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Gallery -->
+  <section id="gallery">
+    <div class="section-header">
+      <div class="section-kicker">Gallery</div>
+      <h2 class="section-title">Inside the studio</h2>
+    </div>
+
+    <div class="gallery-grid" id="galleryGrid">
+      <!-- Generated by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <div class="lightbox-content">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close lightbox">✕</button>
+      <button class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Previous image">‹</button>
+      <img class="lightbox-image" id="lightboxImage" src="" alt="">
+      <button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next image">›</button>
+    </div>
+  </div>
+
+  <!-- Contact -->
+  <section id="contact">
+    <div class="section-header">
+      <div class="section-kicker">Contact</div>
+      <h2 class="section-title">Come for a free trial</h2>
+    </div>
+
+    <div class="contact-info">
+      <div class="contact-block">
+        <div class="contact-label">Address</div>
+        <div class="contact-content">
+          Veveří 54, 602 00 Brno
+          <br>
+          <a href="https://maps.google.com/?q=Veveří+54,+Brno" target="_blank">Open in Google Maps</a>
+        </div>
+      </div>
+
+      <div class="contact-block">
+        <div class="contact-label">Get in touch</div>
+        <div class="contact-content">
+          <a href="tel:+420541000777">+420 541 000 777</a>
+          <br>
+          <a href="mailto:hello@forgefitness.cz">hello@forgefitness.cz</a>
+        </div>
+      </div>
+
+      <div class="contact-block">
+        <div class="contact-label">Hours</div>
+        <div class="contact-content">
+          Monday–Friday: 6:00–22:00
+          <br>
+          Saturday–Sunday: 8:00–20:00
+        </div>
+      </div>
+    </div>
+
+    <form class="contact-form" id="contactForm" onsubmit="handleFormSubmit(event)">
+      <div class="form-group">
+        <label for="name">Name *</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">E-mail *</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone" name="phone">
+      </div>
+
+      <div class="form-group">
+        <label for="interested">Interested in *</label>
+        <select id="interested" name="interested" required>
+          <option value="">Select...</option>
+          <option value="Free trial">Free trial</option>
+          <option value="Membership">Membership</option>
+          <option value="Personal training">Personal training</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="message">Message *</label>
+        <textarea id="message" name="message" required></textarea>
+      </div>
+
+      <button type="submit" class="form-submit">Send</button>
+    </form>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-brand">Forge Fitness Studio</div>
+      <div class="footer-address">Veveří 54, 602 00 Brno</div>
+      <ul class="footer-links">
+        <li><a href="#classes">Classes</a></li>
+        <li><a href="#trainers">Trainers</a></li>
+        <li><a href="#membership">Membership</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+      <div class="footer-copyright">© 2026 Forge Fitness Studio</div>
+    </div>
+  </footer>
+
+  <script>
+    // Classes data
+    const classesData = [
+      { day: 'mon', time: '6:00', name: 'Sunrise Strength', coach: 'Coach Adam', level: 'All levels' },
+      { day: 'mon', time: '18:00', name: 'Kettlebell Basics', coach: 'Coach Klára', level: 'Beginner' },
+      { day: 'tue', time: '7:00', name: 'Mobility Flow', coach: 'Coach Tereza', level: 'All levels' },
+      { day: 'tue', time: '19:00', name: 'Power Circuit', coach: 'Coach Ondřej', level: 'Advanced' },
+      { day: 'wed', time: '6:00', name: 'Engine Builder', coach: 'Coach Adam', level: 'Intermediate' },
+      { day: 'wed', time: '17:30', name: 'Vinyasa Yoga', coach: 'Coach Tereza', level: 'All levels' },
+      { day: 'thu', time: '7:00', name: 'Olympic Lifting', coach: 'Coach Ondřej', level: 'Advanced' },
+      { day: 'thu', time: '18:30', name: 'Core & Conditioning', coach: 'Coach Klára', level: 'Intermediate' },
+      { day: 'fri', time: '6:00', name: 'Friday Burn', coach: 'Coach Adam', level: 'Intermediate' },
+      { day: 'fri', time: '17:00', name: 'Stretch & Restore', coach: 'Coach Tereza', level: 'Beginner' },
+      { day: 'sat', time: '9:00', name: 'Team WOD', coach: 'Coach Ondřej', level: 'All levels' },
+      { day: 'sat', time: '10:30', name: 'Weekend Yoga', coach: 'Coach Tereza', level: 'Beginner' },
+    ];
+
+    // Trainers data
+    const trainersData = [
+      { id: 1, name: 'Adam Novotný', specialty: 'Strength & conditioning', bio: 'Former rower who builds engines that last.' },
+      { id: 2, name: 'Klára Benešová', specialty: 'Kettlebells & core', bio: 'Turns nervous beginners into confident lifters.' },
+      { id: 3, name: 'Tereza Malá', specialty: 'Yoga & mobility', bio: 'Helps you move better so you can train longer.' },
+      { id: 4, name: 'Ondřej Černý', specialty: 'Olympic lifting', bio: 'National-level lifter with an eye for technique.' },
+    ];
+
+    // Plans data
+    const plansData = [
+      { name: 'Basic', monthlyPrice: 790, yearlyPrice: 7900, features: ['Gym floor access', '2 classes a week', 'App booking'] },
+      { name: 'Unlimited', monthlyPrice: 1290, yearlyPrice: 12900, features: ['Gym floor access', 'Unlimited classes', 'App booking', '1 coaching session a month'], popular: true },
+      { name: 'Premium', monthlyPrice: 1990, yearlyPrice: 19900, features: ['Everything in Unlimited', 'Weekly personal training', 'Towel and locker service'] },
+    ];
+
+    // Gallery data
+    const galleryData = [
+      { id: 1, alt: 'The main training floor' },
+      { id: 2, alt: 'Kettlebells lined up' },
+      { id: 3, alt: 'A yoga class at sunset' },
+      { id: 4, alt: 'Barbells and plates' },
+      { id: 5, alt: 'The rowing machines' },
+      { id: 6, alt: 'A coach helping a member' },
+      { id: 7, alt: 'The stretching corner' },
+      { id: 8, alt: 'The front desk and café' },
+    ];
+
+    let isYearly = false;
+    let currentLightboxIndex = 0;
+
+    // Render classes
+    function renderClasses() {
+      const grid = document.getElementById('classesGrid');
+      grid.innerHTML = classesData.map((cls, idx) => `
+        <div class="class-card" data-day="${cls.day}" style="animation-delay: ${(idx % 6) * 0.1 + 0.1}s">
+          <div class="class-day">${cls.day.toUpperCase()}</div>
+          <div class="class-time">${cls.time}</div>
+          <div class="class-name">${cls.name}</div>
+          <div class="class-coach">${cls.coach}</div>
+          <div class="class-level">${cls.level}</div>
+        </div>
+      `).join('');
+    }
+
+    // Render trainers
+    function renderTrainers() {
+      const grid = document.getElementById('trainersGrid');
+      grid.innerHTML = trainersData.map((trainer, idx) => `
+        <div class="trainer-card" style="animation-delay: ${(idx + 1) * 0.1}s">
+          <img src="https://picsum.photos/seed/forge-coach-${trainer.id}/600/700" alt="${trainer.name}" class="trainer-image">
+          <div class="trainer-content">
+            <div class="trainer-name">${trainer.name}</div>
+            <div class="trainer-specialty">${trainer.specialty}</div>
+            <p class="trainer-bio">${trainer.bio}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render plans
+    function renderPlans() {
+      const grid = document.getElementById('plansGrid');
+      grid.innerHTML = plansData.map((plan, idx) => {
+        const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
+        const period = isYearly ? 'per year' : 'per month';
+        return `
+          <div class="plan-card${plan.popular ? ' popular' : ''}" style="animation-delay: ${(idx + 1) * 0.1}s">
+            ${plan.popular ? '<div class="plan-badge">Most popular</div>' : ''}
+            <div class="plan-name">${plan.name}</div>
+            <div class="plan-price">${price} Kč</div>
+            <div class="plan-period">${period}</div>
+            <ul class="plan-features">
+              ${plan.features.map(f => `<li>${f}</li>`).join('')}
+            </ul>
+            <a href="#contact" class="btn btn-filled plan-btn">Join now</a>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Render gallery
+    function renderGallery() {
+      const grid = document.getElementById('galleryGrid');
+      grid.innerHTML = galleryData.map((item, idx) => `
+        <div class="gallery-item" onclick="openLightbox(${idx})" style="animation-delay: ${(idx % 4) * 0.1 + 0.1}s">
+          <img src="https://picsum.photos/seed/forge-g${item.id}/1200/800" alt="${item.alt}">
+        </div>
+      `).join('');
+    }
+
+    // Filter classes
+    function filterClasses(day) {
+      const cards = document.querySelectorAll('.class-card');
+      cards.forEach(card => {
+        if (day === 'all' || card.dataset.day === day) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+
+      // Update filter buttons
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.day === day) {
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    // Billing toggle
+    document.getElementById('billingToggle').addEventListener('click', () => {
+      isYearly = !isYearly;
+      document.getElementById('billingToggle').classList.toggle('active');
+      renderPlans();
+    });
+
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterClasses(btn.dataset.day);
+      });
+    });
+
+    // Lightbox
+    function openLightbox(index) {
+      currentLightboxIndex = index;
+      const image = galleryData[index];
+      document.getElementById('lightboxImage').src = `https://picsum.photos/seed/forge-g${image.id}/1200/800`;
+      document.getElementById('lightboxImage').alt = image.alt;
+      document.getElementById('lightbox').classList.add('active');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+    }
+
+    function nextImage() {
+      currentLightboxIndex = (currentLightboxIndex + 1) % galleryData.length;
+      openLightbox(currentLightboxIndex);
+    }
+
+    function prevImage() {
+      currentLightboxIndex = (currentLightboxIndex - 1 + galleryData.length) % galleryData.length;
+      openLightbox(currentLightboxIndex);
+    }
+
+    document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+    document.getElementById('lightboxNext').addEventListener('click', nextImage);
+    document.getElementById('lightboxPrev').addEventListener('click', prevImage);
+
+    document.addEventListener('keydown', (e) => {
+      if (!document.getElementById('lightbox').classList.contains('active')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowRight') nextImage();
+      if (e.key === 'ArrowLeft') prevImage();
+    });
+
+    // Mobile menu toggle
+    document.getElementById('menuToggle').addEventListener('click', () => {
+      document.getElementById('navLinks').classList.toggle('active');
+    });
+
+    // Close menu when a link is clicked
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      link.addEventListener('click', () => {
+        document.getElementById('navLinks').classList.remove('active');
+      });
+    });
+
+    // Form submission
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const phone = document.getElementById('phone').value;
+      const interested = document.getElementById('interested').value;
+      const message = document.getElementById('message').value;
+
+      const body = `Free trial request\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\nInterested in: ${interested}\nMessage: ${message}`;
+      const subject = 'Free trial request';
+
+      window.location.href = `mailto:hello@forgefitness.cz?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+
+    // Counter animation for numbers
+    function animateCounters() {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      
+      document.querySelectorAll('.number-value[data-target]').forEach(el => {
+        const target = parseInt(el.dataset.target);
+        if (prefersReducedMotion) {
+          el.textContent = target;
+        } else {
+          let current = 0;
+          const increment = target / 40;
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+              el.textContent = target;
+              clearInterval(timer);
+            } else {
+              el.textContent = Math.floor(current);
+            }
+          }, 30);
+        }
+      });
+    }
+
+    // Intersection observer for scroll animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -100px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          if (entry.target.classList.contains('numbers')) {
+            animateCounters();
+          }
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe sections
+    document.querySelectorAll('section').forEach(section => {
+      observer.observe(section);
+    });
+
+    // Initial render
+    renderClasses();
+    renderTrainers();
+    renderPlans();
+    renderGallery();
+  </script>
+
+</body>
+</html>
+```

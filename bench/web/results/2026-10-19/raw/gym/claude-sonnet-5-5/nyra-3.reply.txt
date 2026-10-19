@@ -1,0 +1,134 @@
+use web
+
+site("Forge Fitness Studio", primary: "#E4572E", accent: "#F3C969", bg: "#111315", font: "Inter", display: "Archivo", radius: 16, style: "dark", lang: "en")
+
+let days = ["All", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+let classes = [
+    ("Mon", "6:00", "Sunrise Strength", "Coach Adam", "All levels"),
+    ("Mon", "18:00", "Kettlebell Basics", "Coach Klára", "Beginner"),
+    ("Tue", "7:00", "Mobility Flow", "Coach Tereza", "All levels"),
+    ("Tue", "19:00", "Power Circuit", "Coach Ondřej", "Advanced"),
+    ("Wed", "6:00", "Engine Builder", "Coach Adam", "Intermediate"),
+    ("Wed", "17:30", "Vinyasa Yoga", "Coach Tereza", "All levels"),
+    ("Thu", "7:00", "Olympic Lifting", "Coach Ondřej", "Advanced"),
+    ("Thu", "18:30", "Core & Conditioning", "Coach Klára", "Intermediate"),
+    ("Fri", "6:00", "Friday Burn", "Coach Adam", "Intermediate"),
+    ("Fri", "17:00", "Stretch & Restore", "Coach Tereza", "Beginner"),
+    ("Sat", "9:00", "Team WOD", "Coach Ondřej", "All levels"),
+    ("Sat", "10:30", "Weekend Yoga", "Coach Tereza", "Beginner")
+]
+let coaches = [
+    ("Adam Novotný", "Strength & conditioning", "Former rower who builds engines that last.", "https://picsum.photos/seed/forge-coach-1/600/700"),
+    ("Klára Benešová", "Kettlebells & core", "Turns nervous beginners into confident lifters.", "https://picsum.photos/seed/forge-coach-2/600/700"),
+    ("Tereza Malá", "Yoga & mobility", "Helps you move better so you can train longer.", "https://picsum.photos/seed/forge-coach-3/600/700"),
+    ("Ondřej Černý", "Olympic lifting", "National-level lifter with an eye for technique.", "https://picsum.photos/seed/forge-coach-4/600/700")
+]
+let photos = [
+    ("https://picsum.photos/seed/forge-g1/1200/800", "The main training floor", ""),
+    ("https://picsum.photos/seed/forge-g2/1200/800", "Kettlebells lined up", ""),
+    ("https://picsum.photos/seed/forge-g3/1200/800", "A yoga class at sunset", ""),
+    ("https://picsum.photos/seed/forge-g4/1200/800", "Barbells and plates", ""),
+    ("https://picsum.photos/seed/forge-g5/1200/800", "The rowing machines", ""),
+    ("https://picsum.photos/seed/forge-g6/1200/800", "A coach helping a member", ""),
+    ("https://picsum.photos/seed/forge-g7/1200/800", "The stretching corner", ""),
+    ("https://picsum.photos/seed/forge-g8/1200/800", "The front desk and café", "")
+]
+
+enum Msg { Day(str), Billing(str) }
+var day = "All"
+var billing = "Monthly"
+
+fn update(m: Msg) {
+    match m {
+        Msg.Day(d) => day = d,
+        Msg.Billing(b) => billing = b
+    }
+}
+
+fn price(monthly: str, yearly: str) -> str = billing == "Monthly" ? "{monthly} Kč / month" : "{yearly} Kč / year"
+
+fn schedule() -> Node = stack {
+    row {
+        for d in days { button(d, on: Msg.Day(d), active: d == day) }
+    }
+    grid(3, anim: "stagger", hover: "lift") {
+        for c in classes.filter(x => day == "All" || x.0 == day) {
+            card("{c.2}", "{c.0} · {c.1} · {c.3}", tag: c.4)
+        }
+    }
+}
+
+fn plans() -> Node = stack {
+    row {
+        button("Monthly", on: Msg.Billing("Monthly"), active: billing == "Monthly")
+        button("Yearly", on: Msg.Billing("Yearly"), active: billing == "Yearly")
+    }
+    grid(3, anim: "stagger", hover: "lift") {
+        card("Basic", price("790", "7,900"), items: ["Gym floor access", "2 classes a week", "App booking"]) {
+            button("Join now", "#contact", style: "outline")
+        }
+        card("Unlimited", price("1,290", "12,900"), tag: "Most popular", fill: true, items: ["Gym floor access", "Unlimited classes", "App booking", "1 coaching session a month"]) {
+            button("Join now", "#contact", style: "primary")
+        }
+        card("Premium", price("1,990", "19,900"), items: ["Everything in Unlimited", "Weekly personal training", "Towel and locker service"]) {
+            button("Join now", "#contact", style: "outline")
+        }
+    }
+}
+
+page("/", "Forge Fitness Studio – strength, conditioning and yoga in Brno", desc: "Independent gym and group-class studio on Veveří in Brno: small classes, expert coaches, monthly or yearly membership and a free trial.") {
+    navbar("Forge Fitness", [("Classes", "#classes"), ("Trainers", "#trainers"), ("Membership", "#membership"), ("Gallery", "#gallery"), ("Contact", "#contact")], cta: ("Free trial", "#contact"))
+    hero("Train hard. Feel at home.", kicker: "Brno · Veveří 54 · since 2016", text: "Strength, conditioning and yoga classes in small groups, with coaches who know your name.", image: "https://picsum.photos/seed/forge-hero/1600/1000", alt: "Athletes training with kettlebells at Forge", buttons: [("See the schedule", "#classes"), ("Free trial", "#contact")], anim: "rise")
+    section("numbers", "", bg: "alt", anim: "rise") {
+        grid(4, anim: "stagger") {
+            stat("12", "coaches", anim: "count")
+            stat("45", "classes a week", anim: "count")
+            stat("2,300", "members", anim: "count")
+            stat("6 a.m.", "first class")
+        }
+    }
+    section("classes", "Classes this week", kicker: "Schedule", text: "Book through the app or at the front desk. Max 12 people per class.", anim: "rise") {
+        schedule()
+    }
+    section("trainers", "Meet the team", kicker: "Coaches", bg: "alt", anim: "rise") {
+        grid(4, anim: "stagger", hover: "lift") {
+            for c in coaches { card(c.0, c.2, image: c.3, tag: c.1) }
+        }
+    }
+    section("membership", "Pick your plan", kicker: "Membership", anim: "rise") {
+        plans()
+    }
+    section("testimonials", "Members say", bg: "alt", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            quote("I came for the free trial and stayed for the people.", "Lenka M.")
+            quote("Adam fixed my squat in two sessions after years of knee pain.", "Jakub S.")
+            quote("The only gym where the 6 a.m. class feels like a party.", "Veronika D.")
+        }
+    }
+    section("gallery", "Inside the studio", kicker: "Gallery", anim: "rise") {
+        gallery(photos)
+    }
+    section("contact", "Come for a free trial", kicker: "Contact", bg: "alt", anim: "rise") {
+        grid(2, anim: "stagger") {
+            stack {
+                address {
+                    "Veveří 54, 602 00 Brno"
+                    link("Open in Google Maps", "https://maps.google.com/?q=Veveří+54,+Brno")
+                }
+                p("[+420 541 000 777](tel:+420541000777)")
+                p("[hello@forgefitness.cz](mailto:hello@forgefitness.cz)")
+                hours([("Monday–Friday", "1-5 6:00-22:00"), ("Saturday–Sunday", "6-7 8:00-20:00")])
+            }
+            form("Send us a message", mailto: "hello@forgefitness.cz") {
+                field("name", "Name", req: true)
+                field("email", "E-mail", type: "email", req: true)
+                field("phone", "Phone", type: "tel")
+                field("interest", "Interested in", type: "select", req: true, options: ["Free trial", "Membership", "Personal training"])
+                field("message", "Message", type: "area", req: true)
+                button("Send", style: "primary")
+            }
+        }
+    }
+    footer(text: "Forge Fitness Studio", links: [("Classes", "#classes"), ("Trainers", "#trainers"), ("Membership", "#membership"), ("Gallery", "#gallery"), ("Contact", "#contact")], contact: ["Veveří 54, 602 00 Brno"], small: ["© 2026 Forge Fitness Studio"])
+}
+```

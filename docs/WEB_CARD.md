@@ -1,5 +1,5 @@
 <!-- Metadata: this comment is not part of the card (nyra_spec with topic "web" and the tests strip it).
-TOKENS: 1386 on claude-sonnet-5-5, 1105 on claude-haiku-4-5 (estimated: 2,996 characters, scaled from the last measurement of 3,019 characters = 1,397 tokens; no API key at hand when sidebar/media/video/tabs/search were added. Re-measure: python tools/card_tokens.py --card web --write).
+TOKENS: 1393 on claude-sonnet-5-5, 1111 on claude-haiku-4-5 (estimated: 3,007 characters, scaled from the last measurement of 3,014 characters = 1,396 tokens; no API key at hand when sidebar/media/video/tabs/search were added. Re-measure: python tools/card_tokens.py --card web --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The library is src/std/web.nyra; this card must describe it exactly (tests/docs.rs builds its example). Read with docs/AGENT_CARD.md. -->
 # Nyra web card
@@ -37,7 +37,7 @@ page("/", "Brew & Co") {
 
 ## Elements
 ```
-site(name, primary: accent: bg: font: display: style: soft|sharp|editorial|dark lang: tz:)
+site(name, primary: accent: bg: font: display: radius: 16 style: soft|sharp|editorial|dark lang: tz:)
 page(path, title, desc:) {}
 section(id, title, kicker: text: bg: alt|dark|primary) {}
 grid(cols, widths: "1fr 2fr") {}   stack {}   row {}

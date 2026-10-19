@@ -407,6 +407,9 @@ ol.list:not(.list-icon) li::before { content: counter(li); display: grid; flex: 
 .hero-half { min-height: 72svh; }
 .hero-media { position: absolute; inset: 0; z-index: -2; }
 .hero-media img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.02); }
+/* the entrance of a hero: the photo settles, painted (and opaque) from the first frame */
+@keyframes hero-in { from { scale: 1.04; } }
+@media (prefers-reduced-motion: no-preference) { :root:not([data-motion=off]) .hero-in .hero-media img { animation: hero-in 1.6s cubic-bezier(.16, 1, .3, 1) both; } }
 .hero-shade {
   position: absolute;
   inset: 0;
