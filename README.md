@@ -262,9 +262,24 @@ the same features (the 3D showroom, the opening screen and the testimonials are 
 **A/B test: the same site brief, two answers.** Gemini 3.8 Flash (high effort) wrote the site once as plain
 one-file HTML and once in Nyra. The HTML answer was 27,167 output tokens, the Nyra one 3,032 (0.11x; Claude's
 tokenizer), and the Nyra file compiled on the first try. The Nyra prompt is larger, 6,233 input tokens against
-2,684, because it carries the two reference cards. *Results for more models: to be added when their runs finish.*
+2,684, because it carries the two reference cards.
 
-One site and one model run are not a benchmark: treat these as a first measurement, not a general ratio. The
+Four more models on OpenRouter, three runs each at medium reasoning effort (code tokens on Claude's tokenizer; time
+and cost as billed, averages):
+
+| Model | Code tokens, HTML → Nyra | Time, HTML → Nyra | Cost, HTML → Nyra | Nyra built first try |
+|---|---|---|---|:-:|
+| DeepSeek v4.1 Flash | 20,685 → 2,927 (0.14x) | 126 s → 33 s | $0.0031 → $0.0091 | 1/3 |
+| GPT-6 Luna | 20,224 → 3,037 (0.15x) | 109 s → 44 s | $0.0074 → $0.0025 | 1/3 |
+| GLM 5.3 | 15,252 → 3,043 (0.20x) | 45 s → 14 s | $0.0154 → $0.0051 | 2/3 |
+| GLM 5.3 Flash | 10,796 → 2,968 (0.27x) | 31 s → 18 s | $0.0015 → $0.0008 | 1/3 |
+
+The honest part: every HTML answer worked (13 of 13), but only 7 of 13 Nyra files built on the first try, each
+failure a gap between the first web card and the kit, and the menu filter did not work in the Nyra builds (a kit
+bug). DeepSeek's Nyra cost is higher because one run spent 11,500 tokens reasoning. These are being fixed, and the
+test will be repeated with one repair round from the compiler's messages, the way agents use Nyra.
+
+One site and a few model runs are not a benchmark: treat these as a first measurement, not a general ratio. The
 design document's own samples give 0.19x against plain HTML/CSS/JS and 0.48x against markup that uses a
 ready-made component kit ([Token measurement](docs/WEB.md#token-measurement)).
 
