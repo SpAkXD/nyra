@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Golden Crust Bakery | Fresh bread every morning</title>
+<meta name="description" content="A family bakery in Brno: sourdough, pastries and cakes baked every morning since 1998.">
+<meta name="theme-color" content="#7a3e1d">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@600&family=Nunito:wght@400;700&display=swap">
+<style>
+  :root { --brown: #7a3e1d; --cream: #fbf6ee; --gold: #d99a2b; }
+  body { margin: 0; background: var(--cream); color: #2b1d12; font-family: "Nunito", sans-serif; }
+  h1, h2, h3 { font-family: "Lora", Georgia, serif; }
+  .site-header { display: flex; justify-content: space-between; padding: 1rem 2rem; }
+  .btn { display: inline-block; padding: .8rem 1.4rem; border-radius: 999px; background: var(--brown); color: #fff; }
+  .btn-light { background: var(--gold); color: #2b1d12; }
+  .hero { min-height: 80vh; background: url(img/counter.jpg) center/cover; color: #fff; }
+  .card { border-radius: 14px; background: #fff; }
+  .stats { background: var(--brown); color: #fff; }
+  .stat strong { font-size: 3rem; display: block; }
+  @media (max-width: 600px) { .site-header { display: block; } }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo"><img src="img/logo.svg" alt="Golden Crust" width="40" height="40"> Golden Crust</a>
+  <nav>
+    <ul>
+      <li><a href="#breads">Our breads</a></li>
+      <li><a href="#about">About us</a></li>
+      <li><a href="#visit">Visit</a></li>
+    </ul>
+  </nav>
+  <a class="btn" href="#order">Order a cake</a>
+</header>
+
+<main>
+  <section class="hero" id="home">
+    <div class="hero-inner">
+      <p class="eyebrow">Brno &middot; since 1998</p>
+      <h1>Fresh bread every morning</h1>
+      <p>Sourdough, croissants and cakes, baked by hand before the sun rises.</p>
+      <a class="btn" href="#breads">See today's bread</a>
+      <a class="btn btn-light" href="#visit">Find us</a>
+    </div>
+  </section>
+
+  <section id="breads">
+    <h2>Our breads</h2>
+    <p>Everything is made from organic flour, water, salt and time.</p>
+    <div class="grid">
+      <article class="card">
+        <img src="https://images.example.com/bakery/sourdough.jpg" alt="A round sourdough loaf">
+        <h3>Sourdough loaf</h3>
+        <p>A crisp crust and a soft crumb, fermented for 24 hours.</p>
+      </article>
+      <article class="card">
+        <img src="https://images.example.com/bakery/croissant.jpg" alt="Butter croissants">
+        <h3>Croissant</h3>
+        <p>Butter, flour and patience: 27 layers in every one.</p>
+      </article>
+      <article class="card">
+        <img src="https://images.example.com/bakery/rye.jpg" alt="Dark rye bread">
+        <h3>Rye bread</h3>
+        <p>Dark, dense and full of seeds, the way grandmother baked it.</p>
+      </article>
+      <article class="card">
+        <img src="https://images.example.com/bakery/cake.jpg" alt="A cake with berries">
+        <h3>Berry cake</h3>
+        <p>Seasonal fruit on a light sponge, ordered two days ahead.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="about" class="stats">
+    <h2>About us</h2>
+    <p>Hana and Petr opened the bakery in a small shop on the square. Today twelve bakers work through the night.</p>
+    <div class="row">
+      <div class="stat"><strong>25+</strong><span>years of baking</span></div>
+      <div class="stat"><strong>12</strong><span>bakers</span></div>
+      <div class="stat"><strong>800</strong><span>loaves a day</span></div>
+    </div>
+  </section>
+
+  <section id="reviews">
+    <h2>What our customers say</h2>
+    <div class="quotes">
+      <figure class="testimonial">
+        <blockquote><p>The best sourdough in the whole city, and the croissants sell out by eight.</p></blockquote>
+        <figcaption>Jana Novak, Brno</figcaption>
+      </figure>
+      <figure class="testimonial">
+        <blockquote><p>They baked our wedding cake and every guest asked where it came from.</p></blockquote>
+        <figcaption>Tomas Dvorak, Kurim</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="visit">
+    <h2>Visit us</h2>
+    <table class="hours">
+      <tr><th>Monday - Friday</th><td>6:30 - 18:00</td></tr>
+      <tr><th>Saturday</th><td>7:00 - 12:00</td></tr>
+      <tr><th>Sunday</th><td>Closed</td></tr>
+    </table>
+    <address>Golden Crust Bakery<br>Masarykova 12<br>602 00 Brno</address>
+    <iframe src="https://www.google.com/maps?q=Masarykova%2012%2C%20Brno&amp;output=embed" title="Map" loading="lazy"></iframe>
+  </section>
+
+  <section id="order">
+    <h2>Order a cake</h2>
+    <form action="mailto:orders@goldencrust.example" method="post">
+      <label for="name">Your name</label>
+      <input id="name" name="name" required placeholder="Jana Novak">
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" required>
+      <label for="cake">Cake</label>
+      <select id="cake" name="cake"><option value="">Choose one</option><option>Berry cake</option><option>Chocolate cake</option></select>
+      <label for="msg">Message</label>
+      <textarea id="msg" name="message"></textarea>
+      <button type="submit">Send the order</button>
+    </form>
+  </section>
+</main>
+
+<footer>
+  <p>Golden Crust</p>
+  <p>Bread, pastries and cakes from Brno since 1998.</p>
+  <ul>
+    <li><a href="#breads">Our breads</a></li>
+    <li><a href="https://instagram.com/goldencrust">Instagram</a></li>
+  </ul>
+  <p><a href="tel:+420 541 000 000">+420 541 000 000</a> &middot; <a href="mailto:hello@goldencrust.example">hello@goldencrust.example</a></p>
+  <p>&copy; 2026 Golden Crust Bakery</p>
+</footer>
+<script src="/js/app.js"></script>
+<script>window.dataLayer = [];</script>
+</body>
+</html>

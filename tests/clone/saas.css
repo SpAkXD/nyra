@@ -1,0 +1,21 @@
+/* The stylesheet of saas.html: utility classes and custom properties, as a built site ships it. */
+:root {
+  --color-brand: oklch(54.6% 0.245 262.881);
+  --color-pink: #ec4899;
+  --radius-card: 1rem;
+  --font-sans: "Inter var", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", var(--font-sans);
+}
+html { font-family: var(--font-sans); }
+body { background-color: #ffffff; color: rgb(15 23 42); }
+h1, h2 { font-family: var(--font-display); }
+.bg-brand { background-color: var(--color-brand); }
+.text-brand { color: var(--color-brand); }
+.bg-pink { background-color: var(--color-pink); }
+.bg-slate-50 { background-color: rgb(248 250 252 / 1); }
+.bg-slate-900 { background-color: #0f172a; }
+.text-white { color: #fff; }
+.rounded-card { border-radius: var(--radius-card); }
+.hidden { display: none; }
+@media (min-width: 768px) { .md\:flex { display: flex; } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; }

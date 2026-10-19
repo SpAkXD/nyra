@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shipfast — Deploy previews for every pull request</title>
+  <meta property="og:site_name" content="Shipfast">
+  <meta name="description" content="Shipfast builds a live preview of every pull request in under a minute.">
+  <link rel="stylesheet" href="saas.css">
+  <script defer src="https://cdn.example.com/analytics.js"></script>
+</head>
+<body>
+  <div id="__next">
+    <div class="min-h-screen">
+      <nav class="flex items-center justify-between px-6 py-4">
+        <a href="/" class="font-bold">Shipfast</a>
+        <div class="hidden md:flex gap-6">
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#pricing">Pricing</a>
+          <a href="/docs">Docs</a>
+        </div>
+        <a href="https://app.shipfast.example/signup" class="bg-brand text-white rounded-card px-4 py-2">Start free</a>
+        <button aria-label="Open menu" class="md:hidden"><svg viewBox="0 0 24 24"><path d="M4 6h16"/></svg></button>
+      </nav>
+
+      <main>
+        <section class="px-6 py-24">
+          <div class="max-w-5xl mx-auto">
+            <span class="text-brand">New: preview comments</span>
+            <h1 class="text-6xl font-bold">Deploy previews for every pull request</h1>
+            <p class="text-xl">Shipfast builds a live copy of your app for each branch, so reviewers click instead of guessing.</p>
+            <div class="flex gap-4">
+              <a href="https://app.shipfast.example/signup" class="bg-brand text-white rounded-card px-6 py-3">Get started free</a>
+              <a href="#how" class="btn-outline">See how it works</a>
+            </div>
+            <img src="/static/dashboard.png" alt="The Shipfast dashboard with three previews" width="1200" height="700">
+          </div>
+        </section>
+
+        <section class="bg-slate-50">
+          <p>Trusted by teams at</p>
+          <div class="logos">
+            <img src="/logos/acme.svg" alt="Acme">
+            <img src="/logos/globex.svg" alt="Globex">
+            <img src="/logos/initech.svg" alt="Initech">
+            <img src="/logos/umbrella.svg" alt="Umbrella">
+          </div>
+        </section>
+
+        <section id="features" class="px-6 py-24">
+          <h2>Everything a review needs</h2>
+          <p>Previews, comments and checks in one place.</p>
+          <div class="grid grid-cols-3 gap-8">
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Instant previews</h3><p>A shareable URL for every commit, ready in about 40 seconds.</p></div>
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Comments on the page</h3><p>Reviewers pin notes to the exact button that looks wrong.</p></div>
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Checks that block</h3><p>Lighthouse, links and screenshots run before anyone merges.</p></div>
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Secrets stay secret</h3><p>Preview environments get scoped keys that expire with the branch.</p></div>
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Any framework</h3><p>Next, Remix, Astro, Rails or a plain Dockerfile.</p></div>
+            <div class="feature rounded-card"><svg class="icon"><path d="M1 1"/></svg><h3>Cheap by default</h3><p>Previews sleep after 30 minutes without a visit.</p></div>
+          </div>
+        </section>
+
+        <section id="how" class="bg-slate-50 px-6 py-24">
+          <h2>How it works</h2>
+          <ol class="steps">
+            <li><h3>Connect the repository</h3><p>Install the GitHub app and pick the repositories to watch.</p></li>
+            <li><h3>Open a pull request</h3><p>Shipfast builds the branch and posts the preview link as a comment.</p></li>
+            <li><h3>Review and merge</h3><p>The preview is deleted when the branch is merged or closed.</p></li>
+          </ol>
+        </section>
+
+        <section id="numbers" class="bg-slate-900 text-white px-6 py-16">
+          <div class="grid grid-cols-4">
+            <div><p class="text-4xl">40s</p><p>median build</p></div>
+            <div><p class="text-4xl">12,000</p><p>previews a day</p></div>
+            <div><p class="text-4xl">99.98%</p><p>uptime</p></div>
+            <div><p class="text-4xl">4.9</p><p>average rating</p></div>
+          </div>
+        </section>
+
+        <section id="pricing" class="px-6 py-24">
+          <h2>Simple pricing</h2>
+          <div class="grid grid-cols-3">
+            <div class="plan rounded-card">
+              <h3>Hobby</h3>
+              <p class="price">$0</p>
+              <ul><li>3 projects</li><li>Community support</li></ul>
+              <a href="https://app.shipfast.example/signup?plan=hobby" class="btn">Start free</a>
+            </div>
+            <div class="plan rounded-card bg-brand text-white">
+              <h3>Team</h3>
+              <p class="price">$29 per seat</p>
+              <ul><li>Unlimited projects</li><li>Preview comments</li><li>Priority support</li></ul>
+              <a href="https://app.shipfast.example/signup?plan=team" class="btn">Try Team</a>
+            </div>
+            <div class="plan rounded-card">
+              <h3>Enterprise</h3>
+              <p class="price">Let's talk</p>
+              <ul><li>SSO and audit logs</li><li>Your own cloud</li></ul>
+              <a href="mailto:sales@shipfast.example" class="btn">Contact sales</a>
+            </div>
+          </div>
+        </section>
+
+        <section id="faq" class="px-6 py-24">
+          <h2>Questions</h2>
+          <details><summary>Do previews cost extra?</summary><p>No. Every plan includes previews; they sleep when nobody looks.</p></details>
+          <details><summary>Can I use my own domain?</summary><p>Yes, on the Team plan previews can live on a subdomain of yours.</p></details>
+        </section>
+
+        <section class="bg-brand text-white px-6 py-16">
+          <h2>Ready to ship faster?</h2>
+          <a href="https://app.shipfast.example/signup" class="btn">Create your account</a>
+        </section>
+      </main>
+
+      <footer class="bg-slate-900 text-white">
+        <div class="grid grid-cols-3">
+          <div><p>Shipfast</p><p>Deploy previews for teams that review in the browser.</p></div>
+          <div><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#pricing">Pricing</a></li><li><a href="/changelog">Changelog</a></li></ul></div>
+          <div><h4>Company</h4><ul><li><a href="/about">About</a></li><li><a href="/careers">Careers</a></li></ul></div>
+        </div>
+        <p>&copy; 2026 Shipfast Inc. All rights reserved.</p>
+      </footer>
+    </div>
+  </div>
+  <script>self.__next_f = [];</script>
+</body>
+</html>

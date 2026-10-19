@@ -3,6 +3,21 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.9.0 (unreleased)
+
+Web
+- **`nyra clone <url>`** writes `site.nyra`, a `use web` program that recreates a page with the kit's components,
+  for an agent to refine (docs/CLONE.md). It reads the theme (colors, fonts, radius, light or dark) from the page's
+  stylesheets, and maps its parts to `navbar`, `hero`, `split`, sections of `card`s, `gallery`, `quote`, `stat`,
+  `steps`, `form` with `field`s, `hours`, `map`, `embed`, `table`, `list` and `footer`, keeping all visible text,
+  images (absolute URLs) and links (`#anchors` keep working). Data repeated four or more times becomes a `struct`, an
+  array and a `for` loop. The program is compiled and built in memory before it is written, and a part that does not
+  build is written again more simply. Pages are fetched with the system's `curl`; `--browser` reads the DOM a
+  headless Chrome, Edge, Brave or Chromium renders (for sites built by JavaScript); a saved `.html` file works too,
+  its local images copied into `assets/`. The summary (`--json` for agents) lists the parts, what was dropped, how
+  many words and images were kept, and the size against the original HTML and CSS. No dependencies: the HTML
+  tokenizer, the tree builder and the CSS reader are new and small (`src/clone/`).
+
 ## Unreleased (v0.8)
 
 Language
