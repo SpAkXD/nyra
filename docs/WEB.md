@@ -743,6 +743,58 @@ The build reads the finished HTML of each page, so the library is free in how it
 | `sitemap.xml`, `robots.txt` | See above; `robots.txt` names the sitemap |
 | `_headers` | The pages' policies joined, plus `frame-ancestors 'self'`, `X-Content-Type-Options` and `Referrer-Policy`, in the format of Netlify and Cloudflare Pages (the dev server sends the same header) |
 
+### Images
+
+The build has its own image codec (`src/web/img/`, zero crates). It reads:
+
+- **JPEG**: baseline and progressive, any chroma subsampling, restart markers, grayscale, Adobe RGB, CMYK and YCCK,
+  the EXIF orientation (applied, also to `width`/`height`) and the ICC profile. A photo much larger than needed is
+  decoded at 1/2, 1/4 or 1/8 of its size inside the DCT, so a 50-megapixel file never exists at full size in memory.
+- **PNG**: every color type and bit depth (16-bit too), palette transparency, interlaced files.
+- **GIF** (the first frame), **BMP**, and **WebP** (lossy, lossless, with alpha).
+- SVG, AVIF, ICO and animations (a GIF with several frames, an animated WebP) are copied as they are.
+
+For each photo it writes, next to the original:
+
+- **Variants** 480, 800, 1200, 1600 and 2400 px wide that are narrower than the photo (one within 15% of the widest is
+  left out), plus one at the photo's own width up to 2560 px. Never larger than the source. A variant that is not
+  smaller in bytes than the next wider one is left out, and when the full-size WebP is not smaller than the original
+  file, the original is the widest `srcset` entry instead.
+- **Resizing**: Lanczos3 in linear light with premultiplied alpha (colors do not darken where they mix, transparent
+  pixels do not bleed); very large reductions first halve the image with a box filter.
+- **Lossy WebP** at quality 80 (libwebp's scale): modes chosen by rate and distortion, four segments with finer
+  quantizers for smooth areas, token probabilities fitted to the image, the loop filter level searched per segment,
+  and an exact (lossless) alpha plane. **Graphics** (at most 256 colors, or mostly flat) and small images are also
+  encoded as **lossless WebP**, which is used when it is at most 25% larger (no blur on text and edges).
+- **A preview**: a WebP of at most 24 px (about 150 bytes), shown behind each lazy-loaded image as a blurred
+  `data:` background until the image arrives. The page gets one inline `<style>` with the previews, allowed by its
+  SHA-256 hash in the page's `style-src` (or by `'unsafe-inline'` when the page needs that anyway). The first image
+  of a page (`fetchpriority="high"`, preloaded) and images with transparency get none.
+- **Replacements**: a BMP, or a photo wider than 2560 px, is not copied at all (a 20 MB camera file stays out of
+  `dist/`): its widest WebP takes its place. An `og:image` or `twitter:image` that is not a JPEG or PNG, is wider than
+  2400 px or larger than 1.5 MB gets a JPEG copy 1200 px wide (quality 85, optimized Huffman tables); an image used only
+  there gets nothing else.
+
+The encoded files are cached in the temp folder under the hash of the source (`nyra/web-img`), so a rebuild takes
+milliseconds; images are processed on up to 4 threads and the variants of one image in parallel. A file the codec
+cannot read (damaged, or a format it does not know) is copied as it is and named in warning E0386.
+`--image-tool cwebp`, `magick` or `vips` uses that tool instead (the old way); `--image-tool none` copies the
+originals (also E0386).
+
+Quality, measured: file size at equal SSIM against libwebp (Pillow 12.1, libwebp 1.6, `method=4`, its default), on
+the flora photos at 1280 and 800 px, qualities 50 to 95:
+
+| Photos | Our size / libwebp's at equal SSIM |
+|---|---|
+| 11 at 1280 px | 1.01 (0.95 to 1.03) |
+| the same at 800 px | 1.01 (0.96 to 1.04) |
+
+Lossless WebP (graphics, screenshots, logos): 0.98 of libwebp's `method=4` size over 25 images. The JPEG decoder
+gives the same pixels as libjpeg-turbo; the JPEG encoder is about 5% smaller than libjpeg-turbo with optimized
+tables at equal SSIM. Speed on one core: about 0.65 s to encode a 1280 x 914 photo (libwebp `method=4`: 0.58 s). A
+50-megapixel, 21 MB JPEG gives its five variants in about 5 s with at most 125 MB of memory (it is decoded at half
+size); a 48-megapixel PNG in about 7 s and 470 MB.
+
 ### Chunk markers
 
 `src/web/kit.css` and `src/web/kit.js` are split by `/*! chunk: NAME */` lines. A chunk runs to the next marker;
@@ -1014,9 +1066,9 @@ Taken by the owner after this design was written:
 3. **Built-in UI words** for `lang: "en"` and `lang: "cs"` only: a small table (the opening-hours badge, form labels
    and placeholders, the lightbox's close and arrows, the menu, ...), each word overridable by an argument or
    `say:`. Other languages fall back to English.
-4. **Images**: with `cwebp`, `magick` or `vips` on the PATH the build writes WebP variants and `srcset`; without one
-   it copies the originals with `width`/`height`, `loading="lazy"` and `decoding="async"`. The build never fails over
-   images (E0386 is a warning).
+4. **Images**: the build writes WebP variants and `srcset` with the compiler's own codec (an outside tool only on
+   request, `--image-tool`); a file it cannot read is copied with `width`/`height`, `loading="lazy"` and
+   `decoding="async"`. The build never fails over images (E0386 is a warning).
 5. **The web card's budget is 1,400 tokens**, like the main card's.
 6. **The experiment reports both ratios**: 0.19x against plain HTML/CSS/JS and 0.48x against markup over a complete
    component kit.
