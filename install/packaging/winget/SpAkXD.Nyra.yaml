@@ -1,0 +1,7 @@
+# winget version manifest (made from install/packaging/winget/ by install/packaging/fill.sh)
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+PackageIdentifier: SpAkXD.Nyra
+PackageVersion: {{VERSION}}
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

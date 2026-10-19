@@ -22,6 +22,25 @@ Editors
   outline, formatting (`nyra.formatOnSave`) and quick fixes. Its client is a small JSON-RPC client of its own, so the
   extension still ships without `node_modules`. `nyra.path` names the `nyra` executable (default: `nyra` on `PATH`).
 
+Install and start
+- **Install scripts.** `irm https://nyralang.dev/install.ps1 | iex` (Windows, no administrator rights) and
+  `curl -fsSL https://nyralang.dev/install.sh | sh` (macOS, Linux, Git Bash) download the release for this
+  computer, check its SHA-256 against `SHA256SUMS.txt`, install `nyra` into `%LOCALAPPDATA%\Nyra\bin` or
+  `~/.nyra/bin`, add it to PATH once, register the `.nyra` file icon on Windows, and say how to get a C compiler
+  when there is none. Both take a version, can leave PATH alone, and uninstall (`install/`, `docs/INSTALL.md`).
+- **`nyra upgrade`** installs the newest release over the running `nyra` after checking its SHA-256 and that the
+  new executable starts (on Windows the running one is moved aside to `nyra.exe.old`). `--check` only reports,
+  `--version X` picks a version, `--force` reinstalls. It uses the system's `curl` and `tar`.
+- **`nyra new <kind> <name>`** starts a project: `script` (functions with `ex` tests), `cli` (arguments, standard
+  input, tests), `site` (a one-page `use web` site) or `lib` (a module of `pub` functions and a program that uses
+  it). Each has a README.md with its commands, a `.gitignore` and an AGENTS.md for AI agents. `nyra new` lists them.
+- `nyra --version` prints on standard output and exits with 0 (it printed on standard error and exited with 2).
+
+Releases
+- The Windows zip also holds `tools/windows/*-file-icon.ps1` and `assets/nyra.ico` (for the installer's file icon).
+- Each release also carries `install.sh`, `install.ps1`, a Homebrew formula (`nyra.rb`) and winget manifests,
+  filled for that release by `install/packaging/fill.sh`. They are not submitted to Homebrew or winget yet.
+
 ## Unreleased (v0.8)
 
 Language

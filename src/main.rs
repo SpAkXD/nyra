@@ -22,10 +22,15 @@ mod lsp;
 mod mcp;
 mod mem;
 mod modules;
+// `nyra new` and `nyra upgrade` write files and start processes: not in the WebAssembly build
+#[cfg(not(target_arch = "wasm32"))]
+mod new;
 mod parser;
 mod perfwarn;
 mod sandbox;
 mod stdlib;
+#[cfg(not(target_arch = "wasm32"))]
+mod upgrade;
 mod web;
 mod webcheck;
 // the C-ABI entry points of the WebAssembly build (`src/lib.rs`); natively only for their tests
@@ -52,6 +57,8 @@ usage:
   nyra outline <file.nyra>  list the functions and structs with their lines
   nyra show <file.nyra> <name>    print one function, struct or Struct.field
   nyra edit <file.nyra>     change symbols by name (`nyra edit --help`)
+  nyra new <kind> <name>    start a project: script, cli, site or lib (`nyra new` lists them)
+  nyra upgrade [--check]    install the newest release over this nyra (`nyra upgrade --help`)
   nyra <file.nyra>          same as `nyra run`
 
 options:
@@ -435,6 +442,17 @@ fn real_main() -> ExitCode {
     }
     if let Some(cmd @ ("outline" | "show" | "edit")) = std::env::args().nth(1).as_deref() {
         return edit::run(cmd, std::env::args().skip(2).collect());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    match std::env::args().nth(1).as_deref() {
+        Some("new") => return new::run(std::env::args().skip(2).collect()),
+        Some("upgrade") => return upgrade::run(std::env::args().skip(2).collect()),
+        // on stdout with success, so scripts and installers can read it
+        Some("-V" | "--version" | "version") if std::env::args().len() == 2 => {
+            println!("nyra {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
     let opts = match parse_args() {
         Ok(o) => o,
