@@ -11,9 +11,11 @@
 //! `clone_to_nyra` is the whole conversion of a fetched page, for the command line here and
 //! for a later MCP tool.
 
+mod cdp;
 mod css;
 mod dom;
 mod fetch;
+mod motion;
 mod read;
 mod write;
 
@@ -59,6 +61,16 @@ pub struct CloneResult {
     pub errors: Vec<String>,
     /// True if the check ran.
     pub checked: bool,
+    /// What the page does that needs a server (the program has a `// TODO(server)` note for each).
+    pub server: Vec<String>,
+    /// The motion found: (what, the word it became, how many).
+    pub motion: Vec<(String, String, usize)>,
+    /// How many motion options the program writes (`anim:`, `hover:`, `loop:`, `scroll:`).
+    pub motion_used: usize,
+    /// Videos that play in the program (players, embeds, video thumbnails).
+    pub videos: usize,
+    /// The label of the consent button `--browser` clicked (the most private choice), or "".
+    pub consent: String,
 }
 
 /// Converts a page: `html` is the page, `base_url` its address (relative links and images are
@@ -98,7 +110,8 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
         }
     }
     let styles = css::Styles::compute(&doc, &sheet, &base);
-    let page = read::Reader::new(&doc, &styles, &base, opts.local_dir.clone()).read();
+    let motions = motion::detect(&doc, &styles, &sheet);
+    let page = read::Reader::new(&doc, &styles, &base, opts.local_dir.clone(), motions).read();
 
     let source_label = if opts.source.is_empty() { base.clone() } else { opts.source.clone() };
     let dir = opts.out_dir.clone().unwrap_or_else(|| std::env::temp_dir().join("nyra-clone-check"));
@@ -111,6 +124,7 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
         let (id, title) = match *p {
             write::NAV => (String::new(), page.nav.as_ref().map(|n| read::md_plain(&n.brand)).unwrap_or_default()),
             write::FOOT => (page.footer.as_ref().map(|f| f.id.clone()).unwrap_or_default(), String::new()),
+            write::SIDE => (String::new(), format!("{} links", page.side.as_ref().map_or(0, |sd| sd.links.iter().filter(|l| !l.1.is_empty()).count()))),
             i => {
                 let s = &page.sections[i];
                 let title = if s.kind == read::Kind::Split { format!("{} panels", s.panels.len()) } else { read::md_plain(&s.title) };
@@ -147,6 +161,7 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
     }
     let kept_images = page.images.iter().filter(|u| written.src.contains(u.as_str())).count();
     let words = coverage(&page.words, &written.src);
+    let motion_used = ["anim: \"", "hover: \"", "loop: \"", "scroll: \""].iter().map(|k| written.src.matches(k).count()).sum();
     CloneResult {
         source: written.src,
         parts,
@@ -158,8 +173,14 @@ pub fn clone_to_nyra(html: &str, base_url: &str, opts: &CloneOptions) -> CloneRe
         simplified,
         errors,
         checked: opts.check,
+        server: page.server.clone(),
+        motion: page.motion.iter().map(|((what, word), n)| (what.clone(), word.clone(), *n)).collect(),
+        motion_used,
+        videos: page.videos,
+        consent: String::new(),
     }
 }
+
 
 /// (words of the page, how many of them the program has): words are compared as lowercase runs
 /// of letters and digits, so Markdown and escapes do not count against the program.
@@ -181,7 +202,7 @@ fn settle(page: &read::Page, source: &str, check_in: Option<&Path>) -> (write::W
     let mut simplified = Vec::new();
     let mut errors = Vec::new();
     let part_count = page.sections.len();
-    let all_parts: Vec<usize> = (0..part_count).chain([write::NAV, write::FOOT]).collect();
+    let all_parts: Vec<usize> = (0..part_count).chain([write::NAV, write::FOOT, write::SIDE]).collect();
     let mut written = write::write(page, &levels, source);
     let Some(dir) = check_in else { return (written, levels, simplified, errors) };
     for _round in 0..(part_count * 2 + 8) {
@@ -231,6 +252,7 @@ fn part_name(page: &read::Page, p: usize) -> String {
     match p {
         write::NAV => "navbar".into(),
         write::FOOT => "footer".into(),
+        write::SIDE => "sidebar".into(),
         i => {
             let s = &page.sections[i];
             if !s.id.is_empty() {
@@ -354,6 +376,10 @@ pub fn cli(args: Vec<String>) -> ExitCode {
         Ok(p) => p,
         Err(e) => return fail(json, &e),
     };
+    // the page as it was read (with --browser: the rendered DOM and its hints), for debugging
+    if let Some(save) = std::env::var_os("NYRA_CLONE_SAVE") {
+        let _ = std::fs::write(save, &page.text);
+    }
     let base_url = match (&base, is_url) {
         (Some(b), _) => b.clone(),
         (None, true) => page.url.clone(),
@@ -380,7 +406,8 @@ pub fn cli(args: Vec<String>) -> ExitCode {
         out_dir: Some(out_dir.clone()),
         source: if is_url { target.clone() } else { target.replace('\\', "/") },
     };
-    let result = clone_to_nyra(&page.text, &base_url, &opts);
+    let mut result = clone_to_nyra(&page.text, &base_url, &opts);
+    result.consent = page.consent.clone();
     if !result.assets.is_empty() {
         let dir = out_dir.join("assets");
         if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -392,6 +419,7 @@ pub fn cli(args: Vec<String>) -> ExitCode {
             }
         }
     }
+    let _ = std::fs::create_dir_all(&out_dir);
     if let Err(e) = std::fs::write(&out_path, &result.source) {
         return fail(json, &format!("cannot write `{out}`: {e}"));
     }
@@ -518,9 +546,25 @@ fn summary(r: &CloneResult, out: &str, target: &str, html: usize, css: usize) ->
         let t = if title.is_empty() { String::new() } else { format!("  \"{}\"", shorten(title, 60)) };
         s.push_str(&format!("  {name:<22} {what}{t}\n"));
     }
+    if !r.consent.is_empty() {
+        s.push_str(&format!("  consent   turned the cookie dialog down (clicked \"{}\")\n", shorten(&r.consent, 40)));
+    }
     let (w, kw) = r.words;
     let pct = (kw.min(w) * 100).checked_div(w).unwrap_or(100);
     s.push_str(&format!("  kept      {} of {} words of text ({pct}%), {} of {} images\n", kw.min(w), w, r.images.1, r.images.0));
+    if r.videos > 0 {
+        s.push_str(&format!("  videos    {} that play here (a player loads from the video site only when clicked)\n", r.videos));
+    }
+    if !r.motion.is_empty() {
+        let mut found: Vec<&(String, String, usize)> = r.motion.iter().collect();
+        found.sort_by(|a, b| b.2.cmp(&a.2));
+        let list: Vec<String> = found.iter().take(8).map(|(what, word, n)| format!("{what} x{n} -> {word}")).collect();
+        let more = if found.len() > 8 { format!(", and {} more", found.len() - 8) } else { String::new() };
+        s.push_str(&format!("  motion    {}{more}; the program has {} motion options\n", list.join(", "), r.motion_used));
+    }
+    if !r.server.is_empty() {
+        s.push_str(&format!("  server    needs a server: {} (see the `// TODO(server)` notes)\n", r.server.join(", ")));
+    }
     if !r.dropped.is_empty() {
         s.push_str(&format!("  dropped   {}\n", r.dropped.iter().map(|(k, n)| format!("{n} {k}")).collect::<Vec<_>>().join(", ")));
     }
@@ -566,7 +610,7 @@ fn summary_json(r: &CloneResult, out: &str, target: &str, html: usize, css: usiz
     let list = |v: &[String]| v.iter().map(|x| json_str(x)).collect::<Vec<_>>().join(",");
     let assets: Vec<String> = r.assets.iter().map(|(_, n)| n.clone()).collect();
     format!(
-        "{{\"ok\":{},\"url\":{},\"out\":{},\"parts\":[{}],\"theme\":{{{}}},\"kept\":{{\"words\":{},\"of_words\":{},\"images\":{},\"of_images\":{}}},\"dropped\":{{{}}},\"assets\":[{}],\"simplified\":[{}],\"errors\":[{}],\"bytes\":{{\"html\":{html},\"css\":{css},\"nyra\":{}}},\"tokens\":{{\"original\":{},\"nyra\":{}}}}}",
+        "{{\"ok\":{},\"url\":{},\"out\":{},\"parts\":[{}],\"theme\":{{{}}},\"kept\":{{\"words\":{},\"of_words\":{},\"images\":{},\"of_images\":{}}},\"dropped\":{{{}}},\"assets\":[{}],\"simplified\":[{}],\"errors\":[{}],\"server\":[{}],\"motion\":[{}],\"videos\":{},\"consent\":{},\"bytes\":{{\"html\":{html},\"css\":{css},\"nyra\":{}}},\"tokens\":{{\"original\":{},\"nyra\":{}}}}}",
         r.errors.is_empty(),
         json_str(target),
         json_str(out),
@@ -580,6 +624,10 @@ fn summary_json(r: &CloneResult, out: &str, target: &str, html: usize, css: usiz
         list(&assets),
         list(&r.simplified),
         list(&r.errors),
+        list(&r.server),
+        r.motion.iter().map(|(w, m, n)| format!("{{\"found\":{},\"word\":{},\"count\":{n}}}", json_str(w), json_str(m))).collect::<Vec<_>>().join(","),
+        r.videos,
+        json_str(&r.consent),
         r.source.len(),
         tokens(html + css),
         tokens(r.source.len()),

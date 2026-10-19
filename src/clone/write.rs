@@ -7,11 +7,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::read::{md_plain, slug, Card, Field, Form, Item, Kind, Page, Quote, Section};
+use super::read::{md_plain, slug, Card, Field, Form, Item, Kind, MediaItem, Mo, Page, Quote, Section};
 
 /// Ids of the parts that are not sections.
 pub const NAV: usize = usize::MAX - 1;
 pub const FOOT: usize = usize::MAX;
+/// The side navigation of an app layout (`sidebar(...) { sections }`).
+pub const SIDE: usize = usize::MAX - 3;
 
 /// How simply a part is written: 0 with the kit's components, 1 with plain elements (headings,
 /// paragraphs, images, lists), 2 with paragraphs only. A navbar or footer at level 2 is left out.
@@ -156,12 +158,28 @@ struct W<'a> {
     components: Vec<(usize, String)>,
     has_h1: bool,
     code: bool,
+    /// A grid with category buttons was written (the program's one `enum Msg`).
+    live: bool,
+    tabs: usize,
 }
 
 pub fn write(page: &Page, levels: &Levels, source: &str) -> Written {
-    let mut w = W { page, levels, names: HashSet::new(), decls: Vec::new(), components: Vec::new(), has_h1: false, code: false };
+    let mut w = W {
+        page,
+        levels,
+        names: HashSet::new(),
+        decls: Vec::new(),
+        components: Vec::new(),
+        has_h1: false,
+        code: false,
+        live: false,
+        tabs: 0,
+    };
     // the body of the page, part by part
     let mut body: Vec<(usize, Vec<String>)> = Vec::new();
+    for t in &page.todo_top {
+        body.push((NAV, vec![format!("    // TODO(server): {}", t.replace('\n', " "))]));
+    }
     if let Some(nav) = &page.nav {
         if w.level(NAV) < 2 {
             body.push((NAV, vec![w.navbar(nav)]));
@@ -169,11 +187,22 @@ pub fn write(page: &Page, levels: &Levels, source: &str) -> Written {
         }
     }
     w.has_h1 = page.sections.iter().enumerate().any(|(i, s)| s.kind == Kind::Hero && w.level(i) < 2);
+    // an app layout: the sections inside `sidebar(links) { ... }`
+    let side = page.side.as_ref().filter(|sd| !sd.links.is_empty() && w.level(SIDE) == 0);
+    if let Some(sd) = side {
+        let l: Vec<String> = sd.links.iter().map(|(a, b)| format!("({}, {})", lit(a), lit(b))).collect();
+        body.push((SIDE, wrap_list("    ", "sidebar(", &l, "]) {")));
+        w.components.push((SIDE, "sidebar".into()));
+    }
     for (i, s) in page.sections.iter().enumerate() {
         let lines = w.section(i, s);
         if !lines.is_empty() {
+            let lines = if side.is_some() { lines.into_iter().map(|l| indent(&l)).collect() } else { lines };
             body.push((i, lines));
         }
+    }
+    if side.is_some() {
+        body.push((SIDE, vec!["    }".into()]));
     }
     if let Some(f) = &page.footer {
         if w.level(FOOT) < 2 {
@@ -189,6 +218,13 @@ pub fn write(page: &Page, levels: &Levels, source: &str) -> Written {
     lines.push("use web".into());
     lines.push(String::new());
     lines.push(w.site());
+    // the custom motion words the program uses
+    let used: String = body.iter().flat_map(|(_, b)| b.iter()).chain(w.decls.iter().flat_map(|(_, d)| d.iter())).cloned().collect::<Vec<_>>().join("\n");
+    for (name, kf) in &page.keyframes {
+        if used.contains(&format!("\"{name}\"")) || used.contains(&format!(" {name}\"")) {
+            lines.push(format!("keyframes({}, {})", lit(name), lit(kf)));
+        }
+    }
     if w.code {
         lines.push("css(\"pre {{ overflow-x: auto; padding: 1rem 1.25rem; border-radius: 12px; background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: .875rem; line-height: 1.55 }} pre code {{ padding: 0; background: none }}\")".into());
     }
@@ -358,7 +394,7 @@ impl W<'_> {
             }
             // the kit's hero is a photo or a colored band; a hero on the page's own background is
             // closer as a section that starts with the h1
-            (Kind::Hero, 0) if !s.image.is_empty() || !s.bg.is_empty() => {
+            (Kind::Hero, 0) if (!s.image.is_empty() || !s.bg.is_empty()) && s.aside.is_none() => {
                 self.components.push((i, "hero".into()));
                 let mut args = vec![lit(&s.title)];
                 if !s.kicker.is_empty() {
@@ -377,6 +413,9 @@ impl W<'_> {
                 }
                 if !s.id.is_empty() {
                     args.push(format!("id: {}", lit(&s.id)));
+                }
+                if !s.mo.anim.is_empty() {
+                    args.push(format!("anim: {}", lit(&s.mo.anim)));
                 }
                 return wrap_call("    ", "hero", &args, "");
             }
@@ -404,14 +443,36 @@ impl W<'_> {
         if self.page.theme.left && !title.is_empty() && !hero_simple {
             args.push("align: \"left\"".into());
         }
-        if self.page.theme.narrow {
+        if self.page.theme.narrow && self.page.side.is_none() {
             args.push("width: \"narrow\"".into());
+        }
+        if level == 0 {
+            let mo = Mo { hover: String::new(), looping: String::new(), ..s.mo.clone() };
+            args.extend(mo.args());
         }
         if args.first().is_some_and(|a| a == "\"\"") && args.len() == 1 {
             args.clear();
         }
         let mut kids = Vec::new();
-        if hero_simple {
+        if let (true, Some((src, alt, mo)), 0) = (hero_simple, &s.aside, level) {
+            // the text and the picture side by side
+            kids.push("        grid(2, align: \"center\") {".into());
+            kids.push("            stack {".into());
+            if !s.kicker.is_empty() {
+                kids.push(format!("                small({})", lit(&s.kicker)));
+            }
+            kids.push(format!("                h1({})", lit(&title)));
+            if !s.text.is_empty() {
+                kids.push(format!("                p({}, size: \"lg\")", lit(&s.text)));
+            }
+            if !s.buttons.is_empty() {
+                kids.push(self.buttons(&s.buttons, "                "));
+            }
+            kids.push("            }".into());
+            let m: String = mo.args().iter().map(|a| format!(", {a}")).collect();
+            kids.push(format!("            img({}, {}, fit: \"contain\"{m})", lit(src), lit(alt)));
+            kids.push("        }".into());
+        } else if hero_simple {
             if !s.kicker.is_empty() {
                 kids.push(format!("        small({})", lit(&s.kicker)));
             }
@@ -465,9 +526,24 @@ impl W<'_> {
                 };
                 out.push(format!("{ind}{tag}({}{id})", lit(t)));
             }
-            Item::Img { src, alt, caption } => {
+            Item::Img { src, alt, caption, mo, width, .. } => {
                 let cap = if caption.is_empty() { String::new() } else { format!(", caption: {}", lit(caption)) };
-                out.push(format!("{ind}img({}, {}{cap})", lit(src), lit(alt)));
+                let w = if width.is_empty() { String::new() } else { format!(", width: {}", lit(width)) };
+                let m: String = mo.args().iter().map(|a| format!(", {a}")).collect();
+                out.push(format!("{ind}img({}, {}{cap}{w}{m})", lit(src), lit(alt)));
+            }
+            Item::TabLinks(tabs) => {
+                if level > 0 {
+                    let l: Vec<String> = tabs.iter().map(|(a, h, _)| lit(&format!("[{a}]({h})"))).collect();
+                    out.extend(wrap_list(ind, "list(", &l, "])"));
+                    return;
+                }
+                out.push(format!("{ind}row {{"));
+                for (label, href, on) in tabs {
+                    let style = if *on { "primary" } else { "ghost" };
+                    out.push(format!("{ind}    button({}, {}, style: \"{style}\", size: \"sm\")", lit(label), lit(href)));
+                }
+                out.push(format!("{ind}}}"));
             }
             Item::Buttons(b) => out.push(self.buttons(b, ind)),
             Item::List { items, ordered } => {
@@ -593,6 +669,121 @@ impl W<'_> {
                 out.push(format!("{ind}address {{"));
                 for l in lines {
                     out.push(format!("{ind}    p({})", lit(l)));
+                }
+                out.push(format!("{ind}}}"));
+            }
+            Item::Todo(t) => out.push(format!("{ind}// TODO(server): {}", t.replace('\n', " "))),
+            Item::Search(hint) => {
+                if level == 0 {
+                    out.push(if hint.is_empty() { format!("{ind}search()") } else { format!("{ind}search({})", lit(hint)) });
+                }
+            }
+            Item::Moved { mo, item } => {
+                if level > 0 {
+                    self.item(part, item, ind, level, out, s);
+                    return;
+                }
+                match &**item {
+                    Item::Media { cols, items, cats } => self.media(part, *cols, items, cats, mo, ind, out, s),
+                    Item::Stats(st) if mo.anim == "count" => {
+                        let rest = Mo { anim: String::new(), ..mo.clone() };
+                        let extra = rest.args();
+                        let tail = if extra.is_empty() { String::new() } else { format!(", {}", extra.join(", ")) };
+                        out.push(format!("{ind}grid({}{tail}) {{", st.len().min(4)));
+                        for (v, l) in st {
+                            out.push(format!("{ind}    stat({}, {}, anim: \"count\")", lit(v), lit(l)));
+                        }
+                        out.push(format!("{ind}}}"));
+                    }
+                    inner => {
+                        let mut lines = Vec::new();
+                        self.item(part, inner, ind, level, &mut lines, s);
+                        let mut lines: Vec<String> = lines.into_iter().flat_map(|l| l.split('\n').map(String::from).collect::<Vec<_>>()).collect();
+                        inject(&mut lines, &mo.args());
+                        out.extend(lines);
+                    }
+                }
+            }
+            Item::Media { cols, items, cats } => {
+                if level > 0 {
+                    for m in items {
+                        out.push(format!("{ind}h3({})", lit(&m.title)));
+                        for t in [&m.price, &m.meta, &m.badge] {
+                            if !t.is_empty() {
+                                out.push(format!("{ind}p({})", lit(t)));
+                            }
+                        }
+                        if !m.image.is_empty() && level < 2 {
+                            out.push(format!("{ind}img({}, {})", lit(&m.image), lit(&m.alt)));
+                        }
+                    }
+                    return;
+                }
+                self.media(part, *cols, items, cats, &Mo::default(), ind, out, s);
+            }
+            Item::Video { src, poster, title } => {
+                if level > 0 {
+                    let label = if title.is_empty() { "Video".to_string() } else { title.clone() };
+                    out.push(format!("{ind}p({})", lit(&format!("[{}]({src})", super::read::md_escape(&label)))));
+                    return;
+                }
+                let mut args = vec![lit(src)];
+                if !poster.is_empty() {
+                    args.push(format!("poster: {}", lit(poster)));
+                }
+                if !title.is_empty() {
+                    args.push(format!("title: {}", lit(title)));
+                }
+                out.extend(wrap_call(ind, "video", &args, ""));
+            }
+            Item::Tabs { labels, panels } => {
+                if level > 0 {
+                    for (l, p) in labels.iter().zip(panels) {
+                        out.push(format!("{ind}h3({})", lit(l)));
+                        for it in p {
+                            self.item(part, it, ind, level, out, s);
+                        }
+                    }
+                    return;
+                }
+                self.tabs += 1;
+                let id = if self.tabs == 1 { String::new() } else { format!(", id: \"tabs-{}\"", self.tabs) };
+                let l: Vec<String> = labels.iter().map(|x| lit(x)).collect();
+                out.push(format!("{ind}tabs([{}]{id}) {{", l.join(", ")));
+                let inner = format!("{ind}    ");
+                for p in panels {
+                    let mut lines = Vec::new();
+                    for it in p {
+                        self.item(part, it, &format!("{inner}    "), level, &mut lines, s);
+                    }
+                    if lines.is_empty() {
+                        out.push(format!("{inner}p(\"\")"));
+                    } else {
+                        out.push(format!("{inner}stack {{"));
+                        out.extend(lines);
+                        out.push(format!("{inner}}}"));
+                    }
+                }
+                out.push(format!("{ind}}}"));
+            }
+            Item::Marquee(words) => {
+                let l: Vec<String> = words.iter().map(|x| lit(x)).collect();
+                if level > 0 {
+                    out.extend(wrap_list(ind, "list(", &l, "])"));
+                } else {
+                    out.extend(wrap_list(ind, "marquee(", &l, "])"));
+                }
+            }
+            Item::Strip(photos) => {
+                if level > 0 {
+                    for (src, alt) in photos {
+                        out.push(format!("{ind}img({}, {})", lit(src), lit(alt)));
+                    }
+                    return;
+                }
+                out.push(format!("{ind}row(loop: \"marquee\") {{"));
+                for (src, alt) in photos {
+                    out.push(format!("{ind}    img({}, {}, fit: \"contain\")", lit(src), lit(alt)));
                 }
                 out.push(format!("{ind}}}"));
             }
@@ -734,6 +925,8 @@ impl W<'_> {
                 items: Vec::new(),
                 panels: Vec::new(),
                 level: 0,
+                mo: super::read::Mo::default(),
+                aside: None,
             };
             for e in &c.extra {
                 // a nested grid inside a card stays simple
@@ -774,6 +967,103 @@ impl W<'_> {
                 out.push(format!("{ind}p({})", lit(&t)));
             }
         }
+    }
+
+    /// A grid of thumbnails: with four or more, a struct, an array and a loop; with categories,
+    /// buttons that filter it (a live view: `enum Msg`, `fn update`).
+    #[allow(clippy::too_many_arguments)]
+    fn media(&mut self, part: usize, cols: usize, items: &[MediaItem], cats: &[String], mo: &Mo, ind: &str, out: &mut Vec<String>, s: &Section) {
+        let priced = items.iter().any(|m| !m.price.is_empty());
+        let ratio = if priced { ", ratio: \"1/1\"" } else { "" };
+        let grid_args = {
+            let a = mo.args();
+            if a.is_empty() {
+                String::new()
+            } else {
+                format!(", {}", a.join(", "))
+            }
+        };
+        let field = |m: &MediaItem, f: &str| -> String {
+            match f {
+                "title" => m.title.clone(),
+                "image" => m.image.clone(),
+                "alt" => {
+                    if m.alt != md_plain(&m.title) {
+                        m.alt.clone()
+                    } else {
+                        String::new()
+                    }
+                }
+                "href" => m.href.clone(),
+                "meta" => m.meta.clone(),
+                "badge" => m.badge.clone(),
+                "price" => m.price.clone(),
+                "tag" => m.tag.clone(),
+                _ => String::new(),
+            }
+        };
+        let fields: Vec<&str> = ["title", "image", "alt", "href", "meta", "badge", "price", "tag"]
+            .into_iter()
+            .filter(|f| *f == "title" || items.iter().any(|m| !field(m, f).is_empty()))
+            .collect();
+        let call = |x: &str| -> String {
+            let mut a = vec![format!("{x}.title")];
+            for f in ["image", "alt", "href", "meta", "badge", "price"] {
+                if fields.contains(&f) {
+                    a.push(format!("{f}: {x}.{f}"));
+                }
+            }
+            if fields.contains(&"tag") {
+                a.push(format!("tag: {x}.tag"));
+            }
+            format!("media({}{ratio})", a.join(", "))
+        };
+        if items.len() < 4 {
+            out.push(format!("{ind}grid({cols}{grid_args}) {{"));
+            for m in items {
+                let mut a = vec![lit(&m.title)];
+                for f in ["image", "alt", "href", "meta", "badge", "price", "tag"] {
+                    let v = field(m, f);
+                    if !v.is_empty() {
+                        a.push(format!("{f}: {}", lit(&v)));
+                    }
+                }
+                out.push(format!("{ind}    media({}{ratio})", a.join(", ")));
+            }
+            out.push(format!("{ind}}}"));
+            return;
+        }
+        let (ty, var) = self.data_names(s);
+        let mut decl = vec![format!("struct {ty} {{ {} }}", fields.iter().map(|f| format!("{f}: str")).collect::<Vec<_>>().join(", "))];
+        decl.push(format!("let {var} = ["));
+        for (k, m) in items.iter().enumerate() {
+            let vals: Vec<String> = fields.iter().map(|f| format!("{f}: {}", lit(&field(m, f)))).collect();
+            decl.push(format!("    {ty}({}){}", vals.join(", "), if k + 1 < items.len() { "," } else { "" }));
+        }
+        decl.push("]".into());
+        if !cats.is_empty() && !self.live && fields.contains(&"tag") {
+            // the categories filter the grid: a live view
+            self.live = true;
+            let all = "All".to_string();
+            let names: Vec<String> = std::iter::once(&all).chain(cats.iter()).map(|c| lit(c)).collect();
+            decl.push(String::new());
+            decl.push("enum Msg { Show(str) }".into());
+            decl.push("var shown = \"All\"".into());
+            decl.push("fn update(m: Msg) { match m { Msg.Show(k) => shown = k } }".into());
+            decl.push(format!("fn {var}_view() -> Node = stack {{"));
+            decl.push(format!("    row {{ for k in [{}] {{ button(k, on: Msg.Show(k), active: k == shown) }} }}", names.join(", ")));
+            decl.push(format!("    grid({cols}{grid_args}) {{"));
+            decl.push(format!("        for c in {var}.filter(x => shown == \"All\" || x.tag == shown) {{ {} }}", call("c")));
+            decl.push("    }".into());
+            decl.push("}".into());
+            self.decls.push((part, decl));
+            out.push(format!("{ind}{var}_view()"));
+            return;
+        }
+        self.decls.push((part, decl));
+        out.push(format!("{ind}grid({cols}{grid_args}) {{"));
+        out.push(format!("{ind}    for c in {var} {{ {} }}", call("c")));
+        out.push(format!("{ind}}}"));
     }
 
     /// A struct name and an array name for a section's data, from its title or id.
@@ -916,6 +1206,55 @@ fn text_of(it: &Item) -> Vec<String> {
         Item::Embed { title, .. } => vec![super::read::md_escape(title)],
         Item::Address(l) => l.clone(),
         Item::Code(c) => vec![format!("`{}`", c.replace('`', "'").replace('\n', " "))],
+        Item::Moved { item, .. } => text_of(item),
+        Item::Media { items, .. } => items
+            .iter()
+            .flat_map(|m| [m.title.clone(), m.price.clone(), m.meta.clone(), m.badge.clone()])
+            .filter(|t| !t.is_empty())
+            .collect(),
+        Item::Video { title, .. } => {
+            if title.is_empty() {
+                vec![]
+            } else {
+                vec![super::read::md_escape(title)]
+            }
+        }
+        Item::Tabs { labels, panels } => labels.iter().cloned().chain(panels.iter().flatten().flat_map(text_of)).collect(),
+        Item::Marquee(w) => w.clone(),
+        Item::Strip(p) => p.iter().map(|x| super::read::md_escape(&x.1)).filter(|t| !t.is_empty()).collect(),
+        Item::Search(_) | Item::Todo(_) => vec![],
+        Item::TabLinks(t) => t.iter().map(|x| x.0.clone()).collect(),
+    }
+}
+
+/// Four more spaces at the start of a line (each line of a multi-line entry).
+fn indent(l: &str) -> String {
+    l.split('\n').map(|x| if x.is_empty() { String::new() } else { format!("    {x}") }).collect::<Vec<_>>().join("\n")
+}
+
+/// Adds arguments to the call an item starts with (`grid(3) {` -> `grid(3, anim: "stagger") {`,
+/// `row {` -> `row(anim: "rise") {`), or to the call it is (`gallery([...])`).
+fn inject(lines: &mut [String], args: &[String]) {
+    if args.is_empty() || lines.is_empty() {
+        return;
+    }
+    let extra = args.join(", ");
+    let first = lines[0].trim_end().to_string();
+    if let Some(head) = first.strip_suffix(" {") {
+        lines[0] = match head.strip_suffix(')') {
+            Some(h) if h.ends_with('(') => format!("{h}{extra}) {{"),
+            Some(h) => format!("{h}, {extra}) {{"),
+            None => format!("{head}({extra}) {{"),
+        };
+        return;
+    }
+    if let Some(last) = lines.last_mut() {
+        if last.trim_start().starts_with("//") {
+            return;
+        }
+        if let Some(at) = last.rfind(')') {
+            last.insert_str(at, &format!(", {extra}"));
+        }
     }
 }
 

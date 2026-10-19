@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clipshelf — videos from small workshops</title>
+  <meta property="og:site_name" content="Clipshelf">
+  <style>
+    body { background: #fafafa; color: #1d1d1f; font-family: "Work Sans", sans-serif; }
+    .top { display: flex; align-items: center; gap: 2rem; }
+    .btn { background: #d92d20; color: #fff; border-radius: 999px; }
+    .layout { display: grid; grid-template-columns: 240px 1fr; }
+    .clip { border-radius: 12px; transition: transform .3s; }
+    .clip:hover { transform: translateY(-4px); }
+    .clip .thumb img { transition: transform .5s; }
+    .badge-live { animation: float 4s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+    .comment-list li { list-style: none; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="/" class="logo">Clipshelf</a>
+    <form role="search" action="/results">
+      <input type="search" name="search_query" placeholder="Search Clipshelf">
+      <button type="submit">Search</button>
+    </form>
+    <a href="https://accounts.clipshelf.example/login" class="btn">Sign in</a>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="guide">
+      <nav>
+        <a href="/"><svg viewBox="0 0 24 24"><path d="M3 10l9-7 9 7"/></svg><span>Home</span></a>
+        <a href="/feed/history"><svg viewBox="0 0 24 24"><path d="M12 8v4"/></svg><span>History</span></a>
+        <a href="/feed/subscriptions"><svg viewBox="0 0 24 24"><path d="M4 4h16"/></svg><span>Subscriptions</span></a>
+        <h3>Explore</h3>
+        <a href="/music"><svg viewBox="0 0 24 24"><path d="M9 18V5"/></svg><span>Music</span></a>
+        <a href="/learning"><svg viewBox="0 0 24 24"><path d="M2 10l10-5"/></svg><span>Learning</span></a>
+        <a href="/gaming"><span>Woodwork</span></a>
+        <p>Sign in to like videos, comment and subscribe.</p>
+        <a href="/about">About</a>
+      </nav>
+    </aside>
+
+    <main>
+      <section id="latest" data-aos="fade-up">
+        <h1>Latest from the workshops</h1>
+        <p>New videos from makers, repairers and small studios, every day.</p>
+        <img class="badge-live" src="https://img.clipshelf.example/live.png" alt="Live now: 3 workshops" width="200" height="60">
+        <div class="grid">
+          <div class="clip">
+            <a class="thumb" href="https://www.youtube.com/watch?v=aqz-KE-bpKQ"><img src="https://img.clipshelf.example/t/1.jpg" alt="" width="320" height="180"><span class="duration">9:56</span></a>
+            <h3><a href="https://www.youtube.com/watch?v=aqz-KE-bpKQ">Restoring a 1950s hand plane</a></h3>
+            <p class="meta"><span>Oak &amp; Iron</span> <span>12K views</span> <span>2 days ago</span></p>
+          </div>
+          <div class="clip">
+            <a class="thumb" href="https://www.youtube.com/watch?v=ScMzIvxBSi4"><img src="https://img.clipshelf.example/t/2.jpg" alt="" width="320" height="180"><span class="duration">14:03</span></a>
+            <h3><a href="https://www.youtube.com/watch?v=ScMzIvxBSi4">Hand-cut dovetails for beginners</a></h3>
+            <p class="meta"><span>Bench Notes</span> <span>48K views</span> <span>1 week ago</span></p>
+          </div>
+          <div class="clip">
+            <a class="thumb" href="https://youtu.be/jNQXAC9IVRw"><img src="https://img.clipshelf.example/t/3.jpg" alt="" width="320" height="180"><span class="duration">0:19</span></a>
+            <h3><a href="https://youtu.be/jNQXAC9IVRw">A short tour of the new studio</a></h3>
+            <p class="meta"><span>Clipshelf</span> <span>3.1K views</span> <span>3 weeks ago</span></p>
+          </div>
+          <div class="clip">
+            <a class="thumb" href="https://vimeo.com/76979871"><img src="https://img.clipshelf.example/t/4.jpg" alt="" width="320" height="180"><span class="duration">1:02:44</span></a>
+            <h3><a href="https://vimeo.com/76979871">Building a chair, start to finish</a></h3>
+            <p class="meta"><span>Slow Furniture</span> <span>220K views</span> <span>1 month ago</span></p>
+          </div>
+          <div class="clip">
+            <a class="thumb" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"><img src="https://img.clipshelf.example/t/5.jpg" alt="" width="320" height="180"><span class="duration">3:33</span></a>
+            <h3><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Sharpening chisels on water stones</a></h3>
+            <p class="meta"><span>Edge Lab</span> <span>9.4K views</span> <span>2 months ago</span></p>
+          </div>
+          <div class="clip">
+            <a class="thumb" href="https://www.youtube.com/watch?v=9bZkp7q19f0"><img src="https://img.clipshelf.example/t/6.jpg" alt="" width="320" height="180"><span class="duration">4:12</span></a>
+            <h3><a href="https://www.youtube.com/watch?v=9bZkp7q19f0">Finishing oak with hard wax oil</a></h3>
+            <p class="meta"><span>Oak &amp; Iron</span> <span>31K views</span> <span>5 months ago</span></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="comments">
+        <h2>Comments</h2>
+        <ul class="comment-list">
+          <li><img src="https://img.clipshelf.example/a/1.jpg" alt="" width="40" height="40" data-dropped><strong>@mira_makes</strong> <span>2 days ago</span><p>The plane restoration was so calming to watch, thank you for sharing every step.</p></li>
+          <li><img src="https://img.clipshelf.example/a/2.jpg" alt="" width="40" height="40" data-dropped><strong>@tomas.k</strong> <span>1 day ago</span><p>Which oil did you use on the sole of the plane before storing it away?</p></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <p>© 2026 Clipshelf</p>
+  </footer>
+</body>
+</html>

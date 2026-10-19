@@ -300,3 +300,136 @@
     filter(next);
   });
 })();
+
+/*! chunk: tabs */
+(() => {
+  // Without this script the labels are links to the panels, which all show. With it: a tab list,
+  // one panel at a time, arrow keys, and the panel a link (#id) names opens first.
+  const select = (box, tab, focus) => {
+    for (const t of box.querySelectorAll(':scope > .tabs > a')) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      const p = document.getElementById(t.getAttribute('href').slice(1));
+      if (p) p.hidden = !on;
+    }
+    if (focus) tab.focus();
+  };
+  for (const box of document.querySelectorAll('.tabbed')) {
+    const nav = box.querySelector(':scope > .tabs');
+    const tabs = nav ? [...nav.querySelectorAll(':scope > a')] : [];
+    if (!tabs.length) continue;
+    nav.setAttribute('role', 'tablist');
+    for (const t of tabs) {
+      const id = t.getAttribute('href').slice(1);
+      t.setAttribute('role', 'tab');
+      t.id = id + '-tab';
+      t.setAttribute('aria-controls', id);
+      t.removeAttribute('aria-current');
+      const p = document.getElementById(id);
+      if (p) {
+        p.setAttribute('role', 'tabpanel');
+        p.setAttribute('aria-labelledby', t.id);
+        p.tabIndex = 0;
+      }
+    }
+    box.dataset.ready = '';
+    select(box, tabs.find((t) => t.getAttribute('href') === location.hash) || tabs[0], false);
+  }
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.tabbed[data-ready] > .tabs > a');
+    if (!t) return;
+    e.preventDefault();
+    select(t.closest('.tabbed'), t, false);
+  });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target.closest && e.target.closest('.tabbed[data-ready] > .tabs > a');
+    if (!t || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const all = [...t.parentElement.children];
+    const i = all.indexOf(t);
+    const step = e.key === 'ArrowRight' ? 1 : -1;
+    const next = e.key === 'Home' ? all[0] : e.key === 'End' ? all[all.length - 1] : all[(i + step + all.length) % all.length];
+    select(t.closest('.tabbed'), next, true);
+  });
+})();
+
+/*! chunk: app */
+(() => {
+  // The drawer of an app layout on phones is a checkbox: here it also closes on a link and on Escape.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('.app-side a');
+    const cb = a && a.closest('.app').querySelector('.app-cb');
+    if (cb) cb.checked = false;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    for (const cb of document.querySelectorAll('.app-cb:checked')) {
+      cb.checked = false;
+      cb.focus();
+    }
+  });
+})();
+
+/*! chunk: video */
+(() => {
+  // A YouTube or Vimeo video loads its player only when asked for (a click), then plays; before
+  // that the page makes no request to the video site but the poster.
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-embed]');
+    if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    const box = link.closest('.video, .media');
+    if (!box) return;
+    e.preventDefault();
+    const f = document.createElement('iframe');
+    f.src = link.dataset.embed;
+    f.title = link.dataset.title || link.getAttribute('aria-label') || link.textContent.trim() || 'Video';
+    f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    if (box.classList.contains('video')) {
+      box.querySelector('.video-load').replaceWith(f);
+    } else {
+      const frame = document.createElement('div');
+      frame.className = 'media-thumb';
+      frame.append(f);
+      const thumb = box.querySelector('.media-thumb');
+      if (thumb) thumb.replaceWith(frame);
+      else box.prepend(frame);
+    }
+    f.focus();
+  });
+})();
+
+/*! chunk: search */
+(() => {
+  // A search box filters the cards (or list items, rows) of the element after it as one types.
+  const ITEMS = '.card, .media, .quote, .gallery-item, li, tr';
+  const fold = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const run = (box) => {
+    const target = box.nextElementSibling;
+    if (!target) return;
+    const q = fold(box.querySelector('input').value.trim());
+    const items = [...target.querySelectorAll(ITEMS)].filter((el) => {
+      const up = el.parentElement.closest(ITEMS);
+      return !up || !target.contains(up);
+    });
+    let shown = 0;
+    for (const it of items) {
+      const hit = !q || fold(it.textContent).includes(q);
+      it.hidden = !hit;
+      if (hit) shown++;
+    }
+    box.querySelector('.finder-count').textContent = q ? (shown ? shown + ' / ' + items.length : box.dataset.none) : '';
+  };
+  for (const box of document.querySelectorAll('.finder')) {
+    box.hidden = false;
+    const target = box.nextElementSibling;
+    // a live region drawn again keeps the filter
+    if (target && 'MutationObserver' in window) new MutationObserver(() => run(box)).observe(target, { childList: true, subtree: true });
+  }
+  document.addEventListener('input', (e) => {
+    const box = e.target.closest && e.target.closest('.finder');
+    if (box) run(box);
+  });
+})();

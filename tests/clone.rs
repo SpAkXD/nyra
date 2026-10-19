@@ -56,9 +56,64 @@ const CASES: &[Case] = &[
     },
     Case {
         name: "wordpress",
-        components: &["navbar", "hero", "gallery", "embed", "hours", "footer"],
+        components: &["navbar", "hero", "gallery", "video", "hours", "footer"],
         source: &["(\"Mon–Fri\", \"1-5 8:00-18:00\")", "wp-content/uploads/2026/04/tulips.jpg"],
         css_images: &["https://greenvalley.example/wp-content/uploads/2026/03/greenhouse-1600x900.jpg"],
+    },
+    // an app layout: side navigation, a thumbnail grid of videos, comments, a site search
+    Case {
+        name: "app",
+        components: &["navbar", "sidebar", "media", "TODO(server)", "search"],
+        source: &[
+            "sidebar([",
+            "(\":house: Home\", \"https://app.example/\")",
+            "(\"Explore\", \"\")",
+            "struct ",
+            "media(c.title, image: c.image, href: c.href, meta: c.meta, badge: c.badge)",
+            "badge: \"1:02:44\"",
+            "meta: \"Oak & Iron · 12K views · 2 days ago\"",
+            "// TODO(server): comments",
+            "// TODO(server): sign-in",
+            "// TODO(server): a search over the whole site",
+            "search()",
+            "anim: \"rise\"",
+            "hover: \"lift\"",
+            "loop: \"float\"",
+        ],
+        css_images: &[],
+    },
+    // videos that play (YouTube, Vimeo, a file), counters, a ticker, a shop with categories, a carousel
+    Case {
+        name: "videos",
+        components: &["video", "stat", "marquee", "search", "media", "gallery"],
+        source: &[
+            "video(\"https://www.youtube.com/embed/aqz-KE-bpKQ?rel=0\", title: \"Throwing a mug on the wheel\")",
+            "video(\"https://player.vimeo.com/video/76979871\", title: \"Glazing day at Fernhill\")",
+            "video(\"https://media.fernhill.example/kiln-opening.mp4\", poster: \"https://media.fernhill.example/kiln-opening.jpg\")",
+            "stat(\"1200\", \"mugs a year\", anim: \"count\")",
+            "marquee([\"Stoneware\", \"Porcelain\", \"Raku\", \"Wood-fired\"])",
+            "enum Msg { Show(str) }",
+            "button(k, on: Msg.Show(k), active: k == shown)",
+            "price: \"£24.00\"",
+            "search(\"Search the shop\")",
+            "// TODO(server): a cart",
+            "anim: \"rise\"",
+            "hover: \"glow\"",
+        ],
+        css_images: &[],
+    },
+    // tabs with their panels in the page, tabs that are other pages, custom keyframes
+    Case {
+        name: "tabs",
+        components: &["tabs", "button"],
+        source: &[
+            "tabs([\"Basic\", \"Full service\", \"Season pass\"]) {",
+            "button(\"Booking\", \"https://tabs.example/faq/booking\", style: \"primary\", size: \"sm\")",
+            "keyframes(\"wobble\", \"0% {{ transform: skewX(-6deg) }}",
+            "loop: \"wobble\"",
+            "anim: \"slide\"",
+        ],
+        css_images: &[],
     },
 ];
 
@@ -292,6 +347,42 @@ fn what_is_dropped_is_counted() {
     let kept = json.get("kept").unwrap();
     let (w, of) = (kept.get("words").and_then(Json::as_u64).unwrap(), kept.get("of_words").and_then(Json::as_u64).unwrap());
     assert!(w * 100 >= of * 90, "kept {w} of {of} words");
+}
+
+#[test]
+fn app_pages_keep_their_features_and_name_what_needs_a_server() {
+    let strings = |j: &Json, key: &str| -> Vec<String> {
+        j.get(key).and_then(Json::as_array).unwrap().iter().filter_map(|x| x.as_str().map(str::to_string)).collect()
+    };
+    // the app: what needs a server is named, the videos play, the motion is reported
+    let (program, json) = clone("app");
+    let server = strings(&json, "server");
+    for f in ["sign-in and accounts", "search over the whole site", "comments"] {
+        assert!(server.iter().any(|s| s == f), "no `{f}` in {server:?}");
+    }
+    assert_eq!(json.get("videos").and_then(Json::as_u64), Some(6), "{json:?}");
+    let motion = json.get("motion").and_then(Json::as_array).unwrap();
+    assert!(motion.iter().any(|m| m.get("found").and_then(Json::as_str) == Some("data-aos=\"fade-up\"")), "{motion:?}");
+    let page = build(&program);
+    // a thumbnail plays in place from youtube-nocookie.com, which the policy allows
+    assert!(page.contains("data-embed=\"https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ?autoplay=1\""), "{page}");
+    assert!(page.contains("frame-src https://www.youtube-nocookie.com"), "{page}");
+    assert!(page.contains("class=\"app\"") && page.contains("class=\"app-side\""), "{page}");
+    assert!(page.contains("class=\"finder\""), "{page}");
+
+    // the shop: the categories filter the products in the browser (a live view)
+    let (program, _) = clone("videos");
+    let page = build(&program);
+    for part in ["data-live=", "data-on=", "class=\"video\"", "data-embed=\"https://player.vimeo.com/video/76979871?autoplay=1&amp;dnt=1\"", "<video controls"] {
+        assert!(page.contains(part), "the shop page has no `{part}`");
+    }
+    assert!(page.contains("media-src https://media.fernhill.example"), "{page}");
+
+    // tabs: the panels all in the page, the labels links to them
+    let (program, _) = clone("tabs");
+    let page = build(&program);
+    assert!(page.contains("<a href=\"#tabs-full-service\">Full service</a>"), "{page}");
+    assert!(page.contains("id=\"tabs-season-pass\""), "{page}");
 }
 
 #[test]

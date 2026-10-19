@@ -43,6 +43,11 @@ pub struct Sheet {
     pub faces: Vec<String>,
     /// `@import`ed stylesheets (absolute URLs).
     pub imports: Vec<String>,
+    /// `@keyframes`: (name, body), the first of each name.
+    pub keyframes: Vec<(String, String)>,
+    /// Rules of `:hover` states, with the state taken out of the selector: what changes when the
+    /// pointer is over an element (`--nyra-inner: 1` marks a change of an element inside it).
+    hovers: Vec<Rule>,
 }
 
 /// The properties the reader keeps (the others are skipped while matching).
@@ -58,6 +63,29 @@ const KEEP: &[&str] = &[
     "visibility",
     "max-width",
     "text-align",
+    // motion (`motion.rs`)
+    "animation",
+    "animation-name",
+    "animation-duration",
+    "animation-iteration-count",
+    "animation-delay",
+    "opacity",
+    "transform",
+    "translate",
+    "background-attachment",
+];
+
+/// The properties of `:hover` rules that say how an element moves.
+const HOVER_KEEP: &[&str] = &[
+    "transform",
+    "translate",
+    "scale",
+    "box-shadow",
+    "text-decoration",
+    "text-decoration-line",
+    "background-size",
+    "top",
+    "margin-top",
 ];
 
 /// Properties that children inherit.
@@ -151,12 +179,23 @@ impl Parser<'_> {
                         }
                     }
                 }
+            } else if let Some(name) =
+                lower.strip_prefix("@keyframes").or_else(|| lower.strip_prefix("@-webkit-keyframes")).or_else(|| lower.strip_prefix("@-moz-keyframes"))
+            {
+                let name = prelude[prelude.len() - name.len()..].trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                let body = self.raw_body();
+                if !name.is_empty() && !sheet.keyframes.iter().any(|(n, _)| *n == name) {
+                    sheet.keyframes.push((name, body));
+                }
             } else if lower.starts_with('@') {
                 self.skip_block();
             } else {
                 let body = self.body();
                 if !on {
                     continue;
+                }
+                if lower.contains(":hover") {
+                    hover_rule(sheet, &prelude, &body, self.base);
                 }
                 let decls: Vec<(String, String, bool)> = decls(&body, self.base)
                     .into_iter()
@@ -215,10 +254,57 @@ impl Parser<'_> {
         let _ = self.body();
     }
 
+    /// The whole text of a block whose `{` was just read, nested blocks included.
+    fn raw_body(&mut self) -> String {
+        let mut depth = 1;
+        let start = self.i;
+        for (k, c) in self.s[start..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        self.i = start + k + 1;
+                        return self.s[start..start + k].trim().to_string();
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.i = self.s.len();
+        self.s[start..].to_string()
+    }
+
     fn skip_ws(&mut self) {
         while self.i < self.s.len() && self.s.as_bytes()[self.i].is_ascii_whitespace() {
             self.i += 1;
         }
+    }
+}
+
+/// A rule with `:hover` in its selectors: for each selector, the element that is hovered (the
+/// selector up to the compound with `:hover`, without the state) and the declarations that move
+/// something; `--nyra-inner` says the change is on an element inside the hovered one.
+fn hover_rule(sheet: &mut Sheet, prelude: &str, body: &str, base: &str) {
+    let kept: Vec<(String, String, bool)> = decls(body, base).into_iter().filter(|(k, _, _)| HOVER_KEEP.contains(&k.as_str())).collect();
+    if kept.is_empty() {
+        return;
+    }
+    for sel in split_top(prelude, ',') {
+        let Some(at) = sel.find(":hover") else { continue };
+        let head = &sel[..at];
+        let rest = &sel[at + 6..];
+        // the rest of the compound with `:hover` (`:focus-visible`, `.x`), then what is inside it
+        let end = rest.find(|c: char| c.is_whitespace() || c == '>' || c == '+' || c == '~').unwrap_or(rest.len());
+        let compound_tail: String = rest[..end].replace(":focus-visible", "").replace(":focus-within", "").replace(":focus", "");
+        let inner = !rest[end..].trim().is_empty();
+        let Some(parsed) = parse_sel(&format!("{head}{compound_tail}")) else { continue };
+        let mut d = kept.clone();
+        if inner {
+            d.push(("--nyra-inner".into(), "1".into(), false));
+        }
+        let order = sheet.hovers.len();
+        sheet.hovers.push(Rule { sels: vec![parsed], decls: d, order });
     }
 }
 
@@ -679,50 +765,80 @@ fn sel_matches(dom: &Dom, id: usize, s: &Sel) -> bool {
 /// and the custom properties.
 pub struct Styles {
     own: Vec<HashMap<String, String>>,
+    /// The declarations of the `:hover` rules that match each element.
+    hover: Vec<Vec<(String, String)>>,
+}
+
+/// Rules by the key of their last compound: an id, a class, a tag, or none.
+struct Index<'a> {
+    by_id: HashMap<&'a str, Vec<(usize, usize)>>,
+    by_class: HashMap<&'a str, Vec<(usize, usize)>>,
+    by_tag: HashMap<&'a str, Vec<(usize, usize)>>,
+    any: Vec<(usize, usize)>,
+}
+
+impl<'a> Index<'a> {
+    fn new(rules: &'a [Rule]) -> Index<'a> {
+        let mut x = Index { by_id: HashMap::new(), by_class: HashMap::new(), by_tag: HashMap::new(), any: Vec::new() };
+        for (r, rule) in rules.iter().enumerate() {
+            for (s, sel) in rule.sels.iter().enumerate() {
+                let last = sel.parts.last().unwrap();
+                if let Some(i) = &last.id {
+                    x.by_id.entry(i.as_str()).or_default().push((r, s));
+                } else if let Some(c) = last.classes.first() {
+                    x.by_class.entry(c.as_str()).or_default().push((r, s));
+                } else if let Some(t) = &last.tag {
+                    x.by_tag.entry(t.as_str()).or_default().push((r, s));
+                } else {
+                    x.any.push((r, s));
+                }
+            }
+        }
+        x
+    }
+
+    /// The (rule, selector) pairs that may match an element.
+    fn candidates(&self, dom: &Dom, id: usize) -> Vec<(usize, usize)> {
+        let mut cands: Vec<(usize, usize)> = Vec::new();
+        if let Some(v) = dom.attr(id, "id").and_then(|i| self.by_id.get(i)) {
+            cands.extend(v);
+        }
+        for c in dom.classes(id) {
+            if let Some(v) = self.by_class.get(c) {
+                cands.extend(v);
+            }
+        }
+        if let Some(v) = self.by_tag.get(dom.tag(id)) {
+            cands.extend(v);
+        }
+        cands.extend(&self.any);
+        cands
+    }
 }
 
 impl Styles {
     /// The styles of every element; `base` is the page's address (for `url()` in `style=""`).
     pub fn compute(dom: &Dom, sheet: &Sheet, base: &str) -> Styles {
-        // rules by the key of their last compound: an id, a class, a tag, or none
-        let mut by_id: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
-        let mut by_class: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
-        let mut by_tag: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
-        let mut any: Vec<(usize, usize)> = Vec::new();
-        for (r, rule) in sheet.rules.iter().enumerate() {
-            for (s, sel) in rule.sels.iter().enumerate() {
-                let last = sel.parts.last().unwrap();
-                if let Some(i) = &last.id {
-                    by_id.entry(i.as_str()).or_default().push((r, s));
-                } else if let Some(c) = last.classes.first() {
-                    by_class.entry(c.as_str()).or_default().push((r, s));
-                } else if let Some(t) = &last.tag {
-                    by_tag.entry(t.as_str()).or_default().push((r, s));
-                } else {
-                    any.push((r, s));
-                }
-            }
-        }
+        let index = Index::new(&sheet.rules);
+        let hovers = Index::new(&sheet.hovers);
         let mut own = Vec::with_capacity(dom.nodes.len());
+        let mut hover = Vec::with_capacity(dom.nodes.len());
         for id in 0..dom.nodes.len() {
             let mut map: HashMap<String, String> = HashMap::new();
             if !dom.is_elem(id) {
                 own.push(map);
+                hover.push(Vec::new());
                 continue;
             }
-            let mut cands: Vec<(usize, usize)> = Vec::new();
-            if let Some(v) = dom.attr(id, "id").and_then(|i| by_id.get(i)) {
-                cands.extend(v);
-            }
-            for c in dom.classes(id) {
-                if let Some(v) = by_class.get(c) {
-                    cands.extend(v);
+            let mut moves = Vec::new();
+            for (r, s) in hovers.candidates(dom, id) {
+                let rule = &sheet.hovers[r];
+                if sel_matches(dom, id, &rule.sels[s]) {
+                    moves.extend(rule.decls.iter().map(|(k, v, _)| (k.clone(), v.clone())));
                 }
             }
-            if let Some(v) = by_tag.get(dom.tag(id)) {
-                cands.extend(v);
-            }
-            cands.extend(&any);
+            hover.push(moves);
+            let cands = index.candidates(dom, id);
             // (important, specificity, order) of the winner of each property
             let mut rank: HashMap<String, (bool, u32, usize)> = HashMap::new();
             for (r, s) in cands {
@@ -754,7 +870,7 @@ impl Styles {
             }
             own.push(map);
         }
-        Styles { own }
+        Styles { own, hover }
     }
 
     /// The value of a property for an element, with `var()` resolved; inherited properties and
@@ -828,8 +944,24 @@ impl Styles {
         }
     }
 
+    /// What the `:hover` rules change on the element: (property, value); `--nyra-inner` when the
+    /// change is on an element inside it.
+    pub fn hover(&self, id: usize) -> &[(String, String)] {
+        self.hover.get(id).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// The element's own value of a property (not inherited), `var()` resolved.
+    pub fn own(&self, dom: &Dom, id: usize, prop: &str) -> Option<String> {
+        let v = self.own.get(id)?.get(prop)?;
+        Some(self.vars(dom, id, v, 0))
+    }
+
     /// The element's own background color (not inherited), if it sets an opaque enough one.
     pub fn bg(&self, dom: &Dom, id: usize) -> Option<Rgb> {
+        // the browser's computed value of a band of the page (`--browser`)
+        if let Some(seen) = dom.attr(id, "data-nyra-bg") {
+            return parse_color_in(seen).filter(|c| c.a >= 0.5);
+        }
         let v = self.get(dom, id, "background-color").or_else(|| self.get(dom, id, "background"))?;
         let c = parse_color_in(&v)?;
         (c.a >= 0.5).then_some(c)
@@ -994,6 +1126,10 @@ pub fn first_family(v: &str) -> Option<String> {
             || lower.starts_with("helvetica")
         {
             continue;
+        }
+        // icon fonts are not the text's
+        if lower.contains("awesome") || lower.contains("icon") || lower.contains("glyph") || lower.starts_with("material symbols") {
+            return None;
         }
         // "Inter var", "Inter Variable" -> "Inter"
         let clean = name.trim_end_matches(" var").trim_end_matches(" Variable").trim_end_matches(" VF").to_string();

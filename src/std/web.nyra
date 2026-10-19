@@ -384,13 +384,19 @@ fn note(text: str, id: str = "", cls: str = "", anim: str = "", hover: str = "",
 // Content
 
 // A responsive image. `alt` is required; "" marks a decorative image.
-fn img(src: str, alt: str, ratio: str = "", caption: str = "", fit: str = "", id: str = "", cls: str = "",
+// `width:` keeps a small picture (an avatar, a logo) at that width ("160px").
+fn img(src: str, alt: str, ratio: str = "", caption: str = "", fit: str = "", width: str = "", id: str = "", cls: str = "",
     anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
     var c = "fig"
     if fit == "contain" {
         c += " fig-contain"
     }
-    var h = "<figure" + _ic(c, id, cls) + (if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" })
+    var style = if ratio != "" { "--ratio:" + ratio + ";" } else { "" }
+    if width != "" {
+        c += " fig-w"
+        style += "--w:" + _size(width) + ";"
+    }
+    var h = "<figure" + _ic(c, id, cls) + _at("style", style)
     h += _mo(anim, hover, loop, scroll, at, morph) + ">" + _img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false)
     if caption != "" {
         h += "<figcaption>" + _md(caption) + "</figcaption>"
@@ -675,7 +681,7 @@ fn gallery(photos: [(str, str, str)], filters: [(str, str)] = [], all: str = "",
         }
         h += "<span class=\"gallery-cap\">" + _esc(ph.1) + "</span>" + _icon("expand") + "</span></a>"
     }
-    return Node(html: h + "</div></div>", kit: ["gallery"])
+    return Node(html: h + "</div></div>", kit: ["gallery", "tabs"])
 }
 
 // Opening hours: rows of (days, "1-5 8:00-16:00"), where the days are 1 (Monday) to 7 (Sunday);
@@ -836,6 +842,190 @@ fn footer(brand: str = "", text: str = "", links: [(str, str)] = [], links_title
     }
     h += "</div><a class=\"foot-top\" href=\"#top\">" + _icon("arrow-up") + _md(if top != "" { top } else { _say("top") }) + "</a></div></div></footer>"
     return Node(html: h, kit: _kits(kids, "foot"))
+}
+
+// ---------------------------------------------------------------------------------------------
+// App layouts and media
+
+// An app layout: a column of links down the left side and the main content (the child block)
+// beside it; on phones the column is a drawer behind a menu button (a checkbox: it works
+// without JavaScript). A link with an empty href is a group heading, or a note when it is long.
+fn sidebar(links: [(str, str)], title: str = "", id: str = "app", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    let box = if id != "" { id } else { "app" }
+    let cb = box + "-menu"
+    let label = if title != "" { title } else { _say("side") }
+    var h = "<div" + _ic("app", box, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><input type=\"checkbox\" class=\"app-cb\" id=\""
+    h += _attr(cb) + "\" aria-label=\"" + _attr(_say("menu")) + "\"><label class=\"app-open\" for=\"" + _attr(cb) + "\">" + _icon("menu")
+    h += _esc(label) + "</label><nav class=\"app-side\" aria-label=\"" + _attr(label) + "\">"
+    if title != "" {
+        h += "<p class=\"app-title\">" + _md(title) + "</p>"
+    }
+    h += "<ul class=\"app-links\">"
+    for l in links {
+        if l.1 != "" {
+            h += "<li><a" + _link_attrs(l.1) + ">" + _md(l.0) + "</a></li>"
+        } else if l.0.split(" ").len() <= 4 {
+            h += "<li class=\"app-group\">" + _md(l.0) + "</li>"
+        } else {
+            h += "<li class=\"app-note\">" + _md(l.0) + "</li>"
+        }
+    }
+    h += "</ul></nav><label class=\"app-shade\" for=\"" + _attr(cb) + "\" aria-hidden=\"true\"></label><div class=\"app-main\">"
+    return Node(html: h + _html(kids) + "</div></div>", kit: _kits(kids, "app"))
+}
+
+// A thumbnail card for a grid of videos or products: the picture with a corner `badge:` (a
+// video's length), the title, a `price:` and a `meta:` line ("Channel · 1.2M views · 3 days
+// ago"). A YouTube or Vimeo `href:` plays in place when the picture is clicked.
+fn media(title: str, image: str = "", href: str = "", meta: str = "", badge: str = "", price: str = "", alt: str = "",
+    ratio: str = "", tag: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let play = _embed_url(href)
+    var h = "<article" + _ic("media", id, cls) + _at("data-tag", tag) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if image != "" {
+        let shape = if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" }
+        let open = if href != "" { "<a class=\"media-thumb\"" + _link_attrs(href) + _at("data-embed", play) + " tabindex=\"-1\"" } else { "<div class=\"media-thumb\"" }
+        h += open + shape + ">" + _img_tag(image, if alt != "" { alt } else { title }, "(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw", false)
+        if play != "" {
+            h += "<span class=\"media-play\" aria-hidden=\"true\">" + _icon("play") + "</span>"
+        }
+        if badge != "" {
+            h += "<span class=\"media-badge\">" + _md(badge) + "</span>"
+        }
+        h += if href != "" { "</a>" } else { "</div>" }
+    }
+    h += "<div class=\"media-body\"><h3 class=\"media-title\">"
+    h += (if href != "" { "<a" + _link_attrs(href) + _at("data-embed", play) + ">" + _md(title) + "</a>" } else { _md(title) }) + "</h3>"
+    if price != "" {
+        h += "<p class=\"media-price\">" + _md(price) + "</p>"
+    }
+    if meta != "" {
+        h += "<p class=\"media-meta\">" + _md(meta) + "</p>"
+    }
+    if image == "" && badge != "" {
+        h += "<p class=\"media-meta\">" + _md(badge) + "</p>"
+    }
+    return Node(html: h + "</div></article>", kit: ["media", "video"])
+}
+
+// A video that plays on the page: an mp4 or webm file in a `<video controls>`, or a YouTube or
+// Vimeo address as a picture with a play button that loads the player only when clicked (from
+// youtube-nocookie.com: no request to the video site before the click but the poster).
+fn video(src: str, poster: str = "", title: str = "", ratio: str = "16/9", id: str = "", cls: str = "", anim: str = "",
+    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let play = _embed_url(src)
+    var h = "<figure" + _ic("video", id, cls) + " style=\"--ratio:" + _attr(ratio) + "\"" + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    if play != "" {
+        let yt = _yt_id(src)
+        let pic = if poster != "" { poster } else if yt != "" { "https://i.ytimg.com/vi/" + yt + "/hqdefault.jpg" } else { "" }
+        h += "<a class=\"video-load\"" + _link_attrs(src) + " data-embed=\"" + _attr(play) + "\"" + _at("data-title", title)
+        h += " aria-label=\"" + _attr(_say("play") + (if title != "" { ": " + title } else { "" })) + "\">"
+        if pic != "" {
+            h += _img_tag(pic, "", "(min-width: 1024px) 960px, 100vw", false)
+        }
+        h += "<span class=\"video-play\" aria-hidden=\"true\">" + _icon("play") + "</span></a>"
+    } else {
+        h += "<video controls playsinline preload=\"metadata\" src=\"" + _href(src) + "\""
+        if poster != "" {
+            h += " poster=\"" + _attr(_src(poster)) + "\""
+        }
+        h += _at("title", title) + "></video>"
+    }
+    if title != "" {
+        h += "<figcaption>" + _md(title) + "</figcaption>"
+    }
+    return Node(html: h + "</figure>", kit: ["video"])
+}
+
+// Tabs: one label per child (a panel). Without JavaScript the labels are links to the panels,
+// which all show; with it, one panel at a time, with arrow keys.
+fn tabs(labels: [str], id: str = "tabs", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "",
+    at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    let box = if id != "" { id } else { "tabs" }
+    var h = "<div" + _ic("tabbed", box, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><nav class=\"tabs\">"
+    for i, l in labels {
+        h += "<a href=\"#" + _attr(box + "-" + _slug(l)) + "\"" + (if i == 0 { " aria-current=\"true\"" } else { "" }) + ">" + _md(l) + "</a>"
+    }
+    h += "</nav>"
+    for i, k in kids {
+        let name = if i < labels.len() { box + "-" + _slug(labels[i]) } else { box + "-{i + 1}" }
+        h += "<div class=\"tab-panel\" id=\"" + _attr(name) + "\">" + k.html + "</div>"
+    }
+    return Node(html: h + "</div>", kit: _kits(kids, "tabs"))
+}
+
+// A search box that filters the cards (or list items) of the element right after it, by their
+// text, as the visitor types. It shows only with JavaScript, which it needs.
+fn search(hint: str = "", label: str = "", id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "",
+    scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    let name = if label != "" { label } else { _say("search") }
+    var h = "<div" + _ic("finder", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + " hidden data-none=\"" + _attr(_say("none")) + "\">"
+    h += _icon("search") + "<input type=\"search\" aria-label=\"" + _attr(name) + "\" placeholder=\"" + _attr(if hint != "" { hint } else { name })
+    return Node(html: h + "\"><output class=\"finder-count\" aria-live=\"polite\"></output></div>", kit: ["search"])
+}
+
+// The player of a YouTube or Vimeo address (youtube-nocookie.com, Vimeo without tracking), or "".
+fn _embed_url(url: str) -> str {
+    let yt = _yt_id(url)
+    if yt != "" {
+        return "https://www.youtube-nocookie.com/embed/" + yt + "?autoplay=1"
+    }
+    let u = url.lower()
+    if u.contains("vimeo.com/") {
+        let tail = url.slice(u.index_of("vimeo.com/") + 10, url.len()).replace("video/", "")
+        var digits = ""
+        for c in tail.chars() {
+            if !c.is_digit() {
+                break
+            }
+            digits += str(c)
+        }
+        if digits != "" {
+            return "https://player.vimeo.com/video/" + digits + "?autoplay=1&dnt=1"
+        }
+    }
+    return ""
+}
+
+// The id of a YouTube video address (watch?v=, youtu.be/, /embed/, /shorts/, /live/), or "".
+fn _yt_id(url: str) -> str {
+    let u = url.lower()
+    if !u.starts_with("https://") && !u.starts_with("http://") {
+        return ""
+    }
+    var rest = ""
+    if u.contains("youtu.be/") {
+        rest = url.slice(u.index_of("youtu.be/") + 9, url.len())
+    } else if u.contains("youtube.com/") || u.contains("youtube-nocookie.com/") {
+        for key in ["?v=", "&v=", "/embed/", "/shorts/", "/live/"] {
+            if rest == "" && u.contains(key) {
+                rest = url.slice(u.index_of(key) + key.len(), url.len())
+            }
+        }
+    }
+    var id = ""
+    for c in rest.chars() {
+        if !(c.is_letter() || c.is_digit() || c == '-' || c == '_') {
+            break
+        }
+        id += str(c)
+    }
+    return if id.len() >= 6 && id.len() <= 20 { id } else { "" }
+}
+
+// A label as a part of an id: lowercase letters, digits and dashes.
+fn _slug(s: str) -> str {
+    var o = ""
+    for c in s.lower().chars() {
+        if _lower(c) || c.is_digit() {
+            o += str(c)
+        } else if o != "" && !o.ends_with("-") {
+            o += "-"
+        }
+    }
+    let t = if o.ends_with("-") { o.slice(0, o.len() - 1) } else { o }
+    return if t != "" { t } else { "tab" }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1398,6 +1588,10 @@ fn _say_en(key: str) -> str = match key {
     "top" => "Back to top"
     "links" => "Links"
     "contact" => "Contact"
+    "side" => "Sections"
+    "play" => "Play video"
+    "search" => "Search"
+    "none" => "Nothing matches"
     _ => key
 }
 
@@ -1430,5 +1624,9 @@ fn _say_cs(key: str) -> str = match key {
     "top" => "Nahoru"
     "links" => "Odkazy"
     "contact" => "Kontakt"
+    "side" => "Sekce"
+    "play" => "Přehrát video"
+    "search" => "Hledat"
+    "none" => "Nic neodpovídá"
     _ => _say_en(key)
 }

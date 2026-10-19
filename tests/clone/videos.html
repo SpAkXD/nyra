@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fernhill Pottery — classes, films and the shop</title>
+  <style>
+    body { background: #fffaf3; color: #2a211b; font-family: "Lora", serif; }
+    .button { background: #9a3412; color: #fff; }
+    .product:hover { box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+    .reveal { opacity: 0; transform: translateY(30px); transition: all .6s; }
+    .reveal.visible { opacity: 1; transform: none; }
+    .ticker-track { display: flex; animation: scroll-left 30s linear infinite; }
+    @keyframes scroll-left { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+    .count { font-size: 3rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="brand">Fernhill Pottery</a>
+      <a href="#films">Films</a>
+      <a href="#shop">Shop</a>
+      <a href="/cart" class="button">Cart</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="films">
+      <h1>Films from the studio</h1>
+      <p>Watch how a mug is thrown, trimmed and glazed, start to finish.</p>
+      <iframe src="https://www.youtube.com/embed/aqz-KE-bpKQ?rel=0" title="Throwing a mug on the wheel" allowfullscreen></iframe>
+      <iframe src="https://player.vimeo.com/video/76979871" title="Glazing day at Fernhill"></iframe>
+      <video src="https://media.fernhill.example/kiln-opening.mp4" poster="https://media.fernhill.example/kiln-opening.jpg" controls></video>
+    </section>
+
+    <section id="numbers" class="reveal">
+      <h2>The studio in numbers</h2>
+      <div class="stats">
+        <div><span class="count" data-count="1200">1200</span><span>mugs a year</span></div>
+        <div><span class="count" data-count="35">35</span><span>years at the wheel</span></div>
+        <div><span class="count" data-count="4">4</span><span>kilns</span></div>
+      </div>
+    </section>
+
+    <div class="ticker">
+      <div class="ticker-track">
+        <span>Stoneware</span><span>Porcelain</span><span>Raku</span><span>Wood-fired</span>
+      </div>
+    </div>
+
+    <section id="shop">
+      <h2>From the shop</h2>
+      <label for="filter">Filter products</label>
+      <input id="filter" type="search" placeholder="Search the shop">
+      <div class="products">
+        <article class="product"><img src="https://shop.fernhill.example/p/mug.jpg" alt="A blue stoneware mug"><h3>Blue stoneware mug</h3><span class="category">Mugs</span><span class="price">£24.00</span><a class="button" href="/cart/add/1">Add to cart</a></article>
+        <article class="product"><img src="https://shop.fernhill.example/p/bowl.jpg" alt="A wide serving bowl"><h3>Wide serving bowl</h3><span class="category">Bowls</span><span class="price">£58.00</span><a class="button" href="/cart/add/2">Add to cart</a></article>
+        <article class="product"><img src="https://shop.fernhill.example/p/cup.jpg" alt="A small espresso cup"><h3>Espresso cup</h3><span class="category">Mugs</span><span class="price">£16.50</span><a class="button" href="/cart/add/3">Add to cart</a></article>
+        <article class="product"><img src="https://shop.fernhill.example/p/vase.jpg" alt="A tall raku vase"><h3>Raku vase</h3><span class="category">Vases</span><span class="price">£120.00</span><a class="button" href="/cart/add/4">Add to cart</a></article>
+        <article class="product"><img src="https://shop.fernhill.example/p/plate.jpg" alt="A speckled dinner plate"><h3>Speckled dinner plate</h3><span class="category">Bowls</span><span class="price">£32.00</span><a class="button" href="/cart/add/5">Add to cart</a></article>
+      </div>
+    </section>
+
+    <section id="gallery">
+      <h2>Around the studio</h2>
+      <div class="swiper">
+        <div class="swiper-wrapper">
+          <div class="swiper-slide"><img src="https://media.fernhill.example/g/wheel.jpg" alt="The wheel by the window"></div>
+          <div class="swiper-slide"><img src="https://media.fernhill.example/g/shelves.jpg" alt="Shelves of drying pots"></div>
+          <div class="swiper-slide"><img src="https://media.fernhill.example/g/kiln.jpg" alt="The kiln at night"></div>
+          <div class="swiper-slide swiper-slide-duplicate"><img src="https://media.fernhill.example/g/wheel.jpg" alt="The wheel by the window" data-dropped></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Fernhill Pottery, Mill Lane 2, Fernhill</p>
+    <p>© 2026 Fernhill Pottery</p>
+  </footer>
+</body>
+</html>

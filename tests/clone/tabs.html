@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Northwind Bikes — service plans</title>
+  <style>
+    body { background: #ffffff; color: #111827; }
+    .tab-panel[hidden] { display: none; }
+    .hero-title { animation: slide-in .8s ease-out both; }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(-60px) } to { opacity: 1; transform: none } }
+    .wobble { animation: wobble 3s ease-in-out infinite; }
+    @keyframes wobble { 0%, 100% { transform: skewX(-6deg) } 50% { transform: skewX(6deg) } }
+    .plan:hover { box-shadow: 0 0 0 3px #2563eb; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">Northwind Bikes</a>
+    <nav><a href="#plans">Plans</a> <a href="#faq">FAQ</a></nav>
+  </header>
+  <main>
+    <section>
+      <h1 class="hero-title">Service plans for every rider</h1>
+      <p>Pick a plan, drop your bike off, and ride away with everything tuned.</p>
+      <img class="wobble" src="https://northwind.example/img/wrench.png" alt="A wrench" width="160" height="160">
+    </section>
+
+    <section id="plans">
+      <h2>Plans</h2>
+      <div class="plans">
+        <div role="tablist" aria-label="Plans">
+          <button role="tab" aria-selected="true" aria-controls="p-basic" id="t-basic">Basic</button>
+          <button role="tab" aria-selected="false" aria-controls="p-full" id="t-full">Full service</button>
+          <button role="tab" aria-selected="false" aria-controls="p-season" id="t-season">Season pass</button>
+        </div>
+        <div role="tabpanel" id="p-basic" aria-labelledby="t-basic">
+          <p>Brakes and gears adjusted, chain cleaned and oiled, tyres checked.</p>
+          <ul><li>Takes one day</li><li>From €45</li></ul>
+        </div>
+        <div role="tabpanel" id="p-full" aria-labelledby="t-full" hidden>
+          <p>Everything in Basic, plus wheels trued and bearings serviced.</p>
+          <ul><li>Takes two days</li><li>From €120</li></ul>
+        </div>
+        <div role="tabpanel" id="p-season" aria-labelledby="t-season" hidden>
+          <p>Unlimited basic services from March to October.</p>
+          <ul><li>Priority booking</li><li>€199 a season</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <h2>Questions</h2>
+      <div role="tablist">
+        <a role="tab" aria-selected="true" href="/faq/booking">Booking</a>
+        <a role="tab" aria-selected="false" href="/faq/payments">Payments</a>
+        <a role="tab" aria-selected="false" href="/faq/parts">Parts</a>
+      </div>
+      <p>Book online or call the shop; we confirm within a day.</p>
+    </section>
+  </main>
+  <footer><p>© 2026 Northwind Bikes</p></footer>
+</body>
+</html>
