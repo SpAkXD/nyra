@@ -3,6 +3,25 @@
 Nyra is pre-1.0. Until 1.0 the language, its syntax and the command line may still change from one
 version to the next; each entry says what changed. Error codes are stable: a number is never reused.
 
+## v0.9.0 (unreleased)
+
+Editors
+- **`nyra lsp`: a language server.** VS Code, Neovim, Helix, Zed and any other editor that speaks the Language
+  Server Protocol (3.17, over stdio) now show the compiler's errors and warnings while you type, with their codes, a
+  link to their entry in docs/ERRORS.md and the hint in the message. Hover shows the type of a variable, the
+  signature and comment of a function (also of the standard modules and of the `use web` functions, with their named
+  options) and, on an error, what its code means (`nyra explain`). Completion offers the keywords, the names in
+  scope, the fields and methods after `.` (from the checker's type of the value, also on a line that does not parse
+  yet), a module's functions after `math.` or `shapes.`, an enum's variants, and inside a call the parameters as named
+  arguments. Also signature help, go to definition (functions, structs, enums, fields, variants, variables, `use
+  ./file`), the outline, formatting (`nyra fmt`), and the certain fixes of `nyra check --fix` as quick fixes. It works
+  on unsaved buffers, programs of several files included: `use ./name` reads an open buffer before the file on disk.
+  A buffer is checked again 150 ms after the last change; a 2,000-line file takes a few milliseconds. See
+  docs/EDITORS.md.
+- **The VS Code extension (0.5.0) uses it**: diagnostics, hover, completion, signature help, go to definition, the
+  outline, formatting (`nyra.formatOnSave`) and quick fixes. Its client is a small JSON-RPC client of its own, so the
+  extension still ships without `node_modules`. `nyra.path` names the `nyra` executable (default: `nyra` on `PATH`).
+
 ## Unreleased (v0.8)
 
 Language
