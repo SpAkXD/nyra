@@ -1,5 +1,5 @@
 <!-- Metadata: this comment is not part of the card (nyra_spec with topic "web" and the tests strip it).
-TOKENS: 1397 on claude-sonnet-5-5, 1114 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
+TOKENS: 1396 on claude-sonnet-5-5, 1114 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The library is src/std/web.nyra; this card must describe it exactly (tests/docs.rs builds its example). Read with docs/AGENT_CARD.md. -->
 # Nyra web card
@@ -37,7 +37,7 @@ page("/", "Brew & Co") {
 
 ## Elements
 ```
-site(name, primary: accent: bg: font: display: style: soft|sharp|editorial|dark lang: tz:)
+site(name, primary: accent: bg: font: display: radius: 16 style: soft|sharp|editorial|dark lang: tz:)
 page(path, title, desc:) {}
 section(id, title, kicker: text: bg: alt|dark|white|primary|accent) {}
 grid(cols, widths: "1fr 2fr") {}   stack {}   row {}
@@ -48,7 +48,7 @@ list(items, icon:)   table(rows, head:)   address {}   chip(title, text, icon:) 
 quote(text, name, place: stars:)   stat(value, label)   steps([(label, text)])   marquee(words)
 navbar(brand, [(label, href)], cta: (label, href))
 hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: rows) {}   badge: hours rows, shows open/closed now
-gallery([(image, alt, tag)], filters: [(tag, label)])   adds an All tab
+gallery([(image, alt, tag)], filters: [(tag, label)])
 hours(rows)   rows: [(label, "1-5 8:00-16:00")], days 1-7 = Mon-Sun, "" closed
 map(address)   split { card(...) }   footer(text: links: contact: [str] small: [str]) {}
 form(title, mailto: | on:) {}   field(name, label, type: text|email|tel|date|area|select|check req: hint: options: [str])

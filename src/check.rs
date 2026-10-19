@@ -701,6 +701,64 @@ fn char_literal(e: &Expr) -> Option<Edit> {
     }
 }
 
+/// `28` where a web function takes text (`stat(28, "years of baking")`): the number in quotes. The
+/// web functions show such a value as it is written, so the quoted literal is what was meant.
+fn quoted_number(e: &Expr) -> Option<(String, Edit)> {
+    let text = match e.kind {
+        ExprKind::Int(n) => n.to_string(),
+        ExprKind::Float(_) => show(e)?,
+        _ => return None,
+    };
+    let quoted = format!("\"{text}\"");
+    Some((quoted.clone(), Edit::replace(e.span, &text, quoted)))
+}
+
+/// `"16px"` or `"16"` where a web function takes a number (`site(radius: "16px")`): the number. The
+/// web functions' numbers are pixels, columns or counts, so `px` is the only unit that can be meant.
+fn unquoted_number(e: &Expr, want: Type) -> Option<(String, Edit)> {
+    let ExprKind::Str(text) = &e.kind else { return None };
+    let t = text.trim();
+    let digits = t.strip_suffix("px").unwrap_or(t).trim_end();
+    let body = digits.strip_prefix('-').unwrap_or(digits);
+    if body.is_empty() || !body.chars().all(|c| c.is_ascii_digit() || c == '.') || body.starts_with('.') || body.ends_with('.') {
+        return None;
+    }
+    let n = match want {
+        Type::Int => digits.parse::<i64>().ok()?.to_string(),
+        Type::Float => {
+            digits.parse::<f64>().ok()?;
+            if digits.contains('.') {
+                digits.to_string()
+            } else {
+                format!("{digits}.0")
+            }
+        }
+        _ => return None,
+    };
+    Some((n.clone(), Edit::replace(e.span, &format!("\"{text}\""), n)))
+}
+
+/// `"© 2026 Lípa"` where a web function takes a list of such values (`footer(small: "...")`): the
+/// value in a list of one.
+fn listed_literal(e: &Expr) -> Option<Edit> {
+    let text = match &e.kind {
+        ExprKind::Int(n) => n.to_string(),
+        ExprKind::Str(s) if !s.contains(|c: char| matches!(c, '"' | '\\' | '{' | '}') || c.is_control()) => format!("\"{s}\""),
+        _ => return None,
+    };
+    Some(Edit::replace(e.span, &text, format!("[{text}]")))
+}
+
+/// `hours(rows)` where the rows themselves are wanted (`hero(badge: hours(rows))`): `rows`.
+fn hours_rows(e: &Expr) -> Option<(String, Edit)> {
+    let ExprKind::Call(name, args) = &e.kind else { return None };
+    if name != "web.hours" && name != "hours" {
+        return None;
+    }
+    let ExprKind::Var(rows) = &args.first()?.kind else { return None };
+    Some((rows.clone(), Edit::replace(e.span, &format!("hours({rows})"), rows.clone())))
+}
+
 /// What a variant pattern takes apart: the number of the variant, and the names that take its
 /// values (name, where, type, the field of the enum value that holds it).
 struct VPat {
@@ -1145,9 +1203,16 @@ impl Checker {
             return;
         }
         let hint = self.mismatch_hint(want, got, e, &ctx);
+        // a web function's literal argument written as the other kind of literal: `stat(28, ...)`,
+        // `site(radius: "16px")`; and `badge: hours(rows)` for `badge: rows`
+        let web = matches!(&ctx, Ctx::Arg { f, .. } if f.starts_with("web."));
         let fix = match (want, got) {
             (Type::Float, Type::Int) => float_literal(e),
             (Type::Char, Type::Str) => char_literal(e),
+            (Type::Str, Type::Int | Type::Float) if web => quoted_number(e).map(|(_, edit)| edit),
+            (Type::Int | Type::Float, Type::Str) if web => unquoted_number(e, want).map(|(_, edit)| edit),
+            (Type::Array(_), _) if web && want.elem() == Some(got) => listed_literal(e),
+            _ if matches!(&ctx, Ctx::Arg { f: "web.hero", param: "badge", .. }) => hours_rows(e).map(|(_, edit)| edit),
             _ => None,
         };
         self.errs.push(
@@ -1184,7 +1249,27 @@ impl Checker {
         }
         // the web functions' parameters whose shape a program guesses wrong most (`use web`)
         if let Ctx::Arg { f, param, .. } = ctx {
-            let web = match (f.strip_prefix("web.").unwrap_or(""), *param) {
+            let func = f.strip_prefix("web.").unwrap_or("");
+            if !func.is_empty() {
+                match (want, got) {
+                    (Str, Int | Float) => {
+                        if let Some((quoted, _)) = quoted_number(e) {
+                            return format!("`{param}` is text: write the number in quotes, `{quoted}`");
+                        }
+                    }
+                    (Int | Float, Str) if !(func == "site" && *param == "radius") => {
+                        if let Some((n, _)) = unquoted_number(e, want) {
+                            return format!("`{param}` is a number: write it without quotes, `{n}`");
+                        }
+                    }
+                    _ => {}
+                }
+                if (func, *param) == ("hero", "badge") && got.name() == "Node" {
+                    let rows = hours_rows(e).map_or("[(\"Mon–Fri\", \"1-5 8:00-16:00\")]".to_string(), |(rows, _)| rows);
+                    return format!("`badge:` takes the rows of the opening hours, not the `hours(...)` element: `badge: {rows}`");
+                }
+            }
+            let web = match (func, *param) {
                 ("site", "radius") => Some("`radius:` is the corner radius in pixels, a number: `radius: 16`"),
                 ("gallery", "photos") => Some(
                     "`photos` is a list of (image, alt, tag) triples: `[(\"bread.jpg\", \"Fresh bread\", \"bread\")]`; the tag may be `\"\"`",
@@ -4480,12 +4565,38 @@ impl Checker {
                     );
                 }
                 (_, false) => {
+                    if name == "web.gallery" && names[i] == "photos" {
+                        tys[i] = self.photo_pairs(a, want, tys[i]);
+                    }
                     self.expect_ty(want, tys[i], a, Ctx::Arg { f: name, idx: i, param: &names[i] });
                 }
             }
         }
         self.record_call(name, span, ginout);
         ret
+    }
+
+    /// `gallery(photos)` with (image, alt) pairs: each gets the empty tag, as
+    /// `photos.map(p => (p.0, p.1, ""))` (a literal list is completed where the call is linked,
+    /// `webcheck::Ctx::call`).
+    fn photo_pairs(&mut self, a: &mut Expr, want: Type, got: Type) -> Type {
+        // (a variable or a call without arguments: checked again inside the `map`, which changes nothing)
+        let again = match &a.kind {
+            ExprKind::Var(_) => true,
+            ExprKind::Call(_, xs) => xs.is_empty(),
+            _ => false,
+        };
+        if got.name() != "[(str, str)]" || !again {
+            return got;
+        }
+        let at = a.span;
+        let pair = || Expr::new(ExprKind::Var("_web_pair".to_string()), at);
+        let item = |k: &str| Expr::new(ExprKind::Field(Box::new(pair()), k.to_string()), at);
+        let triple = Expr::new(ExprKind::Tuple(vec![item("0"), item("1"), Expr::new(ExprKind::Str(String::new()), at)]), at);
+        let lambda = Expr::new(ExprKind::Lambda(vec![("_web_pair".to_string(), at)], Box::new(triple)), at);
+        let photos = std::mem::replace(a, Expr::new(ExprKind::None, at));
+        *a = Expr::new(ExprKind::Method(Box::new(photos), "map".to_string(), vec![lambda]), at);
+        self.arg_type(a, Some(want))
     }
 
     /// `Point(x: 1, y: 2)`: every field, named, in declaration order.

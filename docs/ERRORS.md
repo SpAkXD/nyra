@@ -400,6 +400,8 @@ fn main() {
   - the wrong type returned from a function, or passed as an argument
   - using the result of a function without a return type (`let x = print(1)`)
   - a number used as a `bool`: write a comparison
+  - with `use web`, a literal of the other kind for a web function: `stat(28, "years")` (the value is text, `"28"`), `site(radius: "16px")` (a number, `16`), `footer(small: "© 2026")` (a list, `["© 2026"]`); each has one certain repair, which `nyra check` applies in memory as a warning (`--fix` writes it, `--strict` keeps the error)
+  - `hero(badge: hours(rows))`: the badge takes the rows themselves, `badge: rows`
 - **Wrong:**
 ```rust
 fn half(x: float) -> float = x / 2.0
@@ -3778,6 +3780,7 @@ fn main() {
   - a section function named after the component it wraps (`fn footer() -> Node = footer(...)`)
   - data named like a component: `let hours = [...]`, `let map = ...`
   - a type of your own called `Node`
+  - a helper named after what it makes: `fn img(n: int) -> str` for an image URL; the hint says `fn photo`, and when every call fits the function's parameters (none can mean the web function), the name is no variable and `photo` is free, renaming the function and its calls is a certain fix that `nyra check` applies in memory as a warning
 - **Wrong:**
 ```rust
 use web
@@ -3844,6 +3847,7 @@ page("/", "Home") {
 - **What it means:** A web text or option has a word the library does not know: an icon that does not exist (`":phnoe: 123"`, `icon: "phnoe"`), an option word that is not one of its option's few words (`section(..., bg: "alternative")`), or a motion word that is not one of its option's words (`hover: "lfit"`). The motion options `anim:`, `hover:`, `loop:` and `scroll:` each have their own list (see Motion in [WEB.md](WEB.md)), plus the speeds `fast` and `slow`, the easings `out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, one number and one duration (`4s`, `600ms`); a word made with `keyframes` counts in `anim:` and `loop:`. The message names the nearest word or lists the words. A literal is checked when the program compiles; text that is computed while the site is built is checked then, and the build stops with the same code.
 - **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a missing icon, a section without its background or a card that does not move is easy to miss on a page (a misspelled CSS class or animation name fails silently) and costs a round of looking at screenshots. A word is checked like a name in code, before the site is deployed.
 - **Common causes:**
+  - an icon option written as in text, `icon: ":clock:"`: the option takes the bare name, `icon: "clock"` (a certain fix, applied in memory by `nyra check`)
   - an icon name from another set: the icons are [Lucide](https://lucide.dev) names (`phone`, `mail`, `map-pin`, `clock`, `calendar`, `leaf`, `flame`, `house`, `star`, `check`, `send`, `navigation`, `arrow-right`, `chevron-down`, `menu`, `x`, the brand icon `facebook`, ...); `src/std/web_icons.nyra` lists all of them
   - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
   - an option word from CSS (`bg: "gray"`): `bg:` takes `alt`, `white`, `dark`, `primary`, `accent`, `ink`
