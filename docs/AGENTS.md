@@ -20,6 +20,9 @@ Rust, Go, TypeScript or Python, and it is not in your training data: do not gues
 - `nyra run file.nyra` (`-- args` passes arguments). Runtime errors have a code too (exit code 101).
 - Test with examples after a function: `fn sq(x: int) -> int = x * x  ex sq(3) == 9`, or
   `ex for n in 0..100: f(n) >= 0`. `nyra check` evaluates them; `nyra test file.nyra` reports each.
+- State a function's rule as a contract (Nyra v0.9, docs/SPEC.md "Contracts"): lines `requires amount > 0` and
+  `ensures result >= 0` after the signature. `nyra check` searches for an input that breaks it (E0421, E0422);
+  every call checks it (E0420, E0421).
 - Change one function of a big file by name: `nyra outline`, `nyra show file.nyra name`, `nyra edit`.
 
 ## Capabilities and the sandbox

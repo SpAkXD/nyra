@@ -5,6 +5,22 @@ version to the next; each entry says what changed. Error codes are stable: a num
 
 ## v0.9.0 (unreleased)
 
+Contracts
+- **`requires` / `ensures`** on a function: `bool` conditions on the arguments and on the result (`result`, and
+  `old(x)` for an `inout` parameter at the call), one line each with comma-separated conditions, between the signature
+  and `= expr` or as the first lines of a `{ }` body. Every call checks them, in the interpreter and on every backend
+  (C, JavaScript, TypeScript, Python, Rust, Go): a broken `requires` stops the program with runtime error E0420, a
+  broken `ensures` with E0421, each with the call, its argument values and the condition
+  (`withdraw(5, 10) breaks requires amount <= balance`).
+- **Counterexamples at compile time.** `nyra check` (and `run`, `build`, `test`) searches each function with a
+  contract for an input that satisfies `requires` but breaks an `ensures` (E0421: `withdraw(1, 1) breaks ensures
+  result > 0: result is 0`) or makes the function stop with a runtime error (E0422: an overflow, an index out of
+  bounds, ...). Inputs: boundary values, the function's constants, its `ex` arguments, then seeded random values,
+  for ints, floats, bools, chars, strings, arrays, maps, structs, tuples, optionals and enums; the first failure is
+  shrunk to a small input. Deterministic, 300 inputs per function (`NYRA_CONTRACT_TRIES`, 0 turns it off); functions
+  with files, input, the clock, randomness or script variables are only checked at run time. `result` or `old(...)`
+  where they mean nothing is E0423. See docs/CONTRACTS.md.
+
 Editors
 - **`nyra lsp`: a language server.** VS Code, Neovim, Helix, Zed and any other editor that speaks the Language
   Server Protocol (3.17, over stdio) now show the compiler's errors and warnings while you type, with their codes, a

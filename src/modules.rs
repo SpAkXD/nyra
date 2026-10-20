@@ -327,6 +327,10 @@ impl Loader {
     fn rewrite_func(&mut self, f: &mut Func, scope: &Scope) {
         let mut errs = Vec::new();
         each_stmt_mut(&mut f.body, &mut |_| {}, &mut |e| fix_expr(e, scope, &self.loaded, &mut errs));
+        // the conditions of its contract call functions of the file too
+        for c in f.contract.requires.iter_mut().chain(f.contract.ensures.iter_mut()) {
+            c.expr.each_mut(&mut |e| fix_expr(e, scope, &self.loaded, &mut errs));
+        }
         self.errs.append(&mut errs);
     }
 

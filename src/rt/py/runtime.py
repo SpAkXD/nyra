@@ -108,6 +108,13 @@ def ny_mod(a, b, line, col):
     return ny_rem(a, b)
 
 
+def ny_contract_fail(kind, msg, line, col):
+    """A broken contract: `requires` (kind 0, E0420) or `ensures` (kind 1, E0421)."""
+    if kind == 0:
+        ny_panic("E0420", msg, "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict", line, col)
+    ny_panic("E0421", msg, "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong", line, col)
+
+
 def ny_check_some(has, line, col):
     """`opt.unwrap()` of `none`."""
     if not has:

@@ -105,6 +105,21 @@ conditions see, and the first input that fails is reported as E0250 ("is false f
 expected value. Use a property for a rule that holds for every input (a result is never negative, sorting
 twice changes nothing, `parse(show(x)) == x`); use plain examples for exact values.
 
+A *contract* states what a function needs and promises; the compiler then hunts for inputs that break it:
+```rust
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result >= 0, result == balance - amount
+= balance - amount
+
+print(withdraw(100, 30))
+```
+In a `{ }` body the `requires` / `ensures` lines come first; `result` is the return value, `old(xs)` an `inout`
+parameter at the call. `nyra check` tries a few hundred inputs that satisfy `requires` and reports a
+counterexample: E0421 `withdraw(1, 1) breaks ensures result > 0: result is 0` (fix the function for that input,
+or the condition) or E0422 when the call crashes (often an overflow for huge ints: add a bound such as
+`requires x < 1000000000`). At run time a broken `requires` is E0420 (the caller is wrong), a broken `ensures`
+E0421. Write contracts for functions with a clear rule (money, indexes, ranges); docs/CONTRACTS.md has the limits.
 **Run code you did not write, or let an agent run unsupervised, with capabilities.** `nyra run prog.nyra` grants
 everything. Modules that touch the world need a capability: `fs` (files), `input` (stdin), `os` (arguments,
 environment, `exit`). `--allow fs,os` grants only those, `--sandbox` grants nothing but what `--allow` names, in
@@ -494,6 +509,8 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0371 | misused child block | only after a call whose last parameter is an array; each line makes one element; no assignments, `var`, `while` or `return` inside |
 | E0290 | capability not granted | `use fs` / `os` / `input` needs `--allow fs` / `os` / `input` (CLI) or `allow: ["fs"]` (MCP); or drop the module |
 | E0292 | malformed property example | `ex for n in 0..200: f(n) >= 0`: the range is two whole-number literals, `step` is not 0 |
+| E0421 · E0422 | a counterexample breaks `ensures` · makes the function crash | fix the function for that input; or rule the input out with `requires` (a bound against an overflow) |
+| E0423 | `result` / `old` where they mean nothing | `result` only in `ensures` of a function with `-> T`; `old(x)` only for an `inout` parameter |
 | E0293 | property example has too many inputs | at most 100,000: shorten the range or add a `step` |
 | E0275 | `in` cannot look for this value | `x in xs` needs `x` of the element type, `xs` an array, string or map |
 | E0270 | bad format specifier | `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`: fill and align, `+`, `0`, width, `,`, `.N`; no `e`, `x`, `%` |
@@ -531,6 +548,7 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0246 | `char(n)` of an invalid code | codes go from 0 to 1114111, except 55296 to 57343 |
 | E0247 | `min()` or `max()` of an empty array | check `xs.len() > 0` first, or use `fold` with a start value |
 | E0350 | `unwrap()` of `none` | use `x ?? default` or `if let v = x { ... }`, or check `x != none` first |
+| E0420 · E0421 | a call breaks `requires` · a result breaks `ensures` | the caller passes values the function rules out · the function is wrong for these arguments (both are in the message) |
 | E0249 | out of memory | `repeat` makes at most 536,870,888 bytes of text (UTF-16 units with `--js`, the same for ASCII) or 100,000,000 elements |
 | E0355 | step limit reached (interpreter, exit 120) | an endless loop or recursion; or raise `--fuel N` |
 | E0356 | memory limit reached (interpreter, exit 121) | a value that grows without end; or raise `--max-memory 1G` |

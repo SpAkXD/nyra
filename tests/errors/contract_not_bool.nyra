@@ -1,0 +1,6 @@
+// expect: E0209
+fn half(n: int) -> int
+    requires n
+= n / 2
+
+print(half(9))

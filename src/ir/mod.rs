@@ -380,6 +380,9 @@ pub enum RtOp {
     MapRemove,
     /// `json.parse(text)`: a value of the destination's type read from JSON text (E0345), owned.
     JsonParse,
+    /// A broken contract (contracts.rs): stops the program with the message (the second operand);
+    /// the first is 0 for `requires` (runtime error E0420) and 1 for `ensures` (E0421). Writes nowhere.
+    ContractFail,
 }
 
 impl RtOp {
@@ -441,6 +444,7 @@ impl RtOp {
             RtOp::MapSet => "map_set",
             RtOp::MapRemove => "map_remove",
             RtOp::JsonParse => "json_parse",
+            RtOp::ContractFail => "contract_fail",
         }
     }
 
@@ -467,6 +471,7 @@ impl RtOp {
             RtOp::CheckStep => (&[Int], None),
             RtOp::CheckSome => (&[Ty::Bool], None),
             RtOp::CheckNonEmpty => (&[Int, Int], None),
+            RtOp::ContractFail => (&[Int, Str], None),
             _ => (&[], None),
         }
     }

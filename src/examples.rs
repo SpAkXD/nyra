@@ -16,6 +16,7 @@
 
 use crate::ast;
 use crate::ast::{BinOp, Expr, ExprKind, Forall, Func, InterpPart, Param, Program, Span, Stmt, StmtKind, Type, UnOp};
+use crate::contracts::Target;
 use crate::diag::{json_str, render_json_errors, Diag};
 use crate::ir::interp::{self, Interp, Limits, RuntimeError, Stop, Value};
 use crate::ir::{self, FuncId};
@@ -39,6 +40,10 @@ pub struct Outcome {
     /// Examples that could not be run: the backends do not support something they use (or a
     /// compiler bug). They are not reported as errors.
     pub skipped: usize,
+    /// Functions whose contract was searched for a counterexample (their errors are in `errors`).
+    pub contracts: usize,
+    /// How many of them broke (the last errors).
+    pub broken: usize,
 }
 
 /// What is known about one example before it runs.
@@ -78,9 +83,13 @@ enum Res {
 /// error per example that is not true.
 pub fn run(prog: &mut Program) -> Outcome {
     let total = prog.examples.len();
-    if total == 0 {
+    if total == 0 && prog.funcs.iter().all(|f| f.contract.is_empty()) {
         return Outcome::default();
     }
+    // the functions whose contracts are searched for a counterexample (contracts.rs): each adds a
+    // function `pre#name` (its `requires`), lowered with the examples and removed after
+    let pre_start = prog.funcs.len();
+    let targets = crate::contracts::targets(prog);
     let base = prog.funcs.len();
     let mut plans = Vec::with_capacity(total);
     // how to put each condition back together: the operator of a split comparison
@@ -159,15 +168,16 @@ pub fn run(prog: &mut Program) -> Outcome {
         };
     }
     drop(synth);
+    prog.funcs.truncate(pre_start);
 
     let results = match module {
-        Ok(m) => evaluate(&m, &plans, base),
+        Ok(m) => evaluate(&m, &plans, base, &targets, &prog.files),
         Err(_) => None,
     };
-    let Some(results) = results else {
+    let Some((results, broken)) = results else {
         return Outcome { total, skipped: total, ..Outcome::default() };
     };
-    let mut out = Outcome { total, ..Outcome::default() };
+    let mut out = Outcome { total, contracts: targets.len(), ..Outcome::default() };
     for (i, (plan, (res, input))) in plans.iter().zip(results).enumerate() {
         match res {
             Res::Pass => out.passed += 1,
@@ -180,6 +190,8 @@ pub fn run(prog: &mut Program) -> Outcome {
             }
         }
     }
+    out.broken = broken.len();
+    out.errors.extend(broken);
     out
 }
 
@@ -190,12 +202,12 @@ fn synthetic(name: String, e: Expr, ret: Type, span: Span, forall: &Option<Foral
         Some(f) => vec![Param { name: f.var.clone(), ty: Type::Int, inout: false, mutable: false, default: None, span: f.span }],
         None => Vec::new(),
     };
-    Func { name, params, ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span }
+    Func { name, params, ret, body: vec![Stmt { kind: StmtKind::Ret(Some(e)), span: s }], span, contract: Default::default() }
 }
 
 /// Runs every example, on a thread with a large stack. `None` if that thread cannot run.
 #[cfg(not(target_arch = "wasm32"))]
-fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
+fn evaluate(m: &ir::Module, plans: &[Plan], base: usize, targets: &[Target], files: &Files) -> Option<Evaluated> {
     let types = ast::type_tables();
     std::thread::scope(|scope| {
         std::thread::Builder::new()
@@ -204,7 +216,8 @@ fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Opt
             .spawn_scoped(scope, || {
                 // (array and struct types are numbered per thread: `json.parse` needs them)
                 ast::install_type_tables(types);
-                plans.iter().map(|p| one(m, p, base)).collect()
+                let results = plans.iter().map(|p| one(m, p, base)).collect();
+                (results, crate::contracts::search(m, targets, files))
             })
             .ok()?
             .join()
@@ -215,9 +228,17 @@ fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Opt
 /// Runs every example. WebAssembly has no threads: they run on the caller's stack, which the
 /// build makes large (`tools/build_wasm.py`).
 #[cfg(target_arch = "wasm32")]
-fn evaluate(m: &ir::Module, plans: &[Plan], base: usize) -> Option<Vec<(Res, Option<i64>)>> {
-    Some(plans.iter().map(|p| one(m, p, base)).collect())
+fn evaluate(m: &ir::Module, plans: &[Plan], base: usize, targets: &[Target], files: &Files) -> Option<Evaluated> {
+    let results = plans.iter().map(|p| one(m, p, base)).collect();
+    Some((results, crate::contracts::search(m, targets, files)))
 }
+
+/// The result of every example (with the input of a property that failed), and the errors of the
+/// contracts that were broken.
+type Evaluated = (Vec<(Res, Option<i64>)>, Vec<Diag>);
+
+/// The imported file of each function that comes from one.
+type Files = std::collections::HashMap<String, String>;
 
 fn one(m: &ir::Module, plan: &Plan, base: usize) -> (Res, Option<i64>) {
     let id = FuncId((base + plan.func) as u32);
@@ -243,7 +264,7 @@ fn check(m: &ir::Module, plan: &Plan, it: &mut Interp, id: FuncId, input: Option
         Ok(Some(v)) => Ok(v),
         Ok(None) => Err(Res::Skipped),
         Err(Stop::Error(e)) => {
-            let name = e.func.map(|f| m.func(f).name.clone()).filter(|n| !n.starts_with("ex#"));
+            let name = e.func.map(|f| crate::contracts::display_name(&m.func(f).name).to_string()).filter(|n| !n.starts_with("ex#"));
             Err(Res::Error(*e, name))
         }
         Err(Stop::Steps) => Err(Res::Steps),
@@ -387,13 +408,16 @@ fn report(p: &Plan, res: Res, input: Option<i64>) -> Diag {
 /// `nyra test --json`: `{"ok":..,"examples":..,"passed":..,"failed":..,"errors":[..]}`.
 pub fn json(out: &Outcome, file: &str) -> String {
     let skipped = if out.skipped > 0 { format!(",\"skipped\":{}", out.skipped) } else { String::new() };
+    // (`failed` counts the examples; a broken contract is under `counterexamples`)
+    let contracts =
+        if out.contracts > 0 { format!(",\"contracts\":{},\"counterexamples\":{}", out.contracts, out.broken) } else { String::new() };
     format!(
-        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped},\"errors\":{}{}}}",
+        "{{\"ok\":{},\"file\":{},\"examples\":{},\"passed\":{},\"failed\":{}{skipped}{contracts},\"errors\":{}{}}}",
         out.errors.is_empty(),
         json_str(file),
         out.total,
         out.passed,
-        out.errors.len(),
+        out.errors.len() - out.broken,
         render_json_errors(&out.errors, file),
         crate::diag::warnings_json(file)
     )
@@ -401,17 +425,30 @@ pub fn json(out: &Outcome, file: &str) -> String {
 
 /// The summary line of `nyra test`.
 pub fn summary(out: &Outcome, file: &str) -> String {
-    if out.total == 0 {
+    if out.total == 0 && out.contracts == 0 {
         return format!("no examples in {file}: write them after a function, e.g. `fn sq(x: int) -> int = x * x  ex sq(3) == 9`");
     }
-    let mut s = format!("{} example{}: {} passed", out.total, if out.total == 1 { "" } else { "s" }, out.passed);
-    if !out.errors.is_empty() {
-        s += &format!(", {} failed", out.errors.len());
+    let mut parts = Vec::new();
+    if out.total > 0 {
+        let mut s = format!("{} example{}: {} passed", out.total, if out.total == 1 { "" } else { "s" }, out.passed);
+        let failed = out.errors.len() - out.broken;
+        if failed > 0 {
+            s += &format!(", {failed} failed");
+        }
+        if out.skipped > 0 {
+            s += &format!(", {} not run (not supported by the backends yet)", out.skipped);
+        }
+        parts.push(s);
     }
-    if out.skipped > 0 {
-        s += &format!(", {} not run (not supported by the backends yet)", out.skipped);
+    if out.contracts > 0 {
+        let n = out.contracts;
+        let mut s = format!("contracts of {n} function{} searched", if n == 1 { "" } else { "s" });
+        if out.broken > 0 {
+            s += &format!(": {} counterexample{}", out.broken, if out.broken == 1 { "" } else { "s" });
+        }
+        parts.push(s);
     }
-    s
+    parts.join("; ")
 }
 
 /// The first function of the program that `e` calls, in the order it runs.

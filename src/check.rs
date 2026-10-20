@@ -1455,6 +1455,9 @@ impl Checker {
             };
             self.declare(&p.name, ty, decl, p.span);
         }
+        if !f.contract.is_empty() {
+            self.contract(f);
+        }
         if self.g.in_main {
             // a script: each top-level statement is numbered, so a call can be compared with the
             // declarations of the script variables it uses
@@ -1503,6 +1506,32 @@ impl Checker {
                 .fix_opt(fix),
             );
         }
+    }
+
+    /// The `requires` and `ensures` conditions of `f` (see `contracts.rs`): `bool` conditions on the
+    /// parameters; `ensures` also sees `result` and, for each `inout` parameter `x`, `old(x)`.
+    fn contract(&mut self, f: &mut Func) {
+        let mut errs = crate::contracts::prepare(f);
+        self.errs.append(&mut errs);
+        for c in &mut f.contract.requires {
+            let t = self.expr_with(&mut c.expr, Some(Type::Bool));
+            self.cond(t, &c.expr, "`requires`");
+        }
+        self.scopes.push(HashMap::new());
+        let hidden = |ty: Type, span: Span| Var { ty, decl: Decl::Let, span, arena: 0 };
+        if f.ret != Type::Void {
+            let v = hidden(self.ret, f.span);
+            self.scopes.last_mut().expect("pushed above").insert(crate::contracts::RESULT.to_string(), v);
+        }
+        for p in f.params.iter().filter(|p| p.inout) {
+            let v = hidden(if self.defined(p.ty) { p.ty } else { Type::Unknown }, p.span);
+            self.scopes.last_mut().expect("pushed above").insert(crate::contracts::old_name(&p.name), v);
+        }
+        for c in &mut f.contract.ensures {
+            let t = self.expr_with(&mut c.expr, Some(Type::Bool));
+            self.cond(t, &c.expr, "`ensures`");
+        }
+        self.scopes.pop();
     }
 
     /// An `ex` condition: it sees no variables, and it must be a `bool` (it is run by `examples.rs`).

@@ -855,6 +855,7 @@ impl<'a> Gen<'a> {
             RtOp::FloatToInt => format!("nyF2I({}, {at})", a[0]),
             RtOp::CheckStep => format!("nyCheckStep({}, {at})", a[0]),
             RtOp::CheckSome => format!("nyCheckSome({}, {at})", a[0]),
+            RtOp::ContractFail => format!("nyContractFail({}, {}, {at})", a[0], a[1]),
             RtOp::CheckNonEmpty => format!("nyCheckNonEmpty({}, {}, {at})", a[0], a[1]),
             RtOp::StrConcat => format!("{} + {}", self.expr(&args[0]), self.expr(&args[1])),
             RtOp::StrAt => format!("nyCharAt({}, {}, {at})", a[0], a[1]),

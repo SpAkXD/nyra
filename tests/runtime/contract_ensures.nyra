@@ -1,0 +1,10 @@
+// expect: E0421 at 6:13
+let limit = 10
+
+fn capped(x: int) -> int
+    requires x >= 0
+    ensures result <= limit
+= x
+
+print(capped(3))
+print(capped(50))

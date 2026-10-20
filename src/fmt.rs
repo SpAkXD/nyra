@@ -94,7 +94,7 @@ pub fn format(src: &str) -> String {
     let mut last_line = 0;
     // the `ret` tokens to spell out: (line, column)
     let mut rets: Vec<(usize, usize)> = Vec::new();
-    for t in &toks {
+    for (idx, t) in toks.iter().enumerate() {
         match t.tok {
             Tok::Newline => {
                 broke = true;
@@ -110,8 +110,15 @@ pub fn format(src: &str) -> String {
             // operator or a `.` at the end or start), directly in a block or at the top level
             let goes_on =
                 (!broke || matches!(prev, Some(Tok::Comma))) && prev.is_some() && matches!(stack.last(), None | Some(Tok::LBrace));
+            // a `requires` / `ensures` line between a function's signature and its body
+            let contract = open == 0
+                && matches!(&t.tok, Tok::Ident(w) if w == "requires" || w == "ensures")
+                && !matches!(
+                    toks.get(idx + 1).map(|n| &n.tok),
+                    Some(Tok::Assign | Tok::OpAssign(_) | Tok::Dot | Tok::LBracket | Tok::Newline)
+                );
             if let Some(slot) = level.get_mut(t.span.line) {
-                *slot = Some(open + usize::from(goes_on));
+                *slot = Some(open + usize::from(goes_on || contract));
                 closing[t.span.line] = closes;
             }
             last_line = t.span.line;

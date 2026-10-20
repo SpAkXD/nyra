@@ -32,16 +32,21 @@ use bounds::{Iv, MODES};
 
 /// Lowers a type-checked program. Fails for features the backends do not support yet.
 pub fn lower(prog: &ast::Program) -> Result<Module, String> {
+    // a function with a contract is a wrapper that checks it around its body (contracts.rs); the
+    // bodies come after every other function, so the program's functions keep their numbers
+    let contracts = crate::contracts::expand(prog);
+    let globals = contracts.globals.as_ref().unwrap_or(&prog.globals);
     // the functions that change script variables: a call of one changes variables
-    let writers: HashSet<String> =
-        prog.globals.uses.iter().filter(|(_, us)| us.iter().any(|u| u.inout)).map(|(f, _)| f.clone()).collect();
+    let writers: HashSet<String> = globals.uses.iter().filter(|(_, us)| us.iter().any(|u| u.inout)).map(|(f, _)| f.clone()).collect();
     WRITERS.with(|w| *w.borrow_mut() = writers);
-    let ids: HashMap<String, FuncId> = prog.funcs.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
+    let all: Vec<&ast::Func> =
+        prog.funcs.iter().enumerate().map(|(i, f)| contracts.wrappers.get(&i).unwrap_or(f)).chain(contracts.bodies.iter()).collect();
+    let ids: HashMap<String, FuncId> = all.iter().enumerate().map(|(i, f)| (f.name.clone(), FuncId(i as u32))).collect();
     let structs = struct_table(prog);
     let mut strs = Strs::default();
     let mut funcs = Vec::new();
-    for f in &prog.funcs {
-        let mut l = Lower::new(&ids, &mut strs, &structs, &prog.globals);
+    for f in all {
+        let mut l = Lower::new(&ids, &mut strs, &structs, globals);
         let mut func = l.func(f);
         if let Some(what) = l.unsupported {
             return Err(what);
@@ -1840,6 +1845,12 @@ impl<'a> Lower<'a> {
                 }
             }
             "free" | "keep" => Expr::Bool(false),
+            // a broken contract (contracts.rs): `contract#fail(kind, message)` stops the program
+            crate::contracts::FAIL => {
+                let vals = self.operands(&args.iter().collect::<Vec<_>>(), out);
+                out.push(Stmt { kind: StmtKind::Op { dst: None, op: RtOp::ContractFail, args: vals }, span });
+                Expr::Bool(false)
+            }
             // `zip(a, b)` (unless the program defines its own): a generated helper function
             "zip" if !self.ids.contains_key(name) => {
                 let vals = self.operands(&args.iter().collect::<Vec<_>>(), out);

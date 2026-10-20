@@ -1,0 +1,59 @@
+// Contracts: `requires` says what a function needs, `ensures` what it guarantees
+// (`result` is the value it returns, `old(xs)` an `inout` parameter at the call).
+// Every call checks them; `nyra check` also searches for inputs that break them.
+
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result >= 0, result == balance - amount
+= balance - amount
+
+fn clamp(x: int, lo: int, hi: int) -> int
+    requires lo <= hi
+    ensures result >= lo, result <= hi
+= max(lo, min(x, hi))
+
+fn largest(xs: [int]) -> int {
+    requires xs.len() > 0
+    ensures result in xs
+    var best = xs[0]
+    for x in xs {
+        if x > best {
+            best = x
+        }
+    }
+    return best
+}
+
+fn push_twice(inout xs: [str], s: str) {
+    requires s.len() > 0
+    ensures xs.len() == old(xs).len() + 2, xs[xs.len() - 1] == s
+    xs.push(s)
+    xs.push(s)
+}
+
+struct Account { owner: str, cents: int }
+
+fn deposit(a: Account, cents: int) -> Account
+    requires cents > 0, cents <= 1000000, a.cents >= 0, a.cents <= 1000000000000
+    ensures result.cents == a.cents + cents, result.owner == a.owner
+= Account(owner: a.owner, cents: a.cents + cents)
+
+fn initial(name: str) -> char
+    requires name.len() > 0
+    ensures result.is_upper() || !name[0].is_letter()
+= name[0].upper()
+
+fn ratio(part: float, whole: float) -> float
+    requires whole > 0.0, part >= 0.0, part <= whole
+    ensures result >= 0.0, result <= 1.0
+= part / whole
+
+print(withdraw(100, 30))
+print(clamp(15, 0, 10), clamp(-3, 0, 10), clamp(4, 0, 10))
+print(largest([3, 9, 2]))
+var names: [str] = []
+push_twice(inout names, "ada")
+print(names)
+print(deposit(Account(owner: "ada", cents: 500), 250))
+print(initial("grace"), initial("1st"))
+print(ratio(1.0, 4.0))

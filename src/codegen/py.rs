@@ -791,6 +791,7 @@ impl<'a> Gen<'a> {
             RtOp::StrSplit => format!("ny_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("ny_check_step({}, {at})", a[0]),
             RtOp::CheckSome => format!("ny_check_some({}, {at})", a[0]),
+            RtOp::ContractFail => format!("ny_contract_fail({}, {}, {at})", a[0], a[1]),
             RtOp::CheckNonEmpty => format!("ny_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("ny_pad({}, {}, {}, True)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("ny_pad({}, {}, {}, False)", a[0], a[1], a[2]),

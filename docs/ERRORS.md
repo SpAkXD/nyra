@@ -41,6 +41,7 @@ design may still change.
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
 | E0372-E0390 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons (E0389), option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387), opening hours (E0390) |
 | E0400-E0419 | the agent runtime (reserved since v0.9) | `nyra serve --mcp`, typed output (`fn main() -> T`), checkpoints and mocks ([SERVE.md](SERVE.md)); so far they report with existing codes (E0211, E0290, E0340, E0345, E0355-E0359) |
+| E0420-E0429 | contracts (since v0.9; E0424-E0429 kept free) | `requires` broken by a call (E0420, run time) or `ensures` broken by a function (E0421, at run time and as a counterexample `nyra check` finds); a counterexample that makes the function stop with a runtime error (E0422); `result` or `old(...)` where they mean nothing (E0423) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
@@ -4419,3 +4420,133 @@ page("/", "Dentist") {
 }
 ```
 - **Related:** E0374
+
+## E0420: a call breaks `requires`
+- **Kind:** runtime error · **Since:** v0.9
+- **What it means:** A function was called with arguments that its `requires` line rules out: "withdraw(5, 10) breaks requires amount <= balance". Every call checks the `requires` conditions of the function before its body runs, on every backend; the first one that is false stops the program with exit code 101. The message shows the call with the values of its arguments and the condition, and the error points at that condition.
+- **Why Nyra has this rule:** `requires` is what the function needs from its caller. Running the body on arguments it was not written for would give a wrong result somewhere later, far from the call that caused it; stopping at the call names the culprit: the caller.
+- **Common causes:**
+  - a value computed by the caller is out of range (an amount larger than the balance, an index past the end)
+  - an empty array or string passed to a function that needs at least one element
+  - a condition that is stricter than the function needs: relax it
+- **Wrong:**
+```rust
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+= balance - amount
+
+fn main() {
+    print(withdraw(5, 10))
+}
+```
+- **Fixed:**
+```rust
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+= balance - amount
+
+fn main() {
+    let amount = 10
+    if amount <= 5 {
+        print(withdraw(5, amount))
+    } else {
+        print("not enough money")
+    }
+}
+```
+- **Related:** E0421, E0422
+
+## E0421: a function breaks `ensures`
+- **Kind:** compile error · **Since:** v0.9
+- **What it means:** A function returned a result that its `ensures` line rules out: "withdraw(1, 1) breaks ensures result > 0: result is 0". `nyra check` (and `run`, `build`, `test`) searches every function that has a contract for such an input: it tries boundary values, the constants of the function and the arguments of its `ex` lines, then seeded random values, keeps those that satisfy `requires`, and reports the first one whose result breaks an `ensures`, shrunk to a small one. The error points at the broken condition. A call that the search did not try stops the program at run time with the same code (`runtime error[E0421]`, exit code 101); so does a function the search skips (one that uses script variables, files, input or the clock).
+- **Why Nyra has this rule:** `ensures` is what the function promises. A concrete input that breaks the promise is the fastest way to see what is wrong: trace the function with it.
+- **Common causes:**
+  - an off-by-one boundary: `result > 0` where the function can return 0 (`withdraw(1, 1)`)
+  - a case the body forgets: a negative number, an empty string, equal arguments
+  - a condition that promises too much: correct it, or rule such inputs out with a `requires` line if callers never pass them
+- **Wrong:**
+```rust
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result > 0
+= balance - amount
+
+fn main() {
+    print(withdraw(10, 3))
+}
+```
+- **Fixed:**
+```rust
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result >= 0
+= balance - amount
+
+fn main() {
+    print(withdraw(10, 3))
+}
+```
+- **Related:** E0420, E0422, E0250
+
+## E0422: a counterexample makes the function stop with a runtime error
+- **Kind:** compile error · **Since:** v0.9
+- **What it means:** The counterexample search of `nyra check` found arguments that satisfy every `requires` of a function, but the call stops with a runtime error: "`neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3 in `neg`)". The message names the arguments (shrunk to small ones), the runtime error and where it happened; the error points at the function.
+- **Why Nyra has this rule:** A contract says which inputs the function accepts. If it accepts an input it cannot handle, some caller will eventually pass it and the program will stop there.
+- **Common causes:**
+  - an int overflow for very large or very small arguments: bound them (`requires x > -1000000000`)
+  - an index into an empty array or string: `requires xs.len() > 0`
+  - a division by an argument that can be 0
+  - a call of another function whose `requires` the arguments break (E0420 inside)
+- **Wrong:**
+```rust
+fn first(xs: [int]) -> int
+    ensures result in xs
+= xs[0]
+
+fn main() {
+    print(first([4, 5]))
+}
+```
+- **Fixed:**
+```rust
+fn first(xs: [int]) -> int
+    requires xs.len() > 0
+    ensures result in xs
+= xs[0]
+
+fn main() {
+    print(first([4, 5]))
+}
+```
+- **Related:** E0421, E0255, E0240
+
+## E0423: `result` or `old` where it means nothing
+- **Kind:** compile error · **Since:** v0.9
+- **What it means:** A contract uses `result` or `old(...)` where they have no value: `result` in a `requires` line (the function has not run yet), `result` in `ensures` of a function that returns nothing, a parameter named `result` in a function with `ensures`, or `old(x)` in `requires` or of something that is not an `inout` parameter.
+- **Why Nyra has this rule:** `result` is the return value and only exists after the call; `old(x)` is the value an `inout` parameter had before the call changed it. A plain parameter cannot change, so it is simply `x`.
+- **Common causes:**
+  - a condition on the result written on the `requires` line instead of `ensures`
+  - `old(n)` for a parameter that is not `inout`: write `n`
+  - `ensures result ...` on a function without `-> T`: declare the return type, or state what it does to an `inout` parameter
+- **Wrong:**
+```rust
+fn half(n: int) -> int
+    requires n >= 0, result <= n
+= n / 2
+
+fn main() {
+    print(half(9))
+}
+```
+- **Fixed:**
+```rust
+fn half(n: int) -> int
+    requires n >= 0
+    ensures result <= n
+= n / 2
+
+fn main() {
+    print(half(9))
+}
+```
+- **Related:** E0421, E0201
