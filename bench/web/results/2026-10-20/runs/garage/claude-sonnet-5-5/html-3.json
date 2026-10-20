@@ -1,0 +1,38 @@
+{
+ "brief": "garage",
+ "model": "claude-sonnet-5-5",
+ "lang": "html",
+ "run": 3,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 50.6,
+  "input_tokens": 3086,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 3082,
+  "output_tokens": 10110,
+  "cost_usd": 0.101416,
+  "visible_tokens": 10108,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": null,
+ "site": "sites/garage/claude-sonnet-5-5/html-3",
+ "final_file": "raw/garage/claude-sonnet-5-5/html-3.html",
+ "code_tokens": 10103,
+ "code_bytes": 21936,
+ "code_tokens_first": 10103,
+ "total": {
+  "input_tokens": 3086,
+  "cache_write": 0,
+  "cache_read": 3082,
+  "output_tokens": 10110,
+  "cost_usd": 0.101416,
+  "seconds": 50.6,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}

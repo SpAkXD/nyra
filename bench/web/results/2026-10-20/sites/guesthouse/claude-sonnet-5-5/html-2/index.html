@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penzion U Mlýna – riverside guesthouse in Český Krumlov</title>
+<meta name="description" content="Family-run guesthouse in a restored mill on the Vltava, five minutes from the old town of Český Krumlov: six rooms, breakfast included, free parking.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBF8F3;--surf:#fff;--text:#2B2622;--pri:#7A4E2D;--acc:#5B7F5E;--muted:#6b6259;--line:#eadfd2;--sh:0 8px 30px rgba(60,40,20,.09)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Nunito Sans',sans-serif;line-height:1.65;font-size:17px}
+h1,h2,h3{font-family:Fraunces,serif;font-weight:600;line-height:1.15;margin:0}
+a{color:var(--pri)}
+img{display:block;max-width:100%}
+:focus-visible{outline:3px solid var(--acc);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+section{padding:96px 0}
+.kicker{color:var(--acc);text-transform:uppercase;letter-spacing:.14em;font-weight:700;font-size:.8rem;margin:0 0 10px}
+h2{font-size:clamp(2rem,4vw,2.9rem);color:var(--text)}
+.sub{color:var(--muted);max-width:620px;margin:14px 0 0}
+.head{margin-bottom:44px}
+.btn{display:inline-block;padding:14px 28px;border-radius:999px;font-weight:700;text-decoration:none;border:2px solid var(--pri);background:var(--pri);color:#fff;font:inherit;font-weight:700;cursor:pointer;transition:transform .2s,background .2s}
+.btn:hover{transform:translateY(-2px);background:#633d22}
+.btn.out{background:transparent;border-color:#fff;color:#fff}
+.btn.out:hover{background:rgba(255,255,255,.15)}
+/* nav */
+header{position:sticky;top:0;z-index:50;background:rgba(251,248,243,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.brand{font-family:Fraunces,serif;font-size:1.5rem;font-weight:600;color:var(--pri);text-decoration:none}
+.links{display:flex;align-items:center;gap:26px}
+.links a{text-decoration:none;color:var(--text);font-weight:600;font-size:.95rem}
+.links a:hover{color:var(--pri)}
+.links a.btn{color:#fff;padding:10px 22px}
+#menuBtn{display:none;background:none;border:1px solid var(--line);border-radius:12px;padding:8px 10px;cursor:pointer;color:var(--text)}
+/* hero */
+.hero{position:relative;min-height:calc(100vh - 68px);min-height:calc(100svh - 68px);display:flex;align-items:center;color:#fff;padding:80px 0;background:#3a2a1d}
+.hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,rgba(25,16,9,.82),rgba(25,16,9,.45) 60%,rgba(25,16,9,.25));z-index:1}
+.hero .wrap{position:relative;z-index:2}
+.hero h1{font-size:clamp(2.4rem,6vw,4.6rem);max-width:760px;margin:0 0 20px}
+.hero p.lead{max-width:540px;font-size:1.15rem;margin:0 0 30px;color:#f4ece3}
+.hero .kicker{color:#cfe3cf}
+.btns{display:flex;gap:14px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;font-size:.88rem;font-weight:700;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.3)}
+.hero .badge{margin-top:36px}
+.dot{width:9px;height:9px;border-radius:50%;background:#e0705f}
+.badge.open .dot{background:#6fd37c}
+.loc .badge{background:#eef3ee;border-color:#cfdccf;color:#3d5c40}
+.loc .badge.closed{background:#f7ece9;border-color:#e9cdc7;color:#8a4034}
+.hero-i{opacity:0;transform:translateY(24px);animation:in .8s forwards}
+@keyframes in{to{opacity:1;transform:none}}
+/* rooms */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:34px}
+.filters button{font:inherit;font-weight:700;padding:10px 22px;border-radius:999px;border:1px solid var(--line);background:var(--surf);color:var(--text);cursor:pointer;transition:.2s}
+.filters button:hover{border-color:var(--pri)}
+.filters button.active{background:var(--pri);color:#fff;border-color:var(--pri)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+.card{background:var(--surf);border-radius:22px;box-shadow:var(--sh);overflow:hidden;display:flex;flex-direction:column}
+.card .ph{overflow:hidden;aspect-ratio:4/3;background:#e8dccd}
+.card .ph img{width:100%;height:100%;object-fit:cover;transition:transform .6s}
+.card:hover .ph img{transform:scale(1.07)}
+.card .b{padding:22px 24px 26px;display:flex;flex-direction:column;gap:8px;flex:1}
+.card h3{font-size:1.4rem}
+.meta{color:var(--acc);font-weight:700;font-size:.88rem}
+.card p{margin:0;color:var(--muted)}
+.price{margin-top:auto;padding-top:12px;font-size:1.1rem}
+.price b{font-family:Fraunces,serif;font-size:1.5rem;color:var(--pri)}
+.card[hidden]{display:none}
+/* amenities */
+.am{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.am div{background:var(--surf);border-radius:20px;padding:26px 22px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:14px;font-weight:600}
+.ic{width:46px;height:46px;border-radius:14px;background:#e9f0e9;color:var(--acc);display:grid;place-items:center}
+.ic svg{width:24px;height:24px}
+/* gallery */
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.gal button{border:0;padding:0;background:#e8dccd;border-radius:20px;overflow:hidden;cursor:pointer;aspect-ratio:3/2;box-shadow:var(--sh)}
+.gal img{width:100%;height:100%;object-fit:cover;transition:transform .6s}
+.gal button:hover img{transform:scale(1.07)}
+.lb{position:fixed;inset:0;background:rgba(20,13,8,.92);z-index:100;display:none;align-items:center;justify-content:center;padding:60px 70px}
+.lb.open{display:flex}
+.lb img{max-height:100%;max-width:100%;border-radius:14px;object-fit:contain}
+.lb button{position:absolute;background:rgba(255,255,255,.15);border:0;color:#fff;width:48px;height:48px;border-radius:50%;font-size:1.5rem;cursor:pointer}
+.lb button:hover{background:rgba(255,255,255,.3)}
+.lb .x{top:16px;right:16px}.lb .pv{left:12px;top:50%}.lb .nx{right:12px;top:50%}
+/* reviews */
+.rev{background:#f3ece1}
+.rv{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.rv figure{margin:0;background:var(--surf);padding:30px;border-radius:22px;box-shadow:var(--sh)}
+.stars{color:#d79b2c;letter-spacing:3px;font-size:1.1rem}
+.rv blockquote{margin:12px 0 18px;font-family:Fraunces,serif;font-size:1.2rem;line-height:1.45}
+.rv figcaption{color:var(--muted);font-size:.92rem;font-weight:600}
+/* form */
+form{background:var(--surf);padding:36px;border-radius:24px;box-shadow:var(--sh);display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:820px}
+.f{display:flex;flex-direction:column;gap:6px}
+.f.full{grid-column:1/-1}
+label{font-weight:700;font-size:.9rem}
+input,select,textarea{font:inherit;padding:12px 14px;border:1px solid #d9ccbc;border-radius:12px;background:#fff;color:var(--text);width:100%}
+input:focus,select:focus,textarea:focus{outline:3px solid rgba(91,127,94,.4);border-color:var(--acc)}
+form .btn{justify-self:start}
+.bk{max-width:820px}
+/* location */
+.lg{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.pan{background:var(--surf);border-radius:22px;padding:32px;box-shadow:var(--sh)}
+.pan h3{font-size:1.3rem;margin-bottom:14px}
+.pan ul{list-style:none;margin:0 0 18px;padding:0}
+.pan li{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)}
+.pan li span:last-child{color:var(--muted);text-align:right}
+.pan p{margin:0 0 12px}
+/* faq */
+.faq{max-width:800px}
+.faq details{background:var(--surf);border-radius:18px;box-shadow:var(--sh);margin-bottom:14px}
+.faq summary{cursor:pointer;padding:20px 26px;font-weight:700;font-size:1.05rem;list-style:none;display:flex;justify-content:space-between;gap:16px;border-radius:18px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-size:1.5rem;color:var(--pri);line-height:1;transition:transform .25s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{margin:0;padding:0 26px 22px;color:var(--muted)}
+footer{background:#2B2622;color:#d9cfc4;padding:56px 0 30px}
+footer .fg{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+footer h3{color:#fff;font-size:1.4rem;margin-bottom:8px}
+footer a{color:#e8d5bf;text-decoration:none;margin-right:18px}
+footer a:hover{text-decoration:underline}
+footer p{margin:0}
+.copy{margin-top:32px!important;font-size:.9rem;opacity:.7}
+/* reveal */
+.rv-in{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s ease;transition-delay:var(--d,0s)}
+.rv-in.show{opacity:1;transform:none}
+@media(max-width:960px){
+.grid,.rv{grid-template-columns:repeat(2,1fr)}.am{grid-template-columns:repeat(2,1fr)}.lg{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+section{padding:68px 0}
+#menuBtn{display:block}
+.links{position:absolute;top:68px;left:0;right:0;background:var(--bg);flex-direction:column;align-items:stretch;gap:0;padding:10px 24px 20px;border-bottom:1px solid var(--line);display:none}
+.links.open{display:flex}
+.links a{padding:12px 0}
+.links a.btn{text-align:center;margin-top:8px}
+.grid,.rv,.gal{grid-template-columns:1fr}
+.am{grid-template-columns:1fr 1fr}
+form{grid-template-columns:1fr;padding:24px}
+.lb{padding:60px 12px}
+}
+@media(prefers-reduced-motion:reduce){
+html{scroll-behavior:auto}
+*{transition:none!important;animation:none!important}
+.hero-i,.rv-in{opacity:1!important;transform:none!important}
+.card:hover .ph img,.gal button:hover img{transform:none}
+}
+</style>
+</head>
+<body>
+<header>
+<div class="wrap">
+<nav aria-label="Main">
+<a class="brand" href="#top">U Mlýna</a>
+<button id="menuBtn" aria-expanded="false" aria-controls="links" aria-label="Menu"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+<div class="links" id="links">
+<a href="#rooms">Rooms</a><a href="#amenities">Amenities</a><a href="#gallery">Gallery</a><a href="#location">Location</a><a href="#faq">FAQ</a>
+<a class="btn" href="#booking">Book a stay</a>
+</div>
+</nav>
+</div>
+</header>
+<main id="top">
+<section class="hero" style="padding:80px 0">
+<img src="https://picsum.photos/seed/mlyn-hero/1600/1000" alt="The old mill house of Penzion U Mlýna on the Vltava river">
+<div class="wrap">
+<p class="kicker hero-i" style="animation-delay:.1s">Český Krumlov · on the Vltava since 1998</p>
+<h1 class="hero-i" style="animation-delay:.3s">Sleep by the river, wake up to the castle</h1>
+<p class="lead hero-i" style="animation-delay:.5s">Six quiet rooms in a restored 17th-century mill, five minutes' walk from the old town. Breakfast from our own bakery included.</p>
+<div class="btns hero-i" style="animation-delay:.7s"><a class="btn" href="#rooms">See the rooms</a><a class="btn out" href="#booking">Book a stay</a></div>
+<div class="hero-i" style="animation-delay:.9s"><span class="badge" data-badge><span class="dot"></span><span class="t">Reception closed</span></span></div>
+</div>
+</section>
+
+<section id="rooms">
+<div class="wrap">
+<div class="head rv-in"><p class="kicker">Rooms</p><h2>Find your room</h2><p class="sub">Every room has a private bathroom, free Wi-Fi and breakfast included. Prices are per night for the whole room.</p></div>
+<div class="filters rv-in" role="group" aria-label="Filter rooms by type">
+<button class="active" data-f="all" aria-pressed="true">All</button><button data-f="Double" aria-pressed="false">Double</button><button data-f="Family" aria-pressed="false">Family</button><button data-f="Suite" aria-pressed="false">Suite</button>
+</div>
+<div class="grid" id="roomGrid"></div>
+</div>
+</section>
+
+<section id="amenities" style="background:#f3ece1">
+<div class="wrap">
+<div class="head rv-in"><p class="kicker">Amenities</p><h2>Everything for a slow weekend</h2></div>
+<div class="am" id="amGrid"></div>
+</div>
+</section>
+
+<section id="gallery">
+<div class="wrap">
+<div class="head rv-in"><p class="kicker">Gallery</p><h2>A look around</h2></div>
+<div class="gal" id="galGrid"></div>
+</div>
+</section>
+
+<section class="rev">
+<div class="wrap">
+<div class="head rv-in"><h2>What our guests say</h2></div>
+<div class="rv">
+<figure class="rv-in"><div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div><blockquote>“The quietest night we have had in years, and the croissants alone are worth the trip.”</blockquote><figcaption>Anna &amp; Tom, United Kingdom</figcaption></figure>
+<figure class="rv-in" style="--d:.15s"><div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div><blockquote>“Our kids loved the bunk bed and the ducks on the river.”</blockquote><figcaption>The Huber family, Austria</figcaption></figure>
+<figure class="rv-in" style="--d:.3s"><div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div><blockquote>“Five minutes from the old town, yet it feels like the countryside.”</blockquote><figcaption>Petr K., Prague</figcaption></figure>
+</div>
+</div>
+</section>
+
+<section id="booking">
+<div class="wrap">
+<div class="head rv-in bk"><p class="kicker">Book a stay</p><h2>Ask for your dates</h2><p class="sub">Tell us when you would like to come. We reply within a few hours with availability and the price.</p></div>
+<form id="bform" class="rv-in">
+<div class="f"><label for="arr">Arrival</label><input type="date" id="arr" name="Arrival" required></div>
+<div class="f"><label for="dep">Departure</label><input type="date" id="dep" name="Departure" required></div>
+<div class="f"><label for="gst">Guests</label><select id="gst" required><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></div>
+<div class="f"><label for="rt">Room type</label><select id="rt" required><option>Double</option><option>Family</option><option>Suite</option><option selected>Any</option></select></div>
+<div class="f"><label for="nm">Name</label><input id="nm" autocomplete="name" required></div>
+<div class="f"><label for="em">E-mail</label><input type="email" id="em" autocomplete="email" required></div>
+<div class="f full"><label for="ph">Phone (optional)</label><input type="tel" id="ph" autocomplete="tel"></div>
+<div class="f full"><label for="ms">Message (optional)</label><textarea id="ms" rows="4"></textarea></div>
+<button class="btn" type="submit">Check availability</button>
+</form>
+</div>
+</section>
+
+<section id="location" class="loc" style="background:#f3ece1">
+<div class="wrap">
+<div class="head rv-in"><p class="kicker">Location</p><h2>Five minutes from the old town</h2></div>
+<div class="lg">
+<div class="pan rv-in">
+<h3>Find us</h3>
+<p>Linecká 12, 381 01 Český Krumlov</p>
+<p><a href="https://maps.google.com/?q=Linecká+12,+Český+Krumlov" target="_blank" rel="noopener">Open in Google Maps</a></p>
+<ul style="margin-top:18px"><li><span>Old town square</span><span>5 min on foot</span></li><li><span>Castle</span><span>10 min on foot</span></li><li><span>Train station</span><span>free pick-up on request</span></li></ul>
+<p>Phone: <a href="tel:+420380000512">+420 380 000 512</a></p>
+<p>E-mail: <a href="mailto:stay@umlyna.cz">stay@umlyna.cz</a></p>
+</div>
+<div class="pan rv-in" style="--d:.15s">
+<h3>Reception hours</h3>
+<ul><li><span>Monday–Friday</span><span>7:00–21:00</span></li><li><span>Saturday–Sunday</span><span>8:00–20:00</span></li></ul>
+<p><span class="badge" data-badge><span class="dot"></span><span class="t">Reception closed</span></span></p>
+<p style="margin-top:18px">Check-in from 14:00, check-out until 11:00.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section id="faq">
+<div class="wrap">
+<div class="head rv-in"><p class="kicker">FAQ</p><h2>Good to know</h2></div>
+<div class="faq">
+<details class="rv-in"><summary>Is breakfast included?</summary><p>Yes. Breakfast is served from 7:30 to 10:00 in the mill room or on the terrace.</p></details>
+<details class="rv-in"><summary>Can I arrive late in the evening?</summary><p>Yes. Tell us your arrival time and we will leave your key in a code box at the door.</p></details>
+<details class="rv-in"><summary>Do you have parking?</summary><p>We have eight free spaces in our courtyard. There is no need to book one.</p></details>
+<details class="rv-in"><summary>Can I cancel my booking?</summary><p>Free cancellation up to 7 days before arrival. After that we charge the first night.</p></details>
+</div>
+</div>
+</section>
+</main>
+
+<footer>
+<div class="wrap">
+<div class="fg">
+<div><h3>Penzion U Mlýna</h3><p>Linecká 12, 381 01 Český Krumlov</p></div>
+<nav aria-label="Footer"><a href="#rooms">Rooms</a><a href="#amenities">Amenities</a><a href="#gallery">Gallery</a><a href="#location">Location</a><a href="#faq">FAQ</a></nav>
+</div>
+<p class="copy">© 2026 Penzion U Mlýna</p>
+</div>
+</footer>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer">
+<button class="x" aria-label="Close">✕</button><button class="pv" aria-label="Previous photo">‹</button>
+<img id="lbImg" src="" alt=""><button class="nx" aria-label="Next photo">›</button>
+</div>
+
+<script>
+(function(){
+var rooms=[
+["River Room","Double",18,2,"2,400","A window seat right above the weir.","The River Room with a window seat"],
+["Garden Room","Double",16,2,"2,100","Opens onto the herb garden and is quiet at night.","The Garden Room with a view of the herb garden"],
+["Miller's Family Room","Family",32,4,"3,600","A double bed and a bunk bed under old oak beams.","The family room with a bunk bed"],
+["Attic Family Room","Family",36,5,"3,900","Two bedrooms under the roof, ideal with older kids.","The attic family room under the roof"],
+["Castle View Suite","Suite",45,2,"5,200","A free-standing bath and the best view of the castle tower.","The Castle View Suite with a free-standing bath"],
+["Mill Wheel Suite","Suite",50,4,"5,900","A living room with the original mill wheel behind glass.","The Mill Wheel Suite with the old mill wheel"]];
+var rg=document.getElementById('roomGrid');
+rooms.forEach(function(r,i){
+var a=document.createElement('article');a.className='card rv-in';a.dataset.type=r[1];a.style.setProperty('--d',(i%3)*.12+'s');
+a.innerHTML='<div class="ph"><img loading="lazy" src="https://picsum.photos/seed/mlyn-room-'+(i+1)+'/800/600" alt="'+r[6]+'" width="800" height="600"></div><div class="b"><h3>'+r[0]+'</h3><div class="meta">'+r[1]+' · '+r[2]+' m² · '+r[3]+' guests</div><p>'+r[5]+'</p><div class="price"><b>'+r[4]+' Kč</b> per night</div></div>';
+rg.appendChild(a)});
+var fb=document.querySelectorAll('.filters button');
+fb.forEach(function(b){b.addEventListener('click',function(){
+fb.forEach(function(x){x.classList.remove('active');x.setAttribute('aria-pressed','false')});
+b.classList.add('active');b.setAttribute('aria-pressed','true');
+var f=b.dataset.f;
+rg.querySelectorAll('.card').forEach(function(c){var s=f==='all'||c.dataset.type===f;c.hidden=!s;if(s)c.classList.add('show')})})});
+
+var P={
+bread:'<path d="M4 15a4 4 0 0 1 2-7 5 5 0 0 1 12 0 4 4 0 0 1 2 7v3H4z"/>',
+wifi:'<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>',
+car:'<path d="M5 17h14v-5l-2-5H7l-2 5zM5 12h14"/><circle cx="8" cy="17" r="1.5"/><circle cx="16" cy="17" r="1.5"/>',
+leaf:'<path d="M5 19c0-9 5-14 15-14 0 10-5 15-14 15M5 19l8-8"/>',
+bike:'<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-8h5l3 8M10 8l3 8"/>',
+paw:'<circle cx="7" cy="10" r="1.7"/><circle cx="12" cy="7" r="1.7"/><circle cx="17" cy="10" r="1.7"/><path d="M12 12c-3 0-5 3-5 5 0 2 2 2 5 1 3 1 5 1 5-1 0-2-2-5-5-5z"/>',
+sauna:'<path d="M8 4c-2 3 2 4 0 7M13 4c-2 3 2 4 0 7M18 4c-2 3 2 4 0 7M3 15h18v4H3z"/>',
+clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'};
+var am=[["bread","Breakfast from our bakery"],["wifi","Free Wi-Fi"],["car","Free private parking"],["leaf","Riverside garden terrace"],["bike","Bike and canoe storage"],["paw","Pets welcome (300 Kč per night)"],["sauna","Sauna in the old cellar"],["clock","Early check-in on request"]];
+var ag=document.getElementById('amGrid');
+am.forEach(function(a,i){var d=document.createElement('div');d.className='rv-in';d.style.setProperty('--d',(i%4)*.1+'s');
+d.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+P[a[0]]+'</svg></span><span>'+a[1]+'</span>';ag.appendChild(d)});
+
+var gal=["The mill house at dusk","Breakfast on the terrace","The weir below the River Room","The reading corner by the fireplace","Canoes on the riverbank","The castle tower from our garden"];
+var gg=document.getElementById('galGrid'),lb=document.getElementById('lb'),li=document.getElementById('lbImg'),cur=0,last=null;
+gal.forEach(function(t,i){var b=document.createElement('button');b.className='rv-in';b.style.setProperty('--d',(i%3)*.12+'s');b.setAttribute('aria-label','Open photo: '+t);
+b.innerHTML='<img loading="lazy" src="https://picsum.photos/seed/mlyn-g'+(i+1)+'/1200/800" alt="'+t+'" width="1200" height="800">';
+b.addEventListener('click',function(){last=b;show(i);lb.classList.add('open');lb.querySelector('.x').focus()});gg.appendChild(b)});
+function show(i){cur=(i+gal.length)%gal.length;li.src='https://picsum.photos/seed/mlyn-g'+(cur+1)+'/1200/800';li.alt=gal[cur]}
+function close(){lb.classList.remove('open');if(last)last.focus()}
+lb.querySelector('.x').onclick=close;
+lb.querySelector('.pv').onclick=function(){show(cur-1)};
+lb.querySelector('.nx').onclick=function(){show(cur+1)};
+lb.addEventListener('click',function(e){if(e.target===lb)close()});
+document.addEventListener('keydown',function(e){if(!lb.classList.contains('open'))return;
+if(e.key==='Escape')close();else if(e.key==='ArrowRight')show(cur+1);else if(e.key==='ArrowLeft')show(cur-1);
+else if(e.key==='Tab'){var f=lb.querySelectorAll('button'),a=document.activeElement;
+if(e.shiftKey&&a===f[0]){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&a===f[f.length-1]){e.preventDefault();f[0].focus()}}});
+
+/* badge */
+function upd(){var n=new Date(),d=n.getDay(),m=n.getHours()*60+n.getMinutes(),wk=d>=1&&d<=5;
+var o=wk?(m>=420&&m<1260):(m>=480&&m<1200);
+document.querySelectorAll('[data-badge]').forEach(function(b){b.classList.toggle('open',o);b.classList.toggle('closed',!o);b.querySelector('.t').textContent=o?'Reception open':'Reception closed'})}
+upd();setInterval(upd,60000);
+
+/* menu */
+var mb=document.getElementById('menuBtn'),ln=document.getElementById('links');
+mb.onclick=function(){var o=ln.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+ln.addEventListener('click',function(e){if(e.target.tagName==='A'){ln.classList.remove('open');mb.setAttribute('aria-expanded','false')}});
+
+/* form */
+var today=new Date().toISOString().split('T')[0],arr=document.getElementById('arr'),dep=document.getElementById('dep');
+arr.min=today;dep.min=today;
+arr.addEventListener('change',function(){if(arr.value)dep.min=arr.value});
+document.getElementById('bform').addEventListener('submit',function(e){e.preventDefault();
+if(dep.value&&arr.value&&dep.value<=arr.value){dep.setCustomValidity('Departure must be after arrival');dep.reportValidity();dep.setCustomValidity('');return}
+var v=function(id){return document.getElementById(id).value};
+var body='Arrival: '+v('arr')+'\nDeparture: '+v('dep')+'\nGuests: '+v('gst')+'\nRoom type: '+v('rt')+'\nName: '+v('nm')+'\nE-mail: '+v('em')+'\nPhone: '+v('ph')+'\n\nMessage:\n'+v('ms');
+location.href='mailto:stay@umlyna.cz?subject='+encodeURIComponent('Booking request')+'&body='+encodeURIComponent(body)});
+
+/* reveal */
+var els=document.querySelectorAll('.rv-in');
+if('IntersectionObserver' in window){
+var io=new IntersectionObserver(function(en){en.forEach(function(x){if(x.isIntersecting){x.target.classList.add('show');io.unobserve(x.target)}})},{threshold:.12});
+els.forEach(function(e){io.observe(e)})}else els.forEach(function(e){e.classList.add('show')});
+})();
+</script>
+</body>
+</html>

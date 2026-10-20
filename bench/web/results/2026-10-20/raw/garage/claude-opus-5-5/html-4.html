@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoservis Dvořák – honest car repairs in Pardubice</title>
+<meta name="description" content="Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.">
+<meta name="theme-color" content="#1F4E8C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F5F7;
+  --surface:#FFFFFF;
+  --text:#1C2430;
+  --muted:#5A6576;
+  --primary:#1F4E8C;
+  --primary-dark:#173B6B;
+  --accent:#F2A900;
+  --accent-dark:#D69500;
+  --border:#DDE1E7;
+  --radius:14px;
+  --radius-sm:10px;
+  --shadow:0 1px 2px rgba(28,36,48,.05),0 4px 14px rgba(28,36,48,.05);
+  --shadow-lg:0 2px 4px rgba(28,36,48,.06),0 16px 36px rgba(28,36,48,.12);
+  --nav-h:72px;
+  --head:"Barlow Condensed",Impact,"Arial Narrow",sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:1.0625rem;line-height:1.6;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:var(--primary)}
+h1,h2,h3,h4{font-family:var(--head);font-weight:700;line-height:1.05;margin:0;letter-spacing:.005em}
+p{margin:0}
+ul{margin:0;padding:0}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:6px}
+.skip{position:absolute;left:12px;top:-60px;background:var(--accent);color:var(--text);padding:10px 16px;border-radius:8px;font-weight:700;z-index:200;text-decoration:none}
+.skip:focus{top:12px}
+.container{width:min(1180px,100% - 40px);margin-inline:auto}
+section[id]{scroll-margin-top:calc(var(--nav-h) + 12px)}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;font-family:var(--body);font-weight:700;font-size:1rem;line-height:1;padding:.95rem 1.4rem;border-radius:10px;border:2px solid transparent;text-decoration:none;cursor:pointer;transition:background-color .2s,color .2s,border-color .2s,transform .2s,box-shadow .2s;white-space:nowrap}
+.btn svg{width:18px;height:18px;flex:none}
+.btn-accent{background:var(--accent);color:var(--text)}
+.btn-accent:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 8px 20px rgba(242,169,0,.3)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 8px 20px rgba(31,78,140,.3)}
+.btn-outline-light{border-color:rgba(255,255,255,.85);color:#fff;background:rgba(255,255,255,.04)}
+.btn-outline-light:hover{background:#fff;color:var(--text)}
+
+/* Nav */
+.nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.94);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--border)}
+.nav-inner{height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
+.brand-mark{width:40px;height:40px;border-radius:10px;background:var(--primary);display:grid;place-items:center;flex:none;box-shadow:inset 0 -3px 0 var(--accent)}
+.brand-mark svg{width:22px;height:22px;color:#fff}
+.brand-name{font-family:var(--head);font-weight:800;font-size:1.45rem;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.brand-name span{color:var(--primary)}
+.nav-links{display:flex;align-items:center;gap:6px;list-style:none}
+.nav-links a{display:block;padding:.55rem .8rem;border-radius:8px;text-decoration:none;color:var(--text);font-weight:600;font-size:1rem;transition:background-color .2s,color .2s}
+.nav-links a:hover{background:var(--bg);color:var(--primary)}
+.nav-links .btn{margin-left:8px;padding:.75rem 1.1rem}
+.nav-links .btn:hover{background:var(--accent-dark);color:var(--text)}
+.menu-btn{display:none;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.55rem .8rem;font:inherit;font-weight:700;color:var(--text);cursor:pointer}
+.menu-btn svg{width:22px;height:22px}
+.menu-btn .i-close{display:none}
+.menu-btn[aria-expanded="true"] .i-close{display:block}
+.menu-btn[aria-expanded="true"] .i-open{display:none}
+
+/* Hero */
+.hero{position:relative;min-height:calc(100vh - var(--nav-h));min-height:calc(100svh - var(--nav-h));display:flex;align-items:flex-end;color:#fff;overflow:hidden;background:#0f1622}
+.hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(12,18,28,.9) 0%,rgba(12,18,28,.72) 45%,rgba(12,18,28,.25) 100%),linear-gradient(0deg,rgba(12,18,28,.85) 0%,rgba(12,18,28,0) 55%)}
+.hero-content{position:relative;z-index:1;padding:120px 0 150px}
+.hero-text{max-width:720px}
+.kicker-hero{display:inline-flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.9rem;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);padding:.45rem .85rem;border-radius:999px}
+.kicker-hero::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(242,169,0,.25)}
+.hero h1{font-size:clamp(2.8rem,7vw,5.6rem);font-weight:800;text-transform:uppercase;margin:22px 0 18px;letter-spacing:.005em}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p.lead{font-size:clamp(1.1rem,1.6vw,1.3rem);max-width:600px;color:rgba(255,255,255,.88)}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.hero-step{animation:heroIn .8s cubic-bezier(.2,.7,.2,1) both}
+.hero-step:nth-child(1){animation-delay:.15s}
+.hero-step:nth-child(2){animation-delay:.35s}
+.hero-step:nth-child(3){animation-delay:.55s}
+.hero-step:nth-child(4){animation-delay:.75s}
+@keyframes heroIn{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+
+/* Stats */
+.stats{position:relative;z-index:2;margin-top:-80px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);overflow:hidden}
+.stat{padding:30px 28px;border-left:1px solid var(--border);position:relative}
+.stat:first-child{border-left:0}
+.stat-num{font-family:var(--head);font-weight:800;font-size:clamp(2.6rem,4.5vw,3.6rem);line-height:1;color:var(--primary);font-variant-numeric:tabular-nums}
+.stat-label{margin-top:8px;color:var(--muted);font-weight:600;line-height:1.35}
+.stat::before{content:"";position:absolute;left:28px;top:0;width:36px;height:4px;background:var(--accent);border-radius:0 0 4px 4px}
+
+/* Sections */
+.section{padding:110px 0}
+.section-head{max-width:720px;margin-bottom:48px}
+.kicker{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:.9rem;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin-bottom:12px}
+.kicker::before{content:"";width:28px;height:4px;border-radius:2px;background:var(--accent)}
+.section-head h2{font-size:clamp(2.4rem,5vw,3.8rem);text-transform:uppercase;font-weight:800}
+.section-head p{margin-top:14px;font-size:1.15rem;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.lift{transition:translate .25s ease,box-shadow .25s ease,border-color .25s ease}
+.lift:hover{translate:0 -5px;box-shadow:var(--shadow-lg);border-color:#c9d0da}
+
+/* Reveal */
+.js .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease calc(var(--i,0) * 110ms),transform .7s cubic-bezier(.2,.7,.2,1) calc(var(--i,0) * 110ms),translate .25s ease 0s,box-shadow .25s ease 0s,border-color .25s ease 0s}
+.js .reveal.in{opacity:1;transform:none}
+
+/* Services tabs */
+.tabs-wrap{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.tablist{display:flex;flex-direction:column;gap:10px}
+.tab{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;font-weight:700;font-size:1.1rem;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 18px;cursor:pointer;transition:background-color .2s,color .2s,border-color .2s,box-shadow .2s}
+.tab:hover{border-color:var(--primary)}
+.tab .tab-ic{width:42px;height:42px;border-radius:10px;background:var(--bg);display:grid;place-items:center;flex:none;transition:background-color .2s}
+.tab .tab-ic svg{width:22px;height:22px;color:var(--primary)}
+.tab[aria-selected="true"]{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 10px 24px rgba(31,78,140,.25)}
+.tab[aria-selected="true"] .tab-ic{background:var(--accent)}
+.tab[aria-selected="true"] .tab-ic svg{color:var(--text)}
+.tab .chev{margin-left:auto;width:18px;height:18px;opacity:.5}
+.tab[aria-selected="true"] .chev{opacity:1}
+.panel{padding:44px;min-height:100%;position:relative;overflow:hidden}
+.panel[hidden]{display:none}
+.panel:not([hidden]){animation:panelIn .45s ease both}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.panel::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;border:28px solid var(--bg)}
+.panel h3{font-size:2.4rem;text-transform:uppercase;font-weight:800;position:relative}
+.panel p{font-size:1.25rem;margin:12px 0 28px;max-width:560px;position:relative}
+.checks{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative}
+.checks li{display:flex;gap:10px;align-items:flex-start;background:var(--bg);border-radius:var(--radius-sm);padding:16px;font-weight:600;line-height:1.35}
+.checks svg{flex:none;width:22px;height:22px;color:var(--primary)}
+
+/* Prices */
+.prices{background:var(--surface);border-block:1px solid var(--border)}
+.calc{display:grid;grid-template-columns:1.4fr 1fr;gap:28px;align-items:start}
+.calc-main{padding:34px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{font-family:var(--head);font-weight:700;font-size:1.5rem;text-transform:uppercase;margin-bottom:14px;padding:0}
+.step-tag{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--text);font-size:1rem;margin-right:8px;vertical-align:2px}
+.sizes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:34px}
+.size input{position:absolute;opacity:0;pointer-events:none}
+.size label{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-weight:700;text-align:center;transition:border-color .2s,background-color .2s,color .2s;background:var(--surface)}
+.size label svg{width:46px;height:28px;color:var(--muted);transition:color .2s}
+.size label:hover{border-color:var(--primary)}
+.size input:checked + label{border-color:var(--primary);background:#EAF0F8;color:var(--primary)}
+.size input:checked + label svg{color:var(--primary)}
+.size input:focus-visible + label{outline:3px solid var(--accent);outline-offset:3px}
+.svc-list{display:flex;flex-direction:column;gap:10px}
+.svc input{position:absolute;opacity:0;pointer-events:none}
+.svc label{display:flex;align-items:center;gap:14px;padding:15px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .2s,background-color .2s}
+.svc label:hover{border-color:var(--primary)}
+.box{width:24px;height:24px;border-radius:6px;border:2px solid #AEB6C2;display:grid;place-items:center;flex:none;transition:background-color .2s,border-color .2s}
+.box svg{width:16px;height:16px;color:#fff;opacity:0;transform:scale(.5);transition:opacity .2s,transform .2s}
+.svc input:checked + label{border-color:var(--primary);background:#EAF0F8}
+.svc input:checked + label .box{background:var(--primary);border-color:var(--primary)}
+.svc input:checked + label .box svg{opacity:1;transform:none}
+.svc input:focus-visible + label{outline:3px solid var(--accent);outline-offset:3px}
+.svc-name{font-weight:600}
+.svc-price{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--primary)}
+.calc-sum{position:sticky;top:calc(var(--nav-h) + 20px);background:var(--text);color:#fff;border-radius:var(--radius);padding:34px;overflow:hidden}
+.calc-sum::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 12px,transparent 12px 24px);pointer-events:none}
+.calc-sum > *{position:relative}
+.sum-label{font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:.9rem;color:rgba(255,255,255,.7)}
+.sum-total{font-family:var(--head);font-weight:800;font-size:clamp(3rem,6vw,4.4rem);line-height:1;margin:10px 0 6px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sum-meta{color:rgba(255,255,255,.75);font-size:1rem}
+.sum-list{list-style:none;margin:22px 0 26px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px;display:flex;flex-direction:column;gap:8px;font-size:1rem;min-height:30px}
+.sum-list li{display:flex;justify-content:space-between;gap:12px}
+.sum-list li span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.sum-list .empty{color:rgba(255,255,255,.55);font-style:italic}
+.calc-sum .btn{width:100%}
+.sum-note{margin-top:14px;font-size:.92rem;color:rgba(255,255,255,.6)}
+
+/* Process */
+.steps{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;position:relative;counter-reset:s}
+.steps-line{position:absolute;left:12.5%;right:12.5%;top:34px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.steps-line span{position:absolute;inset:0;background:linear-gradient(90deg,var(--primary),var(--accent));transform-origin:left;transform:scaleX(1);transition:transform 1.6s cubic-bezier(.4,.1,.2,1) .2s}
+.js .steps-line:not(.in) span{transform:scaleX(0)}
+.step{text-align:center;position:relative}
+.step-num{width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:var(--surface);border:4px solid var(--primary);display:grid;place-items:center;font-family:var(--head);font-weight:800;font-size:2rem;color:var(--primary);position:relative;z-index:1;box-shadow:0 0 0 8px var(--bg)}
+.step:last-child .step-num{background:var(--accent);border-color:var(--accent);color:var(--text)}
+.step-body{padding:24px 22px}
+.step h3{font-size:1.6rem;text-transform:uppercase;margin-bottom:8px}
+.step p{color:var(--muted)}
+
+/* Team */
+.team-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.person{overflow:hidden;display:flex;flex-direction:column}
+.person-img{aspect-ratio:6/7;overflow:hidden;background:#dfe3ea;position:relative}
+.person-img img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
+.person:hover .person-img img{transform:scale(1.04)}
+.person-body{padding:20px 22px 24px;border-top:4px solid var(--accent)}
+.person h3{font-size:1.65rem;text-transform:uppercase}
+.role{display:block;color:var(--primary);font-weight:700;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase;margin:4px 0 10px}
+.person p{color:var(--muted)}
+
+/* Testimonials */
+.testi{background:var(--primary);color:#fff;position:relative;overflow:hidden}
+.testi::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 85% 10%,rgba(242,169,0,.18),transparent 40%),repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 60px);pointer-events:none}
+.testi .container{position:relative}
+.testi .section-head h2{color:#fff}
+.testi .kicker{color:#fff}
+.quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.quote{margin:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:var(--radius);padding:30px;display:flex;flex-direction:column;gap:22px}
+.quote.lift:hover{border-color:rgba(255,255,255,.4);box-shadow:0 18px 40px rgba(0,0,0,.25)}
+.stars{display:flex;gap:3px;color:var(--accent)}
+.stars svg{width:18px;height:18px}
+.quote blockquote{margin:0;font-size:1.3rem;line-height:1.45;font-weight:500;flex:1}
+.quote figcaption{display:flex;align-items:center;gap:12px;font-weight:700}
+.avatar{width:42px;height:42px;border-radius:50%;background:var(--accent);color:var(--text);display:grid;place-items:center;font-family:var(--head);font-size:1.3rem;font-weight:800}
+
+/* Contact */
+.contact-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:28px;align-items:start}
+.info{padding:32px;display:flex;flex-direction:column;gap:26px}
+.info-row{display:flex;gap:16px}
+.info-ic{width:46px;height:46px;border-radius:12px;background:#EAF0F8;display:grid;place-items:center;flex:none}
+.info-ic svg{width:22px;height:22px;color:var(--primary)}
+.info h3{font-size:1.3rem;text-transform:uppercase;margin-bottom:4px}
+.info a{font-weight:700;text-decoration-thickness:2px;text-underline-offset:3px}
+.info a:hover{color:var(--primary-dark)}
+.hours{width:100%;border-collapse:collapse;margin-top:4px}
+.hours th,.hours td{text-align:left;padding:7px 0;border-bottom:1px dashed var(--border);font-weight:500;vertical-align:top}
+.hours th{font-weight:700;padding-right:14px}
+.hours td{text-align:right}
+.hours tr:last-child th,.hours tr:last-child td{border-bottom:0}
+.closed{color:var(--muted)}
+.form{padding:34px}
+.form h3{font-size:1.8rem;text-transform:uppercase;margin-bottom:6px}
+.form > p{color:var(--muted);margin-bottom:22px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:1/-1}
+.field label{font-weight:700;font-size:.98rem}
+.req{color:#B3261E;font-weight:700}
+.opt{color:var(--muted);font-weight:500;font-size:.9rem}
+.field input,.field select,.field textarea{font:inherit;font-size:1rem;color:var(--text);background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:.8rem .9rem;width:100%;transition:border-color .2s,background-color .2s,box-shadow .2s;min-height:48px}
+.field textarea{min-height:120px;resize:vertical}
+.field select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231C2430' stroke-width='2.2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:18px;padding-right:40px}
+.field input:hover,.field select:hover,.field textarea:hover{border-color:#B8C0CC}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 4px rgba(31,78,140,.15)}
+.field.invalid input,.field.invalid select{border-color:#B3261E}
+.form-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-top:24px}
+.form-foot small{color:var(--muted);max-width:340px;line-height:1.4}
+.form-status{margin-top:14px;font-weight:600;color:var(--primary);min-height:1.2em}
+
+/* Footer */
+.footer{background:var(--text);color:rgba(255,255,255,.8);padding:60px 0 30px}
+.footer-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:30px;padding-bottom:36px;border-bottom:1px solid rgba(255,255,255,.12)}
+.footer .brand{color:#fff}
+.footer .brand-name span{color:var(--accent)}
+.footer address{font-style:normal;margin-top:14px}
+.footer-links{list-style:none;display:flex;flex-wrap:wrap;gap:6px 22px;align-items:center}
+.footer-links a{color:#fff;text-decoration:none;font-weight:600}
+.footer-links a:hover{color:var(--accent);text-decoration:underline;text-underline-offset:4px}
+.footer-bottom{padding-top:24px;font-size:.95rem;color:rgba(255,255,255,.6)}
+
+/* Responsive */
+@media (max-width:1020px){
+  .tabs-wrap{grid-template-columns:1fr}
+  .tablist{flex-direction:row;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+  .tab{flex:1 0 auto;width:auto}
+  .tab .chev{display:none}
+  .calc{grid-template-columns:1fr}
+  .calc-sum{position:relative;top:0}
+  .team-grid{grid-template-columns:repeat(2,1fr)}
+  .contact-grid{grid-template-columns:1fr}
+}
+@media (max-width:920px){
+  .menu-btn{display:inline-flex}
+  .nav-links{position:absolute;left:0;right:0;top:var(--nav-h);flex-direction:column;align-items:stretch;gap:4px;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px 20px;box-shadow:var(--shadow-lg);display:none}
+  .nav-links.open{display:flex}
+  .nav-links a{padding:.85rem .8rem;font-size:1.1rem}
+  .nav-links .btn{margin:8px 0 0}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(3){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--border)}
+  .steps{grid-template-columns:1fr;gap:18px}
+  .steps-line{left:34px;right:auto;top:20px;bottom:20px;width:4px;height:auto}
+  .steps-line span{transform-origin:top}
+  .js .steps-line:not(.in) span{transform:scaleY(0)}
+  .step{display:flex;gap:18px;text-align:left;align-items:flex-start}
+  .step-num{margin:0;flex:none}
+  .step-body{flex:1}
+  .quotes{grid-template-columns:1fr}
+  .checks{grid-template-columns:1fr}
+}
+@media (max-width:600px){
+  body{font-size:1rem}
+  .section{padding:80px 0}
+  .container{width:min(1180px,100% - 32px)}
+  .brand-name{font-size:1.25rem}
+  .menu-btn .lbl{display:none}
+  .hero-content{padding:80px 0 130px}
+  .hero-actions .btn{flex:1 1 100%}
+  .stat{padding:24px 18px}
+  .stat::before{left:18px}
+  .panel{padding:28px 22px}
+  .panel h3{font-size:2rem}
+  .calc-main,.calc-sum,.form,.info{padding:24px 20px}
+  .sizes{grid-template-columns:1fr}
+  .size label{flex-direction:row;justify-content:flex-start;gap:14px;padding:14px 16px}
+  .team-grid{grid-template-columns:1fr}
+  .fields{grid-template-columns:1fr}
+  .form-foot .btn{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .js .reveal{opacity:1;transform:none}
+  .js .steps-line:not(.in) span{transform:none}
+  .lift:hover{translate:none}
+  .person:hover .person-img img{transform:none}
+  .btn:hover{transform:none}
+}
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add('js');</script>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="#top" aria-label="Autoservis Dvořák – back to top">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3.6 17.2a1.9 1.9 0 0 0 2.7 2.7l5.7-5.7a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.3-.4-.4-2.3z"/></svg>
+      </span>
+      <span class="brand-name">Autoservis <span>Dvořák</span></span>
+    </a>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-links">
+      <svg class="i-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      <svg class="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      <span class="lbl">Menu</span>
+    </button>
+    <nav aria-label="Main">
+      <ul class="nav-links" id="nav-links">
+        <li><a href="#services">Services</a></li>
+        <li><a href="#prices">Prices</a></li>
+        <li><a href="#process">How it works</a></li>
+        <li><a href="#team">Team</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a class="btn btn-accent" href="#contact">Book a service</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <img class="hero-img" src="https://picsum.photos/seed/dvorak-hero/1600/1000" alt="A mechanic working under a lifted car at Autoservis Dvořák" width="1600" height="1000" fetchpriority="high">
+    <div class="container hero-content">
+      <div class="hero-text">
+        <p class="kicker-hero hero-step">Pardubice · Hradecká 88 · all makes</p>
+        <h1 id="hero-title" class="hero-step">Honest repairs, done right <em>the first time</em></h1>
+        <p class="lead hero-step">Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.</p>
+        <div class="hero-actions hero-step">
+          <a class="btn btn-accent" href="#prices">Get a price
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-outline-light" href="#contact">Book a service</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats" aria-label="Autoservis Dvořák in numbers">
+    <div class="container">
+      <div class="stats-grid" data-stagger>
+        <div class="stat reveal"><div class="stat-num" data-count="24">24</div><div class="stat-label">years in Pardubice</div></div>
+        <div class="stat reveal"><div class="stat-num" data-count="9800">9,800</div><div class="stat-label">cars serviced last year</div></div>
+        <div class="stat reveal"><div class="stat-num" data-count="6">6</div><div class="stat-label">certified mechanics</div></div>
+        <div class="stat reveal"><div class="stat-num">2 years</div><div class="stat-label">warranty on parts and labour</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="services" aria-labelledby="services-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">Services</p>
+        <h2 id="services-title">What we do</h2>
+      </div>
+      <div class="tabs-wrap reveal">
+        <div class="tablist" role="tablist" aria-label="Services">
+          <button class="tab" role="tab" id="tab-servicing" aria-controls="panel-servicing" aria-selected="true" tabindex="0" type="button">
+            <span class="tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c3 3.6 5.5 6.8 5.5 10a5.5 5.5 0 0 1-11 0c0-3.2 2.5-6.4 5.5-10z"/></svg></span>
+            Servicing
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <button class="tab" role="tab" id="tab-tyres" aria-controls="panel-tyres" aria-selected="false" tabindex="-1" type="button">
+            <span class="tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/></svg></span>
+            Tyres
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <button class="tab" role="tab" id="tab-diagnostics" aria-controls="panel-diagnostics" aria-selected="false" tabindex="-1" type="button">
+            <span class="tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 11h2l1.5-3 3 6 1.5-3h2M8 21h8M12 17v4"/></svg></span>
+            Diagnostics
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <button class="tab" role="tab" id="tab-bodywork" aria-controls="panel-bodywork" aria-selected="false" tabindex="-1" type="button">
+            <span class="tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L13 13.8l-3.6.8.8-3.6z"/><path d="M9.5 16.5c0 2.5-2 4.5-6.5 4.5 1-1.2 1.5-2.5 1.5-4a2.5 2.5 0 0 1 5 0z"/></svg></span>
+            Bodywork
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+        </div>
+
+        <div class="card panel" role="tabpanel" id="panel-servicing" aria-labelledby="tab-servicing" tabindex="0">
+          <h3>Servicing</h3>
+          <p>Scheduled servicing to the maker's plan, so your warranty stays valid.</p>
+          <ul class="checks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Oil and filter change</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Brake check and fluids</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Stamp in your service book</li>
+          </ul>
+        </div>
+        <div class="card panel" role="tabpanel" id="panel-tyres" aria-labelledby="tab-tyres" tabindex="0" hidden>
+          <h3>Tyres</h3>
+          <p>Seasonal tyre changes, storage and repairs while you wait.</p>
+          <ul class="checks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Tyre fitting and balancing</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Tyre hotel for 1,200 Kč a season</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Puncture repair</li>
+          </ul>
+        </div>
+        <div class="card panel" role="tabpanel" id="panel-diagnostics" aria-labelledby="tab-diagnostics" tabindex="0" hidden>
+          <h3>Diagnostics</h3>
+          <p>We read the fault codes and find the real cause before we replace anything.</p>
+          <ul class="checks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Engine and electronics diagnostics</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Air-con check and refill</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Pre-purchase inspection</li>
+          </ul>
+        </div>
+        <div class="card panel" role="tabpanel" id="panel-bodywork" aria-labelledby="tab-bodywork" tabindex="0" hidden>
+          <h3>Bodywork</h3>
+          <p>Dents, scratches and paint, matched in our own paint shop.</p>
+          <ul class="checks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Dent repair</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Colour-matched paintwork</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>Insurance claims handled for you</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section prices" id="prices" aria-labelledby="prices-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">Prices</p>
+        <h2 id="prices-title">Get a price in ten seconds</h2>
+        <p>Fixed prices including VAT, parts and labour.</p>
+      </div>
+      <form class="calc" id="calc" onsubmit="return false;">
+        <div class="card calc-main reveal">
+          <fieldset>
+            <legend><span class="step-tag" aria-hidden="true">1</span>Car size</legend>
+            <div class="sizes">
+              <div class="size">
+                <input type="radio" name="size" id="size-small" value="small">
+                <label for="size-small">
+                  <svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M8 20h-3v-6l5-1 6-6h12l6 6 4 1v6h-3"/><circle cx="12" cy="20" r="3.5"/><circle cx="34" cy="20" r="3.5"/><path d="M16 20h14"/></svg>
+                  Small car
+                </label>
+              </div>
+              <div class="size">
+                <input type="radio" name="size" id="size-family" value="family" checked>
+                <label for="size-family">
+                  <svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M7 20H3v-6l7-2 7-6h14l8 6 6 1v7h-4"/><circle cx="11" cy="20" r="3.5"/><circle cx="37" cy="20" r="3.5"/><path d="M15 20h18"/></svg>
+                  Family car
+                </label>
+              </div>
+              <div class="size">
+                <input type="radio" name="size" id="size-suv" value="suv">
+                <label for="size-suv">
+                  <svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M7 21H3V10l4-6h26l7 7 5 1v9h-4"/><circle cx="11" cy="21" r="3.5"/><circle cx="37" cy="21" r="3.5"/><path d="M15 21h18M3 11h37"/></svg>
+                  SUV / van
+                </label>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><span class="step-tag" aria-hidden="true">2</span>Services you need</legend>
+            <div class="svc-list" id="svc-list"></div>
+          </fieldset>
+        </div>
+        <aside class="calc-sum reveal" style="--i:1" aria-label="Price summary">
+          <p class="sum-label" id="total-label">Estimated total</p>
+          <p class="sum-total" id="total" aria-live="polite" aria-labelledby="total-label">0 Kč</p>
+          <p class="sum-meta" id="sum-meta">Family car · no services selected</p>
+          <ul class="sum-list" id="sum-list"><li class="empty">Tick the services you need.</li></ul>
+          <a class="btn btn-accent" href="#contact">Book this service
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <p class="sum-note">Including VAT, parts and labour. We call before any extra work.</p>
+        </aside>
+      </form>
+    </div>
+  </section>
+
+  <section class="section" id="process" aria-labelledby="process-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">How it works</p>
+        <h2 id="process-title">Four steps, no surprises</h2>
+      </div>
+      <div style="position:relative">
+        <div class="steps-line reveal-line" aria-hidden="true"><span></span></div>
+        <ol class="steps" data-stagger>
+          <li class="step reveal">
+            <div class="step-num" aria-hidden="true">1</div>
+            <div class="card step-body lift"><h3>Book online or call</h3><p>Pick a time that suits you. Most services are done the same day.</p></div>
+          </li>
+          <li class="step reveal">
+            <div class="step-num" aria-hidden="true">2</div>
+            <div class="card step-body lift"><h3>Drop off your car</h3><p>Leave the key at the desk, or in our key box before 7:00.</p></div>
+          </li>
+          <li class="step reveal">
+            <div class="step-num" aria-hidden="true">3</div>
+            <div class="card step-body lift"><h3>We call before extra work</h3><p>If we find anything else, you decide. Nothing is done without your OK.</p></div>
+          </li>
+          <li class="step reveal">
+            <div class="step-num" aria-hidden="true">4</div>
+            <div class="card step-body lift"><h3>Pick up and pay</h3><p>Pay by card or bank transfer. Every job comes with a 2-year warranty.</p></div>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="team" aria-labelledby="team-title" style="padding-top:20px">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">Team</p>
+        <h2 id="team-title">The people under the bonnet</h2>
+      </div>
+      <div class="team-grid" data-stagger>
+        <article class="card person lift reveal">
+          <div class="person-img"><img src="https://picsum.photos/seed/dvorak-team-1/600/700" alt="Jiří Dvořák" width="600" height="700" loading="lazy"></div>
+          <div class="person-body"><h3>Jiří Dvořák</h3><span class="role">Owner, master mechanic</span><p>Opened the shop in 2002 and still checks every car that leaves it.</p></div>
+        </article>
+        <article class="card person lift reveal">
+          <div class="person-img"><img src="https://picsum.photos/seed/dvorak-team-2/600/700" alt="Pavel Svoboda" width="600" height="700" loading="lazy"></div>
+          <div class="person-body"><h3>Pavel Svoboda</h3><span class="role">Diagnostics</span><p>Finds the electrical faults that other garages gave up on.</p></div>
+        </article>
+        <article class="card person lift reveal">
+          <div class="person-img"><img src="https://picsum.photos/seed/dvorak-team-3/600/700" alt="Martina Veselá" width="600" height="700" loading="lazy"></div>
+          <div class="person-body"><h3>Martina Veselá</h3><span class="role">Service advisor</span><p>Explains every line of your invoice in plain words.</p></div>
+        </article>
+        <article class="card person lift reveal">
+          <div class="person-img"><img src="https://picsum.photos/seed/dvorak-team-4/600/700" alt="Lukáš Král" width="600" height="700" loading="lazy"></div>
+          <div class="person-body"><h3>Lukáš Král</h3><span class="role">Bodywork and paint</span><p>Matches any colour, from a 1990s Škoda to a brand-new Tesla.</p></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section testi" aria-labelledby="testi-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">Reviews</p>
+        <h2 id="testi-title">What drivers say</h2>
+      </div>
+      <div class="quotes" data-stagger>
+        <figure class="quote lift reveal">
+          <div class="stars" aria-label="5 out of 5 stars" role="img">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg>
+          </div>
+          <blockquote><p>“They called before changing anything, and the price was exactly as quoted.”</p></blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">M</span>— Michal T.</figcaption>
+        </figure>
+        <figure class="quote lift reveal">
+          <div class="stars" aria-label="5 out of 5 stars" role="img">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg>
+          </div>
+          <blockquote><p>“Found an electrical fault that two other garages missed.”</p></blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">S</span>— Simona K.</figcaption>
+        </figure>
+        <figure class="quote lift reveal">
+          <div class="stars" aria-label="5 out of 5 stars" role="img">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3 6.6 7.2.7-5.4 4.8 1.6 7L12 17.5 5.6 21l1.6-7L1.8 9.3 9 8.6z"/></svg>
+          </div>
+          <blockquote><p>“Tyres changed in 30 minutes while I had a coffee.”</p></blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">R</span>— Radek P.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="contact" aria-labelledby="contact-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="kicker">Contact</p>
+        <h2 id="contact-title">Book your car in</h2>
+      </div>
+      <div class="contact-grid" data-stagger>
+        <div class="card info reveal">
+          <div class="info-row">
+            <span class="info-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span>
+            <div>
+              <h3>Address</h3>
+              <address style="font-style:normal">Hradecká 88, 500 03 Pardubice</address>
+              <a href="https://maps.google.com/?q=Hradecká+88,+Pardubice" target="_blank" rel="noopener">Open in Google Maps<span class="sr-only"> (opens in a new tab)</span></a>
+            </div>
+          </div>
+          <div class="info-row">
+            <span class="info-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/></svg></span>
+            <div>
+              <h3>Phone</h3>
+              <a href="tel:+420466000245">+420 466 000 245</a>
+            </div>
+          </div>
+          <div class="info-row">
+            <span class="info-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 7 8.5-7"/></svg></span>
+            <div>
+              <h3>E-mail</h3>
+              <a href="mailto:servis@autodvorak.cz">servis@autodvorak.cz</a>
+            </div>
+          </div>
+          <div class="info-row">
+            <span class="info-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            <div style="flex:1">
+              <h3>Opening hours</h3>
+              <table class="hours">
+                <caption class="sr-only">Opening hours</caption>
+                <tbody>
+                  <tr><th scope="row">Monday–Friday</th><td>7:00–17:00</td></tr>
+                  <tr><th scope="row">Saturday</th><td>8:00–12:00 (tyres only)</td></tr>
+                  <tr><th scope="row">Sunday</th><td class="closed">closed</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <form class="card form reveal" id="booking" novalidate>
+          <h3>Booking request</h3>
+          <p>Fields marked <span class="req" aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
+          <div class="fields">
+            <div class="field">
+              <label for="f-name">Name <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-name" name="name" type="text" autocomplete="name" required>
+            </div>
+            <div class="field">
+              <label for="f-phone">Phone <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required>
+            </div>
+            <div class="field">
+              <label for="f-email">E-mail <span class="opt">(optional)</span></label>
+              <input id="f-email" name="email" type="email" autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="f-car">Car make and model <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-car" name="car" type="text" placeholder="e.g. Škoda Octavia" required>
+            </div>
+            <div class="field">
+              <label for="f-service">Service <span class="req" aria-hidden="true">*</span></label>
+              <select id="f-service" name="service" required>
+                <option value="">Choose a service</option>
+                <option>Servicing</option>
+                <option>Tyres</option>
+                <option>Diagnostics</option>
+                <option>Bodywork</option>
+                <option>Something else</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-date">Preferred date <span class="opt">(optional)</span></label>
+              <input id="f-date" name="date" type="date">
+            </div>
+            <div class="field full">
+              <label for="f-msg">Message <span class="opt">(optional)</span></label>
+              <textarea id="f-msg" name="message" rows="4"></textarea>
+            </div>
+          </div>
+          <div class="form-foot">
+            <small>Sending opens your e-mail app with the booking ready to send to servis@autodvorak.cz.</small>
+            <button class="btn btn-primary" type="submit">Book service
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <a class="brand" href="#top">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3.6 17.2a1.9 1.9 0 0 0 2.7 2.7l5.7-5.7a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.3-.4-.4-2.3z"/></svg>
+          </span>
+          <span class="brand-name">Autoservis <span>Dvořák</span></span>
+        </a>
+        <address>Hradecká 88, 500 03 Pardubice</address>
+      </div>
+      <nav aria-label="Footer">
+        <ul class="footer-links">
+          <li><a href="#services">Services</a></li>
+          <li><a href="#prices">Prices</a></li>
+          <li><a href="#process">How it works</a></li>
+          <li><a href="#team">Team</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="footer-bottom">© 2026 Autoservis Dvořák s.r.o.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Mobile menu */
+  var menuBtn = document.querySelector('.menu-btn');
+  var links = document.getElementById('nav-links');
+  function closeMenu(){ links.classList.remove('open'); menuBtn.setAttribute('aria-expanded','false'); }
+  menuBtn.addEventListener('click', function(){
+    var open = links.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  links.addEventListener('click', function(e){ if (e.target.closest('a')) closeMenu(); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && links.classList.contains('open')) { closeMenu(); menuBtn.focus(); }
+  });
+  window.addEventListener('resize', function(){ if (window.innerWidth > 920) closeMenu(); });
+
+  /* Tabs */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function selectTab(tab, focus){
+    tabs.forEach(function(t){
+      var on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      var p = document.getElementById(t.getAttribute('aria-controls'));
+      if (p) p.hidden = !on;
+    });
+    if (focus) tab.focus();
+  }
+  tabs.forEach(function(tab, i){
+    tab.addEventListener('click', function(){ selectTab(tab, false); });
+    tab.addEventListener('keydown', function(e){
+      var idx = null;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') idx = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') idx = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') idx = 0;
+      else if (e.key === 'End') idx = tabs.length - 1;
+      if (idx !== null){ e.preventDefault(); selectTab(tabs[idx], true); }
+    });
+  });
+
+  /* Price calculator */
+  var services = [
+    {id:'oil', name:'Oil service', p:{small:1490, family:1790, suv:2290}},
+    {id:'brakes', name:'Front brake pads', p:{small:2190, family:2590, suv:3190}},
+    {id:'aircon', name:'Air-con service', p:{small:1290, family:1290, suv:1590}},
+    {id:'align', name:'Wheel alignment', p:{small:990, family:990, suv:1290}},
+    {id:'tyres', name:'Tyre change (4 wheels)', p:{small:800, family:960, suv:1200}}
+  ];
+  var sizeNames = {small:'Small car', family:'Family car', suv:'SUV / van'};
+  function fmt(n){ return n.toLocaleString('en-US') + ' Kč'; }
+  var list = document.getElementById('svc-list');
+  var checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  services.forEach(function(s){
+    var wrap = document.createElement('div');
+    wrap.className = 'svc';
+    wrap.innerHTML = '<input type="checkbox" id="svc-' + s.id + '" value="' + s.id + '">' +
+      '<label for="svc-' + s.id + '"><span class="box">' + checkSvg + '</span>' +
+      '<span class="svc-name">' + s.name + '</span>' +
+      '<span class="svc-price" id="price-' + s.id + '">' + fmt(s.p.family) + '</span></label>';
+    list.appendChild(wrap);
+  });
+  var calc = document.getElementById('calc');
+  var totalEl = document.getElementById('total');
+  var metaEl = document.getElementById('sum-meta');
+  var sumList = document.getElementById('sum-list');
+  function update(){
+    var sizeInput = calc.querySelector('input[name="size"]:checked');
+    var size = sizeInput ? sizeInput.value : 'family';
+    var total = 0, count = 0, items = [];
+    services.forEach(function(s){
+      var price = s.p[size];
+      document.getElementById('price-' + s.id).textContent = fmt(price);
+      if (document.getElementById('svc-' + s.id).checked){
+        total += price; count++;
+        items.push('<li><span>' + s.name + '</span><span>' + fmt(price) + '</span></li>');
+      }
+    });
+    totalEl.textContent = fmt(total);
+    metaEl.textContent = sizeNames[size] + ' · ' + (count === 0 ? 'no services selected' : count + (count === 1 ? ' service' : ' services'));
+    sumList.innerHTML = items.length ? items.join('') : '<li class="empty">Tick the services you need.</li>';
+  }
+  calc.addEventListener('change', update);
+  calc.addEventListener('input', update);
+  update();
+
+  /* Reveal on scroll */
+  document.querySelectorAll('[data-stagger]').forEach(function(group){
+    Array.prototype.forEach.call(group.querySelectorAll('.reveal'), function(el, i){
+      el.style.setProperty('--i', i);
+    });
+  });
+  var revealEls = document.querySelectorAll('.reveal, .reveal-line');
+  var counters = document.querySelectorAll('[data-count]');
+
+  function countUp(el){
+    var target = parseInt(el.getAttribute('data-count'), 10);
+    var dur = 1700, start = null;
+    function frame(ts){
+      if (start === null) start = ts;
+      var t = Math.min((ts - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(target * eased).toLocaleString('en-US');
+      if (t < 1) requestAnimationFrame(frame);
+      else el.textContent = target.toLocaleString('en-US');
+    }
+    requestAnimationFrame(frame);
+  }
+
+  if (reduce || !('IntersectionObserver' in window)){
+    Array.prototype.forEach.call(revealEls, function(el){ el.classList.add('in'); });
+    // numbers already show their final value in the markup
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (entry.isIntersecting){
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, {threshold:0.12, rootMargin:'0px 0px -40px 0px'});
+    Array.prototype.forEach.call(revealEls, function(el){ io.observe(el); });
+
+    Array.prototype.forEach.call(counters, function(el){ el.textContent = '0'; });
+    var co = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (entry.isIntersecting){
+          countUp(entry.target);
+          co.unobserve(entry.target);
+        }
+      });
+    }, {threshold:0.5});
+    Array.prototype.forEach.call(counters, function(el){ co.observe(el); });
+  }
+
+  /* Booking form → mailto */
+  var form = document.getElementById('booking');
+  var status = document.getElementById('form-status');
+  var dateInput = document.getElementById('f-date');
+  var now = new Date();
+  var pad = function(n){ return (n < 10 ? '0' : '') + n; };
+  dateInput.min = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+
+  Array.prototype.forEach.call(form.querySelectorAll('input, select, textarea'), function(el){
+    el.addEventListener('input', function(){
+      if (el.checkValidity()){
+        el.closest('.field').classList.remove('invalid');
+        el.removeAttribute('aria-invalid');
+      }
+    });
+  });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var firstInvalid = null;
+    Array.prototype.forEach.call(form.querySelectorAll('input, select, textarea'), function(el){
+      var ok = el.checkValidity();
+      el.closest('.field').classList.toggle('invalid', !ok);
+      if (!ok){ el.setAttribute('aria-invalid','true'); if (!firstInvalid) firstInvalid = el; }
+      else el.removeAttribute('aria-invalid');
+    });
+    if (firstInvalid){
+      status.textContent = 'Please fill in the required fields.';
+      firstInvalid.focus();
+      if (form.reportValidity) form.reportValidity();
+      return;
+    }
+    var v = function(id){ return document.getElementById(id).value.trim(); };
+    var lines = [
+      'Name: ' + v('f-name'),
+      'Phone: ' + v('f-phone'),
+      'E-mail: ' + (v('f-email') || '-'),
+      'Car make and model: ' + v('f-car'),
+      'Service: ' + v('f-service'),
+      'Preferred date: ' + (v('f-date') || '-'),
+      'Message: ' + (v('f-msg') || '-')
+    ];
+    var href = 'mailto:servis@autodvorak.cz?subject=' + encodeURIComponent('Service booking') +
+               '&body=' + encodeURIComponent(lines.join('\r\n'));
+    status.textContent = 'Opening your e-mail app…';
+    window.location.href = href;
+  });
+})();
+</script>
+</body>
+</html>

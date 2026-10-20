@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/garage/claude-opus-5-5/nyra-4/",
+ "runs": 3,
+ "fcp_ms": 692,
+ "lcp_ms": 692,
+ "cls": 0.07,
+ "load_ms": 846,
+ "kb": 231.5,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 5.7,
+  "Stylesheet": 10,
+  "Script": 20.4,
+  "Image": 70.8,
+  "Font": 124,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  692,
+  920,
+  652
+ ]
+}

@@ -1,0 +1,167 @@
+use web
+
+site("Penzion U Mlýna", primary: "#7A4E2D", accent: "#5B7F5E", bg: "#FBF8F3", font: "Nunito Sans", radius: 16, style: "soft")
+
+css("
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Nunito+Sans:wght@400;500;600&display=swap');
+h1, h2, h3, .kicker { font-family: 'Fraunces', serif; }
+body { font-family: 'Nunito Sans', sans-serif; color: #2B2622; background: #FBF8F3; }
+")
+
+enum Msg { FilterRooms(str), ToggleFaq(int), OpenLightbox(int) }
+var roomFilter = "All"
+var faqOpen: [bool] = [false, false, false, false]
+var lightboxOpen = false
+var lightboxIndex = 0
+
+fn update(m: Msg) {
+    match m {
+        Msg.FilterRooms(t) => roomFilter = t,
+        Msg.ToggleFaq(i) => faqOpen[i] = !faqOpen[i],
+        Msg.OpenLightbox(i) => {
+            lightboxOpen = true
+            lightboxIndex = i
+        }
+    }
+}
+
+fn isReceptionOpen() -> bool {
+    let now = time.now_ms()
+    let hours = now / 3600000 % 24
+    let day = (now / 86400000 + 4) % 7
+    if day >= 5 {
+        return hours >= 8 && hours < 20
+    }
+    return hours >= 7 && hours < 21
+}
+
+let rooms = [
+    (name: "River Room", type: "Double", size: "18 m²", guests: "2 guests", price: "2,400 Kč", desc: "A window seat right above the weir.", image: "https://picsum.photos/seed/mlyn-room-1/800/600", alt: "The River Room with a window seat"),
+    (name: "Garden Room", type: "Double", size: "16 m²", guests: "2 guests", price: "2,100 Kč", desc: "Opens onto the herb garden and is quiet at night.", image: "https://picsum.photos/seed/mlyn-room-2/800/600", alt: "The Garden Room with a view of the herb garden"),
+    (name: "Miller's Family Room", type: "Family", size: "32 m²", guests: "4 guests", price: "3,600 Kč", desc: "A double bed and a bunk bed under old oak beams.", image: "https://picsum.photos/seed/mlyn-room-3/800/600", alt: "The family room with a bunk bed"),
+    (name: "Attic Family Room", type: "Family", size: "36 m²", guests: "5 guests", price: "3,900 Kč", desc: "Two bedrooms under the roof, ideal with older kids.", image: "https://picsum.photos/seed/mlyn-room-4/800/600", alt: "The attic family room under the roof"),
+    (name: "Castle View Suite", type: "Suite", size: "45 m²", guests: "2 guests", price: "5,200 Kč", desc: "A free-standing bath and the best view of the castle tower.", image: "https://picsum.photos/seed/mlyn-room-5/800/600", alt: "The Castle View Suite with a free-standing bath"),
+    (name: "Mill Wheel Suite", type: "Suite", size: "50 m²", guests: "4 guests", price: "5,900 Kč", desc: "A living room with the original mill wheel behind glass.", image: "https://picsum.photos/seed/mlyn-room-6/800/600", alt: "The Mill Wheel Suite with the old mill wheel")
+]
+
+let amenities = [
+    (icon: ":coffee:", label: "Breakfast from our bakery"),
+    (icon: ":wifi:", label: "Free Wi-Fi"),
+    (icon: ":car:", label: "Free private parking"),
+    (icon: ":trees:", label: "Riverside garden terrace"),
+    (icon: ":bike:", label: "Bike and canoe storage"),
+    (icon: ":pawprint:", label: "Pets welcome (300 Kč per night)"),
+    (icon: ":flame:", label: "Sauna in the old cellar"),
+    (icon: ":key:", label: "Early check-in on request")
+]
+
+let gallery = [
+    (image: "https://picsum.photos/seed/mlyn-g1/1200/800", alt: "The mill house at dusk"),
+    (image: "https://picsum.photos/seed/mlyn-g2/1200/800", alt: "Breakfast on the terrace"),
+    (image: "https://picsum.photos/seed/mlyn-g3/1200/800", alt: "The weir below the River Room"),
+    (image: "https://picsum.photos/seed/mlyn-g4/1200/800", alt: "The reading corner by the fireplace"),
+    (image: "https://picsum.photos/seed/mlyn-g5/1200/800", alt: "Canoes on the riverbank"),
+    (image: "https://picsum.photos/seed/mlyn-g6/1200/800", alt: "The castle tower from our garden")
+]
+
+let reviews = [
+    (text: "The quietest night we have had in years, and the croissants alone are worth the trip.", name: "Anna & Tom", place: "United Kingdom", stars: 5),
+    (text: "Our kids loved the bunk bed and the ducks on the river.", name: "The Huber family", place: "Austria", stars: 5),
+    (text: "Five minutes from the old town, yet it feels like the countryside.", name: "Petr K.", place: "Prague", stars: 5)
+]
+
+let faqItems = [
+    (q: "Is breakfast included?", a: "Yes. Breakfast is served from 7:30 to 10:00 in the mill room or on the terrace."),
+    (q: "Can I arrive late in the evening?", a: "Yes. Tell us your arrival time and we will leave your key in a code box at the door."),
+    (q: "Do you have parking?", a: "We have eight free spaces in our courtyard. There is no need to book one."),
+    (q: "Can I cancel my booking?", a: "Free cancellation up to 7 days before arrival. After that we charge the first night.")
+]
+
+page("/", "Penzion U Mlýna – riverside guesthouse in Český Krumlov", desc: "Family-run guesthouse in a restored mill on the Vltava, five minutes from the old town of Český Krumlov: six rooms, breakfast included, free parking.") {
+    navbar("U Mlýna", [("Rooms", "#rooms"), ("Amenities", "#amenities"), ("Gallery", "#gallery"), ("Location", "#location"), ("FAQ", "#faq")], cta: ("Book a stay", "#booking"))
+
+    hero("Sleep by the river, wake up to the castle", kicker: "Český Krumlov · on the Vltava since 1998", text: "Six quiet rooms in a restored 17th-century mill, five minutes' walk from the old town. Breakfast from our own bakery included.", image: "https://picsum.photos/seed/mlyn-hero/1600/1000", alt: "The old mill house of Penzion U Mlýna on the Vltava river", buttons: [("See the rooms", "#rooms"), ("Book a stay", "#booking")], badge: [(if isReceptionOpen() { "Reception open" } else { "Reception closed" }, "")], anim: "rise")
+
+    section("rooms", "Find your room", kicker: "Rooms", text: "Every room has a private bathroom, free Wi-Fi and breakfast included. Prices are per night for the whole room.", anim: "rise") {
+        row {
+            button("All", on: Msg.FilterRooms("All"), active: roomFilter == "All")
+            button("Double", on: Msg.FilterRooms("Double"), active: roomFilter == "Double")
+            button("Family", on: Msg.FilterRooms("Family"), active: roomFilter == "Family")
+            button("Suite", on: Msg.FilterRooms("Suite"), active: roomFilter == "Suite")
+        }
+        grid(3, anim: "stagger", hover: "lift") {
+            for r in rooms {
+                if roomFilter == "All" || r.type == roomFilter {
+                    card(r.name, r.desc, image: r.image, items: [r.type, r.size, r.guests, r.price])
+                }
+            }
+        }
+    }
+
+    section("amenities", "Everything for a slow weekend", kicker: "Amenities") {
+        grid(4) {
+            for a in amenities {
+                chip(a.label, "", icon: a.icon)
+            }
+        }
+    }
+
+    section("gallery", "A look around", kicker: "Gallery", anim: "rise") {
+        grid(3, hover: "zoom") {
+            for i, g in gallery {
+                img(g.image, g.alt, ratio: "4/3")
+            }
+        }
+    }
+
+    section("", "What our guests say") {
+        grid(3) {
+            for r in reviews {
+                quote(r.text, r.name, place: r.place, stars: r.stars)
+            }
+        }
+    }
+
+    section("booking", "Ask for your dates", kicker: "Book a stay", text: "Tell us when you would like to come. We reply within a few hours with availability and the price.") {
+        form(mailto: "stay@umlyna.cz", subject: "Booking request") {
+            field("arrival", "Arrival", type: "date", req: true)
+            field("departure", "Departure", type: "date", req: true)
+            field("guests", "Guests", type: "select", req: true, options: ["1", "2", "3", "4", "5"])
+            field("roomtype", "Room type", type: "select", req: true, options: ["Double", "Family", "Suite", "Any"])
+            field("name", "Name", type: "text", req: true)
+            field("email", "E-mail", type: "email", req: true)
+            field("phone", "Phone", type: "tel")
+            field("message", "Message", type: "area")
+        }
+    }
+
+    section("location", "Five minutes from the old town", kicker: "Location") {
+        stack {
+            p("**Linecká 12, 381 01 Český Krumlov**")
+            link("Open in Google Maps", "https://maps.google.com/?q=Linecká+12,+Český+Krumlov")
+            p("")
+            p("**Old town square** · 5 min on foot")
+            p("**Castle** · 10 min on foot")
+            p("**Train station** · free pick-up on request")
+            p("")
+            link("+420 380 000 512", "tel:+420380000512")
+            p("")
+            link("stay@umlyna.cz", "mailto:stay@umlyna.cz")
+            p("")
+            hours([("Mon–Fri", "7:00-21:00"), ("Sat–Sun", "8:00-20:00")])
+            note("Check-in from 14:00, check-out until 11:00.")
+            p("")
+            if isReceptionOpen() { p("**Reception open**") } else { p("**Reception closed**") }
+        }
+    }
+
+    section("faq", "Good to know", kicker: "FAQ") {
+        stack {
+            for i, item in faqItems {
+                card(item.q, if faqOpen[i] { item.a } else { "" }, on: Msg.ToggleFaq(i))
+            }
+        }
+    }
+
+    footer(text: "Penzion U Mlýna", contact: ["Linecká 12, 381 01 Český Krumlov", "+420 380 000 512", "stay@umlyna.cz"], links: [("Rooms", "#rooms"), ("Amenities", "#amenities"), ("Gallery", "#gallery"), ("Location", "#location"), ("FAQ", "#faq")], small: ["© 2026 Penzion U Mlýna"])
+}

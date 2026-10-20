@@ -1,0 +1,150 @@
+```nyra
+use web
+
+site("Autoservis Dvořák", primary: "#1F4E8C", accent: "#F2A900", bg: "#F4F5F7", font: "Source Sans 3", display: "Barlow Condensed", radius: 12)
+
+enum Msg { SelectService(str), SelectCar(str), ToggleService(str) }
+
+var selected_service = "Servicing"
+var selected_car = "Family car"
+var services_checked: [str: bool] = [:]
+
+fn update(m: Msg) {
+    match m {
+        Msg.SelectService(s) => selected_service = s
+        Msg.SelectCar(c) => selected_car = c
+        Msg.ToggleService(s) => {
+            var current = services_checked.get(s, false)
+            services_checked[s] = !current
+        }
+    }
+}
+
+fn get_price(service: str, car: str) -> int {
+    var prices: [str: [str: int]] = [:]
+    prices["Oil service"] = ["Small car": 1490, "Family car": 1790, "SUV / van": 2290]
+    prices["Front brake pads"] = ["Small car": 2190, "Family car": 2590, "SUV / van": 3190]
+    prices["Air-con service"] = ["Small car": 1290, "Family car": 1290, "SUV / van": 1590]
+    prices["Wheel alignment"] = ["Small car": 990, "Family car": 990, "SUV / van": 1290]
+    prices["Tyre change (4 wheels)"] = ["Small car": 800, "Family car": 960, "SUV / van": 1200]
+    if let car_prices = prices.get(service) {
+        return car_prices.get(car, 0)
+    }
+    return 0
+}
+
+fn calc_total() -> int {
+    var total = 0
+    for service in ["Oil service", "Front brake pads", "Air-con service", "Wheel alignment", "Tyre change (4 wheels)"] {
+        if services_checked.get(service, false) {
+            total += get_price(service, selected_car)
+        }
+    }
+    return total
+}
+
+page("/", "Autoservis Dvořák – honest car repairs in Pardubice", desc: "Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.") {
+    navbar("Autoservis Dvořák", [("Services", "#services"), ("Prices", "#prices"), ("How it works", "#process"), ("Team", "#team"), ("Contact", "#contact")], cta: ("Book a service", "#contact"))
+    
+    hero("Honest repairs, done right the first time", kicker: "Pardubice · Hradecká 88 · all makes", text: "Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.", image: "https://picsum.photos/seed/dvorak-hero/1600/1000", alt: "A mechanic working under a lifted car at Autoservis Dvořák", buttons: [("Get a price", "#prices"), ("Book a service", "#contact")], anim: "rise")
+    
+    section("", "", bg: "white") {
+        grid(4) {
+            stat("24", "years in Pardubice")
+            stat("9,800", "cars serviced last year")
+            stat("6", "certified mechanics")
+            chip("2 years", "warranty on parts and labour")
+        }
+    }
+    
+    section("services", "What we do", kicker: "Services", anim: "rise") {
+        row {
+            button("Servicing", on: Msg.SelectService("Servicing"), active: selected_service == "Servicing", style: "ghost")
+            button("Tyres", on: Msg.SelectService("Tyres"), active: selected_service == "Tyres", style: "ghost")
+            button("Diagnostics", on: Msg.SelectService("Diagnostics"), active: selected_service == "Diagnostics", style: "ghost")
+            button("Bodywork", on: Msg.SelectService("Bodywork"), active: selected_service == "Bodywork", style: "ghost")
+        }
+        
+        if selected_service == "Servicing" {
+            card("Servicing", "Scheduled servicing to the maker's plan, so your warranty stays valid.", items: ["Oil and filter change", "Brake check and fluids", "Stamp in your service book"])
+        }
+        if selected_service == "Tyres" {
+            card("Tyres", "Seasonal tyre changes, storage and repairs while you wait.", items: ["Tyre fitting and balancing", "Tyre hotel for 1,200 Kč a season", "Puncture repair"])
+        }
+        if selected_service == "Diagnostics" {
+            card("Diagnostics", "We read the fault codes and find the real cause before we replace anything.", items: ["Engine and electronics diagnostics", "Air-con check and refill", "Pre-purchase inspection"])
+        }
+        if selected_service == "Bodywork" {
+            card("Bodywork", "Dents, scratches and paint, matched in our own paint shop.", items: ["Dent repair", "Colour-matched paintwork", "Insurance claims handled for you"])
+        }
+    }
+    
+    section("prices", "Get a price in ten seconds", kicker: "Prices", text: "Fixed prices including VAT, parts and labour.", anim: "rise", bg: "alt") {
+        stack {
+            p("Car size")
+            row {
+                button("Small car", on: Msg.SelectCar("Small car"), active: selected_car == "Small car", style: "ghost")
+                button("Family car", on: Msg.SelectCar("Family car"), active: selected_car == "Family car", style: "ghost")
+                button("SUV / van", on: Msg.SelectCar("SUV / van"), active: selected_car == "SUV / van", style: "ghost")
+            }
+            p("Services")
+            for service in ["Oil service", "Front brake pads", "Air-con service", "Wheel alignment", "Tyre change (4 wheels)"] {
+                let price = get_price(service, selected_car)
+                let price_str = "{price} Kč"
+                field(service, service, type: "check")
+            }
+            p("Estimated total: {calc_total()} Kč")
+            button("Book this service", href: "#contact", style: "primary")
+        }
+    }
+    
+    section("process", "Four steps, no surprises", kicker: "How it works", anim: "rise") {
+        steps([
+            ("Book online or call", "Pick a time that suits you. Most services are done the same day."),
+            ("Drop off your car", "Leave the key at the desk, or in our key box before 7:00."),
+            ("We call before extra work", "If we find anything else, you decide. Nothing is done without your OK."),
+            ("Pick up and pay", "Pay by card or bank transfer. Every job comes with a 2-year warranty.")
+        ])
+    }
+    
+    section("team", "The people under the bonnet", kicker: "Team", anim: "rise", bg: "alt") {
+        grid(4, anim: "stagger", hover: "lift") {
+            card("Jiří Dvořák", "Owner, master mechanic. Opened the shop in 2002 and still checks every car that leaves it.", image: "https://picsum.photos/seed/dvorak-team-1/600/700")
+            card("Pavel Svoboda", "Diagnostics. Finds the electrical faults that other garages gave up on.", image: "https://picsum.photos/seed/dvorak-team-2/600/700")
+            card("Martina Veselá", "Service advisor. Explains every line of your invoice in plain words.", image: "https://picsum.photos/seed/dvorak-team-3/600/700")
+            card("Lukáš Král", "Bodywork and paint. Matches any colour, from a 1990s Škoda to a brand-new Tesla.", image: "https://picsum.photos/seed/dvorak-team-4/600/700")
+        }
+    }
+    
+    section("testimonials", "What drivers say", anim: "rise") {
+        grid(3, anim: "stagger") {
+            quote("They called before changing anything, and the price was exactly as quoted.", "Michal T.")
+            quote("Found an electrical fault that two other garages missed.", "Simona K.")
+            quote("Tyres changed in 30 minutes while I had a coffee.", "Radek P.")
+        }
+    }
+    
+    section("contact", "Book your car in", kicker: "Contact", anim: "rise", bg: "alt") {
+        stack {
+            p("**Address**")
+            p("[Hradecká 88, 500 03 Pardubice](https://maps.google.com/?q=Hradecká+88,+Pardubice)")
+            p("**Phone** [+420 466 000 245](tel:+420466000245)")
+            p("**E-mail** [servis@autodvorak.cz](mailto:servis@autodvorak.cz)")
+            p("**Hours**")
+            hours([("Mon–Fri", "1-5 7:00-17:00"), ("Sat", "6 8:00-12:00"), ("Sun", "")])
+            p("**Book your service**")
+            form(title: "", mailto: "servis@autodvorak.cz", subject: "Service booking") {
+                field("name", "Name", req: true)
+                field("phone", "Phone", type: "tel", req: true)
+                field("email", "E-mail", type: "email")
+                field("car", "Car make and model", req: true)
+                field("service", "Service", type: "select", req: true, options: ["Servicing", "Tyres", "Diagnostics", "Bodywork", "Something else"])
+                field("date", "Preferred date", type: "date")
+                field("message", "Message", type: "area")
+            }
+        }
+    }
+    
+    footer("Autoservis Dvořák", contact: ["Hradecká 88, 500 03 Pardubice", "+420 466 000 245", "servis@autodvorak.cz"], links: [("Services", "#services"), ("Prices", "#prices"), ("How it works", "#process"), ("Team", "#team"), ("Contact", "#contact")], small: ["© 2026 Autoservis Dvořák s.r.o."])
+}
+```

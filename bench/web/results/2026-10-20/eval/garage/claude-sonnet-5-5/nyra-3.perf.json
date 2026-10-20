@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/garage/claude-sonnet-5-5/nyra-3/",
+ "runs": 3,
+ "fcp_ms": 656,
+ "lcp_ms": 656,
+ "cls": 0,
+ "load_ms": 869,
+ "kb": 229.4,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 4.7,
+  "Stylesheet": 10,
+  "Script": 19.3,
+  "Image": 70.8,
+  "Font": 124,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  656,
+  612,
+  760
+ ]
+}

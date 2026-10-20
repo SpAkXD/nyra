@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.">
+  <title>Autoservis Dvořák – honest car repairs in Pardubice</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: #F4F5F7;
+      color: #1C2430;
+      line-height: 1.6;
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      background: #FFFFFF;
+      border-bottom: 1px solid #E0E2E8;
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1F4E8C;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: #1C2430;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus {
+      color: #1F4E8C;
+      outline: none;
+    }
+
+    .nav-button {
+      background: #1F4E8C;
+      color: #FFFFFF;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .nav-button:hover,
+    .nav-button:focus {
+      background: #153a6b;
+      outline: none;
+    }
+
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: #1C2430;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #FFFFFF;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 2rem;
+        border-bottom: 1px solid #E0E2E8;
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .nav-container {
+        padding: 0;
+      }
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(31, 78, 140, 0.7) 0%, rgba(28, 36, 48, 0.7) 100%), url('https://picsum.photos/seed/dvorak-hero/1600/1000') center/cover;
+      color: #FFFFFF;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .hero-content {
+      max-width: 700px;
+      padding: 2rem;
+    }
+
+    .hero-kicker {
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #F2A900;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.2s forwards;
+    }
+
+    .hero-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.4s forwards;
+    }
+
+    .hero-text {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.6s forwards;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.8s forwards;
+    }
+
+    .hero-button {
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border: 2px solid #FFFFFF;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .hero-button.filled {
+      background: #F2A900;
+      color: #1C2430;
+      border-color: #F2A900;
+    }
+
+    .hero-button.filled:hover,
+    .hero-button.filled:focus {
+      background: #d99000;
+      border-color: #d99000;
+      outline: none;
+    }
+
+    .hero-button.outline {
+      background: transparent;
+      color: #FFFFFF;
+      border-color: #FFFFFF;
+    }
+
+    .hero-button.outline:hover,
+    .hero-button.outline:focus {
+      background: #FFFFFF;
+      color: #1F4E8C;
+      outline: none;
+    }
+
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 2.2rem;
+      }
+
+      .hero-text {
+        font-size: 1rem;
+      }
+
+      .hero-buttons {
+        flex-direction: column;
+      }
+
+      .hero-button {
+        width: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-kicker,
+      .hero-title,
+      .hero-text,
+      .hero-buttons {
+        opacity: 1;
+        animation: none;
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Numbers Section */
+    .numbers-section {
+      background: #FFFFFF;
+      padding: 4rem 2rem;
+      margin: 0 auto;
+    }
+
+    .numbers-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 3rem;
+      text-align: center;
+    }
+
+    .number-item {
+      opacity: 0;
+      animation: fadeInScale 0.6s ease-out forwards;
+    }
+
+    .number-item:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .number-item:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .number-item:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    .number-item:nth-child(4) {
+      animation-delay: 0.6s;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .number-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 3rem;
+      font-weight: 700;
+      color: #1F4E8C;
+      margin-bottom: 0.5rem;
+    }
+
+    .number-label {
+      font-size: 1rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .number-item {
+        opacity: 1;
+        animation: none;
+      }
+    }
+
+    /* Section Base */
+    .section {
+      padding: 4rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-kicker {
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #F2A900;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #1C2430;
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    /* Services Section */
+    .services-section {
+      background: #FFFFFF;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      border-bottom: 2px solid #E0E2E8;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .tab:hover {
+      color: #1F4E8C;
+    }
+
+    .tab.active {
+      color: #1F4E8C;
+      border-bottom-color: #1F4E8C;
+    }
+
+    .tab:focus {
+      outline: 2px solid #1F4E8C;
+      outline-offset: 2px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .tab-text {
+      font-size: 1.05rem;
+      margin-bottom: 2rem;
+      color: #666;
+      line-height: 1.7;
+    }
+
+    .tab-points {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+    }
+
+    .tab-point {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .tab-point::before {
+      content: "✓";
+      font-weight: 700;
+      color: #F2A900;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+      margin-top: 0.2rem;
+    }
+
+    .tab-point-text {
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    /* Prices Section */
+    .prices-section {
+      background: #F4F5F7;
+    }
+
+    .prices-form {
+      background: #FFFFFF;
+      padding: 3rem;
+      border-radius: 12px;
+      border: 1px solid #E0E2E8;
+      margin-bottom: 3rem;
+    }
+
+    .form-group {
+      margin-bottom: 2rem;
+    }
+
+    .form-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1C2430;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .radio-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #1F4E8C;
+    }
+
+    .radio-option label {
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .checkbox-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: #F4F5F7;
+      border-radius: 8px;
+      border: 1px solid #E0E2E8;
+      transition: all 0.3s;
+    }
+
+    .checkbox-option:hover {
+      background: #FFFFFF;
+      border-color: #1F4E8C;
+    }
+
+    .checkbox-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #1F4E8C;
+    }
+
+    .checkbox-option label {
+      cursor: pointer;
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .checkbox-price {
+      color: #1F4E8C;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .total-box {
+      background: linear-gradient(135deg, #1F4E8C 0%, #153a6b 100%);
+      color: #FFFFFF;
+      padding: 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 2rem;
+    }
+
+    .total-label {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .total-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .prices-button {
+      background: #F2A900;
+      color: #1C2430;
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 1rem;
+      width: 100%;
+    }
+
+    .prices-button:hover,
+    .prices-button:focus {
+      background: #d99000;
+      outline: none;
+    }
+
+    /* Process Section */
+    .process-section {
+      background: #FFFFFF;
+    }
+
+    .process-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      position: relative;
+    }
+
+    .process-step {
+      opacity: 0;
+      animation: fadeInUp 0.6s ease-out forwards;
+    }
+
+    .process-step:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .process-step:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .process-step:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    .process-step:nth-child(4) {
+      animation-delay: 0.6s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .process-step {
+        opacity: 1;
+        animation: none;
+      }
+    }
+
+    .process-step-number {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #F2A900;
+      margin-bottom: 1rem;
+    }
+
+    .process-step-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1C2430;
+      margin-bottom: 0.5rem;
+    }
+
+    .process-step-text {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* Team Section */
+    .team-section {
+      background: #F4F5F7;
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .team-card {
+      background: #FFFFFF;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #E0E2E8;
+      transition: all 0.3s;
+      opacity: 0;
+      animation: fadeInScale 0.6s ease-out forwards;
+    }
+
+    .team-card:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .team-card:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .team-card:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    .team-card:nth-child(4) {
+      animation-delay: 0.6s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .team-card {
+        opacity: 1;
+        animation: none;
+      }
+    }
+
+    .team-card:hover {
+      transform: translateY(-4px);
+      border-color: #1F4E8C;
+      box-shadow: 0 8px 24px rgba(31, 78, 140, 0.15);
+    }
+
+    .team-image {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+    }
+
+    .team-content {
+      padding: 1.5rem;
+    }
+
+    .team-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1F4E8C;
+      margin-bottom: 0.25rem;
+    }
+
+    .team-role {
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 1rem;
+    }
+
+    .team-bio {
+      font-size: 0.95rem;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* Testimonials Section */
+    .testimonials-section {
+      background: #FFFFFF;
+    }
+
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .testimonial-card {
+      background: #F4F5F7;
+      padding: 2rem;
+      border-radius: 12px;
+      border: 1px solid #E0E2E8;
+      opacity: 0;
+      animation: fadeInScale 0.6s ease-out forwards;
+    }
+
+    .testimonial-card:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .testimonial-card:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .testimonial-card:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .testimonial-card {
+        opacity: 1;
+        animation: none;
+      }
+    }
+
+    .testimonial-text {
+      font-size: 1rem;
+      color: #666;
+      line-height: 1.7;
+      margin-bottom: 1rem;
+      font-style: italic;
+    }
+
+    .testimonial-author {
+      font-weight: 700;
+      color: #1C2430;
+    }
+
+    /* Contact Section */
+    .contact-section {
+      background: #F4F5F7;
+    }
+
+    .contact-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      margin-bottom: 3rem;
+    }
+
+    @media (max-width: 768px) {
+      .contact-content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .contact-info {
+      background: #FFFFFF;
+      padding: 2rem;
+      border-radius: 12px;
+      border: 1px solid #E0E2E8;
+    }
+
+    .contact-item {
+      margin-bottom: 2rem;
+    }
+
+    .contact-label {
+      font-weight: 600;
+      color: #1F4E8C;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .contact-item a {
+      color: #1F4E8C;
+      text-decoration: none;
+      transition: color 0.3s;
+      font-weight: 500;
+    }
+
+    .contact-item a:hover,
+    .contact-item a:focus {
+      color: #F2A900;
+      outline: none;
+    }
+
+    .hours-list {
+      list-style: none;
+    }
+
+    .hours-list li {
+      padding: 0.5rem 0;
+      color: #666;
+    }
+
+    .contact-form {
+      background: #FFFFFF;
+      padding: 2rem;
+      border-radius: 12px;
+      border: 1px solid #E0E2E8;
+    }
+
+    .form-field {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-field label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #1C2430;
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #E0E2E8;
+      border-radius: 6px;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+      outline: none;
+      border-color: #1F4E8C;
+      box-shadow: 0 0 0 3px rgba(31, 78, 140, 0.1);
+    }
+
+    .form-field textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-field.required label::after {
+      content: " *";
+      color: #F2A900;
+    }
+
+    .submit-button {
+      background: #1F4E8C;
+      color: #FFFFFF;
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 1rem;
+      width: 100%;
+    }
+
+    .submit-button:hover,
+    .submit-button:focus {
+      background: #153a6b;
+      outline: none;
+    }
+
+    /* Footer */
+    footer {
+      background: #1C2430;
+      color: #FFFFFF;
+      padding: 3rem 2rem;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .footer-brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #F2A900;
+      margin-bottom: 1rem;
+    }
+
+    .footer-text {
+      font-size: 0.95rem;
+      color: #aaa;
+      line-height: 1.6;
+    }
+
+    .footer-links {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-links a {
+      color: #aaa;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover,
+    .footer-links a:focus {
+      color: #F2A900;
+      outline: none;
+    }
+
+    .footer-bottom {
+      border-top: 1px solid #444;
+      padding-top: 2rem;
+      text-align: center;
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+
+    /* Scroll animations for sections */
+    .section {
+      opacity: 0;
+      animation: fadeIn 0.6s ease-out forwards;
+    }
+
+    .section.in-view {
+      opacity: 1;
+    }
+
+    .card-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .card {
+      background: #FFFFFF;
+      padding: 2rem;
+      border-radius: 12px;
+      border: 1px solid #E0E2E8;
+      transition: all 0.3s;
+      opacity: 0;
+      animation: fadeInScale 0.6s ease-out forwards;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: #1F4E8C;
+      box-shadow: 0 8px 24px rgba(31, 78, 140, 0.1);
+    }
+
+    .card:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .card:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .card:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    .card:nth-child(4) {
+      animation-delay: 0.6s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .card {
+        opacity: 1;
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-container">
+      <div class="nav-brand">Autoservis Dvořák</div>
+      <button class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#services">Services</a></li>
+        <li><a href="#prices">Prices</a></li>
+        <li><a href="#process">How it works</a></li>
+        <li><a href="#team">Team</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#contact" class="nav-button">Book a service</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero" id="hero">
+    <div class="hero-content">
+      <div class="hero-kicker">Pardubice · Hradecká 88 · all makes</div>
+      <h1 class="hero-title">Honest repairs, done right the first time</h1>
+      <p class="hero-text">Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.</p>
+      <div class="hero-buttons">
+        <a href="#prices" class="hero-button filled">Get a price</a>
+        <a href="#contact" class="hero-button outline">Book a service</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Numbers Section -->
+  <section class="numbers-section">
+    <div class="numbers-grid">
+      <div class="number-item">
+        <div class="number-value" data-target="24">0</div>
+        <div class="number-label">years in Pardubice</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="9800">0</div>
+        <div class="number-label">cars serviced last year</div>
+      </div>
+      <div class="number-item">
+        <div class="number-value" data-target="6">0</div>
+        <div class="number-label">certified mechanics</div>
+      </div>
+      <div class="number-item">
+        <div class="number-label">2 years warranty on parts and labour</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Services Section -->
+  <section id="services" class="section services-section">
+    <div class="section-header">
+      <div class="section-kicker">Services</div>
+      <h2 class="section-title">What we do</h2>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="servicing">Servicing</button>
+      <button class="tab" data-tab="tyres">Tyres</button>
+      <button class="tab" data-tab="diagnostics">Diagnostics</button>
+      <button class="tab" data-tab="bodywork">Bodywork</button>
+    </div>
+
+    <div id="servicing" class="tab-content active">
+      <p class="tab-text">Scheduled servicing to the maker's plan, so your warranty stays valid.</p>
+      <div class="tab-points">
+        <div class="tab-point">
+          <span class="tab-point-text">Oil and filter change</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Brake check and fluids</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Stamp in your service book</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="tyres" class="tab-content">
+      <p class="tab-text">Seasonal tyre changes, storage and repairs while you wait.</p>
+      <div class="tab-points">
+        <div class="tab-point">
+          <span class="tab-point-text">Tyre fitting and balancing</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Tyre hotel for 1,200 Kč a season</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Puncture repair</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="diagnostics" class="tab-content">
+      <p class="tab-text">We read the fault codes and find the real cause before we replace anything.</p>
+      <div class="tab-points">
+        <div class="tab-point">
+          <span class="tab-point-text">Engine and electronics diagnostics</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Air-con check and refill</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Pre-purchase inspection</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="bodywork" class="tab-content">
+      <p class="tab-text">Dents, scratches and paint, matched in our own paint shop.</p>
+      <div class="tab-points">
+        <div class="tab-point">
+          <span class="tab-point-text">Dent repair</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Colour-matched paintwork</span>
+        </div>
+        <div class="tab-point">
+          <span class="tab-point-text">Insurance claims handled for you</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Prices Section -->
+  <section id="prices" class="section prices-section">
+    <div class="section-header">
+      <div class="section-kicker">Prices</div>
+      <h2 class="section-title">Get a price in ten seconds</h2>
+      <p class="section-subtitle">Fixed prices including VAT, parts and labour.</p>
+    </div>
+
+    <div class="prices-form">
+      <div class="form-group">
+        <label class="form-label">Car size</label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="size-small" name="car-size" value="small" aria-label="Small car">
+            <label for="size-small">Small car</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="size-family" name="car-size" value="family" checked aria-label="Family car">
+            <label for="size-family">Family car</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="size-suv" name="car-size" value="suv" aria-label="SUV / van">
+            <label for="size-suv">SUV / van</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Services</label>
+        <div class="checkbox-group">
+          <div class="checkbox-option">
+            <input type="checkbox" id="service-oil" data-service="oil" aria-label="Oil service">
+            <label for="service-oil">Oil service</label>
+            <span class="checkbox-price" data-price-oil="1790">1,790 Kč</span>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="service-brake" data-service="brake" aria-label="Front brake pads">
+            <label for="service-brake">Front brake pads</label>
+            <span class="checkbox-price" data-price-brake="2590">2,590 Kč</span>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="service-aircon" data-service="aircon" aria-label="Air-con service">
+            <label for="service-aircon">Air-con service</label>
+            <span class="checkbox-price" data-price-aircon="1290">1,290 Kč</span>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="service-alignment" data-service="alignment" aria-label="Wheel alignment">
+            <label for="service-alignment">Wheel alignment</label>
+            <span class="checkbox-price" data-price-alignment="990">990 Kč</span>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="service-tyre" data-service="tyre" aria-label="Tyre change (4 wheels)">
+            <label for="service-tyre">Tyre change (4 wheels)</label>
+            <span class="checkbox-price" data-price-tyre="960">960 Kč</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="total-box">
+        <div class="total-label">Estimated total</div>
+        <div class="total-value" id="total">0 Kč</div>
+      </div>
+
+      <a href="#contact" class="prices-button">Book this service</a>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section id="process" class="section process-section">
+    <div class="section-header">
+      <div class="section-kicker">How it works</div>
+      <h2 class="section-title">Four steps, no surprises</h2>
+    </div>
+
+    <div class="process-steps">
+      <div class="process-step">
+        <div class="process-step-number">1</div>
+        <div class="process-step-title">Book online or call</div>
+        <div class="process-step-text">Pick a time that suits you. Most services are done the same day.</div>
+      </div>
+      <div class="process-step">
+        <div class="process-step-number">2</div>
+        <div class="process-step-title">Drop off your car</div>
+        <div class="process-step-text">Leave the key at the desk, or in our key box before 7:00.</div>
+      </div>
+      <div class="process-step">
+        <div class="process-step-number">3</div>
+        <div class="process-step-title">We call before extra work</div>
+        <div class="process-step-text">If we find anything else, you decide. Nothing is done without your OK.</div>
+      </div>
+      <div class="process-step">
+        <div class="process-step-number">4</div>
+        <div class="process-step-title">Pick up and pay</div>
+        <div class="process-step-text">Pay by card or bank transfer. Every job comes with a 2-year warranty.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team Section -->
+  <section id="team" class="section team-section">
+    <div class="section-header">
+      <div class="section-kicker">Team</div>
+      <h2 class="section-title">The people under the bonnet</h2>
+    </div>
+
+    <div class="team-grid">
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/dvorak-team-1/600/700" alt="Jiří Dvořák" class="team-image">
+        <div class="team-content">
+          <div class="team-name">Jiří Dvořák</div>
+          <div class="team-role">Owner, master mechanic</div>
+          <div class="team-bio">Opened the shop in 2002 and still checks every car that leaves it.</div>
+        </div>
+      </div>
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/dvorak-team-2/600/700" alt="Pavel Svoboda" class="team-image">
+        <div class="team-content">
+          <div class="team-name">Pavel Svoboda</div>
+          <div class="team-role">Diagnostics</div>
+          <div class="team-bio">Finds the electrical faults that other garages gave up on.</div>
+        </div>
+      </div>
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/dvorak-team-3/600/700" alt="Martina Veselá" class="team-image">
+        <div class="team-content">
+          <div class="team-name">Martina Veselá</div>
+          <div class="team-role">Service advisor</div>
+          <div class="team-bio">Explains every line of your invoice in plain words.</div>
+        </div>
+      </div>
+      <div class="team-card">
+        <img src="https://picsum.photos/seed/dvorak-team-4/600/700" alt="Lukáš Král" class="team-image">
+        <div class="team-content">
+          <div class="team-name">Lukáš Král</div>
+          <div class="team-role">Bodywork and paint</div>
+          <div class="team-bio">Matches any colour, from a 1990s Škoda to a brand-new Tesla.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  <section class="section testimonials-section">
+    <div class="section-header">
+      <h2 class="section-title">What drivers say</h2>
+    </div>
+
+    <div class="testimonials-grid">
+      <div class="testimonial-card">
+        <div class="testimonial-text">"They called before changing anything, and the price was exactly as quoted."</div>
+        <div class="testimonial-author">— Michal T.</div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-text">"Found an electrical fault that two other garages missed."</div>
+        <div class="testimonial-author">— Simona K.</div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-text">"Tyres changed in 30 minutes while I had a coffee."</div>
+        <div class="testimonial-author">— Radek P.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="section contact-section">
+    <div class="section-header">
+      <div class="section-kicker">Contact</div>
+      <h2 class="section-title">Book your car in</h2>
+    </div>
+
+    <div class="contact-content">
+      <div class="contact-info">
+        <div class="contact-item">
+          <span class="contact-label">Address</span>
+          <p>Hradecká 88, 500 03 Pardubice</p>
+          <a href="https://maps.google.com/?q=Hradecká+88,+Pardubice" target="_blank">Open in Google Maps</a>
+        </div>
+
+        <div class="contact-item">
+          <span class="contact-label">Phone</span>
+          <a href="tel:+420466000245">+420 466 000 245</a>
+        </div>
+
+        <div class="contact-item">
+          <span class="contact-label">E-mail</span>
+          <a href="mailto:servis@autodvorak.cz">servis@autodvorak.cz</a>
+        </div>
+
+        <div class="contact-item">
+          <span class="contact-label">Opening hours</span>
+          <ul class="hours-list">
+            <li>Monday–Friday: 7:00–17:00</li>
+            <li>Saturday: 8:00–12:00 (tyres only)</li>
+            <li>Sunday: closed</li>
+          </ul>
+        </div>
+      </div>
+
+      <form class="contact-form" id="contactForm">
+        <div class="form-field required">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" required>
+        </div>
+
+        <div class="form-field required">
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone" required>
+        </div>
+
+        <div class="form-field">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" name="email">
+        </div>
+
+        <div class="form-field required">
+          <label for="car">Car make and model</label>
+          <input type="text" id="car" name="car" required>
+        </div>
+
+        <div class="form-field required">
+          <label for="service">Service</label>
+          <select id="service" name="service" required>
+            <option value="">Select a service</option>
+            <option value="Servicing">Servicing</option>
+            <option value="Tyres">Tyres</option>
+            <option value="Diagnostics">Diagnostics</option>
+            <option value="Bodywork">Bodywork</option>
+            <option value="Something else">Something else</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="date">Preferred date</label>
+          <input type="date" id="date" name="date">
+        </div>
+
+        <div class="form-field">
+          <label for="message">Message</label>
+          <textarea id="message" name="message"></textarea>
+        </div>
+
+        <button type="submit" class="submit-button">Book service</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div>
+        <div class="footer-brand">Autoservis Dvořák</div>
+        <div class="footer-text">Hradecká 88, 500 03 Pardubice</div>
+      </div>
+      <div>
+        <div class="footer-brand">Links</div>
+        <ul class="footer-links">
+          <li><a href="#services">Services</a></li>
+          <li><a href="#prices">Prices</a></li>
+          <li><a href="#process">How it works</a></li>
+          <li><a href="#team">Team</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      © 2026 Autoservis Dvořák s.r.o.
+    </div>
+  </footer>
+
+  <script>
+    // Mobile menu toggle
+    const menuToggle = document.querySelector('.menu-toggle');
+    const navLinks = document.getElementById('navLinks');
+
+    menuToggle.addEventListener('click', () => {
+      navLinks.classList.toggle('active');
+      menuToggle.setAttribute('aria-expanded', navLinks.classList.contains('active'));
+    });
+
+    // Close menu when a link is clicked
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('active');
+        menuToggle.setAttribute('aria-expanded', false);
+      });
+    });
+
+    // Services tabs
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.getAttribute('data-tab');
+        
+        // Remove active class from all tabs and contents
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        // Add active class to clicked tab and corresponding content
+        tab.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+      });
+    });
+
+    // Price calculator
+    const carSizeRadios = document.querySelectorAll('input[name="car-size"]');
+    const serviceCheckboxes = document.querySelectorAll('input[data-service]');
+    const totalElement = document.getElementById('total');
+
+    const prices = {
+      small: {
+        oil: 1490,
+        brake: 2190,
+        aircon: 1290,
+        alignment: 990,
+        tyre: 800
+      },
+      family: {
+        oil: 1790,
+        brake: 2590,
+        aircon: 1290,
+        alignment: 990,
+        tyre: 960
+      },
+      suv: {
+        oil: 2290,
+        brake: 3190,
+        aircon: 1590,
+        alignment: 1290,
+        tyre: 1200
+      }
+    };
+
+    function updatePrices() {
+      const selectedSize = document.querySelector('input[name="car-size"]:checked').value;
+      
+      serviceCheckboxes.forEach(checkbox => {
+        const service = checkbox.getAttribute('data-service');
+        const priceSpan = checkbox.parentElement.querySelector('.checkbox-price');
+        const price = prices[selectedSize][service];
+        priceSpan.textContent = price.toLocaleString('cs-CZ') + ' Kč';
+      });
+
+      updateTotal();
+    }
+
+    function updateTotal() {
+      const selectedSize = document.querySelector('input[name="car-size"]:checked').value;
+      let total = 0;
+
+      serviceCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          const service = checkbox.getAttribute('data-service');
+          total += prices[selectedSize][service];
+        }
+      });
+
+      totalElement.textContent = total.toLocaleString('cs-CZ') + ' Kč';
+    }
+
+    carSizeRadios.forEach(radio => {
+      radio.addEventListener('change', updatePrices);
+    });
+
+    serviceCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', updateTotal);
+    });
+
+    // Initialize prices on page load
+    updatePrices();
+
+    // Number counting animation
+    function countUp(element, target, duration = 2000) {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      
+      if (prefersReducedMotion) {
+        element.textContent = target;
+        return;
+      }
+
+      let current = 0;
+      const increment = target / (duration / 16);
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= target) {
+          element.textContent = target.toLocaleString('cs-CZ');
+          clearInterval(timer);
+        } else {
+          element.textContent = Math.floor(current).toLocaleString('cs-CZ');
+        }
+      }, 16);
+    }
+
+    // Intersection Observer for animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          // Animate numbers when they come into view
+          if (entry.target.classList.contains('number-value')) {
+            const target = parseInt(entry.target.getAttribute('data-target'));
+            countUp(entry.target, target);
+            observer.unobserve(entry.target);
+          }
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.number-value').forEach(el => {
+      if (el.getAttribute('data-target')) {
+        observer.observe(el);
+      }
+    });
+
+    // Contact form
+    const contactForm = document.getElementById('contactForm');
+    contactForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const phone = document.getElementById('phone').value;
+      const email = document.getElementById('email').value;
+      const car = document.getElementById('car').value;
+      const service = document.getElementById('service').value;
+      const date = document.getElementById('date').value;
+      const message = document.getElementById('message').value;
+
+      let body = `Service booking\n\n`;
+      body += `Name: ${name}\n`;
+      body += `Phone: ${phone}\n`;
+      if (email) body += `E-mail: ${email}\n`;
+      body += `Car: ${car}\n`;
+      body += `Service: ${service}\n`;
+      if (date) body += `Preferred date: ${date}\n`;
+      if (message) body += `Message: ${message}\n`;
+
+      const mailtoLink = `mailto:servis@autodvorak.cz?subject=Service booking&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+## What the numbers say
+
+**Plain HTML still wins on the thing that matters most: a working site.** Counting a Nyra file that never built as a
+site with nothing working, HTML scored 98% of the checklist and Nyra 62%. All 24 HTML answers gave a usable site;
+Opus 5.5 and Sonnet 5.5 passed **every** check on all 16 of their HTML sites again. 17 of 24 Nyra answers built,
+with a repair turn that HTML never got.
+
+- **Builds.** Nyra built first try in 9/24 runs and after one repair in 17/24 (round 3: 6/24 and 13/24). By model:
+  Opus 4/8 then 8/8, Sonnet 4/8 then 6/8, Haiku 1/8 then 3/8. The two briefs behave very differently: on the
+  guesthouse, Opus and Sonnet built 8/8 first try; on the garage, Opus and Sonnet built 0/8 first try, and 6 of those
+  8 first answers failed on **one** error only, E0390 (the opening-hours row "Saturday 8:00–12:00 (tyres only)", see
+  causes below).
+- **When Nyra built, the sites were good but not as good as HTML.** Built Nyra sites scored 87% (Opus 90%, Sonnet
+  89%, Haiku 74%) against 98% for HTML. On the garage brief, built Nyra sites from Opus and Sonnet scored 96% and
+  100% (tabs, calculator, counters, form all working); the misses were a kit CSP bug (2 Opus sites) and Haiku's
+  unwired controls. On the guesthouse brief every built Nyra site failed both badge items (the page says "Open now",
+  the brief asks for "Reception open": the kit can change the words, but the card does not say how), and Sonnet's
+  four sites showed the FAQ as static cards instead of an accordion.
+- **The round-3 form bug is fixed.** All 17 built Nyra sites now open a correctly filled e-mail (round 3: 0 of 13).
+- **Where Nyra is clearly better: size, tokens, time and money per answer.** The final Nyra file is 3,526 tokens on
+  average against 18,057 for HTML (5.1x smaller; 7.6x for Opus against Opus). Output tokens per run, thinking and the
+  repair turn included: 6,731 vs 18,056 (2.7x fewer). Time per run: 52 s vs 121 s. Cost per run: $0.103 vs $0.260.
+- **Per working site.** Dividing what each cell cost by the sites that built: Opus Nyra $0.21 per built site (at 90%)
+  vs Opus HTML $0.60 (at 100%); Sonnet Nyra $0.08 (at 89%) vs Sonnet HTML $0.11 (at 100%); Haiku Nyra $0.09 (at 74%)
+  vs Haiku HTML $0.07 (at 95%). Nyra is cheaper per built site for Opus and Sonnet this round, but those sites still
+  miss checks that the HTML ones pass.
+- **Input tokens.** Nyra's prompt carries the two cards: about 12,500 input tokens per run with repairs against 2,900
+  for HTML, mostly billed as cache reads.
+- **Page speed.** LCP was better for Nyra this round (729 ms vs 1,000 ms on average, desktop, unthrottled), and the
+  pages transferred less (452 KB vs 594 KB). HTML's LCP is much worse than in round 3 (625 ms) for the same models:
+  remote images over the real network vary from day to day, and the HTML pages load the big hero and room photos
+  eagerly. Read the LCP column as a rough comparison within this round only.
+- **Where HTML lost points.** Haiku 4.5 only: reduced motion (4 of 8 sites still ran CSS animations), one lightbox
+  without arrow keys and Escape, one form whose e-mail left out the visitor's address.
+
+**In one sentence:** HTML again gave a perfect site every time with the strong models; Nyra built more often than in
+round 3 (17/24 after one repair, 8/8 for Opus) from a fifth of the code and less than half the cost, but no Opus or Sonnet garage
+first answer built (6 of 8 failed only on one strict opening-hours rule), and the built Nyra sites still missed checks (badge
+wording, a CSP bug, a static FAQ) that the HTML sites passed.
+
+## Round 3 vs round 4: what changed
+
+The table above puts the two rounds side by side. **The briefs differ** (dentist and gym in round 3, guesthouse and
+garage in round 4), so a change between the rows can come from Nyra's fixes, from the briefs or from chance; it is not
+a pure A/B of the fixes. What can be traced to a specific fix:
+
+- **Unknown icons warn instead of failing (fix confirmed).** 15 Nyra first answers this round used icons outside
+  the set (`gauge`, `calculator`, `square`, `calendar-check`, `paint-bucket`, `circle-dot`, ...): all got the E0389
+  warning and a plain circle instead of a failed build. In round 3 the same kind of slip (`siren`, `gauge`,
+  `alert-circle`) stopped 12 builds (first answers or repairs).
+- **Form `mailto:` with a subject (fix confirmed).** 17/17 built Nyra sites pass the e-mail check (round 3: 0/13).
+- **Match-arm commas auto-fixed (partly).** The commas were fixed in memory in 6 first answers whose file otherwise
+  passed the type checker (e.g. Opus and Sonnet garage run 3, Haiku garage runs 2 and 4); in 3 others (Haiku garage
+  runs 1 and 3, Sonnet garage run 4) the same commas were reported as errors because another error was in the file.
+- **More errors per run (partly).** Parse and type errors now come together (up to 15 in one message), but the web
+  checks (E0390 hours, E0376 live views, icon names) still run only after the type checks pass, so 3 of the 7 failed
+  repairs (Sonnet garage runs 1 and 4, Haiku garage run 3) fixed every reported error and then hit a new E0390.
+- **Opening hours parsing (new strictness, the main cause this round).** The rows the kit can read now cover
+  "Monday–Friday" + "7:00–17:00", but a row with a note ("8:00–12:00 (tyres only)") is a hard error, even on a page
+  without a live badge. It appeared in 7 first answers and 3 repairs: 10 of the 22 failed compiler runs (15 first answers, 7 repairs).
+- Net: Nyra built 17/24 after one repair (13/24 in round 3) and scored 62% with failed builds as 0 (51%), while its
+  built-site score went down from 93% to 87% (the guesthouse badge wording and the CSP bug). HTML went from 95% to 98%,
+  all of it Haiku (86% -> 95%).
+
+## Top failure causes
+
+### Nyra (7 of 24 runs without a site)
+
+1. **E0390 on an opening-hours row with a note** (`("Saturday", "8:00–12:00 (tyres only)")`): every Opus and Sonnet
+   garage first answer except Sonnet's run 1 and run 4 failed on it alone, and those two plus Haiku's run 3 met it
+   only after the repair. Opus solved it each time in the repair turn by moving the note into the label
+   (`("Saturday (tyres only)", "6 8:00-12:00")`).
+2. **Errors in stages** (cause 1's late E0390, and Haiku garage run 1's repair meeting E0376/E0226/E0374 after its
+   parse errors were fixed): one repair turn is not enough when the web checks hide behind the type checks.
+3. **Haiku writes other languages into the file:** raw CSS at the top level (guesthouse runs 1 and 4: dozens of
+   E0005/E0001/E0007 errors), tuples with field names `(name: "River Room", type: ...)` (guesthouse runs 2 and 3, and run 1's repair; the
+   compiler says "add the missing `)`"), `enum Msg { SubmitBooking() }`, `p(style: "primary" cls: ...)`.
+4. **Model API slips** (Sonnet garage runs 1 and 4, while formatting prices by hand): `int.pad_left`, `.slice(start)`
+   with one argument, an `int` message argument passed where the enum said `str`.
+
+### Nyra, built sites that missed checks
+
+1. **Live badge wording (9/9 built guesthouse sites):** the kit's badge always says "Open now" / "Closed now". The kit
+   has `site(say: ...)` to change its words, but the web card does not mention it, so no model could use it.
+2. **CSP violations from live re-renders (6 sites, all Opus):** see bug 2 below.
+3. **FAQ as static cards (Sonnet, 4/4 guesthouse sites):** the kit has no accordion and the card shows none, so
+   Sonnet listed questions and answers as cards; Opus built one with state and buttons.
+4. **Controls not wired to state (Haiku):** calculator checkboxes written as plain form fields that send no message
+   (garage runs 2 and 4), tab panels chosen by an `if` in the page body that renders once (garage run 4), and a
+   guesthouse site (run 2) whose filter, FAQ, lightbox and badge did nothing.
+
+### HTML (only Haiku 4.5 failed checks)
+
+1. Reduced motion (4/8 Haiku sites: CSS animations still running).
+2. A lightbox without keyboard support (1), a form whose e-mail body left out the e-mail address (1).
+
+## Nyra bugs and gaps found (not fixed here: no compiler or kit code was changed)
+
+1. **`hours` rows with a note are a hard build error (E0390), even without a badge.** "8:00–12:00 (tyres only)" is
+   ordinary client text. It could be a warning (row shown as written, left out of the open/closed computation), or
+   the parser could ignore a trailing parenthesised note. 10 of the 22 failed compiler runs this round.
+2. **Live views emit inline `style=` attributes that the kit's own CSP blocks.** The static build turns
+   `style="--ratio:..."` / `--tint` into classes (`s-<hash>`), but the browser-side re-render of a live view (seen
+   with `img(..., ratio: "4/3")` inside a live room list) builds `" style=\"--ratio:" + ...` strings, so every
+   re-render logs a CSP violation and the ratio is not applied (6 Opus sites).
+3. **The badge words cannot be changed from what the card teaches.** `site(say:)` exists in `src/std/web.nyra` but
+   not in `docs/WEB_CARD.md`; a brief that asks for "Reception open" cannot be met.
+4. **Web checks still run only after the type checks** (E0390, E0376, E0374 for `icon: ":shield:"`), so one repair
+   turn often meets a new error (3 of 7 failed repairs).
+5. **Match-arm comma auto-fix is dropped when any other error remains**, and then shown as an error.
+6. **State read in a page body outside a function compiles silently into a static page.** `if selected == "Tyres"
+   {...}` directly in a `section` block renders once at build time; the buttons that change `selected` do nothing.
+   A function that reads state with parameters gets E0376, but a page body gets no warning.
+7. **Misleading hints for foreign syntax:** named tuple fields `(name: "x", ...)` get "add the missing `)`" (Nyra
+   has `struct` literals for this); raw CSS at the top level gets one error per `;` and `#` instead of one "CSS goes
+   into `css("...")`" hint.
+8. **No disclosure/accordion component** on the card, so an FAQ needs hand-written state (Sonnet skipped it).
+
+## What this round does not show
+
+- How good the sites look (see `shots/`), phones, slow networks, accessibility audits.
+- A pure measure of the round-3 fixes: the briefs changed too. The garage brief's "(tyres only)" note alone moved
+  Opus and Sonnet from 8/8 first-try builds (guesthouse) to 0/8.
+- More than one repair turn, which would likely lift Nyra's build rate (cause 2) at a further token cost.

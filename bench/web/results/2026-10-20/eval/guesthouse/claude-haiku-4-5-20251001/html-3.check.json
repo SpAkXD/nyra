@@ -1,0 +1,125 @@
+{
+ "url": "http://127.0.0.1:61727/guesthouse/claude-haiku-4-5-20251001/html-3/",
+ "score": 0.9473684210526315,
+ "passed": 18,
+ "total": 19,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "badge_open",
+   "name": "live badge says \"Reception open\" while open",
+   "pass": true,
+   "detail": "\"Reception open\" visible true, \"Reception closed\" visible false"
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "faq",
+   "name": "FAQ items open and close",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "filter",
+   "name": "room filter shows the right rooms",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "lb_open",
+   "name": "lightbox opens on click",
+   "pass": true,
+   "detail": "lightbox shows image 0"
+  },
+  {
+   "id": "lb_nav",
+   "name": "lightbox next/previous buttons",
+   "pass": true,
+   "detail": "next button true -> image 1, previous button true -> image 0"
+  },
+  {
+   "id": "lb_close",
+   "name": "lightbox closes with its button",
+   "pass": true,
+   "detail": "close button true, lightbox still showing image -1"
+  },
+  {
+   "id": "lb_keys",
+   "name": "lightbox keyboard: arrows move, Escape closes",
+   "pass": true,
+   "detail": "open 0, ArrowRight 1, ArrowLeft 0, Escape closed"
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "badge_closed",
+   "name": "live badge says \"Reception closed\" while closed",
+   "pass": true,
+   "detail": "\"Reception closed\" visible true, \"Reception open\" visible false"
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": false,
+   "detail": "28 animations, e.g. CSSAnimation fadeIn 600 ms, CSSAnimation slideUp 600 ms"
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "csp_violations": [],
+ "checker_notes": []
+}
