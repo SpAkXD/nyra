@@ -259,29 +259,27 @@ the same features (the 3D showroom, the opening screen and the testimonials are 
 | JavaScript | 120 KB | 4.6 KB |
 | Requests | 29 | 12 |
 
-**A/B test: one-file HTML vs one-file Nyra (honest round, 2026-10-19).** Two new site briefs (a dentist practice
-and a gym) that Nyra was not tuned for, Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5, 4 runs each, 48 sites. One
-checklist for both languages, clicked through in a headless browser: navigation, filters, toggles, lightbox, FAQ,
-live opening badge, form, counters, all text and images, console and CSP errors, reduced motion. A Nyra file that
-did not compile got one repair turn with the compiler's message (its cost is included); HTML has no compiler.
+**A/B test: one-file HTML vs one-file Nyra.** Each round gives Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5 two new
+site briefs that Nyra was not tuned for, 4 runs each (48 sites a round). One checklist for both languages, clicked
+through in a headless browser: navigation, filters, toggles, tabs, calculators, lightbox, FAQ, live opening badge,
+form, counters, all text and images, console and CSP errors, reduced motion. A Nyra file that did not compile got one
+repair turn with the compiler's message (its cost is included); HTML has no compiler. Nyra was fixed between rounds,
+and the briefs differ, so the rounds are not a pure before/after.
 
-| | HTML | Nyra |
-|---|---:|---:|
-| Built on the first try | (always) | 6/24 |
-| Built after one repair | (always) | 13/24 |
-| Checklist score (a failed build scores 0) | **95%** | 51% |
-| Checklist score of the sites that built | 95% | 93% |
-| Code tokens per site | 17,559 | **3,283** |
-| Cost per answer | $0.245 | **$0.101** |
-| Page weight | 633 KB | **351 KB** |
+| | Round 3 (dentist, gym) HTML | Nyra | Round 4 (guesthouse, garage) HTML | Nyra |
+|---|---:|---:|---:|---:|
+| Built on the first try | (always) | 6/24 | (always) | 9/24 |
+| Built after one repair | (always) | 13/24 | (always) | 17/24 |
+| Checklist score (a failed build scores 0) | **95%** | 51% | **98%** | 62% |
+| Checklist score of the sites that built | 95% | 93% | 98% | 87% |
+| Code tokens per site | 17,559 | **3,283** | 18,057 | **3,526** |
+| Cost per answer | $0.245 | **$0.101** | $0.260 | **$0.103** |
 
-**Today plain HTML is the more reliable choice:** Opus and Sonnet passed every check on all their HTML sites, while
-fewer than half of the Nyra answers compiled on the first try (none on the dentist brief). When a Nyra site builds,
-it is nearly as complete from a fifth of the code, at about 40% of the cost per answer, but counted per *working*
-site the cost advantage mostly disappears. The causes are known and fixable (unknown icon names failing the build,
-errors that only appear after earlier ones are fixed, notation copied literally from the web card, a broken
-`mailto:` subject in forms): see [the full report](bench/web/results/2026-10-19/REPORT.md), with every raw model
-output, the failures and the method.
+**Today plain HTML is the more reliable choice:** Opus and Sonnet passed every check on all their HTML sites. Nyra
+needs about a fifth of the code at about 40% of the cost per answer, and improves each round, but too many answers
+still fail to compile (Opus: 8/8 after one repair in round 4; Haiku: 3/8). Counted per *working* site, the cost
+advantage is much smaller. The causes are listed in the reports, with every raw model output and the method:
+[round 3](bench/web/results/2026-10-19/REPORT.md), [round 4](bench/web/results/2026-10-20/REPORT.md).
 
 Earlier, smaller tests (the bakery brief, Gemini 3.8 Flash and four OpenRouter models) measured 0.11x to 0.27x the
 code tokens; the kit was then fixed by studying those outputs, so they are not used as evidence here.
