@@ -120,12 +120,13 @@ fn release(base: &str, tag: &str, dir: &Path, build: &[u8], sum: Option<&str>) -
 }
 
 /// The new build: on Windows this compiler with a marker after it (an .exe still runs with bytes
-/// appended); elsewhere a shell script that answers `--version` like nyra.
+/// appended); elsewhere a shell script that answers `--version` like nyra (it exits before the
+/// marker's line, which would be a command).
 fn new_build() -> Vec<u8> {
     let mut b = if cfg!(windows) {
         std::fs::read(env!("CARGO_BIN_EXE_nyra")).unwrap()
     } else {
-        b"#!/bin/sh\necho \"nyra 99.0.0\"\n#".to_vec()
+        b"#!/bin/sh\necho \"nyra 99.0.0\"\nexit 0\n".to_vec()
     };
     b.extend_from_slice(MARKER);
     b
@@ -239,6 +240,8 @@ fn the_same_version_is_up_to_date_and_a_missing_release_is_an_error() {
     // --force installs it again; a version that is not released is an error
     let out = upgrade(&exe, &base, &["--force"]);
     assert!(out.status.success() && is_new(&exe), "{}", stderr(&out));
+    // (the new build is only a stand-in outside Windows: the next step needs this compiler again)
+    std::fs::copy(env!("CARGO_BIN_EXE_nyra"), &exe).unwrap();
     let out = upgrade(&exe, &base, &["--version", "98.0.0"]);
     assert!(!out.status.success());
     assert!(stderr(&out).contains("cannot find release v98.0.0"), "{}", stderr(&out));
