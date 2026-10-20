@@ -1,0 +1,100 @@
+{
+  "brief": "briefs/garage.md",
+  "comment": "The functional checklist of the garage brief (round 4), the same for the HTML and the Nyra version. check.js reads it. Every item is derived from a requirement of the brief; the method section of results/2026-10-20/REPORT.md says how each kind is checked. The texts of the service tab panels are checked by the tabs item (a page may only show or even only add a panel once its tab is selected); the calculator's prices and totals by the calculator item. The calculator steps avoid the brief's example total (3,080).",
+  "title": "Autoservis Dvořák – honest car repairs in Pardubice",
+  "description": "Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.",
+  "clock": {"tz": "Europe/Prague", "at": "2026-10-21T10:00:00+02:00", "note": "a fixed clock, so every run sees the same day"},
+  "nav": [
+    {"label": "Services", "href": "#services"},
+    {"label": "Prices", "href": "#prices"},
+    {"label": "How it works", "href": "#process"},
+    {"label": "Team", "href": "#team"},
+    {"label": "Contact", "href": "#contact"},
+    {"label": "Book a service", "href": "#contact"}
+  ],
+  "text": [
+    "Pardubice · Hradecká 88 · all makes",
+    "Honest repairs, done right the first time",
+    "Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.",
+    "Get a price",
+    "years in Pardubice", "cars serviced last year", "certified mechanics", "2 years", "warranty on parts and labour",
+    "What we do", "Servicing", "Tyres", "Diagnostics", "Bodywork",
+    "Get a price in ten seconds", "Fixed prices including VAT, parts and labour.",
+    "Small car", "Family car", "SUV / van",
+    "Oil service", "Front brake pads", "Air-con service", "Wheel alignment", "Tyre change (4 wheels)",
+    "Estimated total", "Book this service",
+    "Four steps, no surprises",
+    "Book online or call", "Pick a time that suits you. Most services are done the same day.",
+    "Drop off your car", "Leave the key at the desk, or in our key box before 7:00.",
+    "We call before extra work", "If we find anything else, you decide. Nothing is done without your OK.",
+    "Pick up and pay", "Pay by card or bank transfer. Every job comes with a 2-year warranty.",
+    "The people under the bonnet",
+    "Jiří Dvořák", "Owner, master mechanic", "Opened the shop in 2002 and still checks every car that leaves it.",
+    "Pavel Svoboda", "Finds the electrical faults that other garages gave up on.",
+    "Martina Veselá", "Service advisor", "Explains every line of your invoice in plain words.",
+    "Lukáš Král", "Bodywork and paint", "Matches any colour, from a 1990s Škoda to a brand-new Tesla.",
+    "What drivers say",
+    "They called before changing anything, and the price was exactly as quoted.", "Michal T.",
+    "Found an electrical fault that two other garages missed.", "Simona K.",
+    "Tyres changed in 30 minutes while I had a coffee.", "Radek P.",
+    "Book your car in",
+    "Hradecká 88, 500 03 Pardubice", "Open in Google Maps", "+420 466 000 245", "servis@autodvorak.cz",
+    "7:00–17:00", "8:00–12:00", "tyres only",
+    "© 2026 Autoservis Dvořák s.r.o."
+  ],
+  "hidden_text": [],
+  "images": [
+    {"seed": "dvorak-hero", "alt": "A mechanic working under a lifted car at Autoservis Dvořák"},
+    {"seed": "dvorak-team-1", "alt": "Jiří Dvořák"},
+    {"seed": "dvorak-team-2", "alt": "Pavel Svoboda"},
+    {"seed": "dvorak-team-3", "alt": "Martina Veselá"},
+    {"seed": "dvorak-team-4", "alt": "Lukáš Král"}
+  ],
+  "counters": [
+    {"value": "24", "label": "years in Pardubice"},
+    {"value": "9,800", "label": "cars serviced last year"},
+    {"value": "6", "label": "certified mechanics"}
+  ],
+  "tabs": {
+    "name": "service tabs show the right panel",
+    "section": "services",
+    "tabs": [
+      {"button": "Servicing", "texts": ["Scheduled servicing to the maker's plan, so your warranty stays valid.", "Oil and filter change", "Brake check and fluids", "Stamp in your service book"]},
+      {"button": "Tyres", "texts": ["Seasonal tyre changes, storage and repairs while you wait.", "Tyre fitting and balancing", "Tyre hotel for 1,200 Kč a season", "Puncture repair"]},
+      {"button": "Diagnostics", "texts": ["We read the fault codes and find the real cause before we replace anything.", "Engine and electronics diagnostics", "Air-con check and refill", "Pre-purchase inspection"]},
+      {"button": "Bodywork", "texts": ["Dents, scratches and paint, matched in our own paint shop.", "Dent repair", "Colour-matched paintwork", "Insurance claims handled for you"]}
+    ],
+    "try": ["Tyres", "Bodywork", "Diagnostics", "Servicing"]
+  },
+  "calculator": {
+    "name": "price calculator shows the right total",
+    "section": "prices",
+    "sizes": ["Small car", "Family car", "SUV / van"],
+    "steps": [
+      {"do": "tick Oil service + Front brake pads (Family car is selected on load)", "tick": ["Oil service", "Front brake pads"], "expect": "4,380", "gone": []},
+      {"do": "choose SUV / van", "choose": "SUV / van", "expect": "5,480", "gone": ["4,380"]},
+      {"do": "untick Front brake pads, tick Air-con service", "untick": ["Front brake pads"], "tick": ["Air-con service"], "expect": "3,880", "gone": ["5,480"]},
+      {"do": "choose Small car", "choose": "Small car", "expect": "2,780", "gone": ["3,880"]}
+    ]
+  },
+  "form": {
+    "section": "contact",
+    "submit": "Book service",
+    "mailto": "servis@autodvorak.cz",
+    "subject": "Service booking",
+    "fields": [
+      {"label": "Name", "required": true, "value": "Jana Testová"},
+      {"label": "Phone", "required": true, "value": "+420 777 123 456"},
+      {"label": "E-mail", "required": false, "value": "jana.testova@example.com"},
+      {"label": "Car make and model", "required": true, "value": "Škoda Octavia 2019"},
+      {"label": "Service", "required": true, "value": "Diagnostics", "options": ["Servicing", "Tyres", "Diagnostics", "Bodywork", "Something else"]},
+      {"label": "Preferred date", "required": false, "value": "2026-11-04", "in_body": false},
+      {"label": "Message", "required": false, "value": "Testing the form, please ignore."}
+    ]
+  },
+  "links": [
+    {"href_prefix": "tel:", "digits": "420466000245"},
+    {"href_prefix": "mailto:", "address": "servis@autodvorak.cz"},
+    {"text": "Open in Google Maps", "href_any": ["maps.google.com", "google.com/maps"]}
+  ]
+}

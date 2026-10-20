@@ -1,0 +1,126 @@
+{
+  "brief": "briefs/guesthouse.md",
+  "comment": "The functional checklist of the guesthouse brief (round 4), the same for the HTML and the Nyra version. check.js reads it. Every item is derived from a requirement of the brief; the method section of results/2026-10-20/REPORT.md says how each kind is checked. FAQ answers are checked by the faq item (they may only be in the page once opened). The brief asks for no 'today' row, so the badge has no today_row.",
+  "title": "Penzion U Mlýna – riverside guesthouse in Český Krumlov",
+  "description": "Family-run guesthouse in a restored mill on the Vltava, five minutes from the old town of Český Krumlov: six rooms, breakfast included, free parking.",
+  "clock": {"tz": "Europe/Prague", "at": "2026-10-21T10:00:00+02:00", "note": "a Wednesday morning: the reception is open (Mon-Fri 7:00-21:00)"},
+  "nav": [
+    {"label": "Rooms", "href": "#rooms"},
+    {"label": "Amenities", "href": "#amenities"},
+    {"label": "Gallery", "href": "#gallery"},
+    {"label": "Location", "href": "#location"},
+    {"label": "FAQ", "href": "#faq"},
+    {"label": "Book a stay", "href": "#booking"}
+  ],
+  "text": [
+    "Český Krumlov · on the Vltava since 1998",
+    "Sleep by the river, wake up to the castle",
+    "Six quiet rooms in a restored 17th-century mill, five minutes' walk from the old town. Breakfast from our own bakery included.",
+    "See the rooms",
+    "Find your room",
+    "Every room has a private bathroom, free Wi-Fi and breakfast included. Prices are per night for the whole room.",
+    "River Room", "18 m²", "2,400 Kč", "A window seat right above the weir.",
+    "Garden Room", "16 m²", "2,100 Kč", "Opens onto the herb garden and is quiet at night.",
+    "Miller's Family Room", "32 m²", "3,600 Kč", "A double bed and a bunk bed under old oak beams.",
+    "Attic Family Room", "36 m²", "3,900 Kč", "Two bedrooms under the roof, ideal with older kids.",
+    "Castle View Suite", "45 m²", "5,200 Kč", "A free-standing bath and the best view of the castle tower.",
+    "Mill Wheel Suite", "50 m²", "5,900 Kč", "A living room with the original mill wheel behind glass.",
+    "Everything for a slow weekend",
+    "Breakfast from our bakery", "Free Wi-Fi", "Free private parking", "Riverside garden terrace", "Bike and canoe storage",
+    "Pets welcome (300 Kč per night)", "Sauna in the old cellar", "Early check-in on request",
+    "A look around",
+    "What our guests say",
+    "The quietest night we have had in years, and the croissants alone are worth the trip.", "Anna & Tom",
+    "Our kids loved the bunk bed and the ducks on the river.", "The Huber family",
+    "Five minutes from the old town, yet it feels like the countryside.", "Petr K.",
+    "Ask for your dates",
+    "Tell us when you would like to come. We reply within a few hours with availability and the price.",
+    "Five minutes from the old town",
+    "Linecká 12, 381 01 Český Krumlov", "Open in Google Maps",
+    "Old town square", "5 min on foot", "Castle", "10 min on foot", "Train station", "free pick-up on request",
+    "+420 380 000 512", "stay@umlyna.cz",
+    "7:00–21:00", "8:00–20:00", "Check-in from 14:00, check-out until 11:00.",
+    "Good to know",
+    "Is breakfast included?", "Can I arrive late in the evening?", "Do you have parking?", "Can I cancel my booking?",
+    "© 2026 Penzion U Mlýna"
+  ],
+  "hidden_text": [],
+  "images": [
+    {"seed": "mlyn-hero", "alt": "The old mill house of Penzion U Mlýna on the Vltava river"},
+    {"seed": "mlyn-room-1", "alt": "The River Room with a window seat"},
+    {"seed": "mlyn-room-2", "alt": "The Garden Room with a view of the herb garden"},
+    {"seed": "mlyn-room-3", "alt": "The family room with a bunk bed"},
+    {"seed": "mlyn-room-4", "alt": "The attic family room under the roof"},
+    {"seed": "mlyn-room-5", "alt": "The Castle View Suite with a free-standing bath"},
+    {"seed": "mlyn-room-6", "alt": "The Mill Wheel Suite with the old mill wheel"},
+    {"seed": "mlyn-g1", "alt": "The mill house at dusk"},
+    {"seed": "mlyn-g2", "alt": "Breakfast on the terrace"},
+    {"seed": "mlyn-g3", "alt": "The weir below the River Room"},
+    {"seed": "mlyn-g4", "alt": "The reading corner by the fireplace"},
+    {"seed": "mlyn-g5", "alt": "Canoes on the riverbank"},
+    {"seed": "mlyn-g6", "alt": "The castle tower from our garden"}
+  ],
+  "badge": {
+    "open": "Reception open",
+    "closed": "Reception closed",
+    "closed_at": "2026-10-24T20:30:00+02:00",
+    "closed_note": "a Saturday evening: the reception closes at 20:00 on weekends (21:00 on weekdays)",
+    "section": "location"
+  },
+  "filter": {
+    "name": "room filter shows the right rooms",
+    "section": "rooms",
+    "items": [
+      {"name": "River Room", "group": "Double"}, {"name": "Garden Room", "group": "Double"},
+      {"name": "Miller's Family Room", "group": "Family"}, {"name": "Attic Family Room", "group": "Family"},
+      {"name": "Castle View Suite", "group": "Suite"}, {"name": "Mill Wheel Suite", "group": "Suite"}
+    ],
+    "try": [
+      {"button": "Family", "full": "Family rooms"},
+      {"button": "Suite", "full": "Suites"},
+      {"button": "Double", "full": "Double rooms"},
+      {"button": "All", "full": "All rooms"}
+    ]
+  },
+  "lightbox": {
+    "section": "gallery",
+    "images": [
+      {"seed": "mlyn-g1", "alt": "The mill house at dusk"},
+      {"seed": "mlyn-g2", "alt": "Breakfast on the terrace"},
+      {"seed": "mlyn-g3", "alt": "The weir below the River Room"},
+      {"seed": "mlyn-g4", "alt": "The reading corner by the fireplace"},
+      {"seed": "mlyn-g5", "alt": "Canoes on the riverbank"},
+      {"seed": "mlyn-g6", "alt": "The castle tower from our garden"}
+    ]
+  },
+  "faq": {
+    "section": "faq",
+    "items": [
+      {"q": "Is breakfast included?", "a": "Yes. Breakfast is served from 7:30 to 10:00 in the mill room or on the terrace."},
+      {"q": "Can I arrive late in the evening?", "a": "Yes. Tell us your arrival time and we will leave your key in a code box at the door."},
+      {"q": "Do you have parking?", "a": "We have eight free spaces in our courtyard. There is no need to book one."},
+      {"q": "Can I cancel my booking?", "a": "Free cancellation up to 7 days before arrival. After that we charge the first night."}
+    ]
+  },
+  "form": {
+    "section": "booking",
+    "submit": "Check availability",
+    "mailto": "stay@umlyna.cz",
+    "subject": "Booking request",
+    "fields": [
+      {"label": "Arrival", "required": true, "value": "2026-11-12", "in_body": false},
+      {"label": "Departure", "required": true, "value": "2026-11-15", "in_body": false},
+      {"label": "Guests", "required": true, "value": "3", "options": ["1", "2", "3", "4", "5"]},
+      {"label": "Room type", "required": true, "value": "Family", "options": ["Double", "Family", "Suite", "Any"]},
+      {"label": "Name", "required": true, "value": "Jana Testová"},
+      {"label": "E-mail", "required": true, "value": "jana.testova@example.com"},
+      {"label": "Phone", "required": false, "value": "+420 777 123 456"},
+      {"label": "Message", "required": false, "value": "Testing the form, please ignore."}
+    ]
+  },
+  "links": [
+    {"href_prefix": "tel:", "digits": "420380000512"},
+    {"href_prefix": "mailto:", "address": "stay@umlyna.cz"},
+    {"text": "Open in Google Maps", "href_any": ["maps.google.com", "google.com/maps"]}
+  ]
+}
