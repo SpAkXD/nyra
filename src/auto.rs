@@ -177,6 +177,33 @@ impl Input {
     }
 }
 
+/// Standard input is a regular file (`< input.txt`), not a pipe, a terminal or a device.
+#[cfg(unix)]
+fn stdin_is_file() -> bool {
+    use std::os::fd::AsFd;
+    let file = std::io::stdin().as_fd().try_clone_to_owned().map(std::fs::File::from);
+    file.and_then(|f| f.metadata()).is_ok_and(|m| m.is_file())
+}
+
+/// (Windows: the file metadata of a pipe looks like a file's, so ask for the handle's type.)
+#[cfg(windows)]
+fn stdin_is_file() -> bool {
+    use std::os::windows::io::AsRawHandle;
+    const FILE_TYPE_DISK: u32 = 1;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileType(handle: *mut std::ffi::c_void) -> u32;
+    }
+    // SAFETY: a plain Win32 query of this process's standard input handle (a null or invalid handle
+    // gives FILE_TYPE_UNKNOWN).
+    unsafe { GetFileType(std::io::stdin().as_raw_handle()) == FILE_TYPE_DISK }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn stdin_is_file() -> bool {
+    false
+}
+
 /// Runs `cmd` with `feed` as its standard input and waits for it.
 pub fn run_fed(mut cmd: Command, feed: Feed) -> std::io::Result<ExitStatus> {
     cmd.stdin(Stdio::piped());
@@ -374,7 +401,11 @@ pub fn run(opts: &Opts, prog: &Program, start: Instant) -> ExitCode {
 
     // 3. standard input, all of it (a program that does not read it leaves it alone)
     let mut stdin = Vec::new();
-    if fx.input {
+    if fx.input && stdin_is_file() {
+        // a file (`nyra run prog.nyra < input.txt`) has its end from the start: read all of it, however
+        // long a busy machine takes (only a pipe can be one that answers as it goes)
+        let _ = std::io::stdin().lock().read_to_end(&mut stdin);
+    } else if fx.input {
         match Input::start().gather(STDIN_WAIT) {
             Ok(bytes) => stdin = bytes,
             // the end does not come soon: a program that answers a pipe as it goes must not wait for it

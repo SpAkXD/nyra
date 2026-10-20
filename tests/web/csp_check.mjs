@@ -38,7 +38,8 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const profile = mkdtempSync(join(tmpdir(), 'nyra-csp-'));
 const proc = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
-  '--no-default-browser-check', '--hide-scrollbars', '--force-device-scale-factor=1', 'about:blank'], { stdio: 'ignore' });
+  '--no-default-browser-check', '--hide-scrollbars', '--force-device-scale-factor=1',
+  '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', 'about:blank'], { stdio: 'ignore' });
 let port;
 for (let i = 0; i < 200 && !port; i++) {
   await sleep(50);
@@ -74,6 +75,9 @@ listeners.add((d) => {
   if (d.method === 'Log.entryAdded' && /Content.Security.Policy/i.test(d.params.entry.text)) problems.push('CSP: ' + d.params.entry.text.slice(0, 240));
 });
 await send('Page.enable');
+// a page in front and focused renders every frame (a CI runner's headless window may count as hidden)
+await send('Page.bringToFront');
+await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Runtime.enable');
 await send('Log.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });

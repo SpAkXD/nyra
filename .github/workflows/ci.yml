@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then export NYRA_REQUIRE_ALL_TARGETS=1; fi
-          cargo test --release
+          cargo test --release --no-fail-fast
 
   # Formatting (rustfmt.toml) and lints.
   lint:
