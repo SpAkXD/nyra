@@ -718,6 +718,21 @@ pub fn gen(m: &Module, file: &str) -> String {
     }
     // the standard library reads the program's arguments
     let (params, args) = if std { ("int argc, char **argv", "\n    nyrt_argc = argc;\n    nyrt_argv = argv;") } else { ("void", "") };
+    if m.func(m.main).ret.is_some() {
+        // `fn main() -> T` (schema.rs): the entry returns the JSON text of the value. While the
+        // program runs, standard output is standard error (`print` goes there); then the JSON alone
+        // goes to the real standard output.
+        let _ = write!(
+            out,
+            "#ifdef _WIN32\n#include <io.h>\n#define nyrt_dup _dup\n#define nyrt_dup2 _dup2\n#else\n#include <unistd.h>\n#define nyrt_dup dup\n#define nyrt_dup2 dup2\n#endif\n\
+             int main({params}) {{{args}\n    nyrt_init();\n    fflush(stdout);\n    int nyrt_json_fd = nyrt_dup(1);\n    nyrt_dup2(2, 1);\n    \
+             nyrt_str *nyrt_json = {}();\n    fflush(stdout);\n    nyrt_dup2(nyrt_json_fd, 1);\n    \
+             fwrite(nyrt_json->data, 1, (size_t)nyrt_json->len, stdout);\n    putchar('\\n');\n    fflush(stdout);\n    \
+             nyrt_str_release(nyrt_json);\n    nyrt_leak_check();\n    return 0;\n}}\n",
+            fn_name(&m.func(m.main).name)
+        );
+        return out;
+    }
     let _ = write!(
         out,
         "int main({params}) {{{args}\n    nyrt_init();\n    {}();\n    nyrt_leak_check();\n    return 0;\n}}\n",

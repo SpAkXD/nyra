@@ -361,6 +361,13 @@ this is not: kernel isolation. A compiled program (no `--sandbox`) is an ordinar
 capabilities; for code you do not trust, use `--sandbox` (or `sandbox: true` over MCP), or run Nyra inside a
 container or VM as well.
 
+**New in v0.9: the agent runtime** ([docs/SERVE.md](docs/SERVE.md)):
+- `nyra serve --mcp tools.nyra`: the file's `pub fn`s become MCP tools, with JSON Schemas from their types; each
+  call is sandboxed with its own limits and only the granted capabilities.
+- `fn main() -> T` prints its value as one JSON document (`print` goes to stderr); `nyra schema` gives its schema.
+- `--checkpoint state.json`: a run whose fuel or time runs out pauses and saves its state; `nyra resume` goes on.
+- `--mock fs=DIR`, `--mock input=FILE`, `--mock os.env=K=V`: capabilities served by mocks, writes kept in memory.
+
 ## Speed
 
 - **Native code.** Nyra compiles through C (`-O2` for `build`, `-O1` for `run` so the first output comes sooner,

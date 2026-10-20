@@ -1,0 +1,6 @@
+// expect: E0211
+fn main() -> int {
+    return 42
+}
+print("start")
+main()

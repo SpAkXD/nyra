@@ -49,7 +49,7 @@ fn show(n: int) {                     // no `->`: returns nothing
     print(n)
 }
 ```
-`fn main()` has no parameters and no return type. A function with a return type must `return` on
+`fn main()` has no parameters. It may return a value (typed output, see Printing). A function with a return type must `return` on
 every path. Functions may call each other in any order, and recurse. Parameters cannot be changed:
 declare one `var` (the function works on its own copy: `fn count_down(var n: int)`), or `inout` to change
 the caller's variable (see Values).
@@ -540,6 +540,26 @@ strings and chars inside them quoted: `["a", "b"]`, `['a', '\n']`, `(1, "a")`, `
 like JavaScript's `String(x)`: `3.0` prints `3`, `0.1 + 0.2` prints `0.30000000000000004`,
 `1.0 / 0.0` prints `Infinity`, never `-0`.
 
+**Typed output.** A program whose `fn main() -> T` returns a value prints that value as JSON (its `json.str`
+form, below) on standard output: one JSON document and a line break, nothing else. `print` then writes to
+standard error, so standard output is data a caller can read. `nyra schema file.nyra` prints the JSON Schema of
+`T`. With statements at the top level, `main` runs after them and its value is the output (calling `main()`
+among them is E0211). A runtime error or `os.exit` prints no value. The interpreter, the native and the `js`
+targets support it; the other targets refuse such a program for now. See [SERVE.md](SERVE.md).
+```nyra
+struct Total {
+    items: int
+    sum: float
+}
+
+fn main() -> Total {
+    let prices = [2.5, 4.0]
+    print("adding {prices.len()} prices")   // to standard error
+    return Total(items: prices.len(), sum: prices.sum())
+}
+```
+It prints `{"items":2,"sum":6.5}` on standard output.
+
 ## Standard library
 A `use` line at the top of the file imports a standard module; its functions are called with the
 module's name. Nothing else is imported or installed.
@@ -675,6 +695,13 @@ machine; memory is the heap the interpreter's own thread has added. In the inter
 not wait: it moves a virtual clock that `time.now_ms` and `time.mono_ms` include, and costs one step per
 millisecond. The MCP tool `nyra_run` with `sandbox: true` runs a program this way (no child process) and
 takes `fuel`, `max_memory`, `max_output` (at most 16 KiB) and `timeout_ms`.
+
+`--checkpoint FILE` makes a run that runs out of fuel or time *pause* instead of failing: it stops before the
+next statement, saves its whole state (calls, locals, values, input left, clocks) to FILE as JSON and exits with
+code 125; `nyra resume FILE [--fuel N]` goes on from that statement, without doing again what was done (output,
+files), and refuses a FILE whose program changed. `--mock fs=DIR` (a copy-on-write view of DIR: writes stay in
+memory), `--mock input=FILE` and `--mock os.env=KEY=VALUE` serve a capability from a mock in the interpreter.
+`nyra serve --mcp tools.nyra` serves a file's `pub fn`s as MCP tools, each call sandboxed. See [SERVE.md](SERVE.md).
 
 ## Modules of your own
 ```text

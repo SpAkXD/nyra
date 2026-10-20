@@ -24,7 +24,7 @@ use crate::clock::Instant;
 /// cap on the bytes stops the program (`Stop::Output`) at the first byte beyond it.
 pub struct Out {
     pub kept: Option<String>,
-    sink: Option<std::io::BufWriter<std::io::Stdout>>,
+    sink: Option<std::io::BufWriter<Box<dyn Write>>>,
     /// Bytes written so far.
     pub written: u64,
     pub cap: u64,
@@ -40,7 +40,13 @@ impl Out {
     }
 
     pub fn stdout() -> Out {
-        Out { sink: Some(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout())), ..Out::discard() }
+        Out { sink: Some(std::io::BufWriter::with_capacity(1 << 16, Box::new(std::io::stdout()))), ..Out::discard() }
+    }
+
+    /// The process's standard error: where `print` goes when `main` returns a value (its JSON is
+    /// the only thing on standard output, see `schema.rs`).
+    pub fn stderr() -> Out {
+        Out { sink: Some(std::io::BufWriter::with_capacity(1 << 16, Box::new(std::io::stderr()))), ..Out::discard() }
     }
 
     pub fn write(&mut self, text: &str) -> Result<(), Stop> {
@@ -111,10 +117,31 @@ pub struct Host {
     /// Milliseconds the program slept: added to both clocks.
     slept_ms: i64,
     start: Instant,
+    /// What `time.mono_ms` had counted before this host started (a resumed run, see `checkpoint.rs`).
+    mono_base: f64,
     /// Steps the last call cost on top of the call itself (bytes read, time slept).
     pub cost: u64,
     /// What a web program handed to the build.
     pub web: Web,
+    /// `--mock fs=DIR`: every `fs` call goes to this copy-on-write view (see `mock.rs`).
+    pub mock_fs: Option<crate::mock::MockFs>,
+    /// `--mock os.env=KEY=VAL`: `os.env` and `os.has_env` see only these variables.
+    pub mock_env: Option<Vec<(String, String)>>,
+}
+
+/// What a checkpoint keeps of a host (`Host::save`, `Host::restore`).
+pub struct HostState {
+    pub args: Vec<String>,
+    /// The standard input that is left; `None`: the process's own.
+    pub input: Option<Vec<u8>>,
+    pub seeded: Option<[u32; 4]>,
+    pub os_count: u64,
+    pub slept_ms: i64,
+    /// Milliseconds `time.mono_ms` had counted.
+    pub mono_ms: f64,
+    pub confined: bool,
+    pub mock_fs: Option<crate::mock::MockFs>,
+    pub mock_env: Option<Vec<(String, String)>>,
 }
 
 impl Host {
@@ -134,8 +161,11 @@ impl Host {
             os_count: 0,
             slept_ms: 0,
             start: Instant::now(),
+            mono_base: 0.0,
             cost: 0,
             web: Web::default(),
+            mock_fs: None,
+            mock_env: None,
         }
     }
 
@@ -143,6 +173,42 @@ impl Host {
     pub fn with_input(mut self, bytes: Vec<u8>) -> Host {
         self.input = Input::Bytes(bytes, 0);
         self
+    }
+
+    /// The state of a paused run, taken out of the host.
+    pub fn save(&mut self) -> HostState {
+        let input = match &mut self.input {
+            Input::Process => None,
+            Input::Bytes(data, pos) => Some(data[*pos..].to_vec()),
+        };
+        HostState {
+            args: self.args.clone(),
+            input,
+            seeded: self.seeded,
+            os_count: self.os_count,
+            slept_ms: self.slept_ms,
+            mono_ms: self.mono_base + self.start.elapsed().as_nanos() as f64 / 1e6,
+            confined: self.confined,
+            mock_fs: self.mock_fs.take(),
+            mock_env: self.mock_env.take(),
+        }
+    }
+
+    /// A host that goes on where a paused run's host stood.
+    pub fn restore(s: HostState) -> Host {
+        let mut h = Host::new();
+        h.args = s.args;
+        if let Some(bytes) = s.input {
+            h.input = Input::Bytes(bytes, 0);
+        }
+        h.seeded = s.seeded;
+        h.os_count = s.os_count;
+        h.slept_ms = s.slept_ms;
+        h.mono_base = s.mono_ms;
+        h.confined = s.confined;
+        h.mock_fs = s.mock_fs;
+        h.mock_env = s.mock_env;
+        h
     }
 
     pub fn call(&mut self, f: StdFn, a: &[Value], out: &mut Out, span: Span) -> Result<Option<Value>, Stop> {
@@ -182,6 +248,26 @@ impl Host {
         };
         let text = |t: String| Some(Value::Str(Rc::new(t)));
         let strs = |v: Vec<String>| Some(Value::arr(v.into_iter().map(|t| Value::Str(Rc::new(t))).collect()));
+        // `--mock fs=DIR`: the files are a copy-on-write view of DIR (see `mock.rs`)
+        if let Some(fs) = self.mock_fs.as_mut().filter(|_| f.path().0 == "fs") {
+            let path = s(0)?;
+            let content = if matches!(f, StdFn::FsWrite | StdFn::FsAppend) { Some(s(1)?) } else { None };
+            return match fs.call(f, path, content) {
+                Ok((v, cost)) => {
+                    self.cost = cost;
+                    Ok(v)
+                }
+                Err((what, reason)) => Err(fs_fail(what, path, reason, span)),
+            };
+        }
+        // `--mock os.env=KEY=VAL`: only these variables exist
+        if let (Some(env), StdFn::OsEnv | StdFn::OsHasEnv) = (&self.mock_env, f) {
+            let found = env.iter().find(|(k, _)| k == s(0).unwrap_or("")).map(|(_, v)| v.clone());
+            return Ok(match f {
+                StdFn::OsEnv => text(found.unwrap_or_default()),
+                _ => Some(Value::Bool(found.is_some())),
+            });
+        }
         Ok(match f {
             StdFn::InputLine => {
                 out.flush();
@@ -274,7 +360,9 @@ impl Host {
                 let now = crate::clock::unix_ms();
                 Some(Value::Int(now.saturating_add(self.slept_ms)))
             }
-            StdFn::TimeMonoMs => Some(Value::Float(self.start.elapsed().as_nanos() as f64 / 1e6 + self.slept_ms as f64)),
+            StdFn::TimeMonoMs => {
+                Some(Value::Float(self.mono_base + self.start.elapsed().as_nanos() as f64 / 1e6 + self.slept_ms as f64))
+            }
             StdFn::TimeSleepMs => {
                 let ms = i(0)?;
                 if ms > 0 {

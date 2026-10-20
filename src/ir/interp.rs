@@ -164,7 +164,7 @@ impl MapVal {
         Ok(self.index.get(&Self::key(k)?).and_then(|&i| self.ents[i].as_ref().map(|e| &e.1)))
     }
 
-    pub(super) fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
+    pub fn set(&mut self, k: Value, v: Value) -> Result<(), Stop> {
         let key = Self::key(&k)?;
         if let Some(&i) = self.index.get(&key) {
             self.ents[i] = Some((k, v));
@@ -191,7 +191,7 @@ impl MapVal {
         Ok(())
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(Value, Value)> {
         self.ents.iter().flatten()
     }
 }
@@ -254,6 +254,35 @@ pub enum Stop {
     /// Something the IR should never contain (a bug of the compiler, not of the program), or an
     /// operation this host does not do (a file operation in an example).
     Bug(#[allow(dead_code)] String),
+    /// A run that may pause (`nyra run --checkpoint`) reached a statement with its fuel or time
+    /// used up: the positions it stopped at are in `Interp::take_trail` (see `checkpoint.rs`).
+    Pause,
+}
+
+/// Where a paused run stood, one level of nesting each (see `Interp::take_trail`). A frame starts
+/// with `Frame`, then the statements and loops it was inside, from its body inwards.
+#[derive(Clone, Debug)]
+pub enum Pos {
+    /// A call that runs: the function and its locals (its parameters first).
+    Frame(FuncId, Vec<Value>),
+    /// The statement of a block that runs. The innermost one has not started yet: it runs from
+    /// its beginning when the run resumes.
+    Stmt(usize),
+    /// Inside the `then` (true) or the `else` branch of an `if`.
+    Branch(bool),
+    /// Inside a loop: at the start of a round, or in its head, body or step.
+    Loop(LoopPart),
+    /// Inside a `for`: the items that are left. `body`: the round of the item before them runs
+    /// (else the next round starts with the first of them).
+    Each { items: Vec<Value>, body: bool },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoopPart {
+    Start,
+    Head,
+    Body,
+    Step,
 }
 
 /// int + - * / and negation outside the 64-bit range (E0255), worded like the runtimes.
@@ -335,6 +364,15 @@ pub struct Interp<'m> {
     out: Out,
     /// The string literals of the module, made once (a literal is a shared `Rc`).
     strs: Vec<Rc<String>>,
+    /// The run pauses (`Stop::Pause`) at the first statement after its fuel or time ran out,
+    /// instead of stopping with E0355 / E0359 (`nyra run --checkpoint`).
+    pausable: bool,
+    /// The time ran out in a pausable run: the next statement pauses.
+    time_up: bool,
+    /// While a pause unwinds: where each level stood, the innermost first.
+    trail: Vec<Pos>,
+    /// A resumed run: the positions to go back to, the outermost last (each level pops its own).
+    resume: Vec<Pos>,
 }
 
 impl<'m> Interp<'m> {
@@ -357,7 +395,89 @@ impl<'m> Interp<'m> {
             host,
             out,
             strs: m.strs.iter().map(|t| Rc::new(t.clone())).collect(),
+            pausable: false,
+            time_up: false,
+            trail: Vec::new(),
+            resume: Vec::new(),
         }
+    }
+
+    /// The run pauses instead of failing when its fuel or time runs out (see `Stop::Pause`).
+    pub fn set_pausable(&mut self) {
+        self.pausable = true;
+    }
+
+    /// After `Stop::Pause`: where the run stood, the innermost level first.
+    pub fn take_trail(&mut self) -> Vec<Pos> {
+        std::mem::take(&mut self.trail)
+    }
+
+    /// The string literals as values (a checkpoint keeps a literal shared, see `checkpoint.rs`).
+    pub fn literals(&self) -> &[Rc<String>] {
+        &self.strs
+    }
+
+    /// The host, to save or restore its state (input, clocks, random numbers, mocks).
+    pub fn host_mut(&mut self) -> &mut Host {
+        &mut self.host
+    }
+
+    /// The statement that ran last, or that a paused run stopped before.
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    /// Bytes printed so far (a resumed run continues the count of its output limit).
+    pub fn written(&self) -> u64 {
+        self.out.written
+    }
+
+    pub fn set_written(&mut self, n: u64) {
+        self.out.written = n;
+    }
+
+    /// Goes back to where a paused run stood (`trail` as `take_trail` gave it) and runs on.
+    /// Returns what the outermost function returns.
+    pub fn resume(&mut self, trail: Vec<Pos>) -> Result<Option<Value>, Stop> {
+        self.resume = trail;
+        self.resumed_frame().map(|(v, _)| v)
+    }
+
+    /// A resumed run enters the frame that comes next in `resume`.
+    fn resumed_frame(&mut self) -> Result<(Option<Value>, Vec<Value>), Stop> {
+        match self.resume.pop() {
+            Some(Pos::Frame(fid, locals)) => {
+                let n = self.m.funcs.get(fid.0 as usize).map(|f| f.locals.len());
+                if n != Some(locals.len()) {
+                    return Err(bug("a checkpoint frame that does not match its function"));
+                }
+                self.frame(fid, locals)
+            }
+            _ => Err(bug("a checkpoint whose call has no frame")),
+        }
+    }
+
+    /// The next position of a resumed run, which must be of the kind `pick` accepts.
+    fn resumed<T>(&mut self, pick: impl FnOnce(Pos) -> Option<T>) -> Result<T, Stop> {
+        self.resume.pop().and_then(pick).ok_or_else(|| bug("a checkpoint that does not match the program"))
+    }
+
+    /// At the start of a statement or a round of a loop: a pausable run that has used up its fuel
+    /// or its time pauses here, before the statement does anything.
+    #[inline]
+    fn boundary(&self) -> Result<(), Stop> {
+        if self.pausable && (self.steps >= self.limits.steps || self.time_up) {
+            return Err(Stop::Pause);
+        }
+        Ok(())
+    }
+
+    /// Notes where this level stood when a pause passes through it.
+    fn mark(&mut self, e: Stop, at: impl FnOnce() -> Pos) -> Stop {
+        if matches!(e, Stop::Pause) {
+            self.trail.push(at());
+        }
+        e
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -421,7 +541,8 @@ impl<'m> Interp<'m> {
 
     fn tick(&mut self, n: u64) -> Result<(), Stop> {
         self.steps = self.steps.saturating_add(n);
-        if self.steps > self.limits.steps {
+        // (a pausable run pauses at the next statement instead: see `boundary`)
+        if self.steps > self.limits.steps && !self.pausable {
             return Err(Stop::Steps);
         }
         if self.steps >= self.next_check {
@@ -437,7 +558,11 @@ impl<'m> Interp<'m> {
             return Err(Stop::Memory);
         }
         if self.limits.wall_ms > 0 && self.started.elapsed() > Duration::from_millis(self.limits.wall_ms) {
-            return Err(Stop::Time);
+            if self.pausable {
+                self.time_up = true;
+            } else {
+                return Err(Stop::Time);
+            }
         }
         Ok(())
     }
@@ -462,12 +587,19 @@ impl<'m> Interp<'m> {
         if args.len() != f.params {
             return Err(bug("wrong number of arguments"));
         }
+        let mut locals = args;
+        locals.resize(f.locals.len(), Value::Unset);
+        self.frame(fid, locals)
+    }
+
+    /// Runs the body of a function with its locals (parameters set).
+    fn frame(&mut self, fid: FuncId, mut locals: Vec<Value>) -> Result<(Option<Value>, Vec<Value>), Stop> {
+        let m = self.m;
+        let f = m.funcs.get(fid.0 as usize).ok_or_else(|| bug("call of a function that does not exist"))?;
         if self.depth >= self.limits.depth {
             return Err(Stop::Depth);
         }
         self.depth += 1;
-        let mut locals = args;
-        locals.resize(f.locals.len(), Value::Unset);
         let flow = self.block(f, &mut locals, &f.body);
         self.depth -= 1;
         match flow {
@@ -478,15 +610,22 @@ impl<'m> Interp<'m> {
                 e.func.get_or_insert(fid);
                 Err(Stop::Error(e))
             }
+            Err(Stop::Pause) => {
+                self.trail.push(Pos::Frame(fid, locals));
+                Err(Stop::Pause)
+            }
             Err(e) => Err(e),
         }
     }
 
     fn block(&mut self, f: &Func, locals: &mut Vec<Value>, ss: &[Stmt]) -> Result<Flow, Stop> {
-        for s in ss {
-            match self.stmt(f, locals, s)? {
-                Flow::Normal => {}
-                other => return Ok(other),
+        // a resumed run starts at the statement it stood at
+        let first = if self.resume.is_empty() { 0 } else { self.resumed(|p| if let Pos::Stmt(i) = p { Some(i) } else { None })? };
+        for (i, s) in ss.iter().enumerate().skip(first) {
+            match self.stmt(f, locals, s) {
+                Ok(Flow::Normal) => {}
+                Ok(other) => return Ok(other),
+                Err(e) => return Err(self.mark(e, || Pos::Stmt(i))),
             }
         }
         Ok(Flow::Normal)
@@ -494,7 +633,14 @@ impl<'m> Interp<'m> {
 
     fn stmt(&mut self, f: &Func, locals: &mut Vec<Value>, s: &Stmt) -> Result<Flow, Stop> {
         self.span = s.span;
-        self.tick(1)?;
+        // a statement that a resumed run goes back into has been counted already
+        let resuming = !self.resume.is_empty();
+        if !resuming {
+            self.boundary()?;
+            self.tick(1)?;
+        } else if !matches!(s.kind, StmtKind::Call { .. } | StmtKind::If { .. } | StmtKind::Loop { .. } | StmtKind::ForEach { .. }) {
+            return Err(bug("a checkpoint that stands inside a statement with nothing inside"));
+        }
         let m = self.m;
         match &s.kind {
             StmtKind::Set(l, e) => {
@@ -507,15 +653,27 @@ impl<'m> Interp<'m> {
                 let mut places = Vec::new();
                 for (k, a) in args.iter().enumerate() {
                     match a {
-                        Arg::Val(e) => vals.push(eval(&self.strs, locals, e)?),
+                        // (a resumed call has its arguments in the callee's frame already)
+                        Arg::Val(e) if !resuming => vals.push(eval(&self.strs, locals, e)?),
+                        Arg::Val(_) => {}
                         Arg::InOut(p) => {
+                            // the places are those of the call: the caller's locals did not change since
                             let path = resolve(&self.strs, locals, p)?;
-                            vals.push(self.place(locals, p.root.0 as usize, &path)?.clone());
+                            if !resuming {
+                                vals.push(self.place(locals, p.root.0 as usize, &path)?.clone());
+                            }
                             places.push((k, p.root.0 as usize, path));
                         }
                     }
                 }
-                let (ret, mut callee) = self.invoke(*func, vals)?;
+                let (ret, mut callee) = if resuming {
+                    if !matches!(self.resume.last(), Some(Pos::Frame(id, _)) if id == func) {
+                        return Err(bug("a checkpoint whose call does not match the program"));
+                    }
+                    self.resumed_frame()?
+                } else {
+                    self.invoke(*func, vals)?
+                };
                 for (k, root, path) in places {
                     let v = std::mem::replace(&mut callee[k], Value::Unset);
                     *self.place(locals, root, &path)? = v;
@@ -576,43 +734,96 @@ impl<'m> Interp<'m> {
                 }
             }
             StmtKind::If { cond, then, els } => {
-                let branch = if truth(&eval(&self.strs, locals, cond)?)? { then } else { els };
-                return self.block(f, locals, branch);
-            }
-            StmtKind::Loop { head, cond, body, step } => loop {
-                self.tick(1)?;
-                match self.block(f, locals, head)? {
-                    Flow::Normal => {}
-                    Flow::Break => break,
-                    Flow::Return(v) => return Ok(Flow::Return(v)),
-                    Flow::Continue => return Err(bug("`continue` in the head of a loop")),
-                }
-                if !truth(&eval(&self.strs, locals, cond)?)? {
-                    break;
-                }
-                match self.block(f, locals, body)? {
-                    Flow::Normal | Flow::Continue => {}
-                    Flow::Break => break,
-                    Flow::Return(v) => return Ok(Flow::Return(v)),
-                }
-                if let Flow::Return(v) = self.block(f, locals, step)? {
-                    return Ok(Flow::Return(v));
-                }
-            },
-            StmtKind::ForEach { var, iter, body } => {
-                // the loop goes over the value as it was when it started
-                let items: Vec<Value> = match eval(&self.strs, locals, iter)? {
-                    Value::Str(s) => s.chars().map(Value::Char).collect(),
-                    Value::Arr(xs) => xs.iter().cloned().collect(),
-                    _ => return Err(bug("`for` over a value that is not a string or an array")),
+                let taken = if resuming {
+                    self.resumed(|p| if let Pos::Branch(b) = p { Some(b) } else { None })?
+                } else {
+                    truth(&eval(&self.strs, locals, cond)?)?
                 };
-                for v in items {
-                    self.tick(1)?;
-                    locals[var.0 as usize] = v;
-                    match self.block(f, locals, body)? {
-                        Flow::Normal | Flow::Continue => {}
-                        Flow::Break => break,
-                        Flow::Return(v) => return Ok(Flow::Return(v)),
+                let branch = if taken { then } else { els };
+                return self.block(f, locals, branch).map_err(|e| self.mark(e, || Pos::Branch(taken)));
+            }
+            StmtKind::Loop { head, cond, body, step } => {
+                // (a resumed loop goes on in the part it stood in)
+                let mut part = if resuming {
+                    self.resumed(|p| if let Pos::Loop(part) = p { Some(part) } else { None })?
+                } else {
+                    LoopPart::Start
+                };
+                loop {
+                    match part {
+                        LoopPart::Start => {
+                            // (a resumed run has fuel: it gets past this point, see `sandbox::run`)
+                            if let Err(e) = self.boundary() {
+                                return Err(self.mark(e, || Pos::Loop(LoopPart::Start)));
+                            }
+                            self.tick(1)?;
+                            part = LoopPart::Head;
+                        }
+                        LoopPart::Head => {
+                            match self.block(f, locals, head) {
+                                Ok(Flow::Normal) => {}
+                                Ok(Flow::Break) => break,
+                                Ok(Flow::Return(v)) => return Ok(Flow::Return(v)),
+                                Ok(Flow::Continue) => return Err(bug("`continue` in the head of a loop")),
+                                Err(e) => return Err(self.mark(e, || Pos::Loop(LoopPart::Head))),
+                            }
+                            if !truth(&eval(&self.strs, locals, cond)?)? {
+                                break;
+                            }
+                            part = LoopPart::Body;
+                        }
+                        LoopPart::Body => {
+                            match self.block(f, locals, body) {
+                                Ok(Flow::Normal | Flow::Continue) => {}
+                                Ok(Flow::Break) => break,
+                                Ok(Flow::Return(v)) => return Ok(Flow::Return(v)),
+                                Err(e) => return Err(self.mark(e, || Pos::Loop(LoopPart::Body))),
+                            }
+                            part = LoopPart::Step;
+                        }
+                        LoopPart::Step => {
+                            match self.block(f, locals, step) {
+                                Ok(Flow::Return(v)) => return Ok(Flow::Return(v)),
+                                Ok(_) => {}
+                                Err(e) => return Err(self.mark(e, || Pos::Loop(LoopPart::Step))),
+                            }
+                            part = LoopPart::Start;
+                        }
+                    }
+                }
+            }
+            StmtKind::ForEach { var, iter, body } => {
+                // the loop goes over the value as it was when it started (a resumed one over what was left)
+                let (items, mut in_body) = if resuming {
+                    self.resumed(|p| if let Pos::Each { items, body } = p { Some((items, body)) } else { None })?
+                } else {
+                    let items: Vec<Value> = match eval(&self.strs, locals, iter)? {
+                        Value::Str(s) => s.chars().map(Value::Char).collect(),
+                        Value::Arr(xs) => xs.iter().cloned().collect(),
+                        _ => return Err(bug("`for` over a value that is not a string or an array")),
+                    };
+                    (items, false)
+                };
+                let mut items = items.into_iter();
+                loop {
+                    if !in_body {
+                        if items.as_slice().is_empty() {
+                            break;
+                        }
+                        if let Err(e) = self.boundary() {
+                            return Err(self.mark(e, || Pos::Each { items: items.as_slice().to_vec(), body: false }));
+                        }
+                        self.tick(1)?;
+                        if let Some(v) = items.next() {
+                            locals[var.0 as usize] = v;
+                        }
+                    }
+                    in_body = false;
+                    match self.block(f, locals, body) {
+                        Ok(Flow::Normal | Flow::Continue) => {}
+                        Ok(Flow::Break) => break,
+                        Ok(Flow::Return(v)) => return Ok(Flow::Return(v)),
+                        Err(e) => return Err(self.mark(e, || Pos::Each { items: items.as_slice().to_vec(), body: true })),
                     }
                 }
             }

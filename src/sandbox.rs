@@ -18,8 +18,8 @@
 
 use crate::ast::Program;
 use crate::clock::Instant;
-use crate::ir::host::{Host, Out};
-use crate::ir::interp::{Interp, Limits, RuntimeError, Stop};
+use crate::ir::host::{Host, HostState, Out};
+use crate::ir::interp::{Interp, Limits, Pos, RuntimeError, Stop, Value};
 use crate::ir::{self};
 
 pub const DEFAULT_FUEL: u64 = 2_000_000_000;
@@ -58,6 +58,14 @@ pub struct Config {
     pub confined: bool,
     /// Write straight to the process's standard output; else keep the output in `Report::stdout`.
     pub to_stdout: bool,
+    /// `--checkpoint`: when the fuel or the time runs out, the run pauses at the next statement
+    /// (`Report::paused`) instead of stopping with E0355 or E0359.
+    pub pausable: bool,
+    /// `nyra resume`: the paused run to go on with (its host replaces `args`, `stdin` and `confined`).
+    pub resume: Option<crate::checkpoint::Loaded>,
+    /// `--mock fs=DIR` and `--mock os.env=K=V` (see `mock.rs`).
+    pub mock_fs: Option<crate::mock::MockFs>,
+    pub mock_env: Option<Vec<(String, String)>>,
 }
 
 impl Config {
@@ -68,8 +76,29 @@ impl Config {
             stdin: None,
             confined: false,
             to_stdout: true,
+            pausable: false,
+            resume: None,
+            mock_fs: None,
+            mock_env: None,
         }
     }
+}
+
+/// The exit code of a run that paused (`--checkpoint`): it is not over, `nyra resume` goes on.
+pub const PAUSED_EXIT: i32 = 125;
+
+/// Where a paused run stood, for `checkpoint.rs` to save.
+pub struct Paused {
+    pub trail: Vec<Pos>,
+    pub host: HostState,
+    /// Bytes printed so far.
+    pub written: u64,
+    /// The statement it stopped before.
+    pub span: crate::ast::Span,
+    /// The time ran out (else the fuel).
+    pub by_time: bool,
+    /// The addresses of the run's string literals (a value that is one stays one, see `checkpoint.rs`).
+    pub literals: Vec<usize>,
 }
 
 /// How a run ended.
@@ -89,11 +118,17 @@ pub struct Report {
     pub run_ms: f64,
     /// What a `use web` program handed to the build (empty for other programs).
     pub web: crate::ir::host::Web,
+    /// What `print` wrote, kept, in a program whose `main` returns a value (its JSON is `stdout`).
+    pub log: String,
+    /// The run paused (`Config::pausable`); `exit` is `PAUSED_EXIT`.
+    pub paused: Option<Paused>,
 }
 
 /// Lowers a checked program, as every backend does (`NYRA_OPT=0` skips the optimizer).
 pub fn module(prog: &Program) -> Result<ir::Module, String> {
     let mut m = ir::lower::lower(prog).map_err(|what| format!("not supported yet: {what} (coming later in v0.3)"))?;
+    // `fn main() -> T`: the entry writes T as JSON (see `schema.rs`)
+    crate::schema::wrap_typed_main(&mut m);
     if std::env::var_os("NYRA_OPT").is_none_or(|v| v != "0") {
         ir::opt::optimize(&mut m);
     }
@@ -104,28 +139,74 @@ pub fn module(prog: &Program) -> Result<ir::Module, String> {
 }
 
 /// Runs `main` of a lowered program.
-pub fn run(m: &ir::Module, cfg: Config) -> Report {
-    let mut host = Host::new();
-    host.args = cfg.args;
-    host.confined = cfg.confined;
-    if let Some(bytes) = cfg.stdin {
-        host = host.with_input(bytes);
+pub fn run(m: &ir::Module, mut cfg: Config) -> Report {
+    let mut resume = cfg.resume.take();
+    let host = match resume.as_mut().and_then(|r| r.host.take()) {
+        Some(state) => Host::restore(state),
+        None => {
+            let mut host = Host::new();
+            host.args = std::mem::take(&mut cfg.args);
+            host.confined = cfg.confined;
+            if let Some(bytes) = cfg.stdin.take() {
+                host = host.with_input(bytes);
+            }
+            host.mock_fs = cfg.mock_fs.take();
+            host.mock_env = cfg.mock_env.take();
+            host
+        }
+    };
+    // a `main` that returns a value: its JSON alone goes to standard output, `print` to standard error
+    let typed = m.func(m.main).ret.is_some();
+    let out = match (cfg.to_stdout, typed) {
+        (true, false) => Out::stdout(),
+        (true, true) => Out::stderr(),
+        (false, _) => Out::keep(),
+    };
+    if cfg.pausable {
+        // (a run that may pause runs at least one statement each time: it always gets on)
+        cfg.limits.steps = cfg.limits.steps.max(1);
     }
-    let out = if cfg.to_stdout { Out::stdout() } else { Out::keep() };
     let mut it = Interp::with_host(m, cfg.limits, host, out);
+    if cfg.pausable {
+        it.set_pausable();
+    }
     let start = Instant::now();
     let allocs0 = crate::mem::allocs();
-    let result = it.call(m.main, Vec::new());
+    let result = match &resume {
+        Some(r) => {
+            it.set_written(r.written);
+            match r.trail(m, it.literals()) {
+                Ok(trail) => it.resume(trail),
+                Err(what) => Err(Stop::Bug(what)),
+            }
+        }
+        None => it.call(m.main, Vec::new()),
+    };
     let run_ms = start.elapsed().as_secs_f64() * 1000.0;
     it.flush();
     let mut internal = None;
+    let mut paused = None;
+    let mut json = None;
     let (exit, error) = match result {
+        Ok(Some(Value::Str(text))) if typed => {
+            json = Some(text);
+            (0, None)
+        }
         Ok(_) => (0, None),
         Err(Stop::Exit(code)) => (code, None),
         Err(Stop::Error(e)) => (101, Some(*e)),
         Err(Stop::Bug(what)) => {
             internal = Some(what);
             (70, None)
+        }
+        Err(Stop::Pause) => {
+            let by_time = it.steps() < cfg.limits.steps;
+            let span = it.span();
+            let trail = it.take_trail();
+            let written = it.written();
+            let literals = it.literals().iter().map(|r| std::rc::Rc::as_ptr(r) as *const () as usize).collect();
+            paused = Some(Paused { trail, host: it.host_mut().save(), written, span, by_time, literals });
+            (PAUSED_EXIT, None)
         }
         Err(limit) => match it.limit_error(&limit) {
             Some(e) => {
@@ -135,9 +216,22 @@ pub fn run(m: &ir::Module, cfg: Config) -> Report {
             None => (101, None),
         },
     };
-    let stdout = it.output().to_string();
+    let (mut stdout, mut log) = (it.output().to_string(), String::new());
+    if let Some(text) = json {
+        if cfg.to_stdout {
+            use std::io::Write;
+            let mut out = std::io::stdout().lock();
+            let _ = writeln!(out, "{text}");
+            let _ = out.flush();
+        } else {
+            log = std::mem::take(&mut stdout);
+            stdout = format!("{text}\n");
+        }
+    } else if typed && !cfg.to_stdout {
+        log = std::mem::take(&mut stdout);
+    }
     let web = it.take_web();
-    Report { exit, stdout, error, internal, steps: it.steps(), allocs: crate::mem::allocs() - allocs0, run_ms, web }
+    Report { exit, stdout, error, internal, steps: it.steps(), allocs: crate::mem::allocs() - allocs0, run_ms, web, log, paused }
 }
 
 /// A runtime error as the compiled programs print it: human or JSON (one line).

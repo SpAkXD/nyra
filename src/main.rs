@@ -2,6 +2,8 @@ mod ast;
 mod auto;
 mod caps;
 mod check;
+// `nyra run --checkpoint` and `nyra resume` (see `checkpoint.rs`)
+mod checkpoint;
 mod clock;
 // `nyra clone` runs curl and browsers: not part of the WebAssembly build
 #[cfg(not(target_arch = "wasm32"))]
@@ -24,6 +26,8 @@ mod limits;
 mod lsp;
 mod mcp;
 mod mem;
+// `nyra run --mock fs=DIR ...`: capabilities served by mocks
+mod mock;
 mod modules;
 // `nyra new` and `nyra upgrade` write files and start processes: not in the WebAssembly build
 #[cfg(not(target_arch = "wasm32"))]
@@ -31,6 +35,11 @@ mod new;
 mod parser;
 mod perfwarn;
 mod sandbox;
+// typed output (`fn main() -> T`) and `nyra schema`
+mod schema;
+// `nyra serve --mcp tools.nyra`: a program's functions as MCP tools (stdio, not in the WebAssembly build)
+#[cfg(not(target_arch = "wasm32"))]
+mod serve;
 mod stdlib;
 #[cfg(not(target_arch = "wasm32"))]
 mod upgrade;
@@ -61,6 +70,9 @@ usage:
   nyra show <file.nyra> <name>    print one function, struct or Struct.field
   nyra edit <file.nyra>     change symbols by name (`nyra edit --help`)
   nyra new <kind> <name>    start a project: script, cli, site or lib (`nyra new` lists them)
+  nyra serve --mcp <file.nyra>    serve the file's `pub fn`s as MCP tools (`nyra serve --help`, docs/SERVE.md)
+  nyra schema <file.nyra>   the JSON Schema of what `fn main() -> T` prints (`--tools`: of the MCP tools)
+  nyra resume <state.json>  go on with a run that `--checkpoint` paused (`nyra resume --help`)
   nyra upgrade [--check]    install the newest release over this nyra (`nyra upgrade --help`)
   nyra <file.nyra>          same as `nyra run`
 
@@ -110,6 +122,14 @@ safety (for programs you did not write, or agents that run unsupervised):
   --max-depth N    nested calls (default 20,000)                          E0358, exit 123
   --max-time MS    real time (default: none)                              E0359, exit 124
   A limit flag implies --interp. Programs that stop on a limit print the error code on stderr.
+  --checkpoint F   when the fuel or the time runs out, pause instead and save the state to F
+                   (exit 125); `nyra resume F` goes on from there
+  --mock M         serve a capability from a mock, in the interpreter: fs=DIR (a copy-on-write view
+                   of DIR: writes stay in memory), input=FILE (standard input), os.env=KEY=VALUE.
+                   Like --allow, mocks grant nothing else unless --allow says so.
+
+typed output: a program whose `fn main() -> T` returns a value prints it as one JSON document on
+stdout (its `print` output goes to stderr); `nyra schema` gives the JSON Schema of T.
 
 `build` writes an executable natively and source code for every other target.
 Supported targets: native and js. py, ts, rs and go are experimental.
@@ -215,14 +235,22 @@ struct Opts {
     port: Option<u16>,
     /// `--image-tool T`: the image tool of a `use web` build.
     image_tool: Option<String>,
+    /// `--checkpoint FILE`: pause instead of stopping when the fuel or time runs out.
+    checkpoint: Option<String>,
+    /// `--mock ...`: capabilities served by mocks.
+    mocks: mock::Mocks,
 }
 
 impl Opts {
     /// The capabilities this run grants: everything, unless `--sandbox` or `--allow` narrow it.
     fn grant(&self) -> Result<caps::Grant, String> {
-        let mut g = if self.sandbox || !self.allow.is_empty() { caps::Grant::none() } else { caps::Grant::all() };
+        let narrow = self.sandbox || !self.allow.is_empty() || !self.mocks.is_empty();
+        let mut g = if narrow { caps::Grant::none() } else { caps::Grant::all() };
         for a in &self.allow {
             g.allow(a)?;
+        }
+        for c in self.mocks.caps() {
+            g.allow(c)?;
         }
         Ok(g)
     }
@@ -236,6 +264,8 @@ impl Opts {
             || self.max_output.is_some()
             || self.max_depth.is_some()
             || self.max_time.is_some()
+            || self.checkpoint.is_some()
+            || !self.mocks.is_empty()
     }
 }
 
@@ -269,6 +299,8 @@ fn parse_args() -> Result<Opts, String> {
         max_time: None,
         port: None,
         image_tool: None,
+        checkpoint: None,
+        mocks: mock::Mocks::default(),
     };
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -322,6 +354,9 @@ fn parse_args() -> Result<Opts, String> {
                 }
             }
             "--strict" => opts.strict = true,
+            "--checkpoint" => opts.checkpoint = Some(args.next().ok_or("--checkpoint needs a file: `--checkpoint state.json`")?),
+            "--mock" => opts.mocks.add(&args.next().ok_or("--mock needs a mock: fs=DIR, input=FILE or os.env=KEY=VALUE")?)?,
+            _ if a.starts_with("--mock=") => opts.mocks.add(&a["--mock=".len()..])?,
             "--release" => opts.release = true,
             "--port" => {
                 let v = args.next().ok_or("--port needs a number")?;
@@ -443,6 +478,13 @@ fn real_main() -> ExitCode {
     }
     if std::env::args().nth(1).as_deref() == Some("mcp") {
         return mcp::run(std::env::args().skip(2).collect());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    match std::env::args().nth(1).as_deref() {
+        Some("serve") => return serve::cli(std::env::args().skip(2).collect()),
+        Some("schema") => return schema::cli(std::env::args().skip(2).collect()),
+        Some("resume") => return checkpoint::cli(std::env::args().skip(2).collect()),
+        _ => {}
     }
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::args().nth(1).as_deref() == Some("lsp") {
@@ -616,7 +658,11 @@ fn real_main() -> ExitCode {
     }
 
     if opts.interpreted() {
-        return run_interpreted(&opts, &prog);
+        return run_interpreted(&opts, &prog, &src);
+    }
+    // `fn main() -> T` is written as JSON by the interpreter, C and JavaScript
+    if schema::typed_main(&prog).is_some() && matches!(opts.target, Target::Py | Target::Ts | Target::Rs | Target::Go) {
+        return fail("`fn main() -> T` (typed output) runs on the native, c and js targets and in the interpreter (--interp); the py, ts, rs and go targets do not support it yet");
     }
 
     // `nyra run` is automatic (see auto.rs) unless it was asked to compile: --native, --release
@@ -722,9 +768,10 @@ fn build(opts: &Opts, code: &str, stem: &str, nyra_time: Duration) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `nyra run --interp` / `--sandbox`: the program runs in the IR interpreter, in this process,
-/// under the limits of `sandbox.rs`. Its runtime errors are printed like those of a compiled program.
-fn run_interpreted(opts: &Opts, prog: &ast::Program) -> ExitCode {
+/// `nyra run --interp` / `--sandbox` / `--checkpoint` / `--mock`: the program runs in the IR
+/// interpreter, in this process, under the limits of `sandbox.rs`. Its runtime errors are printed
+/// like those of a compiled program.
+fn run_interpreted(opts: &Opts, prog: &ast::Program, src: &str) -> ExitCode {
     let start = Instant::now();
     let m = match sandbox::module(prog) {
         Ok(m) => m,
@@ -738,17 +785,53 @@ fn run_interpreted(opts: &Opts, prog: &ast::Program) -> ExitCode {
     cfg.limits.output = opts.max_output.unwrap_or(cfg.limits.output);
     cfg.limits.depth = opts.max_depth.unwrap_or(cfg.limits.depth);
     cfg.limits.wall_ms = opts.max_time.unwrap_or(0);
+    cfg.mock_fs = opts.mocks.fs.clone().map(mock::MockFs::new);
+    cfg.mock_env = opts.mocks.env.clone();
+    if let Some(f) = &opts.mocks.input {
+        match std::fs::read(f) {
+            Ok(bytes) => cfg.stdin = Some(bytes),
+            Err(e) => return fail(format!("--mock input: cannot read `{}`: {e}", f.display())),
+        }
+    }
+    cfg.pausable = opts.checkpoint.is_some();
+    // a run that may pause reads its standard input first: what is left of it goes into the checkpoint
+    if cfg.pausable && cfg.stdin.is_none() && auto::effects(&m).input {
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        let _ = std::io::stdin().lock().read_to_end(&mut bytes);
+        cfg.stdin = Some(bytes);
+    }
+    let run = checkpoint::Run {
+        file: opts.file.clone(),
+        fuel: cfg.limits.steps,
+        max_memory: cfg.limits.memory,
+        max_output: cfg.limits.output,
+        max_depth: cfg.limits.depth,
+        max_time: cfg.limits.wall_ms,
+        allow: opts.grant().map(|g| g.names()).unwrap_or_default(),
+        sandbox: opts.sandbox,
+    };
     let nyra_time = start.elapsed();
     let report = sandbox::run(&m, cfg);
+    let code = report_interpreted(&report, &opts.file, opts.json, opts.time, nyra_time);
+    match &opts.checkpoint {
+        Some(path) if report.paused.is_some() => checkpoint::paused(&m, &run, src, 0, &report, path, opts.json),
+        _ => code,
+    }
+}
+
+/// What an interpreted run reports on stderr after it ends: its runtime error, a bug of the
+/// interpreter, the time it took (`--time`). Gives its exit code.
+fn report_interpreted(report: &sandbox::Report, file: &str, json: bool, time: bool, nyra_time: Duration) -> ExitCode {
     if let Some(e) = &report.error {
-        let text = sandbox::render_error(e, &opts.file, opts.json);
+        let text = sandbox::render_error(e, file, json);
         eprintln!("{text}");
     }
     if let Some(what) = &report.internal {
         eprintln!("nyra: internal error in the interpreter: {what}");
         eprintln!("nyra: run the program without --interp and report this bug");
     }
-    if opts.time {
+    if time {
         eprintln!(
             "nyra {} | interpreted {:.2} ms ({} steps, {} allocations)",
             ms(nyra_time),

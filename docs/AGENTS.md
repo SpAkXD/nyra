@@ -59,6 +59,15 @@ Rust, Go, TypeScript or Python, and it is not in your training data: do not gues
 - Scripts, one-line functions (`fn f(x: int) -> int = x * 2`), `xs.map(x => x * 2)`, comprehensions, `print(a, b)`.
 - After a failed check change only what the errors point at; `--fix` before asking a model to repair.
 
+## Agent runtime (v0.9, docs/SERVE.md)
+- `fn main() -> T`: the program prints its value as one JSON line on stdout (`print` goes to stderr);
+  `nyra schema file.nyra` gives its JSON Schema. Interpreter, native and `--js` only.
+- `nyra serve --mcp tools.nyra [--allow fs]`: each `pub fn` is an MCP tool (its `//` comment is the description).
+- Long jobs: `nyra run job.nyra --checkpoint state.json --fuel N` pauses (exit 125) instead of failing;
+  `nyra resume state.json` goes on where it stopped.
+- Tests without side effects: `--mock fs=fixtures/` (writes stay in memory), `--mock input=in.txt`,
+  `--mock os.env=KEY=VALUE`.
+
 ## MCP (optional)
 `nyra mcp` serves the card, check, test, run, build, explain and edit as tools. Claude Code:
 `claude mcp add nyra -- nyra mcp`; other clients: `{"mcpServers": {"nyra": {"command": "nyra", "args": ["mcp"]}}}`.

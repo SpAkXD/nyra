@@ -402,22 +402,13 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
             )
             .hint("write the program's statements at the top level, e.g. `print(\"hello\")`: they run in order"),
         ),
-        Some(f) if !f.params.is_empty() || f.ret != Type::Void => {
-            let mut problems = Vec::new();
-            if !f.params.is_empty() {
-                let ps: Vec<String> = f.params.iter().map(|p| format!("`{}: {}`", p.name, p.ty.name())).collect();
-                problems.push(format!("takes {}", ps.join(", ")));
-            }
-            if f.ret != Type::Void {
-                problems.push(format!("returns `{}`", f.ret.name()));
-            }
+        // (`fn main() -> T` is typed output: its value is printed as JSON, see schema.rs)
+        Some(f) if !f.params.is_empty() => {
+            let ps: Vec<String> = f.params.iter().map(|p| format!("`{}: {}`", p.name, p.ty.name())).collect();
             c.errs.push(
-                Diag::new(
-                    "E0211",
-                    format!("`main` must take no parameters and return nothing, but it {}", problems.join(" and ")),
-                    f.span,
-                )
-                .hint("write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`"),
+                Diag::new("E0211", format!("`main` must take no parameters, but it takes {}", ps.join(", ")), f.span).hint(
+                    "write `fn main() { ... }` (or `fn main() -> T` to print a value as JSON): put the values it needs inside it with `let`, and read arguments with `use os` and `os.args()`",
+                ),
             );
         }
         _ => {}

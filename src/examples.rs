@@ -249,7 +249,7 @@ fn check(m: &ir::Module, plan: &Plan, it: &mut Interp, id: FuncId, input: Option
         Err(Stop::Steps) => Err(Res::Steps),
         Err(Stop::Depth) => Err(Res::Depth),
         Err(Stop::Memory) => Err(Res::Memory),
-        Err(Stop::Bug(_) | Stop::Output | Stop::Time | Stop::Exit(_)) => Err(Res::Skipped),
+        Err(Stop::Bug(_) | Stop::Output | Stop::Time | Stop::Exit(_) | Stop::Pause) => Err(Res::Skipped),
     };
     let Some((op, ..)) = &plan.cmp else {
         return match run(it, id) {

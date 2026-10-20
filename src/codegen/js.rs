@@ -291,11 +291,28 @@ pub fn gen(m: &Module, file: &str) -> String {
         ""
     };
     let (inner, close) = if std { ("    ", "    }\n") } else { ("", "") };
+    // `fn main() -> T` (schema.rs): the entry returns the JSON text of the value; while the program
+    // runs, what it prints goes to standard error, then the JSON alone to standard output
+    let call = if m.func(m.main).ret.is_some() {
+        out.push_str(concat!(
+            "const ny_json_out = typeof process !== \"undefined\" ? process.stdout.write.bind(process.stdout) : null;\n",
+            "if (ny_json_out) {\n",
+            "    process.stdout.write = process.stderr.write.bind(process.stderr);\n",
+            "    console.log = console.error;\n",
+            "}\n",
+        ));
+        format!(
+            "const ny_json = {}();\n    if (ny_json_out) ny_json_out(ny_json + \"\\n\"); else console.log(ny_json);",
+            name(&m.func(m.main).name)
+        )
+    } else {
+        format!("{}();", name(&m.func(m.main).name))
+    };
     let _ = write!(
         out,
         concat!(
             "try {{\n",
-            "    {}();\n",
+            "    {}\n",
             "}} catch (e) {{\n",
             "{}",
             "{}    console.error(ny_rescue(e).message);\n",
@@ -304,12 +321,7 @@ pub fn gen(m: &Module, file: &str) -> String {
             "{}",
             "}}\n",
         ),
-        name(&m.func(m.main).name),
-        exit,
-        inner,
-        inner,
-        inner,
-        close
+        call, exit, inner, inner, inner, close
     );
     out
 }
