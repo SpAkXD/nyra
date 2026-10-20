@@ -1,0 +1,57 @@
+{
+  "name": "@nyralang/nyra",
+  "version": "0.9.0",
+  "description": "Run AI-written Nyra code safely: a sandbox with limits and structured errors, with the nyra executable or the bundled WebAssembly compiler (Node.js, Deno, Bun, browsers, Cloudflare Workers)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./nyra.wasm": "./wasm/nyra.wasm",
+    "./package.json": "./package.json"
+  },
+  "imports": {
+    "#native": {
+      "node": "./src/native.js",
+      "default": "./src/native-stub.js"
+    },
+    "#load": {
+      "node": "./src/load-node.js",
+      "default": "./src/load-web.js"
+    }
+  },
+  "types": "./src/index.d.ts",
+  "files": [
+    "src",
+    "wasm/nyra.wasm",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build:wasm": "node scripts/build-wasm.mjs --build",
+    "copy:wasm": "node scripts/build-wasm.mjs",
+    "prepack": "node scripts/build-wasm.mjs --check",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "nyra",
+    "sandbox",
+    "code-execution",
+    "ai-agents",
+    "llm",
+    "tools",
+    "webassembly",
+    "eval"
+  ],
+  "license": "MIT",
+  "homepage": "https://nyralang.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SpAkXD/nyra.git",
+    "directory": "sdk/js"
+  }
+}

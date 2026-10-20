@@ -52,6 +52,24 @@ Install and start
   it). Each has a README.md with its commands, a `.gitignore` and an AGENTS.md for AI agents. `nyra new` lists them.
 - `nyra --version` prints on standard output and exits with 0 (it printed on standard error and exited with 2).
 
+SDKs for agents
+- **Python package `nyra` (`sdk/python/`, pure Python 3.9+, no dependencies)**: `Sandbox(fuel=, timeout=, memory_mb=,
+  max_output=, max_depth=, allow=, cwd=, strict=)` with `run` (a `Result` with `ok`, `stdout`, `stderr`, `exit_code`,
+  `errors` and `warnings` as data, `steps`, `ms`, `stage`, `limit`, and `feedback()`, the text for a model), `check`,
+  `fix`, `explain` and `run_json`. Every run is `nyra run --sandbox` in a temporary folder that is removed after it;
+  `native=True` is the only way out of the sandbox. The executable is found in `NYRA_PATH` or on `PATH`, or
+  `nyra.install()` downloads the release for this computer, checked against `SHA256SUMS.txt`, into the user cache.
+  `nyra.tools`: `anthropic_tool_spec()`, `openai_tool_spec()`, `run_tool()`, and `langchain_tool()`,
+  `llamaindex_tool()`, `crewai_tool()`, `autogen_function()`, which return the framework's tool when it is installed
+  (imported only then) and a plain callable with a JSON schema otherwise. Not on PyPI yet.
+- **npm package `@nyralang/nyra` (`sdk/js/`, ESM with types, no dependencies)**: the same API, async, on the `nyra`
+  executable (Node.js, Deno, Bun) or on the bundled WebAssembly compiler (`nyra.wasm` of `tools/build_wasm.py`, built
+  into the package by `npm run build:wasm`, not committed), which needs no executable and runs in browsers and
+  Cloudflare Workers too, granting only `input`. A WebAssembly run costs 0.2 ms after a one-time 50 ms compile; a
+  native one is a process start (26 ms from Python, 63 ms from Node.js on Windows). Not on npm yet.
+- Examples in `sdk/examples/` (eval() replaced, a tool-use loop with Claude, a LangChain tool), docs/SDK.md, and a
+  CI job that runs both test suites.
+
 Releases
 - The Windows zip also holds `tools/windows/*-file-icon.ps1` and `assets/nyra.ico` (for the installer's file icon).
 - Each release also carries `install.sh`, `install.ps1`, a Homebrew formula (`nyra.rb`) and winget manifests,
