@@ -233,6 +233,7 @@ fn grid(cols: int = 0, widths: str = "", gap: str = "", numbers: bool = false, a
     }
     if cols > 6 {
         style += "--cols:{cols};"
+        c += " grid-cols"
     }
     if gap != "" {
         style += "--gap:" + _size(gap) + ";"
@@ -389,6 +390,9 @@ fn img(src: str, alt: str, ratio: str = "", caption: str = "", fit: str = "", id
     var c = "fig"
     if fit == "contain" {
         c += " fig-contain"
+    }
+    if ratio != "" {
+        c += " fig-ratio"
     }
     var h = "<figure" + _ic(c, id, cls) + (if ratio != "" { " style=\"--ratio:" + _attr(ratio) + "\"" } else { "" })
     h += _mo(anim, hover, loop, scroll, at, morph) + ">" + _img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false)
