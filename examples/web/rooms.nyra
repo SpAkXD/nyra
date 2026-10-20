@@ -1,0 +1,45 @@
+// A live view whose elements carry their own CSS variables (`img(ratio:)`, `grid(8)`): the build
+// makes the static page's ones classes, and the browser's runtime sets the re-rendered ones through
+// the CSSOM, so the page's style policy holds after every click. Questions that open and close
+// (`accordion`), and an open/closed badge with the site's own words (`open:` / `closed:`).
+use web
+
+site("Mill House", primary: "#5B3A29", tz: "Europe/Prague")
+
+struct Room { name: str, kind: str, photo: str }
+let rooms = [Room(name: "River Room", kind: "double", photo: "photo-1.svg"),
+    Room(name: "Garden Room", kind: "double", photo: "photo-2.svg"), Room(name: "Attic Room", kind: "family", photo: "photo-3.svg")]
+let extras = ["Wi-Fi", "Parking", "Garden", "Sauna", "Bikes", "Pets", "Bakery", "Canoes"]
+let reception = [("Mon–Fri", "7:00-21:00"), ("Sat–Sun", "8:00-20:00")]
+
+enum Msg { Show(str) }
+var kind = "all"
+fn update(m: Msg) { match m { Msg.Show(k) => kind = k } }
+
+fn roomList() -> Node = stack {
+    row {
+        for k in ["all", "double", "family"] { button(k, on: Msg.Show(k), active: k == kind) }
+    }
+    grid(3) {
+        for r in rooms.filter(r => kind == "all" || r.kind == kind) {
+            card(r.name, r.kind) { img(r.photo, r.name, ratio: "4/3") }
+        }
+    }
+    if kind != "all" {
+        grid(8) {
+            for e in extras { card(e, kind) }
+        }
+    }
+}
+
+page("/", "Mill House") {
+    hero("Mill House", text: "Six rooms by the river.", badge: reception, open: "Reception open", closed: "Reception closed")
+    section("rooms", "Rooms", anim: "rise") {
+        roomList()
+    }
+    section("faq", "Questions", bg: "alt") {
+        accordion([("Is breakfast included?", "Yes, from **7:30** to 10:00."), ("Can I arrive late?", "Tell us when: the key waits in a box."),
+            ("Do you have parking?", "Eight free spaces in the courtyard.")], anim: "stagger")
+        hours(reception, title: "Reception", open: "Reception open", closed: "Reception closed")
+    }
+}

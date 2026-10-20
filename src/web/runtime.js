@@ -61,9 +61,10 @@ function ny_morph(old, fresh) {
     for (const c of Array.from(old.childNodes)) if (!used.has(c)) old.removeChild(c);
     let prev = null;
     for (const [n, m] of pairs) {
-        if (!m) ny_restyle(n);
+        const styles = m ? [] : ny_unstyle(n);
         const node = m || n, want = prev ? prev.nextSibling : old.firstChild;
         if (node !== want) old.insertBefore(node, want);
+        for (const [e, t] of styles) ny_style(e, t);
         if (m) ny_patch(m, n);
         else if (n.nodeType === 1) ny_shown(n);
         prev = node;
@@ -103,16 +104,33 @@ function ny_style(e, text) {
     for (const p of Array.from(s)) if (!want.has(p) && p !== "--m-i") s.removeProperty(p);
     for (const [p, v] of want) if (s.getPropertyValue(p).trim() !== v) s.setProperty(p, v);
 }
-// A new element of a live region, before it goes on the page: its style attributes (and those
-// inside it) become CSSOM declarations.
-function ny_restyle(n) {
-    if (n.nodeType !== 1 || !n.querySelectorAll) return;
-    for (const e of [n, ...n.querySelectorAll("[style]")]) {
-        if (!e.hasAttribute("style")) continue;
-        const t = e.getAttribute("style");
+// A view's HTML as the runtime parses it: each `style` attribute (`img(ratio:)`'s `--ratio`,
+// `grid(8)`'s `--cols`) is renamed `data-ny-style`. The page's policy checks a style attribute
+// when the HTML is parsed, also in a template, and drops it; the build makes the static page's
+// ones classes, and the runtime gives these to the CSSOM. Text and attribute values never hold
+// `<`, `>` or `"` (the library escapes them), so a tag is `<` up to the next `>`.
+const NY_STYLE = "data-ny-style";
+function ny_html(text) {
+    return text.replace(/<[A-Za-z][^<>]*>/g, (tag) => tag.replace(/(\s)style=(?=["'])/, "$1" + NY_STYLE + "="));
+}
+// The declarations a fresh element of a view carries (see `ny_html`).
+function ny_decl(e) {
+    return e.hasAttribute(NY_STYLE) ? e.getAttribute(NY_STYLE) : e.getAttribute("style");
+}
+// A new element of a live region, before it goes on the page: its declarations (and those of the
+// elements inside it) are taken off and given back as [element, text] pairs, for `ny_style` to set
+// through the CSSOM once the element is on the page (set in the template's document, they would
+// come along as a style attribute, which the policy drops).
+function ny_unstyle(n) {
+    const out = [];
+    if (n.nodeType !== 1 || !n.querySelectorAll) return out;
+    for (const e of [n, ...n.querySelectorAll("[style],[" + NY_STYLE + "]")]) {
+        if (!e.hasAttribute("style") && !e.hasAttribute(NY_STYLE)) continue;
+        out.push([e, ny_decl(e)]);
         e.removeAttribute("style");
-        ny_style(e, t);
+        e.removeAttribute(NY_STYLE);
     }
+    return out;
 }
 function ny_patch(a, b) {
     if (a.nodeType !== 1) {
@@ -126,10 +144,12 @@ function ny_patch(a, b) {
     // changed it, and never in the field that has the focus
     const busy = a === a.ownerDocument.activeElement;
     const was = [a.getAttribute("value"), a.hasAttribute("checked")];
-    for (const at of Array.from(a.attributes)) if (at.name !== "style" && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
-    for (const at of Array.from(b.attributes)) if (at.name !== "style" && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+    // an opened or closed <details> (an accordion's question) stays as the visitor left it
+    const keep = (name) => name === "style" || name === NY_STYLE || (name === "open" && a.nodeName === "DETAILS");
+    for (const at of Array.from(a.attributes)) if (!keep(at.name) && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
+    for (const at of Array.from(b.attributes)) if (!keep(at.name) && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
     ny_class(a, motion);
-    ny_style(a, b.getAttribute("style"));
+    ny_style(a, ny_decl(b));
     if (!busy && was[0] !== a.getAttribute("value")) a.value = a.getAttribute("value") || "";
     if (was[1] !== a.hasAttribute("checked")) a.checked = a.hasAttribute("checked");
     if (!(busy && a.nodeName === "TEXTAREA")) ny_morph(a, b);
@@ -154,7 +174,7 @@ function ny_send(text) {
         if (!view) continue;
         try {
             const t = document.createElement("template");
-            t.innerHTML = view();
+            t.innerHTML = ny_html(view());
             ny_morph(el, t.content);
         } catch (e) {
             console.error(e instanceof NyPanic ? e.message : e);
@@ -178,5 +198,5 @@ if (typeof document !== "undefined") {
     });
 } else {
     // no page (a test in Node.js): hand the pieces out
-    globalThis.nyra_web = { web: ny_web, morph: ny_morph, msg: ny_msg };
+    globalThis.nyra_web = { web: ny_web, morph: ny_morph, msg: ny_msg, html: ny_html };
 }
