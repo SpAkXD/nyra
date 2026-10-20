@@ -8,18 +8,31 @@ benchmark wins.
 
 ## The pitch
 
-> **The language agents can run unsupervised: nearly as cheap to write as Python, as fast as Rust, and
-> unable to touch anything it didn't declare.**
+> **Let your AI agents write and run code. Safely, in milliseconds.**
+>
+> Nyra is a small language built for AI agents. The code they write can't touch your files or your
+> system unless you allow it, runs without a container, and when it is wrong, the compiler tells the
+> model exactly how to fix it.
 
-Agents now write code and also run it. Today that means either trusting generated code with the
-machine it runs on, or starting a VM or container for every call. Nyra is a language for that
-code-execution step. It is small enough to sit in a prompt, it compiles to a native executable in
-milliseconds of run time, its errors tell the agent exactly what to fix, and a program can use only
-the capabilities it declares (since v0.6).
+Agents now write code, and something has to run it. `eval()` or a plain subprocess hands generated
+code the whole machine; a VM or container per run has to be started, kept warm and paid for. Nyra is
+a language for that code-execution step, for agent-written scripts and tools. It is small enough to
+sit in a prompt, it runs a short program in the interpreter in milliseconds and a long one as native
+code, its errors tell the agent exactly what to fix, and a program can use only the capabilities it
+declares (since v0.6).
 
-The order matters. We lead with **safety** and **speed**, because those are what a harness builder
-cannot get from Python. **Cost** is a condition, not a selling point: we claim it only as "near Python,
-below Rust", and never as "cheaper than Python".
+The order matters. The first thing people read is the problem Nyra solves (running agent-written
+code safely and fast), then what it is (a small language built for AI agents), then the details. We
+lead with **safety** and **speed**, because those are what a harness builder cannot get from Python.
+**Cost** is a condition, not a selling point: we claim it only as "near Python, below Rust", and never
+as "cheaper than Python".
+
+What the pitch must not overstate: the safety is a language-level sandbox (capabilities, plus an
+interpreter with limits under `--sandbox`), not OS isolation; it covers Nyra programs only; a plain
+`nyra run` grants everything; and it has had no security audit yet. We say "no container needed for
+agent-written scripts and tools", never "replaces Docker". For code you do not trust at all, the
+sensible deployment is Nyra inside a container or VM (see
+[Against "Python in a sandbox VM"](#against-python-in-a-sandbox-vm)).
 
 ### Status of each claim
 
