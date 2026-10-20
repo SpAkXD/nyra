@@ -164,8 +164,10 @@ pub fn run_json(src: &str, stdin: &str, limits: &str) -> String {
         }
     };
     crate::perfwarn::check(&prog, false);
-    let warnings = warnings_field();
-    let fixed = if applied.is_empty() { String::new() } else { format!(",\"fixed\":{}", diag::render_json_warnings(&applied, FILE)) };
+    // (the fixes applied in memory are listed in `fixed`, the compiler's warnings in `warnings`)
+    let warnings = diag::compiler_warnings_json(FILE);
+    let fixed =
+        if applied.is_empty() { String::new() } else { format!(",\"fixed\":{}", diag::render_json_warnings(&diag::applied(), FILE)) };
     let module = match sandbox::module(&prog) {
         Ok(m) => m,
         Err(msg) => return format!("{{\"ok\":false,\"exit\":2,\"stdout\":\"\",\"errors\":[],\"stderr\":{}}}", json_str(&msg)),
@@ -175,13 +177,14 @@ pub fn run_json(src: &str, stdin: &str, limits: &str) -> String {
     let report = sandbox::run(&module, opts.cfg);
     let mut out = format!("{{\"ok\":{},\"exit\":{},\"stdout\":{}", report.exit == 0, report.exit, json_str(&report.stdout));
     if let Some(e) = &report.error {
+        let span = fix::span_to_origin(e.span);
         out += &format!(
             ",\"errors\":[{{\"code\":\"{}\",\"message\":{},\"file\":{},\"line\":{},\"col\":{},\"hint\":{},\"runtime\":true}}]",
             e.code,
             json_str(&e.msg),
             json_str(FILE),
-            e.span.line,
-            e.span.col,
+            span.line,
+            span.col,
             json_str(e.hint)
         );
     }
@@ -244,31 +247,16 @@ pub fn fmt_json(src: &str) -> String {
 /// error has no fix: those are listed in `errors`, and `ok` is true only when none is left.
 pub fn fix_json(src: &str) -> String {
     crate::modules::set_main(None);
-    let errors = |text: &str| compile_here(text).err().unwrap_or_default();
-    let mut text = src.to_string();
-    let mut left = errors(&text);
-    let mut applied = Vec::new();
-    for _ in 0..10 {
-        // the fixes that go together (one that overlaps an earlier one waits for the next round)
-        let mut edits = Vec::new();
-        let mut round = Vec::new();
-        for d in left.iter().filter(|d| !d.fix.is_empty()) {
-            let mut with = edits.clone();
-            with.extend(d.fix.iter().cloned());
-            if fix::apply(&text, &with).is_some() {
-                edits = with;
-                let line = d.span.line.checked_sub(1).and_then(|i| text.lines().nth(i)).unwrap_or("").to_string();
-                round.push(fix::Applied { diag: d.clone(), preview: fix::preview(&text, &d.fix), line });
-            }
+    let (text, left) = match compile_here(src) {
+        Ok(_) => (src.to_string(), Vec::new()),
+        Err(diags) => {
+            let out = fix::repair_all(src, diags, compile_here);
+            (out.text, out.result.err().unwrap_or_default())
         }
-        let Some(next) = fix::apply(&text, &edits).filter(|_| !edits.is_empty()) else { break };
-        applied.extend(round);
-        text = next;
-        left = errors(&text);
-        if left.is_empty() {
-            break;
-        }
-    }
+    };
+    // the fixes at their places in `src`; the errors that are left at theirs in the fixed `source`
+    let applied = diag::applied();
+    fix::set_origin(None);
     format!(
         "{{\"ok\":{},\"source\":{},\"fixed\":{},\"errors\":{}}}",
         left.is_empty(),

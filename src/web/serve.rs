@@ -88,12 +88,11 @@ pub fn run(c: &Cli, src: &str, prog: ast::Program) -> ExitCode {
 
 /// Puts the result of a build on the server and says what went wrong, if anything.
 fn publish(state: &Mutex<Served>, result: Result<Site, Error>, file: &str, src: &str) {
-    let warnings = diag::render_warnings(file, src);
-    eprint!("{warnings}");
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     s.version += 1;
     match result {
         Ok(site) => {
+            eprint!("{}", diag::render_warnings(file, src));
             s.files = site.files;
             s.csp = site.csp;
             s.error = None;

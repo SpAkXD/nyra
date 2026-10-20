@@ -1,0 +1,16 @@
+// expect: E0391
+use web
+
+enum Msg { Show(str) }
+var kind = "All"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+    }
+}
+
+page("/", "Bakery") {
+    h1("Bakery")
+    button("Bread", on: Msg.Show("Bread"))
+    p("Showing {kind}")
+}

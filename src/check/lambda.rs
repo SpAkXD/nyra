@@ -12,16 +12,15 @@ use crate::helpers::H;
 
 /// E0213: a lambda where a value is needed.
 pub(super) fn misplaced(span: Span) -> Diag {
-    Diag::new("E0213", "a lambda is not a value: it can only be the argument of an array method", span).hint(
-        "pass it straight to a method, e.g. `xs.map(x => x * 2)` or `xs.filter(x => x > 0)`; to name a computation, define a function: `fn double(x: int) -> int = x * 2`",
-    )
+    Diag::new("E0213", "a lambda is only an argument of an array method", span)
+        .hint("pass it to a method, `xs.map(x => x * 2)`, or define `fn double(x: int) -> int = x * 2`")
 }
 
 /// E0214: something inside a lambda changes a variable.
 pub(super) fn changes(e: &Expr, what: &str, span: Span) -> Diag {
     let shown = show(e).unwrap_or_else(|| "this value".into());
-    Diag::new("E0214", format!("a lambda cannot {what} `{shown}`: inside a lambda, variables are read-only"), span)
-        .hint("let the method build the result (`let ys = xs.map(x => x * 2)`), or change the variable in a `for` loop instead")
+    Diag::new("E0214", format!("a lambda cannot {what} `{shown}` (variables are read-only in it)"), span)
+        .hint("let the method build the result, `let ys = xs.map(x => x * 2)`, or use a `for` loop")
 }
 
 /// A name for a lambda parameter that `taken` does not reject: `x2`, `x3`, ...
@@ -92,7 +91,10 @@ impl Checker {
                     } else {
                         (
                             "`[int]`, `[float]`, `[str]` or `[char]`",
-                            format!("keep the best element with `fold`, e.g. `{r}.fold({r}[0], (best, x) => if x.score {} best.score {{ x }} else {{ best }})`", if name == "min" { "<" } else { ">" }),
+                            format!(
+                                "keep the best with `fold`: `{r}.fold({r}[0], (b, x) => if x.score {} b.score {{ x }} else {{ b }})`",
+                                if name == "min" { "<" } else { ">" }
+                            ),
                         )
                     };
                     self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
@@ -221,7 +223,7 @@ impl Checker {
         if t == Type::Void {
             self.errs.push(
                 Diag::new("E0203", "the element of a comprehension has no value: it returns nothing", start(&c.elem))
-                    .hint("write the value each element becomes, e.g. `[x * 2 for x in xs]`; to do something for each element write a `for` loop"),
+                    .hint("write the value each element becomes, `[x * 2 for x in xs]`, or use a `for` loop"),
             );
             return Type::Unknown;
         }
@@ -249,7 +251,7 @@ impl Checker {
                 (Some(f), _) if params.len() == 2 => format!("call the function in a lambda: `(acc, {p}) => {f}(acc, {p})`"),
                 (Some(f), _) => format!("call the function in a lambda: `{p} => {f}({p})`"),
                 (None, Some(v)) if m == "count" && t == params[0] => {
-                    format!("`.count()` takes a test: to count the elements equal to `{v}` write `.count({p} => {p} == {v})`")
+                    format!("`.count()` takes a test: `.count({p} => {p} == {v})`")
                 }
                 (None, Some(v)) if m == "find_index" && t == params[0] => {
                     format!("`.find_index()` takes a test; to find the value `{v}` itself write `.index_of({v})`")
@@ -290,9 +292,8 @@ impl Checker {
         }
         if t == Type::Void {
             self.errs.push(
-                Diag::new("E0215", format!("the lambda of `.{m}()` gives no value: its body returns nothing"), bspan).hint(format!(
-                    "the body is the value the method uses, e.g. `{example}`; to do something for each element write a `for` loop"
-                )),
+                Diag::new("E0215", format!("the lambda of `.{m}()` gives no value: its body returns nothing"), bspan)
+                    .hint(format!("the body is the value, e.g. `{example}`; for actions use a `for` loop")),
             );
             return Type::Unknown;
         }
@@ -311,12 +312,8 @@ impl Checker {
             }
             Kind::Key if !data::sortable(t) => {
                 self.errs.push(
-                    Diag::new(
-                        "E0228",
-                        format!("`{m}` needs a key of type `int`, `float`, `str`, `char` or a tuple of those, found `{}`", t.name()),
-                        bspan,
-                    )
-                    .hint("sort by one field or a number made from the element, e.g. `ps.sort_by(p => p.age)`"),
+                    Diag::new("E0228", format!("`{m}` cannot sort by a `{}` key", t.name()), bspan)
+                        .hint("use an `int`, `float`, `str` or `char` key, e.g. `ps.sort_by(p => p.age)`"),
                 );
                 Type::Unknown
             }

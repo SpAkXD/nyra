@@ -716,12 +716,15 @@ fn hours(rows: [(str, str)], title: str = "", note: str = "", badge: bool = true
     }
     h += "</div><table class=\"hours-table\"><tbody>"
     for r in rows {
-        let spec = _hours_spec(r.0, r.1)
+        // (a row the badge cannot read is shown as written: only the badge needs to read it)
+        let spec = _hours_read(r.0, r.1)
         let open = spec != "" && spec != "?"
         let days = if open { spec.split(" ")[0] } else { "" }
         // a row without times keeps its words ("Closed", "By appointment")
-        let shown = if open { _hours_text(spec) } else if r.1.trim() != "" { r.1.trim() } else { _say("shut") }
-        h += "<tr" + (if !open { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
+        // a note in parentheses ("8:00–12:00 (tyres only)") is shown after the times
+        let aside = _hours_note(r.1)
+        let shown = if open { _hours_text(spec) + (if aside != "" { " " + aside } else { "" }) } else if r.1.trim() != "" { r.1.trim() } else { _say("shut") }
+        h += "<tr" + (if spec == "" { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
         h += "</th><td>" + _esc(shown) + "</td></tr>"
     }
     h += "</tbody></table>"
@@ -956,7 +959,16 @@ fn _hours_text(spec: str) -> str {
 // `("Mon–Fri", "8–16")`) or before the times ("Mon–Fri 8:00–16:00"), English, Czech and German
 // day names, any dash, "8.00", "8am", "8:00 to 16:00"; text without digits ("Closed") is closed.
 fn _hours_spec(label: str, spec: str) -> str {
-    let s = _hours_norm(spec)
+    let s = _hours_read(label, spec)
+    if s == "?" {
+        _err("E0390", "the badge cannot read the hours `" + spec + "` of the row \"" + label + "\"")
+    }
+    return s
+}
+
+// `_hours_spec` without the error: "?" for a row it cannot read.
+fn _hours_read(label: str, spec: str) -> str {
+    let s = _hours_norm(_hours_cut(spec))
     if s.contains("24/7") || s.contains("nonstop") || s.contains("non-stop") {
         let d = _hours_days(_hours_norm(label))
         return (if d != "" { d } else { "1-7" }) + " 0:00-24:00"
@@ -995,8 +1007,30 @@ fn _hours_spec(label: str, spec: str) -> str {
     return days + " " + times.join(" ")
 }
 
+// The text without its notes in parentheses: "8:00–12:00 (tyres only)" -> "8:00–12:00 ".
+fn _hours_cut(s: str) -> str {
+    var out = ""
+    var depth = 0
+    for c in s.chars() {
+        if c == '(' {
+            depth += 1
+        } else if c == ')' && depth > 0 {
+            depth -= 1
+        } else if depth == 0 {
+            out += str(c)
+        }
+    }
+    return out
+}
+
+// The notes in parentheses of a text, as written: "8:00–12:00 (tyres only)" -> "(tyres only)".
+fn _hours_note(s: str) -> str {
+    let a = s.index_of("(")
+    let b = s.index_of(")")
+    return if a >= 0 && b > a { s.slice(a, b + 1) } else { "" }
+}
+
 fn _hours_bad(label: str, spec: str) -> str {
-    _err("E0390", "the opening hours `" + spec + "` of the row \"" + label + "\" give no days and times the open/closed badge can read")
     return "?"
 }
 
@@ -1377,7 +1411,7 @@ fn _href(url: str) -> str {
     let u = url.trim()
     let scheme = _scheme(u)
     if scheme != "" && scheme != "http" && scheme != "https" && scheme != "mailto" && scheme != "tel" {
-        _err("E0381", "the link `" + u + "` uses the scheme `" + scheme + ":`, which a page may not link to")
+        _err("E0381", "the link `" + u + "` uses the forbidden scheme `" + scheme + ":`")
         return "#"
     }
     if scheme == "tel" {
