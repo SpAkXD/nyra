@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nyra"
+version = "0.9.0"
+description = "Run AI-written Nyra code safely: a sandbox with limits, structured errors, and tools for agent frameworks"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "SpAkXD" }]
+keywords = ["nyra", "sandbox", "code-execution", "ai-agents", "llm", "tools", "langchain", "anthropic"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://nyralang.dev"
+Source = "https://github.com/SpAkXD/nyra"
+Documentation = "https://github.com/SpAkXD/nyra/blob/main/docs/SDK.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nyra"]

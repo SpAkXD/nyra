@@ -1,18 +1,18 @@
 <p align="center">
+  <a href="https://github.com/SpAkXD/nyra/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SpAkXD/nyra?label=release&color=7C5CFF"></a>
+  <a href="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/SpAkXD/nyra/ci.yml?branch=main&label=CI"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/SpAkXD/nyra?color=blue"></a>
+</p>
+
+<p align="center">
   <img src="assets/logo.svg" alt="Nyra" width="320">
 </p>
 
-<p align="center">
-  <b>The language agents can run unsupervised.</b><br>
-  Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare.<br>
-  A small, strict language designed to be written by AI agents. One source file compiles to a native executable
-  (via C) or to JavaScript, and from v0.8 a <code>use web</code> program builds a whole website.
-</p>
+<h3 align="center">Let your AI agents write and run code. Safely, in milliseconds.</h3>
 
 <p align="center">
-  <a href="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <a href="Cargo.toml"><img alt="Version" src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FSpAkXD%2Fnyra%2Fmain%2FCargo.toml&query=%24.package.version&label=version&color=7C5CFF"></a>
+  Nyra is a small language built for AI agents. The code they write can't touch your files or your system unless
+  you allow it, runs without a container, and when it is wrong, the compiler tells the model exactly how to fix it.
 </p>
 
 <p align="center">
@@ -26,6 +26,28 @@
   <a href="docs/SPEC.md">Spec</a> ·
   <a href="docs/ERRORS.md">Errors</a>
 </p>
+
+Agents now write code, and something has to run it. `eval()` or a plain subprocess hands generated code your whole
+machine; a container per run has to be started, kept warm and paid for, and is one more system to operate. Nyra is
+for that step, for agent-written scripts and tools:
+
+- **Safe.** A program can use only what it declares. Files, standard input and the OS are capabilities:
+  `nyra run --sandbox` grants none of them unless you allow it (`--allow fs`), the MCP tool grants only standard
+  input by default, and a missing grant is a compile error that names the flag, before anything runs (a plain
+  `nyra run` grants everything, as for any program of yours). There is no network access at all yet. `--sandbox`
+  also limits steps, memory, output and time. This is a language-level sandbox, not OS isolation, and it has had no
+  security audit yet: for code you do not trust at all, run Nyra inside a container or VM as well.
+  [More](#safe-to-run-unsupervised)
+- **Fast.** No container to start. A short program is answered by the interpreter in milliseconds; a longer one
+  runs as native code, about 5-6 ms against about 300 ms for Python on the benchmark's speed tasks (the C build,
+  0.5-1.5 s, happens once per program). [More](#speed)
+- **Self-repairing.** Every error has a stable code, the exact line and column, and a one-line fix hint; `--json`
+  gives the agent exact edits where a fix is known. A mistake with only one possible fix is repaired by the
+  compiler itself, with no model call. On 83 tasks, right on the first try: Opus 98%, Sonnet 96%, Haiku 4.5 66%
+  (Python: 100%, 99%, 78%). [More](#for-ai-agents)
+
+One source file compiles to a native executable (via C) or to JavaScript, and from v0.8 a `use web` program builds a
+whole website.
 
 <p align="center">
   <sub>AI agent? Read <a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt">llms.txt</a> and the
@@ -66,9 +88,8 @@ to try them. Nyra is 0.x: the syntax may still change before 1.0 ([CHANGELOG.md]
 
 ## What Nyra is
 
-An agent that writes code can now also run it, and that is where the trouble starts: either you trust generated
-code with your machine, or you start a VM or container for every call. Nyra is a language for that code-execution
-step, designed for a model to *write* and for the compiler to tell the model exactly what to fix.
+A language for the step where an agent runs the code it wrote: designed for a model to *write*, for the compiler to
+tell the model exactly what to fix, and for the run to grant only what the program declares.
 
 | | What you get | Status |
 |---|---|---|
