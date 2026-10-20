@@ -141,7 +141,12 @@ code { padding: .1em .35em; border-radius: 6px; background: color-mix(in srgb, c
 .card-body > :empty { display: none; }
 .card-title { font-size: 1.25rem; line-height: 1.25; }
 .card-text { color: var(--muted); font-size: .9375rem; line-height: 1.65; }
-.card-link:hover, .card-feat:hover, .card-img:hover {
+/* `card(on: Msg.X)`: the title is a button that covers the card */
+.card-hit { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+.card-hit::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.card-hit:focus-visible { outline: none; }
+.card-hit:focus-visible::after { outline: 2px solid var(--tint, var(--primary)); outline-offset: -2px; }
+.card-link:hover, .card-feat:hover, .card-img:hover, .card-on:hover {
   box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 0 0 1px var(--ring), 0 24px 48px -20px color-mix(in srgb, var(--tint, var(--primary)) 38%, transparent);
 }
 /* `hover: "lift"` (motion) lifts with the kit's tinted shadow */

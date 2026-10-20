@@ -1,0 +1,13 @@
+// expect: E0389
+use web
+
+let services = [("siren", "Emergency care"), ("envelope", "Write to us")]
+
+page("/", "Dentist") {
+    h1("Dentist")
+    section("services", "What we do") {
+        for s in services {
+            card(s.1, "Call before 10 a.m.", icon: s.0)
+        }
+    }
+}

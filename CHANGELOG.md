@@ -54,6 +54,20 @@ Web
   Encoded files are cached by content, so rebuilds are instant. `--image-tool builtin` is the default; `cwebp`,
   `magick` and `vips` still work on request. E0386 now means a file the codec cannot read, or `--image-tool none`.
 - A `match` on a string whose pattern was longer than 16 characters was wrongly reported as E0279; fixed.
+- **From the held-out web benchmark (2026-10-19).** An unknown icon no longer fails the build: it is warning E0389
+  at the string literal that holds the name, also when the name comes from data, and the site draws a stand-in
+  (old Lucide names such as `alert-circle` are icons of the set; names of other sets such as `envelope` or
+  `map-marker` are drawn as the icon they stand for). `form(mailto:)` with its own `?subject=...` makes a correct
+  e-mail (the address and the query apart, the body after them), and a plain `button(...)` in a form is its submit
+  button instead of a dead second one; `subject:` is on the web card. Opening hours are read as people write them
+  (`("Monday", "8:00–18:00")`, `"Mon–Fri 8–16"`, Czech day names, `9am-5pm`), and a row the badge cannot read is
+  build error E0390 instead of a badge that always says "Closed". `card(on: Msg.X)` makes a clickable card,
+  `table` takes rows of tuples (numbers shown as written), and `css(...)` may be a line of a page's block. A web
+  option's word without quotes (`type: tel`, `style: soft`) and a `,` after a match arm or between statements
+  are repaired as certain fixes, as is the `=` of `fn f() -> T = { ... }`. When the certain fixes do not make a
+  program compile, `nyra build`/`check` now report the errors they uncovered too (a comma hid every type error
+  behind it), in the order of the file; a literal's unknown option word no longer hides the type errors. The web
+  card shows option words in quotes.
 
 Editors and docs
 - **The Nyra file icon.** `assets/nyra.ico` (16 to 256 px, drawn by `tools/gen_icon.py`) and, on Windows,

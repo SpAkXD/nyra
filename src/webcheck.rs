@@ -52,20 +52,74 @@ fn functions() -> Vec<(String, Vec<String>)> {
     v
 }
 
+/// The arms `"name" => "value"` of the `match` of the function `func` of the icon set.
+fn icon_arms(func: &str) -> Vec<(&'static str, &'static str)> {
+    let src: &'static str = include_str!("std/web_icons.nyra");
+    let Some(start) = src.find(&format!("fn {func}(")) else { return Vec::new() };
+    let body = &src[start..];
+    let body = &body[..body.find("\n}").unwrap_or(body.len())];
+    body.lines()
+        .filter_map(|l| {
+            let rest = l.trim_start().strip_prefix('"')?;
+            let (name, value) = rest.split_once("\" => ")?;
+            Some((name, value.trim().trim_matches('"')))
+        })
+        .collect()
+}
+
 /// The names of the icons (`:name:`, `icon: "name"`), sorted.
 pub fn icons() -> Vec<String> {
-    let mut v = Vec::new();
-    for line in include_str!("std/web_icons.nyra").lines() {
-        let l = line.trim_start();
-        if let Some(rest) = l.strip_prefix('"') {
-            if let Some(end) = rest.find("\" =>") {
-                v.push(rest[..end].to_string());
-            }
-        }
-    }
+    let mut v: Vec<String> = icon_arms("_icon_body").into_iter().chain(icon_arms("_brand_body")).map(|(n, _)| n.to_string()).collect();
     v.sort();
     v.dedup();
     v
+}
+
+/// The icon of the set that a name of another icon set stands for (`envelope`: `mail`): the
+/// `|name=icon|` pairs of `_icon_like` in the icon set.
+pub fn icon_like(name: &str) -> Option<&'static str> {
+    let src: &'static str = include_str!("std/web_icons.nyra");
+    let body = &src[src.find("fn _icon_like(")?..];
+    let pairs = body.split_once("let pairs = \"")?.1.split('"').next()?;
+    pairs.split('|').filter_map(|p| p.split_once('=')).find(|(n, _)| *n == name).map(|(_, v)| v)
+}
+
+/// Warning E0389 for an icon name that is not in the set (`text`: written `:name:` in a text).
+/// The build draws the icon the name stands for (`icon_like`); else an icon option gets a plain
+/// circle and a text keeps the name as it was written. The same message at compile time (a
+/// literal) and while the site is built (a value from data), so it is given once.
+pub fn icon_warning(name: &str, text: bool, span: Span) -> Diag {
+    let shown = if text { format!(":{name}:") } else { name.to_string() };
+    let known = icons();
+    match icon_like(name) {
+        Some(like) => {
+            let what = if text { format!("`:{like}:`") } else { format!("`{like}`") };
+            let d = Diag::new("E0389", format!("unknown icon `{shown}`: drawn as `{like}`"), span)
+                .hint(format!("`{name}` is not a name of the icon set (Lucide names): write {what}"));
+            if text {
+                d
+            } else {
+                d.fix(vec![Edit::replace(span, &format!("\"{name}\""), format!("\"{like}\""))])
+            }
+        }
+        None => {
+            let near = known.iter().map(|i| (edits(name, i), i)).filter(|(d, _)| *d <= 2).min();
+            // else the icons that share a word with it (`alert-octagon`: `circle-alert`, `triangle-alert`)
+            let parts: Vec<&str> = name.split('-').filter(|p| p.len() >= 3).collect();
+            let kin: Vec<String> =
+                known.iter().filter(|i| i.split('-').any(|p| parts.contains(&p))).take(4).map(|i| format!("`{i}`")).collect();
+            let guess = match near {
+                Some((_, i)) => format!("did you mean `{i}`? "),
+                None if !kin.is_empty() => format!("the set has {}; ", kin.join(", ")),
+                None => String::new(),
+            };
+            let drawn = if text { "shown as it is written" } else { "drawn as a plain circle" };
+            Diag::new("E0389", format!("unknown icon `{shown}`: {drawn}"), span).hint(format!(
+                "{guess}the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them){}",
+                if text { "; write `\\\\:` for a colon that starts no icon" } else { "" }
+            ))
+        }
+    }
 }
 
 /// The option words the library knows, by parameter (and by function where they differ).
@@ -83,6 +137,41 @@ fn words(func: &str, param: &str) -> Option<&'static [&'static str]> {
         ("grid", "align") => &["center", "start"],
         ("hero", "height") => &["full", "half"],
         ("img", "fit") => &["contain", "cover"],
+        _ => return None,
+    })
+}
+
+/// True if `word` is one of the words of option `param:` of the web function `func` (a motion word,
+/// an option word, a theme color): written without quotes (`type: tel`, `style: soft`, as on the
+/// web card), it is that word, so the quotes are a certain fix.
+pub fn option_word(func: &str, param: &str, word: &str) -> bool {
+    if let Some(opt) = crate::web::motion::Opt::from_name(param) {
+        return opt.words().contains(&word);
+    }
+    if matches!(param, "color" | "tone") {
+        return matches!(word, "primary" | "accent" | "bg" | "alt" | "ink" | "muted" | "white" | "black");
+    }
+    words(func, param).is_some_and(|ws| ws.contains(&word))
+}
+
+/// The hint of E0226 for a named argument a web function does not have, where it is a known
+/// guess: what to write instead.
+pub fn unknown_param_hint(func: &str, param: &str) -> Option<String> {
+    Some(match (func, param) {
+        ("hero", "rows" | "hours" | "open") => {
+            "`hero` has no `rows:`: `badge:` takes the opening hours rows themselves, `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`"
+                .into()
+        }
+        (_, "onclick" | "onClick" | "on_click" | "click" | "action") => {
+            format!("an event is `on: Msg.X(...)`: `{func}(..., on: Msg.Show(1))`")
+        }
+        (_, "class" | "className" | "class_name" | "classes") => {
+            "a class is `cls: \"name\"`, styled with `css(\".name { ... }\")`".into()
+        }
+        (_, "style") => {
+            format!("`{func}` has no `style:`: give it a class with `cls: \"name\"` and style that with `css(\".name {{ ... }}\")`")
+        }
+        (_, "children" | "content" | "body") => format!("the content of `{func}` is its child block: `{func}(...) {{ p(\"text\") }}`"),
         _ => return None,
     })
 }
@@ -182,6 +271,16 @@ pub fn link(prog: &mut Program, at: Span, src: &str, intrinsics: &[String]) -> V
         declare_state(prog, at);
     }
     errs
+}
+
+/// True for an error of `link` that leaves the program whole, so the type checker can still run
+/// and report its own errors in the same run: a literal value the library does not take (an
+/// unknown word E0374, an icon-only button E0377, raw CSS or HTML that is no literal E0378, a
+/// forbidden link E0381) or a mistake of the live views (E0376, E0384). A name clash (E0372) or
+/// `on:` without `Msg` (E0373) would only cause more errors.
+pub fn independent(d: &Diag) -> bool {
+    matches!(d.code, "E0374" | "E0377" | "E0381" | "E0376" | "E0384")
+        || (d.code == "E0378" && d.msg.contains("takes only a string literal"))
 }
 
 /// The motion options and `keyframes(...)` calls of a program's source whose values are literals
@@ -458,19 +557,22 @@ impl Ctx<'_> {
             Kind::Icon if start && !s.is_empty() && !self.icons.contains(s) => {
                 // `icon: ":clock:"`: the colons that mark an icon in text, around a known name
                 let bare = s.strip_prefix(':').and_then(|x| x.strip_suffix(':')).filter(|x| self.icons.contains(*x));
-                errs.push(match bare {
-                    Some(name) => Diag::new("E0374", format!("unknown icon `{s}`"), span)
-                        .hint(format!(
-                            "`{param}:` takes the icon's name without colons: `{param}: \"{name}\"` (colons mark an icon inside text)"
-                        ))
-                        .fix(vec![Edit::replace(span, &format!("\"{s}\""), format!("\"{name}\""))]),
-                    None => unknown_icon(s, span, self.icons),
-                })
+                match bare {
+                    Some(name) => errs.push(
+                        Diag::new("E0374", format!("unknown icon `{s}`"), span)
+                            .hint(format!(
+                                "`{param}:` takes the icon's name without colons: `{param}: \"{name}\"` (colons mark an icon inside text)"
+                            ))
+                            .fix(vec![Edit::replace(span, &format!("\"{s}\""), format!("\"{name}\""))]),
+                    ),
+                    // an icon is decoration: the site still builds (and draws a stand-in)
+                    None => crate::diag::warn(icon_warning(s, false, span)),
+                }
             }
             Kind::Text => {
                 for name in icon_names(s) {
                     if !self.icons.contains(&name) {
-                        errs.push(unknown_icon(&name, span, self.icons));
+                        crate::diag::warn(icon_warning(&name, true, span));
                     }
                 }
                 for url in md_links(s) {
@@ -517,15 +619,6 @@ fn raw_needs_literal(func: &str, span: Span, errs: &mut Vec<Diag>) {
             if func == "css" { "CSS" } else { "markup" }
         )),
     );
-}
-
-fn unknown_icon(name: &str, span: Span, icons: &HashSet<String>) -> Diag {
-    let near = icons.iter().map(|i| (edits(name, i), i)).filter(|(d, _)| *d <= 2).min();
-    let hint = match near.map(|(_, i)| format!("did you mean `{i}`?")).or_else(|| suggest(name, icons.iter().map(String::as_str))) {
-        Some(h) => format!("{h} The icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them"),
-        None => "the icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them; write `\\\\:` in the string for a colon that starts no icon".to_string(),
-    };
-    Diag::new("E0374", format!("unknown icon `{name}`"), span).hint(hint)
 }
 
 /// The edit distance of two names (a swap of neighbours counts as one edit).
@@ -857,8 +950,19 @@ mod tests {
             assert!(fs.iter().any(|(n, _)| n == f), "{f}");
         }
         let icons = icons();
-        for i in ["phone", "mail", "map-pin", "clock", "leaf", "flame", "home", "facebook", "send", "navigation"] {
+        for i in
+            ["phone", "mail", "map-pin", "clock", "leaf", "flame", "home", "facebook", "send", "navigation", "alert-circle", "circle"]
+        {
             assert!(icons.iter().any(|n| n == i), "{i}");
+        }
+        // a name of another set is no icon of the set, but stands for one
+        assert!(!icons.iter().any(|n| n == "envelope"));
+        assert_eq!(icon_like("envelope"), Some("mail"));
+        assert_eq!(icon_like("map-marker"), Some("map-pin"));
+        assert_eq!(icon_like("siren"), None);
+        for (other, icon) in [("warning", "triangle-alert"), ("cog", "settings")] {
+            assert_eq!(icon_like(other), Some(icon));
+            assert!(icons.iter().any(|n| n == icon), "{icon}");
         }
     }
 

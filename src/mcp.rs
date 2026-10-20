@@ -806,9 +806,9 @@ fn compile_tool(program: &Program, grant: &caps::Grant, strict: bool, full: bool
     let result = match build(&program.src) {
         Ok(prog) => Ok(Compiled { prog, applied: Vec::new(), text: program.src.clone() }),
         Err(diags) if strict => Err(diags),
-        Err(diags) => match fix::repair(&program.src, diags.clone(), build) {
-            Some(r) => Ok(Compiled { prog: r.value, applied: r.applied, text: r.text }),
-            None => Err(diags),
+        Err(diags) => match fix::repair_or_report(&program.src, diags, build) {
+            Ok(r) => Ok(Compiled { prog: r.value, applied: r.applied, text: r.text }),
+            Err(left) => Err(left),
         },
     };
     result.map_err(|mut diags| {

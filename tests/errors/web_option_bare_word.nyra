@@ -1,0 +1,8 @@
+// expect: E0201
+use web
+
+page("/", "Contact") {
+    form("Write to us", mailto: "hello@example.com") {
+        field("phone", "Phone", type: tel)
+    }
+}

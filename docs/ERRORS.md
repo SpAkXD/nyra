@@ -39,13 +39,13 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0389 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons, option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387) |
+| E0372-E0390 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons (E0389), option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387), opening hours (E0390) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
 Codes are stable: a number is never reused for another error. E0006 (a bad brace in a string) is retired: since v0.5 a
 brace that starts no `{value}` is text. Numbers that are not listed (E0219, E0257-E0259,
-E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0385 and E0389 are kept for `use web`. E0900-E0919 are set aside
+E0294-E0299, E0317-E0319, E0326-E0329, E0333-E0339, E0346-E0349, E0351-E0354, E0363-E0369) are kept free for future errors of the same kind; E0385 is kept for `use web`. E0900-E0919 are set aside
 for the intermediate representation and the WebAssembly backend (v0.5), which needs no codes of its own so far.
 
 ## Entry format
@@ -227,6 +227,8 @@ fn main() {
   - a lambda written as in another language, `lambda x: x * 2`, `|x| x * 2` or `x -> x * 2`: write `x => x * 2`
   - `{` on a line of its own, or a missing `{` or `}`: put `{` on the same line, and close every block
   - two statements on one line (`let a = 1 let b = 2`) or a line that starts with an operator
+  - a `,` after a match arm or a statement, as in a list (`Msg.Day(d) => day = d,`), or between two statements (`{ open = true, at = i }`): a certain fix deletes it, or puts what follows on a new line
+  - a block after the `=` of a one-line function, `fn f() -> int = { ... }`: a certain fix deletes the `=`
   - a missing piece: `let x` without `= value`, `fn f(a)` without a type, `for i 0..3` without `in`
   - a conditional value `c ? a : b` that lacks its `:` part, or a `?` anywhere else
   - an `import` or a `class` at the top level of the file
@@ -3844,20 +3846,19 @@ page("/", "Home") {
 
 ## E0374: unknown word
 - **Kind:** compile error · **Since:** v0.8
-- **What it means:** A web text or option has a word the library does not know: an icon that does not exist (`":phnoe: 123"`, `icon: "phnoe"`), an option word that is not one of its option's few words (`section(..., bg: "alternative")`), or a motion word that is not one of its option's words (`hover: "lfit"`). The motion options `anim:`, `hover:`, `loop:` and `scroll:` each have their own list (see Motion in [WEB.md](WEB.md)), plus the speeds `fast` and `slow`, the easings `out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, one number and one duration (`4s`, `600ms`); a word made with `keyframes` counts in `anim:` and `loop:`. The message names the nearest word or lists the words. A literal is checked when the program compiles; text that is computed while the site is built is checked then, and the build stops with the same code.
-- **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a missing icon, a section without its background or a card that does not move is easy to miss on a page (a misspelled CSS class or animation name fails silently) and costs a round of looking at screenshots. A word is checked like a name in code, before the site is deployed.
+- **What it means:** A web option has a word the library does not know: an option word that is not one of its option's few words (`section(..., bg: "alternative")`), a motion word that is not one of its option's words (`hover: "lfit"`), a color that is neither a hex color, a theme color nor a palette name, or an icon option written with the colons of text (`icon: ":clock:"`). The motion options `anim:`, `hover:`, `loop:` and `scroll:` each have their own list (see Motion in [WEB.md](WEB.md)), plus the speeds `fast` and `slow`, the easings `out`, `in-out`, `spring`, `bounce`, `snappy`, `linear`, one number and one duration (`4s`, `600ms`); a word made with `keyframes` counts in `anim:` and `loop:`. The message names the nearest word or lists the words. A literal is checked when the program compiles; a value computed while the site is built is checked then, and the build stops with the same code, at the string literal that holds the value. An unknown icon name is not this error but warning E0389: an icon is decoration, and the site builds with a stand-in.
+- **Why Nyra has this rule:** A wrong word would otherwise do nothing at all: a section without its background or a card that does not move is easy to miss on a page (a misspelled CSS class or animation name fails silently) and costs a round of looking at screenshots. A word is checked like a name in code, before the site is deployed.
 - **Common causes:**
   - an icon option written as in text, `icon: ":clock:"`: the option takes the bare name, `icon: "clock"` (a certain fix, applied in memory by `nyra check`)
-  - an icon name from another set: the icons are [Lucide](https://lucide.dev) names (`phone`, `mail`, `map-pin`, `clock`, `calendar`, `leaf`, `flame`, `house`, `star`, `check`, `send`, `navigation`, `arrow-right`, `chevron-down`, `menu`, `x`, the brand icon `facebook`, ...); `src/std/web_icons.nyra` lists all of them
-  - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
   - an option word from CSS (`bg: "gray"`): `bg:` takes `alt`, `white`, `dark`, `primary`, `accent`, `ink`
   - a color that is neither a hex color, a theme color nor a name of `site(palette:)` (found while the site is built)
   - a typo in a motion word (`hover: "lfit"`), a word of another motion option (`hover: "rise"`: `rise` is an entrance, an `anim:` word) or a word from a CSS library (`fadeInUp`, `bounceIn`)
+  - an option word written without quotes, `type: tel`, `style: soft`: that is error E0201 (an undefined variable), with the quotes as a certain fix
 - **Wrong:**
 ```rust
 use web
 
-fn phone() -> Node = card(title: "Call us", text: ":phnoe: +420 123 456 789", hover: "lfit")
+fn phone() -> Node = card(title: "Call us", text: ":phone: +420 123 456 789", hover: "lfit")
 
 page("/", "Bakery") {
     hero("Bakery Hana")
@@ -3875,7 +3876,7 @@ page("/", "Bakery") {
     phone()
 }
 ```
-- **Related:** E0381, E0377, E0375, E0388
+- **Related:** E0389, E0381, E0377, E0375, E0388
 
 ## E0375: keyframes animate a layout property
 - **Kind:** warning · **Since:** v0.8
@@ -4344,3 +4345,76 @@ page("/", "Bakery") {
 }
 ```
 - **Related:** E0374, E0375
+
+## E0389: unknown icon
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A `use web` site names an icon that is not in the icon set (a subset of [Lucide](https://lucide.dev), its old names such as `alert-circle` and `home` included, plus the brand icon `facebook`): in an option (`icon: "siren"`) or in text (`":gauge: 12 kg"`). The site still builds. A name of another icon set that stands for one of the set is drawn as that icon (`envelope` as `mail`, `map-marker` as `map-pin`, `warning` as `triangle-alert`), and the warning names the Lucide name to write; any other name is drawn as a plain circle in an option and left as it is written in text (it may be no icon at all: `a:b:c`). The warning is at the string literal that holds the name, also when the name comes from data (`("siren", "Emergency care")` given as `icon: s.0`).
+- **Why Nyra has this rule:** An icon is decoration: a site that is right in every other way should not fail over one, but a wrong name should not pass unseen either. The set is small on purpose (every icon is in the build), so a name a model knows from another set or a newer Lucide is likely; the hint gives the nearest name.
+- **Common causes:**
+  - a Lucide icon that is not in the subset (`siren`, `gauge`): choose one of the set, e.g. `triangle-alert`, `activity`; `src/std/web_icons.nyra` lists all of them
+  - a name from Font Awesome, Material or Heroicons (`envelope`, `map-marker`, `cog`)
+  - a typo (`phnoe`)
+  - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
+- **Wrong:**
+```rust
+use web
+
+fn services() -> Node = card(title: "Emergency care", text: "Call before 10 a.m.", icon: "siren")
+
+page("/", "Dentist") {
+    hero("Gentle dentistry")
+    section("care", "What we do") {
+        services()
+    }
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn services() -> Node = card(title: "Emergency care", text: "Call before 10 a.m.", icon: "triangle-alert")
+
+page("/", "Dentist") {
+    hero("Gentle dentistry")
+    section("care", "What we do") {
+        services()
+    }
+}
+```
+- **Related:** E0374, E0377
+
+## E0390: opening hours the badge cannot read
+- **Kind:** compile error · **Since:** v0.8
+- **What it means:** A row of `hours(rows)` or of `hero(badge: rows)` has times, but the open/closed badge cannot tell its days or its times. A row is `(label, "days times")`, as in `("Mon–Fri", "1-5 8:00-16:00")`: days 1 (Monday) to 7 (Sunday), then one or more times; or, as people write it, the days in the label and the times alone (`("Monday", "8:00–18:00")`, `("Mon–Fri", "8–16")`), or the days before the times (`"Mon–Fri 8:00–16:00"`). English, Czech and German day names, `weekdays`, `daily`, any dash, `8.00`, `9am-5pm` and `24/7` are read; a time without digits ("Closed", "By appointment") is closed and shown as written. The error is found while the site is built and is reported at the string literal of the row.
+- **Why Nyra has this rule:** A row the badge cannot read would show no times and a badge that always says "Closed now", which nobody notices until a customer does.
+- **Common causes:**
+  - a label that names no days with times that name none either (`("Opening", "8:00–16:00")`)
+  - times in a form that is not a range (`"8:00 18:00"`, `"from 8"`)
+  - text after the times (`"8:00–16:00 (lunch 12–13)"`): put a note in `hours(..., note: "...")`
+- **Wrong:**
+```rust
+use web
+
+fn opening() -> Node = hours([("Office", "8:00–16:00"), ("Sun", "")])
+
+page("/", "Dentist") {
+    h1("Dentist")
+    section("hours", "Opening hours") {
+        opening()
+    }
+}
+```
+- **Fixed:**
+```rust
+use web
+
+fn opening() -> Node = hours([("Mon–Fri", "8:00–16:00"), ("Sun", "")])
+
+page("/", "Dentist") {
+    h1("Dentist")
+    section("hours", "Opening hours") {
+        opening()
+    }
+}
+```
+- **Related:** E0374
