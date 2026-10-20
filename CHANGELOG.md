@@ -76,6 +76,11 @@ Web
   for the whole site), on the web card. New `accordion([(question, answer)], open:)`: an FAQ of native
   `<details>`, which opens by click, Enter or Space without JavaScript, slides open (at once with reduced motion) and
   stays as the visitor left it when a live view renders again; on the web card.
+- **Live views: what a click shows is built too.** A local image in a live view no longer breaks after a click: the
+  build makes every image a view may show (also one only a click brings) and the runtime gives the view's HTML the
+  built file, `srcset`, size and preview. A component or icon that a view shows only after a click has its CSS,
+  behavior and sprite symbol: the build includes the chunks and icons of what the browser's code may render, and
+  still leaves out the rest.
 
 Editors and docs
 - **The Nyra file icon.** `assets/nyra.ico` (16 to 256 px, drawn by `tools/gen_icon.py`) and, on Windows,

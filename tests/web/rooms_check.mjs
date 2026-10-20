@@ -2,7 +2,10 @@
 // Chrome over the DevTools protocol (no packages):
 // - its live view re-renders images with `ratio: "4/3"` and a `grid(8)`: after every click the
 //   images keep their 4:3 shape (the photos are 16:10), the grid has 8 columns, and the page's
-//   Content-Security-Policy reports nothing (the runtime sets those variables through the CSSOM);
+//   Content-Security-Policy reports nothing (the runtime sets those variables through the CSSOM), and
+//   every image it re-renders has loaded (the runtime gives it the name the build copied it to);
+// - a view shows a gallery and an icon only after a click: the photos load (also in the lightbox),
+//   the gallery has its styles, the icon draws from the page's sprite, and no request fails;
 // - its `accordion` opens and closes by a click and by Enter and Space, and slides (not with
 //   reduced motion, where it opens at once);
 // - its badges say the site's words ("Reception open" / "Reception closed").
@@ -70,8 +73,13 @@ listeners.add((d) => {
   if (d.method === 'Runtime.exceptionThrown') errors.push('script error: ' + (d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text));
   if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push('console error: ' + d.params.args.map((a) => a.value ?? a.description).join(' '));
   if (d.method === 'Log.entryAdded' && /Content.Security.Policy/i.test(d.params.entry.text)) errors.push('CSP: ' + d.params.entry.text.slice(0, 240));
+  // (a 404 of an image the build did not write; the browser's own request for a favicon is no file of the site)
+  if (d.method === 'Network.responseReceived' && d.params.response.status >= 400 && !/favicon\.ico$/.test(d.params.response.url))
+    errors.push(`HTTP ${d.params.response.status}: ${d.params.response.url}`);
+  if (d.method === 'Network.loadingFailed' && d.params.type === 'Image' && !d.params.canceled) errors.push(`an image failed to load: ${d.params.errorText}`);
 });
 await send('Page.enable');
+await send('Network.enable');
 await send('Page.bringToFront');
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Runtime.enable');
@@ -122,6 +130,64 @@ for (const [label, images, grids] of [['family', 1, 1], ['all', 3, 0], ['double'
     failures.push(`no button "${label}"`);
   await sleep(700);
   await shapes(`after "${label}"`, images, grids);
+}
+// every image of the live views has loaded (scrolled to, as a lazy image loads)
+const IMAGES = `(async () => {
+  const out = [];
+  for (const i of document.querySelectorAll('[data-live] img')) {
+    i.scrollIntoView({ block: 'center', behavior: 'instant' });
+    await Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
+    out.push([i.getAttribute('src'), i.naturalWidth]);
+  }
+  return out;
+})()`;
+const loadedImages = async (when, count) => {
+  const got = await run(IMAGES);
+  if (count !== undefined && got.length !== count) failures.push(`${when}: ${got.length} images in the live views, expected ${count}`);
+  for (const [src, w] of got) if (!(w > 0)) failures.push(`${when}: the image "${src}" did not load`);
+};
+await loadedImages('after the filters', 3);
+
+// ---- a view that shows a gallery and an icon only after a click: its images were built, the
+// gallery has its styles and its lightbox, the icon is in the page's sprite
+const PHOTOS = (label) => `[...document.querySelectorAll('[data-live] button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)})`;
+if (await run(`document.querySelectorAll('[data-live] .gallery, [data-live] .card-icon').length`)) failures.push('the gallery shows before the click');
+for (let round = 1; round <= 2; round++) {
+  if (!(await clickAt(PHOTOS('Show photos')))) failures.push(`round ${round}: no button "Show photos"`);
+  await sleep(700);
+  await loadedImages(`round ${round}, after "Show photos"`, 6);
+  const look = await run(`(() => {
+    const item = document.querySelector('[data-live] .gallery-item'), grid = document.querySelector('[data-live] .gallery-grid');
+    const use = document.querySelector('[data-live] .card-icon svg use');
+    const target = use && document.querySelector(use.getAttribute('href'));
+    return { items: document.querySelectorAll('[data-live] .gallery-item').length, display: item && getComputedStyle(item).display,
+      breakInside: item && getComputedStyle(item).breakInside, columns: grid && getComputedStyle(grid).columnCount,
+      icon: use ? use.getAttribute('href') : null, symbol: target ? target.nodeName.toLowerCase() : null,
+      iconWidth: use ? use.getBBox().width : 0 };
+  })()`);
+  if (look.items !== 3) failures.push(`round ${round}: ${look.items} gallery photos, expected 3`);
+  if (look.display !== 'block' || look.breakInside !== 'avoid' || look.columns === 'auto')
+    failures.push(`round ${round}: the gallery shown after a click is unstyled (item display ${look.display}, break-inside ${look.breakInside}, columns ${look.columns})`);
+  if (look.icon !== '#i-bike' || look.symbol !== 'symbol' || !(look.iconWidth > 0))
+    failures.push(`round ${round}: the icon shown after a click does not draw (${look.icon} -> ${look.symbol}, ${look.iconWidth}px wide)`);
+  // the lightbox (the gallery's script) opens the photo, which loads
+  await clickAt(`document.querySelector('[data-live] .gallery-item')`);
+  await sleep(500);
+  const box = await run(`(async () => { const d = document.querySelector('dialog.lightbox'); const i = d && d.querySelector('img');
+    if (i) await Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
+    return { open: Boolean(d && d.open), w: i ? i.naturalWidth : 0, src: i ? i.getAttribute('src') : null }; })()`);
+  if (!box.open || !(box.w > 0)) failures.push(`round ${round}: the lightbox does not show the photo (open ${box.open}, ${box.src}, ${box.w}px)`);
+  if ((await run('location.href')) !== url) {
+    // (without the gallery's script the click followed the photo's link)
+    failures.push(`round ${round}: a click on a photo left the page`);
+    await open('no-preference');
+    break;
+  }
+  await run(`document.querySelector('dialog.lightbox')?.close()`);
+  await sleep(300);
+  if (!(await clickAt(PHOTOS('Hide photos')))) failures.push(`round ${round}: no button "Hide photos"`);
+  await sleep(500);
+  await loadedImages(`round ${round}, after "Hide photos"`, 3);
 }
 for (const v of await run('window.__csp')) errors.push('CSP event: ' + v);
 
