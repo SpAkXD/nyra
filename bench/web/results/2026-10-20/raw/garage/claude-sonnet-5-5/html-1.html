@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoservis Dvořák – honest car repairs in Pardubice</title>
+<meta name="description" content="Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F7;--sf:#fff;--tx:#1C2430;--pr:#1F4E8C;--ac:#F2A900;--bd:#dde1e7;--mu:#5b6574}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:'Source Sans 3',sans-serif;font-size:18px;line-height:1.55}
+h1,h2,h3{font-family:'Barlow Condensed',sans-serif;font-weight:700;line-height:1.05;margin:0}
+a{color:var(--pr)}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+section{padding:88px 0}
+.kick{color:var(--pr);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:.85rem;margin:0 0 10px}
+h2{font-size:clamp(2.2rem,5vw,3.4rem);text-transform:uppercase}
+.sub{color:var(--mu);margin:10px 0 0}
+.head{margin-bottom:40px}
+.btn{display:inline-block;padding:14px 26px;border-radius:10px;font-weight:700;text-decoration:none;border:2px solid var(--ac);background:var(--ac);color:#1C2430;cursor:pointer;font:inherit;font-weight:700;transition:transform .2s,box-shadow .2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}
+.btn.out{background:transparent;color:#fff;border-color:#fff}
+nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
+.brand{font-family:'Barlow Condensed';font-weight:700;font-size:1.6rem;text-decoration:none;color:var(--pr);text-transform:uppercase}
+.links{display:flex;align-items:center;gap:24px}
+.links a{text-decoration:none;color:var(--tx);font-weight:600}
+.links a.btn{padding:9px 18px;color:#1C2430}
+#menuBtn{display:none;background:none;border:1px solid var(--bd);border-radius:8px;padding:8px;cursor:pointer}
+.hero{position:relative;min-height:100vh;display:flex;align-items:center;color:#fff;padding:60px 0;background:#1C2430}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(14,22,34,.88),rgba(14,22,34,.45))}
+.hero .wrap{position:relative;z-index:2}
+.hero h1{font-size:clamp(3rem,8vw,6rem);text-transform:uppercase;max-width:800px;margin:12px 0 18px}
+.hero p.t{max-width:560px;font-size:1.25rem}
+.hero .kick{color:var(--ac)}
+.hero .btns{display:flex;gap:14px;flex-wrap:wrap;margin-top:28px}
+.hi{opacity:0;transform:translateY(24px);animation:in .8s forwards}
+@keyframes in{to{opacity:1;transform:none}}
+.nums{padding:0;margin-top:-50px;position:relative;z-index:3}
+.ng{display:grid;grid-template-columns:repeat(4,1fr);background:var(--sf);border:1px solid var(--bd);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.ng div{padding:28px 20px;text-align:center;border-right:1px solid var(--bd)}
+.ng div:last-child{border:0}
+.ng b{display:block;font-family:'Barlow Condensed';font-size:3.4rem;color:var(--pr);line-height:1}
+.ng span{color:var(--mu)}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:16px;padding:24px;transition:transform .25s,box-shadow .25s}
+.card:hover{transform:translateY(-5px);box-shadow:0 14px 30px rgba(31,78,140,.14)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.tabs button{font:inherit;font-weight:700;padding:11px 22px;border-radius:999px;border:1px solid var(--bd);background:var(--sf);cursor:pointer;color:var(--tx)}
+.tabs button[aria-selected=true]{background:var(--pr);color:#fff;border-color:var(--pr)}
+.panel p{font-size:1.25rem;margin-top:0}
+.panel ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.panel li{border:1px solid var(--bd);border-left:4px solid var(--ac);border-radius:10px;padding:16px;font-weight:600;background:var(--bg)}
+.panel[hidden]{display:none}
+.calc fieldset{border:0;padding:0;margin:0 0 24px}
+legend{font-weight:700;margin-bottom:10px;padding:0}
+.opts{display:flex;gap:10px;flex-wrap:wrap}
+.opts label{cursor:pointer}
+.opts input{position:absolute;opacity:0}
+.opts span{display:inline-block;padding:11px 22px;border:1px solid var(--bd);border-radius:999px;font-weight:600;background:var(--bg)}
+.opts input:checked+span{background:var(--pr);color:#fff;border-color:var(--pr)}
+.opts input:focus-visible+span{outline:3px solid var(--ac);outline-offset:2px}
+.svc{display:flex;flex-direction:column;gap:10px}
+.svc label{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--bd);border-radius:10px;cursor:pointer;background:var(--bg)}
+.svc input{width:22px;height:22px;accent-color:var(--pr)}
+.svc .n{flex:1;font-weight:600}.svc .p{font-weight:700;color:var(--pr)}
+.total{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-top:24px;padding-top:24px;border-top:2px solid var(--bd)}
+.total small{display:block;color:var(--mu)}
+.total strong{font-family:'Barlow Condensed';font-size:3rem;color:var(--pr);line-height:1}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;position:relative;counter-reset:s}
+.steps:before{content:"";position:absolute;top:26px;left:12%;right:12%;height:3px;background:var(--bd)}
+.step{position:relative;text-align:center;padding:0 8px}
+.step i{display:flex;width:54px;height:54px;margin:0 auto 16px;border-radius:50%;background:var(--pr);color:#fff;align-items:center;justify-content:center;font:700 1.6rem 'Barlow Condensed';border:4px solid var(--bg);position:relative}
+.step h3{font-size:1.5rem;margin-bottom:6px}.step p{margin:0;color:var(--mu)}
+.team{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.team .card{padding:0;overflow:hidden}
+.team img{width:100%;aspect-ratio:6/7;object-fit:cover;display:block;background:#cfd5dd}
+.team .b{padding:18px}.team h3{font-size:1.5rem}.team em{color:var(--pr);font-style:normal;font-weight:700;display:block;margin-bottom:6px}
+.team p{margin:0;color:var(--mu);font-size:1rem}
+.tg{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+blockquote{margin:0}
+blockquote p{font-size:1.2rem;margin:0 0 14px}
+blockquote footer{font-weight:700;color:var(--pr)}
+.q{font-family:'Barlow Condensed';font-size:3.5rem;color:var(--ac);line-height:.6;display:block}
+.cg{display:grid;grid-template-columns:1fr 1.1fr;gap:30px}
+.cg h3{font-size:1.5rem;margin:18px 0 6px}.cg p{margin:0}
+table{border-collapse:collapse;width:100%}td{padding:5px 0}td:last-child{text-align:right;font-weight:600}
+form label{display:block;font-weight:700;margin:0 0 14px;font-size:.95rem}
+form input,form select,form textarea{display:block;width:100%;margin-top:5px;padding:12px;border:1px solid #b9c0ca;border-radius:8px;font:inherit;background:#fff;color:var(--tx)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+footer.f{background:#1C2430;color:#c9d0da;padding:48px 0 30px}
+footer.f a{color:#fff;text-decoration:none}
+.fg{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+.fg nav{position:static;background:none;border:0;display:flex;gap:18px;flex-wrap:wrap}
+.fg nav a{color:#c9d0da}
+.fb{font-family:'Barlow Condensed';font-size:1.7rem;color:#fff;text-transform:uppercase;font-weight:700}
+.copy{margin-top:30px;border-top:1px solid #3a4556;padding-top:18px;font-size:.9rem}
+.rv{opacity:0;transform:translateY(28px);transition:opacity .7s,transform .7s}
+.rv.on{opacity:1;transform:none}
+@media(max-width:900px){
+.ng,.steps,.team{grid-template-columns:repeat(2,1fr)}.steps:before{display:none}.steps{row-gap:30px}
+.tg,.cg,.panel ul{grid-template-columns:1fr}
+.ng div:nth-child(2){border-right:0}.ng div:nth-child(-n+2){border-bottom:1px solid var(--bd)}
+#menuBtn{display:block}
+.links{display:none;position:absolute;top:68px;left:0;right:0;background:#fff;flex-direction:column;align-items:stretch;padding:16px 20px;border-bottom:1px solid var(--bd);gap:14px}
+.links.open{display:flex}
+section{padding:64px 0}}
+@media(max-width:520px){.team,.two{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){
+html{scroll-behavior:auto}
+.hi{animation:none;opacity:1;transform:none}
+.rv{opacity:1;transform:none;transition:none}
+.btn,.card{transition:none}}
+</style>
+</head>
+<body>
+<nav aria-label="Main">
+<div class="wrap">
+<a class="brand" href="#top">Autoservis Dvořák</a>
+<button id="menuBtn" aria-expanded="false" aria-controls="links" aria-label="Menu"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1C2430" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+<div class="links" id="links">
+<a href="#services">Services</a><a href="#prices">Prices</a><a href="#process">How it works</a><a href="#team">Team</a><a href="#contact">Contact</a>
+<a class="btn" href="#contact">Book a service</a>
+</div>
+</div>
+</nav>
+
+<header class="hero" id="top">
+<img src="https://picsum.photos/seed/dvorak-hero/1600/1000" alt="A mechanic working under a lifted car at Autoservis Dvořák">
+<div class="wrap">
+<p class="kick hi" style="animation-delay:.1s">Pardubice · Hradecká 88 · all makes</p>
+<h1 class="hi" style="animation-delay:.3s">Honest repairs, done right the first time</h1>
+<p class="t hi" style="animation-delay:.5s">Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.</p>
+<div class="btns hi" style="animation-delay:.7s"><a class="btn" href="#prices">Get a price</a><a class="btn out" href="#contact">Book a service</a></div>
+</div>
+</header>
+
+<main>
+<section class="nums" style="padding-bottom:0">
+<div class="wrap"><div class="ng rv">
+<div><b data-count="24">24</b><span>years in Pardubice</span></div>
+<div><b data-count="9800">9,800</b><span>cars serviced last year</span></div>
+<div><b data-count="6">6</b><span>certified mechanics</span></div>
+<div><b>2 years</b><span>warranty on parts and labour</span></div>
+</div></div>
+</section>
+
+<section id="services">
+<div class="wrap">
+<div class="head rv"><p class="kick">Services</p><h2>What we do</h2></div>
+<div class="rv">
+<div class="tabs" role="tablist" aria-label="Services">
+<button role="tab" id="t0" aria-selected="true" aria-controls="p0">Servicing</button>
+<button role="tab" id="t1" aria-selected="false" aria-controls="p1" tabindex="-1">Tyres</button>
+<button role="tab" id="t2" aria-selected="false" aria-controls="p2" tabindex="-1">Diagnostics</button>
+<button role="tab" id="t3" aria-selected="false" aria-controls="p3" tabindex="-1">Bodywork</button>
+</div>
+<div class="card" style="transform:none">
+<div class="panel" role="tabpanel" id="p0" aria-labelledby="t0"><p>Scheduled servicing to the maker's plan, so your warranty stays valid.</p><ul><li>Oil and filter change</li><li>Brake check and fluids</li><li>Stamp in your service book</li></ul></div>
+<div class="panel" role="tabpanel" id="p1" aria-labelledby="t1" hidden><p>Seasonal tyre changes, storage and repairs while you wait.</p><ul><li>Tyre fitting and balancing</li><li>Tyre hotel for 1,200 Kč a season</li><li>Puncture repair</li></ul></div>
+<div class="panel" role="tabpanel" id="p2" aria-labelledby="t2" hidden><p>We read the fault codes and find the real cause before we replace anything.</p><ul><li>Engine and electronics diagnostics</li><li>Air-con check and refill</li><li>Pre-purchase inspection</li></ul></div>
+<div class="panel" role="tabpanel" id="p3" aria-labelledby="t3" hidden><p>Dents, scratches and paint, matched in our own paint shop.</p><ul><li>Dent repair</li><li>Colour-matched paintwork</li><li>Insurance claims handled for you</li></ul></div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="prices" style="background:#fff;border-block:1px solid var(--bd)">
+<div class="wrap" style="max-width:860px">
+<div class="head rv"><p class="kick">Prices</p><h2>Get a price in ten seconds</h2><p class="sub">Fixed prices including VAT, parts and labour.</p></div>
+<div class="calc rv">
+<fieldset><legend>Car size</legend>
+<div class="opts">
+<label><input type="radio" name="size" value="0"><span>Small car</span></label>
+<label><input type="radio" name="size" value="1" checked><span>Family car</span></label>
+<label><input type="radio" name="size" value="2"><span>SUV / van</span></label>
+</div></fieldset>
+<fieldset><legend>Services you need</legend>
+<div class="svc" id="svc"></div></fieldset>
+<div class="total">
+<div><small>Estimated total</small><strong id="total" aria-live="polite">0 Kč</strong></div>
+<a class="btn" href="#contact">Book this service</a>
+</div>
+</div>
+</div>
+</section>
+
+<section id="process">
+<div class="wrap">
+<div class="head rv"><p class="kick">How it works</p><h2>Four steps, no surprises</h2></div>
+<div class="steps">
+<div class="step rv"><i>1</i><h3>Book online or call</h3><p>Pick a time that suits you. Most services are done the same day.</p></div>
+<div class="step rv"><i>2</i><h3>Drop off your car</h3><p>Leave the key at the desk, or in our key box before 7:00.</p></div>
+<div class="step rv"><i>3</i><h3>We call before extra work</h3><p>If we find anything else, you decide. Nothing is done without your OK.</p></div>
+<div class="step rv"><i>4</i><h3>Pick up and pay</h3><p>Pay by card or bank transfer. Every job comes with a 2-year warranty.</p></div>
+</div>
+</div>
+</section>
+
+<section id="team" style="padding-top:20px">
+<div class="wrap">
+<div class="head rv"><p class="kick">Team</p><h2>The people under the bonnet</h2></div>
+<div class="team">
+<article class="card rv"><img loading="lazy" src="https://picsum.photos/seed/dvorak-team-1/600/700" alt="Jiří Dvořák"><div class="b"><h3>Jiří Dvořák</h3><em>Owner, master mechanic</em><p>Opened the shop in 2002 and still checks every car that leaves it.</p></div></article>
+<article class="card rv"><img loading="lazy" src="https://picsum.photos/seed/dvorak-team-2/600/700" alt="Pavel Svoboda"><div class="b"><h3>Pavel Svoboda</h3><em>Diagnostics</em><p>Finds the electrical faults that other garages gave up on.</p></div></article>
+<article class="card rv"><img loading="lazy" src="https://picsum.photos/seed/dvorak-team-3/600/700" alt="Martina Veselá"><div class="b"><h3>Martina Veselá</h3><em>Service advisor</em><p>Explains every line of your invoice in plain words.</p></div></article>
+<article class="card rv"><img loading="lazy" src="https://picsum.photos/seed/dvorak-team-4/600/700" alt="Lukáš Král"><div class="b"><h3>Lukáš Král</h3><em>Bodywork and paint</em><p>Matches any colour, from a 1990s Škoda to a brand-new Tesla.</p></div></article>
+</div>
+</div>
+</section>
+
+<section style="padding-top:20px">
+<div class="wrap">
+<div class="head rv"><h2>What drivers say</h2></div>
+<div class="tg">
+<blockquote class="card rv"><span class="q" aria-hidden="true">“</span><p>They called before changing anything, and the price was exactly as quoted.</p><footer>— Michal T.</footer></blockquote>
+<blockquote class="card rv"><span class="q" aria-hidden="true">“</span><p>Found an electrical fault that two other garages missed.</p><footer>— Simona K.</footer></blockquote>
+<blockquote class="card rv"><span class="q" aria-hidden="true">“</span><p>Tyres changed in 30 minutes while I had a coffee.</p><footer>— Radek P.</footer></blockquote>
+</div>
+</div>
+</section>
+
+<section id="contact" style="background:#fff;border-top:1px solid var(--bd)">
+<div class="wrap">
+<div class="head rv"><p class="kick">Contact</p><h2>Book your car in</h2></div>
+<div class="cg">
+<div class="rv">
+<h3 style="margin-top:0">Address</h3>
+<p>Hradecká 88, 500 03 Pardubice</p>
+<p><a href="https://maps.google.com/?q=Hradecká+88,+Pardubice">Open in Google Maps</a></p>
+<h3>Phone and e-mail</h3>
+<p><a href="tel:+420466000245">+420 466 000 245</a></p>
+<p><a href="mailto:servis@autodvorak.cz">servis@autodvorak.cz</a></p>
+<h3>Opening hours</h3>
+<table><tr><td>Monday–Friday</td><td>7:00–17:00</td></tr><tr><td>Saturday</td><td>8:00–12:00 (tyres only)</td></tr><tr><td>Sunday</td><td>Closed</td></tr></table>
+</div>
+<form class="card rv" id="form" style="transform:none">
+<div class="two">
+<label for="fn">Name *<input id="fn" required autocomplete="name"></label>
+<label for="fp">Phone *<input id="fp" type="tel" required autocomplete="tel"></label>
+</div>
+<label for="fe">E-mail (optional)<input id="fe" type="email" autocomplete="email"></label>
+<label for="fc">Car make and model *<input id="fc" required></label>
+<div class="two">
+<label for="fs">Service *<select id="fs" required><option value="">Choose…</option><option>Servicing</option><option>Tyres</option><option>Diagnostics</option><option>Bodywork</option><option>Something else</option></select></label>
+<label for="fd">Preferred date (optional)<input id="fd" type="date"></label>
+</div>
+<label for="fm">Message (optional)<textarea id="fm" rows="4"></textarea></label>
+<button class="btn" type="submit">Book service</button>
+</form>
+</div>
+</div>
+</section>
+</main>
+
+<footer class="f">
+<div class="wrap">
+<div class="fg">
+<div><div class="fb">Autoservis Dvořák</div><p>Hradecká 88, 500 03 Pardubice</p></div>
+<nav aria-label="Footer"><a href="#services">Services</a><a href="#prices">Prices</a><a href="#process">How it works</a><a href="#team">Team</a><a href="#contact">Contact</a></nav>
+</div>
+<div class="copy">© 2026 Autoservis Dvořák s.r.o.</div>
+</div>
+</footer>
+
+<script>
+(function(){
+var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+// menu
+var mb=document.getElementById('menuBtn'),lk=document.getElementById('links');
+mb.onclick=function(){var o=lk.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+lk.addEventListener('click',function(e){if(e.target.tagName==='A'){lk.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+// tabs
+var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
+function sel(i){tabs.forEach(function(t,j){t.setAttribute('aria-selected',i===j);t.tabIndex=i===j?0:-1;document.getElementById('p'+j).hidden=i!==j})}
+tabs.forEach(function(t,i){t.onclick=function(){sel(i)};
+t.onkeydown=function(e){var n=null;
+if(e.key==='ArrowRight')n=(i+1)%4;else if(e.key==='ArrowLeft')n=(i+3)%4;
+if(n!==null){sel(n);tabs[n].focus();e.preventDefault()}}});
+// calculator
+var S=[["Oil service",1490,1790,2290],["Front brake pads",2190,2590,3190],["Air-con service",1290,1290,1590],["Wheel alignment",990,990,1290],["Tyre change (4 wheels)",800,960,1200]];
+var box=document.getElementById('svc');
+function fmt(n){return n.toLocaleString('en-US')+' Kč'}
+S.forEach(function(s,i){var l=document.createElement('label');
+l.innerHTML='<input type="checkbox" value="'+i+'"><span class="n">'+s[0]+'</span><span class="p"></span>';box.appendChild(l)});
+function calc(){var z=+document.querySelector('[name=size]:checked').value,t=0;
+[].forEach.call(box.querySelectorAll('label'),function(l,i){
+l.querySelector('.p').textContent=fmt(S[i][z+1]);
+if(l.querySelector('input').checked)t+=S[i][z+1]});
+document.getElementById('total').textContent=fmt(t)}
+document.querySelector('.calc').addEventListener('change',calc);calc();
+// form
+document.getElementById('form').addEventListener('submit',function(e){e.preventDefault();
+var v=function(id){return document.getElementById(id).value.trim()};
+var b='Name: '+v('fn')+'\nPhone: '+v('fp')+'\nE-mail: '+v('fe')+'\nCar: '+v('fc')+'\nService: '+v('fs')+'\nPreferred date: '+v('fd')+'\nMessage: '+v('fm');
+location.href='mailto:servis@autodvorak.cz?subject='+encodeURIComponent('Service booking')+'&body='+encodeURIComponent(b)});
+// reveal
+var rv=[].slice.call(document.querySelectorAll('.rv'));
+function cnt(el){var end=+el.dataset.count;if(reduce){el.textContent=end.toLocaleString('en-US');return}
+var st=null;function f(ts){if(!st)st=ts;var p=Math.min((ts-st)/1600,1);
+el.textContent=Math.round(end*(1-Math.pow(1-p,3))).toLocaleString('en-US');if(p<1)requestAnimationFrame(f)}
+el.textContent='0';requestAnimationFrame(f)}
+var counters=[].slice.call(document.querySelectorAll('[data-count]'));
+if(reduce||!('IntersectionObserver' in window)){rv.forEach(function(e){e.classList.add('on')});counters.forEach(function(c){c.textContent=(+c.dataset.count).toLocaleString('en-US')})}
+else{
+var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){
+var el=en.target,sibs=el.parentElement.querySelectorAll(':scope > .rv'),idx=[].indexOf.call(sibs,el);
+el.style.transitionDelay=(idx*120)+'ms';el.classList.add('on');io.unobserve(el);
+[].forEach.call(el.querySelectorAll('[data-count]'),cnt)}})},{threshold:.15});
+rv.forEach(function(e){io.observe(e)});
+}
+})();
+</script>
+</body>
+</html>

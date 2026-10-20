@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-sonnet-5-5/html-4/",
+ "runs": 3,
+ "fcp_ms": 504,
+ "lcp_ms": 732,
+ "cls": 0,
+ "load_ms": 880,
+ "kb": 719.4,
+ "requests": 15,
+ "kb_by_type_first_run": {
+  "Document": 8.3,
+  "Stylesheet": 1.2,
+  "Image": 527,
+  "Font": 182.2,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  732,
+  692,
+  860
+ ]
+}

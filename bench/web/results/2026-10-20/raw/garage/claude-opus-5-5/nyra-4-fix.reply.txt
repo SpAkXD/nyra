@@ -1,0 +1,187 @@
+```nyra
+use web
+
+site("Autoservis Dvořák", primary: "#1F4E8C", accent: "#F2A900", bg: "#F4F5F7", font: "Source Sans 3", display: "Barlow Condensed", radius: 16, style: "soft", lang: "en", tz: "Europe/Prague")
+
+css("body { color: #1C2430 } h1, h2, h3 { font-weight: 700 }")
+
+struct Svc { name: str, text: str, icon: str, points: [str] }
+struct Job { name: str, prices: [int] }
+struct Person { name: str, role: str, text: str, photo: str }
+
+let nav_links = [
+    ("Services", "#services"),
+    ("Prices", "#prices"),
+    ("How it works", "#process"),
+    ("Team", "#team"),
+    ("Contact", "#contact")
+]
+
+let svcs = [
+    Svc(name: "Servicing", text: "Scheduled servicing to the maker's plan, so your warranty stays valid.", icon: "wrench", points: ["Oil and filter change", "Brake check and fluids", "Stamp in your service book"]),
+    Svc(name: "Tyres", text: "Seasonal tyre changes, storage and repairs while you wait.", icon: "circle", points: ["Tyre fitting and balancing", "Tyre hotel for 1,200 Kč a season", "Puncture repair"]),
+    Svc(name: "Diagnostics", text: "We read the fault codes and find the real cause before we replace anything.", icon: "activity", points: ["Engine and electronics diagnostics", "Air-con check and refill", "Pre-purchase inspection"]),
+    Svc(name: "Bodywork", text: "Dents, scratches and paint, matched in our own paint shop.", icon: "paint-roller", points: ["Dent repair", "Colour-matched paintwork", "Insurance claims handled for you"])
+]
+
+let sizes = ["Small car", "Family car", "SUV / van"]
+
+let jobs = [
+    Job(name: "Oil service", prices: [1490, 1790, 2290]),
+    Job(name: "Front brake pads", prices: [2190, 2590, 3190]),
+    Job(name: "Air-con service", prices: [1290, 1290, 1590]),
+    Job(name: "Wheel alignment", prices: [990, 990, 1290]),
+    Job(name: "Tyre change (4 wheels)", prices: [800, 960, 1200])
+]
+
+let team_members = [
+    Person(name: "Jiří Dvořák", role: "Owner, master mechanic", text: "Opened the shop in 2002 and still checks every car that leaves it.", photo: "https://picsum.photos/seed/dvorak-team-1/600/700"),
+    Person(name: "Pavel Svoboda", role: "Diagnostics", text: "Finds the electrical faults that other garages gave up on.", photo: "https://picsum.photos/seed/dvorak-team-2/600/700"),
+    Person(name: "Martina Veselá", role: "Service advisor", text: "Explains every line of your invoice in plain words.", photo: "https://picsum.photos/seed/dvorak-team-3/600/700"),
+    Person(name: "Lukáš Král", role: "Bodywork and paint", text: "Matches any colour, from a 1990s Škoda to a brand-new Tesla.", photo: "https://picsum.photos/seed/dvorak-team-4/600/700")
+]
+
+enum Msg { Tab(str), Size(int), Toggle(int) }
+
+var tab = "Servicing"
+var size = 1
+var picked = [false, false, false, false, false]
+
+fn update(m: Msg) {
+    match m {
+        Msg.Tab(t) => tab = t
+        Msg.Size(k) => size = k
+        Msg.Toggle(i) => picked[i] = !picked[i]
+    }
+}
+
+fn kc(n: int) -> str {
+    if n >= 1000 {
+        let r = n % 1000
+        let rs = r < 10 ? "00{r}" : (r < 100 ? "0{r}" : "{r}")
+        return "{n / 1000},{rs} Kč"
+    }
+    return "{n} Kč"
+}
+
+fn estimate() -> int {
+    var sum = 0
+    for i, j in jobs {
+        if picked[i] {
+            sum += j.prices[size]
+        }
+    }
+    return sum
+}
+
+fn service_tabs() -> Node = stack {
+    row {
+        for s in svcs {
+            button(s.name, on: Msg.Tab(s.name), active: s.name == tab, icon: s.icon)
+        }
+    }
+    for s in svcs.filter(x => x.name == tab) {
+        card(s.name, s.text, icon: s.icon, items: s.points, anim: "fade")
+    }
+}
+
+fn calculator() -> Node = stack {
+    h3("1. Choose your car size", icon: "car")
+    row {
+        for k, z in sizes {
+            button(z, on: Msg.Size(k), active: k == size)
+        }
+    }
+    h3("2. Tick the services you need", icon: "list-checks")
+    grid(2) {
+        for i, j in jobs {
+            button("{j.name} · {kc(j.prices[size])}", on: Msg.Toggle(i), active: picked[i], icon: picked[i] ? "check-circle" : "circle", style: "outline")
+        }
+    }
+    card("Estimated total", "**{kc(estimate())}**", icon: "badge-check")
+    button("Book this service", "#contact", style: "accent", icon: "calendar")
+}
+
+page("/", "Autoservis Dvořák – honest car repairs in Pardubice", desc: "Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.") {
+    navbar("Autoservis Dvořák", nav_links, cta: ("Book a service", "#contact"))
+
+    hero("Honest repairs, done right the first time",
+        kicker: "Pardubice · Hradecká 88 · all makes",
+        text: "Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.",
+        image: "https://picsum.photos/seed/dvorak-hero/1600/1000",
+        alt: "A mechanic working under a lifted car at Autoservis Dvořák",
+        buttons: [("Get a price", "#prices"), ("Book a service", "#contact")],
+        anim: "stagger")
+
+    grid(4, id: "numbers", anim: "stagger") {
+        stat("24", "years in Pardubice", anim: "count")
+        stat("9,800", "cars serviced last year", anim: "count")
+        stat("6", "certified mechanics", anim: "count")
+        stat("2 years", "warranty on parts and labour")
+    }
+
+    section("services", "What we do", kicker: "Services", bg: "white", anim: "rise") {
+        service_tabs()
+    }
+
+    section("prices", "Get a price in ten seconds", kicker: "Prices", text: "Fixed prices including VAT, parts and labour.", anim: "rise") {
+        calculator()
+    }
+
+    section("process", "Four steps, no surprises", kicker: "How it works", bg: "white", anim: "rise") {
+        steps([
+            ("Book online or call", "Pick a time that suits you. Most services are done the same day."),
+            ("Drop off your car", "Leave the key at the desk, or in our key box before 7:00."),
+            ("We call before extra work", "If we find anything else, you decide. Nothing is done without your OK."),
+            ("Pick up and pay", "Pay by card or bank transfer. Every job comes with a 2-year warranty.")
+        ], anim: "stagger")
+    }
+
+    section("team", "The people under the bonnet", kicker: "Team", anim: "rise") {
+        grid(4, anim: "stagger", hover: "lift") {
+            for t in team_members {
+                card(t.name, t.text, image: t.photo, tag: t.role)
+            }
+        }
+    }
+
+    section("reviews", "What drivers say", bg: "white", anim: "rise") {
+        grid(3, anim: "stagger", hover: "lift") {
+            quote("They called before changing anything, and the price was exactly as quoted.", "Michal T.", stars: 5)
+            quote("Found an electrical fault that two other garages missed.", "Simona K.", stars: 5)
+            quote("Tyres changed in 30 minutes while I had a coffee.", "Radek P.", stars: 5)
+        }
+    }
+
+    section("contact", "Book your car in", kicker: "Contact", anim: "rise") {
+        grid(2, anim: "stagger") {
+            stack {
+                card("Visit us", "Hradecká 88, 500 03 Pardubice", icon: "map-pin") {
+                    "[Open in Google Maps](https://maps.google.com/?q=Hradecká+88,+Pardubice)"
+                }
+                card("Call or write", "We answer during opening hours.", icon: "phone") {
+                    ":phone: [+420 466 000 245](tel:+420466000245)"
+                    ":mail: [servis@autodvorak.cz](mailto:servis@autodvorak.cz)"
+                }
+                h3("Opening hours", icon: "clock")
+                hours([
+                    ("Monday–Friday", "1-5 7:00-17:00"),
+                    ("Saturday (tyres only)", "6 8:00-12:00"),
+                    ("Sunday", "")
+                ])
+            }
+            form("Book a service", mailto: "servis@autodvorak.cz", subject: "Service booking", send: "Book service") {
+                field("name", "Name", req: true)
+                field("phone", "Phone", type: "tel", req: true)
+                field("email", "E-mail", type: "email")
+                field("car", "Car make and model", req: true)
+                field("service", "Service", type: "select", req: true, options: ["Servicing", "Tyres", "Diagnostics", "Bodywork", "Something else"])
+                field("date", "Preferred date", type: "date")
+                field("message", "Message", type: "area")
+            }
+        }
+    }
+
+    footer(text: "Autoservis Dvořák", links: nav_links, contact: ["Hradecká 88, 500 03 Pardubice", "+420 466 000 245", "servis@autodvorak.cz"], small: ["© 2026 Autoservis Dvořák s.r.o."])
+}
+```

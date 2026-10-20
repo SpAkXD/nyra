@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-sonnet-5-5/nyra-2/",
+ "runs": 3,
+ "fcp_ms": 652,
+ "lcp_ms": 652,
+ "cls": 0.026,
+ "load_ms": 1054,
+ "kb": 657.5,
+ "requests": 16,
+ "kb_by_type_first_run": {
+  "Document": 5.9,
+  "Stylesheet": 10.4,
+  "Script": 19.5,
+  "Image": 527,
+  "Font": 94.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  652,
+  672,
+  628
+ ]
+}

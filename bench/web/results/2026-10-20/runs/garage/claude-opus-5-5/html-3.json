@@ -1,0 +1,38 @@
+{
+ "brief": "garage",
+ "model": "claude-opus-5-5",
+ "lang": "html",
+ "run": 3,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 221.1,
+  "input_tokens": 3086,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 3082,
+  "output_tokens": 29738,
+  "cost_usd": 0.595392,
+  "visible_tokens": 26163,
+  "thinking_tokens_est": 3575
+ },
+ "builds_first": null,
+ "site": "sites/garage/claude-opus-5-5/html-3",
+ "final_file": "raw/garage/claude-opus-5-5/html-3.html",
+ "code_tokens": 26158,
+ "code_bytes": 57697,
+ "code_tokens_first": 26158,
+ "total": {
+  "input_tokens": 3086,
+  "cache_write": 0,
+  "cache_read": 3082,
+  "output_tokens": 29738,
+  "cost_usd": 0.595392,
+  "seconds": 221.1,
+  "thinking_tokens_est": 3575,
+  "calls": 1
+ }
+}

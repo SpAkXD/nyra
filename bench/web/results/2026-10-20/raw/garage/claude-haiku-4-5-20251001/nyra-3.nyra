@@ -1,0 +1,162 @@
+use web
+
+site("Autoservis Dvořák", primary: "#1F4E8C", accent: "#F2A900", bg: "#F4F5F7", font: "Source Sans 3", display: "Barlow Condensed", radius: 12)
+
+enum Msg { SelectService(str), SelectCarSize(str), ToggleServiceCheckbox(str) }
+
+var selectedService = "Servicing"
+var selectedCarSize = "Family car"
+var checkedServices: [str: bool] = [:]
+
+fn update(m: Msg) {
+    match m {
+        Msg.SelectService(s) => selectedService = s,
+        Msg.SelectCarSize(size) => selectedCarSize = size,
+        Msg.ToggleServiceCheckbox(s) => {
+            let current = checkedServices.get(s, false)
+            checkedServices[s] = !current
+        }
+    }
+}
+
+fn getPrice(service: str, carSize: str) -> int {
+    let prices: [str: [str: int]] = [
+        "Oil service": ["Small car": 1490, "Family car": 1790, "SUV / van": 2290],
+        "Front brake pads": ["Small car": 2190, "Family car": 2590, "SUV / van": 3190],
+        "Air-con service": ["Small car": 1290, "Family car": 1290, "SUV / van": 1590],
+        "Wheel alignment": ["Small car": 990, "Family car": 990, "SUV / van": 1290],
+        "Tyre change (4 wheels)": ["Small car": 800, "Family car": 960, "SUV / van": 1200]
+    ]
+    return prices.get(service, [:]).get(carSize, 0)
+}
+
+fn calculateTotal() -> int {
+    var total = 0
+    for service in ["Oil service", "Front brake pads", "Air-con service", "Wheel alignment", "Tyre change (4 wheels)"] {
+        if checkedServices.get(service, false) {
+            total += getPrice(service, selectedCarSize)
+        }
+    }
+    return total
+}
+
+fn renderServices() -> Node = stack {
+    row {
+        button("Servicing", on: Msg.SelectService("Servicing"), active: selectedService == "Servicing", style: if selectedService == "Servicing" { "primary" } else { "ghost" })
+        button("Tyres", on: Msg.SelectService("Tyres"), active: selectedService == "Tyres", style: if selectedService == "Tyres" { "primary" } else { "ghost" })
+        button("Diagnostics", on: Msg.SelectService("Diagnostics"), active: selectedService == "Diagnostics", style: if selectedService == "Diagnostics" { "primary" } else { "ghost" })
+        button("Bodywork", on: Msg.SelectService("Bodywork"), active: selectedService == "Bodywork", style: if selectedService == "Bodywork" { "primary" } else { "ghost" })
+    }
+    if selectedService == "Servicing" {
+        p("Scheduled servicing to the maker's plan, so your warranty stays valid.")
+        list(["Oil and filter change", "Brake check and fluids", "Stamp in your service book"])
+    }
+    if selectedService == "Tyres" {
+        p("Seasonal tyre changes, storage and repairs while you wait.")
+        list(["Tyre fitting and balancing", "Tyre hotel for 1,200 Kč a season", "Puncture repair"])
+    }
+    if selectedService == "Diagnostics" {
+        p("We read the fault codes and find the real cause before we replace anything.")
+        list(["Engine and electronics diagnostics", "Air-con check and refill", "Pre-purchase inspection"])
+    }
+    if selectedService == "Bodywork" {
+        p("Dents, scratches and paint, matched in our own paint shop.")
+        list(["Dent repair", "Colour-matched paintwork", "Insurance claims handled for you"])
+    }
+}
+
+fn renderPriceCalculator() -> Node = stack {
+    h3("Select car size")
+    row {
+        button("Small car", on: Msg.SelectCarSize("Small car"), active: selectedCarSize == "Small car", style: if selectedCarSize == "Small car" { "primary" } else { "ghost" })
+        button("Family car", on: Msg.SelectCarSize("Family car"), active: selectedCarSize == "Family car", style: if selectedCarSize == "Family car" { "primary" } else { "ghost" })
+        button("SUV / van", on: Msg.SelectCarSize("SUV / van"), active: selectedCarSize == "SUV / van", style: if selectedCarSize == "SUV / van" { "primary" } else { "ghost" })
+    }
+    h3("Select services")
+    for service in ["Oil service", "Front brake pads", "Air-con service", "Wheel alignment", "Tyre change (4 wheels)"] {
+        let price = getPrice(service, selectedCarSize)
+        row {
+            field(service, service, type: "check", req: false)
+            p("{price} Kč")
+        }
+    }
+    let total = calculateTotal()
+    h3("Estimated total")
+    p(style: "primary" cls: "text-2xl font-bold") {
+        "{total} Kč"
+    }
+    button("Book this service", href: "#contact", style: "primary")
+}
+
+page("/", "Autoservis Dvořák – honest car repairs in Pardubice", desc: "Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.") {
+    navbar("Autoservis Dvořák", [("Services", "#services"), ("Prices", "#prices"), ("How it works", "#process"), ("Team", "#team"), ("Contact", "#contact")], cta: ("Book a service", "#contact"))
+    
+    hero("Honest repairs, done right the first time", kicker: "Pardubice · Hradecká 88 · all makes", text: "Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.", image: "https://picsum.photos/seed/dvorak-hero/1600/1000", alt: "A mechanic working under a lifted car at Autoservis Dvořák", buttons: [("Get a price", "#prices"), ("Book a service", "#contact")], anim: "rise")
+    
+    section("", "", bg: "white", anim: "stagger") {
+        grid(4) {
+            stat("24", "years in Pardubice", anim: "count")
+            stat("9,800", "cars serviced last year", anim: "count")
+            stat("6", "certified mechanics", anim: "count")
+            card("2 years", "warranty on parts and labour")
+        }
+    }
+    
+    section("services", "What we do", kicker: "Services", bg: "alt", anim: "rise") {
+        renderServices()
+    }
+    
+    section("prices", "Get a price in ten seconds", kicker: "Prices", text: "Fixed prices including VAT, parts and labour.", bg: "white", anim: "rise") {
+        renderPriceCalculator()
+    }
+    
+    section("process", "Four steps, no surprises", kicker: "How it works", bg: "alt", anim: "rise") {
+        steps([
+            ("Book online or call", "Pick a time that suits you. Most services are done the same day."),
+            ("Drop off your car", "Leave the key at the desk, or in our key box before 7:00."),
+            ("We call before extra work", "If we find anything else, you decide. Nothing is done without your OK."),
+            ("Pick up and pay", "Pay by card or bank transfer. Every job comes with a 2-year warranty.")
+        ], anim: "stagger")
+    }
+    
+    section("team", "The people under the bonnet", kicker: "Team", bg: "white", anim: "rise") {
+        grid(4, anim: "stagger", hover: "lift") {
+            card("Jiří Dvořák", "Opened the shop in 2002 and still checks every car that leaves it.", image: "https://picsum.photos/seed/dvorak-team-1/600/700", tag: "Owner, master mechanic")
+            card("Pavel Svoboda", "Finds the electrical faults that other garages gave up on.", image: "https://picsum.photos/seed/dvorak-team-2/600/700", tag: "Diagnostics")
+            card("Martina Veselá", "Explains every line of your invoice in plain words.", image: "https://picsum.photos/seed/dvorak-team-3/600/700", tag: "Service advisor")
+            card("Lukáš Král", "Matches any colour, from a 1990s Škoda to a brand-new Tesla.", image: "https://picsum.photos/seed/dvorak-team-4/600/700", tag: "Bodywork and paint")
+        }
+    }
+    
+    section("", "What drivers say", bg: "alt", anim: "stagger") {
+        grid(3) {
+            quote("They called before changing anything, and the price was exactly as quoted.", "Michal T.")
+            quote("Found an electrical fault that two other garages missed.", "Simona K.")
+            quote("Tyres changed in 30 minutes while I had a coffee.", "Radek P.")
+        }
+    }
+    
+    section("contact", "Book your car in", kicker: "Contact", bg: "white", anim: "rise") {
+        stack {
+            h3("Get in touch")
+            p("Hradecká 88, 500 03 Pardubice")
+            link("Open in Google Maps", "https://maps.google.com/?q=Hradecká+88,+Pardubice")
+            p("[+420 466 000 245](tel:+420466000245)")
+            p("[servis@autodvorak.cz](mailto:servis@autodvorak.cz)")
+            h3("Opening hours")
+            hours([("Mon–Fri", "7:00–17:00"), ("Sat", "8:00–12:00 (tyres only)"), ("Sun", "")])
+            h3("Book online")
+            form(title: "", mailto: "servis@autodvorak.cz", subject: "Service booking") {
+                field("name", "Name", type: "text", req: true)
+                field("phone", "Phone", type: "tel", req: true)
+                field("email", "E-mail", type: "email", req: false)
+                field("car", "Car make and model", type: "text", req: true)
+                field("service", "Service", type: "select", req: true, options: ["Servicing", "Tyres", "Diagnostics", "Bodywork", "Something else"])
+                field("date", "Preferred date", type: "date", req: false)
+                field("message", "Message", type: "area", req: false)
+            }
+        }
+    }
+    
+    footer(text: "Autoservis Dvořák", contact: ["Hradecká 88, 500 03 Pardubice", "+420 466 000 245", "servis@autodvorak.cz"], links: [("Services", "#services"), ("Prices", "#prices"), ("How it works", "#process"), ("Team", "#team"), ("Contact", "#contact")], small: ["© 2026 Autoservis Dvořák s.r.o."])
+}

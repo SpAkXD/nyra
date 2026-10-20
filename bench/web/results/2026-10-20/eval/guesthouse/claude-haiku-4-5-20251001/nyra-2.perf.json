@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-haiku-4-5-20251001/nyra-2/",
+ "runs": 3,
+ "fcp_ms": 824,
+ "lcp_ms": 824,
+ "cls": 0.026,
+ "load_ms": 923,
+ "kb": 644.4,
+ "requests": 16,
+ "kb_by_type_first_run": {
+  "Document": 4.8,
+  "Stylesheet": 9.9,
+  "Script": 7.9,
+  "Image": 527,
+  "Font": 94.1,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  832,
+  824,
+  764
+ ]
+}

@@ -1,0 +1,1359 @@
+```html
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Independent car repair shop on Hradecká in Pardubice: servicing, tyres, diagnostics and bodywork for all makes, with fixed prices and a 2-year warranty.">
+    <title>Autoservis Dvořák – honest car repairs in Pardubice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background-color: #F4F5F7;
+            color: #1C2430;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 700;
+        }
+
+        .kicker {
+            font-size: 0.875rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #1F4E8C;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        /* Navigation */
+        nav {
+            position: sticky;
+            top: 0;
+            background-color: #FFFFFF;
+            border-bottom: 1px solid #E0E2E8;
+            z-index: 1000;
+            padding: 1rem 2rem;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1F4E8C;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #1C2430;
+            font-size: 0.95rem;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover,
+        .nav-links a:focus {
+            color: #1F4E8C;
+            outline: 2px solid #1F4E8C;
+            outline-offset: 2px;
+        }
+
+        .nav-cta {
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .nav-cta:hover,
+        .nav-cta:focus {
+            background-color: #163A6E;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #1C2430;
+        }
+
+        .menu-toggle:focus {
+            outline: 2px solid #1F4E8C;
+            outline-offset: 2px;
+        }
+
+        /* Hero Section */
+        .hero {
+            height: 100vh;
+            background: linear-gradient(135deg, rgba(31, 78, 140, 0.5), rgba(28, 36, 48, 0.6)), url('https://picsum.photos/seed/dvorak-hero/1600/1000') center/cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .hero-content {
+            max-width: 700px;
+        }
+
+        .hero-kicker {
+            font-size: 0.95rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+            animation: slideInUp 0.6s ease 0s both;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            animation: slideInUp 0.6s ease 0.2s both;
+        }
+
+        .hero > div > p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+            animation: slideInUp 0.6s ease 0.4s both;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: slideInUp 0.6s ease 0.6s both;
+        }
+
+        .btn-primary {
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #1F4E8C;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus {
+            background-color: #163A6E;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #FFFFFF;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .btn-secondary:hover,
+        .btn-secondary:focus {
+            background-color: #FFFFFF;
+            color: #1F4E8C;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hero-kicker,
+            .hero h1,
+            .hero > div > p,
+            .hero-buttons {
+                animation: none;
+                opacity: 1;
+            }
+        }
+
+        /* Numbers Section */
+        .numbers-section {
+            background-color: #FFFFFF;
+            padding: 4rem 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 3rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .number-item {
+            text-align: center;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .number-item:nth-child(1) { animation-delay: 0s; }
+        .number-item:nth-child(2) { animation-delay: 0.2s; }
+        .number-item:nth-child(3) { animation-delay: 0.4s; }
+        .number-item:nth-child(4) { animation-delay: 0.6s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .number-value {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 3rem;
+            color: #1F4E8C;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .number-label {
+            font-size: 1rem;
+            color: #1C2430;
+            font-weight: 600;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .number-item {
+                animation: none;
+                opacity: 1;
+            }
+        }
+
+        /* Section Container */
+        section {
+            padding: 4rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        section > .kicker {
+            text-align: center;
+        }
+
+        section > h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+        }
+
+        /* Services Section */
+        .services-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            background: none;
+            border: 2px solid #E0E2E8;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #1C2430;
+        }
+
+        .tab-button:hover,
+        .tab-button:focus {
+            border-color: #1F4E8C;
+            color: #1F4E8C;
+            outline: 2px solid #1F4E8C;
+            outline-offset: 2px;
+        }
+
+        .tab-button.active {
+            background-color: #1F4E8C;
+            border-color: #1F4E8C;
+            color: #FFFFFF;
+        }
+
+        .tab-panel {
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            border: 1px solid #E0E2E8;
+            padding: 3rem;
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+            animation: fadeInUp 0.6s ease;
+        }
+
+        .tab-panel > p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            color: #1F4E8C;
+            font-weight: 600;
+        }
+
+        .tab-points {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .tab-point {
+            padding-left: 2rem;
+            position: relative;
+        }
+
+        .tab-point::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: #F2A900;
+            font-weight: 700;
+            font-size: 1.3rem;
+        }
+
+        /* Price Calculator */
+        .price-calculator {
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            border: 1px solid #E0E2E8;
+            padding: 3rem;
+        }
+
+        .calculator-subtitle {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .car-size-selector {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .size-button {
+            background: #F4F5F7;
+            border: 2px solid #E0E2E8;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .size-button:hover,
+        .size-button:focus {
+            border-color: #1F4E8C;
+            background-color: #F2F5FB;
+            outline: 2px solid #1F4E8C;
+            outline-offset: 2px;
+        }
+
+        .size-button.active {
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            border-color: #1F4E8C;
+        }
+
+        .services-list {
+            display: grid;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .service-item {
+            display: flex;
+            align-items: center;
+            background-color: #F4F5F7;
+            padding: 1.5rem;
+            border-radius: 6px;
+            gap: 1rem;
+        }
+
+        .service-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #1F4E8C;
+        }
+
+        .service-item label {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .service-price {
+            color: #1F4E8C;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .price-total {
+            text-align: center;
+            background-color: #F4F5F7;
+            padding: 2rem;
+            border-radius: 6px;
+            margin-bottom: 2rem;
+        }
+
+        .price-total-label {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .price-total-value {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 2.5rem;
+            color: #1F4E8C;
+            font-weight: 700;
+        }
+
+        .price-button {
+            display: block;
+            margin: 0 auto;
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .price-button:hover,
+        .price-button:focus {
+            background-color: #163A6E;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        /* How It Works */
+        .process-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            position: relative;
+        }
+
+        .process-step {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E2E8;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .process-step:nth-child(1) { animation-delay: 0s; }
+        .process-step:nth-child(2) { animation-delay: 0.2s; }
+        .process-step:nth-child(3) { animation-delay: 0.4s; }
+        .process-step:nth-child(4) { animation-delay: 0.6s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .process-step {
+                animation: none;
+                opacity: 1;
+            }
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            border-radius: 50%;
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .process-step h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .process-step p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        /* Team Section */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .team-card {
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            border: 1px solid #E0E2E8;
+            overflow: hidden;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+            transition: transform 0.3s ease;
+        }
+
+        .team-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .team-card:nth-child(1) { animation-delay: 0s; }
+        .team-card:nth-child(2) { animation-delay: 0.2s; }
+        .team-card:nth-child(3) { animation-delay: 0.4s; }
+        .team-card:nth-child(4) { animation-delay: 0.6s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .team-card {
+                animation: none;
+                opacity: 1;
+            }
+
+            .team-card:hover {
+                transform: none;
+            }
+        }
+
+        .team-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+        }
+
+        .team-content {
+            padding: 2rem;
+        }
+
+        .team-name {
+            font-size: 1.3rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .team-role {
+            color: #1F4E8C;
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+
+        .team-bio {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        /* Testimonials */
+        .testimonials {
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            border: 1px solid #E0E2E8;
+            padding: 3rem;
+        }
+
+        .testimonials h2 {
+            margin-bottom: 2rem;
+        }
+
+        .quotes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .quote {
+            padding: 2rem;
+            background-color: #F4F5F7;
+            border-left: 4px solid #F2A900;
+            border-radius: 4px;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .quote:nth-child(1) { animation-delay: 0s; }
+        .quote:nth-child(2) { animation-delay: 0.2s; }
+        .quote:nth-child(3) { animation-delay: 0.4s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .quote {
+                animation: none;
+                opacity: 1;
+            }
+        }
+
+        .quote-text {
+            font-style: italic;
+            margin-bottom: 1rem;
+            color: #1C2430;
+        }
+
+        .quote-author {
+            font-weight: 600;
+            color: #1F4E8C;
+        }
+
+        /* Contact Section */
+        .contact-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .contact-block {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E2E8;
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        .contact-block h3 {
+            margin-bottom: 1rem;
+        }
+
+        .contact-block p {
+            margin-bottom: 0.5rem;
+        }
+
+        .contact-block a {
+            color: #1F4E8C;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .contact-block a:hover,
+        .contact-block a:focus {
+            color: #163A6E;
+            outline: 2px solid #1F4E8C;
+            outline-offset: 2px;
+        }
+
+        .contact-form {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E2E8;
+            border-radius: 8px;
+            padding: 3rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1C2430;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E0E2E8;
+            border-radius: 6px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: 2px solid #1F4E8C;
+            outline-offset: 0;
+            border-color: #1F4E8C;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .form-submit {
+            background-color: #1F4E8C;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .form-submit:hover,
+        .form-submit:focus {
+            background-color: #163A6E;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        /* Footer */
+        footer {
+            background-color: #1C2430;
+            color: #FFFFFF;
+            padding: 3rem 2rem;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-brand {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links a {
+            color: #FFFFFF;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover,
+        .footer-links a:focus {
+            color: #F2A900;
+            outline: 2px solid #F2A900;
+            outline-offset: 2px;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            border-top: 1px solid #3C4558;
+            padding-top: 2rem;
+            font-size: 0.9rem;
+            color: #999;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .nav-links.mobile-open {
+                display: flex;
+                flex-direction: column;
+                position: absolute;
+                top: 60px;
+                left: 0;
+                right: 0;
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E2E8;
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero-kicker,
+            .hero > div > p {
+                font-size: 0.95rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .number-value {
+                font-size: 2.5rem;
+            }
+
+            section {
+                padding: 2rem 1rem;
+            }
+
+            section > h2 {
+                font-size: 1.8rem;
+            }
+
+            .contact-form {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <div class="nav-brand">Autoservis Dvořák</div>
+            <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle">☰</button>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#services">Services</a></li>
+                <li><a href="#prices">Prices</a></li>
+                <li><a href="#process">How it works</a></li>
+                <li><a href="#team">Team</a></li>
+                <li><a href="#contact">Contact</a></li>
+                <li><a href="#contact" class="nav-cta">Book a service</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="hero-content">
+            <div class="hero-kicker">Pardubice · Hradecká 88 · all makes</div>
+            <h1>Honest repairs, done right the first time</h1>
+            <div>
+                <p>Servicing, tyres, diagnostics and bodywork for every make. Fixed prices up front and a call before any extra work.</p>
+                <div class="hero-buttons">
+                    <a href="#prices" class="btn-primary">Get a price</a>
+                    <a href="#contact" class="btn-secondary">Book a service</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Numbers Section -->
+    <div class="numbers-section">
+        <div class="number-item">
+            <div class="number-value" data-count="24">0</div>
+            <div class="number-label">years in Pardubice</div>
+        </div>
+        <div class="number-item">
+            <div class="number-value" data-count="9800">0</div>
+            <div class="number-label">cars serviced last year</div>
+        </div>
+        <div class="number-item">
+            <div class="number-value" data-count="6">0</div>
+            <div class="number-label">certified mechanics</div>
+        </div>
+        <div class="number-item">
+            <div class="number-label"><strong>2 years</strong><br>warranty on parts and labour</div>
+        </div>
+    </div>
+
+    <!-- Services Section -->
+    <section id="services">
+        <div class="kicker">Services</div>
+        <h2>What we do</h2>
+        <div class="services-tabs">
+            <button class="tab-button active" data-tab="servicing">Servicing</button>
+            <button class="tab-button" data-tab="tyres">Tyres</button>
+            <button class="tab-button" data-tab="diagnostics">Diagnostics</button>
+            <button class="tab-button" data-tab="bodywork">Bodywork</button>
+        </div>
+        <div id="servicing" class="tab-panel active">
+            <p>Scheduled servicing to the maker's plan, so your warranty stays valid.</p>
+            <div class="tab-points">
+                <div class="tab-point">Oil and filter change</div>
+                <div class="tab-point">Brake check and fluids</div>
+                <div class="tab-point">Stamp in your service book</div>
+            </div>
+        </div>
+        <div id="tyres" class="tab-panel">
+            <p>Seasonal tyre changes, storage and repairs while you wait.</p>
+            <div class="tab-points">
+                <div class="tab-point">Tyre fitting and balancing</div>
+                <div class="tab-point">Tyre hotel for 1,200 Kč a season</div>
+                <div class="tab-point">Puncture repair</div>
+            </div>
+        </div>
+        <div id="diagnostics" class="tab-panel">
+            <p>We read the fault codes and find the real cause before we replace anything.</p>
+            <div class="tab-points">
+                <div class="tab-point">Engine and electronics diagnostics</div>
+                <div class="tab-point">Air-con check and refill</div>
+                <div class="tab-point">Pre-purchase inspection</div>
+            </div>
+        </div>
+        <div id="bodywork" class="tab-panel">
+            <p>Dents, scratches and paint, matched in our own paint shop.</p>
+            <div class="tab-points">
+                <div class="tab-point">Dent repair</div>
+                <div class="tab-point">Colour-matched paintwork</div>
+                <div class="tab-point">Insurance claims handled for you</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Price Calculator -->
+    <section id="prices">
+        <div class="kicker">Prices</div>
+        <h2>Get a price in ten seconds</h2>
+        <div class="price-calculator">
+            <p class="calculator-subtitle">Fixed prices including VAT, parts and labour.</p>
+            <div class="car-size-selector">
+                <button class="size-button" data-size="small">Small car</button>
+                <button class="size-button active" data-size="family">Family car</button>
+                <button class="size-button" data-size="suv">SUV / van</button>
+            </div>
+            <div class="services-list">
+                <div class="service-item">
+                    <input type="checkbox" id="service-oil" data-service="oil" data-small="1490" data-family="1790" data-suv="2290">
+                    <label for="service-oil">
+                        <span>Oil service</span>
+                        <span class="service-price">1,790 Kč</span>
+                    </label>
+                </div>
+                <div class="service-item">
+                    <input type="checkbox" id="service-brake" data-service="brake" data-small="2190" data-family="2590" data-suv="3190">
+                    <label for="service-brake">
+                        <span>Front brake pads</span>
+                        <span class="service-price">2,590 Kč</span>
+                    </label>
+                </div>
+                <div class="service-item">
+                    <input type="checkbox" id="service-aircon" data-service="aircon" data-small="1290" data-family="1290" data-suv="1590">
+                    <label for="service-aircon">
+                        <span>Air-con service</span>
+                        <span class="service-price">1,290 Kč</span>
+                    </label>
+                </div>
+                <div class="service-item">
+                    <input type="checkbox" id="service-alignment" data-service="alignment" data-small="990" data-family="990" data-suv="1290">
+                    <label for="service-alignment">
+                        <span>Wheel alignment</span>
+                        <span class="service-price">990 Kč</span>
+                    </label>
+                </div>
+                <div class="service-item">
+                    <input type="checkbox" id="service-tyre" data-service="tyre" data-small="800" data-family="960" data-suv="1200">
+                    <label for="service-tyre">
+                        <span>Tyre change (4 wheels)</span>
+                        <span class="service-price">960 Kč</span>
+                    </label>
+                </div>
+            </div>
+            <div class="price-total">
+                <div class="price-total-label">Estimated total</div>
+                <div class="price-total-value" id="totalPrice">0 Kč</div>
+            </div>
+            <a href="#contact" class="price-button">Book this service</a>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="process">
+        <div class="kicker">How it works</div>
+        <h2>Four steps, no surprises</h2>
+        <div class="process-steps">
+            <div class="process-step">
+                <div class="step-number">1</div>
+                <h3>Book online or call</h3>
+                <p>Pick a time that suits you. Most services are done the same day.</p>
+            </div>
+            <div class="process-step">
+                <div class="step-number">2</div>
+                <h3>Drop off your car</h3>
+                <p>Leave the key at the desk, or in our key box before 7:00.</p>
+            </div>
+            <div class="process-step">
+                <div class="step-number">3</div>
+                <h3>We call before extra work</h3>
+                <p>If we find anything else, you decide. Nothing is done without your OK.</p>
+            </div>
+            <div class="process-step">
+                <div class="step-number">4</div>
+                <h3>Pick up and pay</h3>
+                <p>Pay by card or bank transfer. Every job comes with a 2-year warranty.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Team -->
+    <section id="team">
+        <div class="kicker">Team</div>
+        <h2>The people under the bonnet</h2>
+        <div class="team-grid">
+            <div class="team-card">
+                <img src="https://picsum.photos/seed/dvorak-team-1/600/700" alt="Jiří Dvořák" class="team-image">
+                <div class="team-content">
+                    <h3 class="team-name">Jiří Dvořák</h3>
+                    <div class="team-role">Owner, master mechanic</div>
+                    <p class="team-bio">Opened the shop in 2002 and still checks every car that leaves it.</p>
+                </div>
+            </div>
+            <div class="team-card">
+                <img src="https://picsum.photos/seed/dvorak-team-2/600/700" alt="Pavel Svoboda" class="team-image">
+                <div class="team-content">
+                    <h3 class="team-name">Pavel Svoboda</h3>
+                    <div class="team-role">Diagnostics</div>
+                    <p class="team-bio">Finds the electrical faults that other garages gave up on.</p>
+                </div>
+            </div>
+            <div class="team-card">
+                <img src="https://picsum.photos/seed/dvorak-team-3/600/700" alt="Martina Veselá" class="team-image">
+                <div class="team-content">
+                    <h3 class="team-name">Martina Veselá</h3>
+                    <div class="team-role">Service advisor</div>
+                    <p class="team-bio">Explains every line of your invoice in plain words.</p>
+                </div>
+            </div>
+            <div class="team-card">
+                <img src="https://picsum.photos/seed/dvorak-team-4/600/700" alt="Lukáš Král" class="team-image">
+                <div class="team-content">
+                    <h3 class="team-name">Lukáš Král</h3>
+                    <div class="team-role">Bodywork and paint</div>
+                    <p class="team-bio">Matches any colour, from a 1990s Škoda to a brand-new Tesla.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section style="background-color: #FFFFFF; border: 1px solid #E0E2E8;">
+        <div class="testimonials">
+            <h2>What drivers say</h2>
+            <div class="quotes-grid">
+                <div class="quote">
+                    <div class="quote-text">"They called before changing anything, and the price was exactly as quoted."</div>
+                    <div class="quote-author">— Michal T.</div>
+                </div>
+                <div class="quote">
+                    <div class="quote-text">"Found an electrical fault that two other garages missed."</div>
+                    <div class="quote-author">— Simona K.</div>
+                </div>
+                <div class="quote">
+                    <div class="quote-text">"Tyres changed in 30 minutes while I had a coffee."</div>
+                    <div class="quote-author">— Radek P.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact">
+        <div class="kicker">Contact</div>
+        <h2>Book your car in</h2>
+        <div class="contact-info">
+            <div class="contact-block">
+                <h3>Address</h3>
+                <p>Hradecká 88, 500 03 Pardubice</p>
+                <p><a href="https://maps.google.com/?q=Hradecká+88,+Pardubice" target="_blank">Open in Google Maps</a></p>
+            </div>
+            <div class="contact-block">
+                <h3>Contact</h3>
+                <p><a href="tel:+420466000245">+420 466 000 245</a></p>
+                <p><a href="mailto:servis@autodvorak.cz">servis@autodvorak.cz</a></p>
+            </div>
+            <div class="contact-block">
+                <h3>Opening hours</h3>
+                <p>Monday–Friday: 7:00–17:00</p>
+                <p>Saturday: 8:00–12:00 (tyres only)</p>
+                <p>Sunday: Closed</p>
+            </div>
+        </div>
+        <div class="contact-form">
+            <form id="contactForm">
+                <div class="form-group">
+                    <label for="name">Name *</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone *</label>
+                    <input type="tel" id="phone" name="phone" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">E-mail</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                <div class="form-group">
+                    <label for="car">Car make and model *</label>
+                    <input type="text" id="car" name="car" required>
+                </div>
+                <div class="form-group">
+                    <label for="service">Service *</label>
+                    <select id="service" name="service" required>
+                        <option value="">Select a service</option>
+                        <option value="Servicing">Servicing</option>
+                        <option value="Tyres">Tyres</option>
+                        <option value="Diagnostics">Diagnostics</option>
+                        <option value="Bodywork">Bodywork</option>
+                        <option value="Something else">Something else</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">Preferred date</label>
+                    <input type="date" id="date" name="date">
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" name="message"></textarea>
+                </div>
+                <button type="submit" class="form-submit">Book service</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div>
+                <div class="footer-brand">Autoservis Dvořák</div>
+                <p>Hradecká 88, 500 03 Pardubice</p>
+            </div>
+            <div>
+                <h4>Quick links</h4>
+                <ul class="footer-links">
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#prices">Prices</a></li>
+                    <li><a href="#process">How it works</a></li>
+                    <li><a href="#team">Team</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            © 2026 Autoservis Dvořák s.r.o.
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const navLinks = document.getElementById('navLinks');
+
+        menuToggle.addEventListener('click', function() {
+            navLinks.classList.toggle('mobile-open');
+        });
+
+        // Close menu when link clicked
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('mobile-open');
+            });
+        });
+
+        // Services tab switching
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabPanels.forEach(panel => panel.classList.remove('active'));
+                
+                this.classList.add('active');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Price calculator
+        let currentSize = 'family';
+        let selectedServices = {};
+
+        const sizeButtons = document.querySelectorAll('.size-button');
+        const serviceCheckboxes = document.querySelectorAll('.service-item input[type="checkbox"]');
+        const totalPriceElement = document.getElementById('totalPrice');
+
+        sizeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                sizeButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                currentSize = this.getAttribute('data-size');
+                updatePrices();
+                updateTotal();
+            });
+        });
+
+        serviceCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    selectedServices[this.id] = true;
+                } else {
+                    delete selectedServices[this.id];
+                }
+                updateTotal();
+            });
+        });
+
+        function updatePrices() {
+            serviceCheckboxes.forEach(checkbox => {
+                const price = checkbox.getAttribute(`data-${currentSize}`);
+                const label = checkbox.nextElementSibling;
+                const priceSpan = label.querySelector('.service-price');
+                priceSpan.textContent = new Intl.NumberFormat('cs-CZ').format(price) + ' Kč';
+            });
+        }
+
+        function updateTotal() {
+            let total = 0;
+            Object.keys(selectedServices).forEach(serviceId => {
+                const checkbox = document.getElementById(serviceId);
+                const price = parseInt(checkbox.getAttribute(`data-${currentSize}`));
+                total += price;
+            });
+            totalPriceElement.textContent = new Intl.NumberFormat('cs-CZ').format(total) + ' Kč';
+        }
+
+        // Number counter animation
+        function animateNumbers() {
+            const numberElements = document.querySelectorAll('.number-value[data-count]');
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            numberElements.forEach(element => {
+                const target = parseInt(element.getAttribute('data-count'));
+                
+                if (prefersReducedMotion) {
+                    element.textContent = target.toLocaleString('cs-CZ');
+                } else {
+                    const duration = 2000;
+                    const start = Date.now();
+                    
+                    function update() {
+                        const now = Date.now();
+                        const progress = Math.min((now - start) / duration, 1);
+                        const current = Math.floor(progress * target);
+                        element.textContent = current.toLocaleString('cs-CZ');
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(update);
+                        }
+                    }
+                    
+                    requestAnimationFrame(update);
+                }
+            });
+        }
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    if (entry.target.classList.contains('numbers-section')) {
+                        animateNumbers();
+                        observer.unobserve(entry.target);
+                    }
+                }
+            });
+        }, observerOptions);
+
+        const numbersSection = document.querySelector('.numbers-section');
+        if (numbersSection) {
+            observer.observe(numbersSection);
+        }
+
+        // Contact form submission
+        const contactForm = document.getElementById('contactForm');
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const email = document.getElementById('email').value;
+            const car = document.getElementById('car').value;
+            const service = document.getElementById('service').value;
+            const date = document.getElementById('date').value;
+            const message = document.getElementById('message').value;
+            
+            const body = `Booking details:\n\nName: ${name}\nPhone: ${phone}\nE-mail: ${email}\nCar: ${car}\nService: ${service}\nPreferred date: ${date}\nMessage: ${message}`;
+            
+            const mailtoLink = `mailto:servis@autodvorak.cz?subject=Service booking&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoLink;
+        });
+    </script>
+</body>
+</html>
+```

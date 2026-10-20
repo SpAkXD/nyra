@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:51238/garage/claude-haiku-4-5-20251001/html-4/",
+ "runs": 3,
+ "fcp_ms": 528,
+ "lcp_ms": 1032,
+ "cls": 0,
+ "load_ms": 1038,
+ "kb": 388.6,
+ "requests": 13,
+ "kb_by_type_first_run": {
+  "Document": 8.1,
+  "Stylesheet": 1.2,
+  "Image": 254.7,
+  "Font": 124,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  760,
+  1032,
+  1144
+ ]
+}

@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:51238/garage/claude-opus-5-5/html-4/",
+ "runs": 3,
+ "fcp_ms": 732,
+ "lcp_ms": 1180,
+ "cls": 0,
+ "load_ms": 1126,
+ "kb": 246.2,
+ "requests": 12,
+ "kb_by_type_first_run": {
+  "Document": 13.2,
+  "Stylesheet": 1.3,
+  "Image": 70.8,
+  "Font": 160.3,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  1236,
+  852,
+  1180
+ ]
+}

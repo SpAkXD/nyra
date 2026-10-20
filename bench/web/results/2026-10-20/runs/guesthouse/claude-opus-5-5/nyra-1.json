@@ -1,0 +1,40 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-opus-5-5",
+ "lang": "nyra",
+ "run": 1,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 59.7,
+  "input_tokens": 6231,
+  "input_fresh": 4,
+  "cache_write": 6227,
+  "cache_read": 0,
+  "output_tokens": 7210,
+  "cost_usd": 0.175351,
+  "visible_tokens": 3652,
+  "thinking_tokens_est": 3558
+ },
+ "builds_first": true,
+ "build_message_first": "warning[E0389]: unknown icon `paw-print`: drawn as a plain circle\n  --> site.nyra:22:41\n   |\n22 |     (\"Pets welcome (300 Kč per night)\", \"paw-print\"),\n   |                                         ^\n  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:maximize:`: shown as it is written\n  --> site.nyra:75:19\n   |\n75 |                 p(\":maximize: {r.size} · :users: {r.guests}\")\n   |                   ^\n  = hint: did you mean `maximize-2`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them); write `\\\\:` for a colon that starts no icon\n  = explain: nyra explain E0389\n\nnyra: built 1 page(s) into dist (5 files, 138.1 KB, site.3d0c36035f.css 40.3 KB, site.3b3dd196da.js 70.7 KB) (116.63 ms)",
+ "builds_after_repair": true,
+ "site": "sites/guesthouse/claude-opus-5-5/nyra-1",
+ "final_file": "raw/guesthouse/claude-opus-5-5/nyra-1.nyra",
+ "code_tokens": 3645,
+ "code_bytes": 8610,
+ "code_tokens_first": 3645,
+ "total": {
+  "input_tokens": 6231,
+  "cache_write": 6227,
+  "cache_read": 0,
+  "output_tokens": 7210,
+  "cost_usd": 0.175351,
+  "seconds": 59.7,
+  "thinking_tokens_est": 3558,
+  "calls": 1
+ }
+}

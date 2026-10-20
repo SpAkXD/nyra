@@ -1,0 +1,40 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-sonnet-5-5",
+ "lang": "nyra",
+ "run": 3,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 15.1,
+  "input_tokens": 6231,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 3348,
+  "cost_usd": 0.034111,
+  "visible_tokens": 3346,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": true,
+ "build_message_first": "warning[E0389]: unknown icon `paw-print`: drawn as a plain circle\n  --> site.nyra:47:59\n   |\n47 |             card(\"Pets welcome (300 Kč per night)\", icon: \"paw-print\")\n   |                                                           ^\n  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nnyra: built 1 page(s) into dist (5 files, 128.2 KB, site.20318ea2de.css 39.4 KB, site.29a0da59d4.js 63.6 KB) (188.47 ms)",
+ "builds_after_repair": true,
+ "site": "sites/guesthouse/claude-sonnet-5-5/nyra-3",
+ "final_file": "raw/guesthouse/claude-sonnet-5-5/nyra-3.nyra",
+ "code_tokens": 3339,
+ "code_bytes": 8143,
+ "code_tokens_first": 3339,
+ "total": {
+  "input_tokens": 6231,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 3348,
+  "cost_usd": 0.034111,
+  "seconds": 15.1,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}
