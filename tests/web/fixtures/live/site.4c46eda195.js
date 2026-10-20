@@ -14,9 +14,18 @@ return (l ? l.textContent : el.name).replace('*', '').trim();
 const lines = fields
 .filter((el) => el !== message && (el.type === 'checkbox' ? el.checked : el.value.trim()))
 .map((el) => (el.type === 'checkbox' ? label(el) : el.value.trim()));
-const body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
-const subject = form.dataset.subject ? 'subject=' + encodeURIComponent(form.dataset.subject) + '&' : '';
-window.location.href = 'mailto:' + form.dataset.mailto + '?' + subject + 'body=' + encodeURIComponent(body);
+let body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
+const query = (form.dataset.query || '').split('&').filter((kv) => {
+if (!/^body=/i.test(kv)) return kv !== '';
+try {
+body = decodeURIComponent(kv.slice(5)) + '\n\n' + body;
+} catch {
+body = kv.slice(5) + '\n\n' + body;
+}
+return false;
+});
+query.push('body=' + encodeURIComponent(body));
+window.location.href = 'mailto:' + form.dataset.mailto + '?' + query.join('&');
 const card = form.closest('.form');
 const done = card && card.querySelector('.form-done');
 if (done) {
@@ -361,6 +370,12 @@ ny_cp() { return new nyS_Bread(this.name, this.kind, this.price); }
 ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.price === o.price; }
 ny_fmt() { return "Bread(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "price: " + ny_fmt(this.price, "i") + ")"; }
 }
+class nyS_Opt_oi {
+constructor(p0, p1) { this.has = p0; this.val = p1; }
+ny_cp() { return new nyS_Opt_oi(this.has, this.val); }
+ny_eq(o) { return this.has === o.has && this.val === o.val; }
+ny_fmt() { return this.has ? "Some(" + ny_fmt(this.val, "i") + ")" : "none"; }
+}
 nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"], ["Send_0", "Send_0", ["m", "s", "s"]]];
 nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Send", [2]], ["Clear", []]];
 nyS_Node.ny_jf = [["html", "html", "s"], ["kit", "kit", ["a", "s"]]];
@@ -374,6 +389,8 @@ nyS_Opt_ot2ss.ny_jk = "o";
 nyS_Tup_t3sss.ny_jf = [["_0", "_0", "s"], ["_1", "_1", "s"], ["_2", "_2", "s"]];
 nyS_Tup_t3sss.ny_jk = "t";
 nyS_Bread.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["price", "price", "i"]];
+nyS_Opt_oi.ny_jf = [["has", "has", "b"], ["val", "val", "i"]];
+nyS_Opt_oi.ny_jk = "o";
 function update(m, kind, sent) {
 let nyU__ub7_m1, k, ny_t5, fields;
 nyU__ub7_m1 = m;
@@ -442,7 +459,7 @@ ny_t26 = `${ny_b_2.price} Kč`;
 ny_t27 = [];
 ny_t28 = new nyS_Opt_of(false, 0.0);
 ny_t29 = [];
-ny_t30 = nyU_web_u2e_card(ny_b_2.name, ny_t26, "", "", "", false, "", "", "", ny_t27, "", "", "", "", "", "", "", ny_t28, "", ny_t29, _web);
+ny_t30 = nyU_web_u2e_card(ny_b_2.name, ny_t26, "", "", "", false, "", "", "", "", ny_t27, "", "", "", "", "", "", "", ny_t28, "", ny_t29, _web);
 {
 if (ny_t21.ny_s) ny_t21 = ny_cp(ny_t21);
 ny_t21.push(ny_sh(ny_t30));
@@ -585,9 +602,14 @@ ny_t24 = nyU_web_u2e__kits(kids, "");
 ny_t25 = new nyS_Node(ny_t23, ny_sh(ny_t24));
 return ny_t25;
 }
-function nyU_web_u2e_card(title, text, icon, image, alt, fill, href, color, tag, items, ratio, id, cls, anim, hover, loop, scroll, at, morph, kids, _web) {
-let c, tag_name, h, ny_t24, ny_t25, ny_t26, t, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49, ny_t50, ny_t51, ny_t52, ny_t53, ny_t54, it, ny_t56, ny_t57, ny_t58, ny_t59, ny_t60, ny_t61, ny_t62, ny_t63, ny_t64;
+function nyU_web_u2e_card(title, text, icon, image, alt, fill, href, on, color, tag, items, ratio, id, cls, anim, hover, loop, scroll, at, morph, kids, _web) {
+let c, tag_name, h, ny_t25, ny_t26, ny_t27, t, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, hit, ny_t50, ny_t51, ny_t52, ny_t53, ny_t54, ny_t55, ny_t56, own, ny_t58, ny_t59, ny_t60, ny_t61, ny_t62, ny_t63, it, ny_t65, ny_t66, ny_t67, ny_t68, ny_t69, ny_t70, ny_t71, ny_t72, ny_t73;
 c = "card";
+if ((on !== "") && (href === "")) {
+{
+c += " card-on";
+}
+}
 if (fill) {
 {
 c += " card-fill";
@@ -609,129 +631,141 @@ c += " card-link";
 }
 }
 tag_name = (href !== "") ? "a" : "article";
-ny_t24 = "<" + tag_name;
-ny_t25 = nyU_web_u2e__ic(c, id, cls);
-h = ny_t24 + ny_t25;
+ny_t25 = "<" + tag_name;
+ny_t26 = nyU_web_u2e__ic(c, id, cls);
+h = ny_t25 + ny_t26;
 if (href !== "") {
-ny_t26 = nyU_web_u2e__link_attrs(href);
+ny_t27 = nyU_web_u2e__link_attrs(href);
 {
-h += ny_t26;
+h += ny_t27;
 }
 }
 t = nyU_web_u2e__color(color, _web);
 if (t !== "") {
-ny_t28 = nyU_web_u2e__attr(t);
-ny_t29 = " style=\"--tint:" + ny_t28;
-ny_t30 = ny_t29 + "\"";
+ny_t29 = nyU_web_u2e__attr(t);
+ny_t30 = " style=\"--tint:" + ny_t29;
+ny_t31 = ny_t30 + "\"";
 {
-h += ny_t30;
+h += ny_t31;
 }
 }
-ny_t31 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t32 = ny_t31 + ">";
+ny_t32 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t33 = ny_t32 + ">";
 {
-h += ny_t32;
+h += ny_t33;
 }
 if (image !== "") {
 if (ratio !== "") {
-ny_t33 = nyU_web_u2e__attr(ratio);
-ny_t34 = " style=\"--ratio:" + ny_t33;
-ny_t35 = ny_t34 + "\"";
+ny_t34 = nyU_web_u2e__attr(ratio);
+ny_t35 = " style=\"--ratio:" + ny_t34;
+ny_t36 = ny_t35 + "\"";
 } else {
-ny_t35 = "";
+ny_t36 = "";
 }
-ny_t36 = "<div class=\"card-media\"" + ny_t35;
-ny_t37 = ny_t36 + ">";
-{
-h += ny_t37;
-}
-ny_t38 = nyU_web_u2e__img_tag(image, (alt !== "") ? alt : title, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false);
+ny_t37 = "<div class=\"card-media\"" + ny_t36;
+ny_t38 = ny_t37 + ">";
 {
 h += ny_t38;
 }
-if (tag !== "") {
-ny_t39 = nyU_web_u2e__md(tag);
-ny_t40 = "<span class=\"card-tag\">" + ny_t39;
-ny_t41 = ny_t40 + "</span>";
+ny_t39 = nyU_web_u2e__img_tag(image, (alt !== "") ? alt : title, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false);
 {
-h += ny_t41;
+h += ny_t39;
+}
+if (tag !== "") {
+ny_t40 = nyU_web_u2e__md(tag);
+ny_t41 = "<span class=\"card-tag\">" + ny_t40;
+ny_t42 = ny_t41 + "</span>";
+{
+h += ny_t42;
 }
 }
 {
 h += "</div>";
 }
 } else if (icon !== "") {
-ny_t42 = nyU_web_u2e__icon(icon);
-ny_t43 = "<span class=\"card-icon\">" + ny_t42;
-ny_t44 = ny_t43 + "</span>";
+ny_t43 = nyU_web_u2e__icon(icon);
+ny_t44 = "<span class=\"card-icon\">" + ny_t43;
+ny_t45 = ny_t44 + "</span>";
 {
-h += ny_t44;
+h += ny_t45;
 }
 }
 {
 h += "<div class=\"card-body\">";
 }
 if ((image === "") && (tag !== "")) {
-ny_t45 = nyU_web_u2e__md(tag);
-ny_t46 = "<span class=\"card-tag\">" + ny_t45;
-ny_t47 = ny_t46 + "</span>";
+ny_t46 = nyU_web_u2e__md(tag);
+ny_t47 = "<span class=\"card-tag\">" + ny_t46;
+ny_t48 = ny_t47 + "</span>";
 {
-h += ny_t47;
+h += ny_t48;
 }
+}
+if ((on !== "") && (href === "")) {
+ny_t50 = nyU_web_u2e__at("data-on", on);
+ny_t51 = "<button type=\"button\" class=\"card-hit\"" + ny_t50;
+hit = ny_t51 + ">";
+} else {
+hit = "";
 }
 if (title !== "") {
-ny_t48 = nyU_web_u2e__md(title);
-ny_t49 = "<h3 class=\"card-title\">" + ny_t48;
-ny_t50 = ny_t49 + "</h3>";
+ny_t52 = "<h3 class=\"card-title\">" + hit;
+ny_t53 = nyU_web_u2e__md(title);
+ny_t54 = ny_t52 + ny_t53;
+ny_t55 = ny_t54 + ((hit !== "") ? "</button>" : "");
+ny_t56 = ny_t55 + "</h3>";
 {
-h += ny_t50;
+h += ny_t56;
 }
 }
 if (text !== "") {
-ny_t51 = nyU_web_u2e__md(text);
-ny_t52 = "<p class=\"card-text\">" + ny_t51;
-ny_t53 = ny_t52 + "</p>";
+own = (hit !== "") && (title === "");
+ny_t58 = "<p class=\"card-text\">" + (own ? hit : "");
+ny_t59 = nyU_web_u2e__md(text);
+ny_t60 = ny_t58 + ny_t59;
+ny_t61 = ny_t60 + (own ? "</button>" : "");
+ny_t62 = ny_t61 + "</p>";
 {
-h += ny_t53;
+h += ny_t62;
 }
 }
 if (items.length > 0) {
 {
 h += "<ul class=\"card-items\">";
 }
-ny_t54 = items;
-ny_sh(ny_t54);
-for (const ny_c1 of ny_t54) {
+ny_t63 = items;
+ny_sh(ny_t63);
+for (const ny_c1 of ny_t63) {
 it = ny_c1;
-ny_t56 = nyU_web_u2e__md(it);
-ny_t57 = "<li>" + ny_t56;
-ny_t58 = ny_t57 + "</li>";
+ny_t65 = nyU_web_u2e__md(it);
+ny_t66 = "<li>" + ny_t65;
+ny_t67 = ny_t66 + "</li>";
 {
-h += ny_t58;
+h += ny_t67;
 }
 }
 {
 h += "</ul>";
 }
 }
-ny_t59 = nyU_web_u2e__html(kids);
-ny_t60 = ny_t59 + "</div>";
+ny_t68 = nyU_web_u2e__html(kids);
+ny_t69 = ny_t68 + "</div>";
 {
-h += ny_t60;
+h += ny_t69;
 }
 if (((icon !== "") && (image === "")) && (!fill)) {
 {
 h += "<span class=\"card-bar\" aria-hidden=\"true\"></span>";
 }
 }
-ny_t61 = "</" + tag_name;
-ny_t62 = ny_t61 + ">";
+ny_t70 = "</" + tag_name;
+ny_t71 = ny_t70 + ">";
 {
-h += ny_t62;
+h += ny_t71;
 }
-ny_t63 = nyU_web_u2e__kits(kids, "");
-ny_t64 = new nyS_Node(h, ny_sh(ny_t63));
-return ny_t64;
+ny_t72 = nyU_web_u2e__kits(kids, "");
+ny_t73 = new nyS_Node(h, ny_sh(ny_t72));
+return ny_t73;
 }
 function nyU_web_u2e_p(text, size, id, cls, anim, hover, loop, scroll, at, morph) {
 let c, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21;
@@ -845,7 +879,7 @@ ny_t6 = ny_t5 + "\"";
 return ny_t6;
 }
 function nyU_web_u2e__md(s) {
-let cs, n, o, i, bold, em, c, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, j, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, mid, ny_t44, end, url, ny_t47, ny_t48, ny_t49, ny_t50, ny_t51, ny_t52, ny_t53, ny_t54, ny_t55, ny_t56, ny_t57, ny_j_2, name, ny_t60, ny_t61, ny_t62, ny_t63, ny_t64, ny_t65, ny_t66, ny_t67, ny_t68, ny_t69, ny_t70;
+let cs, n, o, i, bold, em, c, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, j, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, mid, ny_t44, end, url, ny_t47, ny_t48, ny_t49, ny_t50, ny_t51, ny_t52, ny_t53, ny_t54, ny_t55, ny_t56, ny_t57, ny_j_2, name, ny_t60, ny_t61, ny_t62, ny_t63, ny_t64, ny_t65, ny_t66, ny_t67, ny_t68, ny_t69, ny_t70, ny_t71, ny_t72;
 cs = ny_chars(s);
 n = cs.length;
 o = "";
@@ -981,23 +1015,33 @@ o += ny_t62;
 }
 i = ny_add(ny_j_2, 1, 5, 5);
 } else {
-ny_t63 = "unknown icon `:" + name;
-                                    ny_t64 = ny_t63 + ":` in the text \"";
-ny_t65 = ny_t64 + s;
-ny_t66 = ny_t65 + "\"";
-nyU_web_u2e__err("E0374", ny_t66);
-ny_t67 = `${ny_char_str(c)}`;
-ny_t68 = nyU_web_u2e__esc(ny_t67);
+ny_t63 = nyU_web_u2e__icon_like(name);
+ny_t64 = ny_t63 !== "";
+if (ny_t64) {
+ny_t65 = "text " + name;
+nyU_web_u2e__warn("E0389", ny_t65);
+ny_t66 = nyU_web_u2e__icon_like(name);
+ny_t67 = nyU_web_u2e__icon(ny_t66);
 {
-o += ny_t68;
+o += ny_t67;
 }
-i = ny_add(i, 1, 5, 5);
-}
+i = ny_add(ny_j_2, 1, 5, 5);
 } else {
+ny_t68 = "text " + name;
+nyU_web_u2e__warn("E0389", ny_t68);
 ny_t69 = `${ny_char_str(c)}`;
 ny_t70 = nyU_web_u2e__esc(ny_t69);
 {
 o += ny_t70;
+}
+i = ny_add(i, 1, 5, 5);
+}
+}
+} else {
+ny_t71 = `${ny_char_str(c)}`;
+ny_t72 = nyU_web_u2e__esc(ny_t71);
+{
+o += ny_t72;
 }
 i = ny_add(i, 1, 5, 5);
 }
@@ -1121,23 +1165,29 @@ function nyU_web_u2e__lower(c) {
 return (c >= 97) && (c <= 122);
 }
 function nyU_web_u2e__icon(name) {
-let kind, ny_t2, ny_t3, ny_t4, brand, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11;
-kind = nyU_web_u2e__icon_kind(name);
-if (kind === 0) {
-ny_t2 = "unknown icon `" + name;
-        ny_t3 = ny_t2 + "`";
-nyU_web_u2e__err("E0374", ny_t3);
-ny_t4 = "";
-return ny_t4;
+let n, ny_t2, ny_t3, ny_t4, ny_t5, brand, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13;
+n = name;
+ny_t2 = nyU_web_u2e__icon_kind(n);
+if (ny_t2 === 0) {
+ny_t3 = "icon " + name;
+nyU_web_u2e__warn("E0389", ny_t3);
+ny_t4 = nyU_web_u2e__icon_like(name);
+if (ny_t4 !== "") {
+ny_t5 = nyU_web_u2e__icon_like(name);
+} else {
+ny_t5 = "circle";
 }
-brand = (kind === 2) ? " i-brand" : "";
-ny_t6 = "<svg class=\"i" + brand;
-ny_t7 = ny_t6 + " i-";
-ny_t8 = ny_t7 + name;
-ny_t9 = ny_t8 + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-";
-ny_t10 = ny_t9 + name;
-ny_t11 = ny_t10 + "\"/></svg>";
-return ny_t11;
+n = ny_t5;
+}
+ny_t7 = nyU_web_u2e__icon_kind(n);
+brand = (ny_t7 === 2) ? " i-brand" : "";
+ny_t8 = "<svg class=\"i" + brand;
+ny_t9 = ny_t8 + " i-";
+ny_t10 = ny_t9 + n;
+ny_t11 = ny_t10 + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-";
+ny_t12 = ny_t11 + n;
+ny_t13 = ny_t12 + "\"/></svg>";
+return ny_t13;
 }
 function nyU_web_u2e__href(url) {
 let u, scheme, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10;
@@ -1247,6 +1297,16 @@ let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:error " + code;
 ny_t3 = ny_t2 + " ";
 ny_t4 = ny_str_replace(msg, "*/", "* /", 5, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 5, 5);
+ny_t6 = ny_t3 + ny_t5;
+ny_t7 = ny_t6 + " */";
+ny_std_web__css(ny_t7, 5, 5);
+}
+function nyU_web_u2e__warn(code, what) {
+let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
+ny_t2 = "/*! nyra:warn " + code;
+ny_t3 = ny_t2 + " ";
+ny_t4 = ny_str_replace(what, "*/", "* /", 5, 5);
 ny_t5 = ny_str_replace(ny_t4, "\n", " ", 5, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
@@ -1462,12 +1522,26 @@ return all;
 }
 function nyU_web_u2e__icon_kind(name) {
 let icons, brands, key, ny_t4, ny_t5;
-icons = "|accessibility|activity|alert-triangle|apple|arrow-down|arrow-left|arrow-right|arrow-up|arrow-up-right|at-sign|award|axe|baby|badge-check|banknote|bar-chart|beer|bell|bike|book-open|bookmark|brick-wall|briefcase|building|building-2|bus|cake|cake-slice|calendar|calendar-days|camera|candy|car|carrot|cat|chart-column|chart-line|check|check-check|check-circle|check-circle-2|chef-hat|cherry|chevron-down|chevron-left|chevron-right|chevron-up|chevrons-down|church|circle-check|circle-help|circle-x|clipboard-list|clock|cloud|cloud-sun|cloud-upload|code|coffee|coins|compass|construction|cookie|cpu|credit-card|croissant|crown|cup-soda|database|dog|dollar-sign|donut|download|drill|droplet|droplets|dumbbell|egg|ellipsis|euro|expand|external-link|eye|factory|file-text|film|flag|flame|flower|flower-2|fuel|gem|gift|globe|graduation-cap|grid|grid-3x3|hammer|hand-heart|handshake|hard-hat|headphones|heart|help-circle|history|home|hotel|hourglass|house|ice-cream-cone|image|images|info|key|landmark|languages|laptop|layers|layout-grid|leaf|lightbulb|line-chart|link|link-2|list-checks|lock|mail|mail-open|map|map-pin|maximize-2|medal|menu|message-circle|message-square|mic|minimize-2|minus|monitor|moon|more-horizontal|mountain|move-right|music|navigation|package|paint-roller|paintbrush|palette|party-popper|pen-tool|pencil|percent|phone|phone-call|piggy-bank|pill|pizza|plane|play|plus|printer|quote|receipt|recycle|rocket|ruler|sandwich|scale|school|scissors|search|send|server|settings|share-2|shield|shield-check|ship|shopping-bag|shopping-cart|shovel|sliders-horizontal|smartphone|smile|snowflake|sparkles|sprout|star|stethoscope|store|sun|syringe|tag|target|tent|terminal|thermometer|thumbs-up|timer|train|train-front|tree-pine|trees|trending-up|triangle-alert|trophy|truck|tv|umbrella|upload|user|users|utensils|video|wallet|warehouse|waves|wheat|wifi|wind|wine|wrench|x|x-circle|zap|zoom-in|";
+icons = "|accessibility|activity|alert-circle|alert-triangle|apple|arrow-down|arrow-left|arrow-right|arrow-up|arrow-up-right|at-sign|award|axe|baby|badge-check|banknote|bar-chart|bar-chart-2|bar-chart-3|beer|bell|bike|book-open|bookmark|brick-wall|briefcase|building|building-2|bus|cake|cake-slice|calendar|calendar-days|camera|candy|car|carrot|cat|chart-column|chart-line|check|check-check|check-circle|check-circle-2|chef-hat|cherry|chevron-down|chevron-left|chevron-right|chevron-up|chevrons-down|church|circle|circle-alert|circle-check|circle-help|circle-x|clipboard-list|clock|cloud|cloud-sun|cloud-upload|code|coffee|coins|compass|construction|cookie|cpu|credit-card|croissant|crown|cup-soda|database|dog|dollar-sign|donut|download|drill|droplet|droplets|dumbbell|egg|ellipsis|euro|expand|external-link|eye|factory|file-text|film|flag|flame|flower|flower-2|fuel|gem|gift|globe|graduation-cap|grid|grid-3x3|hammer|hand-heart|handshake|hard-hat|headphones|heart|help-circle|history|home|hotel|hourglass|house|ice-cream-cone|image|images|info|key|landmark|languages|laptop|layers|layout-grid|leaf|lightbulb|line-chart|link|link-2|list-checks|lock|mail|mail-open|map|map-pin|maximize-2|medal|menu|message-circle|message-square|mic|minimize-2|minus|monitor|moon|more-horizontal|mountain|move-right|music|navigation|package|paint-roller|paintbrush|palette|party-popper|pen-tool|pencil|percent|phone|phone-call|piggy-bank|pill|pizza|plane|play|plus|printer|quote|receipt|recycle|rocket|ruler|sandwich|scale|school|scissors|search|send|server|settings|share-2|shield|shield-check|ship|shopping-bag|shopping-cart|shovel|sliders-horizontal|smartphone|smile|snowflake|sparkles|sprout|star|stethoscope|store|sun|syringe|tag|target|tent|terminal|thermometer|thumbs-up|timer|train|train-front|tree-pine|trees|trending-up|triangle-alert|trophy|truck|tv|umbrella|upload|user|users|utensils|verified|video|wallet|warehouse|waves|wheat|wifi|wind|wine|wrench|x|x-circle|zap|zoom-in|";
 brands = "|facebook|";
 ny_t4 = "|" + name;
 key = ny_t4 + "|";
 ny_t5 = icons.includes(key) ? 1 : (brands.includes(key) ? 2 : 0);
 return ny_t5;
+}
+function nyU_web_u2e__icon_like(name) {
+let pairs, at, ny_t3, ny_t4, ny_t5, rest, ny_t7;
+pairs = "|access-time=clock|account=user|airplane=plane|alert=triangle-alert|apple-alt=apple|apps=layout-grid|arrow-trend-up=trending-up|at=at-sign|bag=shopping-bag|balance-scale=scale|bars=menu|basket=shopping-bag|bell-o=bell|bicycle=bike|birthday-cake=cake|boat=ship|bolt=zap|build=wrench|bulb=lightbulb|bullseye=target|bus-alt=bus|calendar-alt=calendar|calendar-o=calendar|calendar-week=calendar-days|call=phone|camera-alt=camera|campground=tent|candy-cane=candy|capsules=pill|car-side=car|cart=shopping-cart|cart-shopping=shopping-cart|cash=banknote|cellphone=smartphone|chart-bar=chart-column|chat=message-circle|check-circle-o=circle-check|check-square=check|checkmark=check|circle-check-big=circle-check|circle-exclamation=circle-alert|circle-info=info|circle-question=circle-help|city=building-2|clock-o=clock|close=x|cloud-upload-alt=cloud-upload|cog=settings|cogs=settings|comment=message-circle|comments=message-square|computer=monitor|cookie-bite=cookie|credit-card-alt=credit-card|cross=x|cut=scissors|cutlery=utensils|date=calendar|delivery=truck|description=file-text|desktop=monitor|diamond=gem|directions=navigation|document=file-text|dollar=dollar-sign|done=check|drop=droplet|e-mail=mail|edit=pencil|ellipsis-h=ellipsis|email=mail|envelope=mail|envelope-o=mail|envelope-open=mail-open|error=circle-alert|euro-sign=euro|event=calendar|exclamation-circle=circle-alert|exclamation-triangle=triangle-alert|external-link-alt=external-link|eye-open=eye|face-smile=smile|facebook-f=facebook|facebook-square=facebook|file-alt=file-text|fire=flame|flash=zap|flight=plane|fork-knife=utensils|gas-pump=fuel|gear=settings|globe-alt=globe|grid-alt=layout-grid|group=users|hamburger=menu|hand-holding-heart=hand-heart|headset=headphones|heart-o=heart|heart-pulse=activity|heartbeat=activity|help=circle-help|history-alt=history|home-alt=house|hourglass-half=hourglass|house-chimney=house|ice-cream=ice-cream-cone|idea=lightbulb|info-circle=info|language=languages|lightning=zap|like=thumbs-up|link-alt=link|list-check=list-checks|local-shipping=truck|location=map-pin|location-arrow=navigation|location-dot=map-pin|location-on=map-pin|location-pin=map-pin|magnifier=search|magnifying-glass=search|mail-alt=mail|map-alt=map|map-marker=map-pin|map-marker-alt=map-pin|message=message-square|microchip=cpu|mobile=smartphone|mobile-alt=smartphone|mobile-phone=smartphone|money=banknote|money-bill=banknote|moon-o=moon|more=ellipsis|more-horiz=ellipsis|music-note=music|navicon=menu|notifications=bell|office=building|paint-brush=paintbrush|paper-plane=send|payment=credit-card|pen=pencil|pencil-alt=pencil|people=users|percentage=percent|person=user|phone-alt=phone|phone-square=phone|photo=image|picture=image|pills=pill|pizza-slice=pizza|place=map-pin|plane-departure=plane|print=printer|question=circle-help|question-circle=circle-help|quote-left=quote|quote-right=quote|restaurant=utensils|schedule=clock|seedling=sprout|share-alt=share-2|shipping=truck|shipping-fast=truck|shop=store|sliders=sliders-horizontal|sliders-h=sliders-horizontal|smile-o=smile|star-o=star|stopwatch=timer|store-alt=store|sun-o=sun|tags=tag|task-alt=circle-check|team=users|telephone=phone|th=layout-grid|th-large=layout-grid|thermometer-half=thermometer|thumbs-o-up=thumbs-up|tick=check|time=clock|times=x|tint=droplet|tools=wrench|translate=languages|trending=trending-up|triangle-exclamation=triangle-alert|trophy-alt=trophy|universal-access=accessibility|university=school|user-alt=user|user-friends=users|user-o=user|users-alt=users|video-camera=video|visibility=eye|warning=triangle-alert|water=droplet|web=globe|website=globe|wheelchair=accessibility|wine-glass=wine|world=globe|xmark=x|";
+ny_t3 = "|" + name;
+ny_t4 = ny_t3 + "=";
+at = ny_str_index_of(pairs, ny_t4);
+if (at < 0) {
+ny_t5 = "";
+return ny_t5;
+}
+rest = ny_str_slice(pairs, (at + ny_len(name)) + 2, ny_len(pairs), 5, 5);
+ny_t7 = ny_str_slice(rest, 0, ny_str_index_of(rest, "|"), 5, 5);
+return ny_t7;
 }
 function nyU_web_u2e__on(m) {
 let ny_t1;

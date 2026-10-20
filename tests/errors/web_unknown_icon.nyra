@@ -2,5 +2,5 @@
 use web
 
 page("/", "Home") {
-    p(":phnoe: +420 123 456 789")
+    card("Call us", "+420 123 456 789", icon: ":phone:")
 }

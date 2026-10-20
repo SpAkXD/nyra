@@ -83,9 +83,9 @@ pub fn compile_js_text(src: &str) -> String {
     let compile = |s: &str| crate::compile_granted(s, &caps::Grant::all(), &flag);
     let prog = match compile(src) {
         Ok(p) => p,
-        Err(diags) => match fix::repair(src, diags.clone(), compile) {
-            Some(r) => r.value,
-            None => return diag::render_json(&diags, FILE),
+        Err(diags) => match fix::repair_or_report(src, diags, compile) {
+            Ok(r) => r.value,
+            Err(left) => return diag::render_json(&left, FILE),
         },
     };
     match crate::generate(&prog, crate::Target::Js, FILE) {
@@ -140,7 +140,14 @@ pub fn run_json(src: &str, stdin: &str, limits: &str) -> String {
     let prog = match compile_here(src) {
         Ok(p) => p,
         Err(diags) => {
-            let repaired = if opts.strict { None } else { fix::repair(src, diags.clone(), compile_here) };
+            let (repaired, diags) = if opts.strict {
+                (None, diags)
+            } else {
+                match fix::repair_or_report(src, diags, compile_here) {
+                    Ok(r) => (Some(r), Vec::new()),
+                    Err(left) => (None, left),
+                }
+            };
             match repaired {
                 Some(r) => {
                     applied = r.applied;

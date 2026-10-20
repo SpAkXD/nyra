@@ -1,13 +1,13 @@
 <!-- Metadata: this comment is not part of the card (nyra_spec with topic "web" and the tests strip it).
-TOKENS: 1396 on claude-sonnet-5-5, 1114 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
+TOKENS: 1395 on claude-sonnet-5-5, 1101 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The library is src/std/web.nyra; this card must describe it exactly (tests/docs.rs builds its example). Read with docs/AGENT_CARD.md. -->
 # Nyra web card
-`use web` makes a static site: `nyra build site.nyra -o dist`.
+`use web` makes a static site.
 
 ```nyra
 use web
-site("Brew & Co", primary: "#3B2A1A", display: "Playfair Display")
+site("Brew & Co", primary: "#3B2A1A")
 let drinks = [("Latte", "hot", "latte.jpg"), ("Cold brew", "cold", "cold.jpg")]
 enum Msg { Show(str) }
 var kind = "all"
@@ -37,26 +37,25 @@ page("/", "Brew & Co") {
 
 ## Elements
 ```
-site(name, primary: accent: bg: font: display: radius: 16 style: soft|sharp|editorial|dark lang: tz:)
-page(path, title, desc:) {}
-section(id, title, kicker: text: bg: alt|dark|white|primary|accent) {}
+site(name, primary: accent: bg: font: display: radius: 16 style: "soft"|"sharp"|"editorial"|"dark" lang: tz:)
+page(path, title, desc:) {}   css(".x { color: red }") anywhere
+section(id, title, kicker: text: bg: "alt"|"dark"|"white"|"primary"|"accent") {}
 grid(cols, widths: "1fr 2fr") {}   stack {}   row {}
-card(title, text, icon: image: tag: items: fill: href:) {}
+card(title, text, icon: image: tag: items: fill: true href: on:) {}
 h1 h2 h3(text, icon:)   p small note(text)   link(text, href)   img(src, alt, ratio: "4/3" caption:)
-button(text, href, style: primary|accent|outline|ghost|light on: active: icon:)
+button(text, href, style: "primary"|"accent"|"outline"|"ghost"|"light" on: active: icon:)
 list(items, icon:)   table(rows, head:)   address {}   chip(title, text, icon:)   embed(url, title)
 quote(text, name, place: stars:)   stat(value, label)   steps([(label, text)])   marquee(words)
 navbar(brand, [(label, href)], cta: (label, href))
-hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: rows) {}   badge: hours rows, shows open/closed now
+hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: hoursRows) {}
 gallery([(image, alt, tag)], filters: [(tag, label)])
-hours(rows)   rows: [(label, "1-5 8:00-16:00")], days 1-7 = Mon-Sun, "" closed
+hours(hoursRows)   hoursRows: [("Mon–Fri", "8:00-16:00"), ("Sun", "")]
 map(address)   split { card(...) }   footer(text: links: contact: [str] small: [str]) {}
-form(title, mailto: | on:) {}   field(name, label, type: text|email|tel|date|area|select|check req: hint: options: [str])
-css(".x { color: red }")
+form(title, mailto: subject: send: | on:) {}   field(name, label, type: "text"|"email"|"tel"|"date"|"area"|"select"|"check" req: hint: options: [str])
 ```
 
 ## Motion
-- `anim:` fade rise zoom pop words count stagger; `hover:` lift glow zoom tilt; `loop:` float pulse; `scroll:` parallax; modifiers: `"rise slow 0.2 spring"`. `keyframes("sway", "50% { rotate: 3deg }")` adds a word.
+- `anim:` fade rise zoom pop words count stagger; `hover:` lift glow zoom tilt; `loop:` float pulse; `scroll:` parallax; modifiers: `"rise slow 0.2 spring"`. `keyframes(name, css)` adds a word.
 - Nothing moves unasked: give sections and the hero `anim: "rise"`.
 
 ## Mistakes

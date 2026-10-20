@@ -6524,15 +6524,34 @@ use web
 
 page("/", "Home") {
     p(":phnoe: +420 123 456 789")
+    card("Call us", "Mon-Fri", icon: "alert-octagon")
+    stat(28, "years")
 }
 ----
-error[E0374]: unknown icon `phnoe`
+warning[E0389]: unknown icon `:phnoe:`: shown as it is written
   --> case.nyra:4:7
   |
 4 |     p(":phnoe: +420 123 456 789")
   |       ^
-  = hint: did you mean `phone`? The icons are Lucide names (`phone`, `mail`, `map-pin`, `clock`, ...): `nyra explain E0374` lists them
-  = explain: nyra explain E0374
+  = hint: did you mean `phone`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them); write `\\:` for a colon that starts no icon
+  = explain: nyra explain E0389
+
+warning[E0389]: unknown icon `alert-octagon`: drawn as a plain circle
+  --> case.nyra:5:38
+  |
+5 |     card("Call us", "Mon-Fri", icon: "alert-octagon")
+  |                                      ^
+  = hint: the set has `alert-circle`, `alert-triangle`, `circle-alert`, `triangle-alert`; the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)
+  = explain: nyra explain E0389
+
+error[E0203]: type mismatch in argument 1 (`value`) of `stat`: expected `str`, found `int`
+  --> case.nyra:6:10
+  |
+6 |     stat(28, "years")
+  |          ^
+  = hint: `value` is text: write the number in quotes, `"28"`
+  = fix: `stat("28", "years")`
+  = explain: nyra explain E0203
 
 nyra: 1 error(s)
 ==== web_unknown_word
@@ -6834,5 +6853,222 @@ error[E0372]: `fn img` has the name of the web function `img`
   = hint: rename your function, e.g. `fn photo`, and its calls: in a program with `use web` the web functions are called by their bare names
   = fix: `fn photo(n: int) -> str = "https://example.com/{n}.jpg"`, `card("Bread", "Fresh", image: photo(1))`, `card("Cake", "Sweet", image: photo(2))` (lines 3, 7, 8)
   = explain: nyra explain E0372
+
+nyra: 1 error(s)
+==== match_arm_comma
+enum Light { Red, Green }
+fn name(l: Light) -> str {
+    var s = ""
+    match l {
+        Light.Red => s = "red",
+        Light.Green => { s = "green", print(s) },
+    }
+    return s
+}
+print(name(Light.Red) + 1)
+----
+error[E0101]: a `,` after a statement or a match arm
+  --> case.nyra:5:31
+  |
+5 |         Light.Red => s = "red",
+  |                               ^
+  = hint: delete the `,`: a new line already ends a statement and a match arm (they are not separated by commas)
+  = fix: `Light.Red => s = "red"`
+  = explain: nyra explain E0101
+
+error[E0101]: a `,` between two statements or match arms
+  --> case.nyra:6:37
+  |
+6 |         Light.Green => { s = "green", print(s) },
+  |                                     ^
+  = hint: one statement or match arm per line: start what follows the `,` on a new line
+  = fix: `Light.Green => { s = "green"`, `print(s) },` (on separate lines)
+  = explain: nyra explain E0101
+
+error[E0101]: a `,` after a statement or a match arm
+  --> case.nyra:6:49
+  |
+6 |         Light.Green => { s = "green", print(s) },
+  |                                                 ^
+  = hint: delete the `,`: a new line already ends a statement and a match arm (they are not separated by commas)
+  = fix: `Light.Green => { s = "green", print(s) }`
+  = explain: nyra explain E0101
+
+nyra: 3 error(s)
+==== fn_equals_block
+fn twice(x: int) -> int = {
+    return x * 2
+}
+print(twice("3"))
+----
+error[E0101]: expected an expression after `=`, found `{`
+  --> case.nyra:1:27
+  |
+1 | fn twice(x: int) -> int = {
+  |                           ^
+  = hint: `=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`
+  = fix: `fn twice(x: int) -> int {`
+  = explain: nyra explain E0101
+
+nyra: 1 error(s)
+==== web_option_bare_words
+use web
+site("Bakery", style: soft)
+page("/", "Contact") {
+    h1("Contact")
+    form("Write to us", mailto: "hello@example.com") {
+        field("phone", "Phone", type: tel)
+        field("note", "Note", type: area)
+    }
+    button("Call", href: "tel:123", style: outlines)
+}
+----
+error[E0201]: undefined variable `soft`
+  --> case.nyra:2:23
+  |
+2 | site("Bakery", style: soft)
+  |                       ^
+  = hint: `style:` takes text: write the word in quotes, `style: "soft"`
+  = fix: `site("Bakery", style: "soft")`
+  = explain: nyra explain E0201
+
+error[E0201]: undefined variable `tel`
+  --> case.nyra:6:39
+  |
+6 |         field("phone", "Phone", type: tel)
+  |                                       ^
+  = hint: `type:` takes text: write the word in quotes, `type: "tel"`
+  = fix: `field("phone", "Phone", type: "tel")`
+  = explain: nyra explain E0201
+
+error[E0201]: undefined variable `area`
+  --> case.nyra:7:37
+  |
+7 |         field("note", "Note", type: area)
+  |                                     ^
+  = hint: `type:` takes text: write the word in quotes, `type: "area"`
+  = fix: `field("note", "Note", type: "area")`
+  = explain: nyra explain E0201
+
+error[E0201]: undefined variable `outlines`
+  --> case.nyra:9:44
+  |
+9 |     button("Call", href: "tel:123", style: outlines)
+  |                                            ^
+  = hint: declare it first: `let outlines = ...`
+  = explain: nyra explain E0201
+
+nyra: 4 error(s)
+==== web_hero_rows
+use web
+let opening = [("Mon–Fri", "8:00-16:00")]
+page("/", "Bakery") {
+    hero("Bakery", badge: hours, rows: opening)
+}
+----
+error[E0201]: undefined variable `hours`
+  --> case.nyra:4:27
+  |
+4 |     hero("Bakery", badge: hours, rows: opening)
+  |                           ^
+  = hint: `badge:` takes the opening hours rows themselves, the list `hours(...)` shows: `badge: [("Mon–Fri", "1-5 8:00-16:00")]`
+  = explain: nyra explain E0201
+
+error[E0226]: `web.hero` has no parameter `rows`
+  --> case.nyra:4:34
+  |
+4 |     hero("Bakery", badge: hours, rows: opening)
+  |                                  ^
+  = hint: `hero` has no `rows:`: `badge:` takes the opening hours rows themselves, `badge: [("Mon–Fri", "1-5 8:00-16:00")]`
+  = explain: nyra explain E0226
+
+nyra: 2 error(s)
+==== web_hours_unreadable
+use web
+let opening = [("Office", "8:00–16:00"), ("Sunday", "closed")]
+page("/", "Dentist") {
+    h1("Dentist")
+    section("hours", "Opening hours") {
+        hours(opening)
+    }
+}
+----
+error[E0390]: the opening hours `8:00–16:00` of the row "Office" give no days and times the open/closed badge can read
+  --> case.nyra:2:27
+  |
+2 | let opening = [("Office", "8:00–16:00"), ("Sunday", "closed")]
+  |                           ^
+  = hint: a row is (label, "days times"): `("Mon–Fri", "1-5 8:00-16:00")`, days 1 (Monday) to 7 (Sunday), one or more times `8:00-12:00 13:00-17:00`, "" for closed; the days may also be in the label (`("Monday", "8:00-18:00")`, `("Mon–Fri", "8–16")`)
+  = explain: nyra explain E0390
+
+nyra: 1 error(s)
+==== web_errors_of_all_stages
+use web
+let services = [("siren", "Emergency care")]
+page("/", "Dentist") {
+    h1("Dentist")
+    section("services", "What we do") {
+        for s in services {
+            card(s.1, "Call us", icon: s.0, fill: "primary")
+        }
+        card("Call us", "+420 123 456 789", icon: ":phone:")
+    }
+}
+----
+error[E0203]: type mismatch in argument 6 (`fill`) of `card`: expected `bool`, found `str`
+  --> case.nyra:7:51
+  |
+7 |             card(s.1, "Call us", icon: s.0, fill: "primary")
+  |                                                   ^
+  = hint: write `true` or `false`: a `bool` is never made from a number or text
+  = explain: nyra explain E0203
+
+error[E0374]: unknown icon `:phone:`
+  --> case.nyra:9:51
+  |
+9 |         card("Call us", "+420 123 456 789", icon: ":phone:")
+  |                                                   ^
+  = hint: `icon:` takes the icon's name without colons: `icon: "phone"` (colons mark an icon inside text)
+  = fix: `card("Call us", "+420 123 456 789", icon: "phone")`
+  = explain: nyra explain E0374
+
+nyra: 2 error(s)
+==== web_icon_from_data
+use web
+let services = [("siren", "Emergency care"), ("map-marker", "Find us")]
+page("/", "Dentist") {
+    h1("Dentist")
+    section("services", "What we do") {
+        for s in services {
+            card(s.1, "Call us", icon: s.0)
+        }
+        hours([("Every day", "8 to 16"), ("Office", "8:00 16:00")])
+    }
+}
+----
+warning[E0389]: unknown icon `siren`: drawn as a plain circle
+  --> case.nyra:2:18
+  |
+2 | let services = [("siren", "Emergency care"), ("map-marker", "Find us")]
+  |                  ^
+  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)
+  = explain: nyra explain E0389
+
+warning[E0389]: unknown icon `map-marker`: drawn as `map-pin`
+  --> case.nyra:2:47
+  |
+2 | let services = [("siren", "Emergency care"), ("map-marker", "Find us")]
+  |                                               ^
+  = hint: `map-marker` is not a name of the icon set (Lucide names): write `map-pin`
+  = fix: `let services = [("siren", "Emergency care"), ("map-pin", "Find us")]`
+  = explain: nyra explain E0389
+
+error[E0390]: the opening hours `8:00 16:00` of the row "Office" give no days and times the open/closed badge can read
+  --> case.nyra:9:53
+  |
+9 |         hours([("Every day", "8 to 16"), ("Office", "8:00 16:00")])
+  |                                                     ^
+  = hint: a row is (label, "days times"): `("Mon–Fri", "1-5 8:00-16:00")`, days 1 (Monday) to 7 (Sunday), one or more times `8:00-12:00 13:00-17:00`, "" for closed; the days may also be in the label (`("Monday", "8:00-18:00")`, `("Mon–Fri", "8–16")`)
+  = explain: nyra explain E0390
 
 nyra: 1 error(s)

@@ -65,9 +65,9 @@ pub fn run(c: &Cli, src: &str, prog: ast::Program) -> ExitCode {
         let compile = |s: &str| crate::compile_granted(s, &c.grant, &crate::cli_flag);
         let compiled = match compile(&text) {
             Ok(p) => Ok((p, text.clone())),
-            Err(diags) => match crate::fix::repair(&text, diags.clone(), compile) {
-                Some(r) => Ok((r.value, r.text)),
-                None => Err(Error::Diags(diags)),
+            Err(diags) => match crate::fix::repair_or_report(&text, diags, compile) {
+                Ok(r) => Ok((r.value, r.text)),
+                Err(left) => Err(Error::Diags(left)),
             },
         };
         let result = match compiled {

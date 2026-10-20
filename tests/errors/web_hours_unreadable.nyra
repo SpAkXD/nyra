@@ -1,0 +1,9 @@
+// expect: E0390
+use web
+
+let opening = [("Office", "8:00–16:00"), ("Sunday", "")]
+
+page("/", "Dentist") {
+    h1("Dentist")
+    hours(opening)
+}

@@ -514,7 +514,7 @@ fn the_web_card_keeps_its_token_budget() {
     // As for the agent card: `python tools/card_tokens.py --card web --write` measures it on Claude's tokenizer and
     // writes the counts into the header; this test checks the header and that the card did not grow since.
     const BUDGET: usize = 1400;
-    const MAX_CHARS: usize = 3050; // measured: 3,019 characters = 1,397 tokens on claude-sonnet-5-5
+    const MAX_CHARS: usize = 3050; // measured: 2,961 characters = 1,395 tokens on claude-sonnet-5-5
     let file = std::fs::read_to_string("docs/WEB_CARD.md").unwrap().replace("\r\n", "\n");
     let header: &str = file.split_once("-->\n").unwrap().0;
     assert!(header.contains("The card has a hard budget: a feature that needs card text must displace something."));

@@ -34,6 +34,12 @@ impl Text {
         (at <= line_end).then_some(at)
     }
 
+    /// The position of a character offset (the inverse of `offset`).
+    fn span_of(&self, p: usize) -> Span {
+        let line = self.starts.partition_point(|s| *s <= p).max(1);
+        Span { line, col: p - self.starts[line - 1] + 1 }
+    }
+
     /// The edits as character ranges, in source order. `None` if one of them is out of range,
     /// does not find the text it expects, or overlaps another.
     fn ranges<'a>(&self, edits: &[&'a Edit]) -> Option<Vec<(usize, usize, &'a Edit)>> {
@@ -158,12 +164,31 @@ pub struct Repaired<T> {
 /// Applies the fixes of `diags` (the errors of `src`), compiles again and repeats, a few rounds
 /// at most. Returns the repaired program only if it compiles in the end.
 pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T, Vec<Diag>>) -> Option<Repaired<T>> {
+    repair_or_report(src, diags, compile).ok()
+}
+
+/// What is left when the fixes do not make a program compile: the errors of `src` itself, which
+/// are the errors of the last round, at their places in `src`, and the earlier errors whose fixes
+/// were certain (with those fixes), in the order of the source. A fix often uncovers the
+/// mistakes of the next stage (a comma after a match arm hides every type error behind it), so
+/// these are more of the program's errors than its first compilation found, all in one report.
+pub fn repair_or_report<T>(
+    src: &str,
+    diags: Vec<Diag>,
+    compile: impl Fn(&str) -> Result<T, Vec<Diag>>,
+) -> Result<Repaired<T>, Vec<Diag>> {
     // keep the file's line breaks when a fix adds a line
     let newline = if src.contains("\r\n") { "\r\n" } else { "\n" };
+    let orig = Text::new(src);
     let mut current = src.to_string();
     let mut diags = diags;
     let mut fixed = 0;
     let mut applied = Vec::new();
+    // the edits of each round: character ranges of the text of that round, with the length of
+    // what each wrote (to move a later round's positions back into `src`)
+    let mut rounds: Vec<Vec<(usize, usize, usize)>> = Vec::new();
+    // the errors whose fixes were applied, at their places in `src`
+    let mut fixed_errs: Vec<Diag> = Vec::new();
     for _ in 0..ROUNDS {
         let text = Text::new(&current);
         // the fixes of all errors, in order; one that overlaps an earlier fix waits for the next round
@@ -184,20 +209,78 @@ pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T
                 round.push(d);
             }
         }
-        if chosen.is_empty() {
-            return None;
-        }
+        let ranges = if chosen.is_empty() { None } else { text.ranges(&chosen) };
+        let Some(ranges) = ranges else {
+            return Err(report(src, &orig, &rounds, &text, &diags, fixed_errs));
+        };
         for d in round {
             let line = d.span.line.checked_sub(1).and_then(|i| current.lines().nth(i)).unwrap_or("").to_string();
             applied.push(Applied { diag: d.clone(), preview: preview(&current, &d.fix), line });
+            fixed_errs.push(back(d.clone(), &orig, &rounds, &text));
         }
-        current = text.apply(&text.ranges(&chosen)?, newline);
+        let next = text.apply(&ranges, newline);
+        rounds.push(ranges.iter().map(|(a, b, e)| (*a, *b, e.text.replace('\n', newline).chars().count())).collect());
+        current = next;
         match compile(&current) {
-            Ok(value) => return Some(Repaired { text: current, value, fixed, applied }),
+            Ok(value) => return Ok(Repaired { text: current, value, fixed, applied }),
             Err(next) => diags = next,
         }
     }
-    None
+    Err(report(src, &orig, &rounds, &Text::new(&current), &diags, fixed_errs))
+}
+
+/// The errors `repair_or_report` gives back: `last` (errors of the text `now`, which the edits of
+/// `rounds` made from `src`) and the `fixed` ones, at their places in `src`, each once.
+fn report(src: &str, orig: &Text, rounds: &[Vec<(usize, usize, usize)>], now: &Text, last: &[Diag], fixed: Vec<Diag>) -> Vec<Diag> {
+    let mut out: Vec<Diag> = Vec::new();
+    for d in fixed.into_iter().chain(last.iter().map(|d| back(d.clone(), orig, rounds, now))) {
+        if !out.iter().any(|o| o.code == d.code && o.span == d.span && o.msg == d.msg) {
+            out.push(d);
+        }
+    }
+    out.sort_by_key(|d| (d.file.is_some(), d.span.line, d.span.col));
+    validate(&mut out, src);
+    // the warnings are those of the last compilation, of the text `now`: moved into `src` too
+    if !rounds.is_empty() {
+        let warnings = crate::diag::warnings();
+        crate::diag::clear_warnings();
+        for w in warnings {
+            crate::diag::warn(back(w, orig, rounds, now));
+        }
+    }
+    out
+}
+
+/// A diagnostic of the text `now` (which the edits of `rounds` made from the text `orig`), moved to
+/// its place in `orig`. A place inside text that a fix wrote moves to the start of that fix.
+fn back(d: Diag, orig: &Text, rounds: &[Vec<(usize, usize, usize)>], now: &Text) -> Diag {
+    if rounds.is_empty() || d.file.is_some() {
+        return d;
+    }
+    d.moved(|s: Span| -> Span {
+        let Some(mut p) = now.offset(s) else { return s };
+        for edits in rounds.iter().rev() {
+            p = before_edits(p, edits);
+        }
+        orig.span_of(p)
+    })
+}
+
+/// A character offset of the text after `edits` (character ranges of the text before them, with the
+/// length of what each wrote), in the text before them.
+fn before_edits(p: usize, edits: &[(usize, usize, usize)]) -> usize {
+    let mut shift: isize = 0;
+    for &(a, b, n) in edits {
+        let start = (a as isize + shift) as usize;
+        if p < start {
+            break;
+        }
+        if p < start + n {
+            return a;
+        }
+        shift += n as isize - (b - a) as isize;
+    }
+    (p as isize - shift).max(0) as usize
 }
 
 /// A unified diff of two texts without context lines: `@@ -3 +3 @@`, `-old line`, `+new line`.
