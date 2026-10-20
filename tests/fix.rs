@@ -166,8 +166,10 @@ fn every_certain_fix_is_applied_and_only_what_is_left_is_an_error() {
     let dir = scratch("fix-apply-all");
     let bad = "enum Light { Red, Green }\nfn name(l: Light) -> str {\n    var s = \"\"\n    match l {\n        Light.Red => s = \"red\",\n        Light.Green => s = \"green\",\n    }\n    return s\n}\nlet f: float = 2\nprint(name(Light.Red) + 1)\nprint(f)\n";
     write(&dir, "prog.nyra", bad);
-    let (ok, json) = check_json(&dir, "prog.nyra");
-    assert!(!ok);
+    // (without --strict, which `check_json` passes)
+    let out = nyra().current_dir(&dir).args(["check", "--json", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let json = Json::parse(stdout(&out).trim()).unwrap();
     // the errors are only what is left, at their places in the file as the agent has it
     let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
     assert_eq!(errors.len(), 1, "{json:?}");
