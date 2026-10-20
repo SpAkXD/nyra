@@ -101,6 +101,13 @@ pub fn run(args: Vec<String>) -> ExitCode {
         }
     }
     let mut server = Server::new();
+    serve_stdio(&mut server);
+    ExitCode::SUCCESS
+}
+
+/// Answers the JSON-RPC messages of standard input, one per line, on standard output, until
+/// standard input ends (`nyra mcp`, and `nyra serve --mcp` in serve.rs).
+pub fn serve_stdio(server: &mut impl Rpc) {
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
     let stdout = std::io::stdout();
@@ -111,30 +118,108 @@ pub fn run(args: Vec<String>) -> ExitCode {
             Ok(0) | Err(_) => break,
             Ok(_) => {}
         }
-        let Some(reply) = server.handle_line(&buf) else { continue };
+        let Some(reply) = handle_line(server, &buf) else { continue };
         let mut out = stdout.lock();
         if writeln!(out, "{reply}").and_then(|_| out.flush()).is_err() {
             break;
         }
     }
-    ExitCode::SUCCESS
 }
 
 // ---- JSON-RPC ------------------------------------------------------------------------------------
 
 const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
-const METHOD_NOT_FOUND: i64 = -32601;
-const INVALID_PARAMS: i64 = -32602;
+pub const METHOD_NOT_FOUND: i64 = -32601;
+pub const INVALID_PARAMS: i64 = -32602;
 const RESOURCE_NOT_FOUND: i64 = -32002;
 
-struct RpcError {
+pub struct RpcError {
     code: i64,
     message: String,
     data: Option<Json>,
 }
 
-fn rpc_err(code: i64, message: impl Into<String>) -> RpcError {
+/// A server of JSON-RPC requests: `handle_line` reads and checks the messages, this answers them.
+pub trait Rpc {
+    fn answer(&mut self, method: &str, params: &Json) -> Result<Json, RpcError>;
+}
+
+impl Rpc for Server {
+    fn answer(&mut self, method: &str, params: &Json) -> Result<Json, RpcError> {
+        self.request(method, params)
+    }
+}
+
+/// One line of input: a message or a batch. `None` when there is nothing to answer.
+pub fn handle_line(server: &mut impl Rpc, line: &[u8]) -> Option<Json> {
+    let Ok(text) = std::str::from_utf8(line) else {
+        return Some(error_reply(Json::Null, rpc_err(PARSE_ERROR, "Parse error: the message is not valid UTF-8")));
+    };
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let msg = match Json::parse(text) {
+        Ok(m) => m,
+        Err(e) => return Some(error_reply(Json::Null, rpc_err(PARSE_ERROR, format!("Parse error: {e}")))),
+    };
+    match msg {
+        Json::Arr(items) if items.is_empty() => {
+            Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: empty batch")))
+        }
+        Json::Arr(items) => {
+            let replies: Vec<Json> = items.iter().filter_map(|m| handle(server, m)).collect();
+            (!replies.is_empty()).then_some(Json::Arr(replies))
+        }
+        m => handle(server, &m),
+    }
+}
+
+/// One message. Notifications and responses get no reply.
+fn handle(server: &mut impl Rpc, msg: &Json) -> Option<Json> {
+    if !msg.is_object() {
+        return Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: not an object")));
+    }
+    let id = msg.get("id").cloned();
+    let id_ok = matches!(id, None | Some(Json::Str(_) | Json::Num(_)));
+    let reply_id = if id_ok { id.clone().unwrap_or(Json::Null) } else { Json::Null };
+    if msg.get("jsonrpc").and_then(Json::as_str) != Some("2.0") {
+        return Some(error_reply(reply_id, rpc_err(INVALID_REQUEST, "Invalid Request: jsonrpc must be \"2.0\"")));
+    }
+    if !id_ok {
+        return Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: id must be a string or a number")));
+    }
+    let Some(method) = msg.get("method").and_then(Json::as_str) else {
+        // a response to a request of ours (we send none), or garbage
+        if id.is_some() && (msg.get("result").is_some() || msg.get("error").is_some()) {
+            return None;
+        }
+        return Some(error_reply(reply_id, rpc_err(INVALID_REQUEST, "Invalid Request: method must be a string")));
+    };
+    // notifications (`notifications/initialized`, `notifications/cancelled`, ...) need no action
+    let id = id?;
+    let empty = Json::Obj(Vec::new());
+    let params = match msg.get("params") {
+        None => &empty,
+        Some(p @ Json::Obj(_)) => p,
+        Some(_) => return Some(error_reply(id, rpc_err(INVALID_PARAMS, "Invalid params: params must be an object"))),
+    };
+    Some(match server.answer(method, params) {
+        Ok(result) => obj([("jsonrpc", "2.0".into()), ("id", id), ("result", result)]),
+        Err(e) => error_reply(id, e),
+    })
+}
+
+/// The protocol version to answer `initialize` with: the client's, if this server speaks it.
+pub fn version(params: &Json) -> Result<&'static str, RpcError> {
+    let Some(asked) = params.get("protocolVersion").and_then(Json::as_str) else {
+        return Err(rpc_err(INVALID_PARAMS, "Invalid params: protocolVersion must be a string"));
+    };
+    Ok(VERSIONS.iter().find(|v| **v == asked).unwrap_or(&VERSIONS[0]))
+}
+
+pub fn rpc_err(code: i64, message: impl Into<String>) -> RpcError {
     RpcError { code, message: message.into(), data: None }
 }
 
@@ -176,76 +261,19 @@ impl Server {
         Server { dir: base.join(format!("mcp-{}", std::process::id())), cc: None }
     }
 
-    /// One line of input: a message or a batch. `None` when there is nothing to answer.
+    /// One line of input (see `handle_line`).
+    #[cfg(test)]
     fn handle_line(&mut self, line: &[u8]) -> Option<Json> {
-        let Ok(text) = std::str::from_utf8(line) else {
-            return Some(error_reply(Json::Null, rpc_err(PARSE_ERROR, "Parse error: the message is not valid UTF-8")));
-        };
-        let text = text.trim();
-        if text.is_empty() {
-            return None;
-        }
-        let msg = match Json::parse(text) {
-            Ok(m) => m,
-            Err(e) => return Some(error_reply(Json::Null, rpc_err(PARSE_ERROR, format!("Parse error: {e}")))),
-        };
-        match msg {
-            Json::Arr(items) if items.is_empty() => {
-                Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: empty batch")))
-            }
-            Json::Arr(items) => {
-                let replies: Vec<Json> = items.iter().filter_map(|m| self.handle(m)).collect();
-                (!replies.is_empty()).then_some(Json::Arr(replies))
-            }
-            m => self.handle(&m),
-        }
-    }
-
-    /// One message. Notifications and responses get no reply.
-    fn handle(&mut self, msg: &Json) -> Option<Json> {
-        if !msg.is_object() {
-            return Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: not an object")));
-        }
-        let id = msg.get("id").cloned();
-        let id_ok = matches!(id, None | Some(Json::Str(_) | Json::Num(_)));
-        let reply_id = if id_ok { id.clone().unwrap_or(Json::Null) } else { Json::Null };
-        if msg.get("jsonrpc").and_then(Json::as_str) != Some("2.0") {
-            return Some(error_reply(reply_id, rpc_err(INVALID_REQUEST, "Invalid Request: jsonrpc must be \"2.0\"")));
-        }
-        if !id_ok {
-            return Some(error_reply(Json::Null, rpc_err(INVALID_REQUEST, "Invalid Request: id must be a string or a number")));
-        }
-        let Some(method) = msg.get("method").and_then(Json::as_str) else {
-            // a response to a request of ours (we send none), or garbage
-            if id.is_some() && (msg.get("result").is_some() || msg.get("error").is_some()) {
-                return None;
-            }
-            return Some(error_reply(reply_id, rpc_err(INVALID_REQUEST, "Invalid Request: method must be a string")));
-        };
-        // notifications (`notifications/initialized`, `notifications/cancelled`, ...) need no action
-        let id = id?;
-        let empty = Json::Obj(Vec::new());
-        let params = match msg.get("params") {
-            None => &empty,
-            Some(p @ Json::Obj(_)) => p,
-            Some(_) => return Some(error_reply(id, rpc_err(INVALID_PARAMS, "Invalid params: params must be an object"))),
-        };
-        Some(match self.request(method, params) {
-            Ok(result) => obj([("jsonrpc", "2.0".into()), ("id", id), ("result", result)]),
-            Err(e) => error_reply(id, e),
-        })
+        handle_line(self, line)
     }
 
     fn request(&mut self, method: &str, params: &Json) -> Result<Json, RpcError> {
         match method {
             "initialize" => {
-                let Some(asked) = params.get("protocolVersion").and_then(Json::as_str) else {
-                    return Err(rpc_err(INVALID_PARAMS, "Invalid params: protocolVersion must be a string"));
-                };
-                let version = VERSIONS.iter().find(|v| **v == asked).unwrap_or(&VERSIONS[0]);
+                let version = version(params)?;
                 let no_changes = || obj([("listChanged", false.into())]);
                 Ok(obj([
-                    ("protocolVersion", (*version).into()),
+                    ("protocolVersion", version.into()),
                     (
                         "capabilities",
                         obj([
@@ -949,6 +977,9 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
         vec![("ok", Json::from(report.exit == 0)), ("exit", Json::from(report.exit as i64)), ("stdout", report.stdout.clone().into())];
     if let Some(what) = &report.internal {
         fields.push(("stderr", format!("internal error in the interpreter: {what}").into()));
+    } else if !report.log.is_empty() {
+        // `fn main() -> T`: stdout is the JSON of its value, what it printed went to stderr
+        fields.push(("stderr", report.log.clone().into()));
     }
     if let Some(e) = &report.error {
         let err = obj([

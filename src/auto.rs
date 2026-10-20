@@ -433,6 +433,10 @@ pub fn run(opts: &Opts, prog: &Program, start: Instant) -> ExitCode {
 
     // within the budget: print what the program printed, as the native one would have
     {
+        // (`fn main() -> T`: what it printed goes to stderr, the JSON of its value to stdout)
+        if !report.log.is_empty() {
+            eprint!("{}", native_text(report.log.clone()));
+        }
         let mut out = std::io::stdout().lock();
         let _ = out.write_all(native_text(report.stdout).as_bytes());
         let _ = out.flush();

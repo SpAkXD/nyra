@@ -2132,12 +2132,12 @@ fn main(a: int, b: str) -> int {
     ret 0
 }
 ----
-error[E0211]: `main` must take no parameters and return nothing, but it takes `a: int`, `b: str` and returns `int`
+error[E0211]: `main` must take no parameters, but it takes `a: int`, `b: str`
   --> case.nyra:1:4
   |
 1 | fn main(a: int, b: str) -> int {
   |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
+  = hint: write `fn main() { ... }` (or `fn main() -> T` to print a value as JSON): put the values it needs inside it with `let`, and read arguments with `use os` and `os.args()`
   = explain: nyra explain E0211
 
 nyra: 1 error(s)
@@ -2145,12 +2145,12 @@ nyra: 1 error(s)
 fn main(x: int) {
 }
 ----
-error[E0211]: `main` must take no parameters and return nothing, but it takes `x: int`
+error[E0211]: `main` must take no parameters, but it takes `x: int`
   --> case.nyra:1:4
   |
 1 | fn main(x: int) {
   |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
+  = hint: write `fn main() { ... }` (or `fn main() -> T` to print a value as JSON): put the values it needs inside it with `let`, and read arguments with `use os` and `os.args()`
   = explain: nyra explain E0211
 
 nyra: 1 error(s)
@@ -2158,13 +2158,15 @@ nyra: 1 error(s)
 fn main() -> int {
     ret 0
 }
+print("first")
+main()
 ----
-error[E0211]: `main` must take no parameters and return nothing, but it returns `int`
-  --> case.nyra:1:4
+error[E0211]: `main` returns `int`, so it runs after the top-level statements and its value is what the program prints: it cannot be called among them
+  --> case.nyra:5:1
   |
-1 | fn main() -> int {
-  |    ^
-  = hint: write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`
+5 | main()
+  | ^
+  = hint: remove this call `main()`, or make `main` return nothing (`fn main() { ... }`) and call it where it should run
   = explain: nyra explain E0211
 
 nyra: 1 error(s)

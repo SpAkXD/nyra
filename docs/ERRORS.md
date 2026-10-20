@@ -40,6 +40,7 @@ design may still change.
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
 | E0372-E0390 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons (E0389), option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387), opening hours (E0390) |
+| E0400-E0419 | the agent runtime (reserved since v0.9) | `nyra serve --mcp`, typed output (`fn main() -> T`), checkpoints and mocks ([SERVE.md](SERVE.md)); so far they report with existing codes (E0211, E0290, E0340, E0345, E0355-E0359) |
 
 A code marked **warning** does not stop the build: the compiler prints it to stderr and `--json` lists it under `"warnings"`.
 
@@ -629,16 +630,16 @@ fn main() {
 
 ## E0211: bad `main`
 - **Kind:** compile error · **Since:** v0.1
-- **What it means:** `fn main` declares parameters or a return type. `main` takes nothing and returns nothing.
-- **Why Nyra has this rule:** A program has no command-line arguments, input or exit code yet, and `main` behaves identically on every backend. To stop early, write `return` without a value.
+- **What it means:** `fn main` declares parameters, or a `main` that returns a value is called among the statements at the top level. `main` takes nothing. Since v0.9 it may return a value (`fn main() -> T`, typed output): the program then prints that value as JSON, and with statements at the top level `main` runs after them, so they may not call it.
+- **Why Nyra has this rule:** `main` is started by the runtime, the same way on every backend: there is nothing to pass it. Arguments are read with `use os` and `os.args()`, input with `use input`. A `main` with a value is the program's result, which the runtime prints once, at the end.
 - **Common causes:**
-  - `fn main() -> int` copied from C or Rust
-  - `fn main(args: ...)`: programs are closed, so put the values in the program (`let n = 12`)
-  - wanting to return an exit code: `main` always ends normally
+  - `fn main(args: [str])` copied from Java or C: read `os.args()` instead
+  - `fn main() -> int` to return an exit code: the value is printed as JSON; stop with a code with `os.exit(n)`
+  - a script that calls `main()` while `main` returns a value: remove the call
 - **Wrong:**
 ```rust
-fn main() -> int {
-    return 0
+fn main(n: int) {
+    print(n)
 }
 ```
 - **Fixed:**

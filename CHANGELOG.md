@@ -70,6 +70,33 @@ Web
   Vimeo player, allowed by the page's policy), `tabs([label]) { ... }` (links to the panels without JavaScript),
   `search(hint)` (filters the cards after it), and `img(..., width:)` for small pictures.
 
+Agent runtime (docs/SERVE.md)
+- **`nyra serve --mcp tools.nyra`**: every `pub fn` of a file becomes an MCP tool (stdio, the JSON-RPC code of
+  `nyra mcp`). The `//` comment above a function is its description; its arguments and result get JSON Schemas from
+  the Nyra types (structs, enums, optionals, tuples, maps; a parameter with a default is optional). Each call runs in
+  the interpreter with fresh limits (`--fuel`, `--max-memory`, `--max-output`, `--max-depth`, `--timeout`), file
+  paths confined, and only the capabilities of `--allow` or `--mock`: a tool that needs another fails with E0290
+  before it runs. Wrong arguments are E0345, runtime errors and limits keep their codes; each comes back as a tool
+  error with the JSON of `nyra run --json`. `--list` prints the tools.
+- **Typed output: `fn main() -> T`.** `main` may return a value: the program prints it as one JSON document on
+  standard output (written like `json.str`, so it is valid JSON of T by construction) and `print` goes to standard
+  error. Interpreter, native and JavaScript; the other targets refuse it with a clear message. With top-level
+  statements `main` runs after them (calling `main()` among them is E0211, whose other case is now only parameters).
+  **`nyra schema file.nyra`** prints the JSON Schema of T (draft 2020-12, `$defs` for a type that contains itself);
+  `--tools` the tools of `nyra serve`.
+- **Checkpoints: `nyra run --checkpoint state.json` and `nyra resume state.json`.** When the fuel (`--fuel`) or the
+  time (`--max-time`) runs out, the run pauses before the next statement instead of failing: the call stack, locals,
+  values (shared ones stay shared), input left, clocks, random state and mocks are saved as JSON with the hashes of
+  the source and the compiled program, and it exits with 125. `nyra resume` goes on with fresh fuel, without
+  printing or writing again what it already did, writes the file again if it pauses again, removes it when the run
+  ends, and refuses a checkpoint whose program changed. A paused and resumed run prints exactly what a whole run
+  prints and runs the same number of steps (every example is checked paused every few hundred steps).
+- **Mocks: `--mock fs=DIR`** (a copy-on-write view of DIR: writes, new folders and removals stay in memory),
+  **`--mock input=FILE`** and **`--mock os.env=KEY=VALUE`** serve a capability from a mock in the interpreter; like
+  `--allow`, a run with mocks grants nothing else. The design of `--mock net=DIR` for the coming network module is in
+  docs/SERVE.md.
+- Error codes E0400-E0419 are reserved for the agent runtime.
+
 ## Unreleased (v0.8)
 
 Language

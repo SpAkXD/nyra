@@ -550,22 +550,44 @@ impl Parser {
             // The user's `main` is renamed, so the script gets the name `main`; every call of `main()`
             // (a bare one among the statements calls it where it stands, and then it is not called again)
             // goes to the user's.
+            // A `main` that returns a value (typed output, see schema.rs) runs after the statements,
+            // and its value is the script's: it may not be called among them.
+            let mut ret = Type::Void;
             if let Some(user) = funcs.iter_mut().find(|f| f.name == "main") {
                 user.name = USER_MAIN.to_string();
                 let at = user.span;
-                let called = top.iter().any(|s| {
-                    matches!(&s.kind, StmtKind::Expr(Expr { kind: ExprKind::Call(f, args), .. }) if f == "main" && args.is_empty())
+                let typed = user.ret != Type::Void;
+                let call_at = top.iter().find_map(|s| match &s.kind {
+                    StmtKind::Expr(Expr { kind: ExprKind::Call(f, args), .. }) if f == "main" && args.is_empty() => Some(s.span),
+                    _ => None,
                 });
+                if let (true, Some(span)) = (typed, call_at) {
+                    self.errs.push(
+                        Diag::new(
+                            "E0211",
+                            format!(
+                                "`main` returns `{}`, so it runs after the top-level statements and its value is what the program prints: it cannot be called among them",
+                                user.ret.name()
+                            ),
+                            span,
+                        )
+                        .hint("remove this call `main()`, or make `main` return nothing (`fn main() { ... }`) and call it where it should run"),
+                    );
+                }
                 for f in &mut funcs {
                     rename_main_calls(&mut f.body);
                 }
                 rename_main_calls(&mut top);
-                if !called {
+                if typed {
+                    ret = funcs.iter().find(|f| f.name == USER_MAIN).map_or(Type::Void, |f| f.ret);
+                    let call = Expr::new(ExprKind::Call(USER_MAIN.to_string(), Vec::new()), at);
+                    top.push(Stmt { kind: StmtKind::Ret(Some(call)), span: at });
+                } else if call_at.is_none() {
                     let call = Expr::new(ExprKind::Call(USER_MAIN.to_string(), Vec::new()), at);
                     top.push(Stmt { kind: StmtKind::Expr(call), span: at });
                 }
             }
-            funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
+            funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret, body: top, span });
             script = true;
         }
         Program { funcs, structs, enums, examples, uses, script, globals: Default::default(), public, files: Default::default() }

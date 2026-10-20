@@ -453,7 +453,7 @@ Short table. The full database, with the reason for each rule and a wrong and a 
 | E0208 | no `fn main()` and no top-level statements | write the program's statements at the top level (a script) |
 | E0209 | condition is not `bool` | compare: `if n != 0`, `if xs.len() > 0` |
 | E0210 | operator on wrong types | `int + float`, `"a" + 1`, `"a" + 'b'`, `'a' + 1`, `c == "a"`, `xs + 5`, `"a" < 1`, `a < b < c` |
-| E0211 | bad `main` | no parameters and no return type |
+| E0211 | bad `main` | no parameters; `fn main() -> T` prints its value as JSON |
 | E0212 | bad `if` value | an `if` used as a value needs an `else`, exactly one expression per branch, and the same type in both |
 | E0213 | lambda used as a value | a lambda is only an argument: `xs.map(x => x * 2)`; to name it, write a `fn` |
 | E0214 | lambda changes a variable | variables are read-only inside a lambda: use the method's result, or a `for` loop |
