@@ -47,6 +47,20 @@ class Node {
         n.parentNode = null;
         return n;
     }
+    // only attribute selectors: "[a],[b]"
+    querySelectorAll(sel) {
+        const names = [...sel.matchAll(/\[([\w-]+)\]/g)].map((m) => m[1]);
+        const out = [];
+        const walk = (n) => {
+            for (const c of n.childNodes) {
+                if (c.nodeType !== 1) continue;
+                if (names.some((x) => c.hasAttribute(x))) out.push(c);
+                walk(c);
+            }
+        };
+        walk(this);
+        return out;
+    }
 }
 const el = (name, attrs, ...kids) => {
     const e = new Node(1, name);
@@ -85,6 +99,38 @@ assert.strictEqual(grid.getAttribute("class"), "grid g3 m-in", "a revealed grid 
 assert.strictEqual(card.getAttribute("style"), "--m-i:2");
 assert.strictEqual(card.childNodes[0].nodeValue, "new");
 assert.strictEqual(box.childNodes[1].getAttribute("class"), "m-in", "a new element with motion is revealed");
+
+// a view's style attributes are renamed before the page parses its HTML (the page's policy drops a
+// parsed one); the morph gives them to the element through the CSSOM (here: the attribute) once it
+// is on the page, to a new element and to one that is kept
+const { html } = globalThis.nyra_web;
+assert.strictEqual(
+    html('<div class="grid" style="--cols:8;"><figure class="fig" style="--ratio:4/3"><img alt="a style=&quot;b&quot;"></figure></div><p>style</p>'),
+    '<div class="grid" data-ny-style="--cols:8;"><figure class="fig" data-ny-style="--ratio:4/3"><img alt="a style=&quot;b&quot;"></figure></div><p>style</p>'
+);
+// the same for the app components: media(ratio:)'s thumbnail (the style after a link's attributes),
+// img(width:), video's ratio
+assert.strictEqual(
+    html('<a class="media-thumb media-fit" href="https://youtu.be/x?a=1&amp;b=2" data-embed="https://www.youtube-nocookie.com/embed/x" tabindex="-1" style="--ratio:1/1"><img alt="t"></a><figure class="fig fig-w" style="--w:160px;"></figure><figure class="video" style="--ratio:16/9" data-anim="rise">'),
+    '<a class="media-thumb media-fit" href="https://youtu.be/x?a=1&amp;b=2" data-embed="https://www.youtube-nocookie.com/embed/x" tabindex="-1" data-ny-style="--ratio:1/1"><img alt="t"></a><figure class="fig fig-w" data-ny-style="--w:160px;"></figure><figure class="video" data-ny-style="--ratio:16/9" data-anim="rise">'
+);
+const kept = el("DIV", { class: "grid s-1a2b" });
+const room = el("DIV", { "data-live": "rooms" }, kept);
+morph(room, el("#fragment", {}, el("DIV", { class: "grid", "data-ny-style": "--cols:8;" }), el("FIGURE", { "data-ny-style": "--ratio:4/3" }, el("I", { "data-ny-style": "--tint:red" }))));
+assert.strictEqual(room.childNodes[0], kept);
+assert.strictEqual(kept.getAttribute("class"), "grid");
+assert.strictEqual(kept.getAttribute("style"), "--cols:8");
+assert(!kept.hasAttribute("data-ny-style"));
+const fig = room.childNodes[1];
+assert.strictEqual(fig.getAttribute("style"), "--ratio:4/3");
+assert.strictEqual(fig.childNodes[0].getAttribute("style"), "--tint:red");
+assert(!fig.hasAttribute("data-ny-style") && !fig.childNodes[0].hasAttribute("data-ny-style"));
+// an accordion question the visitor opened stays open when its view renders again
+const q = el("DETAILS", { class: "acc-item", open: "" });
+const faq = el("DIV", { "data-live": "faq" }, q);
+morph(faq, el("#fragment", {}, el("DETAILS", { class: "acc-item" })));
+assert.strictEqual(faq.childNodes[0], q);
+assert(q.hasAttribute("open"));
 
 // a form whose `data-on` is a variant name sends that variant with its value
 const input = el("INPUT", { "data-on": '"Typed"' });

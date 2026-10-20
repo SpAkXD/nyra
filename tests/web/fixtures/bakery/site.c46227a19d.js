@@ -1903,9 +1903,10 @@ const used = new Set(pairs.map((p) => p[1]));
 for (const c of Array.from(old.childNodes)) if (!used.has(c)) old.removeChild(c);
 let prev = null;
 for (const [n, m] of pairs) {
-if (!m) ny_restyle(n);
+const styles = m ? [] : ny_unstyle(n);
 const node = m || n, want = prev ? prev.nextSibling : old.firstChild;
 if (node !== want) old.insertBefore(node, want);
+for (const [e, t] of styles) ny_style(e, t);
 if (m) ny_patch(m, n);
 else if (n.nodeType === 1) ny_shown(n);
 prev = node;
@@ -1938,14 +1939,23 @@ return;
 for (const p of Array.from(s)) if (!want.has(p) && p !== "--m-i") s.removeProperty(p);
 for (const [p, v] of want) if (s.getPropertyValue(p).trim() !== v) s.setProperty(p, v);
 }
-function ny_restyle(n) {
-if (n.nodeType !== 1 || !n.querySelectorAll) return;
-for (const e of [n, ...n.querySelectorAll("[style]")]) {
-if (!e.hasAttribute("style")) continue;
-const t = e.getAttribute("style");
-e.removeAttribute("style");
-ny_style(e, t);
+const NY_STYLE = "data-ny-style";
+function ny_html(text) {
+return text.replace(/<[A-Za-z][^<>]*>/g, (tag) => tag.replace(/(\s)style=(?=["'])/, "$1" + NY_STYLE + "="));
 }
+function ny_decl(e) {
+return e.hasAttribute(NY_STYLE) ? e.getAttribute(NY_STYLE) : e.getAttribute("style");
+}
+function ny_unstyle(n) {
+const out = [];
+if (n.nodeType !== 1 || !n.querySelectorAll) return out;
+for (const e of [n, ...n.querySelectorAll("[style],[" + NY_STYLE + "]")]) {
+if (!e.hasAttribute("style") && !e.hasAttribute(NY_STYLE)) continue;
+out.push([e, ny_decl(e)]);
+e.removeAttribute("style");
+e.removeAttribute(NY_STYLE);
+}
+return out;
 }
 function ny_patch(a, b) {
 if (a.nodeType !== 1) {
@@ -1955,10 +1965,11 @@ return;
 const motion = (a.getAttribute("class") || "").split(/\s+/).filter((c) => c.startsWith("m-"));
 const busy = a === a.ownerDocument.activeElement;
 const was = [a.getAttribute("value"), a.hasAttribute("checked")];
-for (const at of Array.from(a.attributes)) if (at.name !== "style" && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
-for (const at of Array.from(b.attributes)) if (at.name !== "style" && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+const keep = (name) => name === "style" || name === NY_STYLE || (name === "open" && a.nodeName === "DETAILS");
+for (const at of Array.from(a.attributes)) if (!keep(at.name) && !b.hasAttribute(at.name)) a.removeAttribute(at.name);
+for (const at of Array.from(b.attributes)) if (!keep(at.name) && a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
 ny_class(a, motion);
-ny_style(a, b.getAttribute("style"));
+ny_style(a, ny_decl(b));
 if (!busy && was[0] !== a.getAttribute("value")) a.value = a.getAttribute("value") || "";
 if (was[1] !== a.hasAttribute("checked")) a.checked = a.hasAttribute("checked");
 if (!(busy && a.nodeName === "TEXTAREA")) ny_morph(a, b);
@@ -1982,7 +1993,7 @@ const view = ny_web.views[el.getAttribute("data-live")];
 if (!view) continue;
 try {
 const t = document.createElement("template");
-t.innerHTML = view();
+t.innerHTML = ny_html(view());
 ny_morph(el, t.content);
 } catch (e) {
 console.error(e instanceof NyPanic ? e.message : e);
@@ -2005,6 +2016,6 @@ document.addEventListener("input", (e) => {
 if (e.target.hasAttribute && e.target.hasAttribute("data-on")) ny_send(ny_msg(e.target));
 });
 } else {
-globalThis.nyra_web = { web: ny_web, morph: ny_morph, msg: ny_msg };
+globalThis.nyra_web = { web: ny_web, morph: ny_morph, msg: ny_msg, html: ny_html };
 }
 })();

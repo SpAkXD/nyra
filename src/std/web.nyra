@@ -595,10 +595,12 @@ fn navbar(brand: str, links: [(str, str)] = [], back: (str, str)? = none, other:
 }
 
 // A full-height photo hero: the photo under a gradient of the primary color, a kicker, the title,
-// a text, buttons (the first one in the accent color), an open/closed badge and a scroll cue.
+// a text, buttons (the first one in the accent color), an open/closed badge (of the opening hours
+// `badge:`, saying `open:` / `closed:`) and a scroll cue.
 fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str = "", buttons: [(str, str)] = [],
-    badge: [(str, str)] = [], next: str = "", height: str = "", id: str = "", cls: str = "", anim: str = "",
-    hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "", kids: [Node] = []) -> Node {
+    badge: [(str, str)] = [], open: str = "", closed: str = "", next: str = "", height: str = "", id: str = "",
+    cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "",
+    kids: [Node] = []) -> Node {
     var c = "hero"
     if image == "" {
         c += " hero-plain"
@@ -622,7 +624,7 @@ fn hero(title: str, kicker: str = "", text: str = "", image: str = "", alt: str 
             h += "<span class=\"hero-kicker\">" + _md(kicker) + "</span>"
         }
         if badge.len() > 0 {
-            h += _badge(badge, "light")
+            h += _badge(badge, "light", open, closed)
         }
         h += "</div>"
     }
@@ -712,22 +714,24 @@ fn gallery(photos: [(str, str, str)], filters: [(str, str)] = [], all: str = "",
 }
 
 // Opening hours: rows of (days, "1-5 8:00-16:00"), where the days are 1 (Monday) to 7 (Sunday);
-// an empty time means closed. A live open/closed badge follows the site's time zone.
-fn hours(rows: [(str, str)], title: str = "", note: str = "", badge: bool = true, id: str = "", cls: str = "",
-    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+// an empty time means closed. A live open/closed badge follows the site's time zone; `open:` and
+// `closed:` are its words ("Reception open").
+fn hours(rows: [(str, str)], title: str = "", note: str = "", badge: bool = true, open: str = "", closed: str = "",
+    id: str = "", cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none,
+    morph: str = "") -> Node {
     var h = "<div" + _ic("card hours", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + "><div class=\"hours-head\"><h3 class=\"hours-title\">"
     h += _md(if title != "" { title } else { _say("hours") }) + "</h3>"
     if badge {
-        h += _badge(rows, "dark")
+        h += _badge(rows, "dark", open, closed)
     }
     h += "</div><table class=\"hours-table\"><tbody>"
     for r in rows {
         let spec = _hours_spec(r.0, r.1)
-        let open = spec != "" && spec != "?"
-        let days = if open { spec.split(" ")[0] } else { "" }
+        let timed = spec != "" && spec != "?"
+        let days = if timed { spec.split(" ")[0] } else { "" }
         // a row without times keeps its words ("Closed", "By appointment")
-        let shown = if open { _hours_text(spec) } else if r.1.trim() != "" { r.1.trim() } else { _say("shut") }
-        h += "<tr" + (if !open { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
+        let shown = if timed { _hours_text(spec) } else if r.1.trim() != "" { r.1.trim() } else { _say("shut") }
+        h += "<tr" + (if !timed { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
         h += "</th><td>" + _esc(shown) + "</td></tr>"
     }
     h += "</tbody></table>"
@@ -853,6 +857,19 @@ fn steps(items: [(str, str)], id: str = "", cls: str = "", anim: str = "", hover
         h += "</span><p class=\"step-text\">" + _md(s.1) + "</p></li>"
     }
     return Node(html: h + "</ol>", kit: ["steps"])
+}
+
+// Questions that open to their answers (an FAQ): (question, answer) pairs, each a native
+// <details>, so it opens by click, Enter or Space without JavaScript, and slides open where the
+// browser can animate it (not with reduced motion). `open: 0` opens the first one.
+fn accordion(items: [(str, str)], open: int = -1, id: str = "", cls: str = "", anim: str = "", hover: str = "",
+    loop: str = "", scroll: str = "", at: float? = none, morph: str = "") -> Node {
+    var h = "<div" + _ic("acc", id, cls) + _mo(anim, hover, loop, scroll, at, morph) + ">"
+    for i, it in items {
+        h += "<details class=\"acc-item\"" + (if i == open { " open" } else { "" }) + "><summary class=\"acc-q\"><span>" + _md(it.0)
+        h += "</span>" + _icon("chevron-down") + "</summary><div class=\"acc-a\"><p>" + _md(it.1) + "</p></div></details>"
+    }
+    return Node(html: h + "</div>", kit: ["accordion"])
 }
 
 // A big number with a label ("33+", "let zkušeností").
@@ -1113,7 +1130,8 @@ fn year() -> int {
 // ---------------------------------------------------------------------------------------------
 // The open/closed badge and the opening hours
 
-fn _badge(rows: [(str, str)], tone: str) -> str {
+// The badge says `open` / `closed` ("Reception open"), else the kit's words (`site(say:)`, "Open now").
+fn _badge(rows: [(str, str)], tone: str, open: str, closed: str) -> str {
     var spec = ""
     for r in rows {
         let s = _hours_spec(r.0, r.1)
@@ -1121,8 +1139,10 @@ fn _badge(rows: [(str, str)], tone: str) -> str {
             spec += (if spec != "" { "|" } else { "" }) + s
         }
     }
+    let yes = if open.trim() != "" { open.trim() } else { _say("open") }
+    let no = if closed.trim() != "" { closed.trim() } else { _say("closed") }
     var h = "<span class=\"badge badge-" + tone + "\" data-hours=\"" + _attr(spec) + "\"" + _at("data-tz", _web.tz)
-    h += " data-open=\"" + _attr(_say("open")) + "\" data-closed=\"" + _attr(_say("closed")) + "\">"
+    h += " data-open=\"" + _attr(yes) + "\" data-closed=\"" + _attr(no) + "\">"
     return h + "<span class=\"badge-dot\" aria-hidden=\"true\"></span><span class=\"badge-label\"></span></span>"
 }
 

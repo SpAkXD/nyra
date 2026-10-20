@@ -1,7 +1,8 @@
 //! The motion fixtures (`tests/web/motion/*.html`) in a headless Chrome: every word reveals and ends
 //! in place, counters end on their text, there are no script errors, and with reduced motion (or
 //! `data-motion="off"`) nothing animates longer than 10 ms. And a live site clicked through: its filter
-//! buttons change the cards, and every card shown is visible. And every fixture page keeps its
+//! buttons change the cards, and every card shown is visible; and the rooms site: re-rendered images
+//! and grids keep their shapes, the accordion opens and closes. And every fixture page keeps its
 //! Content-Security-Policy (no violation, also after a live region renders again). The browser is `NYRA_CHROME`, else a
 //! Chrome, Edge or Brave in the usual places; without one (or without Node.js) the tests are skipped.
 
@@ -81,6 +82,34 @@ fn the_live_filter_works_in_a_browser() {
     };
     let out =
         Command::new("node").arg("tests/web/live_check.mjs").arg(&chrome).arg("tests/web/fixtures/live/index.html").output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    if out.status.code() == Some(2) {
+        common::missing(&format!("the browser did not start: {text}"));
+        return;
+    }
+    assert!(out.status.success(), "{text}");
+}
+
+/// The rooms example's site (`examples/web/rooms.nyra`, built as tests/web/fixtures/rooms) clicked
+/// through: its live view re-renders images with `ratio:` and a `grid(8)` without a CSP report and
+/// with their shapes, its accordion opens and closes by click and keyboard (and slides, but not with
+/// reduced motion), and its badges say the words given to `hero(open:, closed:)` and `hours(...)`.
+#[test]
+fn the_rooms_view_and_accordion_work_in_a_browser() {
+    if Command::new("node").arg("--version").output().is_err() {
+        common::missing("no Node.js to drive the browser for the rooms site");
+        return;
+    }
+    let Some(chrome) = chrome() else {
+        common::missing("no Chrome, Edge or Brave for the rooms site (set NYRA_CHROME)");
+        return;
+    };
+    let out = Command::new("node")
+        .arg("tests/web/rooms_check.mjs")
+        .arg(&chrome)
+        .arg("tests/web/fixtures/rooms/index.html")
+        .output()
+        .unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     if out.status.code() == Some(2) {
         common::missing(&format!("the browser did not start: {text}"));

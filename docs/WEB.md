@@ -257,7 +257,8 @@ Each one is the look and behavior of a well-made modern site with no styling cod
 | `split(panels)` | Full-screen selection between two (or more) subsites | Hover zoom, labels, page transition into the chosen site |
 | `marquee(items)` | Endless ticker strip in the primary color | CSS-only loop, pauses on hover, static for reduced motion |
 | `gallery(photos)` | Masonry gallery: `filters:` | Filter tabs with a sliding pill, lightbox with keys, swipe, counter, focus trap |
-| `hours(rows)` | Opening-hours card: rows like `("Sobota", "6 8:30-11:30")` or `("Mon–Fri", "8:00–16:00")` | Live "open now" badge in `site(tz:)`, closed days marked, refreshed each minute |
+| `hours(rows)` | Opening-hours card: rows like `("Sobota", "6 8:30-11:30")` or `("Mon–Fri", "8:00–16:00")`; `open:` and `closed:` are the badge's words (`"Reception open"`) | Live "open now" badge in `site(tz:)`, closed days marked, refreshed each minute |
+| `accordion(items)` | Questions that open to their answers (an FAQ): `(question, answer)` pairs, `open:` (the index of one open at the start) | Native `<details>`: opens by click, Enter or Space without JavaScript; the answer slides open and shut (at once with reduced motion); a question the visitor opened stays open when a live view renders again |
 | `map(address)` | Map card: `show:`, `go:` | Placeholder until clicked (no Google request before consent), then the embed; a directions link |
 | `form(title) { field(...) }` | Form with labeled fields: `mailto:` or `to:` (POST URL), `subject:`, `send:` (the submit button's text; a plain `button(...)` in the form is its submit button instead), `note:`, `done:`, `done_text:`, `edit:` | Validation, focus rings in the theme, a mailto composer (message, then a line, then the other fields; a `?subject=...` written in `mailto:` is kept), a "sent" state with an edit button |
 | `steps(items)` | Vertical timeline of (label, text) | Drawn line, staggered items |
@@ -271,7 +272,9 @@ Each one is the look and behavior of a well-made modern site with no styling cod
 
 Helpers: `maps(address)` gives a Google Maps search URL, `year()` the current year (at build time).
 
-`hero(..., badge: open_hours)` shows the same live open/closed badge as `hours(...)`.
+`hero(..., badge: open_hours)` shows the same live open/closed badge as `hours(...)`. Its words are the kit's ("Open
+now" / "Closed now", `site(say:)` changes them for the whole site), or, for one badge, `open:` and `closed:`:
+`hero(..., badge: reception, open: "Reception open", closed: "Reception closed")`.
 
 ## Motion
 
@@ -571,7 +574,7 @@ page("/", "Flora – garden shop") {
 - `site(name, theme...)` `page(path, title) {}`
 - `section(id, title, kicker:, text:, bg:) {}` `grid(cols, widths:) {}` `stack {}` `row {}` `card(title, text, icon:, image:, fill:) {}`
 - `h1 h2 h3 p small` `img(src, alt, ratio:, caption:)` `link(text, href)` `button(text, href, on:)` `list` `table` `address {}` `note` `chip(title, text, icon:)` `embed(url, title)`
-- kit: `navbar(brand, links, back:, cta:)` `hero(title, kicker:, text:, image:, alt:, buttons:, badge:)` `split` `marquee(items)` `gallery(photos, filters:)` `hours(rows)` `map(address)` `form(title, mailto:) { field(name, label, type:, req:, hint:) }` `steps` `stat(value, label)` `footer`
+- kit: `navbar(brand, links, back:, cta:)` `hero(title, kicker:, text:, image:, alt:, buttons:, badge:, open:, closed:)` `split` `marquee(items)` `gallery(photos, filters:)` `hours(rows, open:, closed:)` `accordion(items)` `map(address)` `form(title, mailto:) { field(name, label, type:, req:, hint:) }` `steps` `stat(value, label)` `footer`
 
 ## Motion (any element; a container passes it to its children)
 - `anim:` fade rise slide zoom blur pop words draw count stagger none · `hover:` lift glow zoom shine tilt underline
@@ -732,7 +735,9 @@ The build reads the finished HTML of each page, so the library is free in how it
   `default-src 'self'`, `script-src 'self'` (or `'none'` without JS), `style-src 'self'` plus `'unsafe-inline'` only
   when the page has a `<style>` or a `style` attribute that cannot be a CSS rule (each `style` attribute becomes a
   class `s-<hash>` of the site's CSS, its declarations `!important`; the kit, the motion script and the live
-  regions set styles only through the CSSOM), Google Fonts when linked, `img-src 'self' data:` plus external
+  regions set styles only through the CSSOM: the runtime renames a re-rendered view's `style` attributes before the
+  browser parses its HTML, which the policy would report, and sets their declarations once the element is on the
+  page), Google Fonts when linked, `img-src 'self' data:` plus external
   image origins, `frame-src` for iframes, `data-src`/`data-embed`/`data-frame` URLs and Google Maps when the `map`
   chunk is used, `form-action 'self'` plus form targets, `base-uri 'self'`, `object-src 'none'`. No inline scripts.
 - Before `</head>`: `<link rel="stylesheet" href="site.<hash>.css">` and `<script src="site.<hash>.js" defer>`
@@ -855,8 +860,8 @@ its images in `examples/web/assets/`; `tests/web.rs` builds each one and compare
   and the kit chunks it needs. `page(path, title) { ... }` puts the document together (head, sprite, skip link,
   the navbar before `<main>`, the footer after it), calls `_uses(chunk)` for the chunks of its children and
   `_emit(path, html)` once. The chunk names are the markers of `kit.css` and `kit.js`: `table chip embed quote nav
-  hero hours map form steps stat foot marquee gallery split tabs app media video search` (CSS) and `nav hours map form
-  gallery tabs app video search` (JS); the text
+  hero hours map form steps accordion stat foot marquee gallery split tabs app media video search` (CSS) and `nav hours
+  map form gallery tabs app video search` (JS); the text
   before the first marker of `kit.css` is the base (theme defaults, type, layout, cards, buttons, lists).
 - `site(...)` gives the theme to `_css` as one `:root{...}` rule with the variables `--primary`, `--accent`, `--bg`,
   `--alt`, `--ink`, `--muted` (what the contrast check reads), `--c-NAME` for each palette color, `--on-primary`,
@@ -901,7 +906,8 @@ Where the build differs from the design above, and why:
 - **Added:** `quote(text, name, place:, tag:, stars:, color:)` (testimonials), `chip`'s `color:`, `card`'s `tag:`,
   `items:` (a two-column list of dots, as flora's product cards) and `ratio:`, `button`'s `icon:` and `label:`,
   `list(icon:, ordered:, cols:)`, `section(width: "narrow")`, `hero(next:, height: "half")`, `site(logo:)`,
-  `navbar(logo:)`, and the helpers `maps(address)` and `year()`.
+  `navbar(logo:)`, `hours(open:, closed:)` and `hero(open:, closed:)` (the badge's words), `accordion(items, open:)`
+  (named so, not `faq`: a program's `let faq = [...]` would be E0372), and the helpers `maps(address)` and `year()`.
 - **The kit's words** (`say:` keys, English and Czech built in): `open closed shut hours more down map show go
   menu close nav skip back all filter zoom prev next dismiss send mail_note done done_text edit top links contact side
   play search none`.

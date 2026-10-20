@@ -523,6 +523,26 @@ ol.list:not(.list-icon) li::before { content: counter(li); display: grid; flex: 
 .step-label { display: block; margin-bottom: .25rem; color: var(--tint, var(--accent)); font: 700 1.5rem/1.2 var(--display); }
 .step-text { color: var(--muted); font-size: .875rem; line-height: 1.65; }
 
+/*! chunk: accordion */
+.acc { display: flex; flex-direction: column; gap: .75rem; width: 100%; max-width: 52rem; margin-inline: auto; }
+.acc-item { border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); transition: box-shadow .4s var(--ease); }
+.acc-item[open] { box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 0 0 1px color-mix(in srgb, var(--tint, var(--primary)) 28%, transparent), 0 20px 40px -26px color-mix(in srgb, var(--tint, var(--primary)) 50%, transparent); }
+.acc-q { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.15rem 1.5rem; border-radius: var(--radius); font: 600 1.0625rem/1.4 var(--font); list-style: none; cursor: pointer; transition: color .2s; }
+.acc-q::-webkit-details-marker { display: none; }
+.acc-q:hover, .acc-item[open] > .acc-q { color: var(--tint, var(--primary)); }
+.acc-q:focus-visible { outline-offset: -2px; }
+.acc-q .i { flex: none; width: 1.25rem; height: 1.25rem; color: var(--tint, var(--primary)); transition: transform .4s var(--ease); }
+.acc-item[open] > .acc-q .i { transform: rotate(180deg); }
+.acc-a { padding: 0 1.5rem 1.35rem; color: var(--muted); line-height: 1.7; }
+.acc-a a { color: var(--tint, var(--primary)); font-weight: 600; text-decoration: underline; text-underline-offset: .2em; }
+.sec-dark .acc-q:hover, .sec-dark .acc-item[open] > .acc-q, .sec-ink .acc-item[open] > .acc-q { color: color-mix(in srgb, var(--tint, var(--accent)) 60%, #fff); }
+/* the answer slides open and shut where a browser can animate a <details> (elsewhere it opens at once) */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion=off]) .acc-item { interpolate-size: allow-keywords; }
+  :root:not([data-motion=off]) .acc-item::details-content { block-size: 0; overflow: clip; opacity: 0; transition: block-size .45s var(--ease), opacity .35s, content-visibility .45s allow-discrete; }
+  :root:not([data-motion=off]) .acc-item[open]::details-content { block-size: auto; opacity: 1; }
+}
+
 /*! chunk: stat */
 .stat { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: clamp(1.25rem, 3vw, 1.75rem); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
 .stat-value { color: var(--tint, var(--primary)); font: 700 clamp(2.25rem, 4.4vw, 3rem)/1.1 var(--display); font-variant-numeric: tabular-nums; }
