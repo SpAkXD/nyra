@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- The WebAssembly backend in a browser, without a bundler: serve sdk/js (python -m http.server -d sdk/js)
+     and open /test/browser.html. The import map does what a bundler does with package.json "imports". -->
+<html lang="en">
+<meta charset="utf-8">
+<title>nyra SDK in a browser</title>
+<script type="importmap">
+  { "imports": { "#native": "../src/native-stub.js", "#load": "../src/load-web.js" } }
+</script>
+<pre id="out">running...</pre>
+<script type="module">
+  import { Sandbox } from "../src/index.js";
+  const out = document.getElementById("out");
+  const results = [];
+  const check = (name, ok, detail = "") => results.push(`${ok ? "PASS" : "FAIL"} ${name} ${detail}`);
+  try {
+    const box = new Sandbox();
+    check("backend is wasm", box.backendName === "wasm", box.backendName);
+    const r = await box.run('use input\nprint("hi {input.line()}")\n', "browser\n");
+    check("run", r.stdout === "hi browser\n", JSON.stringify(r.stdout));
+    const e = await box.run("let x = 1\nprint(y)\n");
+    check("compile error", e.errors[0]?.code === "E0201");
+    const f = await new Sandbox({ fuel: 10000 }).run("var i = 0\nwhile true {\n    i += 1\n}\n");
+    check("fuel", f.limit === "fuel");
+    const t = await new Sandbox({ fuel: 1e15, timeoutMs: 200 }).run("var i = 0\nwhile true {\n    i += 1\n}\n");
+    check("time", t.limit === "time", `${t.ms} ms`);
+    check("runJson", (await box.runJson("print(\"[1, 2]\")\n")).length === 2);
+    check("version", /^\d/.test(await box.version()));
+  } catch (err) {
+    check("no exception", false, String(err && err.stack || err));
+  }
+  out.textContent = results.join("\n");
+  document.title = results.some((x) => x.startsWith("FAIL")) ? "FAIL" : "PASS";
+</script>
+</html>

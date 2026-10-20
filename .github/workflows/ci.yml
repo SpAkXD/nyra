@@ -77,3 +77,28 @@ jobs:
         run: python bench/verify.py --tier edit
       - name: Safety tier (naive Nyra solutions must be rejected at compile time)
         run: python bench/verify.py --tier safety
+
+  # The SDKs (sdk/, docs/SDK.md): the Python package on its oldest Python, and the npm package on both of its
+  # backends (the nyra executable and the WebAssembly build). No network, no API key.
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the Nyra compiler and its WebAssembly build
+        run: |
+          cargo build --release
+          rustup target add wasm32-unknown-unknown
+          python3 tools/build_wasm.py --no-copy
+          node sdk/js/scripts/build-wasm.mjs
+      # after the build: tools/build_wasm.py needs a newer Python than the package's oldest
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Python package
+        run: python -m unittest discover -s sdk/python/tests -v
+      - name: npm package
+        working-directory: sdk/js
+        run: node --test

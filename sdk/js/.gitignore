@@ -1,0 +1,4 @@
+# built from the compiler's sources by scripts/build-wasm.mjs, shipped in the npm package only
+/wasm/
+node_modules/
+*.tgz
