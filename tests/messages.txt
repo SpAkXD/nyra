@@ -5175,8 +5175,8 @@ fn main() {
 error[E0103]: the code is nested more than 256 levels deep
   --> case.nyra:2:265
   |
-2 |     print(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
-  |                                                                                                                                                                                                                                                                         ^
+2 | …((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1)))))))))))))…
+  |                                          ^
   = hint: split it: name parts with `let`, move nested blocks into functions
   = explain: nyra explain E0103
 
@@ -6899,30 +6899,14 @@ page("/", "Contact") {
     button("Call", href: "tel:123", style: outlines)
 }
 ----
-error[E0201]: undefined variable `soft`
+error[E0201]: an option word without quotes (and 2 more: lines 6, 7)
   --> case.nyra:2:23
   |
 2 | site("Bakery", style: soft)
   |                       ^
   = hint: `style:` takes text
-  = fix: `site("Bakery", style: "soft")`
+  = fix: `site("Bakery", style: "soft")`, `field("phone", "Phone", type: "tel")`, `field("note", "Note", type: "area")` (lines 2, 6, 7)
   = explain: nyra explain E0201
-
-error[E0201]: undefined variable `tel`
-  --> case.nyra:6:39
-  |
-6 |         field("phone", "Phone", type: tel)
-  |                                       ^
-  = hint: `type:` takes text
-  = fix: `field("phone", "Phone", type: "tel")`
-
-error[E0201]: undefined variable `area`
-  --> case.nyra:7:37
-  |
-7 |         field("note", "Note", type: area)
-  |                                     ^
-  = hint: `type:` takes text
-  = fix: `field("note", "Note", type: "area")`
 
 error[E0201]: undefined variable `outlines`
   --> case.nyra:9:44
@@ -6931,7 +6915,7 @@ error[E0201]: undefined variable `outlines`
   |                                            ^
   = hint: declare it first: `let outlines = ...`
 
-nyra: 4 error(s)
+nyra: 2 error(s)
 ==== web_hero_rows
 use web
 let opening = [("Mon–Fri", "8:00-16:00")]

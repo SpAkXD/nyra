@@ -124,7 +124,9 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     if within && touched.len() > 1 {
         let fixed = apply(src, fix)?;
         let lines: Vec<&str> = fixed.lines().collect();
-        let shown: Vec<String> = touched.iter().take(3).map(|l| format!("`{}`", lines.get(l - 1).unwrap_or(&"").trim())).collect();
+        let col = |l: usize| fix.iter().find(|e| e.start.line == l).map_or(1, |e| e.start.col);
+        let shown: Vec<String> =
+            touched.iter().take(3).map(|l| format!("`{}`", clip(lines.get(l - 1).unwrap_or(&""), col(*l)))).collect();
         let more = touched.len().saturating_sub(3);
         let nums: Vec<String> = touched.iter().take(3).map(usize::to_string).collect();
         return Some(match more {
@@ -141,7 +143,8 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     let added: usize = fix.iter().map(|e| e.text.matches('\n').count()).sum();
     let removed: usize = fix.iter().map(|e| e.end.line - e.start.line).sum();
     let count = (last + 1 - first + added).checked_sub(removed)?;
-    let lines: Vec<&str> = fixed.lines().skip(first - 1).take(count).map(str::trim).filter(|l| !l.is_empty()).collect();
+    let col = fix.iter().map(|e| e.start.col).min().unwrap_or(1);
+    let lines: Vec<String> = fixed.lines().skip(first - 1).take(count).map(|l| clip(l, col)).filter(|l| !l.is_empty()).collect();
     Some(match lines.as_slice() {
         [] => {
             let old: Vec<&str> = src.lines().skip(first - 1).take(last + 1 - first).map(str::trim).collect();
@@ -150,6 +153,21 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
         [one] => format!("`{one}`"),
         many => format!("{} (on separate lines)", many.iter().map(|l| format!("`{l}`")).collect::<Vec<_>>().join(", ")),
     })
+}
+
+/// A line of a preview, trimmed, and a long one cut to the part around column `col` (a page of
+/// a site is often one long line).
+fn clip(line: &str, col: usize) -> String {
+    const WIDTH: usize = 72;
+    let cs: Vec<char> = line.trim_end().chars().collect();
+    let indent = cs.iter().take_while(|c| c.is_whitespace()).count();
+    if cs.len() - indent <= WIDTH {
+        return cs[indent..].iter().collect();
+    }
+    let start = col.saturating_sub(1).saturating_sub(WIDTH / 3).max(indent).min(cs.len().saturating_sub(WIDTH));
+    let end = (start + WIDTH).min(cs.len());
+    let body: String = cs[start..end].iter().collect();
+    format!("{}{}{}", if start > indent { "…" } else { "" }, body.trim(), if end < cs.len() { "…" } else { "" })
 }
 
 /// One fix that was applied: the error it repaired and its edits, at their places in the original

@@ -335,12 +335,14 @@ fn render(diags: &[Diag], file: &str, src: &str, label: &str, seen: &mut Vec<&'s
         let file = d.file.as_deref().unwrap_or(file);
         out += &format!("{label}[{}]: {}\n", d.code, d.msg);
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
-        if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
+        if let Some(full) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
             let num = d.span.line.to_string();
             let pad = " ".repeat(num.len());
+            // a long line (a page written on one line) shows the part around the column
+            let (line, col) = window(full, d.span.col);
             // keep tabs as tabs, so the caret lines up under the character in any editor
             let mut before = line.chars();
-            let caret: String = (1..d.span.col).map(|_| if before.next() == Some('\t') { '\t' } else { ' ' }).collect();
+            let caret: String = (1..col).map(|_| if before.next() == Some('\t') { '\t' } else { ' ' }).collect();
             out += &format!("{pad} |\n{num} | {line}\n{pad} | {caret}^\n");
         }
         if let Some(h) = &d.hint {
@@ -359,6 +361,21 @@ fn render(diags: &[Diag], file: &str, src: &str, label: &str, seen: &mut Vec<&'s
     out
 }
 
+/// The part of a line a snippet shows, and the column of `col` in it: the whole line up to 120
+/// characters, else 100 characters around the column, marked `…` where it is cut.
+fn window(line: &str, col: usize) -> (String, usize) {
+    let cs: Vec<char> = line.chars().collect();
+    if cs.len() <= 120 {
+        return (line.to_string(), col);
+    }
+    let start = col.saturating_sub(41).min(cs.len().saturating_sub(100));
+    let end = (start + 100).min(cs.len());
+    let head = if start > 0 { "…" } else { "" };
+    let tail = if end < cs.len() { "…" } else { "" };
+    let shown: String = cs[start..end].iter().collect();
+    (format!("{head}{shown}{tail}"), col - start + head.chars().count())
+}
+
 /// The fixes that were applied automatically, for people: one warning each.
 pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> String {
     render_applied(applied, file)
@@ -372,7 +389,7 @@ fn render_applied(applied: &[crate::fix::Applied], file: &str) -> String {
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
         let num = d.span.line.to_string();
         let pad = " ".repeat(num.len());
-        out += &format!("{pad} |\n{num} | {}\n", a.line);
+        out += &format!("{pad} |\n{num} | {}\n", window(&a.line, d.span.col).0);
         if let Some(p) = &a.preview {
             out += &format!("{pad} = applied: {p}\n");
         }

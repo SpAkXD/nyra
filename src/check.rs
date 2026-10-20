@@ -4431,7 +4431,9 @@ impl Checker {
         for d in self.errs[before..].iter_mut().filter(|d| d.code == "E0201" && d.fix.is_empty()) {
             let Some((param, word, at)) = bare.iter().find(|(_, _, at)| *at == d.span) else { continue };
             if crate::webcheck::option_word(short, param, word) {
-                d.hint = Some(format!("`{param}:` takes text: write the word in quotes, `{param}: \"{word}\"`"));
+                // one message for every such word, so a program with several shows them as one
+                d.msg = "an option word without quotes".to_string();
+                d.hint = Some(format!("`{param}:` takes text: `{param}: \"{word}\"`"));
                 d.fix = vec![Edit::replace(*at, word, format!("\"{word}\""))];
             } else if (short, param.as_str(), word.as_str()) == ("hero", "badge", "hours") {
                 d.hint = Some("`badge:` takes the hours rows: `badge: [(\"Mon–Fri\", \"8:00-16:00\")]`".to_string());
