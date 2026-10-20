@@ -1,0 +1,40 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-opus-5-5",
+ "lang": "nyra",
+ "run": 2,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 65.3,
+  "input_tokens": 6231,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 7805,
+  "cost_usd": 0.157361,
+  "visible_tokens": 3633,
+  "thinking_tokens_est": 4172
+ },
+ "builds_first": true,
+ "build_message_first": "warning[E0101]: fixed automatically: a `,` after a statement or a match arm\n  --> site.nyra:58:38\n   |\n58 |         Msg.Show(k) => roomFilter = k,\n   = applied: `Msg.Show(k) => roomFilter = k`\n\nnyra: 1 fix(es) applied in memory; run with --fix to write them to site.nyra\nwarning[E0389]: unknown icon `paw-print`: drawn as a plain circle\n  --> site.nyra:24:41\n   |\n24 |     (\"Pets welcome (300 Kč per night)\", \"paw-print\"),\n   |                                         ^\n  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `footprints`: drawn as a plain circle\n  --> site.nyra:136:147\n    |\n136 |                 list([\"**Old town square** · 5 min on foot\", \"**Castle** · 10 min on foot\", \"**Train station** · free pick-up on request\"], icon: \"footprints\")\n    |                                                                                                                                                   ^\n  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nnyra: built 1 page(s) into dist (5 files, 138.7 KB, site.a919d2ccdd.css 40.4 KB, site.c837eb382b.js 67.7 KB) (129.14 ms)",
+ "builds_after_repair": true,
+ "site": "sites/guesthouse/claude-opus-5-5/nyra-2",
+ "final_file": "raw/guesthouse/claude-opus-5-5/nyra-2.nyra",
+ "code_tokens": 3626,
+ "code_bytes": 8529,
+ "code_tokens_first": 3626,
+ "total": {
+  "input_tokens": 6231,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 7805,
+  "cost_usd": 0.157361,
+  "seconds": 65.3,
+  "thinking_tokens_est": 4172,
+  "calls": 1
+ }
+}

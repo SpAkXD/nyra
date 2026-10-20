@@ -1,18 +1,18 @@
 <p align="center">
+  <a href="https://github.com/SpAkXD/nyra/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SpAkXD/nyra?label=release&color=7C5CFF"></a>
+  <a href="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/SpAkXD/nyra/ci.yml?branch=main&label=CI"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/SpAkXD/nyra?color=blue"></a>
+</p>
+
+<p align="center">
   <img src="assets/logo.svg" alt="Nyra" width="320">
 </p>
 
-<p align="center">
-  <b>The language agents can run unsupervised.</b><br>
-  Nearly as cheap to write as Python, as fast as Rust, and unable to touch anything it didn't declare.<br>
-  A small, strict language designed to be written by AI agents. One source file compiles to a native executable
-  (via C) or to JavaScript, and from v0.8 a <code>use web</code> program builds a whole website.
-</p>
+<h3 align="center">Let your AI agents write and run code. Safely, in milliseconds.</h3>
 
 <p align="center">
-  <a href="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SpAkXD/nyra/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <a href="Cargo.toml"><img alt="Version" src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FSpAkXD%2Fnyra%2Fmain%2FCargo.toml&query=%24.package.version&label=version&color=7C5CFF"></a>
+  Nyra is a small language built for AI agents. The code they write can't touch your files or your system unless
+  you allow it, runs without a container, and when it is wrong, the compiler tells the model exactly how to fix it.
 </p>
 
 <p align="center">
@@ -26,6 +26,28 @@
   <a href="docs/SPEC.md">Spec</a> ·
   <a href="docs/ERRORS.md">Errors</a>
 </p>
+
+Agents now write code, and something has to run it. `eval()` or a plain subprocess hands generated code your whole
+machine; a container per run has to be started, kept warm and paid for, and is one more system to operate. Nyra is
+for that step, for agent-written scripts and tools:
+
+- **Safe.** A program can use only what it declares. Files, standard input and the OS are capabilities:
+  `nyra run --sandbox` grants none of them unless you allow it (`--allow fs`), the MCP tool grants only standard
+  input by default, and a missing grant is a compile error that names the flag, before anything runs (a plain
+  `nyra run` grants everything, as for any program of yours). There is no network access at all yet. `--sandbox`
+  also limits steps, memory, output and time. This is a language-level sandbox, not OS isolation, and it has had no
+  security audit yet: for code you do not trust at all, run Nyra inside a container or VM as well.
+  [More](#safe-to-run-unsupervised)
+- **Fast.** No container to start. A short program is answered by the interpreter in milliseconds; a longer one
+  runs as native code, about 5-6 ms against about 300 ms for Python on the benchmark's speed tasks (the C build,
+  0.5-1.5 s, happens once per program). [More](#speed)
+- **Self-repairing.** Every error has a stable code, the exact line and column, and a one-line fix hint; `--json`
+  gives the agent exact edits where a fix is known. A mistake with only one possible fix is repaired by the
+  compiler itself, with no model call. On 83 tasks, right on the first try: Opus 98%, Sonnet 96%, Haiku 4.5 66%
+  (Python: 100%, 99%, 78%). [More](#for-ai-agents)
+
+One source file compiles to a native executable (via C) or to JavaScript, and from v0.8 a `use web` program builds a
+whole website.
 
 <p align="center">
   <sub>AI agent? Read <a href="https://raw.githubusercontent.com/SpAkXD/nyra/main/llms.txt">llms.txt</a> and the
@@ -66,9 +88,8 @@ to try them. Nyra is 0.x: the syntax may still change before 1.0 ([CHANGELOG.md]
 
 ## What Nyra is
 
-An agent that writes code can now also run it, and that is where the trouble starts: either you trust generated
-code with your machine, or you start a VM or container for every call. Nyra is a language for that code-execution
-step, designed for a model to *write* and for the compiler to tell the model exactly what to fix.
+A language for the step where an agent runs the code it wrote: designed for a model to *write*, for the compiler to
+tell the model exactly what to fix, and for the run to grant only what the program declares.
 
 | | What you get | Status |
 |---|---|---|
@@ -259,29 +280,27 @@ the same features (the 3D showroom, the opening screen and the testimonials are 
 | JavaScript | 120 KB | 4.6 KB |
 | Requests | 29 | 12 |
 
-**A/B test: one-file HTML vs one-file Nyra (honest round, 2026-10-19).** Two new site briefs (a dentist practice
-and a gym) that Nyra was not tuned for, Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5, 4 runs each, 48 sites. One
-checklist for both languages, clicked through in a headless browser: navigation, filters, toggles, lightbox, FAQ,
-live opening badge, form, counters, all text and images, console and CSP errors, reduced motion. A Nyra file that
-did not compile got one repair turn with the compiler's message (its cost is included); HTML has no compiler.
+**A/B test: one-file HTML vs one-file Nyra.** Each round gives Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5 two new
+site briefs that Nyra was not tuned for, 4 runs each (48 sites a round). One checklist for both languages, clicked
+through in a headless browser: navigation, filters, toggles, tabs, calculators, lightbox, FAQ, live opening badge,
+form, counters, all text and images, console and CSP errors, reduced motion. A Nyra file that did not compile got one
+repair turn with the compiler's message (its cost is included); HTML has no compiler. Nyra was fixed between rounds,
+and the briefs differ, so the rounds are not a pure before/after.
 
-| | HTML | Nyra |
-|---|---:|---:|
-| Built on the first try | (always) | 6/24 |
-| Built after one repair | (always) | 13/24 |
-| Checklist score (a failed build scores 0) | **95%** | 51% |
-| Checklist score of the sites that built | 95% | 93% |
-| Code tokens per site | 17,559 | **3,283** |
-| Cost per answer | $0.245 | **$0.101** |
-| Page weight | 633 KB | **351 KB** |
+| | Round 3 (dentist, gym) HTML | Nyra | Round 4 (guesthouse, garage) HTML | Nyra |
+|---|---:|---:|---:|---:|
+| Built on the first try | (always) | 6/24 | (always) | 9/24 |
+| Built after one repair | (always) | 13/24 | (always) | 17/24 |
+| Checklist score (a failed build scores 0) | **95%** | 51% | **98%** | 62% |
+| Checklist score of the sites that built | 95% | 93% | 98% | 87% |
+| Code tokens per site | 17,559 | **3,283** | 18,057 | **3,526** |
+| Cost per answer | $0.245 | **$0.101** | $0.260 | **$0.103** |
 
-**Today plain HTML is the more reliable choice:** Opus and Sonnet passed every check on all their HTML sites, while
-fewer than half of the Nyra answers compiled on the first try (none on the dentist brief). When a Nyra site builds,
-it is nearly as complete from a fifth of the code, at about 40% of the cost per answer, but counted per *working*
-site the cost advantage mostly disappears. The causes are known and fixable (unknown icon names failing the build,
-errors that only appear after earlier ones are fixed, notation copied literally from the web card, a broken
-`mailto:` subject in forms): see [the full report](bench/web/results/2026-10-19/REPORT.md), with every raw model
-output, the failures and the method.
+**Today plain HTML is the more reliable choice:** Opus and Sonnet passed every check on all their HTML sites. Nyra
+needs about a fifth of the code at about 40% of the cost per answer, and improves each round, but too many answers
+still fail to compile (Opus: 8/8 after one repair in round 4; Haiku: 3/8). Counted per *working* site, the cost
+advantage is much smaller. The causes are listed in the reports, with every raw model output and the method:
+[round 3](bench/web/results/2026-10-19/REPORT.md), [round 4](bench/web/results/2026-10-20/REPORT.md).
 
 Earlier, smaller tests (the bakery brief, Gemini 3.8 Flash and four OpenRouter models) measured 0.11x to 0.27x the
 code tokens; the kit was then fixed by studying those outputs, so they are not used as evidence here.

@@ -1,0 +1,95 @@
+{
+ "url": "http://127.0.0.1:61727/garage/claude-sonnet-5-5/nyra-3/",
+ "score": 1,
+ "passed": 14,
+ "total": 14,
+ "items": [
+  {
+   "id": "title",
+   "name": "page title and description",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "text",
+   "name": "all brief text present and visible",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "images",
+   "name": "all brief images present and loaded",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "hscroll",
+   "name": "no horizontal scroll at 1280 px",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "links",
+   "name": "phone, e-mail and map links",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "counters",
+   "name": "counters end on the final number",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "nav",
+   "name": "every nav link scrolls to its section",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "tabs",
+   "name": "service tabs show the right panel",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "calc",
+   "name": "price calculator shows the right total",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_fields",
+   "name": "form fields with visible labels (required ones required)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "form_send",
+   "name": "form opens a filled e-mail (mailto)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "motion",
+   "name": "respects prefers-reduced-motion (no animation over 10 ms)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "console",
+   "name": "no console errors",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "id": "csp",
+   "name": "no CSP violations",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "csp_violations": [],
+ "checker_notes": []
+}

@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-haiku-4-5-20251001/html-1/",
+ "runs": 3,
+ "fcp_ms": 552,
+ "lcp_ms": 1000,
+ "cls": 0,
+ "load_ms": 1087,
+ "kb": 1339,
+ "requests": 19,
+ "kb_by_type_first_run": {
+  "Document": 9.2,
+  "Stylesheet": 1.1,
+  "Image": 1269.8,
+  "Font": 58.2,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  1092,
+  856,
+  1000
+ ]
+}

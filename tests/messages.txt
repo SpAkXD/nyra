@@ -7070,7 +7070,7 @@ error[E0226]: `hero` has no parameter `subtitle`
   |
 3 |     hero("Bread", subtitle: "Fresh")
   |                   ^
-  = hint: its parameters: `title`, `kicker`, `text`, `image`, `alt`, `buttons`, `badge`, `next`, `height`, `id`, `cls`, `kids`, motion options
+  = hint: its parameters: `title`, `kicker`, `text`, `image`, `alt`, `buttons`, `badge`, `open`, `closed`, `next`, `height`, `id`, `cls`, `kids`, motion options
   = explain: nyra explain E0226
 
 nyra: 1 error(s)

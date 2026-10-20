@@ -1,0 +1,38 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-opus-5-5",
+ "lang": "html",
+ "run": 3,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-opus-5-5",
+  "request_id": null,
+  "seconds": 190.4,
+  "input_tokens": 3320,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 3316,
+  "output_tokens": 25699,
+  "cost_usd": 0.514659,
+  "visible_tokens": 23172,
+  "thinking_tokens_est": 2527
+ },
+ "builds_first": null,
+ "site": "sites/guesthouse/claude-opus-5-5/html-3",
+ "final_file": "raw/guesthouse/claude-opus-5-5/html-3.html",
+ "code_tokens": 23167,
+ "code_bytes": 50060,
+ "code_tokens_first": 23167,
+ "total": {
+  "input_tokens": 3320,
+  "cache_write": 0,
+  "cache_read": 3316,
+  "output_tokens": 25699,
+  "cost_usd": 0.514659,
+  "seconds": 190.4,
+  "thinking_tokens_est": 2527,
+  "calls": 1
+ }
+}

@@ -1,0 +1,34 @@
+{
+ "started_jobs": 48,
+ "done": 48,
+ "skipped_cap": 0,
+ "errors": [],
+ "spent_usd": 8.6931,
+ "cap_usd": 12.0,
+ "models": [
+  "claude-opus-5-5",
+  "claude-sonnet-5-5",
+  "claude-haiku-4-5-20251001"
+ ],
+ "briefs": [
+  "guesthouse",
+  "garage"
+ ],
+ "langs": [
+  "html",
+  "nyra"
+ ],
+ "runs": 4,
+ "effort": {
+  "claude-opus-5-5": "medium",
+  "claude-sonnet-5-5": "medium"
+ },
+ "max_tokens": {
+  "claude-opus-5-5": 64000,
+  "claude-sonnet-5-5": 64000,
+  "claude-haiku-4-5-20251001": 64000
+ },
+ "tokenizer_for_code_tokens": "claude-sonnet-5-5",
+ "nyra": "",
+ "finished": "2026-10-20T14:01:12"
+}

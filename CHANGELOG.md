@@ -68,6 +68,14 @@ Web
   program compile, `nyra build`/`check` now report the errors they uncovered too (a comma hid every type error
   behind it), in the order of the file; a literal's unknown option word no longer hides the type errors. The web
   card shows option words in quotes.
+- **From web benchmark round 4 (2026-10-20): the kit.** A live view that renders again with an `img(ratio:)`, a
+  `grid(8)` or any other element with its own CSS variables no longer breaks the page's Content-Security-Policy and
+  keeps its shape: the runtime renames the view's `style` attributes before the browser parses its HTML and sets
+  them through the CSSOM once the element is on the page. `hours(rows, open:, closed:)` and
+  `hero(badge:, open:, closed:)` give the live badge its words ("Reception open"; `site(say:)` still changes them
+  for the whole site), on the web card. New `accordion([(question, answer)], open:)`: an FAQ of native
+  `<details>`, which opens by click, Enter or Space without JavaScript, slides open (at once with reduced motion) and
+  stays as the visitor left it when a live view renders again; on the web card.
 
 Editors and docs
 - **The Nyra file icon.** `assets/nyra.ico` (16 to 256 px, drawn by `tools/gen_icon.py`) and, on Windows,

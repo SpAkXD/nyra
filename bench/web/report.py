@@ -159,6 +159,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--pilot-usd", type=float, default=0.0, help="spent on a pilot outside the results folder (counted in the total)")
+    ap.add_argument("--cap", type=float, default=20.0, help="the spend cap of the round (for the cost line)")
+    ap.add_argument("--compare", default="", help="an earlier results folder: adds a table of that round next to this one")
     a = ap.parse_args()
     out = pathlib.Path(a.out).resolve()
     rows = load(out)
@@ -268,8 +270,38 @@ def main():
         rep = sum(1 for r in sel(model=m, lang="nyra") if r["calls"] > 1)
         md.append(f"| {MODEL_NAMES[m]} | {h:.2f} | {n:.2f} | {rep} |")
     pilot = f"; with the pilot described under Method (${a.pilot_usd:.2f}) the round spent ${total + a.pilot_usd:.2f}" if a.pilot_usd else ""
-    md += ["", f"Total of this round's runs: **${total:.2f}** (cap $20{pilot}). Runs done: {len(rows)} of {gen.get('started_jobs', '?')} planned; "
+    md += ["", f"Total of this round's runs: **${total:.2f}** (cap ${a.cap:.0f}{pilot}). Runs done: {len(rows)} of {gen.get('started_jobs', '?')} planned; "
            f"skipped at the cap: {gen.get('skipped_cap', 0)}; API errors: {len(gen.get('errors', []))}.", ""]
+    if a.compare:
+        prev_dir = pathlib.Path(a.compare).resolve()
+        prev = load(prev_dir)
+        pb = sorted({r["brief"] for r in prev})
+
+        def cell(rs):
+            x = agg(rs)
+            nyra = rs[0]["lang"] == "nyra"
+            return [f"{x['builds_first']}/{x['runs']}" if nyra else "n/a", f"{x['builds_after_repair']}/{x['runs']}" if nyra else "n/a",
+                    fmt(x["score_mean"], 0, True), fmt(x["score_built_mean"], 0, True), fmt(x["code_tokens_mean"]),
+                    fmt(x["output_tokens_mean"]), f"{x['cost_usd_mean']:.3f}"]
+        md += [f"## Round {prev_dir.name} vs round {out.name} (same method, different held-out briefs)", "",
+               f"Earlier round: briefs {', '.join(pb)} (`bench/web/results/{prev_dir.name}/`). This round: briefs {', '.join(briefs)}. "
+               "Same models, settings, prompt template, repair rule and checker rules; Nyra was fixed in between (see the "
+               "commentary). The briefs differ, so this is not a pure A/B of the fixes: a change can come from the fixes, the "
+               "briefs or chance (4 runs per cell).", "",
+               "| model | language | round | builds 1st try | after 1 repair | checklist (failed build = 0) | checklist (built only) | code tokens | output tokens | cost $ per run |",
+               "|---|---|---|---|---|---|---|---|---|---|"]
+        for m in models:
+            for l in ("html", "nyra"):
+                for name, rs_all in ((prev_dir.name, prev), (out.name, rows)):
+                    rs = [r for r in rs_all if r["model"] == m and r["lang"] == l]
+                    if rs:
+                        md.append(f"| {MODEL_NAMES[m]} | {LANG_NAMES[l]} | {name} | " + " | ".join(cell(rs)) + " |")
+        for l in ("html", "nyra"):
+            for name, rs_all in ((prev_dir.name, prev), (out.name, rows)):
+                rs = [r for r in rs_all if r["lang"] == l]
+                if rs:
+                    md.append(f"| all | {LANG_NAMES[l]} | {name} | " + " | ".join(cell(rs)) + " |")
+        md.append("")
     findings = out / "commentary.txt"
     if findings.exists():
         md += [findings.read_text(encoding="utf-8").strip(), ""]

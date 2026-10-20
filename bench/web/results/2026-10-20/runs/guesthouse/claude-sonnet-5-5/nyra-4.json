@@ -1,0 +1,40 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-sonnet-5-5",
+ "lang": "nyra",
+ "run": 4,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 15.0,
+  "input_tokens": 6231,
+  "input_fresh": 4,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 3258,
+  "cost_usd": 0.033211,
+  "visible_tokens": 3256,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": true,
+ "build_message_first": "n `:wifi:`: drawn as a plain circle\n  --> site.nyra:15:6\n   |\n15 |     (\":wifi:\", \"Free Wi-Fi\"),\n   |      ^\n  = hint: did you mean `wifi`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:car:`: drawn as a plain circle\n  --> site.nyra:16:6\n   |\n16 |     (\":car:\", \"Free private parking\"),\n   |      ^\n  = hint: did you mean `car`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:trees:`: drawn as a plain circle\n  --> site.nyra:17:6\n   |\n17 |     (\":trees:\", \"Riverside garden terrace\"),\n   |      ^\n  = hint: did you mean `trees`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:bike:`: drawn as a plain circle\n  --> site.nyra:18:6\n   |\n18 |     (\":bike:\", \"Bike and canoe storage\"),\n   |      ^\n  = hint: did you mean `bike`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:paw-print:`: drawn as a plain circle\n  --> site.nyra:19:6\n   |\n19 |     (\":paw-print:\", \"Pets welcome (300 Kč per night)\"),\n   |      ^\n  = hint: the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:flame:`: drawn as a plain circle\n  --> site.nyra:20:6\n   |\n20 |     (\":flame:\", \"Sauna in the old cellar\"),\n   |      ^\n  = hint: did you mean `flame`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nwarning[E0389]: unknown icon `:clock:`: drawn as a plain circle\n  --> site.nyra:21:6\n   |\n21 |     (\":clock:\", \"Early check-in on request\")\n   |      ^\n  = hint: did you mean `clock`? the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them)\n  = explain: nyra explain E0389\n\nnyra: built 1 page(s) into dist (5 files, 126.6 KB, site.99ebd301b6.css 40.5 KB, site.8072533224.js 62.9 KB) (121.97 ms)",
+ "builds_after_repair": true,
+ "site": "sites/guesthouse/claude-sonnet-5-5/nyra-4",
+ "final_file": "raw/guesthouse/claude-sonnet-5-5/nyra-4.nyra",
+ "code_tokens": 3249,
+ "code_bytes": 7703,
+ "code_tokens_first": 3249,
+ "total": {
+  "input_tokens": 6231,
+  "cache_write": 0,
+  "cache_read": 6227,
+  "output_tokens": 3258,
+  "cost_usd": 0.033211,
+  "seconds": 15.0,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}

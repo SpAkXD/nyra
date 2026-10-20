@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-opus-5-5/nyra-4/",
+ "runs": 3,
+ "fcp_ms": 640,
+ "lcp_ms": 640,
+ "cls": 0.026,
+ "load_ms": 881,
+ "kb": 691.9,
+ "requests": 17,
+ "kb_by_type_first_run": {
+  "Document": 6,
+  "Stylesheet": 10.5,
+  "Script": 20.7,
+  "Image": 527,
+  "Font": 127,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  936,
+  584,
+  640
+ ]
+}

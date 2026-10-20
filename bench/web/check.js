@@ -65,6 +65,11 @@ window.__wb = (() => {
   };
   const present = (s, scope) => norm(textOf(root(scope))).includes(norm(s));
   const shows = (s, scope) => deepest(s, scope).some(visible);
+  // like shows, but s must stand as whole words ("Reception open" is not found in "Reception · Opening hours")
+  const showsWord = (s, scope) => {
+    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + norm(s).replace(/[.*+?^$()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'u');
+    return deepest(s, scope).filter((e) => re.test(norm(textOf(e)))).some(visible);
+  };
   const tokenRe = (v) => new RegExp('(^|[^0-9])' + norm(v).replace(/[.*+?^$()|[\]\\]/g, '\\$&') + '([^0-9]|$)');
   const showsNumber = (v, scope) => {
     const re = tokenRe(v);
@@ -103,7 +108,7 @@ window.__wb = (() => {
     if (lb) for (const id of lb.split(/\s+/)) { const e = document.getElementById(id); if (e && visible(e)) parts.push(textOf(e)); }
     return norm(parts.join(' ')).replace(/-/g, '');
   };
-  return { norm, textOf, visible, deepest, present, shows, showsNumber, control, clickable, scrollThrough, scrollSection, labelOf, root, tokenRe };
+  return { norm, textOf, visible, deepest, present, shows, showsWord, showsNumber, control, clickable, scrollThrough, scrollSection, labelOf, root, tokenRe };
 })();
 `;
 
@@ -258,11 +263,11 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
 
   if (spec.badge) await safe('badge_open', 'live badge says "' + spec.badge.open + '" while open', async () => {
     await ev('window.scrollTo(0, 0)'); await sleep(400);
-    const r = await ev(`({open: __wb.shows(${JSON.stringify(spec.badge.open)}), closed: __wb.shows(${JSON.stringify(spec.badge.closed)})})`);
+    const r = await ev(`({open: __wb.showsWord(${JSON.stringify(spec.badge.open)}), closed: __wb.showsWord(${JSON.stringify(spec.badge.closed)})})`);
     item('badge_open', 'live badge says "' + spec.badge.open + '" while open', r.open && !r.closed, `"${spec.badge.open}" visible ${r.open}, "${spec.badge.closed}" visible ${r.closed}`);
   });
 
-  if (spec.badge) await safe('today', "today's row highlighted", async () => {
+  if (spec.badge && spec.badge.today_row) await safe('today', "today's row highlighted", async () => {
     const r = await ev(`(() => { const B = ${JSON.stringify(spec.badge)};
       const row = (day) => { const c = __wb.deepest(day, B.section).filter(__wb.visible)[0]; if (!c) return null;
         let e = c; while (e.parentElement && !/\\d{1,2}[:.]\\d{2}|closed/i.test(__wb.textOf(e)) ) e = e.parentElement; return e; };
@@ -326,8 +331,10 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
     item('faq', 'FAQ items open and close', !fails.length, fails.join('; '));
   });
 
-  if (spec.filter) await safe('filter', 'day filter shows the right classes', async () => {
-    const F = spec.filter, sec = JSON.stringify(F.section);
+  // the filter items carry their group in `day` (gym, round 3) or `group` (later briefs); the item name may be set by the spec
+  if (spec.filter) await safe('filter', spec.filter.name || 'day filter shows the right classes', async () => {
+    const F = spec.filter, sec = JSON.stringify(F.section), NAME = F.name || 'day filter shows the right classes';
+    for (const it of F.items) if (it.day === undefined) it.day = it.group;
     const state = async () => ev(`(() => ${JSON.stringify(F.items)}.map(i => __wb.shows(i.name, ${sec})))()`);
     const fails = [];
     await ev(`__wb.scrollSection(${sec})`, 30000);
@@ -343,7 +350,73 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
       const wrong = F.items.filter((it, k) => s[k] !== (t.button === 'All' || it.day === t.button)).map((it, k) => it.name);
       if (wrong.length) fails.push(`${t.button}: wrong visibility of ${wrong.join(', ')}`);
     }
-    item('filter', 'day filter shows the right classes', !fails.length, fails.join('; '));
+    item('filter', NAME, !fails.length, fails.join('; '));
+  });
+
+  // tabs (round 4): on load the first tab's panel shows and no other; each tab click shows its panel and hides the rest
+  if (spec.tabs) await safe('tabs', spec.tabs.name || 'tabs show the right panel', async () => {
+    const T = spec.tabs, sec = JSON.stringify(T.section), NAME = T.name || 'tabs show the right panel';
+    const state = async () => ev(`(() => ${JSON.stringify(T.tabs)}.map(t => t.texts.map(s => __wb.shows(s, ${sec}))))()`);
+    const judge = (s, k) => T.tabs.map((t, j) => {
+      const bad = t.texts.filter((_, i) => s[j][i] !== (j === k));
+      return bad.length ? `${j === k ? 'not shown' : 'shown'}: ${t.button} (${bad.length}/${t.texts.length} texts)` : '';
+    }).filter(Boolean);
+    const fails = [];
+    await ev(`__wb.scrollSection(${sec})`, 30000);
+    const init = judge(await state(), 0);
+    if (init.length) fails.push('on load ' + init.join(', '));
+    for (const name of T.try) {
+      const k = T.tabs.findIndex((t) => t.button === name);
+      const ok = await ev(`(() => { const c = __wb.control(${JSON.stringify([name])}, ${sec}); if (!c) return false; c.scrollIntoView({block: 'center'}); c.click(); return true; })()`);
+      if (!ok) { fails.push(`no "${name}" tab`); continue; }
+      await sleep(900);
+      await ev(`__wb.scrollSection(${sec})`, 30000);
+      await sleep(300);
+      const w = judge(await state(), k);
+      if (w.length) fails.push(`after "${name}": ` + w.join(', '));
+    }
+    item('tabs', NAME, !fails.length, fails.join('; '));
+  });
+
+  // a price calculator (round 4): pick a size (select, radio or button), tick services (checkbox or toggle button),
+  // and the expected total must show in the section while the previous total no longer does
+  if (spec.calculator) await safe('calc', spec.calculator.name || 'calculator shows the right total', async () => {
+    const C = spec.calculator, sec = JSON.stringify(C.section), NAME = C.name || 'calculator shows the right total';
+    const fails = [];
+    await ev(`__wb.scrollSection(${sec})`, 30000);
+    const choose = (name) => ev(`(() => { const name = ${JSON.stringify(name)}, sc = __wb.root(${sec}), want = __wb.norm(name);
+      for (const s of sc.querySelectorAll('select')) { const o = [...s.options].find(o => __wb.norm(o.textContent).startsWith(want));
+        if (o) { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value);
+          s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); return 'select'; } }
+      const r = [...sc.querySelectorAll('input[type=radio]')].find(r => __wb.labelOf(r).startsWith(want.replace(/-/g, '')));
+      if (r) { if (!r.checked) r.click(); return 'radio'; }
+      const c = __wb.control([name], ${sec}); if (!c) return ''; c.click(); return 'control'; })()`);
+    const tick = (name, on) => ev(`(() => { const name = ${JSON.stringify(name)}, on = ${on}, sc = __wb.root(${sec}), want = __wb.norm(name).replace(/-/g, '');
+      const cb = [...sc.querySelectorAll('input[type=checkbox]')].find(c => __wb.labelOf(c).includes(want));
+      if (cb) { if (cb.checked !== on) cb.click(); return 'checkbox'; }
+      // a toggle button may mark its state with a leading symbol ("✓ Oil service · 1,790 Kč"): compare without it
+      const lab = (e) => __wb.norm(e.getAttribute('aria-label') || __wb.textOf(e) || '').replace(/^[^\\p{L}\\p{N}]+/u, '').replace(/-/g, '');
+      const c = __wb.control([name], ${sec}) || [...sc.querySelectorAll('button,[role=button],[role=switch],[role=checkbox],label')]
+        .filter(__wb.visible).find(e => { const t = lab(e); return t.length < 60 && t.startsWith(want); });
+      if (!c) return '';
+      const st = c.getAttribute('aria-pressed') ?? c.getAttribute('aria-checked') ?? c.getAttribute('aria-selected');
+      if (st !== null && (st === 'true') === on) return 'already';
+      c.click(); return 'control'; })()`);
+    const shows = (v) => ev(`__wb.showsNumber(${JSON.stringify(v)}, ${sec})`);
+    for (const s of C.steps) {
+      const miss = [];
+      if (s.choose && !(await choose(s.choose))) miss.push(`no "${s.choose}" choice`);
+      for (const n of s.untick || []) if (!(await tick(n, false))) miss.push(`no "${n}" to untick`);
+      for (const n of s.tick || []) if (!(await tick(n, true))) miss.push(`no "${n}" to tick`);
+      await sleep(700);
+      const okE = await shows(s.expect), still = [];
+      for (const g of s.gone || []) if (await shows(g)) still.push(g);
+      if (miss.length || !okE || still.length) {
+        fails.push(`${s.do}: ` + [miss.join(', '), okE ? '' : `${s.expect} not shown`, still.length ? `${still.join(', ')} still shown` : ''].filter(Boolean).join('; '));
+        break;  // later steps build on this one
+      }
+    }
+    item('calc', NAME, !fails.length, fails.join('; '));
   });
 
   if (spec.toggle) await safe('toggle', 'monthly/yearly switch changes the prices', async () => {
@@ -495,7 +568,7 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
     clockScript = (await b.send('Page.addScriptToEvaluateOnNewDocument', { source: fakeClock(spec.badge.closed_at) })).identifier;
     await load();
     await sleep(800);
-    const r = await ev(`({open: __wb.shows(${JSON.stringify(spec.badge.open)}), closed: __wb.shows(${JSON.stringify(spec.badge.closed)})})`);
+    const r = await ev(`({open: __wb.showsWord(${JSON.stringify(spec.badge.open)}), closed: __wb.showsWord(${JSON.stringify(spec.badge.closed)})})`);
     item('badge_closed', 'live badge says "' + spec.badge.closed + '" while closed', r.closed && !r.open, `"${spec.badge.closed}" visible ${r.closed}, "${spec.badge.open}" visible ${r.open}`);
   });
 
