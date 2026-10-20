@@ -1,0 +1,38 @@
+{
+ "brief": "garage",
+ "model": "claude-haiku-4-5-20251001",
+ "lang": "html",
+ "run": 2,
+ "effort": null,
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-haiku-4-5-20251001",
+  "request_id": null,
+  "seconds": 68.4,
+  "input_tokens": 2368,
+  "input_fresh": 2368,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 11895,
+  "cost_usd": 0.061843,
+  "visible_tokens": 11892,
+  "thinking_tokens_est": 3
+ },
+ "builds_first": null,
+ "site": "sites/garage/claude-haiku-4-5-20251001/html-2",
+ "final_file": "raw/garage/claude-haiku-4-5-20251001/html-2.html",
+ "code_tokens": 14100,
+ "code_bytes": 35719,
+ "code_tokens_first": 14100,
+ "total": {
+  "input_tokens": 2368,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 11895,
+  "cost_usd": 0.061843,
+  "seconds": 68.4,
+  "thinking_tokens_est": 3,
+  "calls": 1
+ }
+}

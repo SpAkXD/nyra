@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penzion U Mlýna – riverside guesthouse in Český Krumlov</title>
+    <meta name="description" content="Family-run guesthouse in a restored mill on the Vltava, five minutes from the old town of Český Krumlov: six rooms, breakfast included, free parking.">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: "Nunito Sans", sans-serif;
+            background-color: #FBF8F3;
+            color: #2B2622;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: "Fraunces", serif;
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* Navigation */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background-color: #FFFFFF;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-family: "Fraunces", serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #7A4E2D;
+            text-decoration: none;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            list-style: none;
+        }
+
+        .nav-menu a {
+            text-decoration: none;
+            color: #2B2622;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .nav-menu a:hover {
+            color: #7A4E2D;
+        }
+
+        .nav-menu a:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 4px;
+        }
+
+        .book-btn {
+            background-color: #7A4E2D;
+            color: #FFFFFF;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .book-btn:hover {
+            background-color: #5d3d23;
+        }
+
+        .book-btn:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #2B2622;
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                gap: 1rem;
+                background-color: #FFFFFF;
+                padding: 1.5rem 2rem;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            }
+
+            .nav-menu.active {
+                display: flex;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+        }
+
+        /* Hero Section */
+        .hero {
+            position: relative;
+            height: 100vh;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3)), url('https://picsum.photos/seed/mlyn-hero/1600/1000') center / cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #FFFFFF;
+            overflow: hidden;
+        }
+
+        .hero-content {
+            max-width: 600px;
+            padding: 2rem;
+        }
+
+        .hero-kicker {
+            font-size: 0.95rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            opacity: 0;
+            animation: slideUp 0.8s ease-out forwards;
+        }
+
+        .hero-title {
+            font-size: clamp(2rem, 8vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+            opacity: 0;
+            animation: slideUp 0.8s ease-out 0.2s forwards;
+        }
+
+        .hero-text {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0;
+            animation: slideUp 0.8s ease-out 0.4s forwards;
+            line-height: 1.6;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            opacity: 0;
+            animation: slideUp 0.8s ease-out 0.6s forwards;
+        }
+
+        .btn-primary {
+            background-color: #7A4E2D;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #7A4E2D;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .btn-primary:hover {
+            background-color: #5d3d23;
+            border-color: #5d3d23;
+        }
+
+        .btn-primary:focus {
+            outline: 2px solid #FFFFFF;
+            outline-offset: 2px;
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #FFFFFF;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #FFFFFF;
+            color: #7A4E2D;
+        }
+
+        .btn-secondary:focus {
+            outline: 2px solid #FFFFFF;
+            outline-offset: 2px;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .live-badge {
+            position: absolute;
+            bottom: 3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #2B2622;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            opacity: 0;
+            animation: slideUp 0.8s ease-out 0.8s forwards;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #5B7F5E;
+        }
+
+        .badge-dot.closed {
+            background-color: #9a7061;
+        }
+
+        /* Sections */
+        section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 5rem 2rem;
+        }
+
+        .section-kicker {
+            font-size: 0.95rem;
+            color: #7A4E2D;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: clamp(1.8rem, 5vw, 2.8rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #2B2622;
+        }
+
+        .section-subtitle {
+            font-size: 1.05rem;
+            color: #5a5a5a;
+            max-width: 700px;
+            margin-bottom: 3rem;
+            line-height: 1.7;
+        }
+
+        /* Fade in on scroll */
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        .stagger {
+            animation-delay: 0.1s;
+        }
+
+        .stagger:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .stagger:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .stagger:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .stagger:nth-child(5) {
+            animation-delay: 0.5s;
+        }
+
+        .stagger:nth-child(6) {
+            animation-delay: 0.6s;
+        }
+
+        /* Rooms section */
+        .filter-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background-color: #FFFFFF;
+            color: #2B2622;
+            border: 2px solid #e0e0e0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+        }
+
+        .filter-btn:hover {
+            border-color: #7A4E2D;
+            color: #7A4E2D;
+        }
+
+        .filter-btn:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        .filter-btn.active {
+            background-color: #7A4E2D;
+            color: #FFFFFF;
+            border-color: #7A4E2D;
+        }
+
+        .rooms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .room-card {
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: none;
+            opacity: 0;
+        }
+
+        .room-card.active {
+            display: flex;
+            flex-direction: column;
+            opacity: 1;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        .room-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .room-image {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 12px 12px 0 0;
+            transition: transform 0.3s;
+        }
+
+        .room-card:hover .room-image {
+            transform: scale(1.05);
+        }
+
+        .room-info {
+            padding: 2rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .room-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #2B2622;
+        }
+
+        .room-type {
+            color: #7A4E2D;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .room-details {
+            font-size: 0.95rem;
+            color: #666;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .room-description {
+            color: #5a5a5a;
+            margin-bottom: 1.5rem;
+            flex: 1;
+            line-height: 1.6;
+        }
+
+        .room-price {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #7A4E2D;
+        }
+
+        /* Amenities section */
+        .amenities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .amenity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        .amenity-icon {
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f0ebe4;
+            border-radius: 8px;
+        }
+
+        .amenity-icon svg {
+            width: 24px;
+            height: 24px;
+            color: #7A4E2D;
+        }
+
+        .amenity-label {
+            font-weight: 600;
+            color: #2B2622;
+            font-size: 1rem;
+        }
+
+        /* Gallery section */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 12px;
+            transition: transform 0.3s;
+        }
+
+        .gallery-item:hover .gallery-image {
+            transform: scale(1.08);
+        }
+
+        .gallery-item:focus-visible {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-image {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #FFFFFF;
+            font-size: 2rem;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+            z-index: 10;
+        }
+
+        .lightbox-close:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .lightbox-close:focus {
+            outline: 2px solid #FFFFFF;
+            outline-offset: 2px;
+        }
+
+        .lightbox-nav {
+            position: absolute;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .lightbox-btn {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #FFFFFF;
+            font-size: 1.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+
+        .lightbox-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .lightbox-btn:focus {
+            outline: 2px solid #FFFFFF;
+            outline-offset: 2px;
+        }
+
+        /* Reviews section */
+        .reviews-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .review-card {
+            background-color: #FFFFFF;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        .review-stars {
+            color: #FFC107;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            letter-spacing: 0.25rem;
+        }
+
+        .review-text {
+            font-size: 1.05rem;
+            color: #2B2622;
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+            font-style: italic;
+        }
+
+        .review-author {
+            font-weight: 600;
+            color: #7A4E2D;
+            font-size: 0.95rem;
+        }
+
+        /* Booking section */
+        .booking-form {
+            background-color: #FFFFFF;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #2B2622;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="date"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: "Nunito Sans", sans-serif;
+            font-size: 1rem;
+            color: #2B2622;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="tel"]:focus,
+        input[type="date"]:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #7A4E2D;
+            box-shadow: 0 0 0 3px rgba(122, 78, 45, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .booking-form button {
+            background-color: #7A4E2D;
+            color: #FFFFFF;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        .booking-form button:hover {
+            background-color: #5d3d23;
+        }
+
+        .booking-form button:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        /* Location section */
+        .location-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .location-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .location-address {
+            font-size: 1.1rem;
+            color: #2B2622;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .location-address a {
+            color: #7A4E2D;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .location-address a:hover {
+            color: #5d3d23;
+        }
+
+        .location-address a:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        .location-distances {
+            margin: 2rem 0;
+        }
+
+        .distance-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 1rem;
+        }
+
+        .distance-item:last-child {
+            border-bottom: none;
+        }
+
+        .distance-label {
+            color: #2B2622;
+            font-weight: 600;
+        }
+
+        .distance-value {
+            color: #666;
+        }
+
+        .location-contact {
+            margin: 2rem 0;
+        }
+
+        .contact-item {
+            margin: 1rem 0;
+            font-size: 1.05rem;
+        }
+
+        .contact-item a {
+            color: #7A4E2D;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .contact-item a:hover {
+            color: #5d3d23;
+        }
+
+        .contact-item a:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        .location-hours {
+            background-color: #FFFFFF;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+        }
+
+        .hours-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 0.95rem;
+        }
+
+        .hours-item:last-child {
+            border-bottom: none;
+        }
+
+        .hours-label {
+            font-weight: 600;
+            color: #2B2622;
+        }
+
+        .hours-value {
+            color: #666;
+        }
+
+        .hours-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 1rem 0;
+            font-weight: 600;
+            color: #2B2622;
+            font-size: 0.95rem;
+        }
+
+        .checkin-info {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        /* FAQ section */
+        .faq-list {
+            max-width: 800px;
+        }
+
+        .faq-item {
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        .faq-question {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 600;
+            color: #2B2622;
+            font-size: 1.05rem;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .faq-question:hover {
+            background-color: #f8f5f0;
+        }
+
+        .faq-question:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: -2px;
+        }
+
+        .faq-toggle {
+            font-size: 1.5rem;
+            transition: transform 0.3s;
+            color: #7A4E2D;
+            flex-shrink: 0;
+        }
+
+        .faq-toggle.open {
+            transform: rotate(180deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .faq-answer.open {
+            max-height: 500px;
+        }
+
+        .faq-answer-text {
+            padding: 0 1.5rem 1.5rem;
+            color: #5a5a5a;
+            line-height: 1.7;
+        }
+
+        /* Footer */
+        footer {
+            background-color: #FFFFFF;
+            border-top: 1px solid #e0e0e0;
+            padding: 3rem 2rem;
+            margin-top: 5rem;
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 3rem;
+        }
+
+        .footer-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #2B2622;
+        }
+
+        .footer-section p {
+            color: #666;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .footer-links {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .footer-links a {
+            color: #7A4E2D;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: #5d3d23;
+        }
+
+        .footer-links a:focus {
+            outline: 2px solid #7A4E2D;
+            outline-offset: 2px;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e0e0e0;
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            section {
+                padding: 3rem 1.5rem;
+            }
+
+            .section-title {
+                font-size: 1.8rem;
+            }
+
+            .rooms-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .amenities-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .btn-primary, .btn-secondary {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="nav-brand">U Mlýna</a>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="#rooms">Rooms</a></li>
+                <li><a href="#amenities">Amenities</a></li>
+                <li><a href="#gallery">Gallery</a></li>
+                <li><a href="#location">Location</a></li>
+                <li><a href="#faq">FAQ</a></li>
+                <li><a href="#booking" class="book-btn">Book a stay</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <p class="hero-kicker">Český Krumlov · on the Vltava since 1998</p>
+            <h1 class="hero-title">Sleep by the river, wake up to the castle</h1>
+            <p class="hero-text">Six quiet rooms in a restored 17th-century mill, five minutes' walk from the old town. Breakfast from our own bakery included.</p>
+            <div class="hero-buttons">
+                <a href="#rooms" class="btn-primary">See the rooms</a>
+                <a href="#booking" class="btn-secondary">Book a stay</a>
+            </div>
+        </div>
+        <div class="live-badge" id="heroBadge">
+            <div class="badge-dot" id="badgeDot"></div>
+            <span id="badgeText">Reception open</span>
+        </div>
+    </section>
+
+    <!-- Rooms Section -->
+    <section id="rooms">
+        <p class="section-kicker">Rooms</p>
+        <h2 class="section-title">Find your room</h2>
+        <p class="section-subtitle">Every room has a private bathroom, free Wi-Fi and breakfast included. Prices are per night for the whole room.</p>
+
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="double">Double</button>
+            <button class="filter-btn" data-filter="family">Family</button>
+            <button class="filter-btn" data-filter="suite">Suite</button>
+        </div>
+
+        <div class="rooms-grid" id="roomsGrid">
+            <!-- Rooms will be generated by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Amenities Section -->
+    <section id="amenities">
+        <p class="section-kicker">Amenities</p>
+        <h2 class="section-title">Everything for a slow weekend</h2>
+
+        <div class="amenities-grid" id="amenitiesGrid">
+            <!-- Amenities will be generated by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Gallery Section -->
+    <section id="gallery">
+        <p class="section-kicker">Gallery</p>
+        <h2 class="section-title">A look around</h2>
+
+        <div class="gallery-grid" id="galleryGrid">
+            <!-- Gallery items will be generated by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-content">
+            <button class="lightbox-close" id="lightboxClose" aria-label="Close lightbox">✕</button>
+            <img class="lightbox-image" id="lightboxImage" src="" alt="">
+            <div class="lightbox-nav">
+                <button class="lightbox-btn" id="lightboxPrev" aria-label="Previous image">‹</button>
+                <button class="lightbox-btn" id="lightboxNext" aria-label="Next image">›</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reviews Section -->
+    <section id="reviews">
+        <h2 class="section-title">What our guests say</h2>
+        <div class="reviews-grid" id="reviewsGrid">
+            <!-- Reviews will be generated by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Booking Section -->
+    <section id="booking">
+        <p class="section-kicker">Book a stay</p>
+        <h2 class="section-title">Ask for your dates</h2>
+        <p class="section-subtitle">Tell us when you would like to come. We reply within a few hours with availability and the price.</p>
+
+        <form class="booking-form" id="bookingForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="arrival">Arrival</label>
+                    <input type="date" id="arrival" name="arrival" required>
+                </div>
+                <div class="form-group">
+                    <label for="departure">Departure</label>
+                    <input type="date" id="departure" name="departure" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="guests">Guests</label>
+                    <select id="guests" name="guests" required>
+                        <option value="">Select number of guests</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="roomType">Room type</label>
+                    <select id="roomType" name="roomType" required>
+                        <option value="">Select room type</option>
+                        <option value="Double">Double</option>
+                        <option value="Family">Family</option>
+                        <option value="Suite">Suite</option>
+                        <option value="Any">Any</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone (optional)</label>
+                <input type="tel" id="phone" name="phone">
+            </div>
+
+            <div class="form-group">
+                <label for="message">Message (optional)</label>
+                <textarea id="message" name="message"></textarea>
+            </div>
+
+            <button type="submit">Check availability</button>
+        </form>
+    </section>
+
+    <!-- Location Section -->
+    <section id="location">
+        <p class="section-kicker">Location</p>
+        <h2 class="section-title">Five minutes from the old town</h2>
+
+        <div class="location-content">
+            <div>
+                <div class="location-address">
+                    Linecká 12, 381 01 Český Krumlov<br>
+                    <a href="https://maps.google.com/?q=Linecká+12,+Český+Krumlov" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+                </div>
+
+                <div class="location-distances">
+                    <div class="distance-item">
+                        <span class="distance-label">Old town square</span>
+                        <span class="distance-value">5 min on foot</span>
+                    </div>
+                    <div class="distance-item">
+                        <span class="distance-label">Castle</span>
+                        <span class="distance-value">10 min on foot</span>
+                    </div>
+                    <div class="distance-item">
+                        <span class="distance-label">Train station</span>
+                        <span class="distance-value">free pick-up on request</span>
+                    </div>
+                </div>
+
+                <div class="location-contact">
+                    <div class="contact-item">
+                        <a href="tel:+420380000512">+420 380 000 512</a>
+                    </div>
+                    <div class="contact-item">
+                        <a href="mailto:stay@umlyna.cz">stay@umlyna.cz</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="location-hours">
+                <div class="hours-badge" id="locationBadge">
+                    <div class="badge-dot" id="locationBadgeDot"></div>
+                    <span id="locationBadgeText">Reception open</span>
+                </div>
+                <div class="hours-item">
+                    <span class="hours-label">Monday–Friday</span>
+                    <span class="hours-value">7:00–21:00</span>
+                </div>
+                <div class="hours-item">
+                    <span class="hours-label">Saturday–Sunday</span>
+                    <span class="hours-value">8:00–20:00</span>
+                </div>
+                <div class="checkin-info">
+                    Check-in from 14:00, check-out until 11:00.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq">
+        <p class="section-kicker">FAQ</p>
+        <h2 class="section-title">Good to know</h2>
+
+        <div class="faq-list" id="faqList">
+            <!-- FAQ items will be generated by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>Penzion U Mlýna</h3>
+                <p>Linecká 12, 381 01 Český Krumlov, Czech Republic</p>
+            </div>
+            <div class="footer-section">
+                <h3>Quick links</h3>
+                <ul class="footer-links">
+                    <li><a href="#rooms">Rooms</a></li>
+                    <li><a href="#amenities">Amenities</a></li>
+                    <li><a href="#gallery">Gallery</a></li>
+                    <li><a href="#location">Location</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            © 2026 Penzion U Mlýna
+        </div>
+    </footer>
+
+    <script>
+        // Data
+        const rooms = [
+            {
+                id: 1,
+                name: "River Room",
+                type: "Double",
+                size: "18 m²",
+                guests: 2,
+                price: "2,400 Kč",
+                description: "A window seat right above the weir.",
+                image: "https://picsum.photos/seed/mlyn-room-1/800/600",
+                alt: "The River Room with a window seat"
+            },
+            {
+                id: 2,
+                name: "Garden Room",
+                type: "Double",
+                size: "16 m²",
+                guests: 2,
+                price: "2,100 Kč",
+                description: "Opens onto the herb garden and is quiet at night.",
+                image: "https://picsum.photos/seed/mlyn-room-2/800/600",
+                alt: "The Garden Room with a view of the herb garden"
+            },
+            {
+                id: 3,
+                name: "Miller's Family Room",
+                type: "Family",
+                size: "32 m²",
+                guests: 4,
+                price: "3,600 Kč",
+                description: "A double bed and a bunk bed under old oak beams.",
+                image: "https://picsum.photos/seed/mlyn-room-3/800/600",
+                alt: "The family room with a bunk bed"
+            },
+            {
+                id: 4,
+                name: "Attic Family Room",
+                type: "Family",
+                size: "36 m²",
+                guests: 5,
+                price: "3,900 Kč",
+                description: "Two bedrooms under the roof, ideal with older kids.",
+                image: "https://picsum.photos/seed/mlyn-room-4/800/600",
+                alt: "The attic family room under the roof"
+            },
+            {
+                id: 5,
+                name: "Castle View Suite",
+                type: "Suite",
+                size: "45 m²",
+                guests: 2,
+                price: "5,200 Kč",
+                description: "A free-standing bath and the best view of the castle tower.",
+                image: "https://picsum.photos/seed/mlyn-room-5/800/600",
+                alt: "The Castle View Suite with a free-standing bath"
+            },
+            {
+                id: 6,
+                name: "Mill Wheel Suite",
+                type: "Suite",
+                size: "50 m²",
+                guests: 4,
+                price: "5,900 Kč",
+                description: "A living room with the original mill wheel behind glass.",
+                image: "https://picsum.photos/seed/mlyn-room-6/800/600",
+                alt: "The Mill Wheel Suite with the old mill wheel"
+            }
+        ];
+
+        const amenities = [
+            { label: "Breakfast from our bakery", icon: "🥐" },
+            { label: "Free Wi-Fi", icon: "📶" },
+            { label: "Free private parking", icon: "🅿️" },
+            { label: "Riverside garden terrace", icon: "🌳" },
+            { label: "Bike and canoe storage", icon: "🚴" },
+            { label: "Pets welcome (300 Kč per night)", icon: "🐾" },
+            { label: "Sauna in the old cellar", icon: "🧖" },
+            { label: "Early check-in on request", icon: "🔑" }
+        ];
+
+        const galleryItems = [
+            { image: "https://picsum.photos/seed/mlyn-g1/1200/800", alt: "The mill house at dusk" },
+            { image: "https://picsum.photos/seed/mlyn-g2/1200/800", alt: "Breakfast on the terrace" },
+            { image: "https://picsum.photos/seed/mlyn-g3/1200/800", alt: "The weir below the River Room" },
+            { image: "https://picsum.photos/seed/mlyn-g4/1200/800", alt: "The reading corner by the fireplace" },
+            { image: "https://picsum.photos/seed/mlyn-g5/1200/800", alt: "Canoes on the riverbank" },
+            { image: "https://picsum.photos/seed/mlyn-g6/1200/800", alt: "The castle tower from our garden" }
+        ];
+
+        const reviews = [
+            {
+                text: "The quietest night we have had in years, and the croissants alone are worth the trip.",
+                author: "Anna & Tom",
+                location: "United Kingdom"
+            },
+            {
+                text: "Our kids loved the bunk bed and the ducks on the river.",
+                author: "The Huber family",
+                location: "Austria"
+            },
+            {
+                text: "Five minutes from the old town, yet it feels like the countryside.",
+                author: "Petr K.",
+                location: "Prague"
+            }
+        ];
+
+        const faqItems = [
+            {
+                question: "Is breakfast included?",
+                answer: "Yes. Breakfast is served from 7:30 to 10:00 in the mill room or on the terrace."
+            },
+            {
+                question: "Can I arrive late in the evening?",
+                answer: "Yes. Tell us your arrival time and we will leave your key in a code box at the door."
+            },
+            {
+                question: "Do you have parking?",
+                answer: "We have eight free spaces in our courtyard. There is no need to book one."
+            },
+            {
+                question: "Can I cancel my booking?",
+                answer: "Free cancellation up to 7 days before arrival. After that we charge the first night."
+            }
+        ];
+
+        // Reception hours
+        const receptionHours = {
+            weekday: { open: 7, close: 21 },
+            weekend: { open: 8, close: 20 }
+        };
+
+        function isReceptionOpen() {
+            const now = new Date();
+            const day = now.getDay();
+            const hours = now.getHours();
+            const isWeekend = day === 0 || day === 6;
+            
+            const { open, close } = isWeekend ? receptionHours.weekend : receptionHours.weekday;
+            return hours >= open && hours < close;
+        }
+
+        function updateReceptionBadge(badgeElement, badgeDot, badgeText) {
+            const open = isReceptionOpen();
+            badgeDot.classList.toggle('closed', !open);
+            badgeText.textContent = open ? "Reception open" : "Reception closed";
+        }
+
+        // Initialize
+        function init() {
+            renderRooms();
+            renderAmenities();
+            renderGallery();
+            renderReviews();
+            renderFAQ();
+            setupMenuToggle();
+            setupIntersectionObserver();
+            setupRoomFilters();
+            setupGalleryLightbox();
+            setupBookingForm();
+            setupReceptionBadges();
+        }
+
+        // Render rooms
+        function renderRooms() {
+            const grid = document.getElementById('roomsGrid');
+            grid.innerHTML = rooms.map(room => `
+                <div class="room-card active" data-type="${room.type.toLowerCase()}">
+                    <img src="${room.image}" alt="${room.alt}" class="room-image" loading="lazy">
+                    <div class="room-info">
+                        <div class="room-name">${room.name}</div>
+                        <div class="room-type">${room.type}</div>
+                        <div class="room-details">
+                            <span>${room.size}</span>
+                            <span>${room.guests} guest${room.guests > 1 ? 's' : ''}</span>
+                        </div>
+                        <p class="room-description">${room.description}</p>
+                        <div class="room-price">${room.price} per night</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Render amenities
+        function renderAmenities() {
+            const grid = document.getElementById('amenitiesGrid');
+            grid.innerHTML = amenities.map((item, index) => `
+                <div class="amenity-item" style="animation-delay: ${index * 0.1}s">
+                    <div class="amenity-icon">${item.icon}</div>
+                    <div class="amenity-label">${item.label}</div>
+                </div>
+            `).join('');
+        }
+
+        // Render gallery
+        function renderGallery() {
+            const grid = document.getElementById('galleryGrid');
+            grid.innerHTML = galleryItems.map((item, index) => `
+                <div class="gallery-item" tabindex="0" data-index="${index}" style="animation-delay: ${index * 0.1}s">
+                    <img src="${item.image}" alt="${item.alt}" class="gallery-image" loading="lazy">
+                </div>
+            `).join('');
+        }
+
+        // Render reviews
+        function renderReviews() {
+            const grid = document.getElementById('reviewsGrid');
+            grid.innerHTML = reviews.map((review, index) => `
+                <div class="review-card" style="animation-delay: ${index * 0.1}s">
+                    <div class="review-stars">★★★★★</div>
+                    <p class="review-text">"${review.text}"</p>
+                    <div class="review-author">— ${review.author}, ${review.location}</div>
+                </div>
+            `).join('');
+        }
+
+        // Render FAQ
+        function renderFAQ() {
+            const list = document.getElementById('faqList');
+            list.innerHTML = faqItems.map((item, index) => `
+                <div class="faq-item" style="animation-delay: ${index * 0.1}s">
+                    <button class="faq-question" aria-expanded="false">
+                        <span>${item.question}</span>
+                        <span class="faq-toggle">▼</span>
+                    </button>
+                    <div class="faq-answer">
+                        <div class="faq-answer-text">${item.answer}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.faq-question').forEach(button => {
+                button.addEventListener('click', function() {
+                    const isOpen = this.getAttribute('aria-expanded') === 'true';
+                    this.setAttribute('aria-expanded', !isOpen);
+                    this.querySelector('.faq-toggle').classList.toggle('open');
+                    this.nextElementSibling.classList.toggle('open');
+                });
+            });
+        }
+
+        // Menu toggle
+        function setupMenuToggle() {
+            const toggle = document.getElementById('menuToggle');
+            const menu = document.getElementById('navMenu');
+
+            toggle.addEventListener('click', () => {
+                menu.classList.toggle('active');
+            });
+
+            document.querySelectorAll('.nav-menu a').forEach(link => {
+                link.addEventListener('click', () => {
+                    menu.classList.remove('active');
+                });
+            });
+        }
+
+        // Intersection observer for fade-in
+        function setupIntersectionObserver() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        if (entry.target.classList.contains('room-card')) {
+                            entry.target.classList.add('fade-in', 'stagger');
+                        } else if (entry.target.classList.contains('amenity-item')) {
+                            entry.target.classList.add('fade-in');
+                        } else if (entry.target.classList.contains('gallery-item')) {
+                            entry.target.classList.add('fade-in');
+                        } else if (entry.target.classList.contains('review-card')) {
+                            entry.target.classList.add('fade-in');
+                        } else if (entry.target.classList.contains('faq-item')) {
+                            entry.target.classList.add('fade-in');
+                        }
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('.room-card, .amenity-item, .gallery-item, .review-card, .faq-item').forEach(el => {
+                observer.observe(el);
+            });
+        }
+
+        // Room filters
+        function setupRoomFilters() {
+            const buttons = document.querySelectorAll('.filter-btn');
+            const cards = document.querySelectorAll('.room-card');
+
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+
+                    const filter = button.dataset.filter;
+                    cards.forEach(card => {
+                        const type = card.dataset.type;
+                        if (filter === 'all' || filter === type) {
+                            card.classList.add('active');
+                        } else {
+                            card.classList.remove('active');
+                        }
+                    });
+                });
+            });
+        }
+
+        // Gallery lightbox
+        function setupGalleryLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImage = document.getElementById('lightboxImage');
+            const lightboxClose = document.getElementById('lightboxClose');
+            const lightboxPrev = document.getElementById('lightboxPrev');
+            const lightboxNext = document.getElementById('lightboxNext');
+            let currentIndex = 0;
+
+            function showImage(index) {
+                currentIndex = (index + galleryItems.length) % galleryItems.length;
+                const item = galleryItems[currentIndex];
+                lightboxImage.src = item.image;
+                lightboxImage.alt = item.alt;
+            }
+
+            document.querySelectorAll('.gallery-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    currentIndex = parseInt(item.dataset.index);
+                    showImage(currentIndex);
+                    lightbox.classList.add('active');
+                });
+
+                item.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        currentIndex = parseInt(item.dataset.index);
+                        showImage(currentIndex);
+                        lightbox.classList.add('active');
+                    }
+                });
+            });
+
+            lightboxClose.addEventListener('click', () => {
+                lightbox.classList.remove('active');
+            });
+
+            lightboxPrev.addEventListener('click', () => {
+                showImage(currentIndex - 1);
+            });
+
+            lightboxNext.addEventListener('click', () => {
+                showImage(currentIndex + 1);
+            });
+
+            lightbox.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    lightbox.classList.remove('active');
+                } else if (e.key === 'ArrowLeft') {
+                    showImage(currentIndex - 1);
+                } else if (e.key === 'ArrowRight') {
+                    showImage(currentIndex + 1);
+                }
+            });
+        }
+
+        // Booking form
+        function setupBookingForm() {
+            const form = document.getElementById('bookingForm');
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                const arrival = document.getElementById('arrival').value;
+                const departure = document.getElementById('departure').value;
+                const guests = document.getElementById('guests').value;
+                const roomType = document.getElementById('roomType').value;
+                const name = document.getElementById('name').value;
+                const email = document.getElementById('email').value;
+                const phone = document.getElementById('phone').value;
+                const message = document.getElementById('message').value;
+
+                const body = `Arrival: ${arrival}
+Departure: ${departure}
+Number of guests: ${guests}
+Room type: ${roomType}
+Name: ${name}
+Phone: ${phone}
+Message: ${message}`;
+
+                const mailtoLink = `mailto:stay@umlyna.cz?subject=Booking%20request&body=${encodeURIComponent(body)}`;
+                window.location.href = mailtoLink;
+            });
+        }
+
+        // Reception badge
+        function setupReceptionBadges() {
+            updateReceptionBadge(
+                document.getElementById('heroBadge'),
+                document.getElementById('badgeDot'),
+                document.getElementById('badgeText')
+            );
+
+            updateReceptionBadge(
+                document.getElementById('locationBadge'),
+                document.getElementById('locationBadgeDot'),
+                document.getElementById('locationBadgeText')
+            );
+
+            // Update every minute
+            setInterval(() => {
+                updateReceptionBadge(
+                    document.getElementById('heroBadge'),
+                    document.getElementById('badgeDot'),
+                    document.getElementById('badgeText')
+                );
+
+                updateReceptionBadge(
+                    document.getElementById('locationBadge'),
+                    document.getElementById('locationBadgeDot'),
+                    document.getElementById('locationBadgeText')
+                );
+            }, 60000);
+        }
+
+        // Start
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

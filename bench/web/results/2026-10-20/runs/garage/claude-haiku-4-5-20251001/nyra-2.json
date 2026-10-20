@@ -1,0 +1,40 @@
+{
+ "brief": "garage",
+ "model": "claude-haiku-4-5-20251001",
+ "lang": "nyra",
+ "run": 2,
+ "effort": null,
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-haiku-4-5-20251001",
+  "request_id": null,
+  "seconds": 26.7,
+  "input_tokens": 4716,
+  "input_fresh": 2,
+  "cache_write": 0,
+  "cache_read": 4714,
+  "output_tokens": 2717,
+  "cost_usd": 0.014058,
+  "visible_tokens": 2714,
+  "thinking_tokens_est": 3
+ },
+ "builds_first": true,
+ "build_message_first": "warning[E0101]: fixed automatically: a `,` after a statement or a match arm\n  --> site.nyra:12:52\n   |\n12 |         Msg.SelectService(s) => selectedService = s,\n   = applied: `Msg.SelectService(s) => selectedService = s`\n\nwarning[E0101]: fixed automatically: a `,` after a statement or a match arm\n  --> site.nyra:13:52\n   |\n13 |         Msg.SelectCarSize(c) => selectedCarSize = c,\n   = applied: `Msg.SelectCarSize(c) => selectedCarSize = c`\n\nnyra: 2 fix(es) applied in memory; run with --fix to write them to site.nyra\nnyra: built 1 page(s) into dist (5 files, 114.1 KB, site.23f29a1033.css 36.4 KB, site.a12001d7f1.js 60.6 KB) (189.58 ms)",
+ "builds_after_repair": true,
+ "site": "sites/garage/claude-haiku-4-5-20251001/nyra-2",
+ "final_file": "raw/garage/claude-haiku-4-5-20251001/nyra-2.nyra",
+ "code_tokens": 3506,
+ "code_bytes": 8668,
+ "code_tokens_first": 3506,
+ "total": {
+  "input_tokens": 4716,
+  "cache_write": 0,
+  "cache_read": 4714,
+  "output_tokens": 2717,
+  "cost_usd": 0.014058,
+  "seconds": 26.7,
+  "thinking_tokens_est": 3,
+  "calls": 1
+ }
+}

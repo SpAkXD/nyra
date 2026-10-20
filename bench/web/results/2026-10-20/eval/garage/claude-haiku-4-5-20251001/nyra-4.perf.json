@@ -1,0 +1,23 @@
+{
+ "url": "http://127.0.0.1:51238/garage/claude-haiku-4-5-20251001/nyra-4/",
+ "runs": 3,
+ "fcp_ms": 688,
+ "lcp_ms": 688,
+ "cls": 0.068,
+ "load_ms": 875,
+ "kb": 217.5,
+ "requests": 11,
+ "kb_by_type_first_run": {
+  "Document": 4.7,
+  "Stylesheet": 10.1,
+  "Script": 7.3,
+  "Image": 70.8,
+  "Font": 124,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  624,
+  756,
+  688
+ ]
+}

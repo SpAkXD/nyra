@@ -1,0 +1,22 @@
+{
+ "url": "http://127.0.0.1:51238/guesthouse/claude-opus-5-5/html-2/",
+ "runs": 3,
+ "fcp_ms": 636,
+ "lcp_ms": 996,
+ "cls": 0,
+ "load_ms": 1074,
+ "kb": 850.3,
+ "requests": 17,
+ "kb_by_type_first_run": {
+  "Document": 13.9,
+  "Stylesheet": 1.2,
+  "Image": 618.8,
+  "Font": 215.8,
+  "Other": 0.6
+ },
+ "lcp_all": [
+  892,
+  1452,
+  996
+ ]
+}

@@ -1,0 +1,38 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-sonnet-5-5",
+ "lang": "html",
+ "run": 1,
+ "effort": "medium",
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-sonnet-5-5",
+  "request_id": null,
+  "seconds": 59.5,
+  "input_tokens": 3320,
+  "input_fresh": 4,
+  "cache_write": 3316,
+  "cache_read": 0,
+  "output_tokens": 11282,
+  "cost_usd": 0.121118,
+  "visible_tokens": 11280,
+  "thinking_tokens_est": 2
+ },
+ "builds_first": null,
+ "site": "sites/guesthouse/claude-sonnet-5-5/html-1",
+ "final_file": "raw/guesthouse/claude-sonnet-5-5/html-1.html",
+ "code_tokens": 11275,
+ "code_bytes": 24016,
+ "code_tokens_first": 11275,
+ "total": {
+  "input_tokens": 3320,
+  "cache_write": 3316,
+  "cache_read": 0,
+  "output_tokens": 11282,
+  "cost_usd": 0.121118,
+  "seconds": 59.5,
+  "thinking_tokens_est": 2,
+  "calls": 1
+ }
+}

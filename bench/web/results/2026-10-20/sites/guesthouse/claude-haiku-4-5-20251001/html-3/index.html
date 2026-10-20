@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Penzion U Mlýna – riverside guesthouse in Český Krumlov</title>
+  <meta name="description" content="Family-run guesthouse in a restored mill on the Vltava, five minutes from the old town of Český Krumlov: six rooms, breakfast included, free parking.">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "Nunito Sans", sans-serif;
+      background-color: #FBF8F3;
+      color: #2B2622;
+      line-height: 1.6;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: "Fraunces", serif;
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      background: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      z-index: 1000;
+      padding: 1rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: "Fraunces", serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #7A4E2D;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: #2B2622;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover, .nav-links a:focus {
+      color: #7A4E2D;
+      outline: none;
+    }
+
+    .nav-links a:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    .btn-book-nav {
+      background: #7A4E2D;
+      color: #FFFFFF;
+      padding: 0.7rem 1.5rem;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .btn-book-nav:hover, .btn-book-nav:focus {
+      background: #5C3A20;
+    }
+
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: #2B2622;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #FFFFFF;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1.5rem 2rem;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .nav-container {
+        padding: 0;
+      }
+
+      nav {
+        padding: 1rem;
+      }
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    .hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 100%);
+      z-index: 2;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 3;
+      text-align: center;
+      color: #FFFFFF;
+      max-width: 700px;
+      padding: 2rem;
+    }
+
+    .hero-kicker {
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.3s forwards;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .hero-title {
+      font-family: "Fraunces", serif;
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      font-weight: 700;
+      margin: 1.5rem 0 1rem;
+      line-height: 1.2;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.6s forwards;
+    }
+
+    .hero-text {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 0.9s forwards;
+      line-height: 1.7;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease 1.2s forwards;
+    }
+
+    .btn {
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 50px;
+      text-decoration: none;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: "Nunito Sans", sans-serif;
+    }
+
+    .btn-filled {
+      background: #7A4E2D;
+      color: #FFFFFF;
+    }
+
+    .btn-filled:hover, .btn-filled:focus {
+      background: #5C3A20;
+      outline: none;
+    }
+
+    .btn-filled:focus {
+      outline: 2px solid #FFFFFF;
+      outline-offset: 2px;
+    }
+
+    .btn-outlined {
+      background: transparent;
+      color: #FFFFFF;
+      border: 2px solid #FFFFFF;
+    }
+
+    .btn-outlined:hover, .btn-outlined:focus {
+      background: #FFFFFF;
+      color: #7A4E2D;
+      outline: none;
+    }
+
+    .btn-outlined:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    .hero-badge {
+      position: absolute;
+      top: 2rem;
+      right: 2rem;
+      background: rgba(255, 255, 255, 0.95);
+      color: #2B2622;
+      padding: 0.7rem 1.5rem;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      z-index: 4;
+    }
+
+    .hero-badge.open {
+      background: #5B7F5E;
+      color: #FFFFFF;
+    }
+
+    @media (max-width: 768px) {
+      .hero-buttons {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .hero-badge {
+        top: 1rem;
+        right: 1rem;
+        font-size: 0.8rem;
+        padding: 0.6rem 1.2rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-kicker,
+      .hero-title,
+      .hero-text,
+      .hero-buttons {
+        animation: none;
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Section styles */
+    section {
+      padding: 5rem 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .section-kicker {
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #7A4E2D;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    .section-title {
+      font-family: "Fraunces", serif;
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #2B2622;
+      opacity: 0;
+      animation: fadeIn 0.6s ease 0.2s forwards;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: #555;
+      margin-bottom: 3rem;
+      max-width: 600px;
+      opacity: 0;
+      animation: fadeIn 0.6s ease 0.4s forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .section-kicker,
+      .section-title,
+      .section-subtitle {
+        animation: none;
+        opacity: 1;
+      }
+    }
+
+    /* Rooms Section */
+    .filter-buttons {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.7rem 1.5rem;
+      border: 2px solid #E0D5C7;
+      background: #FFFFFF;
+      color: #2B2622;
+      border-radius: 50px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: "Nunito Sans", sans-serif;
+    }
+
+    .filter-btn:hover, .filter-btn:focus {
+      border-color: #7A4E2D;
+      color: #7A4E2D;
+      outline: none;
+    }
+
+    .filter-btn:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    .filter-btn.active {
+      background: #7A4E2D;
+      color: #FFFFFF;
+      border-color: #7A4E2D;
+    }
+
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 2.5rem;
+    }
+
+    .room-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s;
+      opacity: 0;
+      animation: slideUp 0.6s ease forwards;
+    }
+
+    .room-card:nth-child(1) { animation-delay: 0.1s; }
+    .room-card:nth-child(2) { animation-delay: 0.2s; }
+    .room-card:nth-child(3) { animation-delay: 0.3s; }
+    .room-card:nth-child(4) { animation-delay: 0.4s; }
+    .room-card:nth-child(5) { animation-delay: 0.5s; }
+    .room-card:nth-child(6) { animation-delay: 0.6s; }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .room-card:hover {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px);
+    }
+
+    .room-card.hidden {
+      display: none;
+    }
+
+    .room-image {
+      width: 100%;
+      height: 250px;
+      object-fit: cover;
+      border-radius: 16px 16px 0 0;
+      transition: transform 0.3s;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .room-card:hover .room-image {
+        transform: scale(1.05);
+      }
+    }
+
+    .room-content {
+      padding: 1.5rem;
+    }
+
+    .room-name {
+      font-family: "Fraunces", serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #2B2622;
+    }
+
+    .room-type {
+      display: inline-block;
+      background: #F0EBE3;
+      color: #7A4E2D;
+      padding: 0.3rem 0.8rem;
+      border-radius: 50px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .room-details {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+
+    .room-description {
+      font-size: 0.95rem;
+      color: #555;
+      margin-bottom: 1rem;
+      font-style: italic;
+    }
+
+    .room-price {
+      font-family: "Fraunces", serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #7A4E2D;
+    }
+
+    /* Amenities Section */
+    .amenities-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .amenity-item {
+      display: flex;
+      gap: 1.5rem;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    .amenity-item:nth-child(1) { animation-delay: 0.1s; }
+    .amenity-item:nth-child(2) { animation-delay: 0.2s; }
+    .amenity-item:nth-child(3) { animation-delay: 0.3s; }
+    .amenity-item:nth-child(4) { animation-delay: 0.4s; }
+    .amenity-item:nth-child(5) { animation-delay: 0.5s; }
+    .amenity-item:nth-child(6) { animation-delay: 0.6s; }
+    .amenity-item:nth-child(7) { animation-delay: 0.7s; }
+    .amenity-item:nth-child(8) { animation-delay: 0.8s; }
+
+    .amenity-icon {
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #F0EBE3;
+      border-radius: 12px;
+      color: #7A4E2D;
+    }
+
+    .amenity-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .amenity-label {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #2B2622;
+      line-height: 1.5;
+    }
+
+    /* Gallery Section */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .gallery-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      aspect-ratio: 1.5;
+      cursor: pointer;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    .gallery-item:nth-child(1) { animation-delay: 0.1s; }
+    .gallery-item:nth-child(2) { animation-delay: 0.2s; }
+    .gallery-item:nth-child(3) { animation-delay: 0.3s; }
+    .gallery-item:nth-child(4) { animation-delay: 0.4s; }
+    .gallery-item:nth-child(5) { animation-delay: 0.5s; }
+    .gallery-item:nth-child(6) { animation-delay: 0.6s; }
+
+    .gallery-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .gallery-item:hover .gallery-image {
+        transform: scale(1.08);
+      }
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .lightbox-image {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: -40px;
+      right: 0;
+      background: none;
+      border: none;
+      color: #FFFFFF;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 0;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox-close:hover, .lightbox-close:focus {
+      opacity: 0.7;
+    }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #FFFFFF;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 1rem;
+      z-index: 2001;
+    }
+
+    .lightbox-nav:hover, .lightbox-nav:focus {
+      opacity: 0.7;
+    }
+
+    .lightbox-prev {
+      left: 0;
+    }
+
+    .lightbox-next {
+      right: 0;
+    }
+
+    /* Reviews Section */
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .review-card {
+      background: #FFFFFF;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    .review-card:nth-child(1) { animation-delay: 0.1s; }
+    .review-card:nth-child(2) { animation-delay: 0.2s; }
+    .review-card:nth-child(3) { animation-delay: 0.3s; }
+
+    .stars {
+      color: #F4A460;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      letter-spacing: 2px;
+    }
+
+    .review-text {
+      font-size: 1rem;
+      color: #555;
+      margin-bottom: 1.5rem;
+      line-height: 1.7;
+      font-style: italic;
+    }
+
+    .review-author {
+      font-weight: 600;
+      color: #2B2622;
+      font-size: 0.95rem;
+    }
+
+    /* Booking Form */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #2B2622;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: 2px solid #E0D5C7;
+      border-radius: 8px;
+      font-family: "Nunito Sans", sans-serif;
+      font-size: 0.95rem;
+      color: #2B2622;
+      background: #FFFFFF;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="tel"]:focus,
+    input[type="date"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #7A4E2D;
+      box-shadow: 0 0 0 3px rgba(122, 78, 45, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .btn-submit {
+      background: #7A4E2D;
+      color: #FFFFFF;
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 50px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+      font-family: "Nunito Sans", sans-serif;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .btn-submit:hover, .btn-submit:focus {
+      background: #5C3A20;
+      outline: none;
+    }
+
+    .btn-submit:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    /* Location Section */
+    .location-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 3rem;
+    }
+
+    .location-info {
+      opacity: 0;
+      animation: fadeIn 0.6s ease 0.2s forwards;
+    }
+
+    .location-address {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+
+    .location-address a {
+      color: #7A4E2D;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .location-address a:hover, .location-address a:focus {
+      text-decoration: underline;
+    }
+
+    .location-distances {
+      margin: 2rem 0;
+    }
+
+    .distance-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid #E0D5C7;
+      font-size: 0.95rem;
+    }
+
+    .distance-item:last-child {
+      border-bottom: none;
+    }
+
+    .location-contact {
+      font-size: 1rem;
+      margin-top: 2rem;
+    }
+
+    .contact-item {
+      margin-bottom: 0.8rem;
+    }
+
+    .contact-item a {
+      color: #7A4E2D;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .contact-item a:hover, .contact-item a:focus {
+      text-decoration: underline;
+    }
+
+    .hours-badge {
+      display: inline-block;
+      margin-top: 1.5rem;
+    }
+
+    .reception-hours {
+      background: #F0EBE3;
+      padding: 1.5rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-top: 1.5rem;
+    }
+
+    .reception-note {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    /* FAQ Section */
+    .faq-list {
+      max-width: 700px;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid #E0D5C7;
+      padding: 1.5rem 0;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    .faq-item:nth-child(1) { animation-delay: 0.1s; }
+    .faq-item:nth-child(2) { animation-delay: 0.2s; }
+    .faq-item:nth-child(3) { animation-delay: 0.3s; }
+    .faq-item:nth-child(4) { animation-delay: 0.4s; }
+
+    .faq-item:last-child {
+      border-bottom: none;
+    }
+
+    .faq-question {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font-family: "Fraunces", serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #2B2622;
+      padding: 0;
+    }
+
+    .faq-question:hover, .faq-question:focus {
+      color: #7A4E2D;
+      outline: none;
+    }
+
+    .faq-question:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    .faq-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s;
+    }
+
+    .faq-item.open .faq-icon {
+      transform: rotate(180deg);
+    }
+
+    .faq-answer {
+      display: none;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      color: #555;
+      line-height: 1.7;
+    }
+
+    .faq-item.open .faq-answer {
+      display: block;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .faq-icon {
+        transition: none;
+      }
+    }
+
+    /* Footer */
+    footer {
+      background: #2B2622;
+      color: #FFFFFF;
+      padding: 3rem 2rem;
+      margin-top: 3rem;
+    }
+
+    .footer-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .footer-section h3 {
+      font-family: "Fraunces", serif;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      color: #FFFFFF;
+    }
+
+    .footer-section p {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: #D0C7BB;
+    }
+
+    .footer-section a {
+      color: #D0C7BB;
+      text-decoration: none;
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+
+    .footer-section a:hover, .footer-section a:focus {
+      color: #FFFFFF;
+      outline: none;
+    }
+
+    .footer-section a:focus {
+      outline: 2px solid #7A4E2D;
+      outline-offset: 2px;
+    }
+
+    .footer-bottom {
+      border-top: 1px solid #444;
+      padding-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    @media (max-width: 768px) {
+      section {
+        padding: 3rem 1.5rem;
+      }
+
+      .hero-badge {
+        font-size: 0.75rem;
+        padding: 0.5rem 1rem;
+      }
+
+      .rooms-grid,
+      .amenities-grid,
+      .gallery-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-buttons {
+        flex-direction: column;
+      }
+
+      .filter-btn {
+        width: 100%;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-container">
+      <a href="#" class="nav-brand">U Mlýna</a>
+      <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#rooms">Rooms</a></li>
+        <li><a href="#amenities">Amenities</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+        <li><a href="#location">Location</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#booking" class="btn-book-nav">Book a stay</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero" id="hero">
+    <img src="https://picsum.photos/seed/mlyn-hero/1600/1000" alt="The old mill house of Penzion U Mlýna on the Vltava river" class="hero-image">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <p class="hero-kicker">Český Krumlov · on the Vltava since 1998</p>
+      <h1 class="hero-title">Sleep by the river, wake up to the castle</h1>
+      <p class="hero-text">Six quiet rooms in a restored 17th-century mill, five minutes' walk from the old town. Breakfast from our own bakery included.</p>
+      <div class="hero-buttons">
+        <a href="#rooms" class="btn btn-filled">See the rooms</a>
+        <a href="#booking" class="btn btn-outlined">Book a stay</a>
+      </div>
+    </div>
+    <div class="hero-badge" id="heroBadge">Reception open</div>
+  </section>
+
+  <!-- Rooms Section -->
+  <section id="rooms">
+    <p class="section-kicker">Rooms</p>
+    <h2 class="section-title">Find your room</h2>
+    <p class="section-subtitle">Every room has a private bathroom, free Wi-Fi and breakfast included. Prices are per night for the whole room.</p>
+    
+    <div class="filter-buttons">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="double">Double</button>
+      <button class="filter-btn" data-filter="family">Family</button>
+      <button class="filter-btn" data-filter="suite">Suite</button>
+    </div>
+
+    <div class="rooms-grid" id="roomsGrid">
+      <!-- Rooms will be inserted here by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Amenities Section -->
+  <section id="amenities">
+    <p class="section-kicker">Amenities</p>
+    <h2 class="section-title">Everything for a slow weekend</h2>
+    
+    <div class="amenities-grid" id="amenitiesGrid">
+      <!-- Amenities will be inserted here by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Gallery Section -->
+  <section id="gallery">
+    <p class="section-kicker">Gallery</p>
+    <h2 class="section-title">A look around</h2>
+    
+    <div class="gallery-grid" id="galleryGrid">
+      <!-- Gallery items will be inserted here by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <div class="lightbox-content">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close gallery">✕</button>
+      <img id="lightboxImage" class="lightbox-image" alt="">
+      <button class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Previous image">❮</button>
+      <button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next image">❯</button>
+    </div>
+  </div>
+
+  <!-- Reviews Section -->
+  <section id="reviews">
+    <h2 class="section-title">What our guests say</h2>
+    
+    <div class="reviews-grid">
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p class="review-text">"The quietest night we have had in years, and the croissants alone are worth the trip."</p>
+        <p class="review-author">— Anna & Tom, United Kingdom</p>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p class="review-text">"Our kids loved the bunk bed and the ducks on the river."</p>
+        <p class="review-author">— The Huber family, Austria</p>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p class="review-text">"Five minutes from the old town, yet it feels like the countryside."</p>
+        <p class="review-author">— Petr K., Prague</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Booking Section -->
+  <section id="booking">
+    <p class="section-kicker">Book a stay</p>
+    <h2 class="section-title">Ask for your dates</h2>
+    <p class="section-subtitle">Tell us when you would like to come. We reply within a few hours with availability and the price.</p>
+    
+    <form id="bookingForm" class="booking-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="arrival">Arrival *</label>
+          <input type="date" id="arrival" name="arrival" required>
+        </div>
+        <div class="form-group">
+          <label for="departure">Departure *</label>
+          <input type="date" id="departure" name="departure" required>
+        </div>
+        <div class="form-group">
+          <label for="guests">Guests *</label>
+          <select id="guests" name="guests" required>
+            <option value="">Select number of guests</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="roomType">Room type *</label>
+          <select id="roomType" name="roomType" required>
+            <option value="">Select room type</option>
+            <option value="Double">Double</option>
+            <option value="Family">Family</option>
+            <option value="Suite">Suite</option>
+            <option value="Any">Any</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="name">Name *</label>
+          <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-group">
+          <label for="email">E-mail *</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" name="message"></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit">Check availability</button>
+    </form>
+  </section>
+
+  <!-- Location Section -->
+  <section id="location">
+    <p class="section-kicker">Location</p>
+    <h2 class="section-title">Five minutes from the old town</h2>
+    
+    <div class="location-content">
+      <div class="location-info">
+        <div class="location-address">
+          <strong>Linecká 12, 381 01 Český Krumlov</strong><br>
+          <a href="https://maps.google.com/?q=Linecká+12,+Český+Krumlov" target="_blank" rel="noopener">Open in Google Maps</a>
+        </div>
+
+        <div class="location-distances">
+          <div class="distance-item">
+            <span>Old town square</span>
+            <span>5 min on foot</span>
+          </div>
+          <div class="distance-item">
+            <span>Castle</span>
+            <span>10 min on foot</span>
+          </div>
+          <div class="distance-item">
+            <span>Train station</span>
+            <span>free pick-up on request</span>
+          </div>
+        </div>
+
+        <div class="location-contact">
+          <div class="contact-item">
+            <a href="tel:+420380000512">+420 380 000 512</a>
+          </div>
+          <div class="contact-item">
+            <a href="mailto:stay@umlyna.cz">stay@umlyna.cz</a>
+          </div>
+        </div>
+
+        <div class="hours-badge">
+          <div class="hero-badge" id="locationBadge">Reception open</div>
+        </div>
+
+        <div class="reception-hours">
+          <strong>Reception hours</strong><br>
+          Monday–Friday: 7:00–21:00<br>
+          Saturday–Sunday: 8:00–20:00<br>
+          <div class="reception-note">Check-in from 14:00, check-out until 11:00.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section id="faq">
+    <p class="section-kicker">FAQ</p>
+    <h2 class="section-title">Good to know</h2>
+    
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-question">
+          <span>Is breakfast included?</span>
+          <span class="faq-icon">▼</span>
+        </button>
+        <p class="faq-answer">Yes. Breakfast is served from 7:30 to 10:00 in the mill room or on the terrace.</p>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          <span>Can I arrive late in the evening?</span>
+          <span class="faq-icon">▼</span>
+        </button>
+        <p class="faq-answer">Yes. Tell us your arrival time and we will leave your key in a code box at the door.</p>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          <span>Do you have parking?</span>
+          <span class="faq-icon">▼</span>
+        </button>
+        <p class="faq-answer">We have eight free spaces in our courtyard. There is no need to book one.</p>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          <span>Can I cancel my booking?</span>
+          <span class="faq-icon">▼</span>
+        </button>
+        <p class="faq-answer">Free cancellation up to 7 days before arrival. After that we charge the first night.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>Penzion U Mlýna</h3>
+        <p>Linecká 12<br>381 01 Český Krumlov<br>Czech Republic</p>
+      </div>
+      <div class="footer-section">
+        <h3>Quick links</h3>
+        <a href="#rooms">Rooms</a><br>
+        <a href="#amenities">Amenities</a><br>
+        <a href="#gallery">Gallery</a><br>
+        <a href="#location">Location</a><br>
+        <a href="#faq">FAQ</a><br>
+        <a href="#booking">Book a stay</a>
+      </div>
+      <div class="footer-section">
+        <h3>Contact</h3>
+        <a href="tel:+420380000512">+420 380 000 512</a><br>
+        <a href="mailto:stay@umlyna.cz">stay@umlyna.cz</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      © 2026 Penzion U Mlýna
+    </div>
+  </footer>
+
+  <script>
+    // Data
+    const rooms = [
+      {
+        id: 1,
+        name: "River Room",
+        type: "Double",
+        size: "18 m²",
+        guests: "2 guests",
+        price: "2,400 Kč per night",
+        description: "A window seat right above the weir.",
+        image: "https://picsum.photos/seed/mlyn-room-1/800/600",
+        alt: "The River Room with a window seat"
+      },
+      {
+        id: 2,
+        name: "Garden Room",
+        type: "Double",
+        size: "16 m²",
+        guests: "2 guests",
+        price: "2,100 Kč per night",
+        description: "Opens onto the herb garden and is quiet at night.",
+        image: "https://picsum.photos/seed/mlyn-room-2/800/600",
+        alt: "The Garden Room with a view of the herb garden"
+      },
+      {
+        id: 3,
+        name: "Miller's Family Room",
+        type: "Family",
+        size: "32 m²",
+        guests: "4 guests",
+        price: "3,600 Kč per night",
+        description: "A double bed and a bunk bed under old oak beams.",
+        image: "https://picsum.photos/seed/mlyn-room-3/800/600",
+        alt: "The family room with a bunk bed"
+      },
+      {
+        id: 4,
+        name: "Attic Family Room",
+        type: "Family",
+        size: "36 m²",
+        guests: "5 guests",
+        price: "3,900 Kč per night",
+        description: "Two bedrooms under the roof, ideal with older kids.",
+        image: "https://picsum.photos/seed/mlyn-room-4/800/600",
+        alt: "The attic family room under the roof"
+      },
+      {
+        id: 5,
+        name: "Castle View Suite",
+        type: "Suite",
+        size: "45 m²",
+        guests: "2 guests",
+        price: "5,200 Kč per night",
+        description: "A free-standing bath and the best view of the castle tower.",
+        image: "https://picsum.photos/seed/mlyn-room-5/800/600",
+        alt: "The Castle View Suite with a free-standing bath"
+      },
+      {
+        id: 6,
+        name: "Mill Wheel Suite",
+        type: "Suite",
+        size: "50 m²",
+        guests: "4 guests",
+        price: "5,900 Kč per night",
+        description: "A living room with the original mill wheel behind glass.",
+        image: "https://picsum.photos/seed/mlyn-room-6/800/600",
+        alt: "The Mill Wheel Suite with the old mill wheel"
+      }
+    ];
+
+    const amenities = [
+      { label: "Breakfast from our bakery", icon: "🍞" },
+      { label: "Free Wi-Fi", icon: "📶" },
+      { label: "Free private parking", icon: "🚗" },
+      { label: "Riverside garden terrace", icon: "🌿" },
+      { label: "Bike and canoe storage", icon: "🚴" },
+      { label: "Pets welcome (300 Kč per night)", icon: "🐕" },
+      { label: "Sauna in the old cellar", icon: "🧖" },
+      { label: "Early check-in on request", icon: "🔑" }
+    ];
+
+    const gallery = [
+      {
+        url: "https://picsum.photos/seed/mlyn-g1/1200/800",
+        alt: "The mill house at dusk"
+      },
+      {
+        url: "https://picsum.photos/seed/mlyn-g2/1200/800",
+        alt: "Breakfast on the terrace"
+      },
+      {
+        url: "https://picsum.photos/seed/mlyn-g3/1200/800",
+        alt: "The weir below the River Room"
+      },
+      {
+        url: "https://picsum.photos/seed/mlyn-g4/1200/800",
+        alt: "The reading corner by the fireplace"
+      },
+      {
+        url: "https://picsum.photos/seed/mlyn-g5/1200/800",
+        alt: "Canoes on the riverbank"
+      },
+      {
+        url: "https://picsum.photos/seed/mlyn-g6/1200/800",
+        alt: "The castle tower from our garden"
+      }
+    ];
+
+    // Render rooms
+    function renderRooms(filter = "all") {
+      const roomsGrid = document.getElementById("roomsGrid");
+      roomsGrid.innerHTML = "";
+
+      rooms.forEach((room, index) => {
+        if (filter !== "all" && room.type.toLowerCase() !== filter.toLowerCase()) {
+          return;
+        }
+
+        const roomCard = document.createElement("div");
+        roomCard.className = "room-card";
+        roomCard.innerHTML = `
+          <img src="${room.image}" alt="${room.alt}" class="room-image">
+          <div class="room-content">
+            <h3 class="room-name">${room.name}</h3>
+            <span class="room-type">${room.type}</span>
+            <div class="room-details">
+              <div>${room.size}</div>
+              <div>${room.guests}</div>
+            </div>
+            <p class="room-description">${room.description}</p>
+            <p class="room-price">${room.price}</p>
+          </div>
+        `;
+        roomsGrid.appendChild(roomCard);
+      });
+    }
+
+    // Filter rooms
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        e.target.classList.add("active");
+        const filter = e.target.dataset.filter;
+        renderRooms(filter);
+      });
+    });
+
+    // Render amenities
+    function renderAmenities() {
+      const amenitiesGrid = document.getElementById("amenitiesGrid");
+      amenities.forEach(amenity => {
+        const item = document.createElement("div");
+        item.className = "amenity-item";
+        item.innerHTML = `
+          <div class="amenity-icon">
+            <span>${amenity.icon}</span>
+          </div>
+          <div class="amenity-label">${amenity.label}</div>
+        `;
+        amenitiesGrid.appendChild(item);
+      });
+    }
+
+    // Render gallery
+    function renderGallery() {
+      const galleryGrid = document.getElementById("galleryGrid");
+      gallery.forEach((photo, index) => {
+        const item = document.createElement("div");
+        item.className = "gallery-item";
+        item.role = "button";
+        item.tabindex = "0";
+        item.innerHTML = `<img src="${photo.url}" alt="${photo.alt}" class="gallery-image">`;
+        item.addEventListener("click", () => openLightbox(index));
+        item.addEventListener("keypress", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openLightbox(index);
+          }
+        });
+        galleryGrid.appendChild(item);
+      });
+    }
+
+    // Lightbox
+    let currentImageIndex = 0;
+
+    function openLightbox(index) {
+      currentImageIndex = index;
+      const lightbox = document.getElementById("lightbox");
+      const image = document.getElementById("lightboxImage");
+      image.src = gallery[index].url;
+      image.alt = gallery[index].alt;
+      lightbox.classList.add("active");
+    }
+
+    function closeLightbox() {
+      document.getElementById("lightbox").classList.remove("active");
+    }
+
+    document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
+    document.getElementById("lightbox").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("lightbox")) {
+        closeLightbox();
+      }
+    });
+
+    document.getElementById("lightboxPrev").addEventListener("click", () => {
+      currentImageIndex = (currentImageIndex - 1 + gallery.length) % gallery.length;
+      const image = document.getElementById("lightboxImage");
+      image.src = gallery[currentImageIndex].url;
+      image.alt = gallery[currentImageIndex].alt;
+    });
+
+    document.getElementById("lightboxNext").addEventListener("click", () => {
+      currentImageIndex = (currentImageIndex + 1) % gallery.length;
+      const image = document.getElementById("lightboxImage");
+      image.src = gallery[currentImageIndex].url;
+      image.alt = gallery[currentImageIndex].alt;
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (document.getElementById("lightbox").classList.contains("active")) {
+        if (e.key === "Escape") closeLightbox();
+        if (e.key === "ArrowLeft") document.getElementById("lightboxPrev").click();
+        if (e.key === "ArrowRight") document.getElementById("lightboxNext").click();
+      }
+    });
+
+    // Booking form
+    document.getElementById("bookingForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const arrival = document.getElementById("arrival").value;
+      const departure = document.getElementById("departure").value;
+      const guests = document.getElementById("guests").value;
+      const roomType = document.getElementById("roomType").value;
+      const name = document.getElementById("name").value;
+      const email = document.getElementById("email").value;
+      const phone = document.getElementById("phone").value;
+      const message = document.getElementById("message").value;
+
+      const body = `
+Booking request:
+
+Arrival: ${arrival}
+Departure: ${departure}
+Guests: ${guests}
+Room type: ${roomType}
+Name: ${name}
+Email: ${email}
+Phone: ${phone}
+Message: ${message}
+      `.trim();
+
+      const mailto = `mailto:stay@umlyna.cz?subject=Booking request&body=${encodeURIComponent(body)}`;
+      window.location.href = mailto;
+    });
+
+    // Reception status
+    function updateReceptionStatus() {
+      const now = new Date();
+      const day = now.getDay();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const currentTime = hours + minutes / 60;
+
+      let isOpen = false;
+      
+      if (day >= 1 && day <= 5) {
+        // Monday to Friday: 7:00 - 21:00
+        isOpen = currentTime >= 7 && currentTime < 21;
+      } else {
+        // Saturday and Sunday: 8:00 - 20:00
+        isOpen = currentTime >= 8 && currentTime < 20;
+      }
+
+      const badges = document.querySelectorAll("#heroBadge, #locationBadge");
+      badges.forEach(badge => {
+        badge.textContent = isOpen ? "Reception open" : "Reception closed";
+        badge.classList.toggle("open", isOpen);
+      });
+    }
+
+    // Menu toggle
+    document.getElementById("menuToggle").addEventListener("click", () => {
+      document.getElementById("navLinks").classList.toggle("active");
+    });
+
+    document.querySelectorAll(".nav-links a").forEach(link => {
+      link.addEventListener("click", () => {
+        document.getElementById("navLinks").classList.remove("active");
+      });
+    });
+
+    // FAQ
+    document.querySelectorAll(".faq-question").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const item = btn.parentElement;
+        item.classList.toggle("open");
+      });
+    });
+
+    // Initialize
+    renderRooms();
+    renderAmenities();
+    renderGallery();
+    updateReceptionStatus();
+    setInterval(updateReceptionStatus, 60000); // Update every minute
+  </script>
+</body>
+</html>

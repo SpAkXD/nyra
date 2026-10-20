@@ -65,6 +65,11 @@ window.__wb = (() => {
   };
   const present = (s, scope) => norm(textOf(root(scope))).includes(norm(s));
   const shows = (s, scope) => deepest(s, scope).some(visible);
+  // like shows, but s must stand as whole words ("Reception open" is not found in "Reception · Opening hours")
+  const showsWord = (s, scope) => {
+    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + norm(s).replace(/[.*+?^$()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'u');
+    return deepest(s, scope).filter((e) => re.test(norm(textOf(e)))).some(visible);
+  };
   const tokenRe = (v) => new RegExp('(^|[^0-9])' + norm(v).replace(/[.*+?^$()|[\]\\]/g, '\\$&') + '([^0-9]|$)');
   const showsNumber = (v, scope) => {
     const re = tokenRe(v);
@@ -103,7 +108,7 @@ window.__wb = (() => {
     if (lb) for (const id of lb.split(/\s+/)) { const e = document.getElementById(id); if (e && visible(e)) parts.push(textOf(e)); }
     return norm(parts.join(' ')).replace(/-/g, '');
   };
-  return { norm, textOf, visible, deepest, present, shows, showsNumber, control, clickable, scrollThrough, scrollSection, labelOf, root, tokenRe };
+  return { norm, textOf, visible, deepest, present, shows, showsWord, showsNumber, control, clickable, scrollThrough, scrollSection, labelOf, root, tokenRe };
 })();
 `;
 
@@ -258,7 +263,7 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
 
   if (spec.badge) await safe('badge_open', 'live badge says "' + spec.badge.open + '" while open', async () => {
     await ev('window.scrollTo(0, 0)'); await sleep(400);
-    const r = await ev(`({open: __wb.shows(${JSON.stringify(spec.badge.open)}), closed: __wb.shows(${JSON.stringify(spec.badge.closed)})})`);
+    const r = await ev(`({open: __wb.showsWord(${JSON.stringify(spec.badge.open)}), closed: __wb.showsWord(${JSON.stringify(spec.badge.closed)})})`);
     item('badge_open', 'live badge says "' + spec.badge.open + '" while open', r.open && !r.closed, `"${spec.badge.open}" visible ${r.open}, "${spec.badge.closed}" visible ${r.closed}`);
   });
 
@@ -389,7 +394,11 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
     const tick = (name, on) => ev(`(() => { const name = ${JSON.stringify(name)}, on = ${on}, sc = __wb.root(${sec}), want = __wb.norm(name).replace(/-/g, '');
       const cb = [...sc.querySelectorAll('input[type=checkbox]')].find(c => __wb.labelOf(c).includes(want));
       if (cb) { if (cb.checked !== on) cb.click(); return 'checkbox'; }
-      const c = __wb.control([name], ${sec}); if (!c) return '';
+      // a toggle button may mark its state with a leading symbol ("✓ Oil service · 1,790 Kč"): compare without it
+      const lab = (e) => __wb.norm(e.getAttribute('aria-label') || __wb.textOf(e) || '').replace(/^[^\\p{L}\\p{N}]+/u, '').replace(/-/g, '');
+      const c = __wb.control([name], ${sec}) || [...sc.querySelectorAll('button,[role=button],[role=switch],[role=checkbox],label')]
+        .filter(__wb.visible).find(e => { const t = lab(e); return t.length < 60 && t.startsWith(want); });
+      if (!c) return '';
       const st = c.getAttribute('aria-pressed') ?? c.getAttribute('aria-checked') ?? c.getAttribute('aria-selected');
       if (st !== null && (st === 'true') === on) return 'already';
       c.click(); return 'control'; })()`);
@@ -559,7 +568,7 @@ const PROBE = `window.__csp = []; document.addEventListener('securitypolicyviola
     clockScript = (await b.send('Page.addScriptToEvaluateOnNewDocument', { source: fakeClock(spec.badge.closed_at) })).identifier;
     await load();
     await sleep(800);
-    const r = await ev(`({open: __wb.shows(${JSON.stringify(spec.badge.open)}), closed: __wb.shows(${JSON.stringify(spec.badge.closed)})})`);
+    const r = await ev(`({open: __wb.showsWord(${JSON.stringify(spec.badge.open)}), closed: __wb.showsWord(${JSON.stringify(spec.badge.closed)})})`);
     item('badge_closed', 'live badge says "' + spec.badge.closed + '" while closed', r.closed && !r.open, `"${spec.badge.closed}" visible ${r.closed}, "${spec.badge.open}" visible ${r.open}`);
   });
 

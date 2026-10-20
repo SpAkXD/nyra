@@ -1,0 +1,38 @@
+{
+ "brief": "guesthouse",
+ "model": "claude-haiku-4-5-20251001",
+ "lang": "html",
+ "run": 1,
+ "effort": null,
+ "max_tokens": 64000,
+ "first": {
+  "stop_reason": "end_turn",
+  "model_served": "claude-haiku-4-5-20251001",
+  "request_id": null,
+  "seconds": 116.7,
+  "input_tokens": 2508,
+  "input_fresh": 2508,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 15819,
+  "cost_usd": 0.081603,
+  "visible_tokens": 15816,
+  "thinking_tokens_est": 3
+ },
+ "builds_first": null,
+ "site": "sites/guesthouse/claude-haiku-4-5-20251001/html-1",
+ "final_file": "raw/guesthouse/claude-haiku-4-5-20251001/html-1.html",
+ "code_tokens": 18706,
+ "code_bytes": 54352,
+ "code_tokens_first": 18706,
+ "total": {
+  "input_tokens": 2508,
+  "cache_write": 0,
+  "cache_read": 0,
+  "output_tokens": 15819,
+  "cost_usd": 0.081603,
+  "seconds": 116.7,
+  "thinking_tokens_est": 3,
+  "calls": 1
+ }
+}
