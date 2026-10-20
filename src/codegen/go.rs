@@ -104,7 +104,12 @@ const STD: &str = include_str!("../rt/go/std.go");
 const JSON: &str = include_str!("../rt/go/json.go");
 
 /// A Nyra name as a Go identifier: `ny...` names belong to the runtime, and Go's own words get a `_`.
+/// `_` is Go's blank identifier, which cannot be read (`for _ in 0..n` counts with it), so it gets
+/// a runtime name no user name can have (a user's `ny_blank` becomes `ny_blank_`).
 fn name(n: &str) -> String {
+    if n == "_" {
+        return "ny_blank".to_string();
+    }
     let id = names::ascii(n);
     if RESERVED.contains(&n) || n.starts_with("ny") || n.starts_with("Ny") {
         format!("{id}_")
