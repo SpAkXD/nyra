@@ -21,8 +21,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = 1200, H = 760;
 
 const profile = mkdtempSync(join(tmpdir(), 'nyra-motion-'));
+// (the page must keep rendering at full speed: a headless window the system counts as hidden or occluded,
+// as on a macOS CI runner, would otherwise get its frames, timers and so its animations throttled)
 const proc = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
-  '--no-default-browser-check', '--hide-scrollbars', '--allow-file-access-from-files', '--force-device-scale-factor=1', 'about:blank'],
+  '--no-default-browser-check', '--hide-scrollbars', '--allow-file-access-from-files', '--force-device-scale-factor=1',
+  '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', 'about:blank'],
   { stdio: 'ignore' });
 let port;
 for (let i = 0; i < 200 && !port; i++) {
@@ -59,6 +62,9 @@ listeners.add((d) => {
   if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map((a) => a.value ?? a.description).join(' '));
 });
 await send('Page.enable');
+// a page in front and focused renders every frame (a CI runner's headless window may count as hidden)
+await send('Page.bringToFront');
+await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Runtime.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
 
@@ -67,6 +73,8 @@ const open = async (url) => {
   const loaded = new Promise((r) => { const f = (d) => { if (d.method === 'Page.loadEventFired') { listeners.delete(f); r(); } }; listeners.add(f); });
   await send('Page.navigate', { url });
   await loaded;
+  // the timing below starts at the first frame (a cold browser on a busy runner can take a while to draw one)
+  await run('new Promise(r => { requestAnimationFrame(() => requestAnimationFrame(r)); setTimeout(r, 5000); })');
 };
 const shot = async (file) => {
   const { data } = await send('Page.captureScreenshot', { format: 'png' });
@@ -177,6 +185,9 @@ for (const f of files) {
     await run('scrollTo(0, 0)');
     await sleep(300);
   }
+  // the observer reveals on a rendering step, which a busy machine can be late with: wait (up to 4 s)
+  // until every element on screen is revealed, so the check below sees the end of the entrances
+  await run(`new Promise(r => { const t = Date.now(), f = () => [...document.querySelectorAll('[data-anim]')].every(e => { const b = e.getBoundingClientRect(); return e.classList.contains('m-in') || !(b.bottom > 0 && b.top < innerHeight * .9 && b.width > 0); }) || Date.now() - t > 4000 ? r() : setTimeout(f, 50); f(); })`);
   // let the entrances that are still running (pausing them for the frames delayed some) finish
   await run(`Promise.race([Promise.all(document.getAnimations().filter(a => a.timeline == document.timeline && isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => 0))), new Promise(r => setTimeout(r, 4000))])`);
   // counters run on the frame loop: give them their 1.6 s

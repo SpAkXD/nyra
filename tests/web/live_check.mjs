@@ -29,7 +29,8 @@ const url = `http://127.0.0.1:${server.address().port}/${basename(page)}`;
 
 const profile = mkdtempSync(join(tmpdir(), 'nyra-live-'));
 const proc = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
-  '--no-default-browser-check', '--hide-scrollbars', '--allow-file-access-from-files', '--force-device-scale-factor=1', 'about:blank'],
+  '--no-default-browser-check', '--hide-scrollbars', '--allow-file-access-from-files', '--force-device-scale-factor=1',
+  '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', 'about:blank'],
   { stdio: 'ignore' });
 let port;
 for (let i = 0; i < 200 && !port; i++) {
@@ -66,6 +67,9 @@ listeners.add((d) => {
   if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map((a) => a.value ?? a.description).join(' '));
 });
 await send('Page.enable');
+// a page in front and focused renders every frame (a CI runner's headless window may count as hidden)
+await send('Page.bringToFront');
+await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Runtime.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
 const loaded = new Promise((r) => { const f = (d) => { if (d.method === 'Page.loadEventFired') { listeners.delete(f); r(); } }; listeners.add(f); });
