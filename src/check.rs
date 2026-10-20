@@ -893,6 +893,12 @@ impl Checker {
         if BUILTINS.contains(&name) {
             return d.hint(format!("`{name}` is a function, not a variable: call it as `{name}(x)`"));
         }
+        if let Some(sig) = self.fns.get(&format!("web.{name}")) {
+            return d.hint(format!(
+                "`{name}` is a web function, not a value: call it as `{name}({})`",
+                sig.names.first().map_or("", |n| n.as_str())
+            ));
+        }
         // a script variable this function cannot see, or a local of `main`
         if let Some(d) = self.global_undefined(name, span) {
             return d;
@@ -4114,7 +4120,9 @@ impl Checker {
             named = true;
             match names.iter().position(|p| *p == label) {
                 None => {
+                    let web = name.strip_prefix("web.").and_then(|f| crate::webcheck::unknown_param_hint(f, &label));
                     let (hint, fix) = match suggest_fix(&label, names.iter().map(String::as_str)) {
+                        _ if web.is_some() => (web.unwrap_or_default(), None),
                         Some((h, f)) => (h, f.map(|f| Edit::replace(at, &label, f))),
                         None if names.is_empty() => (format!("`{name}` takes no arguments: call it as `{name}()`"), None),
                         None => {
@@ -4350,6 +4358,16 @@ impl Checker {
         let elem = arr.elem().unwrap_or(Type::Unknown);
         let f = self.block_fns.last().cloned().unwrap_or_default();
         let Some(v) = args.first_mut() else { return Type::Void };
+        // `use web`: `css(...)` and `keyframes(...)` add to the site's stylesheet wherever they are
+        // written, also as a line of a page's block (which then gets no element for it)
+        if let ExprKind::Call(n, _) = &mut v.kind {
+            if let Some(f) = n.strip_prefix("web.").filter(|f| matches!(*f, "css" | "keyframes")) {
+                let kid = format!("web._kid_{f}");
+                if self.fns.contains_key(&kid) {
+                    *n = kid;
+                }
+            }
+        }
         // `use web`: a string on its own line of a block of nodes is a paragraph of text
         if matches!(v.kind, ExprKind::Str(_) | ExprKind::Interp(_))
             && elem.struct_name().as_deref() == Some("Node")
@@ -4385,13 +4403,47 @@ impl Checker {
 
     fn call(&mut self, name: &str, args: &mut Vec<Expr>, span: Span, want: Option<Type>) -> Type {
         let (scopes, stack) = (self.scopes.len(), self.bind_stack.len());
+        // `type: tel` for `type: "tel"`: a web option's word without its quotes (see `bare_words`)
+        let bare: Vec<(String, String, Span)> = if name.starts_with("web.") {
+            args.iter()
+                .filter_map(|a| match &a.kind {
+                    ExprKind::Labeled(l, v) => match &v.kind {
+                        ExprKind::Var(w) => Some((l.clone(), w.clone(), v.span)),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let before = self.errs.len();
         let t = self.call_inner(name, args, span, want);
+        if !bare.is_empty() {
+            self.bare_words(name, &bare, before);
+        }
         // the scope of the arguments `bind_args` moved out, and the moved arguments themselves
         self.scopes.truncate(scopes);
         if self.bind_stack.len() > stack {
             self.arg_binds = self.bind_stack.pop().unwrap_or_default();
         }
         t
+    }
+
+    /// The errors of a web call since `before` that are `undefined variable` for the value of a named
+    /// argument that is one of the option's words (`field(..., type: tel)`, `site(style: soft)`): the
+    /// word in quotes is what was meant, a certain fix.
+    fn bare_words(&mut self, func: &str, bare: &[(String, String, Span)], before: usize) {
+        let short = func.strip_prefix("web.").unwrap_or(func);
+        for d in self.errs[before..].iter_mut().filter(|d| d.code == "E0201" && d.fix.is_empty()) {
+            let Some((param, word, at)) = bare.iter().find(|(_, _, at)| *at == d.span) else { continue };
+            if crate::webcheck::option_word(short, param, word) {
+                d.hint = Some(format!("`{param}:` takes text: write the word in quotes, `{param}: \"{word}\"`"));
+                d.fix = vec![Edit::replace(*at, word, format!("\"{word}\""))];
+            } else if (short, param.as_str(), word.as_str()) == ("hero", "badge", "hours") {
+                d.hint = Some("`badge:` takes the opening hours rows themselves, the list `hours(...)` shows: `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`".to_string());
+            }
+        }
     }
 
     fn call_inner(&mut self, name: &str, args: &mut Vec<Expr>, span: Span, want: Option<Type>) -> Type {
@@ -4568,6 +4620,9 @@ impl Checker {
                     if name == "web.gallery" && names[i] == "photos" {
                         tys[i] = self.photo_pairs(a, want, tys[i]);
                     }
+                    if name == "web.table" && names[i] == "rows" {
+                        tys[i] = self.table_rows(a, want, tys[i]);
+                    }
                     self.expect_ty(want, tys[i], a, Ctx::Arg { f: name, idx: i, param: &names[i] });
                 }
             }
@@ -4596,6 +4651,44 @@ impl Checker {
         let lambda = Expr::new(ExprKind::Lambda(vec![("_web_pair".to_string(), at)], Box::new(triple)), at);
         let photos = std::mem::replace(a, Expr::new(ExprKind::None, at));
         *a = Expr::new(ExprKind::Method(Box::new(photos), "map".to_string(), vec![lambda]), at);
+        self.arg_type(a, Some(want))
+    }
+
+    /// `table(rows)` with rows of tuples (`[("Check-up", "900 Kč")]`, `[("Basic", 790)]`) where the
+    /// cells are `[[str]]`: each tuple becomes the list of its values as text, as
+    /// `rows.map(r => [r.0, str(r.1)])` (a table shows each value as it is written).
+    fn table_rows(&mut self, a: &mut Expr, want: Type, got: Type) -> Type {
+        let Some(cells) = got.elem().and_then(Type::tuple_elems) else { return got };
+        if cells.iter().any(|t| !matches!(t, Type::Str | Type::Int | Type::Float | Type::Bool | Type::Char)) {
+            return got;
+        }
+        // (checked again inside the `map`: only a value whose second check changes nothing)
+        let literal = |e: &Expr| {
+            matches!(e.kind, ExprKind::Str(_) | ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::Char(_))
+        };
+        let again = match &a.kind {
+            ExprKind::Var(_) => true,
+            ExprKind::Call(_, xs) => xs.is_empty(),
+            ExprKind::Array(rows) => rows.iter().all(|r| matches!(&r.kind, ExprKind::Tuple(xs) if xs.iter().all(literal))),
+            _ => false,
+        };
+        if !again {
+            return got;
+        }
+        let at = a.span;
+        let row = || Expr::new(ExprKind::Var("_web_row".to_string()), at);
+        let cell = |k: usize, t: &Type| {
+            let x = Expr::new(ExprKind::Field(Box::new(row()), k.to_string()), at);
+            if *t == Type::Str {
+                x
+            } else {
+                Expr::new(ExprKind::Call("str".to_string(), vec![x]), at)
+            }
+        };
+        let list = Expr::new(ExprKind::Array(cells.iter().enumerate().map(|(k, t)| cell(k, t)).collect()), at);
+        let lambda = Expr::new(ExprKind::Lambda(vec![("_web_row".to_string(), at)], Box::new(list)), at);
+        let rows = std::mem::replace(a, Expr::new(ExprKind::None, at));
+        *a = Expr::new(ExprKind::Method(Box::new(rows), "map".to_string(), vec![lambda]), at);
         self.arg_type(a, Some(want))
     }
 

@@ -1,0 +1,13 @@
+// expect: E0101
+enum Light { Red, Green }
+
+fn name(l: Light) -> str {
+    var s = ""
+    match l {
+        Light.Red => s = "red",
+        Light.Green => s = "green"
+    }
+    return s
+}
+
+print(name(Light.Red))

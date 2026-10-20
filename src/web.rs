@@ -149,7 +149,7 @@ pub fn build(prog: ast::Program, src: &str, o: &Options) -> Result<Site, Error> 
     if report.exit != 0 {
         return Err(Error::Text(format!("the program stopped with exit code {} while the site was built", report.exit)));
     }
-    Site::assemble(&prog, report.web, at, o)
+    Site::assemble(&prog, report.web, at, o, src)
 }
 
 /// The program compiled again with `web._state("name", json.str(name))` at the end of the script
@@ -393,6 +393,22 @@ fn style_classes(page: &str, rules: &mut BTreeMap<String, String>) -> String {
     html::apply(page, edits)
 }
 
+/// The place of the first `needle` in the program's source (a value the library found wrong while
+/// the site was built, as the string literal that holds it).
+fn locate(src: &str, needle: &str) -> Option<Span> {
+    if needle.is_empty() || needle == "\"\"" {
+        return None;
+    }
+    let at = src.find(needle)?;
+    let before = &src[..at];
+    let line = before.matches('\n').count() + 1;
+    let col = before[before.rfind('\n').map_or(0, |i| i + 1)..].chars().count() + 1;
+    Some(Span { line, col })
+}
+
+/// The hint of E0390 (opening hours the badge cannot read).
+const HOURS_HINT: &str = "a row is (label, \"days times\"): `(\"Mon–Fri\", \"1-5 8:00-16:00\")`, days 1 (Monday) to 7 (Sunday), one or more times `8:00-12:00 13:00-17:00`, \"\" for closed; the days may also be in the label (`(\"Monday\", \"8:00-18:00\")`, `(\"Mon–Fri\", \"8–16\")`)";
+
 /// `https://host[:port]` of an absolute http(s) URL.
 fn origin(url: &str) -> Option<String> {
     let rest = url.strip_prefix("https://").map(|r| ("https", r)).or_else(|| url.strip_prefix("http://").map(|r| ("http", r)))?;
@@ -403,7 +419,7 @@ fn origin(url: &str) -> Option<String> {
 // ---- assembling the site ---------------------------------------------------------------------------
 
 impl Site {
-    fn assemble(prog: &ast::Program, web: crate::ir::host::Web, at: Span, o: &Options) -> Result<Site, Error> {
+    fn assemble(prog: &ast::Program, web: crate::ir::host::Web, at: Span, o: &Options, src: &str) -> Result<Site, Error> {
         let mut errs: Vec<Diag> = Vec::new();
         let mut warn = |d: Diag| diag::warn(d);
 
@@ -435,17 +451,38 @@ impl Site {
                 }
             }
         }
-        // errors the library found while rendering (a computed `javascript:` link, an unknown
-        // icon): `_css("/*! nyra:error E0381 message */")`
+        // errors and warnings the library found while rendering (a computed `javascript:` link, an
+        // unknown color or icon): `_css("/*! nyra:error E0381 message */")`, at the string literal
+        // of the program that holds the value (a value from data, `icon: s.0`, has no place of its own)
         for text in &web.css {
+            for part in text.split("/*! nyra:warn ").skip(1) {
+                let what = part.split(" */").next().unwrap_or(part);
+                let mut words = what.splitn(3, ' ');
+                let (code, kind, name) = (words.next().unwrap_or(""), words.next().unwrap_or(""), words.next().unwrap_or(""));
+                if code == "E0389" {
+                    let in_text = kind == "text";
+                    let needle = if in_text { format!(":{name}:") } else { format!("\"{name}\"") };
+                    let d = crate::webcheck::icon_warning(name, in_text, locate(src, &needle).unwrap_or(at));
+                    // (a literal was warned about when the program compiled)
+                    if !diag::warnings().iter().any(|w| w.code == d.code && w.msg == d.msg) {
+                        warn(d);
+                    }
+                }
+            }
             for part in text.split("/*! nyra:error ").skip(1) {
                 let msg = part.split(" */").next().unwrap_or(part);
                 let (code, msg) = msg.split_once(' ').unwrap_or((msg, ""));
                 let (code, hint): (&'static str, &str) = match code {
                     "E0381" => ("E0381", "link to `https://...`, `mailto:...`, `tel:...`, a path or an #anchor; the value was computed while the site was built"),
-                    _ => ("E0374", "use an icon of the set (`nyra explain E0374`), a hex color, a theme color or a name of `site(palette:)`"),
+                    "E0390" => ("E0390", HOURS_HINT),
+                    _ => ("E0374", "use a hex color (`#0F766E`), a theme color (`primary`, `accent`, `bg`, `alt`, `ink`, `muted`) or a name of `site(palette:)`"),
                 };
-                errs.push(Diag::new(code, msg.to_string(), at).hint(hint));
+                let value = msg.split('`').nth(1).unwrap_or("");
+                let place = locate(src, &format!("\"{value}\"")).or_else(|| locate(src, value).filter(|_| !value.is_empty()));
+                let d = Diag::new(code, msg.to_string(), place.unwrap_or(at)).hint(hint);
+                if !errs.iter().any(|e| e.code == d.code && e.msg == d.msg) {
+                    errs.push(d);
+                }
             }
         }
         if pages.is_empty() && errs.is_empty() {
@@ -728,13 +765,15 @@ impl Site {
                 let hint = e
                     .hint()
                     .unwrap_or_else(|| "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`".to_string());
-                errs.push(Diag::new("E0374", format!("{} (in data-{attr}=\"{value}\")", e.message), at).hint(hint));
+                let place = locate(src, &format!("\"{value}\"")).unwrap_or(at);
+                errs.push(Diag::new("E0374", format!("{} (in data-{attr}=\"{value}\")", e.message), place).hint(hint));
             }
         }
         let pairs: Vec<(&str, &str)> = used.iter().map(|(a, v)| (a.as_str(), v.as_str())).collect();
         let mut css = assets::pick(assets::KIT_CSS, "chunk", &web.chunks, true);
         css.push_str(&motion::motion_css(&pairs, &custom));
-        for c in &web.css {
+        // (without the records of errors and warnings, which were read above)
+        for c in web.css.iter().filter(|c| !c.starts_with("/*! nyra:")) {
             css.push('\n');
             css.push_str(c);
         }

@@ -1091,7 +1091,16 @@ impl Parser {
         } else {
             Type::Void
         };
-        let body = if self.at(&Tok::Assign) {
+        let body = if self.at(&Tok::Assign) && matches!(self.peek_at(1), Tok::LBrace) {
+            // `fn f() -> int = { ... }`: no expression starts with `{`, so the `=` is in excess
+            let eq = self.bump().span;
+            self.errs.push(
+                Diag::new("E0101", "expected an expression after `=`, found `{`", self.span())
+                    .hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`")
+                    .fix(vec![Edit::range(eq, self.span(), "=", "")]),
+            );
+            self.block(&format!("fn {name}"))?
+        } else if self.at(&Tok::Assign) {
             // one-line function: the expression is the body (and the return value)
             self.bump();
             let e = self.expr().map_err(|d| self.one_line_fn_error(d))?;
@@ -1404,6 +1413,63 @@ impl Parser {
         self.end_stmt_after(None, None)
     }
 
+    /// A `,` after an assignment, a call or a match arm, as in a list of the language the code
+    /// comes from (`Msg.Day(d) => day = d,`, `{ open = true, at = i }`): Nyra ends statements and
+    /// arms with a new line. The comma is reported with its certain fix (deleted at the end of a
+    /// line, a line break between two statements) and skipped, so the rest of the file is still
+    /// read. True if there was one.
+    fn stray_comma(&mut self) -> bool {
+        if !self.at(&Tok::Comma) || self.in_string {
+            return false;
+        }
+        let comma = self.span();
+        let d = if matches!(self.peek_at(1), Tok::Newline | Tok::RBrace | Tok::Eof) {
+            Diag::new("E0101", "a `,` after a statement or a match arm", comma)
+                .hint("delete the `,`: a new line already ends a statement and a match arm (they are not separated by commas)")
+                .fix(vec![Edit::replace(comma, ",", "")])
+        } else if self.statement_follows() {
+            let next = self.toks[(self.pos + 1).min(self.toks.len() - 1)].span;
+            let indent = self.toks.iter().find(|t| t.span.line == comma.line).map_or(0, |t| t.span.col - 1);
+            Diag::new("E0101", "a `,` between two statements or match arms", comma)
+                .hint("one statement or match arm per line: start what follows the `,` on a new line")
+                .fix(vec![Edit::range(comma, next, ",", format!("\n{}", " ".repeat(indent)))])
+        } else {
+            return false;
+        };
+        self.errs.push(d);
+        self.bump();
+        true
+    }
+
+    /// True if the rest of the line after the current `,` is a statement of its own: a call
+    /// (`f(x)`, `a.b(x)`), or it holds an assignment or a match arm (an `=`, `+=`, ... or `=>`
+    /// outside brackets).
+    fn statement_follows(&self) -> bool {
+        let call = matches!(
+            (self.peek_at(1), self.peek_at(2), self.peek_at(3), self.peek_at(4)),
+            (Tok::Ident(_), Tok::LParen, _, _) | (Tok::Ident(_), Tok::Dot, Tok::Ident(_), Tok::LParen)
+        );
+        if call {
+            return true;
+        }
+        let mut depth = 0i32;
+        for t in &self.toks[self.pos + 1..] {
+            match t.tok {
+                Tok::Newline | Tok::Eof => return false,
+                Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+                Tok::RParen | Tok::RBracket | Tok::RBrace => {
+                    depth -= 1;
+                    if depth < 0 {
+                        return false;
+                    }
+                }
+                Tok::Assign | Tok::OpAssign(_) | Tok::FatArrow if depth == 0 => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// The end of a statement. `first` is the name the statement started with, if it started with
     /// one; `generic` replaces the general "one statement per line" hint.
     fn end_stmt_after(&mut self, first: Option<(&str, Span)>, generic: Option<&str>) -> PResult<()> {
@@ -1465,6 +1531,9 @@ impl Parser {
             }
             (Tok::Colon, Some(_)) => "to declare a variable write `let x: int = 5` (or `var`)".to_string(),
             (Tok::RParen, _) => "this `)` closes nothing: remove it, or add the `(` it belongs to".to_string(),
+            (Tok::Comma, _) => {
+                "a `,` does not end a statement: end the line instead, and start the next statement on a new line".to_string()
+            }
             (Tok::Ident(name), Some(f)) if hints::nyra_type(f).is_some() => format!(
                 "declare variables with `let` or `var`, and put the type after the name: `let {name}: {} = ...` (or just `let {name} = ...`)",
                 hints::nyra_type(f).unwrap_or("int")
@@ -1684,10 +1753,14 @@ impl Parser {
                         _ => None,
                     };
                     let value = self.expr()?;
-                    self.end_stmt()?;
+                    if !self.stray_comma() {
+                        self.end_stmt()?;
+                    }
                     StmtKind::Assign { target: e, op, value }
                 } else {
-                    self.end_stmt_after(first.as_ref().map(|(w, at)| (w.as_str(), *at)), None)?;
+                    if !self.stray_comma() {
+                        self.end_stmt_after(first.as_ref().map(|(w, at)| (w.as_str(), *at)), None)?;
+                    }
                     StmtKind::Expr(e)
                 }
             }
@@ -1781,7 +1854,7 @@ impl Parser {
             .map_err(|d| d.or_hint("an arm looks like `Dir.N => print(\"north\")`, or `Dir.E, Dir.W => { ... }`"))?;
         let body = if self.at(&Tok::LBrace) {
             let b = self.block("match arm")?;
-            if !matches!(self.peek(), Tok::Newline | Tok::RBrace) {
+            if !matches!(self.peek(), Tok::Newline | Tok::RBrace) && !self.stray_comma() {
                 return Err(self.unexpected("a new line after the arm").hint("one arm per line"));
             }
             b

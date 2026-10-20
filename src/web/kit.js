@@ -166,9 +166,19 @@
     const lines = fields
       .filter((el) => el !== message && (el.type === 'checkbox' ? el.checked : el.value.trim()))
       .map((el) => (el.type === 'checkbox' ? label(el) : el.value.trim()));
-    const body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
-    const subject = form.dataset.subject ? 'subject=' + encodeURIComponent(form.dataset.subject) + '&' : '';
-    window.location.href = 'mailto:' + form.dataset.mailto + '?' + subject + 'body=' + encodeURIComponent(body);
+    let body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
+    // `data-query` holds the subject and any other header, encoded; a `body=` of it goes first
+    const query = (form.dataset.query || '').split('&').filter((kv) => {
+      if (!/^body=/i.test(kv)) return kv !== '';
+      try {
+        body = decodeURIComponent(kv.slice(5)) + '\n\n' + body;
+      } catch {
+        body = kv.slice(5) + '\n\n' + body;
+      }
+      return false;
+    });
+    query.push('body=' + encodeURIComponent(body));
+    window.location.href = 'mailto:' + form.dataset.mailto + '?' + query.join('&');
     const card = form.closest('.form');
     const done = card && card.querySelector('.form-done');
     if (done) {

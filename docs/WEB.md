@@ -221,7 +221,8 @@ Every text argument is plain text with a small inline Markdown subset and icons:
 
 - `**bold**`, `*italic*`, `` `code` ``, `[label](url)`; `\\*` for a literal star.
 - `:name:` is an icon from the built-in set (a subset of Lucide, plus brand icons): `":phone: {s.phone}"`. A name
-  starts with a letter and has no spaces, so `8:00 – 16:00` stays text; an unknown name is E0374.
+  starts with a letter and has no spaces, so `8:00 – 16:00` stays text; an unknown name is warning E0389 (a name
+  of another icon set, `:envelope:`, is drawn as the icon it stands for; any other stays text).
 - Interpolation works as everywhere: `"[{c.email}](mailto:{c.email})"`.
 
 Text is always escaped: `"<b>"` shows `<b>`. Markdown is the only markup, and its links are checked (Safety).
@@ -234,11 +235,11 @@ Text is always escaped: `"<b>"` shows `<b>`. Markdown is the only markup, and it
 | `section(id, title) { }` | Full-width band, centered container, vertical rhythm, and a section heading when `title` is given | `kicker:`, `text:` (subtitle), `bg:`, `tone:` (heading accent), `align:` |
 | `grid(cols) { }` | Responsive grid: `cols` on desktop, 2 on tablets, 1 on phones | `widths: "1fr 1.15fr"`, `gap:`, `numbers: true` (01, 02, ... on cards) |
 | `stack { }`, `row { }` | Vertical / horizontal (wrapping) flow with the theme's gap | `gap:`, `align:` |
-| `card(title, text) { }` | Surface with radius and shadow; an `icon:` card is a feature card, an `image:` card a product card | `icon:`, `image:`, `fill: true` (primary background), `href:` |
+| `card(title, text) { }` | Surface with radius and shadow; an `icon:` card is a feature card, an `image:` card a product card | `icon:`, `image:`, `fill: true` (primary background), `href:` (the card is a link), `on:` (its title is a button that covers the card) |
 | `h1`, `h2`, `h3`, `p`, `small` | Text | `icon:`, `sub:` (h3), `size: "lg"` |
 | `img(src, alt)` | Responsive image; `alt` is required, `""` marks a decorative one | `ratio: "16/10"`, `caption:`, `fit:`, `width: "160px"` (a small picture: an avatar, a logo) |
 | `link(text, href)`, `button(text, href)` | A link; a button-styled link or an action | `style: "primary" | "outline" | "ghost"`, `on:` (action) |
-| `list(items)`, `table(rows)`, `address { }`, `note(text)` | Lists, tables, contact block, a small line with a divider | |
+| `list(items)`, `table(rows)`, `address { }`, `note(text)` | Lists, tables (rows of `[str]`, or tuples of text and numbers), contact block, a small line with a divider | `head:` (table) |
 | `chip(title, text)` | Pill with an icon, a title and a line | `icon:` |
 | `embed(url, title)` | An iframe (video, 3D model viewer), lazy | `ratio:` |
 
@@ -256,9 +257,9 @@ Each one is the look and behavior of a well-made modern site with no styling cod
 | `split(panels)` | Full-screen selection between two (or more) subsites | Hover zoom, labels, page transition into the chosen site |
 | `marquee(items)` | Endless ticker strip in the primary color | CSS-only loop, pauses on hover, static for reduced motion |
 | `gallery(photos)` | Masonry gallery: `filters:` | Filter tabs with a sliding pill, lightbox with keys, swipe, counter, focus trap |
-| `hours(rows)` | Opening-hours card: rows like `("Sobota", "6 8:30-11:30")` | Live "open now" badge in `site(tz:)`, closed days marked, refreshed each minute |
+| `hours(rows)` | Opening-hours card: rows like `("Sobota", "6 8:30-11:30")` or `("Mon–Fri", "8:00–16:00")` | Live "open now" badge in `site(tz:)`, closed days marked, refreshed each minute |
 | `map(address)` | Map card: `show:`, `go:` | Placeholder until clicked (no Google request before consent), then the embed; a directions link |
-| `form(title) { field(...) }` | Form with labeled fields: `mailto:` or `to:` (POST URL), `send:`, `note:`, `done:`, `done_text:`, `edit:` | Validation, focus rings in the theme, a mailto composer (message, then a line, then the other fields), a "sent" state with an edit button |
+| `form(title) { field(...) }` | Form with labeled fields: `mailto:` or `to:` (POST URL), `subject:`, `send:` (the submit button's text; a plain `button(...)` in the form is its submit button instead), `note:`, `done:`, `done_text:`, `edit:` | Validation, focus rings in the theme, a mailto composer (message, then a line, then the other fields; a `?subject=...` written in `mailto:` is kept), a "sent" state with an edit button |
 | `steps(items)` | Vertical timeline of (label, text) | Drawn line, staggered items |
 | `stat(value, label)` | Big number with a label | Counts up when seen |
 | `footer(...)` | Columns of brand text, links, contacts, small print | Back-to-top |
@@ -440,7 +441,8 @@ the flora site as the bar.
 ## Escape hatches, accessibility, SEO, safety
 
 **Escape hatches.**
-- `css("...")` at the top level adds raw CSS to the site's stylesheet; it may use the theme variables (`var(--primary)`).
+- `css("...")` adds raw CSS to the site's stylesheet, at the top level or as a line of a child block (a page's
+  block: it makes no element there); it may use the theme variables (`var(--primary)`).
 - `cls: "name"` adds a class to any element, for that CSS.
 - `html("...")` inserts raw HTML. It takes only a string literal (no interpolation, no variables): data never
   becomes markup (E0378).
@@ -475,7 +477,7 @@ schema.org `LocalBusiness` data (open question).
 
 ## Error codes
 
-Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning slightly (above).
+Reserved: **E0370-E0390** (free in `docs/ERRORS.md`). Also E0226 changes meaning slightly (above).
 
 | Code | Kind | Meaning |
 |---|---|---|
@@ -483,7 +485,7 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 | E0371 | compile (built) | A misused child block: after a call whose last parameter is not an array (or is given already), a line that makes no value, or an assignment, `var`, `while`, `return`, `break`, `continue` or `arena` in it |
 | E0372 | compile (built) | A program function or variable has the name of a web function (`fn hero`, `let hours`) |
 | E0373 | compile (built) | `on:` is used but the program has no `enum Msg` or no `fn update(m: Msg)` |
-| E0374 | compile / build (built) | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown icon name |
+| E0374 | compile / build (built) | Unknown option word (`hover: "lfit"`), with the nearest word; also an unknown color, or an icon option written with colons (`icon: ":clock:"`) |
 | E0375 | warning (built) | A custom keyframe animates a layout property (`width`, `top`, ...) |
 | E0376 | compile (built) | A live view function has parameters |
 | E0377 | compile (built) | An icon-only button or link has no `label:` |
@@ -498,7 +500,8 @@ Reserved: **E0370-E0389** (free in `docs/ERRORS.md`). Also E0226 changes meaning
 | E0386 | warning (built) | Images copied without `srcset` variants: the built-in codec cannot read the file, or `--image-tool none` |
 | E0387 | build (built) | Two pages with the same path, or a path that is not `/...` |
 | E0388 | compile / build (built) | A `keyframes(name, body)` that cannot be a word: a bad or taken name, a body that does not parse, an unknown property, a value that is not plain CSS |
-| E0389 | | free |
+| E0389 | warning (built) | An unknown icon name: drawn as the icon a name of another set stands for (`envelope`: `mail`), else as a plain circle (`icon:`) or left as text (`:name:`); at the string literal that holds it, also for a name from data |
+| E0390 | build (built) | Opening hours (`hours`, `hero(badge:)`) the badge cannot read: no days in the row or its label, or times it cannot parse |
 
 Each gets a full entry (wrong and fixed program) in `docs/ERRORS.md` when it is built, as the error database requires.
 
@@ -860,8 +863,10 @@ its images in `examples/web/assets/`; `tests/web.rs` builds each one and compare
   `--on-accent`, `--font`, `--display` and `--radius`. `css("...")` is `_css`, `keyframes(name, body)` is
   `_keyframes`.
 - A build error found while rendering, which the compiler cannot see in a literal (a computed `javascript:` link,
-  an unknown icon or color in computed text), is given to `_css` as a comment `/*! nyra:error E0381 message */`;
-  the build reports it as that error and writes nothing.
+  an unknown color, opening hours it cannot read), is given to `_css` as a comment `/*! nyra:error E0381 message */`;
+  the build reports it as that error, at the string literal of the program that holds the value named first in
+  backticks in the message (a value from data has no place of its own), and writes nothing. A warning is
+  `/*! nyra:warn E0389 icon NAME */` (or `text NAME`), which the build words and places the same way.
 - The site lives in the script variable `_web` (a `WebConfig`), which the compiler declares before the program's
   first statement and `site(...)` fills; the web functions read it (for the kit's words, the time zone, the
   palette). A program cannot name it.
@@ -884,7 +889,12 @@ Where the build differs from the design above, and why:
 - **`footer(brand:, text:, links:, links_title:, contact:, contact_title:, small:, top:)`**: `contact` and `small`
   are lines of text; the default small print is `© <year> <site name>`.
 - **`hours(rows)`**: days are numbers, 1 (Monday) to 7 (Sunday): `"1-5 8:00-16:00"`, `"6 8:30-11:30"`,
-  `"1,3 9:00-12:00 13:00-17:00"`; `""` is closed. The open/closed badge is hidden until the script sets it, so a
+  `"1,3 9:00-12:00 13:00-17:00"`; `""` is closed. Rows written as people write them are read too: the days in the
+  label (`("Monday", "8:00–18:00")`, `("Mon–Fri", "8–16")`) or before the times (`"Mon–Fri: 8:00–16:00"`), English,
+  Czech and German day names (English and Czech short forms), `weekdays`, `daily`, any dash, `8.00`, `9am-5pm`,
+  `24/7`; a time
+  without digits ("Closed", "By appointment") is closed and shown as written. A row with digits that names no days
+  or no readable times is build error E0390. The open/closed badge is hidden until the script sets it, so a
   page without JavaScript never shows a wrong state.
 - **A form's `on: Msg.Send`** (a variant that carries the fields) is written `data-on="&quot;Send&quot;"`, as
   the build expects.

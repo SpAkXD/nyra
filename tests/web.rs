@@ -260,7 +260,7 @@ fn literal_mistakes_are_compile_errors() {
         ("p(\"<b>[x](javascript:alert(1))</b>\")", "E0381"),
         ("img(\"data:image/png;base64,AA\", \"x\")", "E0381"),
         ("navbar(\"A\", [(\"B\", \"JAVASCRIPT:x\")])", "E0381"),
-        ("card(\"A\", icon: \"no-such-icon\")", "E0374"),
+        ("section(\"a\", \"A\", bg: \"gray\")", "E0374"),
         ("button(\"Go\", style: \"primay\")", "E0374"),
         ("link(\":mail:\", \"mailto:a@b.cz\")", "E0377"),
         ("button(icon: \"phone\", href: \"tel:1\")", "E0377"),
@@ -288,6 +288,78 @@ fn literal_mistakes_are_compile_errors() {
     .unwrap();
     let out = nyra().arg("check").arg(&ok).output().unwrap();
     assert!(out.status.success(), "{}", stderr(&out));
+}
+
+/// What models write that the kit reads as meant: an icon outside the set (a warning at the
+/// literal that holds it, even from data, and a stand-in), a clickable card, a table of tuples,
+/// `css(...)` in a page's block, opening hours written as people write them, a `mailto:` with
+/// its own `?subject=` and the form's own submit button.
+#[test]
+fn the_kit_reads_what_models_write() {
+    let dir = scratch("web-model-forms");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = r#"use web
+site("Dentist", tz: "Europe/Prague")
+let services = [("siren", "Emergency care"), ("envelope", "Write to us")]
+let prices = [("Check-up", 900), ("Hygiene", 1600)]
+let opening = [("Monday", "8:00–18:00"), ("Tue–Fri", "8 - 14"), ("Saturday", "Closed"), ("Sunday", "")]
+enum Msg { Open(int) }
+var open = -1
+fn update(m: Msg) {
+    match m {
+        Msg.Open(i) => open = if open == i { -1 } else { i }
+    }
+}
+fn faq() -> Node = stack {
+    for i in 0..2 {
+        card("Question {i}", if open == i { "Answer {i}" } else { "" }, on: Msg.Open(i))
+    }
+}
+page("/", "Dentist") {
+    h1("Dentist")
+    section("services", "What we do") {
+        for s in services {
+            card(s.1, "Call us", icon: s.0)
+        }
+        faq()
+        table(prices, head: ["Treatment", "Price"])
+        hours(opening)
+        form("Book", mailto: "desk@example.com?subject=Booking request") {
+            field("name", "Name", req: true)
+            button("Send request")
+        }
+    }
+    css(".x { color: red }")
+}
+"#;
+    std::fs::write(dir.join("s.nyra"), src).unwrap();
+    let out = nyra().current_dir(&dir).args(["build", "s.nyra", "-o", "out", "--image-tool", "none"]).output().unwrap();
+    let err = stderr(&out);
+    assert!(out.status.success(), "{err}");
+    // the icons: a warning each, at the literal in the data, drawn as a stand-in
+    assert!(err.contains("warning[E0389]: unknown icon `siren`: drawn as a plain circle\n  --> s.nyra:3:18"), "{err}");
+    assert!(err.contains("warning[E0389]: unknown icon `envelope`: drawn as `mail`\n  --> s.nyra:3:47"), "{err}");
+    let page = text(&std::fs::read(dir.join("out/index.html")).unwrap());
+    assert!(page.contains("<use href=\"#i-circle\"/>") && page.contains("<use href=\"#i-mail\"/>"), "{page}");
+    // the card is a button
+    assert!(page.contains("<h3 class=\"card-title\"><button type=\"button\" class=\"card-hit\" data-on="), "{page}");
+    // the table shows the numbers as written
+    assert!(page.contains("<td>Check-up</td><td>900</td>"), "{page}");
+    // the hours: days from the labels, any dash, words for closed
+    assert!(page.contains("data-hours=\"1 8:00-18:00|2-5 8:00-14:00\""), "{page}");
+    assert!(page.contains("<tr class=\"is-shut\"><th scope=\"row\">Saturday</th><td>Closed</td></tr>"), "{page}");
+    // the form: the address and the subject apart, one submit button: the program's own
+    assert!(page.contains("data-mailto=\"desk@example.com\" data-query=\"subject=Booking%20request\""), "{page}");
+    assert_eq!(page.matches("type=\"submit\"").count(), 1, "{page}");
+    assert!(page.contains("<button type=\"submit\" class=\"btn btn-primary\">Send request</button>"), "{page}");
+    let css: String = std::fs::read_dir(dir.join("out"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "css"))
+        .map(|p| text(&std::fs::read(p).unwrap()))
+        .collect();
+    assert!(css.contains(".x{color:red}") && !css.contains("nyra:"), "the page's css(...) is in the CSS, the build's records are not");
 }
 
 /// The measured samples of the design, put together into one program as a site would be.

@@ -1,9 +1,8 @@
 <!-- Metadata: this comment is not part of the card (nyra_spec with topic "web" and the tests strip it).
-TOKENS: 1393 on claude-sonnet-5-5, 1111 on claude-haiku-4-5 (estimated: 3,007 characters, scaled from the last measurement of 3,014 characters = 1,396 tokens; no API key at hand when sidebar/media/video/tabs/search were added. Re-measure: python tools/card_tokens.py --card web --write).
+TOKENS: 1398 on claude-sonnet-5-5, 1103 on claude-haiku-4-5 (Anthropic count_tokens; python tools/card_tokens.py --card web --write).
 BUDGET: hard limit 1,400 tokens on claude-sonnet-5-5. The card has a hard budget: a feature that needs card text must displace something.
 The library is src/std/web.nyra; this card must describe it exactly (tests/docs.rs builds its example). Read with docs/AGENT_CARD.md. -->
 # Nyra web card
-`use web` makes a static site: `nyra build site.nyra -o dist`.
 
 ```nyra
 use web
@@ -13,52 +12,48 @@ enum Msg { Show(str) }
 var kind = "all"
 fn update(m: Msg) { match m { Msg.Show(k) => kind = k } }
 fn menu() -> Node = stack {
-    row {
-        for k in ["all", "hot", "cold"] { button(k, on: Msg.Show(k), active: k == kind) }
-    }
-    grid(3, anim: "stagger", hover: "lift") {
+    row { for k in ["all", "hot", "cold"] { button(k, on: Msg.Show(k), active: k == kind) } }
+    grid(3, anim: "stagger") {
         for d in drinks.filter(x => kind == "all" || x.1 == kind) { card(d.0, d.1, image: d.2) }
     }
 }
 page("/", "Brew & Co") {
     navbar("Brew & Co", [("Menu", "#menu")])
     hero("Good coffee", image: "hero.jpg", alt: "Latte art", buttons: [("Menu", "#menu")], anim: "rise")
-    section("menu", "Our menu", bg: "alt", anim: "rise") {
-        menu()
-    }
+    section("menu", "Menu", bg: "alt", anim: "rise") { menu() }
 }
 ```
 
 ## Rules
 - Params before the first `x:` are positional, the rest named. All elements take `id: cls:` and motion.
-- `{}` takes a child block (`for` `if` `let` allowed); a string line is a paragraph.
-- `on: Msg.X(..)` calls `fn update(m: Msg)`; then a parameterless `Node` fn that reads a changed `var` redraws.
-- Text: `**b**` `[label](url)` `:icon:` (Lucide). Images: `assets/` files or `https://` URLs.
+- `{}`: a child block (`for` `if` `let` ok); a string line is a paragraph.
+- `on: Msg.X(..)` calls `fn update(m: Msg)`; a parameterless `Node` fn reading a changed `var` redraws.
+- Text: `**b**` `[label](url)` `:icon:` (Lucide). Images: `assets/` or `https://`.
 
 ## Elements
 ```
-site(name, primary: accent: bg: font: display: radius: 16 style: soft|sharp|editorial|dark lang: tz:)
-page(path, title, desc:) {}
-section(id, title, kicker: text: bg: alt|dark|primary) {}
+site(name, primary: accent: bg: font: display: radius: 16 style: "soft"|"sharp"|"editorial"|"dark" lang: tz:)
+page(path, title, desc:) {}   css(".x { color: red }") anywhere
+section(id, title, kicker: text: bg: "alt"|"dark"|"white"|"primary"|"accent") {}
 grid(cols, widths: "1fr 2fr") {}   stack {}   row {}
-card(title, text, icon: image: tag: items: fill: href:) {}
+card(title, text, icon: image: tag: items: fill: true href: on:) {}
 h1 h2 h3(text, icon:)   p small note(text)   link(text, href)   img(src, alt, ratio: "4/3" caption: width:)
-button(text, href, style: primary|outline|ghost on: active: icon:)
+button(text, href, style: "primary"|"accent"|"outline"|"ghost"|"light" on: active: icon:)
 list(items, icon:)   table(rows, head:)   address {}   chip(title, text, icon:)   embed(url, title)
 quote(text, name, place: stars:)   stat(value, label)   steps([(label, text)])   marquee(words)
 navbar(brand, [(label, href)], cta: (label, href))
-hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: rows) {}
-gallery([(image, alt, tag)], filters: [(tag, label)])   hours(rows)   rows: [(label, "1-5 8:00-16:00")], days 1-7
+hero(title, kicker: text: image: alt: buttons: [(label, href)] badge: hoursRows) {}
+gallery([(image, alt, tag)], filters: [(tag, label)])
+hours(hoursRows)   hoursRows: [("Mon–Fri", "8:00-16:00"), ("Sun", "")]
 map(address)   split { card(...) }   footer(text: links: contact: [str] small: [str]) {}
-sidebar([(label, href)]) {}   app nav, ("Group", "") a heading   tabs([label]) {}   search(hint)
-media(title, image: href: meta: badge: price:)   video(src, poster: title:)   YouTube/Vimeo play here
-form(title, mailto: | on:) {}   field(name, label, type: text|email|tel|date|area|select|check req: hint: options: [str])
-css(".x { color: red }")
+sidebar([(label, href)]) {}   ("Group", "") = heading   tabs([label]) {}   search(hint)
+media(title, image: href: meta: badge: price:)   video(src, poster: title:)   src: file or YouTube/Vimeo
+form(title, mailto: subject: send: | on:) {}   field(name, label, type: "text"|"email"|"tel"|"date"|"area"|"select"|"check" req: hint: options: [str])
 ```
 
 ## Motion
-- `anim:` fade rise slide zoom pop count stagger; `hover:` lift glow zoom; `loop:` float pulse marquee; `scroll:` parallax; `"rise slow 0.2"`. `keyframes("sway", "50% { rotate: 3deg }")` adds a word.
+- `anim:` fade rise zoom pop words count stagger; `hover:` lift glow zoom tilt; `loop:` float pulse; `scroll:` parallax; `"rise slow 0.2 spring"`. `keyframes(name, css)` adds a word.
 
 ## Mistakes
-- No JSX, tags, `class:`, CSS `style:` or handler fns: `on:` takes a `Msg`.
+- No JSX, tags, `class:`, CSS `style:` or handler fns.
 - E0372: a fn or script var named like a web function (`page map list`).

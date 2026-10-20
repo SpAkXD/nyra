@@ -396,15 +396,19 @@ fn front(src: &str) -> Result<ast::Program, Vec<diag::Diag>> {
     if !errs.is_empty() {
         return Err(checked(errs));
     }
-    let errs = stdlib::link(&mut prog);
-    if !errs.is_empty() {
-        return Err(checked(errs));
+    let linked = stdlib::link(&mut prog);
+    // the web library's checks of literal values (an unknown word, a forbidden link, ...) leave the
+    // program whole: its type errors are found in the same run, so one report lists them all
+    if linked.iter().any(|d| !webcheck::independent(d)) {
+        return Err(checked(linked));
     }
     // the motion words and `keyframes(...)` of a site, where they are literals (E0374, E0388)
     let motion = if prog.uses.iter().any(|u| u.module == "web") { webcheck::motion(src) } else { Vec::new() };
-    let mut errs = check::check(&mut prog);
+    let mut errs = linked;
+    errs.extend(check::check(&mut prog));
     errs.extend(motion);
     if !errs.is_empty() {
+        errs.sort_by_key(|d| (d.file.is_some(), d.span.line, d.span.col));
         return Err(checked(errs));
     }
     Ok(prog)
@@ -517,7 +521,16 @@ fn real_main() -> ExitCode {
         Err(diags) => {
             // --fix: apply the fixes and check again; the file changes only if it then compiles.
             // Without --strict the same happens in memory, and each fix is reported as a warning.
-            let repaired = if opts.fix || !opts.strict { fix::repair(&src, diags.clone(), builder) } else { None };
+            // When they do not make it compile, the errors that are left are reported: with the
+            // ones the fixes uncovered (`fix::repair_or_report`), at their places in the file.
+            let (repaired, diags) = if opts.fix || !opts.strict {
+                match fix::repair_or_report(&src, diags.clone(), builder) {
+                    Ok(r) => (Some(r), diags),
+                    Err(left) => (None, left),
+                }
+            } else {
+                (None, diags)
+            };
             match repaired {
                 Some(r) if opts.fix => {
                     if let Err(e) = std::fs::write(&opts.file, &r.text) {

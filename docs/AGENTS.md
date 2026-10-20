@@ -35,9 +35,11 @@ Rust, Go, TypeScript or Python, and it is not in your training data: do not gues
 - Bare names: `site(...)` once, `page("/", "Title") { ... }`, then `section grid card navbar hero hours map form
   footer`. A program name equal to one is E0372.
 - Look comes from the kit and theme (`site(primary:, font:, style:)`, `bg: "alt"`), motion from words
-  (`anim: "rise"`, `hover: "lift"`, `scroll: "parallax"`). No class lists, inline styles or JSX; `css(...)` last.
+  (`anim: "rise"`, `hover: "lift"`, `scroll: "parallax"`). No class lists, inline styles or JSX; for the rest,
+  `css("...")` (at the top level or as a line of a block).
 - `img(src, alt)` needs `alt` (`""` = decorative); images go in `assets/`. Icons are Lucide names in text
-  (`":phone: Call us"`). Unknown icons and words are E0374 with the nearest name.
+  (`":phone: Call us"`). Unknown words are E0374 with the nearest word; an unknown icon is warning E0389 (a
+  stand-in is drawn).
 - State in top-level `var`s, `enum Msg`, `fn update(m: Msg)`, `button(..., on: Msg.X)`: a handler is a value.
 
 ## Mistakes models make (compile errors)

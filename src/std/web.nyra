@@ -156,6 +156,18 @@ fn keyframes(name: str, body: str) {
     _keyframes(name, body)
 }
 
+// `css(...)` and `keyframes(...)` written as lines of a child block (`page(...) { css("...") }`):
+// they add to the stylesheet as anywhere else, and make no element (the checker calls these).
+fn _kid_css(text: str) -> Node {
+    _css(text)
+    return Node(html: "", kit: [])
+}
+
+fn _kid_keyframes(name: str, body: str) -> Node {
+    _keyframes(name, body)
+    return Node(html: "", kit: [])
+}
+
 // A view's value as HTML: what the browser's runtime puts into a live region after an update.
 fn _render(view: Node) -> str = view.html
 
@@ -264,12 +276,16 @@ fn _flow(kind: str, gap: str, align: str, id: str, cls: str, motion: str, kids: 
 }
 
 // A surface with a radius and a shadow. With `icon:` a feature card, with `image:` a product card,
-// with `fill: true` a card in the primary color; `href:` makes the whole card a link.
+// with `fill: true` a card in the primary color; `href:` makes the whole card a link, `on: Msg.X`
+// a button (its title is the button, and a click anywhere on the card presses it).
 fn card(title: str = "", text: str = "", icon: str = "", image: str = "", alt: str = "", fill: bool = false,
-    href: str = "", color: str = "", tag: str = "", items: [str] = [], ratio: str = "", id: str = "", cls: str = "",
-    anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "",
+    href: str = "", on: str = "", color: str = "", tag: str = "", items: [str] = [], ratio: str = "", id: str = "",
+    cls: str = "", anim: str = "", hover: str = "", loop: str = "", scroll: str = "", at: float? = none, morph: str = "",
     kids: [Node] = []) -> Node {
     var c = "card"
+    if on != "" && href == "" {
+        c += " card-on"
+    }
     if fill {
         c += " card-fill"
     }
@@ -306,11 +322,13 @@ fn card(title: str = "", text: str = "", icon: str = "", image: str = "", alt: s
     if image == "" && tag != "" {
         h += "<span class=\"card-tag\">" + _md(tag) + "</span>"
     }
+    let hit = if on != "" && href == "" { "<button type=\"button\" class=\"card-hit\"" + _at("data-on", on) + ">" } else { "" }
     if title != "" {
-        h += "<h3 class=\"card-title\">" + _md(title) + "</h3>"
+        h += "<h3 class=\"card-title\">" + hit + _md(title) + (if hit != "" { "</button>" } else { "" }) + "</h3>"
     }
     if text != "" {
-        h += "<p class=\"card-text\">" + _md(text) + "</p>"
+        let own = hit != "" && title == ""
+        h += "<p class=\"card-text\">" + (if own { hit } else { "" }) + _md(text) + (if own { "</button>" } else { "" }) + "</p>"
     }
     if items.len() > 0 {
         h += "<ul class=\"card-items\">"
@@ -704,10 +722,13 @@ fn hours(rows: [(str, str)], title: str = "", note: str = "", badge: bool = true
     }
     h += "</div><table class=\"hours-table\"><tbody>"
     for r in rows {
-        let spec = r.1.trim()
-        let days = if spec == "" { "" } else { spec.split(" ")[0] }
-        h += "<tr" + (if spec == "" { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
-        h += "</th><td>" + _esc(_hours_text(spec)) + "</td></tr>"
+        let spec = _hours_spec(r.0, r.1)
+        let open = spec != "" && spec != "?"
+        let days = if open { spec.split(" ")[0] } else { "" }
+        // a row without times keeps its words ("Closed", "By appointment")
+        let shown = if open { _hours_text(spec) } else if r.1.trim() != "" { r.1.trim() } else { _say("shut") }
+        h += "<tr" + (if !open { " class=\"is-shut\"" } else { "" }) + _at("data-days", days) + "><th scope=\"row\">" + _md(r.0)
+        h += "</th><td>" + _esc(shown) + "</td></tr>"
     }
     h += "</tbody></table>"
     if note != "" {
@@ -743,13 +764,45 @@ fn form(title: str = "", mailto: str = "", to: str = "", subject: str = "", send
     }
     h += "<form class=\"form-body\""
     if mailto != "" {
-        let action = "mailto:" + mailto + (if subject != "" { "?subject=" + _uri(subject) } else { "" })
-        h += " action=\"" + _href(action) + "\" method=\"post\" enctype=\"text/plain\" data-mailto=\"" + _attr(mailto) + "\"" + _at("data-subject", subject)
+        // `mailto:` may also be written with its scheme and a query (`mailto:a@b.cz?subject=Booking`):
+        // the address and the query go apart, and the e-mail is made of both (a `subject:` wins)
+        var addr = mailto.trim()
+        if addr.lower().starts_with("mailto:") {
+            addr = addr.slice(7, addr.len())
+        }
+        let q = addr.index_of("?")
+        let query = if q >= 0 { addr.slice(q + 1, addr.len()) } else { "" }
+        if q >= 0 {
+            addr = addr.slice(0, q)
+        }
+        var params = if subject != "" { "subject=" + _uri(subject) } else { "" }
+        for kv in query.split("&") {
+            if kv != "" && !(subject != "" && kv.lower().starts_with("subject=")) {
+                params += (if params != "" { "&" } else { "" }) + kv.replace(" ", "%20")
+            }
+        }
+        let action = "mailto:" + addr + (if params != "" { "?" + params } else { "" })
+        h += " action=\"" + _href(action) + "\" method=\"post\" enctype=\"text/plain\" data-mailto=\"" + _attr(addr) + "\""
+        h += _at("data-query", params)
     } else if to != "" {
         h += " action=\"" + _href(to) + "\" method=\"post\""
     }
-    h += _at("data-on", on) + ">" + _html(kids) + "<button class=\"btn btn-primary btn-block\" type=\"submit\">"
-    h += _md(if send != "" { send } else { _say("send") + " :send:" }) + "</button>"
+    // a plain `button(...)` of the form (no `href:`, no `on:`) is its submit button
+    let plain = "<button type=\"button\""
+    var inner = ""
+    var submit = false
+    for k in kids {
+        if !submit && k.html.starts_with(plain) && !k.html.contains(" data-on=") {
+            inner += "<button type=\"submit\"" + k.html.slice(plain.len(), k.html.len())
+            submit = true
+        } else {
+            inner += k.html
+        }
+    }
+    h += _at("data-on", on) + ">" + inner
+    if !submit {
+        h += "<button class=\"btn btn-primary btn-block\" type=\"submit\">" + _md(if send != "" { send } else { _say("send") + " :send:" }) + "</button>"
+    }
     let line = if note != "" { note } else if mailto != "" { _say("mail_note") } else { "" }
     if line != "" {
         h += "<p class=\"form-note\">" + _md(line) + "</p>"
@@ -1063,8 +1116,8 @@ fn year() -> int {
 fn _badge(rows: [(str, str)], tone: str) -> str {
     var spec = ""
     for r in rows {
-        let s = r.1.trim()
-        if s != "" {
+        let s = _hours_spec(r.0, r.1)
+        if s != "" && s != "?" {
             spec += (if spec != "" { "|" } else { "" }) + s
         }
     }
@@ -1086,6 +1139,243 @@ fn _hours_text(spec: str) -> str {
         }
     }
     return out.join(", ")
+}
+
+// The spec of a row of opening hours as the badge reads it: "1-5 8:00-16:00 17:00-19:00" (the days,
+// 1 = Monday to 7 = Sunday, then times), "" for closed, "?" for a row it cannot read (build error
+// E0390). Rows written in other ways are read too: the days in the label (`("Monday", "8:00–18:00")`,
+// `("Mon–Fri", "8–16")`) or before the times ("Mon–Fri 8:00–16:00"), English, Czech and German
+// day names, any dash, "8.00", "8am", "8:00 to 16:00"; text without digits ("Closed") is closed.
+fn _hours_spec(label: str, spec: str) -> str {
+    let s = _hours_norm(spec)
+    if s.contains("24/7") || s.contains("nonstop") || s.contains("non-stop") {
+        let d = _hours_days(_hours_norm(label))
+        return (if d != "" { d } else { "1-7" }) + " 0:00-24:00"
+    }
+    if !_has_digit(s) {
+        return ""
+    }
+    let words = s.split(" ").filter(w => w != "")
+    var days = ""
+    var day_words = ""
+    var times: [str] = []
+    for i, w in words {
+        let t = _hours_range(w)
+        if i == 0 && words.len() > 1 && _day_numbers(w) && _hours_range(words[1]) != "" {
+            days = w
+        } else if t != "" {
+            times.push(t)
+        } else if times.len() == 0 {
+            day_words += " " + w
+        } else {
+            return _hours_bad(label, spec)
+        }
+    }
+    if times.len() == 0 {
+        return _hours_bad(label, spec)
+    }
+    if days == "" {
+        days = _hours_days(day_words.trim())
+    }
+    if days == "" && day_words.trim() == "" {
+        days = _hours_days(_hours_norm(label))
+    }
+    if days == "" {
+        return _hours_bad(label, spec)
+    }
+    return days + " " + times.join(" ")
+}
+
+fn _hours_bad(label: str, spec: str) -> str {
+    _err("E0390", "the opening hours `" + spec + "` of the row \"" + label + "\" give no days and times the open/closed badge can read")
+    return "?"
+}
+
+// Lowercase, one kind of dash, ranges without spaces, separators as spaces.
+fn _hours_norm(s: str) -> str {
+    var t = " " + s.lower().trim() + " "
+    for d in ["–", "—", "−", "‒", "‐"] {
+        t = t.replace(d, "-")
+    }
+    for sep in [",", ";", "|", ": ", "/ ", " & ", " + ", " and ", " a ", " und ", " from ", " od ", " von ", " h ", " hod ", " uhr "] {
+        t = t.replace(sep, " ")
+    }
+    for to in [" - ", " to ", " until ", " till ", " do ", " bis "] {
+        t = t.replace(to, "-")
+    }
+    while t.contains("  ") {
+        t = t.replace("  ", " ")
+    }
+    return t.replace(" -", "-").replace("- ", "-").trim()
+}
+
+fn _has_digit(s: str) -> bool {
+    for c in s.chars() {
+        if c.is_digit() {
+            return true
+        }
+    }
+    return false
+}
+
+// "1-5", "6", "1,3,5": days already written as numbers.
+fn _day_numbers(w: str) -> bool {
+    for c in w.chars() {
+        if !(c >= '1' && c <= '7') && c != '-' && c != ',' {
+            return false
+        }
+    }
+    return w != "" && w[0] != '-'
+}
+
+// "8:00-16:00", "8-16", "8.30-12", "8am-4pm" as "8:00-16:00", or "".
+fn _hours_range(w: str) -> str {
+    let ends = w.split("-")
+    if ends.len() != 2 {
+        return ""
+    }
+    let a = _hours_time(ends[0])
+    let b = _hours_time(ends[1])
+    return if a != "" && b != "" { a + "-" + b } else { "" }
+}
+
+// "8", "08:30", "8.30", "8h", "4pm", "12am" as "8:00", "8:30", "16:00", "0:00", or "".
+fn _hours_time(x: str) -> str {
+    var t = x.trim()
+    let pm = t.ends_with("pm") || t.ends_with("p.m.")
+    let am = t.ends_with("am") || t.ends_with("a.m.")
+    t = t.replace("p.m.", "").replace("a.m.", "").replace("pm", "").replace("am", "").replace("h", "").replace(".", ":")
+    let parts = t.split(":")
+    if parts.len() > 2 || parts[0] == "" || parts[0].len() > 2 {
+        return ""
+    }
+    var h = parts[0].to_int() ?? -1
+    let m = if parts.len() == 2 { parts[1].to_int() ?? -1 } else { 0 }
+    if parts.len() == 2 && parts[1].len() != 2 {
+        return ""
+    }
+    if pm && h < 12 {
+        h += 12
+    }
+    if am && h == 12 {
+        h = 0
+    }
+    if h < 0 || h > 24 || m < 0 || m > 59 || (h == 24 && m > 0) {
+        return ""
+    }
+    return "{h}:" + (if m < 10 { "0" } else { "" }) + "{m}"
+}
+
+// The days of words like "mon-fri", "monday", "sat sun", "po-pá", "weekdays", "daily", "1-5", as
+// "1-5", "1", "6,7", or "" when they name no days.
+fn _hours_days(words: str) -> str {
+    var out: [str] = []
+    let w = words.replace("every day", "daily").replace("all week", "daily").replace("pracovní dny", "weekdays").replace("všední dny", "weekdays")
+    for part in w.split(" ").filter(x => x != "") {
+        let ends = part.split("-")
+        if ends.len() == 1 {
+            let whole = _day_group(part)
+            if whole != "" {
+                out.push(whole)
+            } else if _day(part) > 0 {
+                out.push("{_day(part)}")
+            } else {
+                return ""
+            }
+        } else if ends.len() == 2 && _day(ends[0]) > 0 && _day(ends[1]) > 0 {
+            let a = _day(ends[0])
+            let b = _day(ends[1])
+            if a <= b {
+                out.push("{a}-{b}")
+            } else {
+                // "Sat-Mon": over the end of the week
+                out.push("{a}-7")
+                out.push("1-{b}")
+            }
+        } else {
+            return ""
+        }
+    }
+    return out.join(",")
+}
+
+fn _day_group(w: str) -> str = match w {
+    "daily" => "1-7"
+    "everyday" => "1-7"
+    "denně" => "1-7"
+    "täglich" => "1-7"
+    "weekdays" => "1-5"
+    "workdays" => "1-5"
+    "weekend" => "6-7"
+    "weekends" => "6-7"
+    "víkend" => "6-7"
+    _ => ""
+}
+
+// A day by a name (English, Czech, German, with or without a dot or diacritics) or a number.
+fn _day(w: str) -> int = match w.replace(".", "") {
+    "1" => 1
+    "mon" => 1
+    "monday" => 1
+    "mo" => 1
+    "po" => 1
+    "pondělí" => 1
+    "pondeli" => 1
+    "montag" => 1
+    "2" => 2
+    "tue" => 2
+    "tues" => 2
+    "tuesday" => 2
+    "tu" => 2
+    "út" => 2
+    "ut" => 2
+    "úterý" => 2
+    "utery" => 2
+    "dienstag" => 2
+    "3" => 3
+    "wed" => 3
+    "wednesday" => 3
+    "we" => 3
+    "st" => 3
+    "středa" => 3
+    "streda" => 3
+    "mittwoch" => 3
+    "4" => 4
+    "thu" => 4
+    "thur" => 4
+    "thurs" => 4
+    "thursday" => 4
+    "th" => 4
+    "čt" => 4
+    "ct" => 4
+    "čtvrtek" => 4
+    "ctvrtek" => 4
+    "donnerstag" => 4
+    "5" => 5
+    "fri" => 5
+    "friday" => 5
+    "fr" => 5
+    "pá" => 5
+    "pa" => 5
+    "pátek" => 5
+    "patek" => 5
+    "freitag" => 5
+    "6" => 6
+    "sat" => 6
+    "saturday" => 6
+    "sa" => 6
+    "so" => 6
+    "sobota" => 6
+    "samstag" => 6
+    "7" => 7
+    "sun" => 7
+    "sunday" => 7
+    "su" => 7
+    "ne" => 7
+    "neděle" => 7
+    "nedele" => 7
+    "sonntag" => 7
+    _ => 0
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1137,8 +1427,14 @@ fn _md(s: str) -> str {
             if _icon_kind(name) > 0 {
                 o += _icon(name)
                 i = j + 1
+            } else if _icon_like(name) != "" {
+                // a name of another icon set: its icon, and a warning with the name to write
+                _warn("E0389", "text " + name)
+                o += _icon(_icon_like(name))
+                i = j + 1
             } else {
-                _err("E0374", "unknown icon `:" + name + ":` in the text \"" + s + "\"")
+                // maybe no icon at all (`a:b:c`): the text stays as it is written
+                _warn("E0389", "text " + name)
                 o += _esc(str(c))
                 i += 1
             }
@@ -1225,14 +1521,16 @@ fn _lower(c: char) -> bool = c >= 'a' && c <= 'z'
 // An inline icon: a stroked Lucide icon, or a filled brand icon. It shows a symbol of the page's
 // sprite (`_sprite`), so an icon used ten times is drawn once, and a view the browser renders
 // again needs only the names.
+// A name that is not in the set is drawn as the icon it stands for (`envelope`: `mail`), else as a
+// plain circle, with warning E0389: an icon is decoration, the site still builds.
 fn _icon(name: str) -> str {
-    let kind = _icon_kind(name)
-    if kind == 0 {
-        _err("E0374", "unknown icon `" + name + "`")
-        return ""
+    var n = name
+    if _icon_kind(n) == 0 {
+        _warn("E0389", "icon " + name)
+        n = if _icon_like(name) != "" { _icon_like(name) } else { "circle" }
     }
-    let brand = if kind == 2 { " i-brand" } else { "" }
-    return "<svg class=\"i" + brand + " i-" + name + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-" + name + "\"/></svg>"
+    let brand = if _icon_kind(n) == 2 { " i-brand" } else { "" }
+    return "<svg class=\"i" + brand + " i-" + n + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use href=\"#i-" + n + "\"/></svg>"
 }
 
 // The symbols of the icons a page uses, for the start of its <body>.
@@ -1372,9 +1670,15 @@ fn _canon_path(path: str) -> str {
 
 fn _trim_slash(u: str) -> str = if u.ends_with("/") { u.slice(0, u.len() - 1) } else { u }
 
-// A build error found while rendering: the build reports it and fails (src/web.rs).
+// A build error found while rendering: the build reports it and fails (src/web.rs). The build puts
+// it at the string literal of the program that holds the value named first in backticks.
 fn _err(code: str, msg: str) {
     _css("/*! nyra:error " + code + " " + msg.replace("*/", "* /").replace("\n", " ") + " */")
+}
+
+// A warning found while rendering (the build words it: E0389 `icon name` or `text name`).
+fn _warn(code: str, what: str) {
+    _css("/*! nyra:warn " + code + " " + what.replace("*/", "* /").replace("\n", " ") + " */")
 }
 
 // ---------------------------------------------------------------------------------------------

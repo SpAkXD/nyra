@@ -41,6 +41,8 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("range()", "fn main() {\n    let n = 3\n    for i in range(n) {\n        print(i)\n    }\n    for i in range(1, 3) {\n        print(i)\n    }\n}\n", "fn main() {\n    let n = 3\n    for i in 0..n {\n        print(i)\n    }\n    for i in 1..3 {\n        print(i)\n    }\n}\n"),
     ("struct literal in braces", "struct Point { x: int, y: int }\nfn main() {\n    let p = Point { x: 1, y: 2 }\n    let q = Point {\n        x: 3,\n        y: 4,\n    }\n    print(p.x + q.y)\n}\n", "struct Point { x: int, y: int }\nfn main() {\n    let p = Point(x: 1, y: 2)\n    let q = Point(x: 3,\n        y: 4,)\n    print(p.x + q.y)\n}\n"),
     ("function keywords", "def double(x: int) -> int = x * 2\nfunction main() {\n    print(double(2))\n}\n", "fn double(x: int) -> int = x * 2\nfn main() {\n    print(double(2))\n}\n"),
+    ("commas after match arms and between statements", "enum Light { Red, Green }\nfn main() {\n    var s = \"\"\n    match Light.Red {\n        Light.Red => s = \"red\",\n        Light.Green => { s = \"green\", print(s) },\n    }\n    print(s)\n}\n", "enum Light { Red, Green }\nfn main() {\n    var s = \"\"\n    match Light.Red {\n        Light.Red => s = \"red\"\n        Light.Green => { s = \"green\"\n        print(s) }\n    }\n    print(s)\n}\n"),
+    ("a block after the = of a function", "fn twice(x: int) -> int = {\n    return x * 2\n}\nfn one() -> int = {\n    1\n}\nfn main() {\n    print(twice(one()))\n}\n", "fn twice(x: int) -> int {\n    return x * 2\n}\nfn one() -> int {\n    return 1\n}\nfn main() {\n    print(twice(one()))\n}\n"),
     // ---- names and types
     ("True and False", "fn main() {\n    let t = True\n    print(t && !False)\n}\n", "fn main() {\n    let t = true\n    print(t && !false)\n}\n"),
     ("a name in the wrong case", "struct Point { x: int }\nfn total(p: point) -> int = p.X\nfn main() {\n    let Count = 1\n    print(count + total(point(x: 1)))\n    Print(1)\n}\n", "struct Point { x: int }\nfn total(p: Point) -> int = p.x\nfn main() {\n    let Count = 1\n    print(Count + total(Point(x: 1)))\n    print(1)\n}\n"),
@@ -60,6 +62,7 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("web: a number for text", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    stat(28, \"years\")\n    stat(4.9, \"stars\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    stat(\"28\", \"years\")\n    stat(\"4.9\", \"stars\")\n}\n"),
     ("web: pixels as text", "use web\n\nsite(\"Bakery\", radius: \"16px\")\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n}\n", "use web\n\nsite(\"Bakery\", radius: 16)\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n}\n"),
     ("web: an icon option in colons", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Hours\", \"8-16\", icon: \":clock:\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Hours\", \"8-16\", icon: \"clock\")\n}\n"),
+    ("web: option words without quotes", "use web\n\nsite(\"Bakery\", style: soft)\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\", anim: rise)\n    button(\"Call\", href: \"tel:123\", style: outline)\n}\n", "use web\n\nsite(\"Bakery\", style: \"soft\")\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\", anim: \"rise\")\n    button(\"Call\", href: \"tel:123\", style: \"outline\")\n}\n"),
     ("web: one line for a list", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    footer(small: \"© 2026 Bakery\")\n}\n", "use web\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    footer(small: [\"© 2026 Bakery\"])\n}\n"),
     ("web: the hours element as a badge", "use web\n\nlet rows = [(\"Mon-Fri\", \"1-5 8:00-16:00\")]\n\npage(\"/\", \"Home\") {\n    hero(\"Bakery\", badge: hours(rows))\n}\n", "use web\n\nlet rows = [(\"Mon-Fri\", \"1-5 8:00-16:00\")]\n\npage(\"/\", \"Home\") {\n    hero(\"Bakery\", badge: rows)\n}\n"),
     ("web: a function named like a web function", "use web\n\nfn img(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: img(1))\n    card(\"Cake\", \"Sweet\", image: img(2))\n}\n", "use web\n\nfn photo(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: photo(1))\n    card(\"Cake\", \"Sweet\", image: photo(2))\n}\n"),
@@ -82,6 +85,8 @@ const NO_FIX: &[(&str, &str)] = &[
     ("a variable that could be a float", "fn main() {\n    let n = 2\n    print(n + 0.5)\n}\n"),
     ("a parameter that changes", "fn f(n: int) {\n    n = 1\n}\nfn main() {\n}\n"),
     ("brace on the next line after a comment", "fn main() // entry\n{\n}\n"),
+    ("a comma before a value (a tuple?)", "fn main() {\n    var x = 0\n    x = 1, 2\n}\n"),
+    ("web: a bare word that is no option word", "use web\n\nsite(\"Bakery\", style: fancy)\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n}\n"),
     ("a function named like a web function, also called as that one", "use web\n\nfn img(n: int) -> str = \"https://example.com/{n}.jpg\"\n\npage(\"/\", \"Home\") {\n    h1(\"Bakery\")\n    card(\"Bread\", \"Fresh\", image: img(1))\n    img(\"https://example.com/a.jpg\", \"A loaf\")\n}\n"),
 ];
 
@@ -145,6 +150,25 @@ fn errors_without_a_fix_leave_the_file_unchanged() {
     let err = stderr(&out);
     assert!(err.contains("error[E0005]") && err.contains("  = fix: `let x = 1`"), "{err}");
     assert!(err.contains("nyra: --fix did not change prog.nyra: errors without a fix remain"), "{err}");
+}
+
+#[test]
+fn a_failed_repair_reports_the_errors_it_uncovered() {
+    // the comma hides the type error behind it from the parser; the fix uncovers it, and the one
+    // report has both, at their places in the file as it is
+    let dir = scratch("fix-stages");
+    let bad = "enum Light { Red, Green }\nfn name(l: Light) -> str {\n    var s = \"\"\n    match l {\n        Light.Red => s = \"red\",\n        Light.Green => s = \"green\"\n    }\n    return s\n}\nprint(name(Light.Red) + 1)\n";
+    write(&dir, "prog.nyra", bad);
+    let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(err.contains("error[E0101]: a `,` after a statement or a match arm\n  --> prog.nyra:5:31"), "{err}");
+    assert!(err.contains("error[E0210]") && err.contains("  --> prog.nyra:10:"), "{err}");
+    assert!(err.find("E0101").unwrap() < err.find("E0210").unwrap(), "in the order of the file: {err}");
+    // --strict repairs nothing, so it shows only what the parser found
+    let strict = stderr(&nyra().current_dir(&dir).args(["check", "--strict", "prog.nyra"]).output().unwrap());
+    assert!(strict.contains("E0101") && !strict.contains("E0210"), "{strict}");
+    assert_eq!(read(&dir, "prog.nyra"), bad);
 }
 
 #[test]
