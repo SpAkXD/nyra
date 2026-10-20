@@ -439,16 +439,41 @@ pub struct Field {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Func {
     pub name: String,
     pub params: Vec<Param>,
     pub ret: Type,
     pub body: Vec<Stmt>,
     pub span: Span,
+    /// `requires` / `ensures` lines (see `contracts.rs`); empty for most functions.
+    pub contract: Contract,
 }
 
-#[derive(Debug)]
+/// The contract of a function: conditions on its arguments (`requires`) and on its result
+/// (`ensures`, where `result` is the return value and `old(x)` an `inout` parameter's value at the call).
+#[derive(Debug, Clone, Default)]
+pub struct Contract {
+    pub requires: Vec<Cond>,
+    pub ensures: Vec<Cond>,
+}
+
+impl Contract {
+    pub fn is_empty(&self) -> bool {
+        self.requires.is_empty() && self.ensures.is_empty()
+    }
+}
+
+/// One condition of a contract, with its source text for messages (`amount > 0`).
+#[derive(Debug, Clone)]
+pub struct Cond {
+    pub expr: Expr,
+    pub text: String,
+    /// Where the condition starts.
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct Param {
     pub name: String,
     pub ty: Type,

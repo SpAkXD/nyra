@@ -57,6 +57,24 @@ impl Value {
         Value::Struct(id, Rc::new(Items(fields)))
     }
 
+    /// A new map with these entries, in this order (a repeated key keeps the last value).
+    pub fn map(entries: Vec<(Value, Value)>) -> Value {
+        let mut m = MapVal::default();
+        for (k, v) in entries {
+            // (only keys of a map type are given: `set` cannot fail for them)
+            let _ = m.set(k, v);
+        }
+        Value::Map(Rc::new(m))
+    }
+
+    /// The entries of a map, in order (`None` for any other value).
+    pub fn map_entries(&self) -> Option<Vec<(Value, Value)>> {
+        match self {
+            Value::Map(m) => Some(m.iter().cloned().collect()),
+            _ => None,
+        }
+    }
+
     fn nested(&self) -> bool {
         matches!(self, Value::Arr(_) | Value::Struct(..) | Value::Map(_))
     }
@@ -270,6 +288,12 @@ fn overflow(a: i64, op: &str, b: i64, span: Span) -> Stop {
         span,
     )
 }
+
+/// The hints of a broken contract (the same text in every runtime).
+const REQUIRES_HINT: &str =
+    "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict";
+const ENSURES_HINT: &str =
+    "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong";
 
 pub(super) fn fail(code: &'static str, msg: String, hint: &'static str, span: Span) -> Stop {
     Stop::Error(Box::new(RuntimeError { code, msg, hint, span, func: None }))
@@ -1058,6 +1082,13 @@ impl<'m> Interp<'m> {
                 let r = parts.join(sep);
                 self.tick(r.len() as u64)?;
                 text(r)
+            }
+            RtOp::ContractFail => {
+                let (Some(Value::Int(kind)), Some(Value::Str(msg))) = (args.first(), args.get(1)) else {
+                    return Err(bug("contract_fail without its kind and message"));
+                };
+                let (code, hint) = if *kind == 0 { ("E0420", REQUIRES_HINT) } else { ("E0421", ENSURES_HINT) };
+                return Err(fail(code, msg.to_string(), hint, span));
             }
             RtOp::CheckSome => {
                 let Some(Value::Bool(has)) = args.first() else { return Err(bug("unwrap without a flag")) };

@@ -1,0 +1,6 @@
+// expect: E0423
+fn grow(n: int) -> int
+    ensures result > old(n)
+= n + 1
+
+print(grow(1))

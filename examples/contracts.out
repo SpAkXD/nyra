@@ -1,0 +1,7 @@
+70
+10 0 4
+9
+["ada", "ada"]
+Account(owner: "ada", cents: 750)
+G 1
+0.25

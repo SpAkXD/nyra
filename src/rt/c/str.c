@@ -456,3 +456,8 @@ static double nyrt_str_to_float(const nyrt_str *s, int line, int col) {
     }
     return strtod(s->data, NULL);
 }
+// A broken contract: `requires` (kind 0, E0420) or `ensures` (kind 1, E0421), with the message the program built.
+static NYRT_NORETURN void nyrt_contract_fail(int64_t kind, const nyrt_str *msg, int line, int col) {
+    if (kind == 0) nyrt_panic("E0420", msg->data, "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict", line, col);
+    nyrt_panic("E0421", msg->data, "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong", line, col);
+}

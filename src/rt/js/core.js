@@ -70,6 +70,11 @@ function ny_mod(a, b, line, col) {
 function ny_check_step(k, line, col) {
     if (k === 0) ny_panic("E0243", "range step must not be 0", "use a positive step to count up and a negative one to count down", line, col);
 }
+// A broken contract: `requires` (kind 0, E0420) or `ensures` (kind 1, E0421).
+function ny_contract_fail(kind, msg, line, col) {
+    if (kind === 0) ny_panic("E0420", msg, "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict", line, col);
+    ny_panic("E0421", msg, "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong", line, col);
+}
 // `opt.unwrap()` of `none`.
 function ny_check_some(has, line, col) {
     if (!has) ny_panic("E0350", "unwrap() of none", "check `x != none` first, or give a default with `x ?? value`", line, col);

@@ -746,7 +746,14 @@ fn declare_state(prog: &mut Program, at: Span) {
     let Some(user) = prog.funcs.iter_mut().find(|f| f.name == "main") else { return };
     user.name = USER_MAIN.to_string();
     let call = Stmt { kind: StmtKind::Expr(Expr::new(ExprKind::Call(USER_MAIN.to_string(), Vec::new()), at)), span: at };
-    prog.funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: vec![decl, call], span: at });
+    prog.funcs.push(Func {
+        name: "main".to_string(),
+        params: Vec::new(),
+        ret: Type::Void,
+        body: vec![decl, call],
+        span: at,
+        contract: Default::default(),
+    });
     prog.script = true;
 }
 

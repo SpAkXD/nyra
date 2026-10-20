@@ -1,0 +1,11 @@
+// expect: E0422
+fn average(xs: [int]) -> int {
+    ensures result >= 0
+    var total = 0
+    for x in xs {
+        total += x
+    }
+    return total / xs.len()
+}
+
+print(average([2, 4]))

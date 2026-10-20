@@ -99,6 +99,64 @@ program compiles. The first input that fails is reported as E0250 (`example `f(n
 `f(n)` is -3`, with the actual and expected values), a runtime error for an input as E0251 and a run that
 does not finish within 10,000,000 steps as E0253, each saying which `n`.
 
+## Contracts
+```nyra
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result >= 0, result == balance - amount
+= balance - amount
+
+fn push_twice(inout xs: [str], s: str) {
+    requires s.len() > 0
+    ensures xs.len() == old(xs).len() + 2
+    xs.push(s)
+    xs.push(s)
+}
+
+var names: [str] = []
+push_twice(inout names, "ada")
+print(withdraw(100, 30), names)
+```
+`requires` lists `bool` conditions on the parameters, `ensures` conditions on what the function gives
+back: `result` is its return value, `old(x)` the value an `inout` parameter `x` had when the call began
+(a plain parameter never changes, so it is just `x`). Each line holds conditions separated by commas, and
+there may be several lines. They go between the signature and `= expr`, or as the first lines of a
+`{ }` body; `{` may also end the last contract line. The conditions may call functions and use
+everything a function body may read. `requires` and `ensures` are words only at the start of such a line.
+`result` in `requires`, in `ensures` of a function that returns nothing, a parameter named `result`, and
+`old(...)` of anything but an `inout` parameter are E0423.
+
+**Every call checks the contract**, on every backend and in the interpreter: the `requires` conditions
+before the body runs, the `ensures` conditions after it returns. A broken one stops the program
+(exit code 101) with the call, its arguments and the condition:
+```
+runtime error[E0420]: withdraw(5, 10) breaks requires amount <= balance
+runtime error[E0421]: capped(50) breaks ensures result <= limit: result is 50
+```
+E0420 means the caller is wrong, E0421 the function. An `inout` argument shows the value it had at the
+call when `old(x)` kept it (else `inout x`), and the message ends with its value after the call.
+
+**`nyra check` searches for counterexamples** (so do `run`, `build` and `test`, like for `ex`). For each
+function with a contract it builds inputs: boundary values (0, ±1, the smallest and largest int, empty
+and one-element arrays, strings and maps, `none`, each variant of an enum), the constants of the
+function and its contract and their neighbours, the literal arguments of its `ex` lines, then seeded
+random values. It keeps the inputs that satisfy `requires`, calls the function in the interpreter, and
+reports the first one that breaks an `ensures` (E0421) or makes the function stop with a runtime error
+(E0422: an overflow, an index out of bounds, a division by zero, a broken `requires` of a function it
+calls). The input is shrunk first (ints toward 0, shorter strings and arrays), so the message shows a
+small one:
+```
+error[E0421]: withdraw(1, 1) breaks ensures result > 0: result is 0
+error[E0422]: `neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3 in `neg`)
+```
+The search is deterministic (the same program always finds the same counterexample) and bounded: 300
+inputs per function (`NYRA_CONTRACT_TRIES=N` changes it, `0` turns the search off) and 3,000,000
+interpreter steps; it adds a few milliseconds per function. A search that finds nothing proves nothing:
+it is testing, not verification. Not searched (their contracts are still checked at run time):
+functions that use script variables, functions that read files, input, arguments, the clock or random
+numbers (directly or through the functions they call), and calls nested deeper than 10,000. Floats are
+finite (no NaN or infinity), strings are short and mostly ASCII, arrays have at most 6 elements and
+values nest at most 3 levels deep.
 ## Variables
 ```nyra
 let x = 5               // immutable
@@ -740,6 +798,8 @@ runtime error[E0240]: index 3 is out of bounds for length 3
 | E0255 | int overflow: `+`, `-`, `*`, negation, `abs` or `/` (only `MIN / -1`) outside -2^63 to 2^63 - 1 |
 | E0256 | `--js`/`--ts` only: an int beyond 2^53 - 1 (9007199254740991), which JavaScript would round |
 | E0350 | `opt.unwrap()` of `none` |
+| E0420 | a call breaks the `requires` of the function it calls (see Contracts) |
+| E0421 | a function's result breaks its `ensures` |
 | E0340 | a file operation failed: `fs.read: cannot read "x.txt" (not found)` |
 | E0341 | input, an argument or a variable is not UTF-8 |
 | E0342 | a bad argument to a standard function: `random.range(5, 5)`, `text.fixed(x, -1)` |

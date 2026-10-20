@@ -93,6 +93,14 @@ fn ny_rem(a: i64, b: i64, line: u32, col: u32) -> i64 {
     a.wrapping_rem(b)
 }
 
+/// A broken contract: `requires` (kind 0, E0420) or `ensures` (kind 1, E0421).
+fn ny_contract_fail(kind: i64, msg: &str, line: u32, col: u32) -> ! {
+    if kind == 0 {
+        ny_fail("E0420", msg, "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict", line, col);
+    }
+    ny_fail("E0421", msg, "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong", line, col)
+}
+
 /// `opt.unwrap()` of `none`.
 fn ny_check_some(has: bool, line: u32, col: u32) {
     if !has {

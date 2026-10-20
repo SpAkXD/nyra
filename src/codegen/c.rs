@@ -1329,6 +1329,7 @@ impl Gen<'_> {
             RtOp::StrSplit => format!("nyrt_str_split({}, {}, {at})", a[0], a[1]),
             RtOp::CheckStep => format!("nyrt_check_step({}, {at})", a[0]),
             RtOp::CheckSome => format!("nyrt_check_some({}, {at})", a[0]),
+            RtOp::ContractFail => format!("nyrt_contract_fail({}, {}, {at})", a[0], a[1]),
             RtOp::CheckNonEmpty => format!("nyrt_check_non_empty({}, {}, {at})", a[0], a[1]),
             RtOp::StrPadLeft => format!("nyrt_str_pad({}, {}, {}, true)", a[0], a[1], a[2]),
             RtOp::StrPadRight => format!("nyrt_str_pad({}, {}, {}, false)", a[0], a[1], a[2]),

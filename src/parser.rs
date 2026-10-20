@@ -42,6 +42,8 @@ pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
         queue: Vec::new(),
         hidden: 0,
         no_block: false,
+        fn_block: false,
+        block_contract: Contract::default(),
     };
     let prog = p.program();
     let mut errs = p.errs;
@@ -86,6 +88,10 @@ struct Parser {
     /// True while parsing a condition (`if`, `while`, `for ... in`, `match`): a `{` there starts
     /// the body, not the child block of a call. Parentheses and brackets clear it again.
     no_block: bool,
+    /// The next block is a function's body: its first lines may be `requires` / `ensures` lines.
+    fn_block: bool,
+    /// The contract lines read at the start of a function's body.
+    block_contract: Contract,
 }
 
 /// A pattern: `a`, `_` or `(a, (b, _))`.
@@ -565,7 +571,14 @@ impl Parser {
                     top.push(Stmt { kind: StmtKind::Expr(call), span: at });
                 }
             }
-            funcs.push(Func { name: "main".to_string(), params: Vec::new(), ret: Type::Void, body: top, span });
+            funcs.push(Func {
+                name: "main".to_string(),
+                params: Vec::new(),
+                ret: Type::Void,
+                body: top,
+                span,
+                contract: Default::default(),
+            });
             script = true;
         }
         Program { funcs, structs, enums, examples, uses, script, globals: Default::default(), public, files: Default::default() }
@@ -1091,6 +1104,17 @@ impl Parser {
         } else {
             Type::Void
         };
+        // `requires` / `ensures` lines between the signature and the body (contracts.rs)
+        let mut contract = Contract::default();
+        while self.contract_ahead() {
+            self.skip_newlines();
+            self.contract_line(&mut contract)?;
+        }
+        if !contract.is_empty() {
+            self.skip_newlines();
+        }
+        // ...or the first lines of a block body
+        self.fn_block = self.at(&Tok::LBrace);
         let body = if self.at(&Tok::Assign) && matches!(self.peek_at(1), Tok::LBrace) {
             // `fn f() -> int = { ... }`: no expression starts with `{`, so the `=` is in excess
             let eq = self.bump().span;
@@ -1117,7 +1141,55 @@ impl Parser {
         } else {
             self.block(&format!("fn {name}"))?
         };
-        Ok(Func { name, params, ret, body, span })
+        self.fn_block = false;
+        let inner = std::mem::take(&mut self.block_contract);
+        contract.requires.extend(inner.requires);
+        contract.ensures.extend(inner.ensures);
+        Ok(Func { name, params, ret, body, span, contract })
+    }
+
+    /// True at a `requires` or `ensures` line of a contract, possibly after line breaks: the word,
+    /// then the start of a condition (`requires = 1` and `ensures.len()` are ordinary statements).
+    fn contract_ahead(&self) -> bool {
+        let mut k = 0;
+        while matches!(self.peek_at(k), Tok::Newline) {
+            k += 1;
+        }
+        matches!(self.peek_at(k), Tok::Ident(w) if w == "requires" || w == "ensures")
+            && !matches!(
+                self.peek_at(k + 1),
+                Tok::Assign
+                    | Tok::OpAssign(_)
+                    | Tok::Dot
+                    | Tok::LBracket
+                    | Tok::Colon
+                    | Tok::Comma
+                    | Tok::Newline
+                    | Tok::Eof
+                    | Tok::RParen
+                    | Tok::RBrace
+            )
+    }
+
+    /// `requires a > 0, b > 0` or `ensures result >= 0`: comma-separated `bool` conditions. A `{`
+    /// right after the last one starts the function's body.
+    fn contract_line(&mut self, c: &mut Contract) -> PResult<()> {
+        let Tok::Ident(word) = self.bump().tok else { unreachable!("contract_ahead saw the word") };
+        let saved = std::mem::replace(&mut self.no_block, true);
+        let r = (|| loop {
+            let span = self.span();
+            let e = self.expr()?;
+            let text = crate::examples::source(&e);
+            let list = if word == "requires" { &mut c.requires } else { &mut c.ensures };
+            list.push(Cond { expr: e, text, span });
+            if !self.at(&Tok::Comma) {
+                return Ok(());
+            }
+            self.bump();
+            self.skip_newlines();
+        })();
+        self.no_block = saved;
+        r
     }
 
     /// `int a` (C) or `a int` (no colon) in a parameter list.
@@ -1332,6 +1404,16 @@ impl Parser {
     fn block_body(&mut self, what: &str) -> PResult<Vec<Stmt>> {
         let open = self.open_brace(what)?;
         let mut stmts = Vec::new();
+        // a function's body may start with its contract: `requires ...` / `ensures ...` lines
+        if std::mem::take(&mut self.fn_block) {
+            let mut c = Contract::default();
+            while self.contract_ahead() {
+                self.skip_newlines();
+                self.contract_line(&mut c)?;
+                self.end_stmt()?;
+            }
+            self.block_contract = c;
+        }
         loop {
             self.skip_newlines();
             match self.peek() {
@@ -2353,6 +2435,8 @@ impl Parser {
             queue: Vec::new(),
             hidden: 0,
             no_block: true,
+            fn_block: false,
+            block_contract: Contract::default(),
         };
         let e = sub.expr();
         self.errs.append(&mut sub.errs);

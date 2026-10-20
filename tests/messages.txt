@@ -7072,3 +7072,68 @@ error[E0390]: the opening hours `8:00 16:00` of the row "Office" give no days an
   = explain: nyra explain E0390
 
 nyra: 1 error(s)
+==== contract_ensures_counterexample
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result > 0
+= balance - amount
+
+print(withdraw(10, 3))
+----
+error[E0421]: withdraw(1, 1) breaks ensures result > 0: result is 0
+  --> case.nyra:3:13
+  |
+3 |     ensures result > 0
+  |             ^
+  = hint: a counterexample: `nyra check` called `withdraw(1, 1)`, which satisfies every `requires`, and the result breaks this `ensures`; fix the function for this input, or the condition if it is wrong (inputs that callers never pass are ruled out with a `requires` line)
+  = explain: nyra explain E0421
+
+nyra: 1 error(s)
+==== contract_crash_counterexample
+fn neg(x: int) -> int
+    ensures result + x == 0
+= -x
+
+print(neg(3))
+----
+error[E0422]: `neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3 in `neg`)
+  --> case.nyra:1:4
+  |
+1 | fn neg(x: int) -> int
+  |    ^
+  = hint: a counterexample: these arguments satisfy every `requires` of `neg`, yet the call fails; make `neg` handle them, or rule them out with a `requires` line (e.g. `requires n <= 1000000` against an int overflow); the runtime error says: an int holds -9223372036854775808 to 9223372036854775807: use smaller values, or keep a running value small with `%` (e.g. `h = (h * 31 + x) % 1000000007`)
+  = explain: nyra explain E0422
+
+nyra: 1 error(s)
+==== contract_result_in_requires
+fn half(n: int) -> int
+    requires n >= 0, result <= n
+= n / 2
+
+print(half(9))
+----
+error[E0423]: `result` in `requires` of `half`: there is no result yet
+  --> case.nyra:2:22
+  |
+2 |     requires n >= 0, result <= n
+  |                      ^
+  = hint: `requires` is checked when the call starts, before the function has a result: put this condition on an `ensures` line
+  = explain: nyra explain E0423
+
+nyra: 1 error(s)
+==== contract_old_not_inout
+fn grow(n: int) -> int
+    ensures result > old(n)
+= n + 1
+
+print(grow(1))
+----
+error[E0423]: `old(n)`: `n` is not an `inout` parameter
+  --> case.nyra:2:22
+  |
+2 |     ensures result > old(n)
+  |                      ^
+  = hint: only an `inout` parameter can change during the call; `n` keeps the value it got, so write `n`
+  = explain: nyra explain E0423
+
+nyra: 1 error(s)

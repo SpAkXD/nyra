@@ -1,0 +1,7 @@
+// expect: E0421
+fn withdraw(balance: int, amount: int) -> int
+    requires amount > 0, amount <= balance
+    ensures result > 0
+= balance - amount
+
+print(withdraw(10, 3))

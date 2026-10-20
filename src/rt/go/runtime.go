@@ -136,6 +136,14 @@ func nyCheckNonEmpty(n, max int64, line, col int) {
 	}
 }
 
+// nyContractFail is a broken contract: `requires` (kind 0, E0420) or `ensures` (kind 1, E0421).
+func nyContractFail(kind int64, msg string, line, col int) {
+	if kind == 0 {
+		nyFail("E0420", msg, "the call passes arguments that the function's `requires` rules out: fix the call, or the condition if it is too strict", line, col)
+	}
+	nyFail("E0421", msg, "the function gives a result that its `ensures` rules out: fix the function, or the condition if it is wrong", line, col)
+}
+
 // nyCheckSome is `opt.unwrap()` of `none`.
 func nyCheckSome(has bool, line, col int) {
 	if !has {

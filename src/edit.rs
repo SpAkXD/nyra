@@ -220,17 +220,38 @@ impl Scan<'_> {
         // the body: `{` or `=` outside the parameter list
         let mut j = i + 1;
         let mut depth = 0usize;
-        while !matches!(self.tok(j), Tok::Eof | Tok::Newline) || depth > 0 {
-            match self.tok(j) {
-                Tok::LParen | Tok::LBracket => depth += 1,
-                Tok::RParen | Tok::RBracket => depth = depth.saturating_sub(1),
-                Tok::LBrace | Tok::Assign if depth == 0 => break,
-                Tok::Eof => break,
-                _ => {}
+        let mut sig_end = None;
+        loop {
+            while !matches!(self.tok(j), Tok::Eof | Tok::Newline) || depth > 0 {
+                match self.tok(j) {
+                    Tok::LParen | Tok::LBracket => depth += 1,
+                    Tok::RParen | Tok::RBracket => depth = depth.saturating_sub(1),
+                    Tok::LBrace | Tok::Assign if depth == 0 => break,
+                    Tok::Eof => break,
+                    _ => {}
+                }
+                j += 1;
             }
-            j += 1;
+            sig_end.get_or_insert(j);
+            // `requires` / `ensures` lines between the signature and the body (`= expr` or `{`)
+            let mut k = j;
+            while matches!(self.tok(k), Tok::Newline) {
+                k += 1;
+            }
+            let contract = matches!(self.tok(k), Tok::Ident(w) if w == "requires" || w == "ensures");
+            let in_contract = sig_end != Some(j);
+            let body_after_contract = in_contract && matches!(self.tok(k), Tok::LBrace | Tok::Assign);
+            // a contract line that ends with a comma goes on on the next line
+            let goes_on = in_contract && j > 0 && matches!(self.tok(j - 1), Tok::Comma);
+            if k > j && (contract || body_after_contract || goes_on) {
+                j = k;
+                if contract || goes_on {
+                    continue;
+                }
+            }
+            break;
         }
-        let sig = squash(&self.text[start..self.end_before(j)]);
+        let sig = squash(&self.text[start..self.end_before(sig_end.unwrap_or(j))]);
         let (end, next) = match self.tok(j) {
             Tok::LBrace => self.block_end(j),
             Tok::Assign => {

@@ -7,6 +7,7 @@ mod clock;
 #[cfg(not(target_arch = "wasm32"))]
 mod clone;
 mod codegen;
+mod contracts;
 mod diag;
 mod edit;
 mod examples;
