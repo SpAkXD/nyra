@@ -1,0 +1,13 @@
+{
+ "_comment": "Names and notes for the web rounds in bench/web/results/<folder>/. build.py pools every folder found there; set \"exclude\": true here to leave one out. A folder made by run_model.py carries its own arena.json instead.",
+ "2026-10-19": {
+  "label": "Web round 3 · dentist, gym",
+  "nyra": "v0.8 @ fbca6d9 (before the round-3 web fixes)",
+  "note": "Held out when run. These two briefs were studied afterwards to fix Nyra, so they are not reused for new models."
+ },
+ "2026-10-20": {
+  "label": "Web round 4 · guesthouse, garage",
+  "nyra": "v0.8 @ 679f69a (after the round-3 web fixes)",
+  "note": "Two new held-out briefs, frozen before the first model call. run_model.py reuses these briefs for new models."
+ }
+}

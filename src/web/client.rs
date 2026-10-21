@@ -8,14 +8,17 @@
 //! adds `runtime.js`, which sends each event to `update` and re-renders the live regions. The state
 //! starts from the values the script variables had when the build ran the program.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::{self, Type};
 use crate::codegen::js;
-use crate::ir::{self, FuncId, StmtKind};
+use crate::ir::{self, Expr, FuncId, RtOp, StdFn, StmtKind, StrId};
 
 /// Event delegation and the keyed morph of live regions (see the file).
 pub const RUNTIME_JS: &str = include_str!("runtime.js");
+
+/// The part of the runtime that gives a view's local images their built names (after `ny_imgs`).
+pub const IMAGES_JS: &str = include_str!("images.js");
 
 /// The name of the function that receives the events.
 pub const UPDATE: &str = "update";
@@ -41,16 +44,31 @@ pub fn state_vars(prog: &ast::Program) -> Vec<String> {
     vars.into_iter().map(|i| prog.globals.vars[i].name.clone()).collect()
 }
 
-/// The client JavaScript (runtime parts, the program's functions, `runtime.js`), or `None` when the
-/// pages have no events. `views` are the names in `data-live`; `state` the values the build
-/// recorded (`_state`).
-pub fn build(
-    prog: &ast::Program,
-    views: &[String],
-    events: bool,
-    state: &[(String, String)],
-    file: &str,
-) -> Result<Option<String>, String> {
+/// What the browser runs of a program: `update`, the live views, and everything they call,
+/// found before the site is assembled (so the build can also prepare what a view may show only
+/// after a click: its images, kit chunks and icons, see [`Plan::reach`]).
+pub struct Plan {
+    module: ir::Module,
+    update: (FuncId, Vec<(String, bool)>),
+    views: Vec<js::View>,
+    funcs: Vec<FuncId>,
+}
+
+/// What the functions the browser runs may put on a page, from their literals (see [`Plan::reach`]).
+#[derive(Default, Debug)]
+pub struct Reach {
+    /// The string literals of the program's own functions (not the web library's).
+    pub texts: Vec<String>,
+    /// The kit chunks the library's functions name: `_uses("x")`, and the literal lists of a
+    /// `Node`'s kit (`kit: ["gallery"]`, `_kits(kids, "hero")`, `_add(kit, "hours")`).
+    pub chunks: Vec<String>,
+    /// The icons the library's functions draw by a literal name (`_icon("chevron-down")`).
+    pub icons: Vec<String>,
+}
+
+/// The plan of the client code, or `None` when the pages have no events. `views` are the names in
+/// `data-live`.
+pub fn plan(prog: &ast::Program, views: &[String], events: bool) -> Result<Option<Plan>, String> {
     if !events {
         return Ok(None);
     }
@@ -105,9 +123,81 @@ pub fn build(
         view_list.push((v.clone(), id, g, render));
     }
     let funcs = reachable(m, &roots);
+    Ok(Some(Plan { update: (update, ug), views: view_list, funcs, module }))
+}
+
+impl Plan {
+    /// True if the program has the function `name` (the web library's `web._icon`).
+    pub fn has(&self, name: &str) -> bool {
+        self.module.funcs.iter().any(|f| f.name == name)
+    }
+
+    /// The literals of the functions the browser runs: what a live view may show after a click
+    /// although the build's run never rendered it (an image, a component, an icon).
+    pub fn reach(&self) -> Reach {
+        let m = &self.module;
+        let mut r = Reach::default();
+        let add = |v: &mut Vec<String>, s: &str| {
+            if !s.is_empty() && !v.iter().any(|x| x == s) {
+                v.push(s.to_string());
+            }
+        };
+        for id in &self.funcs {
+            let f = m.func(*id);
+            let lib = f.name.starts_with("web.");
+            // locals that only ever hold literals (a literal argument may come through a temporary)
+            let mut consts: BTreeMap<u32, Vec<StrId>> = BTreeMap::new();
+            each_stmt(&f.body, &mut |s| {
+                if let StmtKind::Set(l, Expr::Str(id)) = &s.kind {
+                    consts.entry(l.0).or_default().push(*id);
+                }
+            });
+            let lits = |e: &Expr| -> Vec<StrId> {
+                let mut out = Vec::new();
+                literals(e, &consts, &mut out);
+                out
+            };
+            each_stmt(&f.body, &mut |s| match &s.kind {
+                StmtKind::Call { func, args, .. } if lib => {
+                    let callee = m.func(*func).name.as_str();
+                    let (at, into) = match callee {
+                        "web._icon" => (0, &mut r.icons),
+                        "web._kits" | "web._add" => (1, &mut r.chunks),
+                        _ => return,
+                    };
+                    if let Some(ir::Arg::Val(e)) = args.get(at) {
+                        lits(e).into_iter().for_each(|id| add(into, m.str(id)));
+                    }
+                }
+                StmtKind::Op { op: RtOp::Std(StdFn::WebUses), args, .. } => {
+                    args.iter().flat_map(&lits).for_each(|id| add(&mut r.chunks, m.str(id)));
+                }
+                StmtKind::Op { op: RtOp::ArrNew, args, .. } if lib => {
+                    args.iter().flat_map(&lits).for_each(|id| add(&mut r.chunks, m.str(id)));
+                }
+                _ => {}
+            });
+            if !lib {
+                let mut ids = Vec::new();
+                each_stmt(&f.body, &mut |s| stmt_strs(s, &mut ids));
+                ids.into_iter().for_each(|id| add(&mut r.texts, m.str(id)));
+            }
+        }
+        r
+    }
+}
+
+/// The client JavaScript (runtime parts, the program's functions, `runtime.js`) of a plan. `state`
+/// are the values the build recorded (`_state`); `images` the JavaScript of the site's images that
+/// a live view may show (`ny_imgs`, see `web.rs`), or "".
+pub fn build(plan: &Plan, prog: &ast::Program, state: &[(String, String)], file: &str, images: &str) -> Result<String, String> {
+    let m = &plan.module;
+    let (update, ug) = (plan.update.0, &plan.update.1);
+    let view_list = &plan.views;
+    let funcs = plan.funcs.clone();
     // the values the functions start from
     let mut names: Vec<String> = ug.iter().map(|(n, _)| n.clone()).collect();
-    for (_, _, g, _) in &view_list {
+    for (_, _, g, _) in view_list {
         for (n, _) in g {
             if !names.contains(n) {
                 names.push(n.clone());
@@ -124,17 +214,101 @@ pub fn build(
         };
         st.push((n, var.ty, json.clone()));
     }
-    let client = js::Client { funcs, update: Some((update, ug)), views: view_list, state: st };
+    let client = js::Client { funcs, update: Some((update, ug.clone())), views: view_list.clone(), state: st };
     let code = js::gen_client(m, &client);
     // runtime errors name the program's file, without the folder it was built in
     let name = std::path::Path::new(file).file_name().and_then(|n| n.to_str()).unwrap_or(file);
     let runtime = js::runtime(name);
-    let roots_text = format!("{code}\n{RUNTIME_JS}");
+    let roots_text = format!("{code}\n{images}{RUNTIME_JS}");
     let mut out = String::from("(() => {\n");
     out.push_str(&shake(&runtime, &roots_text));
     out.push_str(&roots_text);
     out.push_str("})();\n");
-    Ok(Some(out))
+    Ok(out)
+}
+
+/// Calls `f` on every statement of `ss` and the statements nested in them.
+fn each_stmt<'a>(ss: &'a [ir::Stmt], f: &mut dyn FnMut(&'a ir::Stmt)) {
+    for s in ss {
+        f(s);
+        match &s.kind {
+            StmtKind::If { then, els, .. } => {
+                each_stmt(then, f);
+                each_stmt(els, f);
+            }
+            StmtKind::Loop { head, body, step, .. } => {
+                each_stmt(head, f);
+                each_stmt(body, f);
+                each_stmt(step, f);
+            }
+            StmtKind::ForEach { body, .. } => each_stmt(body, f),
+            _ => {}
+        }
+    }
+}
+
+/// The literals a value may be: itself, a local that only holds literals, either branch of a select.
+fn literals(e: &Expr, consts: &BTreeMap<u32, Vec<StrId>>, out: &mut Vec<StrId>) {
+    match e {
+        Expr::Str(id) => out.push(*id),
+        Expr::Local(l) => out.extend(consts.get(&l.0).into_iter().flatten().copied()),
+        Expr::Select(_, a, b) => {
+            literals(a, consts, out);
+            literals(b, consts, out);
+        }
+        _ => {}
+    }
+}
+
+/// The string literals of one statement (not of the statements nested in it).
+fn stmt_strs(s: &ir::Stmt, out: &mut Vec<StrId>) {
+    fn expr(e: &Expr, out: &mut Vec<StrId>) {
+        match e {
+            Expr::Str(id) => out.push(*id),
+            Expr::Unary(_, x) | Expr::IntToFloat(x) | Expr::Field(x, _, _) => expr(x, out),
+            Expr::Binary(_, a, b) => {
+                expr(a, out);
+                expr(b, out);
+            }
+            Expr::Select(c, a, b) => {
+                expr(c, out);
+                expr(a, out);
+                expr(b, out);
+            }
+            Expr::Pure(_, args) => args.iter().for_each(|a| expr(a, out)),
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Char(_) | Expr::Local(_) => {}
+        }
+    }
+    fn place(p: &ir::Place, out: &mut Vec<StrId>) {
+        for s in &p.path {
+            if let ir::Step::Index(e, _) | ir::Step::Key(e, _) = s {
+                expr(e, out);
+            }
+        }
+    }
+    match &s.kind {
+        StmtKind::Set(_, e) | StmtKind::Return(Some(e)) => expr(e, out),
+        StmtKind::Call { args, .. } => {
+            for a in args {
+                match a {
+                    ir::Arg::Val(e) => expr(e, out),
+                    ir::Arg::InOut(p) => place(p, out),
+                }
+            }
+        }
+        StmtKind::Op { args, .. } => args.iter().for_each(|a| expr(a, out)),
+        StmtKind::Store { place: p, value } => {
+            place(p, out);
+            expr(value, out);
+        }
+        StmtKind::Mutate { place: p, args, .. } => {
+            place(p, out);
+            args.iter().for_each(|a| expr(a, out));
+        }
+        StmtKind::If { cond, .. } | StmtKind::Loop { cond, .. } => expr(cond, out),
+        StmtKind::ForEach { iter, .. } => expr(iter, out),
+        _ => {}
+    }
 }
 
 /// `roots` and every function they call, in the module's order.

@@ -60,6 +60,11 @@ pub fn pick(text: &str, kind: &str, used: &[String], always: bool) -> String {
     out
 }
 
+/// True if the kit's CSS or JS has a chunk `name`.
+pub fn has_chunk(name: &str) -> bool {
+    [KIT_CSS, KIT_JS].iter().any(|f| split(f, "chunk").1.iter().any(|(n, _)| n == name))
+}
+
 /// The attributes the motion CSS and JS key off (`site(transition:)` is `data-transition`).
 pub const MOTION_ATTRS: [&str; 8] =
     ["data-anim", "data-hover", "data-loop", "data-scroll", "data-at", "data-motion", "data-morph", "data-transition"];

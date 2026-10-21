@@ -722,7 +722,14 @@ The build reads the finished HTML of each page, so the library is free in how it
 - **Images**: the attributes `src`, `poster`, `data-src`, `data-full`, `data-bg`, `data-image`, the `href` of `a`
   and `link`, and the `content` of `<meta property="og:image">` / `<meta name="twitter:image">`, when the value is
   a relative path with an image extension. The file is looked up in `assets/` next to the program, then next to the
-  program (E0383 if missing). CSS `url(...)` of a file in `assets/` is copied too.
+  program (E0383 if missing). CSS `url(...)` of a file in `assets/` is copied too. For a program with live
+  views the build also makes the images a view may show only after a click: the files of `assets/` named by the
+  program's own strings in the code the browser runs and by the strings of the state it starts from, and those in
+  the live regions' first render. The client code gets a map from each such name to its built file, srcset, size and
+  preview (`ny_imgs`), and the runtime gives a view's fresh HTML the same attributes the build gave the static page.
+- **Kit chunks**: the `_uses` calls of the run, plus the chunks of every kit component the browser's code may call
+  (`_uses("x")` and the literal kit lists of the library's functions it reaches), so a component that a live view
+  shows only after a click has its CSS and behavior.
 - **Checks**: `id` attributes and `#anchor` links (E0382), `h1`-`h6` (E0379), the CSS variables `--ink`, `--muted`,
   `--bg`, `--alt` in `_css` text (E0380, hex colors only).
 - **Sitemap**: `<link rel="canonical" href="https://...">`. The site's address is the canonical URL of `/` (else
@@ -880,7 +887,9 @@ its images in `examples/web/assets/`; `tests/web.rs` builds each one and compare
   hero's photo is `<img fetchpriority="high">` and also the page's preload link and default `og:image`.
 - Icons are `<svg class="i"><use href="#i-NAME"/></svg>`; each page starts with a hidden sprite of the symbols it
   uses. So an icon used often is drawn once, and the code compiled for the browser needs the icons' names, not
-  their paths. (A live region that shows an icon nothing else on the page uses shows nothing in its place.)
+  their paths. On a page with a live region the build adds the icons the browser's code may draw after a click
+  (names given to the library's `_icon`, the program's own strings in that code and in the state it starts from,
+  `:name:` in them).
 
 Where the build differs from the design above, and why:
 

@@ -97,9 +97,8 @@ pub fn prepare(f: &mut Func) -> Vec<Diag> {
         let before = errs.len();
         c.expr.each_mut(&mut |e| match &e.kind {
             ExprKind::Var(n) if n == RESULT && result_param.is_none() => errs.push(
-                Diag::new("E0423", format!("`result` in `requires` of `{fname}`: there is no result yet"), e.span).hint(
-                    "`requires` is checked when the call starts, before the function has a result: put this condition on an `ensures` line",
-                ),
+                Diag::new("E0423", format!("`result` in `requires` of `{fname}`: there is no result yet"), e.span)
+                    .hint("`requires` is checked before the call has a result: move this condition to an `ensures` line"),
             ),
             ExprKind::Call(n, _) if n == "old" => errs.push(
                 Diag::new("E0423", "`old(...)` in `requires`: it is only for `ensures`", e.span)
@@ -117,11 +116,11 @@ pub fn prepare(f: &mut Func) -> Vec<Diag> {
         c.expr.each_mut(&mut |e| {
             let replace = match &e.kind {
                 ExprKind::Var(n) if n == RESULT && void && result_param.is_none() => {
-                    errs.push(
-                        Diag::new("E0423", format!("`result` in `ensures` of `{fname}`, which returns nothing"), e.span).hint(format!(
-                            "declare what `{fname}` returns (`fn {fname}(...) -> int`), or state what it does to an `inout` parameter, e.g. `ensures xs.len() == old(xs).len() + 1`"
-                        )),
-                    );
+                    errs.push(Diag::new("E0423", format!("`result` in `ensures` of `{fname}`, which returns nothing"), e.span).hint(
+                        format!(
+                            "declare what `{fname}` returns (`-> int`), or state what it does to an `inout` parameter with `old(xs)`"
+                        ),
+                    ));
                     None
                 }
                 ExprKind::Call(n, args) if n == "old" => match args.as_slice() {
@@ -885,17 +884,16 @@ impl<'m> Search<'m> {
         let call = format!("{name}({})", shown.join(", "));
         if e.code == "E0421" {
             return Diag::new("E0421", e.msg, e.span).hint(format!(
-                "a counterexample: `nyra check` called `{call}`, which satisfies every `requires`, and the result breaks this `ensures`; fix the function for this input, or the condition if it is wrong (inputs that callers never pass are ruled out with a `requires` line)"
+                "`{call}` meets every `requires`: fix the function for it, the `ensures` if it is wrong, or rule it out with `requires`"
             ));
         }
         let place = match e.func.map(|f| display_name(&self.m.func(f).name).to_string()) {
+            Some(f) if f == name && e.span.line > 0 => format!(" (at {}:{})", e.span.line, e.span.col),
             Some(f) if !f.contains('#') && e.span.line > 0 => format!(" (at {}:{} in `{f}`)", e.span.line, e.span.col),
             _ => String::new(),
         };
-        Diag::new("E0422", format!("`{call}` stops with runtime error {}: {}{place}", e.code, e.msg), self.t.span).hint(format!(
-            "a counterexample: these arguments satisfy every `requires` of `{name}`, yet the call fails; make `{name}` handle them, or rule them out with a `requires` line (e.g. `requires n <= 1000000` against an int overflow); the runtime error says: {}",
-            e.hint
-        ))
+        Diag::new("E0422", format!("`{call}` stops with runtime error {}: {}{place}", e.code, e.msg), self.t.span)
+            .hint("a counterexample: handle it, or rule it out with `requires`")
     }
 }
 

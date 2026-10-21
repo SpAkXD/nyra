@@ -40,7 +40,7 @@ function), and shrinks the first failure (ints toward 0, shorter strings and arr
 ```
 error[E0421]: withdraw(1, 1) breaks ensures result > 0: result is 0
   --> bank.nyra:3:13
-  = hint: a counterexample: `nyra check` called `withdraw(1, 1)`, which satisfies every `requires`, ...
+  = hint: `withdraw(1, 1)` meets every `requires`: fix the function for it, the `ensures` if it is wrong, ...
 ```
 
 The same program always gives the same counterexample. Finding none is no proof: the search is testing.

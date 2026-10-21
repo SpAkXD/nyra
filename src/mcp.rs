@@ -69,7 +69,7 @@ Loop: nyra_check until ok is true, then nyra_run. nyra_explain gives the full en
 /// Tool definitions, as sent by `tools/list`.
 const TOOLS: &str = r#"[
 {"name":"nyra_spec","title":"Nyra language spec","description":"The Nyra agent card (Markdown, about 1,400 tokens): one example program, the rules that differ from other languages, what is not in Nyra, every method and module name. Nyra is not in your training data: read it once before writing Nyra. full: true returns the complete language spec instead (about 8,000 tokens). part \"guide\" returns the AI guide: workflow, do/don't rules, error codes with fixes, recipes, complete programs. topic \"web\" returns the web card instead (about 1,400 tokens): the `use web` library for websites, to read together with the agent card.","inputSchema":{"type":"object","properties":{"full":{"type":"boolean","description":"return the complete spec instead of the card (default false)"},"part":{"type":"string","enum":["spec","guide"],"description":"default spec (the card, or the complete spec with full: true)"},"topic":{"type":"string","enum":["language","web"],"description":"default language; web returns the web card (websites with `use web`)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
-{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program (code, or files for a program of several files) without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint}],\"warnings\":[..]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. An error with exactly one certain fix is repaired in memory and listed under warnings (with the fix edits), unless strict is true. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
+{"name":"nyra_check","title":"Check Nyra code","description":"Type-check a Nyra program (code, or files for a program of several files) without running it, and evaluate its `ex` examples. Returns {\"ok\":bool,\"errors\":[{code,message,file,line,col,hint,fix?,exact?}],\"warnings\":[..]}, the same as `nyra check --json`; a false example is E0250 with actual and expected. Every error with exactly one certain fix is repaired in memory (also when others remain) and listed under warnings with its fix edits, at their places in your code, unless strict is true; errors lists what is left. Fix every error, then check again.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]. A `use` of a module that needs another one is error E0290."}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_test","title":"Test Nyra examples","description":"Run the `ex` examples of a Nyra program (`fn sq(x: int) -> int = x * x  ex sq(3) == 9`) at compile time, without running main. Returns {ok,examples,passed,failed,errors:[{code,message,line,col,hint,actual?,expected?}]}, the same as `nyra test --json`; compile errors come back as from nyra_check (repairs included).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities nyra_run will grant; default [\"input\"]"}},"required":[]},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
 {"name":"nyra_run","title":"Run Nyra code","description":"Compile and run a Nyra program (code, or files for several files). Returns {ok,exit,stdout,stderr?,errors?,warnings?,timeout?,truncated?,ms}. A program that ends within a few million steps is answered at once from the interpreter (\"mode\":\"interp\", no wait for the C compiler); one that runs longer, or that uses fs or os, runs as a native executable, with the same output. Compile errors come back as from nyra_check, and an error with one certain fix is repaired in memory first (listed under warnings; strict: true turns that off); a runtime error (exit 101) is in errors. The program gets only the capabilities in allow (default: standard input): a `use fs` or `use os` without them is error E0290. stdout is capped at 16 KiB; a run may use 1 GiB of memory and a CPU-time budget of twice its timeout. With sandbox true the program runs in the interpreter instead (no child process, no C compiler or Node.js): file paths stay below the working folder, and fuel, max_memory and max_output stop it with E0355, E0356 or E0357 (exit 120, 121, 122); the same program and limits always stop at the same place.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"the whole program"},"files":{"type":"object","additionalProperties":{"type":"string"},"description":"or a program of several files: file name (relative, ends in .nyra) -> text; main.nyra is the entry unless entry says otherwise, and `use ./shapes` imports shapes.nyra"},"entry":{"type":"string","description":"with files: the file to run (default main.nyra)"},"strict":{"type":"boolean","description":"do not repair errors that have exactly one certain fix (default: repair in memory and report each repair under warnings)"},"backend":{"type":"string","enum":["native","js"],"description":"native (via a C compiler, default) or js (Node.js); ignored with sandbox"},"stdin":{"type":"string","description":"standard input for the program"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000,"description":"default 10000"},"allow":{"type":"array","items":{"type":"string","enum":["fs","input","net","os"]},"description":"capabilities to grant: fs (files), input (stdin), os (arguments, environment, exit), net. Default [\"input\"]; a program that uses fs and reads stdin needs [\"fs\",\"input\"]"},"sandbox":{"type":"boolean","description":"run in the interpreter with deterministic limits; default false"},"args":{"type":"array","items":{"type":"string"},"description":"sandbox only: the program's arguments (os.args(); needs allow os)"},"fuel":{"type":"integer","minimum":1,"description":"sandbox only: steps the program may run, default 200000000 (E0355)"},"max_memory":{"type":"integer","minimum":1,"description":"sandbox only: bytes of heap, default 268435456 (E0356)"},"max_output":{"type":"integer","minimum":1,"description":"sandbox only: bytes the program may print, default and maximum 16384 (E0357)"}},"required":[]},"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}},
 {"name":"nyra_explain","title":"Explain a Nyra error code","description":"The error database entry for a code: what it means, why the rule exists, common causes, a wrong and a fixed program, related codes. Without code: every code the compiler reports, with its title (planned: true adds the codes of future designs).","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"e.g. E0201"},"planned":{"type":"boolean","description":"with no code: also list planned codes (not in the compiler yet)"}}},"annotations":{"readOnlyHint":true,"openWorldHint":false}},
@@ -845,23 +845,25 @@ fn compile_tool(program: &Program, grant: &caps::Grant, strict: bool, full: bool
     })
 }
 
-/// The `warnings` of a call: the warnings of the compiler (`${x}` in a string, slow patterns) and the
-/// repairs that were applied. `None` when there are none.
+/// The `warnings` of a call: the repairs that were applied (one per mistake, with their edits at
+/// their places in the program's text) and the warnings of the compiler (`${x}` in a string, slow
+/// patterns). `None` when there are none.
 fn warnings_value(program: &Program, applied: &[fix::Applied]) -> Option<Json> {
     let mut w = diag::warnings();
     program.localize(&mut w);
     let mut items: Vec<Json> = Vec::new();
-    if !w.is_empty() {
+    let applied = if applied.is_empty() { Vec::new() } else { diag::applied() };
+    if !applied.is_empty() {
         items.extend(
-            Json::parse(&diag::render_json_errors(&w, &program.name))
+            Json::parse(&diag::render_json_warnings(&applied, &program.name))
                 .ok()
                 .and_then(|j| j.as_array().map(<[Json]>::to_vec))
                 .unwrap_or_default(),
         );
     }
-    if !applied.is_empty() {
+    if !w.is_empty() {
         items.extend(
-            Json::parse(&diag::render_json_warnings(applied, &program.name))
+            Json::parse(&diag::render_json_errors(&w, &program.name))
                 .ok()
                 .and_then(|j| j.as_array().map(<[Json]>::to_vec))
                 .unwrap_or_default(),
@@ -982,12 +984,13 @@ fn interpreted_json(report: &sandbox::Report, compile_ms: Json, mode: Option<&st
         fields.push(("stderr", report.log.clone().into()));
     }
     if let Some(e) = &report.error {
+        let span = fix::span_to_origin(e.span);
         let err = obj([
             ("code", e.code.into()),
             ("message", e.msg.clone().into()),
             ("file", file.into()),
-            ("line", Json::from(e.span.line as i64)),
-            ("col", Json::from(e.span.col as i64)),
+            ("line", Json::from(span.line as i64)),
+            ("col", Json::from(span.col as i64)),
             ("hint", e.hint.into()),
             ("runtime", true.into()),
         ]);
@@ -1057,15 +1060,11 @@ fn web_build(server: &Server, program: &Program, args: &Json) -> Result<String, 
         dev: false,
         to_stdout: false,
     };
-    let mut json = match crate::web::build(c.prog, &c.text, &opts) {
+    // (the fixes applied in memory are listed with the warnings)
+    Ok(match crate::web::build(c.prog, &c.text, &opts) {
         Ok(site) => crate::web::site_json(&site, &program.name, None).replacen("{\"ok\":true,", "{\"ok\":true,\"target\":\"web\",", 1),
         Err(e) => e.json(&program.name),
-    };
-    if !c.applied.is_empty() && json.ends_with('}') {
-        json.pop();
-        json.push_str(&format!(",\"applied\":{}}}", diag::render_json_warnings(&c.applied, &program.name)));
-    }
-    Ok(json)
+    })
 }
 
 fn explain_tool(args: &Json) -> Result<String, String> {

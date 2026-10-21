@@ -39,7 +39,7 @@ design may still change.
 | E0355-E0359 | run time, interpreter (since v0.6) | a run in the interpreter hit its limit of steps, memory, output, call depth or time; exit codes 120 to 124 |
 | E0360-E0362 | performance warnings (since v0.6) | warnings: a loop that is correct but quadratic (a search in a growing array, putting text in front of a string, appending to a string on the Go target) |
 | E0370-E0371 | type checker (since v0.8) | named arguments and default values out of place; a misused child block `f(...) { ... }` |
-| E0372-E0390 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons (E0389), option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387), opening hours (E0390) |
+| E0372-E0391 | `use web` (since v0.8; E0385 planned) | the web library of [WEB.md](WEB.md): names, events, icons (E0389), option and motion words, keyframes (E0375, E0388), live views, raw HTML, links, code that runs in the browser; the site build's checks: headings (E0379), theme contrast (E0380), `#anchor` links (E0382), images (E0383, E0386), page paths (E0387), opening hours (E0390); a page that reads state `update` changes (E0391, warning) |
 | E0400-E0419 | the agent runtime (reserved since v0.9) | `nyra serve --mcp`, typed output (`fn main() -> T`), checkpoints and mocks ([SERVE.md](SERVE.md)); so far they report with existing codes (E0211, E0290, E0340, E0345, E0355-E0359) |
 | E0420-E0429 | contracts (since v0.9; E0424-E0429 kept free) | `requires` broken by a call (E0420, run time) or `ensures` broken by a function (E0421, at run time and as a counterexample `nyra check` finds); a counterexample that makes the function stop with a runtime error (E0422); `result` or `old(...)` where they mean nothing (E0423) |
 
@@ -4351,9 +4351,9 @@ page("/", "Bakery") {
 ## E0389: unknown icon
 - **Kind:** warning · **Since:** v0.8
 - **What it means:** A `use web` site names an icon that is not in the icon set (a subset of [Lucide](https://lucide.dev), its old names such as `alert-circle` and `home` included, plus the brand icon `facebook`): in an option (`icon: "siren"`) or in text (`":gauge: 12 kg"`). The site still builds. A name of another icon set that stands for one of the set is drawn as that icon (`envelope` as `mail`, `map-marker` as `map-pin`, `warning` as `triangle-alert`), and the warning names the Lucide name to write; any other name is drawn as a plain circle in an option and left as it is written in text (it may be no icon at all: `a:b:c`). The warning is at the string literal that holds the name, also when the name comes from data (`("siren", "Emergency care")` given as `icon: s.0`).
-- **Why Nyra has this rule:** An icon is decoration: a site that is right in every other way should not fail over one, but a wrong name should not pass unseen either. The set is small on purpose (every icon is in the build), so a name a model knows from another set or a newer Lucide is likely; the hint gives the nearest name.
+- **Why Nyra has this rule:** An icon is decoration: a site that is right in every other way should not fail over one, but a wrong name should not pass unseen either. The set is small on purpose (every icon is in the build), so a name a model knows from another set or a newer Lucide is likely; the hint gives the closest names of the set.
 - **Common causes:**
-  - a Lucide icon that is not in the subset (`siren`, `gauge`): choose one of the set, e.g. `triangle-alert`, `activity`; `src/std/web_icons.nyra` lists all of them
+  - a Lucide icon that is not in the subset (`siren`, `gauge`): the hint names the three icons of the set closest in meaning or spelling (`bell`, `triangle-alert`, `phone-call` for `siren`)
   - a name from Font Awesome, Material or Heroicons (`envelope`, `map-marker`, `cog`)
   - a typo (`phnoe`)
   - a colon in text that looks like the start of an icon (`a:b:c`): write `\\:` in the string for a plain colon
@@ -4387,12 +4387,12 @@ page("/", "Dentist") {
 
 ## E0390: opening hours the badge cannot read
 - **Kind:** compile error · **Since:** v0.8
-- **What it means:** A row of `hours(rows)` or of `hero(badge: rows)` has times, but the open/closed badge cannot tell its days or its times. A row is `(label, "days times")`, as in `("Mon–Fri", "1-5 8:00-16:00")`: days 1 (Monday) to 7 (Sunday), then one or more times; or, as people write it, the days in the label and the times alone (`("Monday", "8:00–18:00")`, `("Mon–Fri", "8–16")`), or the days before the times (`"Mon–Fri 8:00–16:00"`). English, Czech and German day names, `weekdays`, `daily`, any dash, `8.00`, `9am-5pm` and `24/7` are read; a time without digits ("Closed", "By appointment") is closed and shown as written. The error is found while the site is built and is reported at the string literal of the row.
+- **What it means:** A row of the hours an open/closed badge reads (`hero(badge: rows)`, or `hours(rows)` with its badge, which is on unless `badge: false`) has times, but the badge cannot tell its days or its times. Without a badge, such a row is shown as it is written. A row is `(label, "days times")`, as in `("Mon–Fri", "1-5 8:00-16:00")`: days 1 (Monday) to 7 (Sunday), then one or more times; or, as people write it, the days in the label and the times alone (`("Monday", "8:00–18:00")`, `("Mon–Fri", "8–16")`), or the days before the times (`"Mon–Fri 8:00–16:00"`). English, Czech and German day names, `weekdays`, `daily`, any dash, `8.00`, `9am-5pm` and `24/7` are read, and a note in parentheses (`"8:00–12:00 (tyres only)"`) is shown after the times; a time without digits ("Closed", "By appointment") is closed and shown as written. The error is found while the site is built and is reported at the string literal of the row.
 - **Why Nyra has this rule:** A row the badge cannot read would show no times and a badge that always says "Closed now", which nobody notices until a customer does.
 - **Common causes:**
   - a label that names no days with times that name none either (`("Opening", "8:00–16:00")`)
   - times in a form that is not a range (`"8:00 18:00"`, `"from 8"`)
-  - text after the times (`"8:00–16:00 (lunch 12–13)"`): put a note in `hours(..., note: "...")`
+  - text after the times that is not in parentheses (`"8:00–16:00 lunch 12–13"`): write `(lunch 12–13)`, or put a note in `hours(..., note: "...")`
 - **Wrong:**
 ```rust
 use web
@@ -4420,6 +4420,53 @@ page("/", "Dentist") {
 }
 ```
 - **Related:** E0374
+
+## E0391: a page reads state that `update` changes
+- **Kind:** warning · **Since:** v0.8
+- **What it means:** A page of a `use web` site reads a script variable that `update` changes (`p("Showing {kind}")` right in `page(...) { ... }`). A page is rendered once, while the site is built, so that part shows the first value for ever: clicking a button changes the variable, but not the page. Only a live view, a function without parameters that returns a `Node` and reads the variable, is rendered again in the browser.
+- **Why Nyra has this rule:** The site builds and looks right until someone clicks, so the mistake would pass every check; the fix is always the same: move that part into a function `fn view() -> Node` and call it in the page.
+- **Common causes:**
+  - the filtered list or the selected tab written inline in a section instead of in a view function
+  - `active: tab == 1` on a button inside the page
+- **Wrong:**
+```rust
+use web
+
+enum Msg { Show(str) }
+var kind = "All"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+    }
+}
+
+page("/", "Bakery") {
+    h1("Bakery")
+    button("Bread", on: Msg.Show("Bread"))
+    p("Showing {kind}")
+}
+```
+- **Fixed:**
+```rust
+use web
+
+enum Msg { Show(str) }
+var kind = "All"
+fn update(m: Msg) {
+    match m {
+        Msg.Show(k) => kind = k
+    }
+}
+
+fn shown() -> Node = p("Showing {kind}")
+
+page("/", "Bakery") {
+    h1("Bakery")
+    button("Bread", on: Msg.Show("Bread"))
+    shown()
+}
+```
+- **Related:** E0376, E0384
 
 ## E0420: a call breaks `requires`
 - **Kind:** runtime error · **Since:** v0.9
@@ -4490,7 +4537,7 @@ fn main() {
 
 ## E0422: a counterexample makes the function stop with a runtime error
 - **Kind:** compile error · **Since:** v0.9
-- **What it means:** The counterexample search of `nyra check` found arguments that satisfy every `requires` of a function, but the call stops with a runtime error: "`neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3 in `neg`)". The message names the arguments (shrunk to small ones), the runtime error and where it happened; the error points at the function.
+- **What it means:** The counterexample search of `nyra check` found arguments that satisfy every `requires` of a function, but the call stops with a runtime error: "`neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3)". The message names the arguments (shrunk to small ones), the runtime error and where it happened; the error points at the function.
 - **Why Nyra has this rule:** A contract says which inputs the function accepts. If it accepts an input it cannot handle, some caller will eventually pass it and the program will stop there.
 - **Common causes:**
   - an int overflow for very large or very small arguments: bound them (`requires x > -1000000000`)

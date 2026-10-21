@@ -3,6 +3,7 @@
 //! - every pair below is a program with typical mistakes and exactly what `--fix` must turn it into;
 //!   the result must compile;
 //! - mistakes with more than one possible repair get no fix, and leave the file alone;
+//! - every certain fix is applied also when other errors remain, and only those are errors;
 //! - a program that compiles is never changed;
 //! - `--json` carries the same fixes as edits an agent can apply itself.
 
@@ -139,17 +140,75 @@ fn mistakes_with_alternatives_get_no_fix() {
 }
 
 #[test]
-fn errors_without_a_fix_leave_the_file_unchanged() {
-    // the `;` has a fix, `null` does not: nothing is written, and the errors are reported as usual
+fn errors_without_a_fix_do_not_stop_the_others() {
+    // the `;` has a fix, `null` does not: --fix writes the one it has, and reports what is left at
+    // its place in the file as it is now
     let dir = scratch("fix-partial");
     let bad = "fn main() {\n    let x = 1;\n    let y = null\n}\n";
     write(&dir, "prog.nyra", bad);
     let out = nyra().current_dir(&dir).args(["check", "--fix", "prog.nyra"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert_eq!(read(&dir, "prog.nyra"), bad);
+    assert_eq!(read(&dir, "prog.nyra"), "fn main() {\n    let x = 1\n    let y = null\n}\n");
     let err = stderr(&out);
-    assert!(err.contains("error[E0005]") && err.contains("  = fix: `let x = 1`"), "{err}");
-    assert!(err.contains("nyra: --fix did not change prog.nyra: errors without a fix remain"), "{err}");
+    assert!(err.contains("nyra: fixed 1 error(s) in prog.nyra:"), "{err}");
+    assert!(err.contains("error[E0201]: undefined variable `null`\n  --> prog.nyra:3:13"), "{err}");
+    assert!(!err.contains("error[E0005]"), "{err}");
+    // the next --fix has nothing left to write
+    let again = nyra().current_dir(&dir).args(["check", "--fix", "prog.nyra"]).output().unwrap();
+    assert_eq!(again.status.code(), Some(1));
+    assert!(!stderr(&again).contains("nyra: fixed"), "{}", stderr(&again));
+}
+
+#[test]
+fn every_certain_fix_is_applied_and_only_what_is_left_is_an_error() {
+    // a comma after a match arm (fixed in the first round) hides the type errors behind it: an
+    // int for a float (a fix of the second round) and a string plus an int (no fix)
+    let dir = scratch("fix-apply-all");
+    let bad = "enum Light { Red, Green }\nfn name(l: Light) -> str {\n    var s = \"\"\n    match l {\n        Light.Red => s = \"red\",\n        Light.Green => s = \"green\",\n    }\n    return s\n}\nlet f: float = 2\nprint(name(Light.Red) + 1)\nprint(f)\n";
+    write(&dir, "prog.nyra", bad);
+    // (without --strict, which `check_json` passes)
+    let out = nyra().current_dir(&dir).args(["check", "--json", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let json = Json::parse(stdout(&out).trim()).unwrap();
+    // the errors are only what is left, at their places in the file as the agent has it
+    let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
+    assert_eq!(errors.len(), 1, "{json:?}");
+    assert_eq!(errors[0].get("code").and_then(|c| c.as_str()), Some("E0210"));
+    assert_eq!(errors[0].get("line").and_then(|l| l.as_u64()), Some(11));
+    assert!(errors[0].get("fix").is_none() && errors[0].get("exact").is_none());
+    // the fixes are warnings, each with its edits (at their places in the file) and `exact`
+    let warnings = json.get("warnings").and_then(|w| w.as_array()).unwrap();
+    let codes: Vec<&str> = warnings.iter().map(|w| w.get("code").and_then(|c| c.as_str()).unwrap()).collect();
+    assert_eq!(codes, ["E0101", "E0203"], "{json:?}");
+    // the two commas are one mistake: one warning that lists the other line, with both edits
+    assert!(warnings[0].get("message").and_then(|m| m.as_str()).unwrap().contains("(and 1 more: line 6)"), "{json:?}");
+    assert_eq!(warnings[1].get("line").and_then(|l| l.as_u64()), Some(10));
+    let mut edits: Vec<Json> = Vec::new();
+    for w in warnings {
+        assert_eq!(w.get("exact").and_then(|e| e.as_bool()), Some(true), "{w:?}");
+        edits.extend(w.get("fix").and_then(|f| f.as_array()).unwrap().iter().cloned());
+    }
+    assert_eq!(edits.len(), 3);
+    // applied to the file, the edits leave exactly the one error
+    let fixed = apply_json(bad, &edits);
+    assert!(fixed.contains("Light.Red => s = \"red\"\n") && fixed.contains("let f: float = 2.0\n"), "{fixed}");
+    write(&dir, "prog.nyra", &fixed);
+    let out = nyra().current_dir(&dir).args(["check", "--strict", "--json", "prog.nyra"]).output().unwrap();
+    let json = Json::parse(stdout(&out).trim()).unwrap();
+    let left = json.get("errors").and_then(|e| e.as_array()).unwrap();
+    assert_eq!(left.len(), 1, "{json:?}");
+    assert_eq!(left[0].get("line").and_then(|l| l.as_u64()), Some(11));
+    // people see the error first, then what was fixed
+    write(&dir, "prog.nyra", bad);
+    let err = stderr(&nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap());
+    assert!(err.starts_with("error[E0210]"), "{err}");
+    assert!(err.contains("warning[E0101]: fixed automatically"), "{err}");
+    assert!(err.trim_end().ends_with("nyra: 1 error(s)"), "{err}");
+    // --fix writes them all, and the error is then at its place in the new file
+    let out = nyra().current_dir(&dir).args(["check", "--fix", "prog.nyra"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(read(&dir, "prog.nyra"), fixed);
+    assert!(stderr(&out).contains("  --> prog.nyra:11:"), "{}", stderr(&out));
 }
 
 #[test]
@@ -162,9 +221,12 @@ fn a_failed_repair_reports_the_errors_it_uncovered() {
     let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
-    assert!(err.contains("error[E0101]: a `,` after a statement or a match arm\n  --> prog.nyra:5:31"), "{err}");
+    assert!(
+        err.contains("warning[E0101]: fixed automatically: a `,` after a statement or a match arm\n  --> prog.nyra:5:31"),
+        "{err}"
+    );
     assert!(err.contains("error[E0210]") && err.contains("  --> prog.nyra:10:"), "{err}");
-    assert!(err.find("E0101").unwrap() < err.find("E0210").unwrap(), "in the order of the file: {err}");
+    assert!(err.find("E0210").unwrap() < err.find("E0101").unwrap(), "the errors first: {err}");
     // --strict repairs nothing, so it shows only what the parser found
     let strict = stderr(&nyra().current_dir(&dir).args(["check", "--strict", "prog.nyra"]).output().unwrap());
     assert!(strict.contains("E0101") && !strict.contains("E0210"), "{strict}");
@@ -318,8 +380,9 @@ fn single_safe_fixes_are_applied_in_memory_and_reported_as_warnings() {
     assert_eq!(json.get("ok").and_then(|v| v.as_bool()), Some(true));
     let warnings = json.get("warnings").and_then(|w| w.as_array()).expect("a `warnings` array");
     let codes: Vec<&str> = warnings.iter().map(|w| w.get("code").and_then(|c| c.as_str()).unwrap()).collect();
-    assert_eq!(codes, ["E0005", "E0205"]);
-    let semi = &warnings[0];
+    // in the order of the file
+    assert_eq!(codes, ["E0205", "E0005"]);
+    let semi = &warnings[1];
     assert_eq!(semi.get("line").and_then(|v| v.as_u64()), Some(3));
     assert_eq!(semi.get("applied").and_then(|v| v.as_str()), Some("`n += 2`"));
     assert!(semi.get("fix").and_then(|f| f.as_array()).is_some_and(|f| !f.is_empty()));
@@ -346,7 +409,9 @@ fn single_safe_fixes_are_applied_in_memory_and_reported_as_warnings() {
     write(&dir, "prog.nyra", bad);
     let out = nyra().current_dir(&dir).args(["check", "prog.nyra"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert!(stderr(&out).contains("error[E0005]") && !stderr(&out).contains("warning["), "{}", stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains("error[E0201]") && err.contains("warning[E0005]: fixed automatically"), "{err}");
+    assert!(!err.contains("error[E0005]") && err.find("error[E0201]") < err.find("warning[E0005]"), "{err}");
     assert_eq!(read(&dir, "prog.nyra"), bad);
     let bad = "fn main() {\n    let y = null\n}\n";
     write(&dir, "prog.nyra", bad);
@@ -437,7 +502,8 @@ fn fix_keeps_windows_line_breaks() {
 }
 
 /// The golden corpus of the diagnostics test, through `--fix`: a program is either repaired into one
-/// that compiles, or left exactly as it was. Never anything in between.
+/// that compiles, or gets every certain fix and keeps only errors that have none (and a second
+/// `--fix` changes nothing more).
 #[test]
 fn every_fix_of_the_corpus_compiles_or_changes_nothing() {
     let text = std::fs::read_to_string("tests/messages.txt").unwrap().replace("\r\n", "\n");
@@ -468,8 +534,9 @@ fn every_fix_of_the_corpus_compiles_or_changes_nothing() {
             let (ok, json) = check_json(&dir, "prog.nyra");
             assert!(ok, "--fix wrote a program that does not compile:\n{src}\n->\n{after}\n{json:?}");
             repaired += 1;
-        } else {
-            assert_eq!(after, src, "--fix failed but changed the file");
+        } else if after != src {
+            let again = nyra().current_dir(&dir).args(["check", "--fix", "prog.nyra"]).output().unwrap();
+            assert_eq!(read(&dir, "prog.nyra"), after, "a second --fix changed the file again:\n{src}\n{}", stderr(&again));
         }
     }
     assert!(repaired >= 60, "only {repaired} of {} corpus programs were repaired", programs.len());

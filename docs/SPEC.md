@@ -147,7 +147,7 @@ calls). The input is shrunk first (ints toward 0, shorter strings and arrays), s
 small one:
 ```
 error[E0421]: withdraw(1, 1) breaks ensures result > 0: result is 0
-error[E0422]: `neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3 in `neg`)
+error[E0422]: `neg(-9223372036854775808)` stops with runtime error E0255: int overflow: -(-9223372036854775808) does not fit in 64 bits (at 3:3)
 ```
 The search is deterministic (the same program always finds the same counterexample) and bounded: 300
 inputs per function (`NYRA_CONTRACT_TRIES=N` changes it, `0` turns the search off) and 3,000,000

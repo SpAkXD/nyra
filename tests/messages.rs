@@ -13,6 +13,11 @@ use common::{check_json, nyra, scratch, stderr};
 
 const FILE: &str = "tests/messages.txt";
 
+/// The most characters a message and its hint may have together (about 50 tokens).
+const BUDGET: usize = 200;
+/// The most characters they may have on average (about 30 tokens).
+const MEAN: usize = 120;
+
 struct Case {
     name: String,
     src: String,
@@ -78,6 +83,9 @@ fn diagnostics_match_the_golden_file() {
 
     let mut blessed = header.clone();
     let mut failures = Vec::new();
+    // the length of each message with its hint, and the ones over the budget
+    let mut sizes: Vec<usize> = Vec::new();
+    let mut too_long: Vec<String> = Vec::new();
     for (index, case) in cases.iter().enumerate() {
         std::fs::write(dir.join("case.nyra"), unescape(&case.src)).unwrap();
         let out = nyra().current_dir(&dir).args(["check", "--strict", "case.nyra"]).output().unwrap();
@@ -95,6 +103,21 @@ fn diagnostics_match_the_golden_file() {
         for block in &blocks {
             let head = block.lines().next().unwrap_or("");
             let (code, message) = head.split_once("]: ").unwrap_or(("", ""));
+            // an agent reads every word: the message and the hint stay short (see `BUDGET`), name
+            // no file it cannot see, and call the web functions by the names a program uses
+            let hint = block.lines().find_map(|l| l.strip_prefix("  = hint: ")).unwrap_or("");
+            let size = message.chars().count() + hint.chars().count();
+            sizes.push(size);
+            if size > BUDGET {
+                too_long.push(format!("{} {code} ({size} chars): {message} | {hint}", case.name));
+            }
+            for text in [message, hint] {
+                assert!(
+                    !["src/", "docs/", "tools/", ".rs`", "`web."].iter().any(|p| text.contains(p)),
+                    "{}: {code} names a file of the repository or a `web.` function: {text}",
+                    case.name
+                );
+            }
             assert!(
                 code.len() == 5 && code.starts_with('E') && code[1..].chars().all(|c| c.is_ascii_digit()),
                 "{}: bad code in `error[{head}`",
@@ -124,6 +147,11 @@ fn diagnostics_match_the_golden_file() {
         }
     }
 
+    // the budget: every message with its hint within `BUDGET` characters (about 50 tokens at four
+    // characters a token), and on average within `MEAN` (about 30 tokens)
+    assert!(too_long.is_empty(), "{} diagnostics are over {BUDGET} characters:\n{}", too_long.len(), too_long.join("\n"));
+    let mean = sizes.iter().sum::<usize>() / sizes.len().max(1);
+    assert!(mean <= MEAN, "messages with hints average {mean} characters, over {MEAN}");
     if bless {
         std::fs::write(FILE, blessed).unwrap();
         return;

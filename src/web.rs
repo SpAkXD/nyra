@@ -15,9 +15,14 @@
 //!    the theme's contrast once (E0380). Two pages with one path, or a bad path, is E0387.
 //! 3. Images are copied to `img/` with a content hash, get `width`/`height`, `loading="lazy"` and
 //!    `decoding="async"`, WebP variants with `srcset` and a blurred preview from the built-in codec (`web/img/`;
-//!    E0386 for a file it cannot read).
+//!    E0386 for a file it cannot read). A live view may show more after a click than the build's
+//!    run rendered: the images it may show (the program's own literals in the code the browser
+//!    runs, the strings of the state it starts from, the images of its first render) are made too,
+//!    and the client code maps their names to the built files (`ny_imgs`, `web/images.js`); the
+//!    icons it may draw join the page's sprite.
 //! 4. One CSS file and one JS file are assembled from only the used parts (`web/assets.rs`) and the
-//!    client code (`web/client.rs`), named by a hash of their content.
+//!    client code (`web/client.rs`), named by a hash of their content. The used parts are the
+//!    chunks the pages reported, and those of every kit component the browser's code may call.
 //! 5. Each page gets a Content-Security-Policy `<meta>` computed from what it uses, the CSS and JS
 //!    links; the site gets `sitemap.xml` (when the pages have canonical URLs), `robots.txt` and
 //!    `_headers` (the same policy as an HTTP header, for hosts that read that file).
@@ -102,14 +107,17 @@ pub enum Error {
 }
 
 impl Error {
-    /// The error for people (`file` names the program).
+    /// The error for people (`file` names the program), then the fixes applied in memory and the
+    /// warnings.
     pub fn human(&self, file: &str, src: &str) -> String {
         match self {
-            Error::Diags(d) => format!("{}nyra: {} error(s)\n", diag::render_human(d, file, src), d.len()),
-            Error::Runtime(e) => {
-                format!("{}\nnyra: the program stopped while the site was built\n", sandbox::render_error(e, file, false))
-            }
-            Error::Text(t) => format!("nyra: {t}\n"),
+            Error::Diags(d) => diag::report(d, file, src),
+            Error::Runtime(e) => format!(
+                "{}\nnyra: the program stopped while the site was built\n{}",
+                sandbox::render_error(e, file, false),
+                diag::render_warnings(file, src)
+            ),
+            Error::Text(t) => format!("nyra: {t}\n{}", diag::render_warnings(file, src)),
         }
     }
 
@@ -407,7 +415,7 @@ fn locate(src: &str, needle: &str) -> Option<Span> {
 }
 
 /// The hint of E0390 (opening hours the badge cannot read).
-const HOURS_HINT: &str = "a row is (label, \"days times\"): `(\"Mon–Fri\", \"1-5 8:00-16:00\")`, days 1 (Monday) to 7 (Sunday), one or more times `8:00-12:00 13:00-17:00`, \"\" for closed; the days may also be in the label (`(\"Monday\", \"8:00-18:00\")`, `(\"Mon–Fri\", \"8–16\")`)";
+const HOURS_HINT: &str = "write rows like `(\"Mon–Fri\", \"8:00-16:00\")`, `(\"Sun\", \"\")` for closed; notes go in `( )`";
 
 /// `https://host[:port]` of an absolute http(s) URL.
 fn origin(url: &str) -> Option<String> {
@@ -427,11 +435,10 @@ impl Site {
         let mut pages: Vec<Page> = Vec::new();
         for (path, text, span) in web.pages {
             match page_file(&path) {
-                Err(why) => {
-                    errs.push(Diag::new("E0387", format!("page path \"{path}\" is not a path of the site: {why}"), span).hint(
-                        "write the path from the site's root, as in the address bar: `page(\"/\", ...)`, `page(\"/about\", ...)`",
-                    ))
-                }
+                Err(why) => errs.push(
+                    Diag::new("E0387", format!("page path \"{path}\" is not a path of the site: {why}"), span)
+                        .hint("write a path like `/about`"),
+                ),
                 Ok(file) => {
                     if let Some(first) = pages.iter().find(|p| p.file == file) {
                         let same = if first.path == path {
@@ -441,7 +448,7 @@ impl Site {
                         };
                         errs.push(
                             Diag::new("E0387", format!("two pages have the path \"{path}\"{same}"), span)
-                                .hint("each page needs its own path: rename one of them, or make one page of the two"),
+                                .hint("give each page its own path"),
                         );
                         continue;
                     }
@@ -473,9 +480,9 @@ impl Site {
                 let msg = part.split(" */").next().unwrap_or(part);
                 let (code, msg) = msg.split_once(' ').unwrap_or((msg, ""));
                 let (code, hint): (&'static str, &str) = match code {
-                    "E0381" => ("E0381", "link to `https://...`, `mailto:...`, `tel:...`, a path or an #anchor; the value was computed while the site was built"),
+                    "E0381" => ("E0381", "link to `https://`, `mailto:`, `tel:`, a path or a `#anchor`"),
                     "E0390" => ("E0390", HOURS_HINT),
-                    _ => ("E0374", "use a hex color (`#0F766E`), a theme color (`primary`, `accent`, `bg`, `alt`, `ink`, `muted`) or a name of `site(palette:)`"),
+                    _ => ("E0374", "use `#0F766E`, a theme color (`primary`, `accent`, `ink`, `muted`) or a `palette:` name"),
                 };
                 let value = msg.split('`').nth(1).unwrap_or("");
                 let place = locate(src, &format!("\"{value}\"")).or_else(|| locate(src, value).filter(|_| !value.is_empty()));
@@ -530,13 +537,13 @@ impl Site {
                 let hint = match diag::suggest(&id, known.iter().copied()) {
                     Some(s) => format!("{s} An anchor link needs an element with that id {on}"),
                     None => {
-                        known.truncate(12);
+                        known.truncate(6);
                         let list = if known.is_empty() {
                             "none".to_string()
                         } else {
                             known.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ")
                         };
-                        format!("give the element you mean that id (a section's first argument is its id: `section(\"{id}\", ...)`), or fix the link; the ids {on}: {list}")
+                        format!("give an element that id, `section(\"{id}\", ...)`, or fix the link; ids {on}: {list}")
                     }
                 };
                 errs.push(
@@ -557,9 +564,10 @@ impl Site {
                 .collect();
             let h1 = levels.iter().filter(|l| **l == 1).count();
             if h1 != 1 {
-                warn(Diag::new("E0379", format!("page \"{}\" has {h1} `h1` headings: a page has exactly one", p.path), p.span).hint(
-                    "the `h1` is the page's title for search engines and screen readers: a hero's title is one; make the other headings `h2` or `h3`",
-                ));
+                warn(
+                    Diag::new("E0379", format!("page \"{}\" has {h1} `h1` headings: a page has exactly one", p.path), p.span)
+                        .hint("a hero's title is the `h1`: make the other headings `h2`"),
+                );
             }
             if let Some(w) = levels.windows(2).find(|w| w[1] > w[0] + 1) {
                 warn(
@@ -568,11 +576,7 @@ impl Site {
                         format!("page \"{}\" skips a heading level: an `h{}` follows an `h{}`", p.path, w[1], w[0]),
                         p.span,
                     )
-                    .hint(format!(
-                        "go down one level at a time (`h{}` after `h{}`), so screen readers can follow the outline",
-                        w[0] + 1,
-                        w[0]
-                    )),
+                    .hint(format!("go down one level at a time: `h{}` after `h{}`", w[0] + 1, w[0])),
                 );
             }
         }
@@ -580,11 +584,56 @@ impl Site {
         // the theme's contrast (E0380)
         contrast(&web.css, at, &mut warn);
 
+        // the live regions, the events, and what the browser's code may show after a click (its
+        // images, kit chunks and icons), which the build's run need not have rendered
+        let mut events = false;
+        let mut views: Vec<String> = Vec::new();
+        for p in &pages {
+            for t in p.tags.iter().filter(|t| !t.close) {
+                events |= t.has("data-on");
+                if let Some(v) = t.get("data-live") {
+                    if !views.iter().any(|x| x == v) {
+                        views.push(v.to_string());
+                    }
+                }
+            }
+        }
+        let plan = client::plan(prog, &views, events).map_err(Error::Text)?;
+        let reach = plan.as_ref().map(|p| p.reach()).unwrap_or_default();
+        // the program's own literals the browser runs, and the strings of the state it starts from
+        // (the keys of its maps may name images too, but no icons: a struct's field names are keys)
+        let mut texts: Vec<String> = reach.texts.clone();
+        let mut keys: Vec<String> = Vec::new();
+        if plan.is_some() {
+            for (_, json) in &web.state {
+                for (s, key) in json_strings(json) {
+                    if key { &mut keys } else { &mut texts }.push(s);
+                }
+            }
+        }
+        // the local images a live view may show: those it showed when the build ran, and the names
+        // in those strings that are files of `assets/`
+        let mut live_images: Vec<String> = Vec::new();
+        if plan.is_some() {
+            for p in &pages {
+                live_region_images(&p.tags, &mut live_images);
+            }
+            for t in texts.iter().chain(&keys) {
+                let v = t.trim();
+                if image_name(v) && find_asset(&o.dir, v).is_some() && !live_images.iter().any(|x| x == v) {
+                    live_images.push(v.to_string());
+                }
+            }
+        }
+
         // images: every one the pages show is loaded (and its variants made) first, in parallel
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let tool = image::find_tool(o.image_tool.as_deref());
         // (each with: shown by a page, used by a `<meta>`)
         let mut wanted: Vec<(String, bool, bool)> = Vec::new();
+        for v in &live_images {
+            wanted.push((v.clone(), true, false));
+        }
         for p in &pages {
             for t in p.tags.iter().filter(|t| !t.close) {
                 for (name, value) in &t.attrs {
@@ -622,7 +671,7 @@ impl Site {
                             let msg =
                                 format!("page \"{}\" shows the image \"{v}\", which is not in `assets/` next to the program", p.path);
                             let d = Diag::new("E0383", msg, p.span).hint(format!(
-                                "put the file at `assets/{}` (images are read from the folder `assets` next to the program), or fix the name",
+                                "put it at `assets/{}`, or fix the name",
                                 v.trim_start_matches("./").trim_start_matches('/')
                             ));
                             if o.strict_images {
@@ -694,10 +743,38 @@ impl Site {
                 }
             }
         }
-        if unscaled > 0 {
-            warn(Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` (--image-tool none)"), at).hint(
-                "build without `--image-tool none` to make WebP variants with the built-in codec; the site works without them, with larger images on phones",
+        // the images of the live views for the browser's runtime (`src/web/images.js`), and their
+        // previews on each page with a live region
+        let mut images_js = String::new();
+        let mut entries: Vec<String> = Vec::new();
+        for v in &live_images {
+            let Some(Some(img)) = images.get(v) else { continue };
+            let set: Vec<String> = img.variants.iter().map(|(f, w)| format!("{f} {w}w")).collect();
+            let (w, h) = img.size.unwrap_or((0, 0));
+            let ph = img.preview.as_ref().map(|uri| (format!("ph-{}", &hash(uri.as_bytes())[..8]), uri.clone()));
+            entries.push(format!(
+                "{}: [{}, {}, {w}, {h}, {}]",
+                diag::json_str(v),
+                diag::json_str(&img.file),
+                diag::json_str(&set.join(", ")),
+                diag::json_str(ph.as_ref().map_or("", |(c, _)| c.as_str()))
             ));
+            if let Some((cls, uri)) = ph {
+                for (pi, p) in pages.iter().enumerate() {
+                    if p.tags.iter().any(|t| t.has("data-live")) && !previews[pi].iter().any(|(c, _)| *c == cls) {
+                        previews[pi].push((cls.clone(), uri.clone()));
+                    }
+                }
+            }
+        }
+        if !entries.is_empty() {
+            images_js = format!("const ny_imgs = {{{}}};\n{}", entries.join(", "), client::IMAGES_JS);
+        }
+        if unscaled > 0 {
+            warn(
+                Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` (--image-tool none)"), at)
+                    .hint("build without `--image-tool none` for WebP variants"),
+            );
         }
         if !failed.is_empty() {
             let list: Vec<String> = failed.iter().take(5).map(|(f, why)| format!("`{f}` ({why})")).collect();
@@ -705,11 +782,26 @@ impl Site {
             warn(
                 Diag::new(
                     "E0386",
-                    format!("{} image(s) copied without WebP variants: the built-in codec cannot read {}{more}", failed.len(), list.join(", ")),
+                    format!(
+                        "{} image(s) copied without WebP variants: the built-in codec cannot read {}{more}",
+                        failed.len(),
+                        list.join(", ")
+                    ),
                     at,
                 )
-                .hint("save the file again as a plain JPEG, PNG or WebP (an image editor's \"export\"); the site still shows the original"),
+                .hint("re-save it as a plain JPEG, PNG or WebP"),
             );
+        }
+
+        // the icons a live view may draw after a click join the sprite of each page with a live
+        // region (the library draws a page's sprite from the icons it shows when the build runs)
+        if plan.as_ref().is_some_and(|p| p.has("web._icon")) {
+            let names = live_icons(&reach.icons, &texts);
+            for (pi, p) in pages.iter().enumerate() {
+                if p.tags.iter().any(|t| t.has("data-live")) {
+                    edits[pi].extend(sprite_edit(&p.tags, &names));
+                }
+            }
         }
 
         // the pages with their images, and their `style` attributes as classes of the CSS
@@ -722,17 +814,15 @@ impl Site {
 
         // the CSS: the kit's base and used parts, the motion words, custom keyframes, the program's own
         let mut used: Vec<(String, String)> = Vec::new();
-        let mut events = false;
-        let mut views: Vec<String> = Vec::new();
         for p in &pages {
             assets::motion_attrs(&p.tags, &mut used);
-            for t in p.tags.iter().filter(|t| !t.close) {
-                events |= t.has("data-on");
-                if let Some(v) = t.get("data-live") {
-                    if !views.iter().any(|x| x == v) {
-                        views.push(v.to_string());
-                    }
-                }
+        }
+        // the kit chunks: the ones the pages use, and the ones of every component a live view may
+        // show after a click (only those the kit has)
+        let mut chunks = web.chunks.clone();
+        for c in &reach.chunks {
+            if !chunks.contains(c) && assets::has_chunk(c) {
+                chunks.push(c.clone());
             }
         }
         // `keyframes(name, body)`: a wrong one stops the build (E0388), layout properties warn (E0375)
@@ -762,15 +852,13 @@ impl Site {
         for (attr, value) in &used {
             let Some(opt) = motion::Opt::from_name(attr) else { continue };
             if let Err(e) = motion::parse(opt, value, &names) {
-                let hint = e
-                    .hint()
-                    .unwrap_or_else(|| "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`".to_string());
+                let hint = e.hint().unwrap_or_else(|| "the motion words: `nyra explain E0374`".to_string());
                 let place = locate(src, &format!("\"{value}\"")).unwrap_or(at);
                 errs.push(Diag::new("E0374", format!("{} (in data-{attr}=\"{value}\")", e.message), place).hint(hint));
             }
         }
         let pairs: Vec<(&str, &str)> = used.iter().map(|(a, v)| (a.as_str(), v.as_str())).collect();
-        let mut css = assets::pick(assets::KIT_CSS, "chunk", &web.chunks, true);
+        let mut css = assets::pick(assets::KIT_CSS, "chunk", &chunks, true);
         css.push_str(&motion::motion_css(&pairs, &custom));
         // (without the records of errors and warnings, which were read above)
         for c in web.css.iter().filter(|c| !c.starts_with("/*! nyra:")) {
@@ -785,14 +873,14 @@ impl Site {
 
         // the JS: kit behaviors, motion, the program's client code
         let mut js = String::new();
-        let kit_js = assets::pick(assets::KIT_JS, "chunk", &web.chunks, false);
+        let kit_js = assets::pick(assets::KIT_JS, "chunk", &chunks, false);
         if !kit_js.trim().is_empty() {
             js.push_str(&format!("(() => {{\n{}}})();\n", assets::min_js(&kit_js)));
         }
         // the motion script is its own closure already
         js.push_str(&motion::motion_js(&pairs));
-        let client = client::build(prog, &views, events, &web.state, &o.file).map_err(Error::Text)?;
-        if let Some(c) = client {
+        if let Some(plan) = &plan {
+            let c = client::build(plan, prog, &web.state, &o.file, &images_js).map_err(Error::Text)?;
             js.push_str(&assets::min_js(&c));
         }
         let css_file = (!css.trim().is_empty()).then(|| format!("site.{}.css", &hash(css.as_bytes())[..10]));
@@ -814,7 +902,7 @@ impl Site {
         let mut sitemap = Vec::new();
         for (pi, (p, body)) in pages.iter().zip(bodies).enumerate() {
             let styles = html::tags(&body).iter().any(|t| !t.close && t.has("style"));
-            let mut policy = page_policy(p, js_file.is_some() || o.dev, &web.chunks, styles);
+            let mut policy = page_policy(p, js_file.is_some() || o.dev, &chunks, styles);
             // the previews: one inline style, allowed by its hash (unless inline styles are allowed anyway)
             let mut style = String::new();
             if !previews[pi].is_empty() {
@@ -880,6 +968,149 @@ fn image_ref(t: &html::Tag, name: &str, v: &str) -> bool {
         _ => false,
     };
     is_ref && local_ref(v) && image::is_image(v.split(['?', '#']).next().unwrap_or(v))
+}
+
+/// True if `v` names an image of the site (a file of `assets/`, not a URL).
+fn image_name(v: &str) -> bool {
+    local_ref(v) && !v.contains(char::is_whitespace) && image::is_image(v.split(['?', '#']).next().unwrap_or(v))
+}
+
+/// The local images in the live regions of a page (`data-live`), as the build's run rendered them.
+fn live_region_images(tags: &[html::Tag], out: &mut Vec<String>) {
+    // (the tag that opens the region, how deep in it the scan is)
+    let mut region: Option<(&str, usize)> = None;
+    for t in tags {
+        match &mut region {
+            None => {
+                if !t.close && t.has("data-live") && !t.self_closing {
+                    region = Some((t.name.as_str(), 1));
+                }
+                continue;
+            }
+            Some((name, depth)) if t.name == *name && !t.self_closing => {
+                if t.close {
+                    *depth -= 1;
+                    if *depth == 0 {
+                        region = None;
+                        continue;
+                    }
+                } else {
+                    *depth += 1;
+                }
+            }
+            Some(_) => {}
+        }
+        for (name, value) in &t.attrs {
+            let Some(v) = value else { continue };
+            if !t.close && image_ref(t, name, v) && !out.iter().any(|x| x == v) {
+                out.push(v.clone());
+            }
+        }
+    }
+}
+
+/// The strings of a JSON text, each with whether it is a key.
+fn json_strings(json: &str) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    let mut cs = json.chars();
+    while let Some(c) = cs.next() {
+        if c != '"' {
+            continue;
+        }
+        let mut s = String::new();
+        while let Some(c) = cs.next() {
+            match c {
+                '"' => break,
+                '\\' => match cs.next() {
+                    Some('n') => s.push('\n'),
+                    Some('t') => s.push('\t'),
+                    Some('r') => s.push('\r'),
+                    Some('b') => s.push('\u{8}'),
+                    Some('f') => s.push('\u{c}'),
+                    Some('u') => {
+                        let hex: String = cs.by_ref().take(4).collect();
+                        s.push(u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).unwrap_or('\u{fffd}'));
+                    }
+                    Some(c) => s.push(c),
+                    None => break,
+                },
+                c => s.push(c),
+            }
+        }
+        let key = cs.clone().find(|c| !c.is_whitespace()).is_some_and(|c| c == ':');
+        out.push((s, key));
+    }
+    out
+}
+
+/// The icons a live view may draw: the ones the library draws by name (`reach`), and those the
+/// program's strings name, whole (`icon: "clock"`) or in text (`":clock: Open"`), also by the name
+/// of another icon set (`envelope`: `mail`). Sorted, each once.
+fn live_icons(reach: &[String], texts: &[String]) -> Vec<String> {
+    let set: std::collections::BTreeSet<String> = crate::webcheck::icons().into_iter().collect();
+    let mut out: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut take = |n: &str| {
+        if set.contains(n) {
+            out.insert(n.to_string());
+        } else if let Some(like) = crate::webcheck::icon_like(n) {
+            out.insert(like.to_string());
+        }
+    };
+    for n in reach {
+        take(n);
+    }
+    for t in texts {
+        let t = t.trim();
+        if t.len() <= 40 {
+            take(t);
+        }
+        // `:name:` in a text: a lowercase letter, then letters, digits and dashes
+        let parts: Vec<&str> = t.split(':').collect();
+        for w in parts.iter().skip(1).take(parts.len().saturating_sub(2)) {
+            if w.starts_with(|c: char| c.is_ascii_lowercase())
+                && w.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            {
+                take(w);
+            }
+        }
+    }
+    out.into_iter().collect()
+}
+
+/// The `<symbol>` of an icon as the library's `_sprite` writes it, from the icon set.
+fn icon_symbol(name: &str) -> Option<String> {
+    let src: &str = include_str!("std/web_icons.nyra");
+    let key = format!("\"{name}\" => \"");
+    for func in ["fn _icon_body(", "fn _brand_body("] {
+        let Some(start) = src.find(func) else { continue };
+        let body = &src[start..];
+        let body = &body[..body.find("\n}").unwrap_or(body.len())];
+        for line in body.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix(&key) {
+                let svg = rest.trim_end().strip_suffix('"').unwrap_or(rest).replace("\\\"", "\"").replace("\\\\", "\\");
+                return Some(format!("<symbol id=\"i-{name}\" viewBox=\"0 0 24 24\">{svg}</symbol>"));
+            }
+        }
+    }
+    None
+}
+
+/// The edit that adds the symbols of `names` that the page's sprite lacks: into its sprite, or a
+/// new sprite at the start of the `<body>`.
+fn sprite_edit(tags: &[html::Tag], names: &[String]) -> Option<(usize, usize, String)> {
+    let have: Vec<&str> =
+        tags.iter().filter(|t| t.name == "symbol" && !t.close).filter_map(|t| t.get("id")?.strip_prefix("i-")).collect();
+    let symbols: String = names.iter().filter(|n| !have.contains(&n.as_str())).filter_map(|n| icon_symbol(n)).collect();
+    if symbols.is_empty() {
+        return None;
+    }
+    let sprite = tags.iter().position(|t| t.name == "svg" && !t.close && t.get("class") == Some("sprite"));
+    if let Some(at) = sprite {
+        let end = tags[at..].iter().find(|t| t.name == "svg" && t.close)?;
+        return Some((end.start, end.start, symbols));
+    }
+    let body = tags.iter().find(|t| t.name == "body" && !t.close)?;
+    Some((body.end, body.end, format!("<svg class=\"sprite\" aria-hidden=\"true\">{symbols}</svg>\n")))
 }
 
 /// Loads the images `wanted` (each with whether a page shows it and whether a `<meta>` uses it),
@@ -1202,15 +1433,10 @@ fn contrast(css: &[String], at: Span, warn: &mut impl FnMut(Diag)) {
             warn(
                 Diag::new(
                     "E0380",
-                    format!(
-                        "theme colors `{fg}` {} on `{bg}` {} have a contrast of {r:.2}:1, below the 4.5:1 that WCAG AA needs for text",
-                        shown[fg], shown[bg]
-                    ),
+                    format!("`{fg}` {} on `{bg}` {} has contrast {r:.2}:1 (text needs 4.5:1)", shown[fg], shown[bg]),
                     at,
                 )
-                .hint(format!(
-                    "make `{fg}` darker or `{bg}` lighter (or the reverse for a dark theme) in `site(...)` until they reach 4.5:1"
-                )),
+                .hint(format!("darken `{fg}` or lighten `{bg}` in `site(...)` (or the reverse)")),
             );
         }
     }
@@ -1290,7 +1516,6 @@ pub fn cli(c: &Cli, src: &str, prog: ast::Program) -> std::process::ExitCode {
             if c.json {
                 println!("{}", e.json(&c.file));
             } else {
-                eprint!("{}", diag::render_warnings(&c.file, src));
                 eprint!("{}", e.human(&c.file, src));
             }
             return ExitCode::from(1);

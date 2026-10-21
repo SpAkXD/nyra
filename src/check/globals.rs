@@ -214,27 +214,27 @@ impl Checker {
                         Diag::new(
                             "E0216",
                             format!(
-                                "`{name}` is a script variable (line {line}), but `{}` declares its own `{name}`{local}, so it cannot see the script's",
+                                "`{}` declares its own `{name}`{local}, which hides the script variable (line {line})",
                                 self.fname
                             ),
                             span,
                         )
-                        .hint(format!(
-                            "a name means one thing in a function: to use the script variable here, rename the function's own `{name}` (e.g. `{name}2`); a function that declares `{name}` sees only its own"
-                        )),
+                        .hint(format!("rename the function's own `{name}` (e.g. `{name}2`)")),
                     );
                 }
             }
             if let Some((_, at)) = g.main_decls.iter().find(|(n, _)| n == name && !own) {
-                return Some(Diag::new("E0201", format!("undefined variable `{name}`"), span).hint(format!(
-                    "`{name}` is declared inside a block of the script (line {}): functions see only the variables declared at the top level of the script; declare it there, before the block",
-                    at.line
-                )));
+                return Some(
+                    Diag::new("E0201", format!("undefined variable `{name}`"), span).hint(format!(
+                        "`{name}` is declared in a block of the script (line {}): declare it at the top level",
+                        at.line
+                    )),
+                );
             }
         } else if g.explicit_main && self.fname != "main" {
             if let Some((_, at)) = g.main_decls.iter().find(|(n, _)| n == name && !own) {
                 return Some(Diag::new("E0201", format!("undefined variable `{name}`"), span).hint(format!(
-                    "`{name}` is a variable of `fn main` (line {}), and functions cannot see it: pass it as a parameter, or declare it at the top level of the file (a script variable), which every function can use",
+                    "`{name}` is local to `fn main` (line {}): pass it as a parameter, or declare it at the top level",
                     at.line
                 )));
             }
@@ -283,9 +283,8 @@ impl Checker {
                 if fname.is_empty() {
                     let v = &var(first).name;
                     errs.push(
-                        Diag::new("E0254", format!("this example calls `{callee}`, which uses the script variable `{v}`"), s.span).hint(
-                            "examples run while the program compiles, before the script, so they cannot call a function that uses script variables: give it the value as a parameter instead, or remove this example",
-                        ),
+                        Diag::new("E0254", format!("this example calls `{callee}`, which uses the script variable `{v}`"), s.span)
+                            .hint("examples run before the script: pass the value as a parameter, or remove the example"),
                     );
                     continue;
                 }
@@ -293,8 +292,12 @@ impl Checker {
                     if let Some(&w) = cw.iter().next() {
                         let v = &var(w).name;
                         errs.push(
-                            Diag::new("E0214", format!("a lambda cannot call `{callee}`: it changes the script variable `{v}`, and inside a lambda variables are read-only"), s.span)
-                                .hint(format!("call `{callee}` in a `for` loop instead")),
+                            Diag::new(
+                                "E0214",
+                                format!("a lambda cannot call `{callee}`: it changes the script variable `{v}`"),
+                                s.span,
+                            )
+                            .hint(format!("call `{callee}` in a `for` loop instead")),
                         );
                     }
                 }
@@ -302,14 +305,8 @@ impl Checker {
                     if let Some(&w) = cw.iter().find(|&&w| self.managed(var(w).ty)) {
                         let v = &var(w).name;
                         errs.push(
-                            Diag::new(
-                                "E0238",
-                                format!(
-                                    "`{callee}` changes the script variable `{v}`, so it cannot be called inside this `arena` block"
-                                ),
-                                s.span,
-                            )
-                            .hint(format!("values created in an `arena` are freed at its `}}`: call `{callee}` after the block")),
+                            Diag::new("E0238", format!("`{callee}` changes the script variable `{v}`: not inside an `arena`"), s.span)
+                                .hint(format!("call `{callee}` after the block")),
                         );
                     }
                 }
@@ -317,9 +314,12 @@ impl Checker {
                     if cu.contains(&i) {
                         let v = &var(i).name;
                         errs.push(
-                            Diag::new("E0237", format!("`{v}` is passed `inout` to `{callee}`, which also uses the script variable `{v}`"), at).hint(format!(
-                                "`{callee}` sees `{v}` itself: change it there instead of passing it, or pass a copy (`var t = {v}`, `inout t`, then `{v} = t`)"
-                            )),
+                            Diag::new(
+                                "E0237",
+                                format!("`{v}` is passed `inout` to `{callee}`, which also uses the script variable `{v}`"),
+                                at,
+                            )
+                            .hint(format!("`{callee}` sees `{v}` itself: change it there instead of passing it")),
                         );
                     }
                 }
@@ -333,9 +333,9 @@ impl Checker {
                         } else {
                             format!("`{callee}` uses the script variable `{v}`, which is declared later (line {line})")
                         };
-                        errs.push(Diag::new("E0217", msg, s.span).hint(format!(
-                            "a function can run only after the script variables it uses exist: move `{kw} {v} = ...` (line {line}) above this call, or the call below it"
-                        )));
+                        errs.push(
+                            Diag::new("E0217", msg, s.span).hint(format!("move `{kw} {v} = ...` (line {line}) above this call")),
+                        );
                     }
                 }
                 for &(i, fr) in &s.freed {
@@ -346,9 +346,7 @@ impl Checker {
                         } else {
                             format!("`{callee}` uses the script variable `{v}`, which was freed at line {}", fr.line)
                         };
-                        errs.push(Diag::new("E0239", msg, s.span).hint(format!(
-                            "give `{v}` a new value first (`{v} = ...`, needs `var`), or move `free({v})` after this call"
-                        )));
+                        errs.push(Diag::new("E0239", msg, s.span).hint(format!("move `free({v})` after this call")));
                     }
                 }
             }

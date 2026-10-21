@@ -10,11 +10,21 @@ Rust, Go, TypeScript or Python, and it is not in your training data: do not gues
    read `docs/WEB_CARD.md` (same place). `docs/SPEC.md` only when the card is not enough.
 3. A feature that is not on the card does not exist. Say so and write the closest program that works.
 
+## Commands
+`nyra help agent` prints this list, one line each:
+- `nyra check f.nyra --json`: errors; `--fix` writes the certain fixes, `--strict` repairs nothing.
+- `nyra run f.nyra` (`-- args`, `--allow fs,os`, `--sandbox`, `--native`); `nyra build f.nyra` (`-o PATH`, `--js`).
+- `nyra test f.nyra` (the `ex` examples), `nyra fmt f.nyra`, `nyra explain E0210`.
+- `nyra outline f.nyra`, `nyra show f.nyra name`, `nyra edit f.nyra --set name CODE`; `nyra mcp` (MCP server).
+- `nyra new site name`, `nyra serve --mcp f.nyra`, `nyra schema f.nyra`, `nyra resume state.json`, `nyra clone URL`,
+  `nyra lsp`, `nyra upgrade` (Nyra v0.9).
+
 ## Edit, check, run
-- After every edit: `nyra check file.nyra --json` gives `{"ok":true,...}` or `errors` with `code`, `line`, `col`,
-  `hint` and sometimes `fix`. Follow the hint.
-- Slips with one certain repair (`elif`, `;`, `'text'`, `xs.length()`) are repaired in memory and listed under
-  `warnings`; `--fix` writes them into the file.
+- After every edit: `nyra check file.nyra --json` gives `{"ok":true,...}` or `errors` with `code`, `message`,
+  `line`, `col`, `hint`, sorted by place. One mistake made in several places is one error that lists the lines.
+- Every slip with one certain repair (`elif`, `;`, `'text'`, `xs.length()`) is repaired in memory, also when
+  other errors remain, and listed under `warnings` with its `fix` edits (`"exact":true`: apply them as they are);
+  `errors` is only what is left, at its place in your file. `--fix` writes the repairs into the file.
 - Hint not enough: `nyra explain E0210` (meaning, causes, a wrong and a fixed program). Do not guess twice.
 - Warnings (E0260, E0360-E0362) never fail a build but are likely bugs or slow code.
 - `nyra run file.nyra` (`-- args` passes arguments). Runtime errors have a code too (exit code 101).

@@ -190,8 +190,7 @@ impl Loader {
             self.err(
                 "E0305",
                 format!("`{path}` is not a path Nyra imports"),
-                "write the path from the importing file's folder, with `/` and without `.nyra`: `use ./shapes`, `use ../util/text`"
-                    .to_string(),
+                "write `use ./shapes` (relative, no `.nyra`)".to_string(),
                 u,
                 shown,
             );
@@ -284,9 +283,8 @@ impl Loader {
         if sub.script {
             // the statements of a script became its `main`
             let at = sub.funcs.iter().find(|f| f.name == "main").map(|f| f.span).unwrap_or(u.span);
-            let mut d = Diag::new("E0285", format!("module `{name}` has statements at the top level"), at).hint(
-                "a module holds only definitions (`fn`, `struct`, `enum`, `ex`); the program that imports it has the statements",
-            );
+            let mut d = Diag::new("E0285", format!("module `{name}` has statements at the top level"), at)
+                .hint("a module holds only `fn`, `struct`, `enum` and `ex`");
             d.file = Some(shown_file);
             self.errs.push(d);
             return None;

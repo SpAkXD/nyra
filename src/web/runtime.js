@@ -175,6 +175,8 @@ function ny_send(text) {
         try {
             const t = document.createElement("template");
             t.innerHTML = ny_html(view());
+            // (the site's own images get their built names: src/web/images.js, when a view has any)
+            if (typeof ny_img_fix === "function") ny_img_fix(t.content);
             ny_morph(el, t.content);
         } catch (e) {
             console.error(e instanceof NyPanic ? e.message : e);

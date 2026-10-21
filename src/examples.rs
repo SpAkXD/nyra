@@ -337,26 +337,16 @@ fn report(p: &Plan, res: Res, input: Option<i64>) -> Diag {
                 _ => (format!("example `{text}` is false{at}"), "false".to_string(), "true".to_string()),
             };
             let hint = match &p.call {
-                Some((f, ..)) if p.forall.is_some() => format!(
-                    "if the property is right, `{f}` is wrong{at}: trace it with that value and fix it; change the example only if it expects the wrong thing"
-                ),
+                Some((f, ..)) if p.forall.is_some() => {
+                    format!("if the property is right, `{f}` is wrong{at}: trace it with that value")
+                }
                 Some((f, params, args)) if !params.is_empty() && params.len() == args.len() => {
                     let with: Vec<String> = params.iter().zip(args).map(|(p, a)| format!("{p} = {a}")).collect();
-                    format!(
-                        "if the example is right, `{f}` is wrong for {}: trace `{f}` with these values and fix it; change the example only if it expects the wrong value",
-                        with.join(", ")
-                    )
+                    format!("if the example is right, `{f}` is wrong for {}: trace it", with.join(", "))
                 }
-                Some((f, ..)) => format!(
-                    "if the example is right, `{f}` is wrong: trace it and fix it; change the example only if it expects the wrong value"
-                ),
-                None if p.builtins_only => {
-                    "the example calls no function of the program, so the example itself expects the wrong value: fix it".to_string()
-                }
-                None => format!(
-                    "if the example is right, {} is wrong for these values: trace it and fix it; change the example only if it expects the wrong value",
-                    named("a function it calls")
-                ),
+                Some((f, ..)) => format!("if the example is right, `{f}` is wrong: trace it"),
+                None if p.builtins_only => "it calls none of your functions: the example itself is wrong".to_string(),
+                None => format!("if the example is right, {} is wrong for these values: trace it", named("a function it calls")),
             };
             Diag::new("E0250", msg, p.span).hint(hint).values(actual, expected)
         }
@@ -376,31 +366,28 @@ fn report(p: &Plan, res: Res, input: Option<i64>) -> Diag {
         }
         Res::Steps => Diag::new(
             "E0253",
-            format!("example `{text}` did not finish{at} within {} steps", if p.forall.is_some() { PROPERTY_LIMITS.steps } else { LIMITS.steps }),
+            format!(
+                "example `{text}` did not finish{at} within {} steps",
+                if p.forall.is_some() { PROPERTY_LIMITS.steps } else { LIMITS.steps }
+            ),
             p.span,
         )
         .hint(format!(
-            "examples run while the program compiles, so they must be quick: look for a loop in {} that never ends (a `while` whose condition never changes), or use smaller inputs",
+            "examples must be quick: look for an endless loop in {}, or use smaller inputs",
             named("the functions it calls")
         )),
-        Res::Depth => Diag::new(
-            "E0253",
-            format!("example `{text}` did not finish{at}: more than {} calls were nested", LIMITS.depth),
-            p.span,
-        )
-        .hint(format!(
-            "look for a recursive call in {} that never reaches its base case, or use smaller inputs",
-            named("the functions it calls")
-        )),
-        Res::Memory => Diag::new(
-            "E0253",
-            format!("example `{text}` used more than {} MiB of memory{at}", LIMITS.memory >> 20),
-            p.span,
-        )
-        .hint(format!(
-            "examples run while the program compiles, so they must be small: look for a value that grows without end in {}, or use smaller inputs",
-            named("the functions it calls")
-        )),
+        Res::Depth => {
+            Diag::new("E0253", format!("example `{text}` did not finish{at}: more than {} calls were nested", LIMITS.depth), p.span)
+                .hint(format!(
+                    "look for a recursive call in {} that never reaches its base case, or use smaller inputs",
+                    named("the functions it calls")
+                ))
+        }
+        Res::Memory => {
+            Diag::new("E0253", format!("example `{text}` used more than {} MiB of memory{at}", LIMITS.memory >> 20), p.span).hint(
+                format!("examples must be small: look for a value that grows without end in {}", named("the functions it calls")),
+            )
+        }
         Res::Pass | Res::Skipped => unreachable!("not an error"),
     }
 }

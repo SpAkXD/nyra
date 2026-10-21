@@ -434,6 +434,91 @@ fn the_built_in_codec_makes_variants_and_previews() {
     assert_eq!(read(&dir.join("dist/index.html")), home);
 }
 
+/// A live view that shows an image, a gallery and an icon only after a click (the build's run never
+/// renders them): the build still makes the images' files and variants and tells the browser's
+/// runtime their names, includes the gallery's CSS and JS, and puts the icons in the page's sprite.
+/// With the real web library.
+#[test]
+fn what_a_live_view_shows_after_a_click_is_built_too() {
+    let dir = scratch("web-later");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("assets")).unwrap();
+    let mut seed = 11u32;
+    let mut noise = |x: u32, y: u32| {
+        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+        let n = seed >> 27;
+        [(x / 4 + n) as u8, (y / 3 + n) as u8, ((x + y) / 7) as u8, 255]
+    };
+    std::fs::write(dir.join("assets/hall.png"), real_png(1000, 700, &mut noise)).unwrap();
+    std::fs::write(dir.join("assets/garden.png"), real_png(900, 600, &mut noise)).unwrap();
+    std::fs::write(
+        dir.join("site.nyra"),
+        r#"use web
+
+enum Msg { Toggle }
+var open = false
+
+fn update(m: Msg) {
+    match m {
+        Msg.Toggle => open = !open
+    }
+}
+
+fn more() -> Node = stack {
+    button(open ? "Hide" : "Show", on: Msg.Toggle)
+    if open {
+        img("hall.png", "The hall")
+        gallery([("garden.png", "The garden", "")])
+        card("Bikes", "Free to borrow.", icon: "bike")
+    }
+}
+
+page("/", "Later") {
+    hero("Later", text: "More after a click.")
+    section("more", "More") {
+        more()
+    }
+}
+"#,
+    )
+    .unwrap();
+    let out = common::nyra().current_dir(&dir).args(["build", "site.nyra"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let dist = dir.join("dist");
+    let home = read(&dist.join("index.html"));
+    assert!(!home.contains("hall") && !home.contains("garden"), "the build's run shows neither image: {home}");
+
+    // the images' files and WebP variants
+    let names: Vec<String> =
+        std::fs::read_dir(dist.join("img")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    for prefix in ["hall-", "hall-480-", "garden-", "garden-480-"] {
+        assert!(
+            names.iter().any(|n| n.starts_with(prefix) && n.split('-').count() == prefix.matches('-').count() + 1),
+            "no {prefix}* in {names:?}"
+        );
+    }
+    // the client code maps the names the program wrote to them, with their sizes and previews
+    let js = read(&one(&dist, "site.", ".js"));
+    let hall =
+        js.split("\"hall.png\": [").nth(1).and_then(|s| s.split(']').next()).unwrap_or_else(|| panic!("no manifest entry: {js}"));
+    assert!(
+        hall.starts_with("\"img/hall-") && hall.contains(".webp 480w, img/hall-800-") && hall.contains(", 1000, 700, \"ph-"),
+        "{hall}"
+    );
+    assert!(js.contains("\"garden.png\": [\"img/garden-") && js.contains("function ny_img_fix("), "{js}");
+    // ... and the page has their previews
+    let style = home.split("<style>").nth(1).and_then(|s| s.split("</style>").next()).expect("a <style> with the previews");
+    assert_eq!(style.matches(".ph-").count(), 2, "{style}");
+    // the gallery's CSS and script (its lightbox), but not the chunks of components it cannot show
+    let css = read(&one(&dist, "site.", ".css"));
+    assert!(css.contains(".gallery-grid") && js.contains("lightbox"), "the gallery's chunk is missing");
+    assert!(!css.contains(".acc-item") && !css.contains(".map-frame") && !js.contains("map-load"), "unused chunks: {css}");
+    // the icons the view may draw are in the page's sprite
+    for icon in ["bike", "expand"] {
+        assert!(home.contains(&format!("<symbol id=\"i-{icon}\" viewBox=\"0 0 24 24\"><")), "no {icon} in the sprite: {home}");
+    }
+}
+
 /// Reads one HTTP response (the server closes the connection after it).
 fn get(port: u16, path: &str) -> (u16, String) {
     let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();

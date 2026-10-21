@@ -1,0 +1,946 @@
+{
+ "schema": "nyra-arena/1",
+ "updated": "2026-10-20",
+ "built": "2026-10-20",
+ "min_runs": 8,
+ "bootstrap": {
+  "resamples": 10000,
+  "seed": 20261020,
+  "interval": "95% percentile",
+  "web": "resample runs within each round x brief cell",
+  "lang": "resample tasks"
+ },
+ "totals": {
+  "graded_answers": 594,
+  "models": 3,
+  "rounds": 3,
+  "spent_usd": 36.2312
+ },
+ "categories": [
+  {
+   "id": "overall",
+   "name": "Overall",
+   "baseline": "HTML / Python",
+   "entries": [
+    {
+     "model": "claude-opus-5-5",
+     "runs": 99,
+     "score": 0.92,
+     "ci": [
+      0.8609,
+      0.9615
+     ],
+     "baseline": {
+      "lang": "HTML / Python",
+      "runs": 99,
+      "score": 1.0,
+      "ci": [
+       1.0,
+       1.0
+      ]
+     },
+     "parts": {
+      "web": {
+       "score": 0.864,
+       "ci": [
+        0.7459,
+        0.9275
+       ],
+       "baseline": 1.0,
+       "runs": 16
+      },
+      "lang": {
+       "score": 0.9759,
+       "ci": [
+        0.9398,
+        1.0
+       ],
+       "baseline": 1.0,
+       "runs": 83
+      }
+     },
+     "first": null,
+     "after": null,
+     "tokens": null,
+     "cost": null,
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.8248,
+       "baseline": 1.0,
+       "builds_first": 3,
+       "builds_after_repair": 7,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.9032,
+       "baseline": 1.0,
+       "builds_first": 4,
+       "builds_after_repair": 8,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.9759,
+       "baseline": 1.0,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Opus 5.5",
+     "short": "Opus 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 4.0,
+      "out": 20.0
+     },
+     "provisional": false,
+     "rank": 1,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-sonnet-5-5",
+     "runs": 99,
+     "score": 0.7972,
+     "ci": [
+      0.7173,
+      0.8812
+     ],
+     "baseline": {
+      "lang": "HTML / Python",
+      "runs": 99,
+      "score": 0.994,
+      "ci": [
+       0.9819,
+       1.0
+      ]
+     },
+     "parts": {
+      "web": {
+       "score": 0.6305,
+       "ci": [
+        0.5055,
+        0.8106
+       ],
+       "baseline": 1.0,
+       "runs": 16
+      },
+      "lang": {
+       "score": 0.9639,
+       "ci": [
+        0.9157,
+        1.0
+       ],
+       "baseline": 0.988,
+       "runs": 83
+      }
+     },
+     "first": null,
+     "after": null,
+     "tokens": null,
+     "cost": null,
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.5899,
+       "baseline": 1.0,
+       "builds_first": 3,
+       "builds_after_repair": 5,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.6711,
+       "baseline": 1.0,
+       "builds_first": 4,
+       "builds_after_repair": 6,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.9639,
+       "baseline": 0.988,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Sonnet 5.5",
+     "short": "Sonnet 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 2.0,
+      "out": 10.0
+     },
+     "provisional": false,
+     "rank": 2,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-haiku-4-5-20251001",
+     "runs": 99,
+     "score": 0.4265,
+     "ci": [
+      0.339,
+      0.5179
+     ],
+     "baseline": {
+      "lang": "HTML / Python",
+      "runs": 99,
+      "score": 0.8447,
+      "ci": [
+       0.7895,
+       0.8961
+      ]
+     },
+     "parts": {
+      "web": {
+       "score": 0.1903,
+       "ci": [
+        0.0446,
+        0.3445
+       ],
+       "baseline": 0.9063,
+       "runs": 16
+      },
+      "lang": {
+       "score": 0.6627,
+       "ci": [
+        0.5542,
+        0.759
+       ],
+       "baseline": 0.7831,
+       "runs": 83
+      }
+     },
+     "first": null,
+     "after": null,
+     "tokens": null,
+     "cost": null,
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.1029,
+       "baseline": 0.8591,
+       "builds_first": 0,
+       "builds_after_repair": 1,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.2777,
+       "baseline": 0.9535,
+       "builds_first": 1,
+       "builds_after_repair": 3,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.6627,
+       "baseline": 0.7831,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      },
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Haiku 4.5",
+     "short": "Haiku 4.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 1.0,
+      "out": 5.0
+     },
+     "provisional": false,
+     "rank": 3,
+     "rank_spread": [
+      3,
+      3
+     ]
+    }
+   ],
+   "score_def": "Unweighted mean of the Websites score and the Language tasks score.",
+   "unit": "mean of the two category scores"
+  },
+  {
+   "id": "web",
+   "name": "Websites",
+   "baseline": "HTML",
+   "entries": [
+    {
+     "model": "claude-opus-5-5",
+     "runs": 16,
+     "score": 0.864,
+     "ci": [
+      0.7459,
+      0.9275
+     ],
+     "score_built": 0.9216,
+     "first": {
+      "k": 7,
+      "n": 16,
+      "label": "Builds first try"
+     },
+     "after": {
+      "k": 15,
+      "n": 16,
+      "label": "Builds after 1 repair"
+     },
+     "baseline": {
+      "lang": "HTML",
+      "runs": 16,
+      "score": 1.0,
+      "ci": [
+       1.0,
+       1.0
+      ]
+     },
+     "tokens": {
+      "nyra": 3489.0625,
+      "baseline": 26055.625,
+      "ratio": 0.1339,
+      "what": "code tokens of the final file, mean over all runs (claude-sonnet-5-5 tokenizer)"
+     },
+     "cost": {
+      "answer": 0.2103,
+      "working": 0.2434,
+      "baseline_answer": 0.5766,
+      "baseline_working": 0.5766,
+      "total": 3.3646,
+      "baseline_total": 9.2263
+     },
+     "seconds": {
+      "nyra": 81.4688,
+      "baseline": 211.7812
+     },
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.8248,
+       "baseline": 1.0,
+       "builds_first": 3,
+       "builds_after_repair": 7,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.9032,
+       "baseline": 1.0,
+       "builds_first": 4,
+       "builds_after_repair": 8,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "name": "Claude Opus 5.5",
+     "short": "Opus 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 4.0,
+      "out": 20.0
+     },
+     "provisional": false,
+     "rank": 1,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-sonnet-5-5",
+     "runs": 16,
+     "score": 0.6305,
+     "ci": [
+      0.5055,
+      0.8106
+     ],
+     "score_built": 0.917,
+     "first": {
+      "k": 7,
+      "n": 16,
+      "label": "Builds first try"
+     },
+     "after": {
+      "k": 11,
+      "n": 16,
+      "label": "Builds after 1 repair"
+     },
+     "baseline": {
+      "lang": "HTML",
+      "runs": 16,
+      "score": 1.0,
+      "ci": [
+       1.0,
+       1.0
+      ]
+     },
+     "tokens": {
+      "nyra": 3159.5,
+      "baseline": 10345.0625,
+      "ratio": 0.3054,
+      "what": "code tokens of the final file, mean over all runs (claude-sonnet-5-5 tokenizer)"
+     },
+     "cost": {
+      "answer": 0.0628,
+      "working": 0.0997,
+      "baseline_answer": 0.1057,
+      "baseline_working": 0.1057,
+      "total": 1.0056,
+      "baseline_total": 1.691
+     },
+     "seconds": {
+      "nyra": 34.5438,
+      "baseline": 61.2938
+     },
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.5899,
+       "baseline": 1.0,
+       "builds_first": 3,
+       "builds_after_repair": 5,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.6711,
+       "baseline": 1.0,
+       "builds_first": 4,
+       "builds_after_repair": 6,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "name": "Claude Sonnet 5.5",
+     "short": "Sonnet 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 2.0,
+      "out": 10.0
+     },
+     "provisional": false,
+     "rank": 2,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-haiku-4-5-20251001",
+     "runs": 16,
+     "score": 0.1903,
+     "ci": [
+      0.0446,
+      0.3445
+     ],
+     "score_built": 0.7613,
+     "first": {
+      "k": 1,
+      "n": 16,
+      "label": "Builds first try"
+     },
+     "after": {
+      "k": 4,
+      "n": 16,
+      "label": "Builds after 1 repair"
+     },
+     "baseline": {
+      "lang": "HTML",
+      "runs": 16,
+      "score": 0.9063,
+      "ci": [
+       0.8374,
+       0.9553
+      ]
+     },
+     "tokens": {
+      "nyra": 3564.0,
+      "baseline": 17023.5625,
+      "ratio": 0.2094,
+      "what": "code tokens of the final file, mean over all runs (claude-sonnet-5-5 tokenizer)"
+     },
+     "cost": {
+      "answer": 0.033,
+      "working": 0.1735,
+      "baseline_answer": 0.074,
+      "baseline_working": 0.0816,
+      "total": 0.5285,
+      "baseline_total": 1.1834
+     },
+     "seconds": {
+      "nyra": 51.2812,
+      "baseline": 106.0375
+     },
+     "rounds": [
+      {
+       "round": "2026-10-19",
+       "date": "2026-10-19",
+       "label": "Web round 3 · dentist, gym",
+       "runs": 8,
+       "score": 0.1029,
+       "baseline": 0.8591,
+       "builds_first": 0,
+       "builds_after_repair": 1,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "round": "2026-10-20",
+       "date": "2026-10-20",
+       "label": "Web round 4 · guesthouse, garage",
+       "runs": 8,
+       "score": 0.2777,
+       "baseline": 0.9535,
+       "builds_first": 1,
+       "builds_after_repair": 3,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "Web round 3 · dentist, gym",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md"
+      },
+      {
+       "label": "Web round 4 · guesthouse, garage",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md"
+      }
+     ],
+     "name": "Claude Haiku 4.5",
+     "short": "Haiku 4.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 1.0,
+      "out": 5.0
+     },
+     "provisional": false,
+     "rank": 3,
+     "rank_spread": [
+      3,
+      3
+     ]
+    }
+   ],
+   "score_def": "Mean functional-checklist score per site on held-out client briefs. A Nyra file that does not build after one repair turn scores 0.",
+   "unit": "checklist score, failed builds = 0"
+  },
+  {
+   "id": "lang",
+   "name": "Language tasks",
+   "baseline": "Python",
+   "entries": [
+    {
+     "model": "claude-opus-5-5",
+     "runs": 83,
+     "score": 0.9759,
+     "ci": [
+      0.9398,
+      1.0
+     ],
+     "first": {
+      "k": 82,
+      "n": 83,
+      "label": "Compiles first try"
+     },
+     "after": {
+      "k": 83,
+      "n": 83,
+      "label": "Passes within 3 repairs"
+     },
+     "baseline": {
+      "lang": "Python",
+      "runs": 83,
+      "score": 1.0,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "after": 83
+     },
+     "tokens": {
+      "nyra": 467.5062,
+      "baseline": 365.321,
+      "ratio": 1.2797,
+      "what": "code tokens, first attempt, on the 81 tasks both languages passed first try"
+     },
+     "cost": {
+      "answer": 0.0624,
+      "working": 0.0624,
+      "baseline_answer": 0.013,
+      "baseline_working": 0.013,
+      "total": 5.1766,
+      "baseline_total": 1.0821
+     },
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.9759,
+       "baseline": 1.0,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Opus 5.5",
+     "short": "Opus 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 4.0,
+      "out": 20.0
+     },
+     "provisional": false,
+     "rank": 1,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-sonnet-5-5",
+     "runs": 83,
+     "score": 0.9639,
+     "ci": [
+      0.9157,
+      1.0
+     ],
+     "first": {
+      "k": 80,
+      "n": 83,
+      "label": "Compiles first try"
+     },
+     "after": {
+      "k": 83,
+      "n": 83,
+      "label": "Passes within 3 repairs"
+     },
+     "baseline": {
+      "lang": "Python",
+      "runs": 83,
+      "score": 0.988,
+      "ci": [
+       0.9639,
+       1.0
+      ],
+      "after": 83
+     },
+     "tokens": {
+      "nyra": 398.0,
+      "baseline": 327.2405,
+      "ratio": 1.2162,
+      "what": "code tokens, first attempt, on the 79 tasks both languages passed first try"
+     },
+     "cost": {
+      "answer": 0.0374,
+      "working": 0.0374,
+      "baseline_answer": 0.0084,
+      "baseline_working": 0.0084,
+      "total": 3.105,
+      "baseline_total": 0.6984
+     },
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.9639,
+       "baseline": 0.988,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Sonnet 5.5",
+     "short": "Sonnet 5.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 2.0,
+      "out": 10.0
+     },
+     "provisional": false,
+     "rank": 2,
+     "rank_spread": [
+      1,
+      2
+     ]
+    },
+    {
+     "model": "claude-haiku-4-5-20251001",
+     "runs": 83,
+     "score": 0.6627,
+     "ci": [
+      0.5542,
+      0.759
+     ],
+     "first": {
+      "k": 63,
+      "n": 83,
+      "label": "Compiles first try"
+     },
+     "after": {
+      "k": 68,
+      "n": 83,
+      "label": "Passes within 3 repairs"
+     },
+     "baseline": {
+      "lang": "Python",
+      "runs": 83,
+      "score": 0.7831,
+      "ci": [
+       0.6867,
+       0.8675
+      ],
+      "after": 77
+     },
+     "tokens": {
+      "nyra": 216.9623,
+      "baseline": 182.0377,
+      "ratio": 1.1919,
+      "what": "code tokens, first attempt, on the 53 tasks both languages passed first try"
+     },
+     "cost": {
+      "answer": 0.0268,
+      "working": 0.0327,
+      "baseline_answer": 0.0068,
+      "baseline_working": 0.0073,
+      "total": 2.2262,
+      "baseline_total": 0.5639
+     },
+     "seconds": null,
+     "rounds": [
+      {
+       "round": "2026-10-v0.5-anthropic",
+       "date": "2026-10-09",
+       "label": "Language tasks · 83 programs",
+       "runs": 83,
+       "score": 0.6627,
+       "baseline": 0.7831,
+       "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "reports": [
+      {
+       "label": "2026-10-v0.5-anthropic (published summary)",
+       "url": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md"
+      }
+     ],
+     "name": "Claude Haiku 4.5",
+     "short": "Haiku 4.5",
+     "provider": "Anthropic",
+     "license": "Proprietary",
+     "price": {
+      "in": 1.0,
+      "out": 5.0
+     },
+     "provisional": false,
+     "rank": 3,
+     "rank_spread": [
+      3,
+      3
+     ]
+    }
+   ],
+   "score_def": "Share of the 83 small programs whose first answer printed the exact expected output (pass@1).",
+   "unit": "first-try pass rate"
+  }
+ ],
+ "rounds": [
+  {
+   "id": "2026-10-20",
+   "category": "web",
+   "date": "2026-10-20",
+   "label": "Web round 4 · guesthouse, garage",
+   "briefs": [
+    "garage",
+    "guesthouse"
+   ],
+   "held_out": true,
+   "models": [
+    "claude-haiku-4-5-20251001",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "runs": 48,
+   "runs_per_cell": 4,
+   "spent_usd": 8.6931,
+   "nyra": "v0.8 @ 679f69a (after the round-3 web fixes)",
+   "note": "Two new held-out briefs, frozen before the first model call. run_model.py reuses these briefs for new models.",
+   "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-20/REPORT.md",
+   "folder": "https://github.com/SpAkXD/nyra/tree/v0.8/bench/web/results/2026-10-20"
+  },
+  {
+   "id": "2026-10-19",
+   "category": "web",
+   "date": "2026-10-19",
+   "label": "Web round 3 · dentist, gym",
+   "briefs": [
+    "dentist",
+    "gym"
+   ],
+   "held_out": true,
+   "models": [
+    "claude-haiku-4-5-20251001",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "runs": 48,
+   "runs_per_cell": 4,
+   "spent_usd": 8.3063,
+   "nyra": "v0.8 @ fbca6d9 (before the round-3 web fixes)",
+   "note": "Held out when run. These two briefs were studied afterwards to fix Nyra, so they are not reused for new models.",
+   "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/web/results/2026-10-19/REPORT.md",
+   "folder": "https://github.com/SpAkXD/nyra/tree/v0.8/bench/web/results/2026-10-19"
+  },
+  {
+   "id": "2026-10-v0.5-anthropic",
+   "category": "lang",
+   "date": "2026-10-09",
+   "label": "Language tasks · 83 programs",
+   "tasks": 83,
+   "samples": 1,
+   "repairs": 3,
+   "models": [
+    "claude-haiku-4-5-20251001",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "runs": 498,
+   "spent_usd": 19.2318,
+   "nyra": "nyra 0.4.0",
+   "held_out": false,
+   "report": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.md",
+   "folder": "https://github.com/SpAkXD/nyra/blob/v0.8/bench/published/2026-10-v0.5-anthropic.json"
+  }
+ ],
+ "excluded": [
+  "Early OpenRouter runs (Gemini, DeepSeek, Haiku via OpenRouter, 2026-10-07/08) and the bakery web pilot: another task set, a tuned prompt and an old card; never published and not comparable."
+ ],
+ "sources": {
+  "web": "https://github.com/SpAkXD/nyra/tree/v0.8/bench/web/results",
+  "lang": "https://github.com/SpAkXD/nyra/tree/v0.8/bench/published",
+  "arena": "https://github.com/SpAkXD/nyra/tree/v0.8/bench/arena"
+ }
+}

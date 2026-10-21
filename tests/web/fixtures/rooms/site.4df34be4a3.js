@@ -1,66 +1,5 @@
 (() => {
 (() => {
-const nav = document.querySelector('.nav');
-if (!nav) return;
-const bar = nav.querySelector('.nav-progress');
-let queued = false;
-const onScroll = () => {
-queued = false;
-const y = window.scrollY;
-nav.classList.toggle('is-scrolled', y > 40);
-if (bar) {
-const max = document.documentElement.scrollHeight - window.innerHeight;
-bar.style.setProperty('--progress', max > 0 ? Math.min(y / max, 1).toFixed(4) : '0');
-}
-};
-window.addEventListener('scroll', () => {
-if (!queued) {
-queued = true;
-requestAnimationFrame(onScroll);
-}
-}, { passive: true });
-onScroll();
-const more = nav.querySelector('.nav-more');
-if (more) {
-const toggle = more.querySelector('.nav-toggle');
-more.addEventListener('toggle', () => {
-toggle.setAttribute('aria-label', more.open ? toggle.dataset.close : toggle.dataset.open);
-toggle.setAttribute('aria-expanded', String(more.open));
-});
-toggle.setAttribute('aria-expanded', 'false');
-more.addEventListener('click', (e) => {
-if (e.target.closest('.nav-menu a')) more.open = false;
-});
-document.addEventListener('keydown', (e) => {
-if (e.key === 'Escape' && more.open) {
-more.open = false;
-toggle.focus();
-}
-});
-document.addEventListener('click', (e) => {
-if (more.open && !nav.contains(e.target)) more.open = false;
-});
-window.matchMedia('(min-width: 1024px)').addEventListener('change', (m) => {
-if (m.matches) more.open = false;
-});
-}
-const links = [...nav.querySelectorAll('.nav-links a, .nav-menu ul a')].filter((a) => /^#./.test(a.getAttribute('href')));
-const sections = [...new Set(links.map((a) => a.getAttribute('href').slice(1)))]
-.map((id) => document.getElementById(id))
-.filter(Boolean);
-if (!sections.length || !('IntersectionObserver' in window)) return;
-const io = new IntersectionObserver((entries) => {
-for (const e of entries) {
-if (!e.isIntersecting) continue;
-for (const a of links) {
-if (a.getAttribute('href') === '#' + e.target.id) a.setAttribute('aria-current', 'true');
-else a.removeAttribute('aria-current');
-}
-}
-}, { rootMargin: '-35% 0px -60% 0px' });
-sections.forEach((s) => io.observe(s));
-})();
-(() => {
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const now = (tz) => {
 try {
@@ -115,67 +54,6 @@ for (const tr of card.querySelectorAll('tr[data-days]')) tr.classList.toggle('is
 };
 update();
 setInterval(update, 60000);
-})();
-(() => {
-document.addEventListener('click', (e) => {
-const link = e.target.closest('.map-load');
-const frame = link && link.closest('.map-frame');
-if (!frame || !frame.dataset.src || e.metaKey || e.ctrlKey) return;
-e.preventDefault();
-const f = document.createElement('iframe');
-f.src = frame.dataset.src;
-f.title = frame.dataset.title || '';
-f.loading = 'lazy';
-f.referrerPolicy = 'no-referrer-when-downgrade';
-f.allowFullscreen = true;
-frame.replaceChildren(f);
-});
-})();
-(() => {
-document.addEventListener('submit', (e) => {
-const form = e.target.closest && e.target.closest('.form-body[data-mailto]');
-if (!form) return;
-e.preventDefault();
-if (!form.reportValidity()) return;
-const fields = [...form.elements].filter((el) => el.name && !['submit', 'button'].includes(el.type));
-const message = fields.find((el) => el.tagName === 'TEXTAREA');
-const label = (el) => {
-const l = el.closest('label') || form.querySelector(`label[for="${el.id}"]`);
-return (l ? l.textContent : el.name).replace('*', '').trim();
-};
-const lines = fields
-.filter((el) => el !== message && (el.type === 'checkbox' ? el.checked : el.value.trim()))
-.map((el) => (el.type === 'checkbox' ? label(el) : el.value.trim()));
-let body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
-const query = (form.dataset.query || '').split('&').filter((kv) => {
-if (!/^body=/i.test(kv)) return kv !== '';
-try {
-body = decodeURIComponent(kv.slice(5)) + '\n\n' + body;
-} catch {
-body = kv.slice(5) + '\n\n' + body;
-}
-return false;
-});
-query.push('body=' + encodeURIComponent(body));
-window.location.href = 'mailto:' + form.dataset.mailto + '?' + query.join('&');
-const card = form.closest('.form');
-const done = card && card.querySelector('.form-done');
-if (done) {
-form.hidden = true;
-done.hidden = false;
-const edit = done.querySelector('.form-edit');
-if (edit) edit.focus();
-}
-});
-document.addEventListener('click', (e) => {
-const edit = e.target.closest('.form-edit');
-const card = edit && edit.closest('.form');
-if (!card) return;
-card.querySelector('.form-body').hidden = false;
-card.querySelector('.form-done').hidden = true;
-const first = card.querySelector('input, textarea, select');
-if (first) first.focus();
-});
 })();
 (() => {
 const ICON = {
@@ -369,60 +247,11 @@ else if(!el.hasAttribute('data-at'))io.observe(el);
 else if(!el.parentElement.closest('[data-anim]'))requestAnimationFrame(()=>show(el));
 }
 };
-setup.push(()=>{
-if(RM)return;
-for(const el of $('[data-anim~=words],[data-anim~=letters]')){
-const L=el.matches('[data-anim~=letters]');
-let j=0;
-if(L)el.setAttribute('aria-label',el.textContent.trim());
-const span=(c,t)=>{
-const s=D.createElement('span');
-s.className=c;
-if(t){s.textContent=t;s.style.setProperty('--m-j',j++);}
-return s;
-};
-const walk=(n)=>{
-for(const c of[...n.childNodes]){
-if(c.nodeType==1){walk(c);continue;}
-if(c.nodeType!=3)continue;
-const f=D.createDocumentFragment();
-for(const p of c.data.split(/([ \t\n\r]+)/)){
-if(!p||/^[ \t\n\r]/.test(p)){f.append(p);continue;}
-const w=span(L?'m-lw':'m-w');
-if(L){w.ariaHidden='true';for(const ch of p)w.append(span('m-li',ch));}
-else w.append(span('m-wi',p));
-f.append(w);
-}
-c.replaceWith(f);
-}
-};
-walk(el);
-}
-});
-on.push((el)=>{
-if(RM||!el.matches('[data-anim~=count]'))return;
-const w=D.createTreeWalker(el,4);
-let n,m;
-while((n=w.nextNode())&&!(m=/(\d{1,3}(?:([   ,.])\d{3})+(?!\d)|\d+)([.,]\d+)?/.exec(n.data)));
-if(!m)return;
-const[all,int,sep,dec='']=m,pre=n.data.slice(0,m.index),post=n.data.slice(m.index+all.length),
-end=+(int.replace(/\D/g,'')+'.'+(dec.slice(1)||0)),
-t0=performance.now()+(1000*parseFloat(getComputedStyle(el).animationDelay)||0),
-fmt=(v)=>{
-const[a,b]=v.toFixed(dec.length&&dec.length-1).split('.');
-return pre+(sep?a.replace(/\B(?=(\d{3})+$)/g,sep):a)+(b?dec[0]+b:'')+post;
-};
-loop((dt,t)=>{
-const p=Math.min(Math.max((t-t0)/1600,0),1);
-n.data=fmt(p<1?end*(1-Math.pow(2,-10*p)):end);
-return p<1;
-});
-});
 D.readyState=='loading'?D.addEventListener('DOMContentLoaded',init):init();
 })();
 (() => {
 "use strict";
-const ny_file = "bakery.nyra";
+const ny_file = "rooms.nyra";
 class NyPanic extends Error {}
 function ny_panic(code, msg, hint, line, col) {
 const json = typeof process !== "undefined" && process.env.NYRA_JSON;
@@ -550,6 +379,11 @@ NY_KEYS.set(s, c);
 }
 return c;
 }
+function ny_mget(m, k, kt, line, col) {
+k = ny_ik(k);
+if (!m.has(k)) ny_panic("E0248", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
+return m.get(k);
+}
 function ny_aindex(a, v) {
 for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
 return -1;
@@ -656,7 +490,7 @@ class nyS_Msg {
 constructor(p0, p1) { this.tag = p0; this.Show_0 = p1; }
 ny_cp() { return new nyS_Msg(this.tag, this.Show_0); }
 ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0; }
-ny_fmt() { const n = ["Msg.Show"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; return n; }
+ny_fmt() { const n = ["Msg.Show", "Msg.Photos"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; return n; }
 }
 class nyS_Node {
 constructor(p0, p1) { this.html = p0; this.kit = p1; }
@@ -694,11 +528,11 @@ ny_cp() { return new nyS_Tup_t3sss(this._0, this._1, this._2); }
 ny_eq(o) { return this._0 === o._0 && this._1 === o._1 && this._2 === o._2; }
 ny_fmt() { return "(" + ny_fmt(this._0, "s") + ", " + ny_fmt(this._1, "s") + ", " + ny_fmt(this._2, "s") + ")"; }
 }
-class nyS_Product {
-constructor(p0, p1, p2, p3, p4) { this.name = p0; this.cat = p1; this.text = p2; this.image = p3; this.tag = p4; }
-ny_cp() { return new nyS_Product(this.name, this.cat, this.text, this.image, this.tag); }
-ny_eq(o) { return this.name === o.name && this.cat === o.cat && this.text === o.text && this.image === o.image && this.tag === o.tag; }
-ny_fmt() { return "Product(" + "name: " + ny_fmt(this.name, "s") + ", " + "cat: " + ny_fmt(this.cat, "s") + ", " + "text: " + ny_fmt(this.text, "s") + ", " + "image: " + ny_fmt(this.image, "s") + ", " + "tag: " + ny_fmt(this.tag, "s") + ")"; }
+class nyS_Room {
+constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.photo = p2; }
+ny_cp() { return new nyS_Room(this.name, this.kind, this.photo); }
+ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.photo === o.photo; }
+ny_fmt() { return "Room(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "photo: " + ny_fmt(this.photo, "s") + ")"; }
 }
 class nyS_Opt_oi {
 constructor(p0, p1) { this.has = p0; this.val = p1; }
@@ -707,7 +541,7 @@ ny_eq(o) { return this.has === o.has && this.val === o.val; }
 ny_fmt() { return this.has ? "Some(" + ny_fmt(this.val, "i") + ")" : "none"; }
 }
 nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"]];
-nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]]];
+nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Photos", []]];
 nyS_Node.ny_jf = [["html", "html", "s"], ["kit", "kit", ["a", "s"]]];
 nyS_WebConfig.ny_jf = [["name", "name", "s"], ["url", "url", "s"], ["lang", "lang", "s"], ["tz", "tz", "s"], ["desc", "desc", "s"], ["share", "share", "s"], ["style", "style", "s"], ["motion", "motion", "s"], ["transition", "transition", "s"], ["font", "font", "s"], ["display", "display", "s"], ["primary", "primary", "s"], ["logo", "logo", "s"], ["say", "say", ["m", "s", "s"]], ["palette", "palette", ["m", "s", "s"]]];
 nyS_Opt_of.ny_jf = [["has", "has", "b"], ["val", "val", "f"]];
@@ -718,31 +552,34 @@ nyS_Opt_ot2ss.ny_jf = [["has", "has", "b"], ["val", "val", nyS_Tup_t2ss]];
 nyS_Opt_ot2ss.ny_jk = "o";
 nyS_Tup_t3sss.ny_jf = [["_0", "_0", "s"], ["_1", "_1", "s"], ["_2", "_2", "s"]];
 nyS_Tup_t3sss.ny_jk = "t";
-nyS_Product.ny_jf = [["name", "name", "s"], ["cat", "cat", "s"], ["text", "text", "s"], ["image", "image", "s"], ["tag", "tag", "s"]];
+nyS_Room.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["photo", "photo", "s"]];
 nyS_Opt_oi.ny_jf = [["has", "has", "b"], ["val", "val", "i"]];
 nyS_Opt_oi.ny_jk = "o";
-function update(m, cat_now) {
-let nyU__ub7_m1, k, ny_t4;
+function update(m, kind, photos) {
+let nyU__ub7_m1, k, ny_t5;
 nyU__ub7_m1 = m;
 ny_sh(nyU__ub7_m1);
+if (nyU__ub7_m1.tag === 0) {
 k = nyU__ub7_m1.Show_0;
-ny_t4 = k;
-cat_now.v = ny_t4;
+ny_t5 = k;
+kind.v = ny_t5;
+} else {
+photos.v = !photos.v;
 }
-function product_grid(_web, products, product_tabs, cat_now) {
-let ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, t, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, x, ny_t19, d, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26;
+}
+function roomList(_web, rooms, extras, kind) {
+let ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, k, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, r, ny_t19, ny_r_2, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, e, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37;
 ny_t4 = new nyS_Opt_of(false, 0.0);
 ny_t5 = [];
 ny_t6 = new nyS_Opt_of(false, 0.0);
 ny_t7 = [];
-ny_t8 = product_tabs;
-ny_sh(ny_t8);
+ny_t8 = ["all", "double", "family"];
 for (const ny_c1 of ny_t8) {
-t = ny_c1;
-ny_t10 = new nyS_Msg(0, t._0);
+k = ny_c1;
+ny_t10 = new nyS_Msg(0, k);
 ny_t11 = nyU_web_u2e__on(ny_t10);
 ny_t12 = new nyS_Opt_of(false, 0.0);
-ny_t13 = nyU_web_u2e_button(t._1, "", "", ny_t11, t._0 === cat_now, "", "", "", "", "", "", "", "", "", ny_t12, "");
+ny_t13 = nyU_web_u2e_button(k, "", "", ny_t11, k === kind, "", "", "", "", "", "", "", "", "", ny_t12, "");
 {
 if (ny_t7.ny_s) ny_t7 = ny_cp(ny_t7);
 ny_t7.push(ny_sh(ny_t13));
@@ -756,34 +593,98 @@ ny_t5.push(ny_sh(ny_t14));
 ny_t15 = new nyS_Opt_of(false, 0.0);
 ny_t16 = [];
 ny_t17 = [];
-for (const ny_c2 of products) {
-x = ny_c2;
-if ((cat_now === "all") || (x.cat === cat_now)) {
+for (const ny_c2 of rooms) {
+r = ny_c2;
+if ((kind === "all") || (r.kind === kind)) {
 {
 if (ny_t17.ny_s) ny_t17 = ny_cp(ny_t17);
-ny_t17.push(ny_sh(x));
+ny_t17.push(ny_sh(r));
 }
 }
 }
 ny_t19 = ny_t17;
 for (const ny_c3 of ny_t19) {
-d = ny_c3;
+ny_r_2 = ny_c3;
 ny_t21 = [];
 ny_t22 = new nyS_Opt_of(false, 0.0);
 ny_t23 = [];
-ny_t24 = nyU_web_u2e_card(d.name, d.text, "", d.image, "", false, "", "", "", d.tag, ny_t21, "", "", "", "", "", "", "", ny_t22, "", ny_t23, _web);
+ny_t24 = new nyS_Opt_of(false, 0.0);
+ny_t25 = nyU_web_u2e_img(ny_r_2.photo, ny_r_2.name, "4/3", "", "", "", "", "", "", "", "", "", ny_t24, "");
+{
+if (ny_t23.ny_s) ny_t23 = ny_cp(ny_t23);
+ny_t23.push(ny_sh(ny_t25));
+}
+ny_t26 = nyU_web_u2e_card(ny_r_2.name, ny_r_2.kind, "", "", "", false, "", "", "", "", ny_t21, "", "", "", "", "", "", "", ny_t22, "", ny_t23, _web);
 {
 if (ny_t16.ny_s) ny_t16 = ny_cp(ny_t16);
-ny_t16.push(ny_sh(ny_t24));
+ny_t16.push(ny_sh(ny_t26));
 }
 }
-ny_t25 = nyU_web_u2e_grid(4, "", "", false, "", "", "", "stagger", "lift", "", "", ny_t15, "", ny_t16);
+ny_t27 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "", "", "", "", ny_t15, "", ny_t16);
 {
 if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
-ny_t5.push(ny_sh(ny_t25));
+ny_t5.push(ny_sh(ny_t27));
 }
-ny_t26 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t4, "", ny_t5);
-return ny_t26;
+if (kind !== "all") {
+ny_t28 = new nyS_Opt_of(false, 0.0);
+ny_t29 = [];
+ny_t30 = extras;
+ny_sh(ny_t30);
+for (const ny_c4 of ny_t30) {
+e = ny_c4;
+ny_t32 = [];
+ny_t33 = new nyS_Opt_of(false, 0.0);
+ny_t34 = [];
+ny_t35 = nyU_web_u2e_card(e, kind, "", "", "", false, "", "", "", "", ny_t32, "", "", "", "", "", "", "", ny_t33, "", ny_t34, _web);
+{
+if (ny_t29.ny_s) ny_t29 = ny_cp(ny_t29);
+ny_t29.push(ny_sh(ny_t35));
+}
+}
+ny_t36 = nyU_web_u2e_grid(8, "", "", false, "", "", "", "", "", "", "", ny_t28, "", ny_t29);
+{
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t36));
+}
+}
+ny_t37 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t4, "", ny_t5);
+return ny_t37;
+}
+function album(_web, photos) {
+let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19;
+ny_t2 = new nyS_Opt_of(false, 0.0);
+ny_t3 = [];
+ny_t4 = new nyS_Msg(1, "");
+ny_t5 = nyU_web_u2e__on(ny_t4);
+ny_t6 = new nyS_Opt_of(false, 0.0);
+ny_t7 = nyU_web_u2e_button(photos ? "Hide photos" : "Show photos", "", "", ny_t5, false, "", "", "", "", "", "", "", "", "", ny_t6, "");
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t7));
+}
+if (photos) {
+ny_t8 = new nyS_Tup_t3sss("photo-4.svg", "The river at dawn", "");
+ny_t9 = new nyS_Tup_t3sss("photo-5.svg", "Breakfast in the garden", "");
+ny_t10 = new nyS_Tup_t3sss("photo-6.svg", "The mill wheel", "");
+ny_t11 = [ny_sh(ny_t8), ny_sh(ny_t9), ny_sh(ny_t10)];
+ny_t12 = [];
+ny_t13 = new nyS_Opt_of(false, 0.0);
+ny_t14 = nyU_web_u2e_gallery(ny_t11, ny_t12, "", 3, "", "", "", "", "", "", ny_t13, "", _web);
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t14));
+}
+ny_t15 = [];
+ny_t16 = new nyS_Opt_of(false, 0.0);
+ny_t17 = [];
+ny_t18 = nyU_web_u2e_card("Bikes", "Free to borrow for the river path.", "bike", "", "", false, "", "", "", "", ny_t15, "", "", "", "", "", "", "", ny_t16, "", ny_t17, _web);
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t18));
+}
+}
+ny_t19 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t2, "", ny_t3);
+return ny_t19;
 }
 function nyU_web_u2e__render(view) {
 let ny_t1;
@@ -1068,6 +969,60 @@ ny_t72 = nyU_web_u2e__kits(kids, "");
 ny_t73 = new nyS_Node(h, ny_sh(ny_t72));
 return ny_t73;
 }
+function nyU_web_u2e_img(src, alt, ratio, caption, fit, width, id, cls, anim, hover, loop, scroll, at, morph) {
+let c, style, ny_t16, ny_t17, ny_t18, ny_t19, h, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33;
+c = "fig";
+if (fit === "contain") {
+{
+c += " fig-contain";
+}
+}
+if (ratio !== "") {
+{
+c += " fig-ratio";
+}
+}
+if (ratio !== "") {
+ny_t16 = "--ratio:" + ratio;
+style = ny_t16 + ";";
+} else {
+style = "";
+}
+if (width !== "") {
+{
+c += " fig-w";
+}
+ny_t17 = nyU_web_u2e__size(width);
+ny_t18 = "--w:" + ny_t17;
+ny_t19 = ny_t18 + ";";
+{
+style += ny_t19;
+}
+}
+ny_t21 = nyU_web_u2e__ic(c, id, cls);
+ny_t22 = "<figure" + ny_t21;
+ny_t23 = nyU_web_u2e__at("style", style);
+h = ny_t22 + ny_t23;
+ny_t24 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t25 = ny_t24 + ">";
+ny_t26 = nyU_web_u2e__img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false);
+ny_t27 = ny_t25 + ny_t26;
+{
+h += ny_t27;
+}
+if (caption !== "") {
+ny_t28 = nyU_web_u2e__md(caption);
+ny_t29 = "<figcaption>" + ny_t28;
+ny_t30 = ny_t29 + "</figcaption>";
+{
+h += ny_t30;
+}
+}
+ny_t31 = h + "</figure>";
+ny_t32 = [];
+ny_t33 = new nyS_Node(ny_t31, ny_sh(ny_t32));
+return ny_t33;
+}
 function nyU_web_u2e_button(text, href, style, on, active, icon, label, size, id, cls, anim, hover, loop, scroll, at, morph) {
 let c, ny_t17, ny_t18, ny_t19, inner, ny_t21, ny_t22, motion, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, h, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49;
 if (style !== "") {
@@ -1132,13 +1087,149 @@ ny_t48 = [];
 ny_t49 = new nyS_Node(ny_t47, ny_sh(ny_t48));
 return ny_t49;
 }
+function nyU_web_u2e_gallery(photos, filters, all, cols, id, cls, anim, hover, loop, scroll, at, morph, _web) {
+let h, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, f, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49, ph, label, ny_t52, ny_f_2, ny_t54, tint, ny_t56, ny_t57, ny_t58, ny_t59, ny_t60, ny_t61, ny_t62, ny_t63, ny_t64, ny_t65, ny_t66, ny_t67, ny_t68, ny_t69, ny_t70, ny_t71, ny_t72, ny_t73, ny_t74, ny_t75, ny_t76, ny_t77, ny_t78, ny_t79, ny_t80, ny_t81, ny_t82, ny_t83, ny_t84;
+ny_t14 = "gallery" + ((cols === 2) ? " gallery-2" : ((cols === 4) ? " gallery-4" : ""));
+ny_t15 = nyU_web_u2e__ic(ny_t14, id, cls);
+h = "<div" + ny_t15;
+ny_t16 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t17 = ny_t16 + " data-zoom=\"";
+ny_t18 = nyU_web_u2e__say("zoom", _web);
+ny_t19 = nyU_web_u2e__attr(ny_t18);
+ny_t20 = ny_t17 + ny_t19;
+ny_t21 = ny_t20 + "\" data-prev=\"";
+ny_t22 = nyU_web_u2e__say("prev", _web);
+ny_t23 = nyU_web_u2e__attr(ny_t22);
+ny_t24 = ny_t21 + ny_t23;
+{
+h += ny_t24;
+}
+ny_t25 = nyU_web_u2e__say("next", _web);
+ny_t26 = nyU_web_u2e__attr(ny_t25);
+ny_t27 = "\" data-next=\"" + ny_t26;
+ny_t28 = ny_t27 + "\" data-dismiss=\"";
+ny_t29 = nyU_web_u2e__say("dismiss", _web);
+ny_t30 = nyU_web_u2e__attr(ny_t29);
+ny_t31 = ny_t28 + ny_t30;
+ny_t32 = ny_t31 + "\">";
+{
+h += ny_t32;
+}
+if (filters.length > 0) {
+ny_t33 = nyU_web_u2e__say("filter", _web);
+ny_t34 = nyU_web_u2e__attr(ny_t33);
+ny_t35 = "<div class=\"tabs\" role=\"tablist\" aria-label=\"" + ny_t34;
+ny_t36 = ny_t35 + "\" hidden>";
+{
+h += ny_t36;
+}
+if (all !== "") {
+ny_t37 = all;
+} else {
+ny_t37 = nyU_web_u2e__say("all", _web);
+}
+ny_t38 = nyU_web_u2e__md(ny_t37);
+ny_t39 = "<button type=\"button\" role=\"tab\" aria-selected=\"true\" data-filter=\"\">" + ny_t38;
+ny_t40 = ny_t39 + "</button>";
+{
+h += ny_t40;
+}
+ny_t41 = filters;
+ny_sh(ny_t41);
+for (const ny_c1 of ny_t41) {
+f = ny_c1;
+ny_t43 = nyU_web_u2e__attr(f._0);
+ny_t44 = "<button type=\"button\" role=\"tab\" aria-selected=\"false\" data-filter=\"" + ny_t43;
+ny_t45 = ny_t44 + "\">";
+ny_t46 = nyU_web_u2e__md(f._1);
+ny_t47 = ny_t45 + ny_t46;
+ny_t48 = ny_t47 + "</button>";
+{
+h += ny_t48;
+}
+}
+{
+h += "</div>";
+}
+}
+{
+h += "<div class=\"gallery-grid\">";
+}
+ny_t49 = photos;
+ny_sh(ny_t49);
+for (const ny_c2 of ny_t49) {
+ph = ny_c2;
+label = "";
+ny_t52 = filters;
+ny_sh(ny_t52);
+for (const ny_c3 of ny_t52) {
+ny_f_2 = ny_c3;
+if (ny_f_2._0 === ph._2) {
+ny_t54 = ny_f_2._1;
+label = ny_t54;
+}
+}
+if (_web.palette.has(ny_ik(ph._2))) {
+ny_t56 = nyU_web_u2e__word(ph._2);
+ny_t57 = " style=\"--tint:var(--c-" + ny_t56;
+tint = ny_t57 + ")\"";
+} else {
+tint = "";
+}
+ny_t58 = nyU_web_u2e__src(ph._0);
+ny_t59 = nyU_web_u2e__attr(ny_t58);
+ny_t60 = "<a class=\"gallery-item\" href=\"" + ny_t59;
+ny_t61 = ny_t60 + "\"";
+ny_t62 = nyU_web_u2e__at("data-tag", ph._2);
+ny_t63 = ny_t61 + ny_t62;
+ny_t64 = ny_t63 + tint;
+ny_t65 = ny_t64 + " aria-label=\"";
+{
+h += ny_t65;
+}
+ny_t66 = nyU_web_u2e__say("zoom", _web);
+ny_t67 = ny_t66 + ": ";
+ny_t68 = ny_t67 + ph._1;
+ny_t69 = nyU_web_u2e__attr(ny_t68);
+ny_t70 = ny_t69 + "\">";
+ny_t71 = nyU_web_u2e__img_tag(ph._0, ph._1, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false);
+ny_t72 = ny_t70 + ny_t71;
+{
+h += ny_t72;
+}
+{
+h += "<span class=\"gallery-over\" aria-hidden=\"true\">";
+}
+if (label !== "") {
+ny_t73 = nyU_web_u2e__md(label);
+ny_t74 = "<span class=\"gallery-tag\">" + ny_t73;
+ny_t75 = ny_t74 + "</span>";
+{
+h += ny_t75;
+}
+}
+ny_t76 = nyU_web_u2e__esc(ph._1);
+ny_t77 = "<span class=\"gallery-cap\">" + ny_t76;
+ny_t78 = ny_t77 + "</span>";
+ny_t79 = nyU_web_u2e__icon("expand");
+ny_t80 = ny_t78 + ny_t79;
+ny_t81 = ny_t80 + "</span></a>";
+{
+h += ny_t81;
+}
+}
+ny_t82 = h + "</div></div>";
+ny_t83 = ["gallery", "tabs"];
+ny_t84 = new nyS_Node(ny_t82, ny_sh(ny_t83));
+return ny_t84;
+}
 function nyU_web_u2e__esc(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5;
-ny_t1 = ny_str_replace(s, "&", "&amp;", 4, 5);
-ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 4, 5);
-ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 4, 5);
-ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 4, 5);
-ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 4, 5);
+ny_t1 = ny_str_replace(s, "&", "&amp;", 7, 5);
+ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 7, 5);
+ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 7, 5);
+ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 7, 5);
 return ny_t5;
 }
 function nyU_web_u2e__attr(s) {
@@ -1168,9 +1259,9 @@ i = 0;
 bold = false;
 em = false;
 while (i < n) {
-c = ny_get(cs, i, 4, 5);
+c = ny_get(cs, i, 7, 5);
 if ((c === 92) && ((i + 1) < n)) {
-ny_t8 = ny_get(cs, i + 1, 4, 5);
+ny_t8 = ny_get(cs, i + 1, 7, 5);
 ny_t9 = `${ny_char_str(ny_t8)}`;
 ny_t10 = nyU_web_u2e__esc(ny_t9);
 {
@@ -1180,22 +1271,22 @@ i = i + 2;
 } else {
 ny_t12 = c === 42;
 if (ny_t12) {
-ny_t11 = ny_add(i, 1, 4, 5);
+ny_t11 = ny_add(i, 1, 7, 5);
 ny_t12 = ny_t11 < n;
 }
 ny_t15 = ny_t12;
 if (ny_t15) {
-ny_t13 = ny_add(i, 1, 4, 5);
-ny_t14 = ny_get(cs, ny_t13, 4, 5);
+ny_t13 = ny_add(i, 1, 7, 5);
+ny_t14 = ny_get(cs, ny_t13, 7, 5);
 ny_t15 = ny_t14 === 42;
 }
 ny_t20 = ny_t15;
 if (ny_t20) {
 ny_t19 = bold;
 if (!ny_t19) {
-ny_t16 = ny_add(i, 2, 4, 5);
+ny_t16 = ny_add(i, 2, 7, 5);
 ny_t17 = nyU_web_u2e__find(cs, ny_t16, "**");
-ny_t18 = ny_add(i, 2, 4, 5);
+ny_t18 = ny_add(i, 2, 7, 5);
 ny_t19 = ny_t17 > ny_t18;
 }
 ny_t20 = ny_t19;
@@ -1205,24 +1296,24 @@ if (ny_t20) {
 o += bold ? "</strong>" : "<strong>";
 }
 bold = !bold;
-i = ny_add(i, 2, 4, 5);
+i = ny_add(i, 2, 7, 5);
 } else {
 ny_t30 = c === 42;
 if (ny_t30) {
 ny_t29 = em;
 if (!ny_t29) {
-ny_t21 = ny_add(i, 1, 4, 5);
+ny_t21 = ny_add(i, 1, 7, 5);
 ny_t24 = ny_t21 < n;
 if (ny_t24) {
-ny_t22 = ny_add(i, 1, 4, 5);
-ny_t23 = ny_get(cs, ny_t22, 4, 5);
+ny_t22 = ny_add(i, 1, 7, 5);
+ny_t23 = ny_get(cs, ny_t22, 7, 5);
 ny_t24 = ny_t23 !== 32;
 }
 ny_t28 = ny_t24;
 if (ny_t28) {
-ny_t25 = ny_add(i, 1, 4, 5);
+ny_t25 = ny_add(i, 1, 7, 5);
 ny_t26 = nyU_web_u2e__find(cs, ny_t25, "*");
-ny_t27 = ny_add(i, 1, 4, 5);
+ny_t27 = ny_add(i, 1, 7, 5);
 ny_t28 = ny_t26 > ny_t27;
 }
 ny_t29 = ny_t28;
@@ -1234,26 +1325,26 @@ if (ny_t30) {
 o += em ? "</em>" : "<em>";
 }
 em = !em;
-i = ny_add(i, 1, 4, 5);
+i = ny_add(i, 1, 7, 5);
 } else {
 ny_t33 = c === 96;
 if (ny_t33) {
-ny_t31 = ny_add(i, 1, 4, 5);
+ny_t31 = ny_add(i, 1, 7, 5);
 ny_t32 = nyU_web_u2e__find(cs, ny_t31, "`");
                         ny_t33 = ny_t32 > i;
                     }
                     if (ny_t33) {
-                        ny_t35 = ny_add(i, 1, 4, 5);
+                        ny_t35 = ny_add(i, 1, 7, 5);
                         j = nyU_web_u2e__find(cs, ny_t35, "`");
-ny_t36 = ny_add(i, 1, 4, 5);
-ny_t37 = ny_str_slice(s, ny_t36, j, 4, 5);
+ny_t36 = ny_add(i, 1, 7, 5);
+ny_t37 = ny_str_slice(s, ny_t36, j, 7, 5);
 ny_t38 = nyU_web_u2e__esc(ny_t37);
 ny_t39 = "<code>" + ny_t38;
 ny_t40 = ny_t39 + "</code>";
 {
 o += ny_t40;
 }
-i = ny_add(j, 1, 4, 5);
+i = ny_add(j, 1, 7, 5);
 } else {
 ny_t42 = c === 91;
 if (ny_t42) {
@@ -1261,23 +1352,23 @@ ny_t41 = nyU_web_u2e__link_end(cs, i);
 ny_t42 = ny_t41 > i;
 }
 if (ny_t42) {
-ny_t44 = ny_add(i, 1, 4, 5);
+ny_t44 = ny_add(i, 1, 7, 5);
 mid = nyU_web_u2e__find(cs, ny_t44, "](");
 end = nyU_web_u2e__link_end(cs, i);
-ny_t47 = ny_add(mid, 2, 4, 5);
-url = ny_str_slice(s, ny_t47, end, 4, 5);
+ny_t47 = ny_add(mid, 2, 7, 5);
+url = ny_str_slice(s, ny_t47, end, 7, 5);
 ny_t48 = nyU_web_u2e__link_attrs(url);
 ny_t49 = "<a" + ny_t48;
 ny_t50 = ny_t49 + ">";
-ny_t51 = ny_add(i, 1, 4, 5);
-ny_t52 = ny_str_slice(s, ny_t51, mid, 4, 5);
+ny_t51 = ny_add(i, 1, 7, 5);
+ny_t52 = ny_str_slice(s, ny_t51, mid, 7, 5);
 ny_t53 = nyU_web_u2e__md(ny_t52);
 ny_t54 = ny_t50 + ny_t53;
 ny_t55 = ny_t54 + "</a>";
 {
 o += ny_t55;
 }
-i = ny_add(end, 1, 4, 5);
+i = ny_add(end, 1, 7, 5);
 } else {
 ny_t57 = c === 58;
 if (ny_t57) {
@@ -1286,15 +1377,15 @@ ny_t57 = ny_t56 > i;
 }
 if (ny_t57) {
 ny_j_2 = nyU_web_u2e__icon_end(cs, i);
-ny_t60 = ny_add(i, 1, 4, 5);
-name = ny_str_slice(s, ny_t60, ny_j_2, 4, 5);
+ny_t60 = ny_add(i, 1, 7, 5);
+name = ny_str_slice(s, ny_t60, ny_j_2, 7, 5);
 ny_t61 = nyU_web_u2e__icon_kind(name);
 if (ny_t61 > 0) {
 ny_t62 = nyU_web_u2e__icon(name);
 {
 o += ny_t62;
 }
-i = ny_add(ny_j_2, 1, 4, 5);
+i = ny_add(ny_j_2, 1, 7, 5);
 } else {
 ny_t63 = nyU_web_u2e__icon_like(name);
 ny_t64 = ny_t63 !== "";
@@ -1306,7 +1397,7 @@ ny_t67 = nyU_web_u2e__icon(ny_t66);
 {
 o += ny_t67;
 }
-i = ny_add(ny_j_2, 1, 4, 5);
+i = ny_add(ny_j_2, 1, 7, 5);
 } else {
 ny_t68 = "text " + name;
 nyU_web_u2e__warn("E0389", ny_t68);
@@ -1315,7 +1406,7 @@ ny_t70 = nyU_web_u2e__esc(ny_t69);
 {
 o += ny_t70;
 }
-i = ny_add(i, 1, 4, 5);
+i = ny_add(i, 1, 7, 5);
 }
 }
 } else {
@@ -1324,7 +1415,7 @@ ny_t72 = nyU_web_u2e__esc(ny_t71);
 {
 o += ny_t72;
 }
-i = ny_add(i, 1, 4, 5);
+i = ny_add(i, 1, 7, 5);
 }
 }
 }
@@ -1349,15 +1440,15 @@ let ps, i, ny_t5, ok, k, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13;
 ps = ny_chars(pat);
 i = from;
 for (;; ) {
-ny_t5 = ny_add(i, ps.length, 4, 5);
+ny_t5 = ny_add(i, ps.length, 7, 5);
 if (!(ny_t5 <= cs.length)) break;
 ok = true;
 k = 0;
 ny_t8 = ps.length;
 for (; k < ny_t8; k = k + 1) {
-ny_t9 = ny_add(i, k, 4, 5);
-ny_t10 = ny_get(cs, ny_t9, 4, 5);
-ny_t11 = ny_get(ps, k, 4, 5);
+ny_t9 = ny_add(i, k, 7, 5);
+ny_t10 = ny_get(cs, ny_t9, 7, 5);
+ny_t11 = ny_get(ps, k, 7, 5);
 if (ny_t10 !== ny_t11) {
 ok = false;
 break;
@@ -1367,22 +1458,22 @@ if (ok) {
 ny_t12 = i;
 return ny_t12;
 }
-i = ny_add(i, 1, 4, 5);
+i = ny_add(i, 1, 7, 5);
 }
 ny_t13 = -1 + 0;
 return ny_t13;
 }
 function nyU_web_u2e__link_end(cs, at) {
 let mid, ny_t3, depth, k, c;
-ny_t3 = ny_add(at, 1, 4, 5);
+ny_t3 = ny_add(at, 1, 7, 5);
 mid = nyU_web_u2e__find(cs, ny_t3, "](");
 if (mid < 0) {
 return -1 + 0;
 }
 depth = 0;
-k = ny_add(mid, 2, 4, 5);
+k = ny_add(mid, 2, 7, 5);
 while (k < cs.length) {
-c = ny_get(cs, k, 4, 5);
+c = ny_get(cs, k, 7, 5);
 if (c === 10) {
 return -1 + 0;
 }
@@ -1400,41 +1491,41 @@ return -1 + 0;
 }
 function nyU_web_u2e__icon_end(cs, at) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, j, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16;
-ny_t2 = ny_add(at, 1, 4, 5);
+ny_t2 = ny_add(at, 1, 7, 5);
 ny_t6 = ny_t2 >= cs.length;
 if (!ny_t6) {
-ny_t3 = ny_add(at, 1, 4, 5);
-ny_t4 = ny_get(cs, ny_t3, 4, 5);
+ny_t3 = ny_add(at, 1, 7, 5);
+ny_t4 = ny_get(cs, ny_t3, 7, 5);
 ny_t5 = nyU_web_u2e__lower(ny_t4);
 ny_t6 = !ny_t5;
 }
 if (ny_t6) {
 return -1 + 0;
 }
-j = ny_add(at, 1, 4, 5);
+j = ny_add(at, 1, 7, 5);
 for (;; ) {
 ny_t14 = j < cs.length;
 if (ny_t14) {
-ny_t8 = ny_get(cs, j, 4, 5);
+ny_t8 = ny_get(cs, j, 7, 5);
 ny_t9 = nyU_web_u2e__lower(ny_t8);
 ny_t11 = ny_t9;
 if (!ny_t11) {
-ny_t10 = ny_get(cs, j, 4, 5);
+ny_t10 = ny_get(cs, j, 7, 5);
 ny_t11 = ny_char_is_digit(ny_t10);
 }
 ny_t13 = ny_t11;
 if (!ny_t13) {
-ny_t12 = ny_get(cs, j, 4, 5);
+ny_t12 = ny_get(cs, j, 7, 5);
 ny_t13 = ny_t12 === 45;
 }
 ny_t14 = ny_t13;
 }
 if (!ny_t14) break;
-j = ny_add(j, 1, 4, 5);
+j = ny_add(j, 1, 7, 5);
 }
 ny_t16 = j < cs.length;
 if (ny_t16) {
-ny_t15 = ny_get(cs, j, 4, 5);
+ny_t15 = ny_get(cs, j, 7, 5);
 ny_t16 = ny_t15 === 58;
 }
 if (ny_t16) {
@@ -1476,15 +1567,15 @@ u = ny_str_trim(url);
 scheme = nyU_web_u2e__scheme(u);
 if (((((scheme !== "") && (scheme !== "http")) && (scheme !== "https")) && (scheme !== "mailto")) && (scheme !== "tel")) {
 ny_t3 = "the link `" + u;
-        ny_t4 = ny_t3 + "` uses the scheme `";
+        ny_t4 = ny_t3 + "` uses the forbidden scheme `";
         ny_t5 = ny_t4 + scheme;
-        ny_t6 = ny_t5 + ":`, which a page may not link to";
+        ny_t6 = ny_t5 + ":`";
 nyU_web_u2e__err("E0381", ny_t6);
 ny_t7 = "#";
 return ny_t7;
 }
 if (scheme === "tel") {
-ny_t8 = ny_str_replace(u, " ", "", 4, 5);
+ny_t8 = ny_str_replace(u, " ", "", 7, 5);
 ny_t9 = nyU_web_u2e__attr(ny_t8);
 return ny_t9;
 }
@@ -1512,10 +1603,10 @@ let cs, i, c, ny_t4, ny_t5, ny_t6, ny_t7;
 cs = ny_chars(u);
 i = 0;
 while (i < cs.length) {
-c = ny_get(cs, i, 4, 5);
+c = ny_get(cs, i, 7, 5);
 if (c === 58) {
 if (i > 0) {
-ny_t4 = ny_str_slice(u, 0, i, 4, 5);
+ny_t4 = ny_str_slice(u, 0, i, 7, 5);
 ny_t5 = ny_str_lower(ny_t4);
 } else {
 ny_t5 = "";
@@ -1577,21 +1668,21 @@ function nyU_web_u2e__err(code, msg) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:error " + code;
 ny_t3 = ny_t2 + " ";
-ny_t4 = ny_str_replace(msg, "*/", "* /", 4, 5);
-ny_t5 = ny_str_replace(ny_t4, "\n", " ", 4, 5);
+ny_t4 = ny_str_replace(msg, "*/", "* /", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 7, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
-ny_std_web__css(ny_t7, 4, 5);
+ny_std_web__css(ny_t7, 7, 5);
 }
 function nyU_web_u2e__warn(code, what) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:warn " + code;
 ny_t3 = ny_t2 + " ";
-ny_t4 = ny_str_replace(what, "*/", "* /", 4, 5);
-ny_t5 = ny_str_replace(ny_t4, "\n", " ", 4, 5);
+ny_t4 = ny_str_replace(what, "*/", "* /", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 7, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
-ny_std_web__css(ny_t7, 4, 5);
+ny_std_web__css(ny_t7, 7, 5);
 }
 function nyU_web_u2e__color(c, _web) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10;
@@ -1621,10 +1712,10 @@ return ny_t10;
 }
 function nyU_web_u2e__css_value(v) {
 let ny_t1, ny_t2, ny_t3, ny_t4;
-ny_t1 = ny_str_replace(v, ";", "", 4, 5);
-ny_t2 = ny_str_replace(ny_t1, "}", "", 4, 5);
-ny_t3 = ny_str_replace(ny_t2, "{", "", 4, 5);
-ny_t4 = ny_str_replace(ny_t3, "<", "", 4, 5);
+ny_t1 = ny_str_replace(v, ";", "", 7, 5);
+ny_t2 = ny_str_replace(ny_t1, "}", "", 7, 5);
+ny_t3 = ny_str_replace(ny_t2, "{", "", 7, 5);
+ny_t4 = ny_str_replace(ny_t3, "<", "", 7, 5);
 return ny_t4;
 }
 function nyU_web_u2e__word(w) {
@@ -1646,9 +1737,9 @@ return o;
 }
 function nyU_web_u2e__size(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5, ny_t6;
-ny_t1 = ny_std_text_is_float(s, 4, 5);
+ny_t1 = ny_std_text_is_float(s, 7, 5);
 if (ny_t1) {
-ny_t3 = ny_str_to_float(s, 4, 5);
+ny_t3 = ny_str_to_float(s, 7, 5);
 ny_t2 = new nyS_Opt_of(true, ny_t3);
 } else {
 ny_t2 = new nyS_Opt_of(false, 0.0);
@@ -1658,7 +1749,7 @@ if (!ny_eq(ny_t2, ny_t4)) {
 ny_t6 = s + "rem";
 } else {
 ny_t5 = nyU_web_u2e__css_value(s);
-ny_t6 = ny_str_replace(ny_t5, "\"", "", 4, 5);
+ny_t6 = ny_str_replace(ny_t5, "\"", "", 7, 5);
 }
 return ny_t6;
 }
@@ -1733,7 +1824,7 @@ return ny_t3;
 close = ny_str_index_of(html, ">");
 ny_t8 = close < 0;
 if (!ny_t8) {
-ny_t5 = ny_str_slice(html, 0, close, 4, 5);
+ny_t5 = ny_str_slice(html, 0, close, 7, 5);
 ny_t6 = " " + name;
 ny_t7 = ny_t6 + "=";
 ny_t8 = ny_t5.includes(ny_t7);
@@ -1746,16 +1837,16 @@ end = 1;
 for (;; ) {
 ny_t12 = end < close;
 if (ny_t12) {
-ny_t11 = ny_str_slice(html, end, end + 1, 4, 5);
+ny_t11 = ny_str_slice(html, end, end + 1, 7, 5);
 ny_t12 = !" \n\t/".includes(ny_t11);
 }
 if (!ny_t12) break;
 end = end + 1;
 }
-ny_t13 = ny_str_slice(html, 0, end, 4, 5);
+ny_t13 = ny_str_slice(html, 0, end, 7, 5);
 ny_t14 = nyU_web_u2e__at(name, value);
 ny_t15 = ny_t13 + ny_t14;
-ny_t16 = ny_str_slice(html, end, ny_len(html), 4, 5);
+ny_t16 = ny_str_slice(html, end, ny_len(html), 7, 5);
 ny_t17 = ny_t15 + ny_t16;
 return ny_t17;
 }
@@ -1801,6 +1892,190 @@ all.push(ny_t8);
 }
 return all;
 }
+function nyU_web_u2e__say(key, _web) {
+let ny_t2, ny_t3, ny_t4;
+if (_web.say.has(ny_ik(key))) {
+ny_t2 = ny_mget(_web.say, key, "s", 7, 5);
+return ny_t2;
+}
+if (_web.lang === "cs") {
+ny_t3 = nyU_web_u2e__say_cs(key);
+return ny_t3;
+}
+ny_t4 = nyU_web_u2e__say_en(key);
+return ny_t4;
+}
+function nyU_web_u2e__say_en(key) {
+let ny_t1, ny_t2;
+ny_t1 = key;
+ny_t2 = (ny_t1 === "open") ? "Open now" : ((ny_t1 === "closed") ? "Closed now" : ((ny_t1 === "shut") ? "Closed" : ((ny_t1 === "hours") ? "Opening hours" : ((ny_t1 === "more") ? "More" : ((ny_t1 === "down") ? "Scroll down" : ((ny_t1 === "map") ? "Map" : ((ny_t1 === "show") ? "Show map" : ((ny_t1 === "go") ? "Open in Google Maps" : ((ny_t1 === "menu") ? "Open menu" : ((ny_t1 === "close") ? "Close menu" : ((ny_t1 === "nav") ? "Main navigation" : ((ny_t1 === "skip") ? "Skip to content" : ((ny_t1 === "back") ? "Back" : ((ny_t1 === "all") ? "All" : ((ny_t1 === "filter") ? "Filter photos" : ((ny_t1 === "zoom") ? "Enlarge" : ((ny_t1 === "prev") ? "Previous" : ((ny_t1 === "next") ? "Next" : ((ny_t1 === "dismiss") ? "Close" : ((ny_t1 === "send") ? "Send message" : ((ny_t1 === "mail_note") ? "The message opens in your e-mail app, ready to send." : ((ny_t1 === "done") ? "Your message is ready" : ((ny_t1 === "done_text") ? "We opened it in your e-mail app: just send it from there." : ((ny_t1 === "edit") ? "Edit message" : ((ny_t1 === "top") ? "Back to top" : ((ny_t1 === "links") ? "Links" : ((ny_t1 === "contact") ? "Contact" : ((ny_t1 === "side") ? "Sections" : ((ny_t1 === "play") ? "Play video" : ((ny_t1 === "search") ? "Search" : ((ny_t1 === "none") ? "Nothing matches" : key)))))))))))))))))))))))))))))));
+return ny_t2;
+}
+function nyU_web_u2e__say_cs(key) {
+let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33;
+ny_t1 = key;
+if (ny_t1 === "open") {
+ny_t33 = "Nyní otevřeno";
+} else {
+if (ny_t1 === "closed") {
+ny_t32 = "Nyní zavřeno";
+} else {
+if (ny_t1 === "shut") {
+ny_t31 = "Zavřeno";
+} else {
+if (ny_t1 === "hours") {
+ny_t30 = "Otevírací doba";
+} else {
+if (ny_t1 === "more") {
+ny_t29 = "Více";
+} else {
+if (ny_t1 === "down") {
+ny_t28 = "Posunout dolů";
+} else {
+if (ny_t1 === "map") {
+ny_t27 = "Mapa";
+} else {
+if (ny_t1 === "show") {
+ny_t26 = "Zobrazit mapu";
+} else {
+if (ny_t1 === "go") {
+ny_t25 = "Otevřít v Google Maps";
+} else {
+if (ny_t1 === "menu") {
+ny_t24 = "Otevřít menu";
+} else {
+if (ny_t1 === "close") {
+ny_t23 = "Zavřít menu";
+} else {
+if (ny_t1 === "nav") {
+ny_t22 = "Hlavní navigace";
+} else {
+if (ny_t1 === "skip") {
+ny_t21 = "Přeskočit na obsah";
+} else {
+if (ny_t1 === "back") {
+ny_t20 = "Zpět";
+} else {
+if (ny_t1 === "all") {
+ny_t19 = "Vše";
+} else {
+if (ny_t1 === "filter") {
+ny_t18 = "Filtrovat fotografie";
+} else {
+if (ny_t1 === "zoom") {
+ny_t17 = "Zvětšit";
+} else {
+if (ny_t1 === "prev") {
+ny_t16 = "Předchozí";
+} else {
+if (ny_t1 === "next") {
+ny_t15 = "Další";
+} else {
+if (ny_t1 === "dismiss") {
+ny_t14 = "Zavřít";
+} else {
+if (ny_t1 === "send") {
+ny_t13 = "Odeslat zprávu";
+} else {
+if (ny_t1 === "mail_note") {
+ny_t12 = "Zpráva se otevře ve vašem e-mailu, odkud ji odešlete.";
+} else {
+if (ny_t1 === "done") {
+ny_t11 = "Zpráva je připravená";
+} else {
+if (ny_t1 === "done_text") {
+ny_t10 = "Otevřeli jsme ji ve vašem e-mailovém programu, stačí ji odeslat.";
+} else {
+if (ny_t1 === "edit") {
+ny_t9 = "Upravit zprávu";
+} else {
+if (ny_t1 === "top") {
+ny_t8 = "Nahoru";
+} else {
+if (ny_t1 === "links") {
+ny_t7 = "Odkazy";
+} else {
+if (ny_t1 === "contact") {
+ny_t6 = "Kontakt";
+} else {
+if (ny_t1 === "side") {
+ny_t5 = "Sekce";
+} else {
+if (ny_t1 === "play") {
+ny_t4 = "Přehrát video";
+} else {
+if (ny_t1 === "search") {
+ny_t3 = "Hledat";
+} else {
+if (ny_t1 === "none") {
+ny_t2 = "Nic neodpovídá";
+} else {
+ny_t2 = nyU_web_u2e__say_en(key);
+}
+ny_t3 = ny_t2;
+}
+ny_t4 = ny_t3;
+}
+ny_t5 = ny_t4;
+}
+ny_t6 = ny_t5;
+}
+ny_t7 = ny_t6;
+}
+ny_t8 = ny_t7;
+}
+ny_t9 = ny_t8;
+}
+ny_t10 = ny_t9;
+}
+ny_t11 = ny_t10;
+}
+ny_t12 = ny_t11;
+}
+ny_t13 = ny_t12;
+}
+ny_t14 = ny_t13;
+}
+ny_t15 = ny_t14;
+}
+ny_t16 = ny_t15;
+}
+ny_t17 = ny_t16;
+}
+ny_t18 = ny_t17;
+}
+ny_t19 = ny_t18;
+}
+ny_t20 = ny_t19;
+}
+ny_t21 = ny_t20;
+}
+ny_t22 = ny_t21;
+}
+ny_t23 = ny_t22;
+}
+ny_t24 = ny_t23;
+}
+ny_t25 = ny_t24;
+}
+ny_t26 = ny_t25;
+}
+ny_t27 = ny_t26;
+}
+ny_t28 = ny_t27;
+}
+ny_t29 = ny_t28;
+}
+ny_t30 = ny_t29;
+}
+ny_t31 = ny_t30;
+}
+ny_t32 = ny_t31;
+}
+ny_t33 = ny_t32;
+}
+return ny_t33;
+}
 function nyU_web_u2e__icon_kind(name) {
 let icons, brands, key, ny_t4, ny_t5;
 icons = "|accessibility|activity|alert-circle|alert-triangle|apple|arrow-down|arrow-left|arrow-right|arrow-up|arrow-up-right|at-sign|award|axe|baby|badge-check|banknote|bar-chart|bar-chart-2|bar-chart-3|beer|bell|bike|book-open|bookmark|brick-wall|briefcase|building|building-2|bus|cake|cake-slice|calendar|calendar-days|camera|candy|car|carrot|cat|chart-column|chart-line|check|check-check|check-circle|check-circle-2|chef-hat|cherry|chevron-down|chevron-left|chevron-right|chevron-up|chevrons-down|church|circle|circle-alert|circle-check|circle-help|circle-x|clipboard-list|clock|cloud|cloud-sun|cloud-upload|code|coffee|coins|compass|construction|cookie|cpu|credit-card|croissant|crown|cup-soda|database|dog|dollar-sign|donut|download|drill|droplet|droplets|dumbbell|egg|ellipsis|euro|expand|external-link|eye|factory|file-text|film|flag|flame|flower|flower-2|fuel|gem|gift|globe|graduation-cap|grid|grid-3x3|hammer|hand-heart|handshake|hard-hat|headphones|heart|help-circle|history|home|hotel|hourglass|house|ice-cream-cone|image|images|info|key|landmark|languages|laptop|layers|layout-grid|leaf|lightbulb|line-chart|link|link-2|list-checks|lock|mail|mail-open|map|map-pin|maximize-2|medal|menu|message-circle|message-square|mic|minimize-2|minus|monitor|moon|more-horizontal|mountain|move-right|music|navigation|package|paint-roller|paintbrush|palette|party-popper|pen-tool|pencil|percent|phone|phone-call|piggy-bank|pill|pizza|plane|play|plus|printer|quote|receipt|recycle|rocket|ruler|sandwich|scale|school|scissors|search|send|server|settings|share-2|shield|shield-check|ship|shopping-bag|shopping-cart|shovel|sliders-horizontal|smartphone|smile|snowflake|sparkles|sprout|star|stethoscope|store|sun|syringe|tag|target|tent|terminal|thermometer|thumbs-up|timer|train|train-front|tree-pine|trees|trending-up|triangle-alert|trophy|truck|tv|umbrella|upload|user|users|utensils|verified|video|wallet|warehouse|waves|wheat|wifi|wind|wine|wrench|x|x-circle|zap|zoom-in|";
@@ -1820,8 +2095,8 @@ if (at < 0) {
 ny_t5 = "";
 return ny_t5;
 }
-rest = ny_str_slice(pairs, (at + ny_len(name)) + 2, ny_len(pairs), 4, 5);
-ny_t7 = ny_str_slice(rest, 0, ny_str_index_of(rest, "|"), 4, 5);
+rest = ny_str_slice(pairs, (at + ny_len(name)) + 2, ny_len(pairs), 7, 5);
+ny_t7 = ny_str_slice(rest, 0, ny_str_index_of(rest, "|"), 7, 5);
 return ny_t7;
 }
 function nyU_web_u2e__on(m) {
@@ -1830,25 +2105,63 @@ ny_t1 = ny_jenc(m, nyS_Msg);
 return ny_t1;
 }
 const ny_st = {
-"cat_now": ny_from("all", "s"),
-"_web": ny_from({"name":"Hana's Bakery","url":"","lang":"en","tz":"Europe/Prague","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"Playfair Display","primary":"#B5651D","logo":"","say":{},"palette":{}}, nyS_WebConfig),
-"products": ny_from([{"name":"Sourdough loaf","cat":"bread","text":"Slow-risen for 24 hours with a crackling crust.","image":"photo-2.svg","tag":"Bread"},{"name":"Rye and caraway","cat":"bread","text":"A dense, aromatic loaf from our grandmother's recipe.","image":"photo-3.svg","tag":"Bread"},{"name":"Seeded rolls","cat":"bread","text":"Crunchy rolls with sunflower, flax and sesame.","image":"photo-4.svg","tag":"Bread"},{"name":"Butter croissant","cat":"pastry","text":"Laminated by hand, golden and flaky.","image":"photo-5.svg","tag":"Pastry"},{"name":"Cinnamon roll","cat":"pastry","text":"Soft, warm and generously glazed.","image":"photo-6.svg","tag":"Pastry"},{"name":"Apple strudel","cat":"pastry","text":"Thin pastry, local apples and a hint of rum.","image":"photo-2.svg","tag":"Pastry"},{"name":"Honey cake","cat":"cakes","text":"Layers of honey sponge and soft cream.","image":"photo-3.svg","tag":"Cake"},{"name":"Poppy seed cake","cat":"cakes","text":"A Moravian classic with plum jam.","image":"photo-4.svg","tag":"Cake"}], ["a", nyS_Product]),
-"product_tabs": ny_from([["all","All"],["bread","Bread"],["pastry","Pastry"],["cakes","Cakes"]], ["a", nyS_Tup_t2ss]),
+"kind": ny_from("all", "s"),
+"photos": ny_from(false, "b"),
+"_web": ny_from({"name":"Mill House","url":"","lang":"en","tz":"Europe/Prague","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#5B3A29","logo":"","say":{},"palette":{}}, nyS_WebConfig),
+"rooms": ny_from([{"name":"River Room","kind":"double","photo":"photo-1.svg"},{"name":"Garden Room","kind":"double","photo":"photo-2.svg"},{"name":"Attic Room","kind":"family","photo":"photo-3.svg"}], ["a", nyS_Room]),
+"extras": ny_from(["Wi-Fi","Parking","Garden","Sauna","Bikes","Pets","Bakery","Canoes"], ["a", "s"]),
 };
 const ny_web = {
 update(text) {
 const ny_m = ny_from(JSON.parse(text), nyS_Msg);
-const ny_b0 = {v: ny_st["cat_now"]};
-update(ny_m, ny_b0);
-ny_st["cat_now"] = ny_b0.v;
+const ny_b0 = {v: ny_st["kind"]};
+const ny_b1 = {v: ny_st["photos"]};
+update(ny_m, ny_b0, ny_b1);
+ny_st["kind"] = ny_b0.v;
+ny_st["photos"] = ny_b1.v;
 },
 views: {
-"product_grid": () => {
-const ny_r = nyU_web_u2e__render(product_grid(ny_st["_web"], ny_st["products"], ny_st["product_tabs"], ny_st["cat_now"]));
+"roomList": () => {
+const ny_r = nyU_web_u2e__render(roomList(ny_st["_web"], ny_st["rooms"], ny_st["extras"], ny_st["kind"]));
+return ny_r;
+},
+"album": () => {
+const ny_r = nyU_web_u2e__render(album(ny_st["_web"], ny_st["photos"]));
 return ny_r;
 },
 },
 };
+const ny_imgs = {"photo-1.svg": ["img/photo-1-96fc7884.svg", "", 1600, 1000, ""], "photo-2.svg": ["img/photo-2-b3948750.svg", "", 1200, 1500, ""], "photo-3.svg": ["img/photo-3-6faa67c4.svg", "", 1600, 1100, ""], "photo-4.svg": ["img/photo-4-370fd493.svg", "", 1400, 1000, ""], "photo-5.svg": ["img/photo-5-9250f43c.svg", "", 1200, 1400, ""], "photo-6.svg": ["img/photo-6-156f6d51.svg", "", 1600, 1050, ""]};
+const ny_up = (() => {
+const s = typeof document !== "undefined" && document.currentScript;
+const a = (s && s.getAttribute("src")) || "";
+return a.slice(0, a.lastIndexOf("/") + 1);
+})();
+const NY_REFS = ["src", "href", "poster", "data-src", "data-full", "data-bg", "data-image"];
+function ny_img_fix(root) {
+for (const e of root.querySelectorAll("*")) {
+const img = e.nodeName === "IMG";
+const first = e.getAttribute("fetchpriority") === "high";
+for (const a of NY_REFS) {
+const v = e.getAttribute(a);
+const i = v !== null && Object.prototype.hasOwnProperty.call(ny_imgs, v) ? ny_imgs[v] : null;
+if (!i || (a === "href" && e.nodeName !== "A" && e.nodeName !== "LINK")) continue;
+e.setAttribute(a, ny_up + i[0]);
+if (!img || a !== "src") continue;
+if (i[2] && !e.hasAttribute("width") && !e.hasAttribute("height")) {
+e.setAttribute("width", i[2]);
+e.setAttribute("height", i[3]);
+}
+if (i[1] && !e.hasAttribute("srcset")) {
+e.setAttribute("srcset", i[1].split(", ").map((x) => ny_up + x).join(", "));
+if (!e.hasAttribute("sizes")) e.setAttribute("sizes", "100vw");
+}
+if (i[4] && !first) ny_class(e, [i[4]]);
+}
+if (img && !e.hasAttribute("loading") && !first) e.setAttribute("loading", "lazy");
+if (img && !e.hasAttribute("decoding")) e.setAttribute("decoding", "async");
+}
+}
 function ny_std_web__emit() {}
 function ny_std_web__uses() {}
 function ny_std_web__css() {}
@@ -1994,6 +2307,7 @@ if (!view) continue;
 try {
 const t = document.createElement("template");
 t.innerHTML = ny_html(view());
+if (typeof ny_img_fix === "function") ny_img_fix(t.content);
 ny_morph(el, t.content);
 } catch (e) {
 console.error(e instanceof NyPanic ? e.message : e);

@@ -2,15 +2,21 @@
 //! applied, shown and repeated until the program compiles (`nyra check --fix`).
 //!
 //! A fix is only kept when every edit finds exactly the text it expects (`Edit::old`), so a
-//! position that is off by a character can never damage a program. `--fix` writes a file back
-//! only when all errors are gone, and never touches a program that already compiles.
+//! position that is off by a character can never damage a program. Every certain fix is applied,
+//! also when other errors remain (`repair_all`): the errors that are left are reported at their
+//! places in the original text, and the fixes as warnings that carry their edits. `--fix` writes
+//! the fixes back, and never touches a program that already compiles.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::ast::Span;
 use crate::diag::{Diag, Edit};
 
-/// How often `repair` applies fixes and checks again: fixing one stage (characters, then syntax,
-/// then types) can uncover the mistakes of the next.
-const ROUNDS: usize = 10;
+/// How often `repair_all` applies fixes and checks again: fixing one stage (characters, then
+/// syntax, then types) can uncover the mistakes of the next. Each round compiles the whole
+/// program again, and a round happens only while it has fixes to apply, so the rounds are few.
+const ROUNDS: usize = 6;
 
 /// The source as characters, with the offset where each line starts.
 struct Text {
@@ -95,9 +101,14 @@ pub fn validate(diags: &mut [Diag], src: &str) {
 
 /// The source with the edits applied, or `None` if they do not apply.
 pub fn apply(src: &str, edits: &[Edit]) -> Option<String> {
+    apply_with(src, edits, "\n")
+}
+
+/// `apply`, with `newline` for the line breaks the edits write.
+fn apply_with(src: &str, edits: &[Edit], newline: &str) -> Option<String> {
     let text = Text::new(src);
     let edits: Vec<&Edit> = edits.iter().collect();
-    Some(text.apply(&text.ranges(&edits)?, "\n"))
+    Some(text.apply(&text.ranges(&edits)?, newline))
 }
 
 /// What the lines touched by a fix look like after it, for the `= fix:` line of an error:
@@ -110,10 +121,12 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     touched.sort_unstable();
     touched.dedup();
     let within = fix.iter().all(|e| e.start.line == e.end.line && !e.text.contains('\n'));
-    if within && touched.windows(2).any(|w| w[1] > w[0] + 1) {
+    if within && touched.len() > 1 {
         let fixed = apply(src, fix)?;
         let lines: Vec<&str> = fixed.lines().collect();
-        let shown: Vec<String> = touched.iter().take(3).map(|l| format!("`{}`", lines.get(l - 1).unwrap_or(&"").trim())).collect();
+        let col = |l: usize| fix.iter().find(|e| e.start.line == l).map_or(1, |e| e.start.col);
+        let shown: Vec<String> =
+            touched.iter().take(3).map(|l| format!("`{}`", clip(lines.get(l - 1).unwrap_or(&""), col(*l)))).collect();
         let more = touched.len().saturating_sub(3);
         let nums: Vec<String> = touched.iter().take(3).map(usize::to_string).collect();
         return Some(match more {
@@ -130,7 +143,8 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     let added: usize = fix.iter().map(|e| e.text.matches('\n').count()).sum();
     let removed: usize = fix.iter().map(|e| e.end.line - e.start.line).sum();
     let count = (last + 1 - first + added).checked_sub(removed)?;
-    let lines: Vec<&str> = fixed.lines().skip(first - 1).take(count).map(str::trim).filter(|l| !l.is_empty()).collect();
+    let col = fix.iter().map(|e| e.start.col).min().unwrap_or(1);
+    let lines: Vec<String> = fixed.lines().skip(first - 1).take(count).map(|l| clip(l, col)).filter(|l| !l.is_empty()).collect();
     Some(match lines.as_slice() {
         [] => {
             let old: Vec<&str> = src.lines().skip(first - 1).take(last + 1 - first).map(str::trim).collect();
@@ -141,8 +155,23 @@ pub fn preview(src: &str, fix: &[Edit]) -> Option<String> {
     })
 }
 
-/// One fix that was applied: the error it repaired, where that was in the text of its round, what
-/// the changed lines look like now, and the line as it was.
+/// A line of a preview, trimmed, and a long one cut to the part around column `col` (a page of
+/// a site is often one long line).
+fn clip(line: &str, col: usize) -> String {
+    const WIDTH: usize = 72;
+    let cs: Vec<char> = line.trim_end().chars().collect();
+    let indent = cs.iter().take_while(|c| c.is_whitespace()).count();
+    if cs.len() - indent <= WIDTH {
+        return cs[indent..].iter().collect();
+    }
+    let start = col.saturating_sub(1).saturating_sub(WIDTH / 3).max(indent).min(cs.len().saturating_sub(WIDTH));
+    let end = (start + WIDTH).min(cs.len());
+    let body: String = cs[start..end].iter().collect();
+    format!("{}{}{}", if start > indent { "…" } else { "" }, body.trim(), if end < cs.len() { "…" } else { "" })
+}
+
+/// One fix that was applied: the error it repaired and its edits, at their places in the original
+/// text; what the changed lines look like after it, and the line as it was.
 #[derive(Debug, Clone)]
 pub struct Applied {
     pub diag: Diag,
@@ -161,94 +190,190 @@ pub struct Repaired<T> {
     pub applied: Vec<Applied>,
 }
 
-/// Applies the fixes of `diags` (the errors of `src`), compiles again and repeats, a few rounds
-/// at most. Returns the repaired program only if it compiles in the end.
-pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T, Vec<Diag>>) -> Option<Repaired<T>> {
-    repair_or_report(src, diags, compile).ok()
+/// What `repair_all` made of a program: the text with every certain fix applied, what `compile`
+/// says about that text (its errors are at their places in `text`; rendering moves them back to
+/// the original, see `Origin`), and the fixes.
+pub struct Outcome<T> {
+    pub text: String,
+    pub result: Result<T, Vec<Diag>>,
+    /// How many errors were fixed.
+    pub fixed: usize,
+    /// The fixes, at their places in the original text.
+    pub applied: Vec<Applied>,
 }
 
-/// What is left when the fixes do not make a program compile: the errors of `src` itself, which
-/// are the errors of the last round, at their places in `src`, and the earlier errors whose fixes
-/// were certain (with those fixes), in the order of the source. A fix often uncovers the
-/// mistakes of the next stage (a comma after a match arm hides every type error behind it), so
-/// these are more of the program's errors than its first compilation found, all in one report.
+/// Applies the fixes of `diags` (the errors of `src`), compiles again and repeats, a few rounds
+/// at most. Returns the repaired program only if it compiles in the end. The repaired text is
+/// the caller's new text, so no `Origin` is kept.
+pub fn repair<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T, Vec<Diag>>) -> Option<Repaired<T>> {
+    let out = repair_all(src, diags, compile);
+    set_origin(None);
+    let value = out.result.ok()?;
+    Some(Repaired { text: out.text, value, fixed: out.fixed, applied: out.applied })
+}
+
+/// Applies every certain fix of `diags` (the errors of `src`), compiles again, and repeats while
+/// that uncovers more certain fixes (a comma after a match arm hides every type error behind it),
+/// `ROUNDS` at most. A fix that overlaps another waits for the next round. The errors without a
+/// certain fix do not stop the others: the result has the errors that are left, of the repaired
+/// text. When something was fixed, the `Origin` is recorded, so diagnostics are shown at their
+/// places in `src`, with the fixes as warnings.
+pub fn repair_all<T>(src: &str, diags: Vec<Diag>, compile: impl Fn(&str) -> Result<T, Vec<Diag>>) -> Outcome<T> {
+    // keep the file's line breaks when a fix adds a line
+    let newline = if src.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut current = src.to_string();
+    let mut result: Result<T, Vec<Diag>> = Err(diags);
+    let mut fixed = 0;
+    // the text before each round, and the edits of each round: character ranges of that text,
+    // with the length of what each wrote (to move a later round's positions back into `src`)
+    let mut texts: Vec<String> = Vec::new();
+    let mut rounds: Vec<Vec<(usize, usize, usize)>> = Vec::new();
+    // the errors whose fixes were applied, with their round
+    let mut done: Vec<(Diag, usize, Option<String>)> = Vec::new();
+    for _ in 0..ROUNDS {
+        let Err(diags) = &result else { break };
+        let text = Text::new(&current);
+        // the fixes of all errors, in order; one that overlaps an earlier fix waits for the next round
+        let mut chosen: Vec<&Edit> = Vec::new();
+        let mut round: Vec<&Diag> = Vec::new();
+        for d in diags.iter().filter(|d| !d.fix.is_empty() && d.file.is_none()) {
+            let fresh: Vec<&Edit> = d.fix.iter().filter(|e| !chosen.contains(e)).collect();
+            let mut with: Vec<&Edit> = chosen.clone();
+            with.extend(&fresh);
+            if fresh.is_empty() || text.ranges(&with).is_some() {
+                chosen = with;
+                round.push(d);
+            }
+        }
+        let Some(ranges) = (!chosen.is_empty()).then(|| text.ranges(&chosen)).flatten() else { break };
+        for d in round {
+            fixed += 1;
+            done.push((d.clone(), rounds.len(), preview(&current, &d.fix)));
+        }
+        let next = text.apply(&ranges, newline);
+        rounds.push(ranges.iter().map(|(a, b, e)| (*a, *b, e.text.replace('\n', newline).chars().count())).collect());
+        texts.push(std::mem::replace(&mut current, next));
+        result = compile(&current);
+    }
+    if rounds.is_empty() {
+        set_origin(None);
+        return Outcome { text: current, result, fixed, applied: Vec::new() };
+    }
+    let orig = Text::new(src);
+    let applied = originals(src, &orig, &texts, &rounds, done, &current, newline);
+    set_origin(Some(Origin { src: src.to_string(), orig, now: Text::new(&current), rounds, applied: applied.clone() }));
+    Outcome { text: current, result, fixed, applied }
+}
+
+/// `repair_all` for callers that report the errors that are left at once: the repaired program,
+/// or those errors (rendering puts them at their places in `src`).
 pub fn repair_or_report<T>(
     src: &str,
     diags: Vec<Diag>,
     compile: impl Fn(&str) -> Result<T, Vec<Diag>>,
 ) -> Result<Repaired<T>, Vec<Diag>> {
-    // keep the file's line breaks when a fix adds a line
-    let newline = if src.contains("\r\n") { "\r\n" } else { "\n" };
-    let orig = Text::new(src);
-    let mut current = src.to_string();
-    let mut diags = diags;
-    let mut fixed = 0;
-    let mut applied = Vec::new();
-    // the edits of each round: character ranges of the text of that round, with the length of
-    // what each wrote (to move a later round's positions back into `src`)
-    let mut rounds: Vec<Vec<(usize, usize, usize)>> = Vec::new();
-    // the errors whose fixes were applied, at their places in `src`
-    let mut fixed_errs: Vec<Diag> = Vec::new();
-    for _ in 0..ROUNDS {
-        let text = Text::new(&current);
-        // the fixes of all errors, in order; one that overlaps an earlier fix waits for the next round
-        let mut chosen: Vec<&Edit> = Vec::new();
-        let mut round: Vec<&Diag> = Vec::new();
-        for d in diags.iter().filter(|d| !d.fix.is_empty()) {
-            let fresh: Vec<&Edit> = d.fix.iter().filter(|e| !chosen.contains(e)).collect();
-            if fresh.is_empty() {
-                fixed += 1; // the same edit as another error's fix
-                round.push(d);
-                continue;
-            }
-            let mut with: Vec<&Edit> = chosen.clone();
-            with.extend(&fresh);
-            if text.ranges(&with).is_some() {
-                chosen = with;
-                fixed += 1;
-                round.push(d);
-            }
-        }
-        let ranges = if chosen.is_empty() { None } else { text.ranges(&chosen) };
-        let Some(ranges) = ranges else {
-            return Err(report(src, &orig, &rounds, &text, &diags, fixed_errs));
-        };
-        for d in round {
-            let line = d.span.line.checked_sub(1).and_then(|i| current.lines().nth(i)).unwrap_or("").to_string();
-            applied.push(Applied { diag: d.clone(), preview: preview(&current, &d.fix), line });
-            fixed_errs.push(back(d.clone(), &orig, &rounds, &text));
-        }
-        let next = text.apply(&ranges, newline);
-        rounds.push(ranges.iter().map(|(a, b, e)| (*a, *b, e.text.replace('\n', newline).chars().count())).collect());
-        current = next;
-        match compile(&current) {
-            Ok(value) => return Ok(Repaired { text: current, value, fixed, applied }),
-            Err(next) => diags = next,
-        }
+    let out = repair_all(src, diags, compile);
+    match out.result {
+        Ok(value) => Ok(Repaired { text: out.text, value, fixed: out.fixed, applied: out.applied }),
+        Err(left) => Err(left),
     }
-    Err(report(src, &orig, &rounds, &Text::new(&current), &diags, fixed_errs))
 }
 
-/// The errors `repair_or_report` gives back: `last` (errors of the text `now`, which the edits of
-/// `rounds` made from `src`) and the `fixed` ones, at their places in `src`, each once.
-fn report(src: &str, orig: &Text, rounds: &[Vec<(usize, usize, usize)>], now: &Text, last: &[Diag], fixed: Vec<Diag>) -> Vec<Diag> {
-    let mut out: Vec<Diag> = Vec::new();
-    for d in fixed.into_iter().chain(last.iter().map(|d| back(d.clone(), orig, rounds, now))) {
-        if !out.iter().any(|o| o.code == d.code && o.span == d.span && o.msg == d.msg) {
-            out.push(d);
+/// The fixes that were applied, with their errors and edits moved to their places in `src`. The
+/// edits of all of them together must turn `src` into `now`; when a later round edited text that
+/// an earlier fix wrote, that is not so, and the first fix carries one edit for all of them.
+fn originals(
+    src: &str,
+    orig: &Text,
+    texts: &[String],
+    rounds: &[Vec<(usize, usize, usize)>],
+    done: Vec<(Diag, usize, Option<String>)>,
+    now: &str,
+    newline: &str,
+) -> Vec<Applied> {
+    let lines: Vec<&str> = src.lines().collect();
+    let mut out: Vec<Applied> = done
+        .into_iter()
+        .map(|(d, k, preview)| {
+            let d = back(d, orig, &rounds[..k], &Text::new(&texts[k]));
+            let line = d.span.line.checked_sub(1).and_then(|i| lines.get(i)).unwrap_or(&"").to_string();
+            Applied { diag: d, preview, line }
+        })
+        .collect();
+    let all: Vec<Edit> = {
+        let mut v: Vec<Edit> = Vec::new();
+        for e in out.iter().flat_map(|a| a.diag.fix.iter()) {
+            if !v.contains(e) {
+                v.push(e.clone());
+            }
         }
+        v
+    };
+    if apply_with(src, &all, newline).as_deref() == Some(now) {
+        return out;
     }
-    out.sort_by_key(|d| (d.file.is_some(), d.span.line, d.span.col));
-    validate(&mut out, src);
-    // the warnings are those of the last compilation, of the text `now`: moved into `src` too
-    if !rounds.is_empty() {
-        let warnings = crate::diag::warnings();
-        crate::diag::clear_warnings();
-        for w in warnings {
-            crate::diag::warn(back(w, orig, rounds, now));
-        }
+    // one edit from the first character that changed to the last
+    let (a, b): (Vec<char>, Vec<char>) = (src.chars().collect(), now.chars().collect());
+    let pre = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let max = a.len().min(b.len()) - pre;
+    let suf = a.iter().rev().zip(b.iter().rev()).take(max).take_while(|(x, y)| x == y).count();
+    let old: String = a[pre..a.len() - suf].iter().collect();
+    let new: String = b[pre..b.len() - suf].iter().collect();
+    let edit = Edit::range(orig.span_of(pre), orig.span_of(a.len() - suf), &old, new.replace(newline, "\n"));
+    for (i, x) in out.iter_mut().enumerate() {
+        x.diag.fix = if i == 0 { vec![edit.clone()] } else { Vec::new() };
     }
     out
+}
+
+/// The original text of a program that `repair_all` changed, and how its places moved: the
+/// errors and warnings of the repaired text are shown at their places in the original, which is
+/// the text the author (or agent) has.
+pub struct Origin {
+    pub src: String,
+    orig: Text,
+    now: Text,
+    rounds: Vec<Vec<(usize, usize, usize)>>,
+    /// The fixes that were applied, at their places in `src`.
+    pub applied: Vec<Applied>,
+}
+
+thread_local! {
+    /// The origin of the program being compiled (`None`: it was not changed).
+    static ORIGIN: RefCell<Option<Rc<Origin>>> = const { RefCell::new(None) };
+}
+
+/// Records the origin of the program being compiled (`None` forgets it: the text compiled is the
+/// author's, or the repaired text became the author's, as with `--fix`).
+pub fn set_origin(o: Option<Origin>) {
+    ORIGIN.with(|x| *x.borrow_mut() = o.map(Rc::new));
+}
+
+/// The origin of the program being compiled, if `repair_all` changed it.
+pub fn origin() -> Option<Rc<Origin>> {
+    ORIGIN.with(|x| x.borrow().clone())
+}
+
+/// A diagnostic of the program being compiled, at its place in the original text.
+pub fn to_origin(d: Diag) -> Diag {
+    match origin() {
+        Some(o) => {
+            let mut d = back(d, &o.orig, &o.rounds, &o.now);
+            if !d.fix.is_empty() && d.file.is_none() {
+                validate(std::slice::from_mut(&mut d), &o.src);
+            }
+            d
+        }
+        None => d,
+    }
+}
+
+/// A place in the program being compiled (a runtime error's), at its place in the original text.
+pub fn span_to_origin(s: Span) -> Span {
+    match origin() {
+        Some(o) if !o.rounds.is_empty() => back_span(s, &o.orig, &o.rounds, &o.now),
+        _ => s,
+    }
 }
 
 /// A diagnostic of the text `now` (which the edits of `rounds` made from the text `orig`), moved to
@@ -257,13 +382,16 @@ fn back(d: Diag, orig: &Text, rounds: &[Vec<(usize, usize, usize)>], now: &Text)
     if rounds.is_empty() || d.file.is_some() {
         return d;
     }
-    d.moved(|s: Span| -> Span {
-        let Some(mut p) = now.offset(s) else { return s };
-        for edits in rounds.iter().rev() {
-            p = before_edits(p, edits);
-        }
-        orig.span_of(p)
-    })
+    d.moved(|s: Span| back_span(s, orig, rounds, now))
+}
+
+/// A place of the text `now` at its place in `orig` (see `back`).
+fn back_span(s: Span, orig: &Text, rounds: &[Vec<(usize, usize, usize)>], now: &Text) -> Span {
+    let Some(mut p) = now.offset(s) else { return s };
+    for edits in rounds.iter().rev() {
+        p = before_edits(p, edits);
+    }
+    orig.span_of(p)
 }
 
 /// A character offset of the text after `edits` (character ranges of the text before them, with the

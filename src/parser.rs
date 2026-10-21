@@ -13,11 +13,9 @@ use crate::lexer::{self, StrPart, Tok, Token};
 
 type PResult<T> = Result<T, Diag>;
 
-const QUESTION_HINT: &str =
-    "`?` is a conditional value, `cond ? a : b`, or after a type an optional type, `int?`; `x ?? d` gives a default for `none`";
+const QUESTION_HINT: &str = "`?` is `cond ? a : b`, or an optional type `int?`";
 
-const FORMAT_SPEC_HINT: &str =
-    "a format specifier is `[[fill]align][+][0][width][,][.precision]` after the colon: `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`";
+const FORMAT_SPEC_HINT: &str = "e.g. `{x:>8}`, `{n:05}`, `{f:.2}`, `{n:,}`";
 
 pub fn parse(toks: Vec<Token>) -> (Program, Vec<Diag>) {
     // every `struct Name` of the file, so a type can name a struct that is declared further down
@@ -113,9 +111,8 @@ impl Parser {
             self.too_deep = Some(span);
         }
         self.pos = self.toks.len() - 1;
-        Err(Diag::new("E0103", format!("the code is nested more than {MAX_NESTING} levels deep"), span).hint(
-            "split it up: give parts of a long expression names with `let`, and move deeply nested blocks into functions of their own",
-        ))
+        Err(Diag::new("E0103", format!("the code is nested more than {MAX_NESTING} levels deep"), span)
+            .hint("split it: name parts with `let`, move nested blocks into functions"))
     }
 
     /// Runs `f`, then goes back to the nesting depth from before it.
@@ -216,10 +213,9 @@ impl Parser {
         }
         match self.peek() {
             Tok::Ident(w) => self.number_suffix(w).map(|(h, _)| h).or_else(|| hints::word(w)),
-            Tok::FatArrow => Some(
-                "`=>` only starts the body of a lambda, which is an argument of an array method: `xs.map(x => x * 2)`; elsewhere define a named function, e.g. `fn double(x: int) -> int = x * 2`"
-                    .into(),
-            ),
+            Tok::FatArrow => {
+                Some("`=>` is for lambdas in array methods, `xs.map(x => x * 2)`; else use `fn f(x: int) -> int = x * 2`".into())
+            }
             // `x -> x * 2` (Java, Kotlin): a lambda arrow is `=>`
             Tok::Arrow if matches!(self.prev().map(|p| &p.tok), Some(Tok::Ident(_))) => {
                 Some("a lambda is written with `=>`: `x => x * 2`".into())
@@ -227,7 +223,7 @@ impl Parser {
             Tok::Assign if self.glued_to(&Tok::Eq) || self.glued_to(&Tok::Ne) => {
                 Some("`===` and `!==` do not exist: compare with `==` and `!=`".into())
             }
-            Tok::Assign => Some("`=` assigns to a variable on a line of its own (`x = 1`); to compare two values write `==`".into()),
+            Tok::Assign => Some("to compare write `==`".into()),
             Tok::Slash if matches!(self.peek_at(1), Tok::Star) => {
                 Some("Nyra has no block comments: start every comment line with `//`".into())
             }
@@ -397,10 +393,7 @@ impl Parser {
                     let fix = (!rest.is_empty()).then(|| shown.clone());
                     Some((format!("exponent notation does not exist: write the number in full, `{shown}`"), fix))
                 } else {
-                    Some((
-                        "exponent notation does not exist: write the number in full, with a dot (`0.00001`, `100000.0`)".into(),
-                        None,
-                    ))
+                    Some(("no exponent notation: write `100000.0`".into(), None))
                 }
             }
             _ => None,
@@ -498,7 +491,7 @@ impl Parser {
                 }
                 Tok::Ident(w) if w == "pub" => {
                     let d = Diag::new("E0332", "`pub` goes right before `fn`, `struct` or `enum`", self.span())
-                        .hint("only definitions can be exported: `pub fn area(r: Rect) -> int = ...`; an import cannot be re-exported, write a small wrapper function");
+                        .hint("only definitions can be exported: `pub fn area(r: Rect) -> int = ...`");
                     self.errs.push(d);
                     self.sync_top();
                 }
@@ -572,12 +565,12 @@ impl Parser {
                         Diag::new(
                             "E0211",
                             format!(
-                                "`main` returns `{}`, so it runs after the top-level statements and its value is what the program prints: it cannot be called among them",
+                                "`main` returns `{}`: it runs after the top-level statements and its value is printed, so it cannot be called",
                                 user.ret.name()
                             ),
                             span,
                         )
-                        .hint("remove this call `main()`, or make `main` return nothing (`fn main() { ... }`) and call it where it should run"),
+                        .hint("remove this call, or write `fn main() { ... }` and call it where it should run"),
                     );
                 }
                 for f in &mut funcs {
@@ -644,7 +637,7 @@ impl Parser {
     /// `for n in 0..200:` (or `10..0 step -2`) after `ex`: the range of a property example. The
     /// bounds and the step are whole-number literals.
     fn forall(&mut self) -> PResult<Forall> {
-        const FORM: &str = "write a property as `ex for n in 0..200: f(n) >= 0`: a variable, a range of whole-number literals (an optional `step k`), a colon and the conditions";
+        const FORM: &str = "write `ex for n in 0..200: f(n) >= 0`";
         let span = self.span();
         self.bump();
         let (var, _) = self.ident("a variable name", FORM)?;
@@ -661,8 +654,9 @@ impl Parser {
         self.expect(Tok::Colon, "`:` before the conditions").map_err(|d| d.or_hint(FORM))?;
         let f = Forall { var, lo, hi, step, span };
         if step == 0 {
-            return Err(Diag::new("E0292", "the step of a property example cannot be 0", span)
-                .hint("use a positive step to count up and a negative one to count down: `ex for n in 0..100 step 5: ...`"));
+            return Err(
+                Diag::new("E0292", "the step of a property example cannot be 0", span).hint("e.g. `ex for n in 0..100 step 5: ...`")
+            );
         }
         if f.count() > MAX_PROPERTY_INPUTS {
             return Err(Diag::new(
@@ -670,7 +664,7 @@ impl Parser {
                 format!("the property example `for {}` has {} inputs; at most {MAX_PROPERTY_INPUTS} are run", f.text(), f.count()),
                 span,
             )
-            .hint("use a smaller range, or a `step`, so the property finishes while the program compiles"));
+            .hint("use a smaller range or a `step`"));
         }
         Ok(f)
     }
@@ -718,10 +712,7 @@ impl Parser {
                 ),
                 self.span(),
             )
-            .hint(format!(
-                "to import a file write its path from this file's folder: `use ./shapes`; the standard modules are {}: `use math`",
-                crate::stdlib::module_list()
-            )));
+            .hint(format!("a file is `use ./shapes`; the modules are {}", crate::stdlib::module_list())));
         }
         let (module, mspan) = self.ident("a module name", "write the module after `use`: `use math`")?;
         if word == "from" {
@@ -739,7 +730,7 @@ impl Parser {
         }
         if !matches!(self.peek(), Tok::Newline | Tok::Eof) {
             let rest = match self.peek() {
-                Tok::Dot => format!("`use {module}` imports the whole module: call its functions as `{module}.name(...)`, there is no `use {module}.name`"),
+                Tok::Dot => format!("write `use {module}` and call `{module}.name(...)`"),
                 Tok::Comma => "one module per line: `use math` and `use text` on two lines".to_string(),
                 Tok::Ident(w) if w == "as" => format!("modules cannot be renamed: write `use {module}` and call `{module}.name(...)`"),
                 _ => format!("a `use` line names one module: `use {module}`"),
@@ -777,7 +768,7 @@ impl Parser {
             && (path.starts_with("./") || path.starts_with("../"));
         if !valid {
             return Err(Diag::new("E0305", format!("`{path}` is not a path Nyra imports"), span)
-                .hint("write the path from this file's folder, with `/` and without `.nyra`: `use ./shapes`, `use ../util/text`"));
+                .hint("write `use ./shapes` (relative, no `.nyra`)"));
         }
         if !matches!(self.peek(), Tok::Newline | Tok::Eof) {
             return Err(Diag::new("E0302", format!("unexpected {} after `use {path}`", self.found()), self.span())
@@ -813,10 +804,10 @@ impl Parser {
                 if let (true, Some(fname), Tok::LParen) = (hints::is_type_word(w), name_after(1), self.peek_at(2)) {
                     // C-style `int main() {`
                     if w == "void" {
-                        format!("functions start with `fn`: `fn {fname}(...) {{ ... }}` (no `->` part when nothing is returned)")
+                        format!("write `fn {fname}(...) {{ ... }}`")
                     } else {
                         let ty = hints::nyra_type(w).unwrap_or(w);
-                        format!("functions start with `fn` and the return type comes after `->`: `fn {fname}(...) -> {ty} {{ ... }}`")
+                        format!("write `fn {fname}(...) -> {ty} {{ ... }}`")
                     }
                 } else if let Some(h) = hints::top_level_word(w) {
                     // `def f(`, `function f(`: the keyword of another language
@@ -874,8 +865,7 @@ impl Parser {
             let mut fields = Vec::new();
             if self.at(&Tok::LParen) {
                 let open = self.bump().span;
-                let hint =
-                    format!("a variant lists the types of its values: `enum {name} {{ Circle(float), Rect(float, float), Empty }}`");
+                let hint = format!("a variant lists types: `enum {name} {{ Circle(float), Empty }}`");
                 loop {
                     self.skip_newlines();
                     if self.at(&Tok::RParen) && !fields.is_empty() {
@@ -976,9 +966,8 @@ impl Parser {
             _ => "area".to_string(),
         };
         let var: String = name.chars().next().map(|c| c.to_lowercase().collect()).unwrap_or_else(|| "p".into());
-        Diag::new("E0263", format!("functions cannot be written inside `struct {name}`: a struct holds only fields"), at).hint(format!(
-            "Nyra has no methods: write `fn {method}` after the struct and pass the struct as a parameter, `fn {method}({var}: {name})`; call it as `{method}({var})`"
-        ))
+        Diag::new("E0263", format!("functions cannot be written inside `struct {name}`: a struct holds only fields"), at)
+            .hint(format!("write `fn {method}({var}: {name})` after the struct"))
     }
 
     /// True at `class Name {` or `impl Name {` (the `{` on the same line).
@@ -1055,14 +1044,11 @@ impl Parser {
         let m = method.unwrap_or_else(|| "area".into());
         let d = if word == "class" {
             Diag::new("E0264", format!("`class {name}`: Nyra has no classes, only structs"), at)
-                .hint(format!(
-                    "write `struct {name} {{ field: int }}` for the data, and its functions after it as plain functions that take the struct: `fn {m}({var}: {name})`"
-                ))
+                .hint(format!("write `struct {name} {{ ... }}` and functions `fn {m}({var}: {name})`"))
                 .fix_opt(only_fields.then(|| Edit::replace(at, "class", "struct")))
         } else {
-            Diag::new("E0263", format!("`impl {name}`: Nyra has no `impl` blocks, functions are written outside the struct"), at).hint(
-                format!("remove the `impl {name} {{ }}` wrapper and write `fn {m}({var}: {name})` on its own, with the struct as a parameter; call it as `{m}({var})`"),
-            )
+            Diag::new("E0263", format!("`impl {name}`: Nyra has no `impl` blocks, functions are written outside the struct"), at)
+                .hint(format!("remove the wrapper: `fn {m}({var}: {name})`"))
         };
         self.errs.push(d);
     }
@@ -1082,7 +1068,7 @@ impl Parser {
             if inout && self.at(&Tok::Var) {
                 return Err(self
                     .unexpected("a parameter name")
-                    .hint("`inout` changes the caller's variable and `var` is a copy the function may change: use one of them"));
+                    .hint("use `inout` (changes the caller's variable) or `var` (a local copy)"));
             }
             let mutable = !inout && self.at(&Tok::Var);
             if mutable {
@@ -1135,7 +1121,7 @@ impl Parser {
             let eq = self.bump().span;
             self.errs.push(
                 Diag::new("E0101", "expected an expression after `=`, found `{`", self.span())
-                    .hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`")
+                    .hint("a block body has no `=`")
                     .fix(vec![Edit::range(eq, self.span(), "=", "")]),
             );
             self.block(&format!("fn {name}"))?
@@ -1228,10 +1214,8 @@ impl Parser {
         }
         match self.peek() {
             Tok::Newline => d.hint("the expression must start on the same line as `=`: `fn f() -> int = 1`"),
-            Tok::Ret => {
-                d.hint("a one-line function returns its expression itself, so there is no `return`: `fn f(x: int) -> int = x`")
-            }
-            Tok::LBrace => d.hint("`=` is followed by an expression, not a block: for a block write `fn f() { ... }` without the `=`"),
+            Tok::Ret => d.hint("a one-line function has no `return`: `fn f(x: int) -> int = x`"),
+            Tok::LBrace => d.hint("a block body has no `=`"),
             _ => d,
         }
     }
@@ -1315,13 +1299,9 @@ impl Parser {
                     Some((h, f)) => (h, f.map(str::to_string)),
                     None => (hints::type_name(&name), hints::type_fix(&name).map(str::to_string)),
                 };
-                Err(Diag::new(
-                    "E0102",
-                    format!("unknown type `{name}`: expected `int`, `float`, `bool`, `str`, `char`, an array `[T]` or a struct"),
-                    span,
-                )
-                .hint(hint)
-                .fix_opt(fix.map(|t| Edit::replace(name_span, &name, t))))
+                Err(Diag::new("E0102", format!("unknown type `{name}`"), span)
+                    .hint(hint)
+                    .fix_opt(fix.map(|t| Edit::replace(name_span, &name, t))))
             }
         }
     }
@@ -1362,10 +1342,7 @@ impl Parser {
                 });
                 Some((format!("put the `{{` on the same line as the header: `{example}`"), fix))
             }
-            Tok::Newline if is_fn => Some((
-                format!("a function body is missing: write `{example} ... }}`, or `= expression` for a one-line function"),
-                None,
-            )),
+            Tok::Newline if is_fn => Some((format!("write `{example} ... }}` or `= expression`"), None)),
             Tok::Newline => Some((format!("a body in braces is missing: `{example} ... }}`"), None)),
             Tok::Colon if is_fn => {
                 // `fn f(a: int): int {`
@@ -1373,10 +1350,7 @@ impl Parser {
                 let fix = typed.then(|| Edit::replace(here, ":", " ->"));
                 Some(("the return type is written after an arrow: `fn f(a: int) -> int {`".to_string(), fix))
             }
-            Tok::FatArrow if is_fn => Some((
-                "`=>` does not start a function body: a one-line function is written `fn f(x: int) -> int = x * 2`".to_string(),
-                None,
-            )),
+            Tok::FatArrow if is_fn => Some(("write `fn f(x: int) -> int = x * 2`".to_string(), None)),
             Tok::Ident(t) if is_fn && hints::is_type_word(t) => {
                 let fix = (t != "void").then(|| Edit::replace(here, t, format!("-> {t}")));
                 Some((format!("the return type is written after an arrow: `fn f() -> {t} {{`"), fix))
@@ -1475,7 +1449,7 @@ impl Parser {
         }
         let d = self.unexpected(&format!("`}}` to close the `{{` of `{what}` opened at {}:{}", open.line, open.col));
         d.hint(if nested {
-            "functions cannot be nested: add the missing `}` before this `fn`, or move the inner function to the top level"
+            "functions do not nest: a `}` is missing before this `fn`"
         } else {
             "add the missing `}`: every `{` needs a matching `}`"
         })
@@ -1522,7 +1496,7 @@ impl Parser {
         let comma = self.span();
         let d = if matches!(self.peek_at(1), Tok::Newline | Tok::RBrace | Tok::Eof) {
             Diag::new("E0101", "a `,` after a statement or a match arm", comma)
-                .hint("delete the `,`: a new line already ends a statement and a match arm (they are not separated by commas)")
+                .hint("no commas between arms or statements")
                 .fix(vec![Edit::replace(comma, ",", "")])
         } else if self.statement_follows() {
             let next = self.toks[(self.pos + 1).min(self.toks.len() - 1)].span;
@@ -1585,7 +1559,7 @@ impl Parser {
         if let Some((w, at)) = first {
             let word_hint = match (w, self.peek()) {
                 ("const" | "final" | "static" | "val", Tok::Ident(name)) => {
-                    Some(format!("write `let {name} = ...` for a value that never changes, or `var {name} = ...` for one that does"))
+                    Some(format!("write `let {name} = ...` (or `var` to change it)"))
                 }
                 _ => hints::word(w),
             };
@@ -1609,9 +1583,7 @@ impl Parser {
             && self.toks[self.pos - 3].tok == Tok::LParen
             && matches!(&self.toks[self.pos - 2].tok, Tok::Ident(w) if hints::nyra_type(w).is_some());
         let hint = match (t, first) {
-            (_, Some("ex")) => {
-                "examples go outside functions: put `ex ...` on its own line after the function's closing `}`, or at the end of a one-line function".to_string()
-            }
+            (_, Some("ex")) => "put `ex ...` after the function's closing `}`".to_string(),
             _ if after_cast => {
                 let Tok::Ident(w) = &self.toks[self.pos - 2].tok else { unreachable!() };
                 let ty = hints::nyra_type(w).unwrap_or("float");
@@ -1620,21 +1592,16 @@ impl Parser {
             (Tok::Let | Tok::Var | Tok::If | Tok::While | Tok::For | Tok::Ret, _) => {
                 format!("put `{}` on a new line: Nyra has one statement per line", t.text())
             }
-            (Tok::Colon, _) if matches!(self.peek_at(1), Tok::Colon) => {
-                "`::` paths do not exist: call a module's function with a dot, `math.sqrt(x)`, and other functions by their plain name".to_string()
-            }
+            (Tok::Colon, _) if matches!(self.peek_at(1), Tok::Colon) => "use a dot: `math.sqrt(x)`".to_string(),
             (Tok::Colon, Some(f)) if matches!(self.peek_at(1), Tok::Assign) => {
-                format!("`:=` does not exist: declare a variable with `let {f} = ...` (or `var {f} = ...` to change it later)")
+                format!("write `let {f} = ...` (or `var`)")
             }
             (Tok::Colon, Some(_)) => "to declare a variable write `let x: int = 5` (or `var`)".to_string(),
             (Tok::RParen, _) => "this `)` closes nothing: remove it, or add the `(` it belongs to".to_string(),
-            (Tok::Comma, _) => {
-                "a `,` does not end a statement: end the line instead, and start the next statement on a new line".to_string()
+            (Tok::Comma, _) => "one statement per line, no commas".to_string(),
+            (Tok::Ident(name), Some(f)) if hints::nyra_type(f).is_some() => {
+                format!("write `let {name}: {} = ...`", hints::nyra_type(f).unwrap_or("int"))
             }
-            (Tok::Ident(name), Some(f)) if hints::nyra_type(f).is_some() => format!(
-                "declare variables with `let` or `var`, and put the type after the name: `let {name}: {} = ...` (or just `let {name} = ...`)",
-                hints::nyra_type(f).unwrap_or("int")
-            ),
             (Tok::Int(_) | Tok::Float(_) | Tok::Str(_) | Tok::Ident(_) | Tok::True | Tok::False, Some(f)) => {
                 let arg = match t {
                     Tok::Int(n) => n.to_string(),
@@ -1645,7 +1612,7 @@ impl Parser {
                     Tok::False => "false".to_string(),
                     _ => "...".to_string(),
                 };
-                format!("to call `{f}` put the argument in parentheses: `{f}({arg})`; to start a new statement, begin a new line")
+                format!("calls need parentheses: `{f}({arg})`")
             }
             _ => match generic {
                 Some(g) => g.to_string(),
@@ -1733,7 +1700,7 @@ impl Parser {
             }
             Tok::For => {
                 self.bump();
-                const LOOPS: &str = "loops look like `for i in 0..10 { ... }`, `for x in xs { ... }` or `for i, x in xs { ... }`";
+                const LOOPS: &str = "write `for i in 0..10 { ... }` or `for x in xs { ... }`";
                 // a loop variable is a name, or a tuple pattern: `for (k, v) in pairs`
                 let (first, first_pat) = self.loop_var(LOOPS)?;
                 // `for i, x in xs`: the position, then the element
@@ -1766,14 +1733,12 @@ impl Parser {
                     }
                 }
                 if self.at(&Tok::DotDot) && var_pat.is_some() {
-                    return Err(self.unexpected("`{` to start the body of this `for`").hint(
-                        "a range gives one number at a time: a pattern like `(a, b)` goes with an array of tuples, `for (a, b) in pairs`",
-                    ));
+                    return Err(self
+                        .unexpected("`{` to start the body of this `for`")
+                        .hint("a range gives one number: `for i in a..b`"));
                 }
                 if self.at(&Tok::DotDot) && index.is_some() {
-                    return Err(self.unexpected("`{` to start the body of this `for`").hint(
-                        "`for i, x in xs` goes over an array or a string; over a range the variable is already the position: `for i in a..b`",
-                    ));
+                    return Err(self.unexpected("`{` to start the body of this `for`").hint("over a range write `for i in a..b`"));
                 }
                 if self.at(&Tok::DotDot) {
                     self.bump();
@@ -1802,7 +1767,7 @@ impl Parser {
                 let t = self.bump().tok;
                 if self.loop_depth == 0 {
                     return Err(Diag::new("E0101", format!("`{}` must be inside a loop", t.text()), span)
-                        .hint("`break` and `continue` work in `while` and `for` loops; to leave a function early write `return`"));
+                        .hint("to leave a function write `return`"));
                 }
                 self.end_stmt()?;
                 if t == Tok::Break {
@@ -1868,9 +1833,8 @@ impl Parser {
     /// `match value { pattern, pattern => body  _ => body }` after the word `match`.
     fn match_stmt(&mut self, span: Span) -> PResult<Stmt> {
         let scrut = self.cond_expr()?;
-        self.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| {
-            d.or_hint("a match looks like `match d { Dir.N => print(\"north\") _ => print(\"other\") }`, one arm per line")
-        })?;
+        self.expect(Tok::LBrace, "`{` to start the arms of this `match`")
+            .map_err(|d| d.or_hint("one arm per line: `Dir.N => print(\"north\")`"))?;
         let open = self.pos - 1;
         let mut arms = Vec::new();
         loop {
@@ -2255,7 +2219,7 @@ impl Parser {
     fn match_expr(&mut self) -> PResult<Expr> {
         self.same_depth(|p| {
             let span = p.expect(Tok::Match, "`match`")?;
-            let hint = "a match used as a value looks like `match s { Shape.Circle(r) => r * r  _ => 0.0 }`: one arm per line, each arm one expression";
+            let hint = "one arm per line: `Shape.Circle(r) => r * r`";
             let scrut = p.cond_expr()?;
             p.expect(Tok::LBrace, "`{` to start the arms of this `match`").map_err(|d| d.or_hint(hint))?;
             let open = p.pos - 1;
@@ -2328,12 +2292,8 @@ impl Parser {
         self.skip_newlines();
         if !self.at(&Tok::Else) {
             self.pos = save;
-            return Err(Diag::new(
-                "E0212",
-                "an `if` used as a value needs an `else`: without it there is no value when the condition is false",
-                span,
-            )
-            .hint("add the other branch: `let x = if cond { 1 } else { 0 }`"));
+            return Err(Diag::new("E0212", "an `if` used as a value needs an `else`", span)
+                .hint("add the other branch: `let x = if cond { 1 } else { 0 }`"));
         }
         self.bump();
         let els = if self.at(&Tok::If) {
@@ -2370,7 +2330,7 @@ impl Parser {
                 format!("each branch of an `if` used as a value must be exactly one expression, found {} after it", self.found()),
                 self.span(),
             )
-            .hint("compute the value first: `var x = 0`, then an `if` statement that sets it (`if c { x = 1 } else { x = 2 }`)");
+            .hint("use `var x = 0` and an `if` statement that sets it");
             self.skip_if_value_rest();
             return Err(d);
         }
@@ -2463,11 +2423,8 @@ impl Parser {
         let e = e?;
         if !matches!(sub.peek(), Tok::Newline | Tok::Eof) {
             let d = sub.unexpected("`}` after the expression");
-            let hint = if spec && matches!(sub.peek(), Tok::Colon) {
-                FORMAT_SPEC_HINT
-            } else {
-                "only one expression can go inside `{ }` in a string: build the parts separately, e.g. `\"{a} {b}\"`"
-            };
+            let hint =
+                if spec && matches!(sub.peek(), Tok::Colon) { FORMAT_SPEC_HINT } else { "one expression per `{ }`: `\"{a} {b}\"`" };
             return Err(d.hint(hint));
         }
         match spec_text.filter(|t| !t.is_empty()) {
@@ -2654,6 +2611,30 @@ impl Parser {
             Tok::LParen => {
                 let open = self.bump().span;
                 let e = self.open_expr()?;
+                // `(name: "x", size: 2)`: a tuple of another language, with field names. One error,
+                // and the values are read as a tuple, so the next lines are not errors too.
+                if let (ExprKind::Var(field), true) = (&e.kind, self.at(&Tok::Colon)) {
+                    let d = Diag::new("E0101", "a tuple has no field names", e.span).hint(format!(
+                        "write the values alone, `(\"a\", 2)`, or a struct: `struct Item {{ {field}: str, ... }}`, `Item({field}: ...)`"
+                    ));
+                    self.errs.push(d);
+                    let mut items = Vec::new();
+                    loop {
+                        if matches!(self.peek(), Tok::Ident(_)) && matches!(self.peek_at(1), Tok::Colon) {
+                            self.bump();
+                        }
+                        if self.at(&Tok::Colon) {
+                            self.bump();
+                        }
+                        items.push(self.open_expr()?);
+                        if !self.at(&Tok::Comma) {
+                            break;
+                        }
+                        self.bump();
+                    }
+                    self.expect(Tok::RParen, &format!("`)` to close the tuple opened at {}:{}", open.line, open.col))?;
+                    return self.postfix(Expr::new(ExprKind::Tuple(items), open));
+                }
                 // `(a, b)`: a comma makes a tuple
                 if self.at(&Tok::Comma) {
                     let mut items = vec![e];
@@ -2681,9 +2662,7 @@ impl Parser {
         self.bump();
         let (var, vspan) = self.ident("a loop variable", "a comprehension looks like `[x * x for x in xs if x > 0]`")?;
         if self.at(&Tok::Comma) {
-            return Err(self
-                .unexpected("`in`")
-                .hint("a comprehension has one variable; for the position too, use a loop: `for i, x in xs { ... }`"));
+            return Err(self.unexpected("`in`").hint("for the position too, use `for i, x in xs { ... }`"));
         }
         self.expect(Tok::In, "`in`").map_err(|d| d.or_hint("a comprehension looks like `[x * x for x in xs if x > 0]`"))?;
         let first = self.expr()?;
@@ -2918,7 +2897,7 @@ impl Parser {
             return d.hint("`++` does not exist: write `i += 1`").fix_opt(fix);
         }
         if matches!(t, Tok::Star) && self.glued_to(&Tok::Star) {
-            return d.hint("there is no `**` operator: multiply (`x * x * x`) or write a loop (see the `pow` recipe in docs/AI_GUIDE.md section 6)");
+            return d.hint("no `**`: multiply, or `use math` and `math.pow(x, y)`");
         }
         if matches!(t, Tok::Assign) && self.glued_to(&Tok::DotDot) {
             return d.hint("`..=` does not exist: the end of a range is exclusive, so `0..10` counts 0 to 9");
@@ -2933,13 +2912,11 @@ impl Parser {
         let generic = "an expression is a value such as `5`, `x + 1` or `f(x)`";
         match t {
             Tok::Question => d.hint(QUESTION_HINT),
-            Tok::Else => d.hint("`else` must follow the `}` of an `if` (`} else {`): look for a missing `}` or a statement between them"),
+            Tok::Else => d.hint("`else` must follow an `if`'s `}`: a `}` is missing or misplaced"),
             Tok::RParen if matches!(before, Some(Tok::LParen)) => {
                 d.hint("empty parentheses are not a value: put an expression inside, or remove them")
             }
-            Tok::Fn => d.hint(
-                "functions are not values: an array method takes a lambda, `xs.map(x => x * 2)`; anything else needs a named `fn` at the top level",
-            ),
+            Tok::Fn => d.hint("functions are not values: use a lambda in a method, or a top-level `fn`"),
             Tok::LBrace if before == Some(&Tok::FatArrow) => {
                 d.hint("the body of a lambda is one expression, without braces or `return`: `x => x * 2`")
             }
@@ -2947,17 +2924,35 @@ impl Parser {
                 d.hint(format!("`{}` starts a statement, not a value: put it on its own line", t.text()))
             }
             Tok::LBrace => d.hint("a `{ }` block is not a value: for a conditional value write `if cond { a } else { b }`"),
-            Tok::Plus | Tok::Star | Tok::Slash | Tok::Percent | Tok::Eq | Tok::Ne | Tok::Lt | Tok::Le | Tok::Gt | Tok::Ge
-            | Tok::And | Tok::Or
+            Tok::Plus
+            | Tok::Star
+            | Tok::Slash
+            | Tok::Percent
+            | Tok::Eq
+            | Tok::Ne
+            | Tok::Lt
+            | Tok::Le
+            | Tok::Gt
+            | Tok::Ge
+            | Tok::And
+            | Tok::Or
                 if starts_line =>
             {
-                d.hint(format!(
-                    "a line cannot start with `{}`: end the previous line with the operator instead (a line may break after an operator, never before one)",
-                    t.text()
-                ))
+                d.hint(format!("break the line after `{}`, not before it", t.text()))
             }
-            Tok::Plus | Tok::Star | Tok::Slash | Tok::Percent | Tok::Eq | Tok::Ne | Tok::Lt | Tok::Le | Tok::Gt | Tok::Ge
-            | Tok::And | Tok::Or | Tok::Comma
+            Tok::Plus
+            | Tok::Star
+            | Tok::Slash
+            | Tok::Percent
+            | Tok::Eq
+            | Tok::Ne
+            | Tok::Lt
+            | Tok::Le
+            | Tok::Gt
+            | Tok::Ge
+            | Tok::And
+            | Tok::Or
+            | Tok::Comma
                 if before.is_some_and(|p| Self::binop(p).is_some()) =>
             {
                 d.hint(format!(
@@ -3200,7 +3195,7 @@ fn parse_spec(text: &str, at: Span) -> PResult<FmtSpec> {
     }
     if i < cs.len() {
         let rest: String = cs[i..].iter().collect();
-        return Err(bad(format!("`{rest}` is not understood here (the order is fill and align, `+`, `0`, width, `,`, `.decimals`)")));
+        return Err(bad(format!("`{rest}` is not understood")));
     }
     Ok(spec)
 }

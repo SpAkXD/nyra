@@ -1,59 +1,49 @@
 (() => {
 (() => {
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const now = (tz) => {
+document.addEventListener('submit', (e) => {
+const form = e.target.closest && e.target.closest('.form-body[data-mailto]');
+if (!form) return;
+e.preventDefault();
+if (!form.reportValidity()) return;
+const fields = [...form.elements].filter((el) => el.name && !['submit', 'button'].includes(el.type));
+const message = fields.find((el) => el.tagName === 'TEXTAREA');
+const label = (el) => {
+const l = el.closest('label') || form.querySelector(`label[for="${el.id}"]`);
+return (l ? l.textContent : el.name).replace('*', '').trim();
+};
+const lines = fields
+.filter((el) => el !== message && (el.type === 'checkbox' ? el.checked : el.value.trim()))
+.map((el) => (el.type === 'checkbox' ? label(el) : el.value.trim()));
+let body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
+const query = (form.dataset.query || '').split('&').filter((kv) => {
+if (!/^body=/i.test(kv)) return kv !== '';
 try {
-const parts = new Intl.DateTimeFormat('en-GB', {
-timeZone: tz || undefined, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-}).formatToParts(new Date());
-const get = (t) => (parts.find((p) => p.type === t) || {}).value;
-const d = DAYS.indexOf(get('weekday'));
-return { day: d === 0 ? 7 : d, min: Number(get('hour')) * 60 + Number(get('minute')) };
+body = decodeURIComponent(kv.slice(5)) + '\n\n' + body;
 } catch {
-const d = new Date();
-return { day: d.getDay() || 7, min: d.getHours() * 60 + d.getMinutes() };
+body = kv.slice(5) + '\n\n' + body;
 }
-};
-const days = (spec) => {
-const out = new Set();
-for (const part of spec.split(',')) {
-const [a, b] = part.split('-').map(Number);
-if (Number.isNaN(a)) continue;
-for (let d = a; d <= (Number.isNaN(b) || b === undefined ? a : b); d++) out.add(d === 0 ? 7 : d);
+return false;
+});
+query.push('body=' + encodeURIComponent(body));
+window.location.href = 'mailto:' + form.dataset.mailto + '?' + query.join('&');
+const card = form.closest('.form');
+const done = card && card.querySelector('.form-done');
+if (done) {
+form.hidden = true;
+done.hidden = false;
+const edit = done.querySelector('.form-edit');
+if (edit) edit.focus();
 }
-return out;
-};
-const mins = (t) => {
-const [h, m] = t.split(':').map(Number);
-return h * 60 + (m || 0);
-};
-const inRange = (r, m) => {
-const [a, b] = r.split('-');
-if (!a || !b) return false;
-const from = mins(a);
-const to = mins(b);
-return to > from ? m >= from && m < to : m >= from || m < to;
-};
-const openOn = (row, t) => {
-const [d, ...ranges] = row.trim().split(/\s+/);
-return days(d).has(t.day) && ranges.some((r) => inRange(r, t.min));
-};
-const update = () => {
-for (const b of document.querySelectorAll('.badge[data-hours]')) {
-const t = now(b.dataset.tz);
-const open = b.dataset.hours.split('|').some((row) => row && openOn(row, t));
-b.dataset.state = open ? 'open' : 'closed';
-const label = b.querySelector('.badge-label');
-if (label) label.textContent = open ? b.dataset.open : b.dataset.closed;
-}
-for (const card of document.querySelectorAll('.hours')) {
-const badge = card.querySelector('.badge');
-const t = now(badge && badge.dataset.tz);
-for (const tr of card.querySelectorAll('tr[data-days]')) tr.classList.toggle('is-today', days(tr.dataset.days).has(t.day));
-}
-};
-update();
-setInterval(update, 60000);
+});
+document.addEventListener('click', (e) => {
+const edit = e.target.closest('.form-edit');
+const card = edit && edit.closest('.form');
+if (!card) return;
+card.querySelector('.form-body').hidden = false;
+card.querySelector('.form-done').hidden = true;
+const first = card.querySelector('input, textarea, select');
+if (first) first.focus();
+});
 })();
 })();
 (()=>{
@@ -97,7 +87,7 @@ D.readyState=='loading'?D.addEventListener('DOMContentLoaded',init):init();
 })();
 (() => {
 "use strict";
-const ny_file = "rooms.nyra";
+const ny_file = "live.nyra";
 class NyPanic extends Error {}
 function ny_panic(code, msg, hint, line, col) {
 const json = typeof process !== "undefined" && process.env.NYRA_JSON;
@@ -225,6 +215,11 @@ NY_KEYS.set(s, c);
 }
 return c;
 }
+function ny_mnew(kv) {
+const m = new Map();
+for (let i = 0; i < kv.length; i += 2) m.set(ny_ik(kv[i]), kv[i + 1]);
+return m;
+}
 function ny_aindex(a, v) {
 for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
 return -1;
@@ -328,10 +323,10 @@ if (typeof d !== "string") return d[0] === "m" ? new Map() : [];
 return d === "s" ? "" : d === "b" ? false : 0;
 }
 class nyS_Msg {
-constructor(p0, p1) { this.tag = p0; this.Show_0 = p1; }
-ny_cp() { return new nyS_Msg(this.tag, this.Show_0); }
-ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0; }
-ny_fmt() { const n = ["Msg.Show"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; return n; }
+constructor(p0, p1, p2) { this.tag = p0; this.Show_0 = p1; this.Send_0 = p2; }
+ny_cp() { return new nyS_Msg(this.tag, this.Show_0, ny_sh(this.Send_0)); }
+ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0 && ny_eq(this.Send_0, o.Send_0); }
+ny_fmt() { const n = ["Msg.Show", "Msg.Send", "Msg.Clear"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; if (this.tag === 1) return n + "(" + ny_fmt(this.Send_0, "{ss") + ")"; return n; }
 }
 class nyS_Node {
 constructor(p0, p1) { this.html = p0; this.kit = p1; }
@@ -369,11 +364,11 @@ ny_cp() { return new nyS_Tup_t3sss(this._0, this._1, this._2); }
 ny_eq(o) { return this._0 === o._0 && this._1 === o._1 && this._2 === o._2; }
 ny_fmt() { return "(" + ny_fmt(this._0, "s") + ", " + ny_fmt(this._1, "s") + ", " + ny_fmt(this._2, "s") + ")"; }
 }
-class nyS_Room {
-constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.photo = p2; }
-ny_cp() { return new nyS_Room(this.name, this.kind, this.photo); }
-ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.photo === o.photo; }
-ny_fmt() { return "Room(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "photo: " + ny_fmt(this.photo, "s") + ")"; }
+class nyS_Bread {
+constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.price = p2; }
+ny_cp() { return new nyS_Bread(this.name, this.kind, this.price); }
+ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.price === o.price; }
+ny_fmt() { return "Bread(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "price: " + ny_fmt(this.price, "i") + ")"; }
 }
 class nyS_Opt_oi {
 constructor(p0, p1) { this.has = p0; this.val = p1; }
@@ -381,8 +376,8 @@ ny_cp() { return new nyS_Opt_oi(this.has, this.val); }
 ny_eq(o) { return this.has === o.has && this.val === o.val; }
 ny_fmt() { return this.has ? "Some(" + ny_fmt(this.val, "i") + ")" : "none"; }
 }
-nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"]];
-nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]]];
+nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"], ["Send_0", "Send_0", ["m", "s", "s"]]];
+nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Send", [2]], ["Clear", []]];
 nyS_Node.ny_jf = [["html", "html", "s"], ["kit", "kit", ["a", "s"]]];
 nyS_WebConfig.ny_jf = [["name", "name", "s"], ["url", "url", "s"], ["lang", "lang", "s"], ["tz", "tz", "s"], ["desc", "desc", "s"], ["share", "share", "s"], ["style", "style", "s"], ["motion", "motion", "s"], ["transition", "transition", "s"], ["font", "font", "s"], ["display", "display", "s"], ["primary", "primary", "s"], ["logo", "logo", "s"], ["say", "say", ["m", "s", "s"]], ["palette", "palette", ["m", "s", "s"]]];
 nyS_Opt_of.ny_jf = [["has", "has", "b"], ["val", "val", "f"]];
@@ -393,99 +388,101 @@ nyS_Opt_ot2ss.ny_jf = [["has", "has", "b"], ["val", "val", nyS_Tup_t2ss]];
 nyS_Opt_ot2ss.ny_jk = "o";
 nyS_Tup_t3sss.ny_jf = [["_0", "_0", "s"], ["_1", "_1", "s"], ["_2", "_2", "s"]];
 nyS_Tup_t3sss.ny_jk = "t";
-nyS_Room.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["photo", "photo", "s"]];
+nyS_Bread.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["price", "price", "i"]];
 nyS_Opt_oi.ny_jf = [["has", "has", "b"], ["val", "val", "i"]];
 nyS_Opt_oi.ny_jk = "o";
-function update(m, kind) {
-let nyU__ub7_m1, k, ny_t4;
+function update(m, kind, sent) {
+let nyU__ub7_m1, k, ny_t5, fields;
 nyU__ub7_m1 = m;
 ny_sh(nyU__ub7_m1);
+if (nyU__ub7_m1.tag === 0) {
 k = nyU__ub7_m1.Show_0;
-ny_t4 = k;
-kind.v = ny_t4;
+ny_t5 = k;
+kind.v = ny_t5;
+} else if (nyU__ub7_m1.tag === 1) {
+fields = nyU__ub7_m1.Send_0;
+ny_sh(fields);
+sent.v = ny_add(sent.v, fields.size, 19, 29);
+} else {
+kind.v = "vše";
 }
-function roomList(_web, rooms, extras, kind) {
-let ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, k, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, r, ny_t19, ny_r_2, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, e, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37;
-ny_t4 = new nyS_Opt_of(false, 0.0);
-ny_t5 = [];
-ny_t6 = new nyS_Opt_of(false, 0.0);
-ny_t7 = [];
-ny_t8 = ["all", "double", "family"];
-for (const ny_c1 of ny_t8) {
+}
+function menu(_web, breads, kind) {
+let ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, k, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, b, ny_t24, ny_b_2, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32;
+ny_t3 = new nyS_Opt_of(false, 0.0);
+ny_t4 = [];
+ny_t5 = new nyS_Opt_of(false, 0.0);
+ny_t6 = [];
+ny_t7 = ["vše", "chléb", "sladké"];
+for (const ny_c1 of ny_t7) {
 k = ny_c1;
-ny_t10 = new nyS_Msg(0, k);
+ny_t9 = ny_mnew([]);
+ny_t10 = new nyS_Msg(0, k, ny_sh(ny_t9));
 ny_t11 = nyU_web_u2e__on(ny_t10);
 ny_t12 = new nyS_Opt_of(false, 0.0);
 ny_t13 = nyU_web_u2e_button(k, "", "", ny_t11, k === kind, "", "", "", "", "", "", "", "", "", ny_t12, "");
 {
-if (ny_t7.ny_s) ny_t7 = ny_cp(ny_t7);
-ny_t7.push(ny_sh(ny_t13));
+if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
+ny_t6.push(ny_sh(ny_t13));
 }
 }
-ny_t14 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t6, "", ny_t7);
+ny_t14 = ny_mnew([]);
+ny_t15 = new nyS_Msg(2, "", ny_sh(ny_t14));
+ny_t16 = nyU_web_u2e__on(ny_t15);
+ny_t17 = new nyS_Opt_of(false, 0.0);
+ny_t18 = nyU_web_u2e_button("Zrušit filtr", "", "ghost", ny_t16, false, "", "", "", "", "", "", "", "", "", ny_t17, "");
 {
-if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
-ny_t5.push(ny_sh(ny_t14));
+if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
+ny_t6.push(ny_sh(ny_t18));
 }
-ny_t15 = new nyS_Opt_of(false, 0.0);
-ny_t16 = [];
-ny_t17 = [];
-for (const ny_c2 of rooms) {
-r = ny_c2;
-if ((kind === "all") || (r.kind === kind)) {
+ny_t19 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t5, "", ny_t6);
 {
-if (ny_t17.ny_s) ny_t17 = ny_cp(ny_t17);
-ny_t17.push(ny_sh(r));
+if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
+ny_t4.push(ny_sh(ny_t19));
 }
-}
-}
-ny_t19 = ny_t17;
-for (const ny_c3 of ny_t19) {
-ny_r_2 = ny_c3;
+ny_t20 = new nyS_Opt_of(false, 0.0);
 ny_t21 = [];
-ny_t22 = new nyS_Opt_of(false, 0.0);
-ny_t23 = [];
-ny_t24 = new nyS_Opt_of(false, 0.0);
-ny_t25 = nyU_web_u2e_img(ny_r_2.photo, ny_r_2.name, "4/3", "", "", "", "", "", "", "", "", "", ny_t24, "");
+ny_t22 = [];
+for (const ny_c2 of breads) {
+b = ny_c2;
+if ((kind === "vše") || (b.kind === kind)) {
 {
-if (ny_t23.ny_s) ny_t23 = ny_cp(ny_t23);
-ny_t23.push(ny_sh(ny_t25));
-}
-ny_t26 = nyU_web_u2e_card(ny_r_2.name, ny_r_2.kind, "", "", "", false, "", "", "", "", ny_t21, "", "", "", "", "", "", "", ny_t22, "", ny_t23, _web);
-{
-if (ny_t16.ny_s) ny_t16 = ny_cp(ny_t16);
-ny_t16.push(ny_sh(ny_t26));
+if (ny_t22.ny_s) ny_t22 = ny_cp(ny_t22);
+ny_t22.push(ny_sh(b));
 }
 }
-ny_t27 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "", "", "", "", ny_t15, "", ny_t16);
-{
-if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
-ny_t5.push(ny_sh(ny_t27));
 }
-if (kind !== "all") {
+ny_t24 = ny_t22;
+for (const ny_c3 of ny_t24) {
+ny_b_2 = ny_c3;
+ny_t26 = `${ny_b_2.price} Kč`;
+ny_t27 = [];
 ny_t28 = new nyS_Opt_of(false, 0.0);
 ny_t29 = [];
-ny_t30 = extras;
-ny_sh(ny_t30);
-for (const ny_c4 of ny_t30) {
-e = ny_c4;
-ny_t32 = [];
-ny_t33 = new nyS_Opt_of(false, 0.0);
-ny_t34 = [];
-ny_t35 = nyU_web_u2e_card(e, kind, "", "", "", false, "", "", "", "", ny_t32, "", "", "", "", "", "", "", ny_t33, "", ny_t34, _web);
+ny_t30 = nyU_web_u2e_card(ny_b_2.name, ny_t26, "", "", "", false, "", "", "", "", ny_t27, "", "", "", "", "", "", "", ny_t28, "", ny_t29, _web);
 {
-if (ny_t29.ny_s) ny_t29 = ny_cp(ny_t29);
-ny_t29.push(ny_sh(ny_t35));
+if (ny_t21.ny_s) ny_t21 = ny_cp(ny_t21);
+ny_t21.push(ny_sh(ny_t30));
 }
 }
-ny_t36 = nyU_web_u2e_grid(8, "", "", false, "", "", "", "", "", "", "", ny_t28, "", ny_t29);
+ny_t31 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "stagger", "lift", "", "", ny_t20, "", ny_t21);
 {
-if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
-ny_t5.push(ny_sh(ny_t36));
+if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
+ny_t4.push(ny_sh(ny_t31));
 }
+ny_t32 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t3, "", ny_t4);
+return ny_t32;
 }
-ny_t37 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t4, "", ny_t5);
-return ny_t37;
+function thanks(sent) {
+let ny_t1, ny_t2, ny_t3;
+if (sent > 0) {
+ny_t1 = new nyS_Opt_of(false, 0.0);
+ny_t3 = nyU_web_u2e_p("Děkujeme za zprávu.", "", "", "", "", "", "", "", ny_t1, "");
+} else {
+ny_t2 = new nyS_Opt_of(false, 0.0);
+ny_t3 = nyU_web_u2e_p("", "", "", "", "", "", "", "", ny_t2, "");
+}
+return ny_t3;
 }
 function nyU_web_u2e__render(view) {
 let ny_t1;
@@ -770,59 +767,25 @@ ny_t72 = nyU_web_u2e__kits(kids, "");
 ny_t73 = new nyS_Node(h, ny_sh(ny_t72));
 return ny_t73;
 }
-function nyU_web_u2e_img(src, alt, ratio, caption, fit, width, id, cls, anim, hover, loop, scroll, at, morph) {
-let c, style, ny_t16, ny_t17, ny_t18, ny_t19, h, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33;
-c = "fig";
-if (fit === "contain") {
-{
-c += " fig-contain";
-}
-}
-if (ratio !== "") {
-{
-c += " fig-ratio";
-}
-}
-if (ratio !== "") {
-ny_t16 = "--ratio:" + ratio;
-style = ny_t16 + ";";
+function nyU_web_u2e_p(text, size, id, cls, anim, hover, loop, scroll, at, morph) {
+let c, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21;
+if (size !== "") {
+ny_t11 = nyU_web_u2e__word(size);
+c = "p p-" + ny_t11;
 } else {
-style = "";
+c = "p";
 }
-if (width !== "") {
-{
-c += " fig-w";
-}
-ny_t17 = nyU_web_u2e__size(width);
-ny_t18 = "--w:" + ny_t17;
-ny_t19 = ny_t18 + ";";
-{
-style += ny_t19;
-}
-}
-ny_t21 = nyU_web_u2e__ic(c, id, cls);
-ny_t22 = "<figure" + ny_t21;
-ny_t23 = nyU_web_u2e__at("style", style);
-h = ny_t22 + ny_t23;
-ny_t24 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t25 = ny_t24 + ">";
-ny_t26 = nyU_web_u2e__img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false);
-ny_t27 = ny_t25 + ny_t26;
-{
-h += ny_t27;
-}
-if (caption !== "") {
-ny_t28 = nyU_web_u2e__md(caption);
-ny_t29 = "<figcaption>" + ny_t28;
-ny_t30 = ny_t29 + "</figcaption>";
-{
-h += ny_t30;
-}
-}
-ny_t31 = h + "</figure>";
-ny_t32 = [];
-ny_t33 = new nyS_Node(ny_t31, ny_sh(ny_t32));
-return ny_t33;
+ny_t12 = nyU_web_u2e__ic(c, id, cls);
+ny_t13 = "<p" + ny_t12;
+ny_t14 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t15 = ny_t13 + ny_t14;
+ny_t16 = ny_t15 + ">";
+ny_t17 = nyU_web_u2e__md(text);
+ny_t18 = ny_t16 + ny_t17;
+ny_t19 = ny_t18 + "</p>";
+ny_t20 = [];
+ny_t21 = new nyS_Node(ny_t19, ny_sh(ny_t20));
+return ny_t21;
 }
 function nyU_web_u2e_button(text, href, style, on, active, icon, label, size, id, cls, anim, hover, loop, scroll, at, morph) {
 let c, ny_t17, ny_t18, ny_t19, inner, ny_t21, ny_t22, motion, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, h, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49;
@@ -1232,9 +1195,9 @@ u = ny_str_trim(url);
 scheme = nyU_web_u2e__scheme(u);
 if (((((scheme !== "") && (scheme !== "http")) && (scheme !== "https")) && (scheme !== "mailto")) && (scheme !== "tel")) {
 ny_t3 = "the link `" + u;
-        ny_t4 = ny_t3 + "` uses the scheme `";
+        ny_t4 = ny_t3 + "` uses the forbidden scheme `";
         ny_t5 = ny_t4 + scheme;
-        ny_t6 = ny_t5 + ":`, which a page may not link to";
+        ny_t6 = ny_t5 + ":`";
 nyU_web_u2e__err("E0381", ny_t6);
 ny_t7 = "#";
 return ny_t7;
@@ -1586,21 +1549,27 @@ ny_t1 = ny_jenc(m, nyS_Msg);
 return ny_t1;
 }
 const ny_st = {
-"kind": ny_from("all", "s"),
-"_web": ny_from({"name":"Mill House","url":"","lang":"en","tz":"Europe/Prague","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#5B3A29","logo":"","say":{},"palette":{}}, nyS_WebConfig),
-"rooms": ny_from([{"name":"River Room","kind":"double","photo":"photo-1.svg"},{"name":"Garden Room","kind":"double","photo":"photo-2.svg"},{"name":"Attic Room","kind":"family","photo":"photo-3.svg"}], ["a", nyS_Room]),
-"extras": ny_from(["Wi-Fi","Parking","Garden","Sauna","Bikes","Pets","Bakery","Canoes"], ["a", "s"]),
+"kind": ny_from("vše", "s"),
+"sent": ny_from(0, "i"),
+"_web": ny_from({"name":"Pekárna Hana","url":"","lang":"cs","tz":"","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#7A3E1D","logo":"","say":{},"palette":{}}, nyS_WebConfig),
+"breads": ny_from([{"name":"Kváskový chléb","kind":"chléb","price":89},{"name":"Croissant","kind":"sladké","price":35},{"name":"Bageta","kind":"chléb","price":29}], ["a", nyS_Bread]),
 };
 const ny_web = {
 update(text) {
 const ny_m = ny_from(JSON.parse(text), nyS_Msg);
 const ny_b0 = {v: ny_st["kind"]};
-update(ny_m, ny_b0);
+const ny_b1 = {v: ny_st["sent"]};
+update(ny_m, ny_b0, ny_b1);
 ny_st["kind"] = ny_b0.v;
+ny_st["sent"] = ny_b1.v;
 },
 views: {
-"roomList": () => {
-const ny_r = nyU_web_u2e__render(roomList(ny_st["_web"], ny_st["rooms"], ny_st["extras"], ny_st["kind"]));
+"menu": () => {
+const ny_r = nyU_web_u2e__render(menu(ny_st["_web"], ny_st["breads"], ny_st["kind"]));
+return ny_r;
+},
+"thanks": () => {
+const ny_r = nyU_web_u2e__render(thanks(ny_st["sent"]));
 return ny_r;
 },
 },
@@ -1750,6 +1719,7 @@ if (!view) continue;
 try {
 const t = document.createElement("template");
 t.innerHTML = ny_html(view());
+if (typeof ny_img_fix === "function") ny_img_fix(t.content);
 ny_morph(el, t.content);
 } catch (e) {
 console.error(e instanceof NyPanic ? e.message : e);

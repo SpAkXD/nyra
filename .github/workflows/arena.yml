@@ -1,0 +1,132 @@
+# Nyra Arena: add a model to the leaderboard at nyralang.dev/arena/.
+#
+# Runs bench/arena/run_model.py for one model on the briefs of the latest held-out web round (same prompts, same
+# checklist, one Nyra repair turn), rebuilds bench/arena/arena.json, commits the results to a new branch and opens a
+# pull request. Nothing is merged automatically: review the REPORT.md in the PR, then merge by hand.
+#
+# Needs repository secrets (Settings -> Secrets and variables -> Actions); the owner adds them, this file does not:
+#   ANTHROPIC_API_KEY   for provider "anthropic", and for counting code tokens on the shared tokenizer (free calls)
+#   OPENROUTER_API_KEY  for provider "openrouter"
+# The spend cap input is a hard stop: no call starts that could pass it.
+name: Arena (add a model)
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model id (Anthropic: claude-..., OpenRouter: vendor/model)"
+        required: true
+        type: string
+      provider:
+        description: "API to call"
+        required: true
+        default: openrouter
+        type: choice
+        options: [anthropic, openrouter]
+      runs:
+        description: "Runs per brief and language (4 = 8 Nyra answers, the minimum to rank)"
+        required: true
+        default: "4"
+        type: string
+      cap_usd:
+        description: "Spend cap in US dollars (hard stop)"
+        required: true
+        default: "10"
+        type: string
+      name:
+        description: "Display name (optional)"
+        required: false
+        type: string
+      vendor:
+        description: "Who makes the model, shown as provider (optional, e.g. OpenAI)"
+        required: false
+        type: string
+      effort:
+        description: "Effort / reasoning effort, or none for the model's default"
+        required: false
+        default: medium
+        type: string
+      price:
+        description: "IN,OUT USD per million tokens (only for an Anthropic id the harness does not know)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: arena
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      IN_MODEL: ${{ inputs.model }}
+      IN_PROVIDER: ${{ inputs.provider }}
+      IN_RUNS: ${{ inputs.runs }}
+      IN_CAP: ${{ inputs.cap_usd }}
+      IN_NAME: ${{ inputs.name }}
+      IN_VENDOR: ${{ inputs.vendor }}
+      IN_EFFORT: ${{ inputs.effort }}
+      IN_PRICE: ${{ inputs.price }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check the inputs and the key
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$IN_MODEL" =~ ^[A-Za-z0-9._:/-]+$ ]] || { echo "bad model id"; exit 1; }
+          [[ "$IN_RUNS" =~ ^[0-9]+$ ]] || { echo "runs must be a number"; exit 1; }
+          [[ "$IN_CAP" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "cap_usd must be a number"; exit 1; }
+          if [ "$IN_PROVIDER" = anthropic ] && [ -z "$ANTHROPIC_API_KEY" ]; then echo "add the ANTHROPIC_API_KEY secret first"; exit 1; fi
+          if [ "$IN_PROVIDER" = openrouter ] && [ -z "$OPENROUTER_API_KEY" ]; then echo "add the OPENROUTER_API_KEY secret first"; exit 1; fi
+      - name: Build the compiler
+        run: cargo build --release
+      - name: Install the harness
+        run: pip install -r bench/requirements.txt
+      - name: Run the model
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          args=(--model "$IN_MODEL" --provider "$IN_PROVIDER" --runs "$IN_RUNS" --cap "$IN_CAP" --effort "${IN_EFFORT:-medium}" --parallel 4)
+          [ -n "$IN_NAME" ] && args+=(--name "$IN_NAME")
+          [ -n "$IN_VENDOR" ] && args+=(--vendor "$IN_VENDOR")
+          [ -n "$IN_PRICE" ] && args+=(--price "$IN_PRICE")
+          python bench/arena/run_model.py "${args[@]}" | tee arena-run.log
+      - name: Open a pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          slug="$(echo "$IN_MODEL" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9.]+/-/g; s/^-+|-+$//g')"
+          branch="arena/${slug}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add bench/web/results bench/arena/arena.json
+          git commit -m "arena: add ${IN_MODEL} (${IN_PROVIDER}, ${IN_RUNS} runs per brief and language)"
+          git push origin "$branch"
+          {
+            echo "Results of \`bench/arena/run_model.py\` for \`${IN_MODEL}\` via ${IN_PROVIDER}, spend cap \$${IN_CAP}."
+            echo
+            echo "Review the new folder's REPORT.md (failures are listed with the compiler's messages), then merge by hand."
+            echo "After merging, regenerate the site data: \`python bench/arena/build.py --site <site worktree>/site/arena\`."
+            echo
+            echo '```'
+            tail -n 20 arena-run.log
+            echo '```'
+          } > pr-body.md
+          gh pr create --base "${GITHUB_REF_NAME}" --head "$branch" --title "Arena: add ${IN_MODEL}" --body-file pr-body.md
