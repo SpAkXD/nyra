@@ -329,9 +329,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         }
         if c.structs.contains_key(&sd.name) && data::contains_itself(&sd.name, &c.structs) {
             c.errs.push(
-                Diag::new("E0222", format!("struct `{}` contains itself, so its size would be infinite", sd.name), sd.span).hint(
-                    format!("store the nested values in an array instead, e.g. `children: [{}]` (an array can be empty)", sd.name),
-                ),
+                Diag::new("E0222", format!("struct `{}` contains itself, so its size would be infinite", sd.name), sd.span)
+                    .hint(format!("hold the nested values in an array: `children: [{}]`", sd.name)),
             );
         }
     }
@@ -345,7 +344,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
         if c.enums.contains_key(&ed.name) && data::contains_itself(&ed.name, &c.structs) {
             c.errs.push(
                 Diag::new("E0222", format!("enum `{}` contains itself, so its size would be infinite", ed.name), ed.span)
-                    .hint(format!("keep the nested values in an array instead, e.g. `Node([{}])` (an array can be empty)", ed.name)),
+                    .hint(format!("hold the nested values in an array: `Node([{}])`", ed.name)),
             );
         }
     }
@@ -363,10 +362,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                     format!("function `{}` is defined twice (the first one is on line {})", f.name, first.span.line),
                     f.span,
                 )
-                .hint(format!(
-                    "rename one of them, e.g. `{}_2`: Nyra has no overloading, so a function name can be used only once",
-                    f.name
-                )),
+                .hint(format!("rename one, e.g. `{}_2` (there is no overloading)", f.name)),
             );
         } else if let Some(sd) = c.structs.get(&f.name) {
             c.errs.push(
@@ -400,7 +396,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                 "nothing to run: the program has no statements at the top level and no `fn main()`",
                 Span { line: 1, col: 1 },
             )
-            .hint("write the program's statements at the top level, e.g. `print(\"hello\")`: they run in order"),
+            .hint("write statements at the top level, e.g. `print(\"hello\")`"),
         ),
         Some(f) if !f.params.is_empty() || f.ret != Type::Void => {
             let mut problems = Vec::new();
@@ -412,12 +408,8 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
                 problems.push(format!("returns `{}`", f.ret.name()));
             }
             c.errs.push(
-                Diag::new(
-                    "E0211",
-                    format!("`main` must take no parameters and return nothing, but it {}", problems.join(" and ")),
-                    f.span,
-                )
-                .hint("write `fn main() { ... }`: put the values it needs inside it with `let`, and stop early with a plain `return`"),
+                Diag::new("E0211", format!("`main` takes nothing and returns nothing, but it {}", problems.join(" and ")), f.span)
+                    .hint("write `fn main() { ... }` and declare its values inside with `let`"),
             );
         }
         _ => {}
@@ -445,9 +437,7 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
             let module = f.name.split('.').next().unwrap_or_default().to_string();
             for d in &mut c.errs[before..] {
                 d.msg = format!("internal error in the standard module `{module}`, function `{}`: {}", f.name, d.msg);
-                d.hint = Some(format!(
-                    "this is a bug in the compiler, not in your program; please report it (your program's `use {module}` line is where it shows)"
-                ));
+                d.hint = Some(format!("a bug in the compiler, not in your program (shown at `use {module}`): please report it"));
                 d.fix.clear();
             }
         } else {
@@ -493,6 +483,25 @@ pub fn check(prog: &mut Program) -> Vec<Diag> {
 }
 
 /// True if every path through the block ends in `ret`.
+/// The names of a function's parameters for a hint, `` `title`, `text` ``: for a web function the
+/// motion options (the same on every element) are one entry.
+fn param_names(names: &[String], web: bool) -> String {
+    const MOTION: &[&str] = &["anim", "hover", "loop", "scroll", "at", "morph"];
+    let mut shown: Vec<String> = names.iter().filter(|n| !(web && MOTION.contains(&n.as_str()))).map(|n| format!("`{n}`")).collect();
+    if web && names.iter().any(|n| MOTION.contains(&n.as_str())) {
+        shown.push("motion options".to_string());
+    }
+    shown.join(", ")
+}
+
+/// A signature for a message: a web function by its bare name and parameter names only.
+fn shown_sig(sig: &Sig, name: &str) -> String {
+    match name.strip_prefix("web.") {
+        Some(short) => format!("{short}(...)"),
+        None => sig.show(name),
+    }
+}
+
 fn returns(b: &[Stmt]) -> bool {
     match b.last().map(|s| &s.kind) {
         Some(StmtKind::Ret(_)) => true,
@@ -846,10 +855,10 @@ impl Checker {
         };
         let from_end = var.as_ref().map(|v| format!("{v}.len() - {}", -n));
         let hint = match (&var, &from_end, slice) {
-            (Some(v), Some(e), false) => format!("Nyra has no positions counted from the end: write `{v}[{e}]` for the element {} from the end", -n),
-            (Some(_), Some(e), true) => format!("Nyra has no positions counted from the end: write `{e}` (the length minus {})", -n),
-            (_, _, false) => "Nyra has no positions counted from the end: write the length minus n, e.g. `xs[xs.len() - 1]` is the last element".to_string(),
-            _ => "Nyra has no positions counted from the end: write the length minus n, e.g. `xs.slice(xs.len() - 2, xs.len())` is the last two".to_string(),
+            (Some(v), Some(e), false) => format!("positions count from 0, never from the end: `{v}[{e}]`"),
+            (Some(_), Some(e), true) => format!("positions count from 0, never from the end: `{e}`"),
+            (_, _, false) => "positions count from 0, never from the end: the last element is `xs[xs.len() - 1]`".to_string(),
+            _ => "positions count from 0, never from the end: the last two are `xs.slice(xs.len() - 2, xs.len())`".to_string(),
         };
         let fix = from_end.map(|e| Edit::replace(pos.span, &format!("-{}", -n), e));
         self.errs.push(
@@ -875,9 +884,7 @@ impl Checker {
             return;
         }
         let open = Span { line: root.line, col: root.col - 1 };
-        d.hint = Some(format!(
-            "`{{{text}}}` inserts the value of `{text}`; to keep `${{{text}}}` as text, double the braces: `${{{{{text}}}}}`"
-        ));
+        d.hint = Some(format!("`{{{text}}}` inserts a value; doubled braces keep the text"));
         d.fix = vec![Edit::replace(open, &format!("{{{text}}}"), format!("{{{{{text}}}}}")).after("$")];
     }
 
@@ -907,10 +914,7 @@ impl Checker {
         let first = self.decls.iter().filter(|(n, _)| n == name).map(|(_, s)| *s).min_by_key(|s| (s.line, s.col));
         if let Some(at) = first {
             return d.hint(if (at.line, at.col) < (span.line, span.col) {
-                format!(
-                    "`{name}` was declared on line {} inside a block that has already ended: declare it before that block to use it here",
-                    at.line
-                )
+                format!("`{name}` was declared on line {} in a block that has ended: declare it before that block", at.line)
             } else {
                 format!("`{name}` is declared later, on line {}: move that declaration above this line", at.line)
             });
@@ -927,7 +931,7 @@ impl Checker {
             return d.hint(h).fix_opt(fix.map(|f| Edit::replace(span, name, f)));
         }
         d.hint(if assigning {
-            format!("declare it first with `var {name} = ...`: `{name} = ...` can only change a variable that exists")
+            format!("declare it first: `var {name} = ...`")
         } else {
             format!("declare it first: `let {name} = ...`")
         })
@@ -941,17 +945,15 @@ impl Checker {
             let (msg, hint) = match pdecl {
                 Decl::Let => (
                     format!("`{name}` is already declared on line {} (Nyra has no shadowing)", pspan.line),
-                    format!(
-                        "use a different name for the new variable, e.g. `{name}2`; to change the old one, declare it with `var` and assign: `{name} = ...`"
-                    ),
+                    format!("use another name, e.g. `{name}2`, or declare the first with `var` and assign `{name} = ...`"),
                 ),
                 Decl::Var => (
                     format!("`{name}` is already declared on line {} (Nyra has no shadowing)", pspan.line),
-                    format!("assign to the existing variable (`{name} = ...`) instead of declaring it again, or use a different name"),
+                    format!("assign to it, `{name} = ...`, or use another name"),
                 ),
                 Decl::Param | Decl::Inout => (
                     format!("`{name}` is already a parameter of `{}` (Nyra has no shadowing)", self.fname),
-                    "use a different name: parameters cannot be declared again or changed (copy one into a `var` to change it)".to_string(),
+                    "use another name (to change a parameter, copy it into a `var`)".to_string(),
                 ),
                 Decl::Loop => (
                     format!("`{name}` is already the loop variable of an enclosing `for` (line {})", pspan.line),
@@ -1039,9 +1041,7 @@ impl Checker {
                 } else if let Some(s) = suggest(&name, names.iter().copied()) {
                     s
                 } else if names.is_empty() {
-                    format!(
-                        "define it: `struct {name} {{ field: int }}`, or use `int`, `float`, `bool`, `str`, `char` or an array `[T]`"
-                    )
+                    format!("define it: `struct {name} {{ field: int }}`")
                 } else {
                     let mut sorted = names.clone();
                     sorted.sort();
@@ -1163,15 +1163,13 @@ impl Checker {
         }
         let hint = match k {
             Type::Float => "a float is a bad key (rounding, NaN): use `int` keys, or the text `str(x)`".to_string(),
-            _ if k.is_tuple() => {
-                "a tuple is a key when each of its parts is an `int`, `str`, `char`, `bool` or such a tuple: use an `int` that stands for a float part, or the text `str(x)`".to_string()
-            }
+            _ if k.is_tuple() => "each part of a tuple key must be a key type: use an `int` for the float, or `str(x)`".to_string(),
             _ => format!("use an `int` or a `str` that stands for the {}, e.g. an id or a name", k.name()),
         };
         self.errs.push(
             Diag::new(
                 "E0218",
-                format!("a map key must be `int`, `str`, `char`, `bool` or a tuple of those, found `{}`", k.name()),
+                format!("`{}` cannot be a map key (keys: `int`, `str`, `char`, `bool`, tuples of those)", k.name()),
                 span,
             )
             .hint(hint),
@@ -1231,12 +1229,12 @@ impl Checker {
     /// Why a call that returns nothing cannot give a value, and what to do.
     fn no_value_hint(&self, e: &Expr) -> String {
         match &e.kind {
-            ExprKind::Call(n, _) if self.fns.contains_key(n.as_str()) => format!(
-                "`{n}` has no return type, so it returns nothing: call it on its own line, or declare `fn {n}(...) -> int` and `return` a value"
-            ),
-            ExprKind::Call(n, _) => format!("`{n}` only has an effect and returns nothing: use it as a statement on its own line"),
+            ExprKind::Call(n, _) if self.fns.contains_key(n.as_str()) => {
+                format!("`{n}` returns nothing (it has no `-> T`): call it on its own line")
+            }
+            ExprKind::Call(n, _) => format!("`{n}` returns nothing: call it on its own line"),
             ExprKind::Method(_, m, _) => {
-                format!("`.{m}()` changes its receiver and returns nothing: call it on its own line, then use the value")
+                format!("`.{m}()` changes its receiver and returns nothing: call it on its own line")
             }
             _ => "only a function with a return type (`-> int`) has a value".to_string(),
         }
@@ -1248,9 +1246,7 @@ impl Checker {
         // `for k, label in pairs`: `k` is the position and `label` the whole pair
         if let ExprKind::Var(n) = &e.kind {
             if let Some((i, x)) = self.pair_loops.iter().rev().find(|(i, x)| i == n || x == n) {
-                return format!(
-                    "`for {i}, {x} in ...` gives the position `{i}` and the whole element `{x}`: to take each pair apart write `for ({i}, {x}) in ...`"
-                );
+                return format!("`{i}` is the position and `{x}` the whole element: take pairs apart with `for ({i}, {x}) in ...`");
             }
         }
         // the web functions' parameters whose shape a program guesses wrong most (`use web`)
@@ -1272,20 +1268,18 @@ impl Checker {
                 }
                 if (func, *param) == ("hero", "badge") && got.name() == "Node" {
                     let rows = hours_rows(e).map_or("[(\"Mon–Fri\", \"1-5 8:00-16:00\")]".to_string(), |(rows, _)| rows);
-                    return format!("`badge:` takes the rows of the opening hours, not the `hours(...)` element: `badge: {rows}`");
+                    return format!("`badge:` takes the rows, not `hours(...)`: `badge: {rows}`");
                 }
             }
             let web = match (func, *param) {
                 ("site", "radius") => Some("`radius:` is the corner radius in pixels, a number: `radius: 16`"),
-                ("gallery", "photos") => Some(
-                    "`photos` is a list of (image, alt, tag) triples: `[(\"bread.jpg\", \"Fresh bread\", \"bread\")]`; the tag may be `\"\"`",
-                ),
+                ("gallery", "photos") => Some("(image, alt, tag) triples: `[(\"bread.jpg\", \"Bread\", \"\")]`"),
                 ("gallery", "filters") => Some("`filters:` is a list of (tag, label) pairs: `[(\"bread\", \"Bread\")]`"),
-                ("hero", "badge") => Some(
-                    "`badge:` takes the rows of `hours(...)` and shows open or closed now: `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`",
-                ),
-                ("hours", "rows") => Some("`hours` takes (label, days and times) rows: `[(\"Mon–Fri\", \"1-5 8:00-16:00\"), (\"Sun\", \"\")]`"),
-                ("navbar" | "footer", "links") | ("hero", "buttons") => Some("a list of (label, href) pairs: `[(\"Menu\", \"#menu\")]`"),
+                ("hero", "badge") => Some("`badge:` takes hours rows: `[(\"Mon–Fri\", \"8:00-16:00\")]`"),
+                ("hours", "rows") => Some("(label, hours) rows: `[(\"Mon–Fri\", \"8:00-16:00\"), (\"Sun\", \"\")]`"),
+                ("navbar" | "footer", "links") | ("hero", "buttons") => {
+                    Some("a list of (label, href) pairs: `[(\"Menu\", \"#menu\")]`")
+                }
                 ("navbar", "cta") => Some("`cta:` is one (label, href) pair: `cta: (\"Order\", \"#contact\")`"),
                 ("footer", "contact" | "small") | ("field", "options") | ("list", "items") | ("marquee", "items") => {
                     Some("a list of lines of text: `[\"one\", \"two\"]`")
@@ -1304,13 +1298,13 @@ impl Checker {
                 _ => return "convert it with `float(...)`".to_string(),
             },
             (Int, Float) => match &s {
-                Some(s) => return format!("convert it with `int`: `int({s})` (truncates toward zero), or write an int"),
-                None => return "convert it with `int(...)` (truncates toward zero)".to_string(),
+                Some(s) => return format!("convert with `int({s})` (truncates), or write an int"),
+                None => return "convert with `int(...)` (truncates)".to_string(),
             },
             (Str, Int | Float | Bool) => {
                 return match &s {
-                    Some(s) if !s.contains('"') => format!("build text with interpolation: `\"{{{s}}}\"`, or convert with `str({s})`"),
-                    _ => "build text with interpolation: store the value in a variable `x`, then write `\"{x}\"`".to_string(),
+                    Some(s) if !s.contains('"') => format!("convert with `str({s})`"),
+                    _ => "convert with `str(...)`".to_string(),
                 }
             }
             (Str, Char) => {
@@ -1335,15 +1329,15 @@ impl Checker {
                 let f = if want == Int { "int" } else { "float" };
                 if matches!(e.kind, ExprKind::Str(_)) {
                     // parsing literal text that is not a number would always fail
-                    return format!("this text is not a number: write an `{f}` here, or give the variable the type you need");
+                    return format!("this text is not a number: write an `{f}`");
                 }
                 return match &s {
-                    Some(s) => format!("parse the text with `{f}({s})` (a runtime error if it is not a number)"),
-                    None => format!("parse the text with `{f}(...)` (a runtime error if it is not a number)"),
+                    Some(s) => format!("parse it with `{f}({s})`"),
+                    None => format!("parse it with `{f}(...)`"),
                 };
             }
             (Bool, Int | Float | Str) if matches!(e.kind, ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Str(_)) => {
-                return "write `true` or `false`: a `bool` is never made from a number or text".to_string()
+                return "write `true` or `false`".to_string()
             }
             (Bool, Int) | (Bool, Float) | (Bool, Str) => {
                 let zero = match got {
@@ -1379,29 +1373,25 @@ impl Checker {
         }
         match ctx {
             Ctx::Let(name, _) => {
-                format!("change the value to {}, or change the declared type: `let {name}: {} = ...`", article(want), got.name())
+                format!("give it {}, or declare `let {name}: {}`", article(want), got.name())
             }
             Ctx::Assign(name) => {
-                format!("`{name}` holds {} values: assign {}, or declare `{name}` with the type you need", want.name(), article(want))
+                format!("`{name}` holds `{}` values", want.name())
             }
             Ctx::AssignTo(target) => format!("`{target}` holds {} values: assign {}", want.name(), article(want)),
             // a standard function (`web.hero`, `math.pow`) is not the program's to change
             Ctx::Arg { f, param, .. } if f.split_once('.').is_some_and(|(m, _)| crate::stdlib::MODULES.contains(&m)) => {
                 format!("`{param}` takes {}: pass one", article(want))
             }
-            Ctx::Arg { f, param, .. } => format!("pass {} for `{param}`, or change the parameter type in `fn {f}`", article(want)),
+            Ctx::Arg { param, .. } => format!("`{param}` takes {}", article(want)),
             Ctx::MethodArg { m, .. } => format!("`.{m}(...)` needs {} here", article(want)),
             Ctx::Field { s, f } => {
-                format!("field `{f}` of `{s}` holds {}: pass one, or change the field's type in `struct {s}`", article(want))
+                format!("field `{f}` of `{s}` holds {}", article(want))
             }
-            Ctx::Ret => format!("return {}, or change the return type of `{}` to `{}`", article(want), self.fname, got.name()),
+            Ctx::Ret => format!("return {}, or declare `-> {}`", article(want), got.name()),
             Ctx::Range(_) => "the bounds of a range are `int` values: `for i in 0..10`".to_string(),
             Ctx::Default { param, .. } => format!("give `{param}` a default of its type, {}", article(want)),
-            Ctx::Kid(f) => format!(
-                "each line of the child block of `{}` is one element of {}: make it one",
-                f.strip_prefix("web.").unwrap_or(f),
-                article(want)
-            ),
+            Ctx::Kid(f) => format!("each line of the child block of `{}` is {}", f.strip_prefix("web.").unwrap_or(f), article(want)),
         }
     }
 
@@ -1486,15 +1476,11 @@ impl Checker {
             };
             let hint = match f.body.last().map(|s| &s.kind) {
                 Some(StmtKind::Expr(e)) if e.ty == f.ret => match show(e) {
-                    Some(s) => format!(
-                        "the last line computes a value, but Nyra does not return it by itself: write `return {s}` (or make this a one-line function: `fn {}(...) -> {} = {s}`)",
-                        f.name,
-                        f.ret.name()
-                    ),
-                    None => "the last line computes a value, but Nyra does not return it by itself: start it with `return`".to_string(),
+                    Some(s) => format!("the last value is not returned by itself: write `return {s}`"),
+                    None => "the last value is not returned by itself: start the line with `return`".to_string(),
                 },
                 Some(StmtKind::If { els: None, .. }) => {
-                    format!("the last `if` has no `else`: add `return {value}` after it, or an `else {{ return {value} }}` branch")
+                    format!("the last `if` has no `else`: add `return {value}` after it")
                 }
                 Some(StmtKind::If { .. }) => "every branch of the last `if`/`else` must end with `return`".to_string(),
                 Some(StmtKind::While { .. } | StmtKind::For { .. } | StmtKind::ForEach { .. }) => {
@@ -1505,7 +1491,7 @@ impl Checker {
             self.errs.push(
                 Diag::new(
                     "E0207",
-                    format!("function `{}` is declared `-> {}` but not every path ends with `return`", f.name, f.ret.name()),
+                    format!("`{}` (declared `-> {}`) does not end every path with `return`", f.name, f.ret.name()),
                     f.span,
                 )
                 .hint(hint)
@@ -1531,10 +1517,7 @@ impl Checker {
         if t != Type::Bool && !t.is_unknown() {
             let what = show(e).map_or("this example".to_string(), |s| format!("`{s}`"));
             let hint = match (t, show(e)) {
-                (Type::Void, _) => {
-                    "an example checks a value: call a function that returns one and compare the result, e.g. `ex sq(3) == 9`"
-                        .to_string()
-                }
+                (Type::Void, _) => "compare a returned value, e.g. `ex sq(3) == 9`".to_string(),
                 (_, Some(s)) => format!("compare it with the value you expect: `ex {s} == ...`"),
                 _ => "write a condition that must be true, e.g. `ex sq(3) == 9`".to_string(),
             };
@@ -1706,10 +1689,7 @@ impl Checker {
                                 format!("`return` returns a value, but `{}` has no return type (it returns nothing)", self.fname),
                                 e.span,
                             )
-                            .hint(format!(
-                                "add the return type to the signature: `fn {}(...) -> {shown}`, or write `return` without a value",
-                                self.fname
-                            )),
+                            .hint(format!("declare `fn {}(...) -> {shown}`, or write `return` alone", self.fname)),
                         );
                     } else {
                         let want = self.ret;
@@ -1773,11 +1753,11 @@ impl Checker {
                         let (msg, hint) = match decl {
                             Decl::Param => (
                                 format!("cannot assign to `{name}`: parameters cannot be changed"),
-                                format!("copy it into a variable first (`var m = {name}`), then change `m`; or declare the parameter `inout {name}: {}` to change the caller's variable", t.name()),
+                                format!("copy it, `var m = {name}`, or declare `inout {name}: {}`", t.name()),
                             ),
                             Decl::Loop => (
                                 format!("cannot assign to `{name}`: it is the loop variable of a `for`"),
-                                "loop variables cannot be changed: use a `while` loop with a `var` counter instead".to_string(),
+                                "use a `while` loop with a `var` counter".to_string(),
                             ),
                             Decl::Lambda => (
                                 format!("cannot assign to `{name}`: it is the parameter of a lambda"),
@@ -1785,7 +1765,7 @@ impl Checker {
                             ),
                             _ => (
                                 format!("cannot assign to `{name}`: it was declared with `let` on line {}", dspan.line),
-                                format!("declare it with `var` to make it changeable: `var {name} = ...` on line {}", dspan.line),
+                                format!("declare it with `var` on line {}", dspan.line),
                             ),
                         };
                         // it changes, so it was meant to be a `var`
@@ -1834,14 +1814,8 @@ impl Checker {
     }
 
     fn arena_error(&self, name: &str, span: Span) -> Diag {
-        Diag::new(
-            "E0238",
-            format!("`{name}` cannot be changed inside this `arena` block: it was declared outside it"),
-            span,
-        )
-        .hint(format!(
-            "values created in an `arena` are freed at its `}}`: change `{name}` after the block, or return the result from a function whose body is the `arena` (`return` copies it out)"
-        ))
+        Diag::new("E0238", format!("`{name}` cannot be changed inside this `arena` block: it was declared outside it"), span)
+            .hint(format!("an `arena` frees its values at its `}}`: change `{name}` after the block"))
     }
 
     /// `e` is changed (assigned into, a mutating method, `inout`): it must be a place whose root
@@ -1865,7 +1839,7 @@ impl Checker {
             if b.ty == Type::Str {
                 self.errs.push(
                     Diag::new("E0229", format!("cannot {what} a character of a string: strings are immutable"), span)
-                        .hint("build a new string instead, e.g. `s = s.slice(0, i) + \"x\" + s.slice(i + 1, s.len())`"),
+                        .hint("build a new string: `s = s.slice(0, i) + \"x\" + s.slice(i + 1, s.len())`"),
                 );
                 return;
             }
@@ -1895,19 +1869,20 @@ impl Checker {
             }
             Decl::Let => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` was declared with `let` on line {}", dspan.line), span)
-                    .hint(format!("declare it with `var` to make it changeable: `var {root} = ...` on line {}", dspan.line))
+                    .hint(format!("declare it with `var` on line {}", dspan.line))
                     .fix(vec![Edit::replace(dspan, "let", "var")]),
             ),
             Decl::Param => self.errs.push(
-                Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` is a parameter, and parameters cannot be changed"), span)
-                    .hint(format!(
-                        "copy it into a variable first (`var m = {root}`), or declare the parameter `inout {root}: {}` to change the caller's value",
-                        t.name()
-                    )),
+                Diag::new(
+                    "E0205",
+                    format!("cannot {what} `{shown}`: `{root}` is a parameter, and parameters cannot be changed"),
+                    span,
+                )
+                .hint(format!("copy it, `var m = {root}`, or declare `inout {root}: {}`", t.name())),
             ),
             Decl::Loop => self.errs.push(
                 Diag::new("E0205", format!("cannot {what} `{shown}`: `{root}` is the loop variable of a `for`"), span)
-                    .hint("the loop variable is a copy of each element: change the array itself, e.g. `xs[i] = ...` in `for i, x in xs`"),
+                    .hint("it is a copy: change the array, `xs[i] = ...` in `for i, x in xs`"),
             ),
             Decl::Lambda => {}
         }
@@ -1922,8 +1897,7 @@ impl Checker {
             format!("`{name}` was freed at line {} and cannot be used any more", f.line)
         };
         self.errs.push(
-            Diag::new("E0239", msg, span)
-                .hint(format!("give it a new value first (`{name} = ...`, needs `var`), or move `free({name})` after its last use")),
+            Diag::new("E0239", msg, span).hint(format!("assign it a new value first, or move `free({name})` after its last use")),
         );
     }
 
@@ -2229,10 +2203,10 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0212",
-                            format!("the {which} branch of this conditional value (`if` or `? :`) produces no value: {} returns nothing", call_text(branch)),
+                            format!("the {which} branch of this `if`/`? :` value has no value: {} returns nothing", call_text(branch)),
                             span,
                         )
-                        .hint("each branch must be an expression with a value, e.g. `if c { 1 } else { 2 }`; use an `if` statement for actions"),
+                        .hint("each branch must give a value, e.g. `if c { 1 } else { 2 }`"),
                     );
                     Type::Unknown
                 } else if ta.is_unknown() || tb.is_unknown() {
@@ -2263,11 +2237,7 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0212",
-                            format!(
-                                "the branches of this conditional value (`if` or `? :`) have different types: `{}` and `{}`",
-                                ta.name(),
-                                tb.name()
-                            ),
+                            format!("the branches of this `if`/`? :` value differ: `{}` and `{}`", ta.name(), tb.name()),
                             span,
                         )
                         .hint(hint)
@@ -2302,8 +2272,7 @@ impl Checker {
                 }
                 None => {
                     self.errs.push(
-                        Diag::new("E0276", "cannot infer the type of `none`", span)
-                            .hint("say which optional type it is where it is declared: `var best: int? = none`, or compare it with a value: `x == none`"),
+                        Diag::new("E0276", "cannot infer the type of `none`", span).hint("declare its type: `var best: int? = none`"),
                     );
                     Type::Unknown
                 }
@@ -2395,13 +2364,13 @@ impl Checker {
                                     .and_then(|n| self.structs.get(&n))
                                     .and_then(|s| s.fields.first().map(|(f, _, _)| f.clone()));
                                 match (shown, field) {
-                                    (Some(b), Some(f)) => format!("a struct has fields, not positions: read one with a dot, e.g. `{b}.{f}`"),
+                                    (Some(b), Some(f)) => {
+                                        format!("a struct has fields, not positions: read one with a dot, e.g. `{b}.{f}`")
+                                    }
                                     _ => "a struct has fields, not positions: read one with a dot, e.g. `p.x`".to_string(),
                                 }
                             }
-                            (Type::Int, Some(b)) => format!(
-                                "only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed; to index the digits of `{b}`, turn it into text first: `str({b})`"
-                            ),
+                            (Type::Int, Some(b)) => format!("only arrays and strings can be indexed; for digits use `str({b})[i]`"),
                             _ => "only arrays (`xs[0]`) and strings (`s[0]`, a `char`) can be indexed".to_string(),
                         };
                         self.errs.push(Diag::new("E0233", format!("cannot index a value of type `{}`", t.name()), span).hint(hint));
@@ -2432,9 +2401,8 @@ impl Checker {
                         None => {
                             if !self.errs.iter().any(|d| d.code == "E0277" && d.span == span) {
                                 self.errs.push(
-                                    Diag::new("E0277", format!("`if let` needs an optional value, found {}", article(bt)), span).hint(
-                                        "the value must be an optional `T?`, such as `m.get(k)`, `xs.find(x => ...)` or `s.to_int()`: `if let v = m.get(k) { ... }`",
-                                    ),
+                                    Diag::new("E0277", format!("`if let` needs an optional value, found {}", article(bt)), span)
+                                        .hint("use it directly; `if let` is for a `T?` such as `m.get(k)`"),
                                 );
                             }
                             Type::Unknown
@@ -2617,9 +2585,8 @@ impl Checker {
             Some(t) if t.is_unknown() || (t != Type::Void && self.defined(t)) => t,
             _ => {
                 self.errs.push(
-                    Diag::new("E0309", "`json.parse` needs to know the type it reads", span).hint(
-                        "give the value a type: `let p: Point = json.parse(text)`, `let xs: [int] = json.parse(text)`, or pass it where that type is expected",
-                    ),
+                    Diag::new("E0309", "`json.parse` needs to know the type it reads", span)
+                        .hint("give it a type: `let p: Point = json.parse(text)`"),
                 );
                 Type::Unknown
             }
@@ -2785,7 +2752,7 @@ impl Checker {
                     format!("the pattern `{en}.{name}` does not name the {} of the variant", count(want.len(), "value")),
                     span,
                 )
-                .hint(format!("a variant that carries values is matched with a name for each, `_` for one you do not need: `{en}.{name}({names})`"))
+                .hint("name each value (`_` to skip one)")
                 .fix(vec![Edit::insert(after(span, name), format!("({names})")).after(name.to_string())]),
             );
             return Some(VPat { k: Some(k), binds: Vec::new() });
@@ -2812,10 +2779,10 @@ impl Checker {
                 ExprKind::Var(n) if n == "_" => {}
                 ExprKind::Var(n) => binds.push((n.clone(), a.span, want[i], self.enums[en].slot(k, i))),
                 _ => {
-                    self.errs
-                        .push(Diag::new("E0287", "a variant pattern names its values, it does not compare them", a.span).hint(
-                            "write a name (it takes the value) or `_` for each value; to test the value use an `if` in the arm",
-                        ));
+                    self.errs.push(
+                        Diag::new("E0287", "a variant pattern names its values, it does not compare them", a.span)
+                            .hint("write a name or `_` for each value; test it with an `if` in the arm"),
+                    );
                     return Some(VPat { k: Some(k), binds: unknown(args) });
                 }
             }
@@ -2836,9 +2803,10 @@ impl Checker {
             3
         } else {
             let shown = show(scrut).unwrap_or_else(|| "the value".into());
-            self.errs.push(Diag::new("E0279", format!("cannot `match` a value of type `{}`", st.name()), scrut.span).hint(format!(
-                "`match` works on an enum, a `bool`, an `int`, a `str` or a `char`; for other types compare with `if {shown} == ...`"
-            )));
+            self.errs.push(
+                Diag::new("E0279", format!("cannot `match` a value of type `{}`", st.name()), scrut.span)
+                    .hint(format!("`match` takes an enum, `bool`, `int`, `str` or `char`: use `if {shown} == ...`")),
+            );
             0
         }
     }
@@ -3119,7 +3087,7 @@ impl Checker {
                         format!("this arm of a `match` used as a value produces no value: {} returns nothing", call_text(&body)),
                         body.span,
                     )
-                    .hint("each arm must be an expression with a value, e.g. `Dir.N => 1`; use a `match` statement for actions"),
+                    .hint("each arm must give a value, e.g. `Dir.N => 1`"),
                 );
                 bad = true;
             } else if t.is_unknown() {
@@ -3250,10 +3218,7 @@ impl Checker {
             } else {
                 "`0`"
             };
-            bad(
-                format!("{what} is for numbers"),
-                "an `int` or a `float` can have separators, a sign and zeros; align a text with `<`, `>` or `^`".to_string(),
-            );
+            bad(format!("{what} is for numbers"), "text takes only width and align (`<`, `>`, `^`)".to_string());
         } else {
             match (spec.ty, t) {
                 (Some('f'), Type::Float) | (Some('d'), Type::Int) | (Some('s'), Type::Str) | (None, _) => {}
@@ -3305,13 +3270,12 @@ impl Checker {
         let Some(elems) = bt.tuple_elems() else {
             if !again {
                 self.errs.push(
-                    Diag::new("E0272", format!("cannot take apart {}: a pattern like `(a, b)` needs a tuple", article(bt)), span).hint(
-                        if in_for {
-                            "`for (a, b) in xs` takes each element apart, so the elements must be tuples; for the position too write `for i, x in xs`"
+                    Diag::new("E0272", format!("cannot take apart {}: a pattern like `(a, b)` needs a tuple", article(bt)), span)
+                        .hint(if in_for {
+                            "for the position and the element write `for i, x in xs`"
                         } else {
-                            "a pattern takes a tuple apart, e.g. the result of `fn f() -> (int, str)`; for a single value write `let a = ...`"
-                        },
-                    ),
+                            "for a single value write `let a = ...`"
+                        }),
                 );
             }
             return Type::Unknown;
@@ -3359,7 +3323,7 @@ impl Checker {
             Err(_) => {
                 self.errs.push(
                     Diag::new("E0224", format!("`{}` has no field `{name}`", bt.name()), span)
-                        .hint("the elements of a tuple are read by position: `t.0`, `t.1`, or taken apart with `let (a, b) = t`"),
+                        .hint("read a tuple by position, `t.0`, or `let (a, b) = t`"),
                 );
                 Type::Unknown
             }
@@ -3431,13 +3395,10 @@ impl Checker {
                             None => "make every element a float: convert the first with `float(...)`".to_string(),
                         },
                         (Type::Str, Type::Int | Type::Float | Type::Bool | Type::Char) => match show(it) {
-                            Some(s) => format!("an array holds one type: write this element as text, `str({s})`, or use a struct to group values of different types"),
-                            None => "an array holds one type: write this element as text with `str(...)`, or use a struct to group values of different types".to_string(),
+                            Some(s) => format!("an array holds one type: write it as text, `str({s})`, or use a struct"),
+                            None => "an array holds one type: convert with `str(...)`, or use a struct".to_string(),
                         },
-                        _ => format!(
-                            "an array holds one type: convert this element to `{}`, or use a struct to group different types",
-                            f.name()
-                        ),
+                        _ => format!("an array holds one type: make it `{}`, or use a struct", f.name()),
                     };
                     self.errs.push(
                         Diag::new(
@@ -3481,7 +3442,7 @@ impl Checker {
         if bt.is_option() {
             self.errs.push(
                 Diag::new("E0224", format!("`{}` is an optional value and has no field `{name}`", bt.name()), span)
-                    .hint("take the value out first: `x ?? default`, `if let v = x { v.field }` or `x.unwrap().field`"),
+                    .hint("take the value out first: `if let v = x { v.field }` or `x.unwrap().field`"),
             );
             return Type::Unknown;
         }
@@ -3545,9 +3506,8 @@ impl Checker {
         }
         if !matches!(name, "is_some" | "is_none" | "unwrap") {
             self.errs.push(
-                Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span).hint(
-                    "an optional value has `is_some()`, `is_none()` and `unwrap()`; to get the value use `x ?? default` or `if let v = x { ... }`",
-                ),
+                Diag::new("E0227", format!("`{}` has no method `{name}`", rt.name()), span)
+                    .hint("take the value out first: `x ?? default` or `if let v = x { ... }`"),
             );
             return Type::Unknown;
         }
@@ -3616,7 +3576,7 @@ impl Checker {
             let arity = |m: &str| data::method_sig(rt, m).is_some_and(|s| s.params.len() == args.len());
             let mut fix = None;
             let hint = if rt == Type::Str && data::CHAR_METHODS.contains(&name) {
-                format!("`{name}()` is a `char` method: use a character, `'A'.{name}()` or `s[0].{name}()`; all codes of a string: `s.codes()`")
+                format!("`{name}()` is a `char` method: `s[0].{name}()`; all codes: `s.codes()`")
             } else if let Some(h) = hints::method(rt, name, &shown) {
                 fix = hints::method_rename(rt, name).filter(|m| arity(m)).map(|m| vec![Edit::replace(span, name, m)]);
                 // `n.to_string()` is `str(n)`
@@ -3632,6 +3592,12 @@ impl Checker {
                 h
             } else if let Some(sname) = rt.struct_name() {
                 format!("structs have no methods: write a function `fn {name}(x: {sname})` and call `{name}(x)`")
+            } else if matches!(rt, Type::Int | Type::Float | Type::Bool | Type::Char) && data::method_sig(Type::Str, name).is_some() {
+                // `n.pad_left(2, '0')`: a string method on a number
+                if let ExprKind::Var(v) = &recv.kind {
+                    fix = Some(vec![Edit::range(recv.span, after(span, name), &format!("{v}.{name}"), format!("str({v}).{name}"))]);
+                }
+                format!("make it text first: `str({shown}).{name}(...)`")
             } else if methods.is_empty() {
                 format!("`{}` has no methods", rt.name())
             } else {
@@ -3659,9 +3625,9 @@ impl Checker {
                 let hint = if name == "join" {
                     let (r, sep) =
                         (show(recv).unwrap_or_else(|| "xs".into()), args.first().and_then(show).unwrap_or_else(|| "\", \"".into()));
-                    format!("turn the elements into text first: `var parts: [str] = []`, `for x in {r} {{ parts.push(str(x)) }}`, then `parts.join({sep})`")
+                    format!("make them text first: `[str(x) for x in {r}].join({sep})`")
                 } else {
-                    "sort by a key yourself: e.g. loop and insert each element at its place".to_string()
+                    "sort by a key: `xs.sort_by(x => key)`".to_string()
                 };
                 self.errs.push(Diag::new("E0228", format!("`{name}` needs {needs}, found `{}`", rt.name()), span).hint(hint));
             }
@@ -3783,7 +3749,7 @@ impl Checker {
             BinOp::Eq | BinOp::Ne => "two values of the same type",
             BinOp::And | BinOp::Or => "two `bool`s",
         };
-        let msg = format!("cannot use `{sym}` on `{}` and `{}`: `{sym}` needs {needs}", l.name(), r.name());
+        let msg = format!("cannot use `{sym}` on `{}` and `{}`", l.name(), r.name());
         // a literal that only needs another spelling (`2` as `2.0`, `"a"` as `'a'`)
         let mut literal_fix = None;
         let (ls, rs) = (show(le), show(re));
@@ -3812,7 +3778,7 @@ impl Checker {
             if compound {
                 let name = ls.clone().unwrap_or_else(|| "x".into());
                 match (int_left, &rs) {
-                    (true, Some(rs)) => format!("`{name}` is an `int`: convert the value (`{name} {sym} int({rs})` truncates toward zero) or declare `{name}` as a float"),
+                    (true, Some(rs)) => format!("`{name}` is an `int`: `{name} {sym} int({rs})` (truncates), or declare it a float"),
                     (false, _) if matches!(re.kind, ExprKind::Int(_)) => {
                         let n = if let ExprKind::Int(n) = re.kind { n } else { 0 };
                         literal_fix = float_literal(re);
@@ -3833,17 +3799,16 @@ impl Checker {
                 match (a, b) {
                     (Some(a), Some(b)) => {
                         literal_fix = float_literal(if int_left { le } else { re });
-                        format!("use one type on both sides, e.g. `{a} {sym} {b}` (Nyra never converts numbers implicitly)")
+                        format!("numbers never convert implicitly: `{a} {sym} {b}`")
                     }
-                    _ => "Nyra never converts numbers implicitly: use `float(x)` on the `int` side, or `int(x)` on the `float` side"
-                        .to_string(),
+                    _ => "numbers never convert implicitly: use `float(x)` or `int(x)`".to_string(),
                 }
             }
         } else if op == BinOp::Add && (l == Char || r == Char) {
             if l == Char && r == Int {
                 let c = ls.clone().unwrap_or_else(|| "c".into());
                 let n = rs.clone().unwrap_or_else(|| "n".into());
-                format!("characters have no arithmetic: compute with the code and convert back, `char({c}.code() + {n})`")
+                format!("compute with the code: `char({c}.code() + {n})`")
             } else {
                 let c = if l == Char { ls.clone() } else { rs.clone() }.unwrap_or_else(|| "c".into());
                 format!("convert the character to text first: `str({c})` (or use interpolation, `\"{{a}}{{b}}\"`)")
@@ -3852,15 +3817,13 @@ impl Checker {
             let other = if l == Str { &rs } else { &ls };
             match other {
                 Some(o) if !o.contains('"') => {
-                    format!("`+` joins two strings: convert the other side with `str({o})`, or use interpolation")
+                    format!("convert it: `str({o})`")
                 }
                 _ => {
                     let whole = self.chain.as_ref().filter(|(nodes, _)| nodes.contains(&span)).and_then(|(_, t)| t.clone());
                     match whole {
-                        Some(t) => format!(
-                            "`+` joins two strings: convert the other side with `str(...)`, or use interpolation, e.g. `\"{t}\"`"
-                        ),
-                        None => "`+` joins two strings: convert the other side with `str(...)`, or use interpolation".to_string(),
+                        Some(t) => format!("use interpolation: `\"{t}\"`"),
+                        None => "convert the other side with `str(...)`".to_string(),
                     }
                 }
             }
@@ -3875,8 +3838,7 @@ impl Checker {
                 format!("`+` joins two arrays of the same type: `{}` and `{}` differ", l.name(), r.name())
             }
         } else if op == BinOp::Mod && (l == Float || r == Float) {
-            "`%` works on `int` only: convert a float with `int(x)`, or compute a float remainder as `a - b * float(int(a / b))`"
-                .to_string()
+            "`%` is for `int`s: convert with `int(x)`".to_string()
         } else if matches!(op, BinOp::And | BinOp::Or) {
             let fix = |e: &Expr, t: Type, s: &Option<String>| -> Option<String> {
                 let s = s.as_ref()?;
@@ -3903,7 +3865,7 @@ impl Checker {
             }
         } else if matches!(op, BinOp::Eq | BinOp::Ne) {
             if l == Bool || r == Bool {
-                "compare a `bool` only with another `bool` (`flag == true`, or just `flag`)".to_string()
+                "compare a `bool` with a `bool`, or use it as it is".to_string()
             } else if (l == Char && r == Str) || (l == Str && r == Char) {
                 let s = if l == Str { &ls } else { &rs };
                 match s.as_deref().and_then(|t| t.strip_prefix('"')).and_then(|t| t.strip_suffix('"')) {
@@ -3914,15 +3876,14 @@ impl Checker {
                     _ => "compare a `char` with a `char` (`c == 'a'`), or text with text (`str(c) == s`)".to_string(),
                 }
             } else {
-                format!("`{sym}` compares two values of one type: convert one side (`float(x)`, `int(x)`) or write the literal with the right type")
+                "convert one side: `float(x)`, `int(x)`, `str(x)`".to_string()
             }
         } else if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge) && l.is_tuple() && l == r {
-            "tuples are ordered when every element is a number, text, a char or a bool (or such a tuple): compare the other parts one by one"
-                .to_string()
+            "compare the orderable parts one by one".to_string()
         } else if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge) && (l.elem().is_some() || l.struct_name().is_some()) {
             "only numbers, strings and characters are ordered: compare elements or fields instead".to_string()
         } else {
-            format!("both sides of `{sym}` need the same numeric type: check the types of the two operands")
+            format!("`{sym}` needs {needs}")
         };
         self.errs.push(Diag::new("E0210", msg, span).hint(hint).fix_opt(literal_fix));
         Type::Unknown
@@ -4022,19 +3983,18 @@ impl Checker {
                             format!("the `inout` parameter `{}` of `{}` cannot have a default value", p.name, f.name),
                             d.span,
                         )
-                        .hint("an `inout` argument is a variable of the caller, so every call must name it: remove `= ...`"),
+                        .hint("every call names its `inout` variable: remove `= ...`"),
                     );
                     false
                 } else if !self.constant(d) {
                     self.errs.push(
-                        Diag::new("E0370", format!("the default value of `{}` in `{}` is not a constant", p.name, f.name), d.span).hint(
-                            format!(
-                                "a default value is a literal, `[]`, `[:]`, `none`, an enum variant, or an array, tuple, map or struct of those: `{}: {} = {}`",
+                        Diag::new("E0370", format!("the default value of `{}` in `{}` is not a constant", p.name, f.name), d.span)
+                            .hint(format!(
+                                "a default is a literal (or `[]`, `none`, a variant): `{}: {} = {}`",
                                 p.name,
                                 p.ty.name(),
                                 sample(p.ty)
-                            ),
-                        ),
+                            )),
                     );
                     false
                 } else {
@@ -4076,6 +4036,20 @@ impl Checker {
         }
     }
 
+    /// The web functions that have a parameter `label` (`icon`: `button`, `card`, ...), the most
+    /// used first, at most four, as a list for a hint; empty when none has it.
+    fn web_param_owners(&self, label: &str) -> String {
+        const COMMON: &[&str] = &["card", "button", "chip", "section", "hero", "link", "stat", "feature", "list", "img"];
+        let mut owners: Vec<&str> = self
+            .fns
+            .iter()
+            .filter_map(|(n, s)| n.strip_prefix("web.").filter(|f| !f.starts_with('_') && s.names.iter().any(|p| p == label)))
+            .collect();
+        owners.sort_by_key(|f| (COMMON.iter().position(|c| c == f).unwrap_or(COMMON.len()), *f));
+        let shown: Vec<String> = owners.iter().take(4).map(|f| format!("`{f}`")).collect();
+        shown.join(", ")
+    }
+
     /// Puts the arguments of a call of the program's function `name` in the order of its
     /// parameters: the values without a name first, then `label: value` ones by name, the child
     /// block for the last parameter, and the default values of those left out. False when that is
@@ -4085,7 +4059,7 @@ impl Checker {
     fn bind_args(&mut self, name: &str, args: &mut Vec<Expr>, span: Span) -> bool {
         let sig = &self.fns[name];
         let (params, names, defaults, bad, shown) =
-            (sig.params.clone(), sig.names.clone(), sig.defaults.clone(), sig.bad_defaults.clone(), sig.show(name));
+            (sig.params.clone(), sig.names.clone(), sig.defaults.clone(), sig.bad_defaults.clone(), shown_sig(sig, name));
         let n = params.len();
         let block = if matches!(args.last().map(|a| &a.kind), Some(ExprKind::Block(..))) { args.pop() } else { None };
         let mut slots: Vec<Option<Expr>> = vec![None; n];
@@ -4101,9 +4075,8 @@ impl Checker {
             if !matches!(a.kind, ExprKind::Labeled(..)) {
                 if named {
                     self.errs.push(
-                        Diag::new("E0370", format!("a value without a name after a named argument in the call of `{name}`"), at).hint(
-                            format!("write the values without names first, in parameter order, then the named ones: `fn {shown}`"),
-                        ),
+                        Diag::new("E0370", format!("a value without a name after a named argument in the call of `{name}`"), at)
+                            .hint(format!("write the unnamed values first: `fn {shown}`")),
                     );
                     spare.push(a);
                     ok = false;
@@ -4120,24 +4093,27 @@ impl Checker {
             named = true;
             match names.iter().position(|p| *p == label) {
                 None => {
-                    let web = name.strip_prefix("web.").and_then(|f| crate::webcheck::unknown_param_hint(f, &label));
+                    // a web function is called by its bare name
+                    let short = name.strip_prefix("web.");
+                    let called = short.unwrap_or(name);
+                    let web = short.and_then(|f| crate::webcheck::unknown_param_hint(f, &label));
                     let (hint, fix) = match suggest_fix(&label, names.iter().map(String::as_str)) {
                         _ if web.is_some() => (web.unwrap_or_default(), None),
                         Some((h, f)) => (h, f.map(|f| Edit::replace(at, &label, f))),
-                        None if names.is_empty() => (format!("`{name}` takes no arguments: call it as `{name}()`"), None),
-                        None => {
-                            let list: Vec<String> = names.iter().map(|p| format!("`{p}`")).collect();
-                            (format!("its parameters are {}: `fn {shown}`", list.join(", ")), None)
-                        }
+                        None if names.is_empty() => (format!("`{called}` takes no arguments"), None),
+                        None => match short.map(|_| self.web_param_owners(&label)).filter(|o| !o.is_empty()) {
+                            Some(owners) => (format!("`{label}` is an option of {owners}, not `{called}`"), None),
+                            None => (format!("its parameters: {}", param_names(&names, short.is_some())), None),
+                        },
                     };
-                    self.errs.push(Diag::new("E0226", format!("`{name}` has no parameter `{label}`"), at).hint(hint).fix_opt(fix));
+                    self.errs.push(Diag::new("E0226", format!("`{called}` has no parameter `{label}`"), at).hint(hint).fix_opt(fix));
                     spare.push(*v);
                     ok = false;
                 }
                 Some(j) if slots[j].is_some() => {
                     self.errs.push(
                         Diag::new("E0370", format!("`{label}` is given twice in the call of `{name}`"), at)
-                            .hint(format!("give each parameter one value: `{label}` is parameter {} of `fn {shown}`", j + 1)),
+                            .hint(format!("give `{label}` one value (it is parameter {})", j + 1)),
                     );
                     spare.push(*v);
                     ok = false;
@@ -4160,21 +4136,17 @@ impl Checker {
                     self.errs.push(
                         Diag::new(
                             "E0371",
-                            format!("`{name}` gets its last parameter `{}` twice: as an argument and as the child block", names[last]),
+                            format!("`{name}` gets `{}` twice: as an argument and as the child block", names[last]),
                             b.span,
                         )
-                        .hint(format!(
-                            "leave out the argument `{}` or the block: the block is the value of the last parameter",
-                            names[last]
-                        )),
+                        .hint(format!("leave out the argument `{}` or the block", names[last])),
                     );
                     ok = false;
                 }
                 None => {
                     self.errs.push(
-                        Diag::new("E0371", format!("`{name}` takes no arguments, so it takes no child block"), b.span).hint(format!(
-                            "remove the block, or give `fn {name}` a last parameter that is an array, e.g. `kids: [str]`"
-                        )),
+                        Diag::new("E0371", format!("`{name}` takes no arguments, so it takes no child block"), b.span)
+                            .hint(format!("remove the block, or give `{name}` a last array parameter")),
                     );
                     ok = false;
                 }
@@ -4199,20 +4171,26 @@ impl Checker {
         if extra > 0 && ok {
             self.errs.push(
                 Diag::new("E0204", format!("`{shown}` takes {} but {given} {} given", count(n, "argument"), was_were(given)), span)
-                    .hint(format!("remove the extra argument(s): the signature is `fn {shown}`")),
+                    .hint("remove the extra argument(s)"),
             );
             ok = false;
         }
         if !missing.is_empty() && ok {
             let list: Vec<String> = missing.iter().map(|&j| format!("`{}: {}`", names[j], params[j].name())).collect();
             let named: Vec<String> = missing.iter().map(|&j| format!("{}: ...", names[j])).collect();
-            self.errs.push(Diag::new("E0204", format!("the call of `{name}` gives no value for {}", list.join(", ")), span).hint(
-                format!(
-                    "pass {}, e.g. `{name}(..., {})`, or give the parameter a default value in `fn {shown}`",
+            self.errs.push(
+                Diag::new(
+                    "E0204",
+                    format!("the call of `{}` gives no value for {}", name.strip_prefix("web.").unwrap_or(name), list.join(", ")),
+                    span,
+                )
+                .hint(format!(
+                    "pass {}: `{}(..., {})`",
                     if missing.len() == 1 { "it" } else { "them" },
+                    name.strip_prefix("web.").unwrap_or(name),
                     named.join(", ")
-                ),
-            ));
+                )),
+            );
             ok = false;
         }
         if !ok {
@@ -4265,16 +4243,24 @@ impl Checker {
             (Some((f, _)), Some(w)) if matches!(w, Type::Array(_)) => (f, w),
             (Some((f, param)), Some(w)) if !w.is_unknown() => {
                 self.errs.push(
-                    Diag::new("E0371", format!("`{f}` takes no child block: its last parameter `{param}` is {}, not an array", article(w)), span)
-                        .hint(format!("pass the value as an argument, `{f}(..., {param}: ...)`, or declare the parameter as an array to take a block")),
+                    Diag::new(
+                        "E0371",
+                        format!("`{f}` takes no child block: its last parameter `{param}` is {}, not an array", article(w)),
+                        span,
+                    )
+                    .hint(format!("pass it as `{f}(..., {param}: ...)`")),
                 );
                 return Type::Unknown;
             }
             (Some(_), _) => return Type::Unknown,
             (None, _) => {
                 self.errs.push(
-                    Diag::new("E0371", "a child block `{ ... }` follows only a call of a function whose last parameter is an array", span)
-                        .hint("pass the values as an argument instead, `f([a, b])`, or write a function with a last parameter such as `kids: [str]`"),
+                    Diag::new(
+                        "E0371",
+                        "a child block `{ ... }` follows only a call of a function whose last parameter is an array",
+                        span,
+                    )
+                    .hint("pass the values as an argument, `f([a, b])`"),
                 );
                 return Type::Unknown;
             }
@@ -4328,17 +4314,24 @@ impl Checker {
                 }
                 StmtKind::Assign { target, .. } => Some((
                     format!(
-                        "the child block of `{f}` changes {}: a child block lists values and changes nothing",
+                        "the child block of `{f}` changes {}: it may only list values",
                         show(target).map_or("a variable".to_string(), |t| format!("`{t}`"))
                     ),
-                    "compute the value before the call and use it in the block, or name it with `let`".to_string(),
+                    "compute it before the call".to_string(),
                 )),
                 StmtKind::While { .. } => Some((
                     format!("`while` in the child block of `{f}`"),
-                    "use `for x in xs { ... }` or `for i in 0..n { ... }`: a child block changes no variable, so a `while` could not end".to_string(),
+                    "use `for x in xs { ... }` (a child block changes nothing)".to_string(),
                 )),
                 StmtKind::Ret(_) | StmtKind::Break | StmtKind::Continue => Some((
-                    format!("`{}` in the child block of `{f}`", match s.kind { StmtKind::Ret(_) => "return", StmtKind::Break => "break", _ => "continue" }),
+                    format!(
+                        "`{}` in the child block of `{f}`",
+                        match s.kind {
+                            StmtKind::Ret(_) => "return",
+                            StmtKind::Break => "break",
+                            _ => "continue",
+                        }
+                    ),
                     "a child block runs to its end: choose its lines with `if` instead".to_string(),
                 )),
                 StmtKind::Arena(_) => Some((
@@ -4393,7 +4386,7 @@ impl Checker {
                     format!("this line of the child block of `{f}` makes no value: {} returns nothing", call_text(v)),
                     v.span,
                 )
-                .hint("each line of a child block is one element of it: call this before the block, or make it return a value"),
+                .hint("each line is an element: call this before the block"),
             );
         } else {
             self.expect_ty(elem, t, v, Ctx::Kid(&f));
@@ -4438,10 +4431,12 @@ impl Checker {
         for d in self.errs[before..].iter_mut().filter(|d| d.code == "E0201" && d.fix.is_empty()) {
             let Some((param, word, at)) = bare.iter().find(|(_, _, at)| *at == d.span) else { continue };
             if crate::webcheck::option_word(short, param, word) {
-                d.hint = Some(format!("`{param}:` takes text: write the word in quotes, `{param}: \"{word}\"`"));
+                // one message for every such word, so a program with several shows them as one
+                d.msg = "an option word without quotes".to_string();
+                d.hint = Some(format!("`{param}:` takes text: `{param}: \"{word}\"`"));
                 d.fix = vec![Edit::replace(*at, word, format!("\"{word}\""))];
             } else if (short, param.as_str(), word.as_str()) == ("hero", "badge", "hours") {
-                d.hint = Some("`badge:` takes the opening hours rows themselves, the list `hours(...)` shows: `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`".to_string());
+                d.hint = Some("`badge:` takes the hours rows: `badge: [(\"Mon–Fri\", \"8:00-16:00\")]`".to_string());
             }
         }
     }
@@ -4451,9 +4446,10 @@ impl Checker {
         if !self.fns.contains_key(name) {
             if let Some(b) = args.pop_if(|a| matches!(a.kind, ExprKind::Block(..))) {
                 let what = if self.structs.contains_key(name) { "a struct is built" } else { "this call is written" };
-                self.errs.push(Diag::new("E0371", format!("`{name}` takes no child block"), b.span).hint(format!(
-                    "a child block follows a call of a function whose last parameter is an array; {what} with its values in `( )`"
-                )));
+                self.errs.push(
+                    Diag::new("E0371", format!("`{name}` takes no child block"), b.span)
+                        .hint(format!("a child block needs a last array parameter; {what} with values in `( )`")),
+                );
             }
         }
         // (the checker itself turns `Dir.N` into a call of `Dir` with the number: those are right)
@@ -4491,7 +4487,7 @@ impl Checker {
                 self.fns.keys().map(String::as_str).chain(BUILTINS.iter().copied()).chain(self.structs.keys().map(String::as_str));
             let mut fix = Vec::new();
             let hint = if self.lookup(name).is_some() {
-                format!("`{name}` is a variable, not a function: remove the parentheses (or give the function another name)")
+                format!("`{name}` is a variable, not a function")
             } else if let Some(h) = hints::undefined_function(name) {
                 let plain = matches!(args.as_slice(), [a] if !matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Inout(_)));
                 match (name, args.as_slice()) {
@@ -4513,13 +4509,14 @@ impl Checker {
                 // `Vec2(x: 1.0, y: 2.0)` and no struct `Vec2`: it was probably meant as a struct
                 format!("no struct `{name}` is defined: declare it before use, `struct {name} {{ {fields} }}`")
             } else {
-                format!("define it: `fn {name}(...) {{ ... }}` (the builtins are `print`, `int`, `float`, `str`, `char`, `free` and `keep`)")
+                format!("define it: `fn {name}(...) {{ ... }}`")
             };
             self.errs.push(d.hint(hint).fix(fix));
             return Type::Unknown;
         };
         let _ = want;
-        let (params, names, inout, ret, shown) = (sig.params.clone(), sig.names.clone(), sig.inout.clone(), sig.ret, sig.show(name));
+        let (params, names, inout, ret, shown) =
+            (sig.params.clone(), sig.names.clone(), sig.inout.clone(), sig.ret, shown_sig(sig, name));
         // named arguments, default values and a child block: the arguments in parameter order
         let defaulted = args.len() < params.len() && sig.defaults[args.len()..].iter().any(Option::is_some);
         let bind = defaulted || args.iter().any(|a| matches!(a.kind, ExprKind::Labeled(..) | ExprKind::Block(..)));
@@ -4547,7 +4544,7 @@ impl Checker {
                     names[tys.len()..].iter().zip(&params[tys.len()..]).map(|(n, t)| format!("`{n}: {}`", t.name())).collect();
                 format!("also pass {}: the call is `{name}({})`", missing.join(", "), names.join(", "))
             } else {
-                format!("remove the extra argument(s): the signature is `fn {shown}`")
+                "remove the extra argument(s)".to_string()
             };
             self.errs.push(
                 Diag::new(
@@ -4584,16 +4581,12 @@ impl Checker {
                     let root = data::place_root(place).unwrap_or_default().to_string();
                     if let Some((_, first)) = roots.iter().find(|(r, _)| *r == root) {
                         self.errs.push(
-                            Diag::new(
-                                "E0237",
-                                format!("`inout` arguments must be different variables: `{root}` is passed twice (also at column {})", first.col),
-                                a.span,
-                            )
-                            .hint(if matches!(place.kind, ExprKind::Index(..)) {
-                                format!("two elements of one array: to exchange them write `{root}.swap(i, j)`; else change one through a temporary (copy into a `var`, call, then assign back)")
-                            } else {
-                                "change one of them through a temporary: copy into a `var`, call, then assign back".to_string()
-                            }),
+                            Diag::new("E0237", format!("`{root}` is passed `inout` twice (also at column {})", first.col), a.span)
+                                .hint(if matches!(place.kind, ExprKind::Index(..)) {
+                                    format!("to exchange two elements write `{root}.swap(i, j)`")
+                                } else {
+                                    "change one of them through a temporary: copy into a `var`, call, then assign back".to_string()
+                                }),
                         );
                     } else {
                         if let Some(g) = self.global_ref(&root) {
@@ -4742,7 +4735,7 @@ impl Checker {
                                 self.errs.push(
                                     Diag::new(
                                         "E0225",
-                                        format!("the fields of `{name}(...)` must be named in declaration order: `{}` is field {} of `{name}`", label, j + 1),
+                                        format!("name the fields in order: `{}` is field {} of `{name}`", label, j + 1),
                                         a_span,
                                     )
                                     .hint(format!("write them in this order: `{}`", template())),
@@ -4826,8 +4819,7 @@ impl Checker {
                     .push(Diag::new("E0237", format!("the argument of `{name}` is not `inout`"), a.span).hint("remove `inout`")),
                 ExprKind::Labeled(label, _) => self.errs.push(
                     Diag::new("E0226", format!("named argument `{label}:` in a call to `{name}`"), a.span).hint(if name == "print" {
-                        "write the values alone: `print(a, b)`; the only named argument is a last `end:`, as in `print(a, end: \"\")`"
-                            .to_string()
+                        "`print` takes values and a last `end:` only".to_string()
                     } else {
                         format!("write the value alone: `{name}(x)`")
                     }),
@@ -4855,7 +4847,7 @@ impl Checker {
                     if spaced.len() == parts.len() {
                         format!("`print` takes one value: put the parts in one string, `print(\"{}\")`", spaced.join(" "))
                     } else {
-                        "`print` takes one value: put the parts in one string with interpolation, `print(\"{a} {b}\")`".to_string()
+                        "use interpolation: `print(\"{a} {b}\")`".to_string()
                     }
                 }
                 "free" | "keep" => format!("`{name}` takes one variable: `{name}(x)`"),
@@ -4940,7 +4932,7 @@ impl Checker {
             if !t.is_unknown() {
                 self.errs.push(
                     Diag::new("E0238", format!("`{name}` needs a local variable"), arg.span)
-                        .hint("to drop one element or field early, assign an empty value instead: `xs[i] = []`, `p.name = \"\"`"),
+                        .hint("assign an empty value instead: `xs[i] = []`"),
                 );
             }
             return;
@@ -4949,19 +4941,32 @@ impl Checker {
         let problem = match decl {
             _ if self.global_of(var).is_some() => Some((
                 format!("cannot {name} script variable `{var}` in function `{}`: the script still needs it", self.fname),
-                format!("only variables declared in this function can be freed or kept; call `{name}({var})` at the top level of the script"),
+                format!("call `{name}({var})` at the top level of the script"),
             )),
-            Decl::Param => Some((format!("cannot {name} parameter `{var}`: the caller owns it"), "only variables declared with `let` or `var` in this function can be freed or kept".to_string())),
-            Decl::Inout => Some((format!("cannot {name} `inout` parameter `{var}`: the caller still needs a value"), format!("assign a new value instead: `{var} = ...`"))),
-            Decl::Loop => Some((format!("cannot {name} the loop variable `{var}`"), "the loop variable is a copy of each element: there is nothing to free".to_string())),
-            Decl::Lambda => Some((format!("cannot {name} the lambda parameter `{var}`"), "a lambda only reads values: there is nothing to free".to_string())),
+            Decl::Param => Some((
+                format!("cannot {name} parameter `{var}`: the caller owns it"),
+                "only variables declared with `let` or `var` in this function can be freed or kept".to_string(),
+            )),
+            Decl::Inout => Some((
+                format!("cannot {name} `inout` parameter `{var}`: the caller still needs a value"),
+                format!("assign a new value instead: `{var} = ...`"),
+            )),
+            Decl::Loop => Some((
+                format!("cannot {name} the loop variable `{var}`"),
+                "the loop variable is a copy of each element: there is nothing to free".to_string(),
+            )),
+            Decl::Lambda => Some((
+                format!("cannot {name} the lambda parameter `{var}`"),
+                "a lambda only reads values: there is nothing to free".to_string(),
+            )),
             _ if !t.is_unknown() && !self.managed(t) => Some((
                 format!("nothing to {name}: `{var}` is {}, which owns no heap memory", article(t)),
                 "only strings, arrays and structs that contain them can be freed or kept".to_string(),
             )),
-            _ if self.arena_depth > 0 && arena < self.arena_depth => {
-                Some((format!("`{var}` cannot be changed inside this `arena` block: it was declared outside it"), format!("call `{name}({var})` after the `arena` block")))
-            }
+            _ if self.arena_depth > 0 && arena < self.arena_depth => Some((
+                format!("`{var}` cannot be changed inside this `arena` block: it was declared outside it"),
+                format!("call `{name}({var})` after the `arena` block"),
+            )),
             _ => None,
         };
         if let Some((msg, hint)) = problem {

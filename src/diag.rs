@@ -149,16 +149,183 @@ pub fn warnings() -> Vec<Diag> {
     v
 }
 
+// ---- what is shown ----------------------------------------------------------------------------------
+//
+// Every report shows the errors first (the first line an agent reads is what blocks the build), then
+// the fixes that were applied in memory, then the warnings. Diagnostics are moved to their places in
+// the text the author has (`fix::to_origin`), sorted by place, and one root mistake that shows up in
+// several places is one diagnostic that lists the other lines (`condense`).
+
+/// The diagnostics as they are shown: at their places in the original text, one per root mistake,
+/// in the order of the source (the imported files after the program's own).
+pub fn prepare(diags: &[Diag]) -> Vec<Diag> {
+    let mut v: Vec<Diag> = diags.iter().cloned().map(|d| tidy(crate::fix::to_origin(d))).collect();
+    v.sort_by_key(|d| (d.file.is_some(), d.file.clone(), d.span.line, d.span.col));
+    condense(v)
+}
+
+/// The text of a diagnostic as it is shown: the web functions by their bare names (`hero`, not
+/// `web.hero`: that is how a program calls them), and with a fix, only the why of the hint (the
+/// fix itself says what to write).
+fn tidy(mut d: Diag) -> Diag {
+    d.msg = bare_web(&d.msg);
+    d.hint = d.hint.map(|h| bare_web(&h));
+    if !d.fix.is_empty() {
+        d.hint = d.hint.map(|h| why_only(&h));
+    }
+    d
+}
+
+/// `web.hero` as `hero`, where `web.` starts a name.
+fn bare_web(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find("web.") {
+        let before = rest[..i].chars().next_back();
+        let after = rest[i + 4..].chars().next();
+        out.push_str(&rest[..i]);
+        let starts_name = !before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '/');
+        if !(starts_name && after.is_some_and(|c| c.is_ascii_lowercase())) {
+            out.push_str("web.");
+        }
+        rest = &rest[i + 4..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The first part of a hint, up to its first `: ` or `; ` outside backticks and parentheses: the
+/// reason, without the code that follows it (which a fix already writes). A hint without such a
+/// break is kept.
+fn why_only(h: &str) -> String {
+    let (mut depth, mut code) = (0i32, false);
+    let cs: Vec<char> = h.chars().collect();
+    for (i, c) in cs.iter().enumerate() {
+        match c {
+            '`' => code = !code,
+            '(' if !code => depth += 1,
+            ')' if !code => depth -= 1,
+            ':' | ';' if !code && depth == 0 && cs.get(i + 1) == Some(&' ') && i >= 8 => {
+                return cs[..i].iter().collect();
+            }
+            _ => {}
+        }
+    }
+    h.to_string()
+}
+
+/// The name a cascade hangs on: an unknown struct `Rect` is an unknown type in a signature and an
+/// undefined function where a value is built, and both are the one missing `struct Rect`.
+fn root_name(d: &Diag) -> Option<&str> {
+    if !matches!(d.code, "E0102" | "E0202") {
+        return None;
+    }
+    let name = d.msg.split('`').nth(1)?;
+    name.starts_with(|c: char| c.is_ascii_uppercase()).then_some(name)
+}
+
+/// True if `b` is the same mistake as `a`, made again in another place.
+fn same_mistake(a: &Diag, b: &Diag) -> bool {
+    a.file == b.file
+        && a.fix.is_empty() == b.fix.is_empty()
+        && a.actual.is_none()
+        && b.actual.is_none()
+        && ((a.code == b.code && a.msg == b.msg) || root_name(a).is_some_and(|n| root_name(b) == Some(n)))
+}
+
+/// One diagnostic per mistake: the others of the same mistake are counted in its message (`and 2
+/// more: lines 7, 9`), and their fixes join its fix (all of them or none are certain).
+pub fn condense(diags: Vec<Diag>) -> Vec<Diag> {
+    let mut out: Vec<(Diag, Vec<usize>)> = Vec::new();
+    for d in diags {
+        match out.iter_mut().find(|(o, _)| same_mistake(o, &d)) {
+            Some((o, lines)) => {
+                lines.push(d.span.line);
+                for e in d.fix {
+                    if !o.fix.contains(&e) {
+                        o.fix.push(e);
+                    }
+                }
+                // an undefined struct: the hint that names its fields
+                if o.code != d.code && d.code == "E0202" && d.hint.is_some() {
+                    o.hint = d.hint;
+                }
+            }
+            None => out.push((d, Vec::new())),
+        }
+    }
+    out.into_iter()
+        .map(|(mut d, lines)| {
+            if !lines.is_empty() {
+                let mut shown: Vec<usize> = lines.clone();
+                shown.dedup();
+                let list: Vec<String> = shown.iter().take(6).map(usize::to_string).collect();
+                let more = if shown.len() > 6 { ", ..." } else { "" };
+                let s = if shown.len() == 1 { "" } else { "s" };
+                d.msg = format!("{} (and {} more: line{s} {}{more})", d.msg, lines.len(), list.join(", "));
+            }
+            d
+        })
+        .collect()
+}
+
+/// The text the snippets come from: the original, when the program was repaired in memory.
+fn shown_src(src: &str) -> String {
+    crate::fix::origin().map_or_else(|| src.to_string(), |o| o.src.clone())
+}
+
+/// The errors for people (each mistake once, at its place in the original text).
 pub fn render_human(diags: &[Diag], file: &str, src: &str) -> String {
-    render(diags, file, src, "error")
+    render(&prepare(diags), file, &shown_src(src), "error", &mut Vec::new())
 }
 
-/// The warnings of the last compilation for humans (empty when there are none).
+/// The whole report of a program that does not compile, for people: the errors, the fixes applied
+/// in memory, the warnings, and the count.
+pub fn report(diags: &[Diag], file: &str, src: &str) -> String {
+    let errs = prepare(diags);
+    let text = shown_src(src);
+    let mut seen = Vec::new();
+    let mut out = render(&errs, file, &text, "error", &mut seen);
+    out += &render_applied(&applied(), file);
+    out += &render(&prepare(&warnings()), file, &text, "warning", &mut seen);
+    out += &format!("nyra: {} error(s)\n", errs.len());
+    out
+}
+
+/// The fixes applied in memory and the warnings of the last compilation, for people (empty when
+/// there are none).
 pub fn render_warnings(file: &str, src: &str) -> String {
-    render(&warnings(), file, src, "warning")
+    let mut seen = Vec::new();
+    let fixes = applied();
+    let mut out = render_applied(&fixes, file);
+    out += &render(&prepare(&warnings()), file, &shown_src(src), "warning", &mut seen);
+    if !fixes.is_empty() {
+        out += &format!("nyra: {} fix(es) applied in memory; `--fix` writes them to {file}\n", fixes.len());
+    }
+    out
 }
 
-fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
+/// The fixes `repair_all` applied to the program being compiled, one per mistake.
+pub fn applied() -> Vec<crate::fix::Applied> {
+    crate::fix::origin().map(|o| condense_applied(&o.applied, &o.src)).unwrap_or_default()
+}
+
+/// One applied fix per mistake (see `condense`), with what its lines look like now.
+fn condense_applied(applied: &[crate::fix::Applied], src: &str) -> Vec<crate::fix::Applied> {
+    let mut diags: Vec<Diag> = applied.iter().map(|a| tidy(a.diag.clone())).collect();
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    condense(diags)
+        .into_iter()
+        .map(|d| {
+            let first = applied.iter().find(|a| a.diag.span == d.span && a.diag.code == d.code);
+            let preview = crate::fix::preview(src, &d.fix).or_else(|| first.and_then(|a| a.preview.clone()));
+            let line = first.map(|a| a.line.clone()).unwrap_or_default();
+            crate::fix::Applied { diag: d, preview, line }
+        })
+        .collect()
+}
+
+fn render(diags: &[Diag], file: &str, src: &str, label: &str, seen: &mut Vec<&'static str>) -> String {
     let mut out = String::new();
     for d in diags {
         // a mistake in an imported file shows that file's line
@@ -168,12 +335,14 @@ fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
         let file = d.file.as_deref().unwrap_or(file);
         out += &format!("{label}[{}]: {}\n", d.code, d.msg);
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
-        if let Some(line) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
+        if let Some(full) = d.span.line.checked_sub(1).and_then(|i| lines.get(i)) {
             let num = d.span.line.to_string();
             let pad = " ".repeat(num.len());
+            // a long line (a page written on one line) shows the part around the column
+            let (line, col) = window(full, d.span.col);
             // keep tabs as tabs, so the caret lines up under the character in any editor
             let mut before = line.chars();
-            let caret: String = (1..d.span.col).map(|_| if before.next() == Some('\t') { '\t' } else { ' ' }).collect();
+            let caret: String = (1..col).map(|_| if before.next() == Some('\t') { '\t' } else { ' ' }).collect();
             out += &format!("{pad} |\n{num} | {line}\n{pad} | {caret}^\n");
         }
         if let Some(h) = &d.hint {
@@ -182,14 +351,37 @@ fn render(diags: &[Diag], file: &str, src: &str, label: &str) -> String {
         if let Some(f) = crate::fix::preview(text, &d.fix) {
             out += &format!("  = fix: {f}\n");
         }
-        out += &format!("  = explain: nyra explain {}\n", d.code);
+        // the explanation of a code once per report
+        if !seen.contains(&d.code) {
+            seen.push(d.code);
+            out += &format!("  = explain: nyra explain {}\n", d.code);
+        }
         out.push('\n');
     }
     out
 }
 
+/// The part of a line a snippet shows, and the column of `col` in it: the whole line up to 120
+/// characters, else 100 characters around the column, marked `…` where it is cut.
+fn window(line: &str, col: usize) -> (String, usize) {
+    let cs: Vec<char> = line.chars().collect();
+    if cs.len() <= 120 {
+        return (line.to_string(), col);
+    }
+    let start = col.saturating_sub(41).min(cs.len().saturating_sub(100));
+    let end = (start + 100).min(cs.len());
+    let head = if start > 0 { "…" } else { "" };
+    let tail = if end < cs.len() { "…" } else { "" };
+    let shown: String = cs[start..end].iter().collect();
+    (format!("{head}{shown}{tail}"), col - start + head.chars().count())
+}
+
 /// The fixes that were applied automatically, for people: one warning each.
 pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> String {
+    render_applied(applied, file)
+}
+
+fn render_applied(applied: &[crate::fix::Applied], file: &str) -> String {
     let mut out = String::new();
     for a in applied {
         let d = &a.diag;
@@ -197,7 +389,7 @@ pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> Str
         out += &format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col);
         let num = d.span.line.to_string();
         let pad = " ".repeat(num.len());
-        out += &format!("{pad} |\n{num} | {}\n", a.line);
+        out += &format!("{pad} |\n{num} | {}\n", window(&a.line, d.span.col).0);
         if let Some(p) = &a.preview {
             out += &format!("{pad} = applied: {p}\n");
         }
@@ -207,9 +399,14 @@ pub fn render_warnings_human(applied: &[crate::fix::Applied], file: &str) -> Str
 }
 
 /// The `warnings` array: one object per applied fix, with the `code`, `message`, position, the
-/// `applied` text (what the changed lines look like now) and the `fix` edits.
+/// `applied` text (what the changed lines look like now) and the `fix` edits (at their places in
+/// the original text, so an agent can write them back).
 pub fn render_json_warnings(applied: &[crate::fix::Applied], file: &str) -> String {
-    let items: Vec<String> = applied
+    format!("[{}]", applied_items(applied, file).join(","))
+}
+
+fn applied_items(applied: &[crate::fix::Applied], file: &str) -> Vec<String> {
+    applied
         .iter()
         .map(|a| {
             let d = &a.diag;
@@ -224,25 +421,46 @@ pub fn render_json_warnings(applied: &[crate::fix::Applied], file: &str) -> Stri
                 fix_json(&d.fix)
             )
         })
-        .collect();
-    format!("[{}]", items.join(","))
+        .collect()
 }
 
 pub fn render_json(diags: &[Diag], file: &str) -> String {
-    format!("{{\"ok\":{},\"errors\":{}{}}}", diags.is_empty(), render_json_errors(diags, file), warnings_json(file))
+    let errs = prepare(diags);
+    format!("{{\"ok\":{},\"errors\":{}{}}}", errs.is_empty(), json_errors(&errs, file), warnings_json(file))
 }
 
-/// `,"warnings":[..]` with the warnings of the last compilation, or nothing when there are none.
+/// `,"warnings":[..]` with the fixes applied in memory and the warnings of the last compilation, or
+/// nothing when there are none.
 pub fn warnings_json(file: &str) -> String {
-    let w = warnings();
+    let mut items = applied_items(&applied(), file);
+    let w = prepare(&warnings());
+    let rest = json_errors(&w, file);
+    if !w.is_empty() {
+        items.push(rest[1..rest.len() - 1].to_string());
+    }
+    if items.is_empty() {
+        return String::new();
+    }
+    format!(",\"warnings\":[{}]", items.join(","))
+}
+
+/// `,"warnings":[..]` with the compiler's warnings only (for results that list the applied fixes
+/// on their own), or nothing.
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+pub fn compiler_warnings_json(file: &str) -> String {
+    let w = prepare(&warnings());
     if w.is_empty() {
         return String::new();
     }
-    format!(",\"warnings\":{}", render_json_errors(&w, file))
+    format!(",\"warnings\":{}", json_errors(&w, file))
 }
 
 /// The `errors` array of `render_json`.
 pub fn render_json_errors(diags: &[Diag], file: &str) -> String {
+    json_errors(&prepare(diags), file)
+}
+
+fn json_errors(diags: &[Diag], file: &str) -> String {
     let items: Vec<String> = diags
         .iter()
         .map(|d| {
@@ -265,8 +483,9 @@ pub fn render_json_errors(diags: &[Diag], file: &str) -> String {
     format!("[{}]", items.join(","))
 }
 
-/// `,"fix":[{"line":..,"col":..,"end_line":..,"end_col":..,"text":".."}]`, or nothing without a fix.
-/// Columns count characters; the end is exclusive.
+/// `,"fix":[{"line":..,"col":..,"end_line":..,"end_col":..,"text":".."}],"exact":true`, or nothing
+/// without a fix. Columns count characters; the end is exclusive. A fix is only given when it is
+/// certain, so `exact` is always true: an agent may apply it without looking.
 fn fix_json(fix: &[Edit]) -> String {
     if fix.is_empty() {
         return String::new();
@@ -284,7 +503,7 @@ fn fix_json(fix: &[Edit]) -> String {
             )
         })
         .collect();
-    format!(",\"fix\":[{}]", edits.join(","))
+    format!(",\"fix\":[{}],\"exact\":true", edits.join(","))
 }
 
 pub fn json_str(s: &str) -> String {

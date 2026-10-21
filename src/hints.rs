@@ -11,31 +11,23 @@ use crate::diag::suggest;
 pub fn word(w: &str) -> Option<String> {
     let hint = match w {
         "elif" | "elsif" | "elseif" => "write `else if` (two words) to test another condition",
-        "switch" | "case" => "Nyra has no `switch`: write `match value { 1 => ..., _ => ... }`, or chain `if` / `else if`",
+        "switch" | "case" => "no `switch`: use `match value { 1 => ... }`",
         "and" => "write `&&` for logical and: `a && b`",
         "or" => "write `||` for logical or: `a || b`",
         "not" => "write `!` for logical not: `!done`",
         "then" => "Nyra has no `then`: the body of an `if` is `{ ... }` on the same line as the `if`",
-        "null" | "nil" | "None" | "NULL" | "undefined" => {
-            "Nyra has no null: a value that may be missing has an optional type `int?`, and its empty value is `none`: `var best: int? = none`"
-        }
+        "null" | "nil" | "None" | "NULL" | "undefined" => "Nyra has no null: use an optional, `var best: int? = none`",
         "True" | "False" => "write `true` or `false` in lowercase",
         "mut" => "write `var` for a variable that changes: `var x = 0`",
-        "const" | "static" | "final" => {
-            "write `let` for a value that never changes and `var` for one that does (a constant for the whole program is a function: `fn limit() -> int = 100`)"
-        }
+        "const" | "static" | "final" => "write `let` (never changes) or `var` (changes)",
         "function" | "func" | "fun" | "def" => "functions start with `fn`: `fn name(a: int) -> int { ... }`",
-        "try" | "catch" | "throw" | "finally" | "except" | "raise" => {
-            "Nyra has no exceptions: a failing operation (such as a division by zero or an index out of bounds) stops the program with a runtime error"
-        }
-        "self" | "this" => {
-            "Nyra has no `self` or `this`: write a function that takes the value as a parameter, e.g. `fn area(r: Rect) -> int`"
-        }
+        "try" | "catch" | "throw" | "finally" | "except" | "raise" => "Nyra has no exceptions: a failing operation stops the program",
+        "self" | "this" => "no `self`: take the value as a parameter, `fn area(r: Rect) -> int`",
         "loop" | "do" | "repeat" | "until" | "foreach" => {
-            "loops are `while cond { ... }`, `for i in 0..n { ... }` and `for x in xs { ... }` (for an endless loop write `while true { ... }` and leave it with `break`)"
+            "loops are `while cond { ... }`, `for i in 0..n { ... }`, `for x in xs { ... }`"
         }
         "as" => "Nyra has no `as` casts: convert with `int(x)`, `float(x)`, `str(x)` or `char(n)`",
-        "new" => "Nyra has no `new`: build a struct by calling its name with the fields, e.g. `Point(x: 1, y: 2)`",
+        "new" => "no `new`: `Point(x: 1, y: 2)`",
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
         _ => return None,
     };
@@ -45,28 +37,18 @@ pub fn word(w: &str) -> Option<String> {
 /// A word that starts a top-level item in another language.
 pub fn top_level_word(w: &str) -> Option<String> {
     let hint = match w {
-        "class" | "object" | "record" | "data" => {
-            "Nyra has no classes: declare the data with `struct Name { field: int }` and write functions that take it, e.g. `fn area(r: Rect) -> int`"
-        }
+        "class" | "object" | "record" | "data" => "no classes: `struct Rect { w: int }` and `fn area(r: Rect) -> int`",
         "impl" | "trait" | "interface" | "protocol" | "extension" => {
-            return Some(format!(
-                "Nyra has no `{w}`: methods are plain functions that take the struct as a parameter, e.g. `fn area(r: Rect) -> int`"
-            ))
+            return Some(format!("no `{w}`: write `fn area(r: Rect) -> int`"))
         }
-        "union" | "type" | "typedef" => {
-            return Some(format!(
-                "Nyra has no `{w}`: the top-level items are `fn`, `struct` and `enum` (`enum Dir {{ N, E, S, W }}`)"
-            ))
-        }
+        "union" | "type" | "typedef" => return Some(format!("no `{w}`: use `fn`, `struct` or `enum`")),
         "import" | "use" | "require" | "include" | "from" | "package" | "module" | "namespace" | "mod" => {
-            "a program is one file; it imports standard modules with `use name` on a line of its own, e.g. `use math`"
+            "import with `use math` or `use ./file`"
         }
         "pub" | "public" | "private" | "protected" | "extern" | "export" => {
             "Nyra has no visibility modifiers: start the definition with `fn` or `struct`"
         }
-        "const" | "static" | "final" => {
-            "Nyra has no `const` or `static`: a `let` at the top level of a script is a constant every function can read (`let limit = 100`)"
-        }
+        "const" | "static" | "final" => "no `const`: a top-level `let limit = 100` is one",
         _ => return word(w),
     };
     Some(hint.to_string())
@@ -87,16 +69,14 @@ pub fn receiver(w: &str) -> Option<String> {
         "console" | "fmt" | "System" | "sys" | "io" | "Console" | "std" | "process" => {
             "print with `print(x)`: it takes one value and ends the line"
         }
-        "Math" | "math" => "the math functions are in the standard module `math`: add `use math` and call `math.sqrt(x)`",
+        "Math" | "math" => "add `use math` and call `math.sqrt(x)`",
         "Integer" | "Number" | "Float" | "Double" | "String" | "Str" | "Char" | "Character" => {
-            "convert with the builtins `int(x)`, `float(x)`, `str(x)` and `char(n)`; methods belong to values, e.g. `s.len()`"
+            "convert with `int(x)`, `float(x)`, `str(x)`, `char(n)`"
         }
         "Array" | "List" | "Vec" | "list" | "array" => {
             "arrays are written `[1, 2, 3]` and their methods are called on a value, e.g. `xs.push(4)`"
         }
-        "random" | "Random" | "rand" | "time" | "Date" | "os" | "fs" | "File" => {
-            "use the standard modules: `use random` (`random.range(1, 7)`), `use time` (`time.now_ms()`), `use fs` (`fs.read(path)`), `use os` (`os.args()`)"
-        }
+        "random" | "Random" | "rand" | "time" | "Date" | "os" | "fs" | "File" => "add `use random`, `use time`, `use fs` or `use os`",
         _ => return None,
     };
     Some(hint.to_string())
@@ -106,15 +86,11 @@ pub fn receiver(w: &str) -> Option<String> {
 pub fn undefined_function(w: &str) -> Option<String> {
     let hint = match w {
         "abs" => "Nyra has no `abs`: define it, e.g. `fn abs(x: int) -> int = if x < 0 { -x } else { x }`",
-        "min" => "Nyra has no `min`: define it, e.g. `fn min(a: int, b: int) -> int = if a < b { a } else { b }`",
-        "max" => "Nyra has no `max`: define it, e.g. `fn max(a: int, b: int) -> int = if a > b { a } else { b }`",
+        "min" => "define `fn min(a: int, b: int) -> int = if a < b { a } else { b }`",
+        "max" => "define `fn max(a: int, b: int) -> int = if a > b { a } else { b }`",
         "pow" | "power" | "powi" => "`pow` is in the standard module `math`: add `use math` and call `math.pow(x, y)`",
-        "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" => {
-            "the math functions are in the standard module `math`: add `use math` and call e.g. `math.sqrt(x)`"
-        }
-        "floor" | "ceil" | "round" | "trunc" => {
-            "these are in the standard module `math` (`math.floor(x)` gives a float); `int(x)` truncates a float to an int"
-        }
+        "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" => "add `use math` and call `math.sqrt(x)`",
+        "floor" | "ceil" | "round" | "trunc" => "add `use math`: `math.floor(x)`; `int(x)` truncates",
         "len" | "length" | "size" | "count" => "the length is a method: `xs.len()` or `s.len()`",
         "string" | "String" | "to_string" | "toString" | "tostring" | "format" | "itoa" | "repr" | "sprintf" => {
             "convert with `str(x)`, or build text with interpolation, e.g. `\"{x}\"`"
@@ -126,13 +102,18 @@ pub fn undefined_function(w: &str) -> Option<String> {
         "chr" | "fromCharCode" | "char_from" => "turn a code into a character with `char(n)`",
         "ord" | "charCodeAt" | "codePointAt" => "a character's code is `c.code()`; all codes of a string: `s.codes()`",
         "sorted" | "sort" => "sort an array in place with `xs.sort()`, or by a key with `xs.sort_by(x => key)`",
-        "reversed" | "reverse" => "`xs.reversed()` gives a reversed copy of an array or a string; `xs.reverse()` reverses an array in place",
+        "reversed" | "reverse" => "`xs.reversed()` (a copy) or `xs.reverse()` (in place)",
         "enumerate" => "for the position and the element write `for i, x in xs { ... }`",
-        "sum" | "any" | "all" => return Some(format!("`{w}` is a method: `xs.{w}()`{}", if w == "sum" { "" } else { " with a test, e.g. `xs.any(x => x > 0)`" })),
-        "map" | "filter" => return Some(format!("`{w}` is a method that takes a lambda: `xs.{w}(x => ...)`, or write a comprehension: `[x * 2 for x in xs if x > 0]`")),
-        "reduce" | "fold" => "`xs.fold(start, (acc, x) => ...)` combines the elements, e.g. `xs.fold(0, (acc, x) => acc + x)`",
-        "split" | "join" | "trim" | "strip" | "upper" | "lower" | "replace" | "contains" | "startswith" | "endswith"
-        | "push" | "append" | "pop" | "insert" | "remove" => {
+        "sum" | "any" | "all" => {
+            return Some(format!(
+                "`{w}` is a method: `xs.{w}()`{}",
+                if w == "sum" { "" } else { " with a test, e.g. `xs.any(x => x > 0)`" }
+            ))
+        }
+        "map" | "filter" => return Some(format!("`{w}` is a method: `xs.{w}(x => ...)`")),
+        "reduce" | "fold" => "use `xs.fold(0, (acc, x) => acc + x)`",
+        "split" | "join" | "trim" | "strip" | "upper" | "lower" | "replace" | "contains" | "startswith" | "endswith" | "push"
+        | "append" | "pop" | "insert" | "remove" => {
             return Some(format!("`{w}` is a method: call it on the value, e.g. `x.{}(...)`", method_spelling(w)))
         }
         "println" | "printf" | "puts" | "echo" | "writeln" => "print with `print(x)`: it takes one value and ends the line",
@@ -140,13 +121,11 @@ pub fn undefined_function(w: &str) -> Option<String> {
             "standard input is the module `input`: add `use input` and call `input.line()`"
         }
         "exit" | "quit" => "add `use os` and call `os.exit(code)`",
-        "panic" | "assert" | "abort" => {
-            "Nyra has no `panic` or `assert`: print a message and stop with `os.exit(1)` (add `use os`)"
-        }
+        "panic" | "assert" | "abort" => "print, then `os.exit(1)` (`use os`)",
         "range" => "a range is written `a..b` in a loop: `for i in 0..10 { ... }`",
         "bool" => "Nyra has no `bool(x)`: compare instead, e.g. `x != 0`",
         "random" | "rand" | "randint" | "clock" | "sleep" => {
-            "use the standard modules: `use random` (`random.range(1, 7)`, `random.random()`), `use time` (`time.mono_ms()`, `time.sleep_ms(ms)`)"
+            "use `random.range(1, 7)` (`use random`) or `time.sleep_ms(ms)` (`use time`)"
         }
         _ => return None,
     };
@@ -177,9 +156,7 @@ pub fn method(t: Type, name: &str, recv: &str) -> Option<String> {
         _ => None,
     };
     own.or_else(|| match w.as_str() {
-        "clone" | "copy" | "duplicate" => {
-            Some(format!("values are copied when they are assigned: `var other = {r}` is already independent of `{r}`"))
-        }
+        "clone" | "copy" | "duplicate" => Some(format!("assignment copies: `var other = {r}`")),
         "tostring" | "tostr" | "asstring" => Some(format!("`str({r})` gives the text that `print({r})` shows")),
         "equals" | "isequal" => Some(format!("compare with `==`: `{r} == other`")),
         "abs" | "min" | "max" | "pow" | "powi" | "sqrt" | "cbrt" | "exp" | "log" | "sin" | "cos" | "tan" | "floor" | "ceil"
@@ -203,22 +180,20 @@ fn array_method(w: &str, r: &str) -> Option<String> {
         "includes" | "has" | "contain" => format!("write `{r}.contains(x)`"),
         "indexof" | "find" | "position" => format!("`{r}.index_of(x)` gives the position of the first match, or -1"),
         "removeat" | "delete" | "erase" => format!("`{r}.remove(i)` removes the element at position `i` and gives it back"),
-        "first" | "front" => format!(
-            "the first element is `{r}[0]` (check `{r}.len() > 0` first); the first that passes a test: `{r}.find_index(x => test)`"
-        ),
+        "first" | "front" => format!("the first element is `{r}[0]`"),
         "last" | "back" => format!("the last element is `{r}[{r}.len() - 1]` (check `{r}.len() > 0` first)"),
         "sorted" => format!("`{r}.sort()` sorts in place (`{r}` must be a `var`); `{r}.sort_by(x => key)` sorts by a key"),
         "rev" | "toreversed" => format!("`{r}.reversed()` gives a reversed copy; `{r}.reverse()` reverses in place"),
         "sortby" | "sortbykey" | "sortedby" => format!("`{r}.sort_by(x => key)` sorts in place by a key (`{r}` must be a `var`)"),
         "reduce" | "inject" | "aggregate" => {
-            format!("`{r}.fold(start, (acc, x) => ...)` combines the elements, e.g. `{r}.fold(0, (acc, x) => acc + x)`")
+            format!("use `{r}.fold(0, (acc, x) => acc + x)`")
         }
         "findindex" | "indexwhere" => format!("`{r}.find_index(x => test)` gives the position of the first match, or -1"),
         "some" | "anymatch" | "exists" => format!("`{r}.any(x => test)` is true if one element passes"),
         "every" | "allmatch" | "forall" => format!("`{r}.all(x => test)` is true if every element passes"),
         "select" | "where" => format!("`{r}.filter(x => test)` keeps the elements that pass"),
         "collect" | "transform" => format!("`{r}.map(x => ...)` gives a new array of the results"),
-        "foreach" | "each" => format!("loop over the elements: `for x in {r} {{ ... }}` (`for i, x in {r}` also gives the position)"),
+        "foreach" | "each" => format!("write `for x in {r} {{ ... }}`"),
         "enumerate" | "withindex" | "indexed" => format!("`for i, x in {r} {{ ... }}` gives each position and element"),
         "clear" => format!("give it an empty array: `{r} = []` (`{r}` must be a `var`)"),
         "sublist" | "subarray" | "take" => {
@@ -236,7 +211,7 @@ fn str_method(w: &str, r: &str) -> Option<String> {
     Some(match w {
         "length" | "size" => format!("the length is `{r}.len()`"),
         "isempty" | "empty" => format!("compare with an empty string: `{r} == \"\"`"),
-        "push" | "append" | "add" => format!("a string is joined with `+`: `{r} += t` (`{r}` must be a `var`; for a character write `{r} += str(c)`)"),
+        "push" | "append" | "add" => format!("join with `+`: `{r} += t`"),
         "touppercase" | "uppercase" | "toupper" | "upcase" => format!("write `{r}.upper()` (it changes ASCII letters only)"),
         "tolowercase" | "lowercase" | "tolower" | "downcase" => format!("write `{r}.lower()` (it changes ASCII letters only)"),
         "strip" | "trimstart" | "trimend" | "trimleft" | "trimright" | "lstrip" | "rstrip" => {
@@ -251,17 +226,17 @@ fn str_method(w: &str, r: &str) -> Option<String> {
         }
         "charat" | "at" | "get" => format!("`{r}[i]` is the character at position `i`, a `char`"),
         "charcodeat" | "codepointat" | "ord" => {
-            format!("the code of the character at position `i` is `{r}[i].code()`; all the codes: `{r}.codes()`")
+            format!("`{r}[i].code()`; all codes: `{r}.codes()`")
         }
         "replaceall" => format!("`{r}.replace(old, new)` already replaces every match"),
         "splitlines" | "lines" => format!("split at the line breaks: `{r}.split(\"\\n\")`"),
         "padstart" | "padend" | "ljust" | "rjust" | "center" | "zfill" => {
-            format!("pad with `repeat`, e.g. `\" \".repeat(width - {r}.len()) + {r}` (the count must not be negative)")
+            format!("pad with `\" \".repeat(width - {r}.len()) + {r}`")
         }
         "reverse" | "rev" => format!("`{r}.reversed()` gives the characters in reverse order"),
-        "map" | "filter" => format!("strings have no `.{w}()`: use a comprehension over the characters, e.g. `[c.upper() for c in {r} if c != ' ']`, or `{r}.chars().{w}(c => ...)`"),
+        "map" | "filter" => format!("use `{r}.chars().{w}(c => ...)`"),
         "isdigit" | "isnumeric" | "isdecimal" | "isalpha" | "isalnum" | "isupper" | "islower" | "isspace" => {
-            format!("these are `char` methods (`c.is_digit()`, `c.is_letter()`, ...): test each character, `for c in {r} {{ ... }}`")
+            format!("a `char` method: `{r}.chars().all(c => c.is_digit())`")
         }
         "toint" | "parseint" | "parse" | "atoi" | "tonumber" | "parsefloat" | "tofloat" => {
             format!("parse text with `int({r})` or `float({r})` (a runtime error if it is not a number)")
@@ -387,13 +362,13 @@ pub fn type_fix(w: &str) -> Option<&'static str> {
 }
 
 /// What to do when a value might be missing (`int?`, `Option<int>`): Nyra has no optional values.
-pub const OPTION_HINT: &str = "an optional type is written with a `?` after the type, `int?`; a missing value is `none`, `x ?? d` gives a default and `if let v = x { ... }` takes the value out";
+pub const OPTION_HINT: &str = "write `int?`; a missing value is `none`";
 
 /// What to do about a type name that does not exist.
 pub fn type_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     if let Some(t) = nyra_type(name) {
-        return format!("write `{t}` (the built-in type names are lowercase: `int`, `float`, `bool`, `str`, `char`)");
+        return format!("write `{t}`");
     }
     match lower.as_str() {
         "void" | "unit" | "none" | "nothing" => {
@@ -402,10 +377,8 @@ pub fn type_name(name: &str) -> String {
         "vec" | "list" | "array" | "vector" | "slice" | "arraylist" => {
             "an array type is written `[T]`, e.g. `[int]` or `[str]`".to_string()
         }
-        "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => {
-            "a map type is written `[K: V]`, e.g. `[str: int]`; a value is `[\"a\": 1]`, an empty one `[:]`".to_string()
-        }
-        "set" | "hashset" => "Nyra has no sets: use a map `[str: bool]` and `m.has(k)`, or an array and `xs.contains(x)`".to_string(),
+        "map" | "dict" | "hashmap" | "dictionary" | "object" | "record" => "a map type is `[str: int]`; empty: `[:]`".to_string(),
+        "set" | "hashset" => "no sets: a map `[str: bool]` with `m.has(k)`".to_string(),
         "tuple" | "pair" => "a tuple type is written with parentheses, e.g. `(int, str)`; a value `(1, \"a\")`".to_string(),
         "option" | "optional" | "maybe" | "nullable" => {
             "an optional type is written with a question mark after the type, e.g. `int?`".to_string()
@@ -550,8 +523,7 @@ pub fn bad_char(c: char) -> String {
 pub fn dollar_brace(code: &str, at: crate::ast::Span) {
     let code = code.trim();
     crate::diag::warn(
-        crate::diag::Diag::new("E0260", format!("`${{{code}}}` in a string prints a `$` and then the value of `{code}`"), at).hint(format!(
-            "`{{{code}}}` alone inserts the value, so drop the `$` if you did not mean to print one; to print a dollar sign before a value write `\"$\" + str(...)`, to print `${{{code}}}` as text double the braces: `${{{{{code}}}}}`"
-        )),
+        crate::diag::Diag::new("E0260", format!("`${{{code}}}` in a string prints a `$` and then the value of `{code}`"), at)
+            .hint(format!("`{{{code}}}` inserts the value: drop the `$`, or write `${{{{{code}}}}}` for the text")),
     );
 }

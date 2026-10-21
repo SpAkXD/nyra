@@ -107,14 +107,17 @@ pub enum Error {
 }
 
 impl Error {
-    /// The error for people (`file` names the program).
+    /// The error for people (`file` names the program), then the fixes applied in memory and the
+    /// warnings.
     pub fn human(&self, file: &str, src: &str) -> String {
         match self {
-            Error::Diags(d) => format!("{}nyra: {} error(s)\n", diag::render_human(d, file, src), d.len()),
-            Error::Runtime(e) => {
-                format!("{}\nnyra: the program stopped while the site was built\n", sandbox::render_error(e, file, false))
-            }
-            Error::Text(t) => format!("nyra: {t}\n"),
+            Error::Diags(d) => diag::report(d, file, src),
+            Error::Runtime(e) => format!(
+                "{}\nnyra: the program stopped while the site was built\n{}",
+                sandbox::render_error(e, file, false),
+                diag::render_warnings(file, src)
+            ),
+            Error::Text(t) => format!("nyra: {t}\n{}", diag::render_warnings(file, src)),
         }
     }
 
@@ -412,7 +415,7 @@ fn locate(src: &str, needle: &str) -> Option<Span> {
 }
 
 /// The hint of E0390 (opening hours the badge cannot read).
-const HOURS_HINT: &str = "a row is (label, \"days times\"): `(\"Mon–Fri\", \"1-5 8:00-16:00\")`, days 1 (Monday) to 7 (Sunday), one or more times `8:00-12:00 13:00-17:00`, \"\" for closed; the days may also be in the label (`(\"Monday\", \"8:00-18:00\")`, `(\"Mon–Fri\", \"8–16\")`)";
+const HOURS_HINT: &str = "write rows like `(\"Mon–Fri\", \"8:00-16:00\")`, `(\"Sun\", \"\")` for closed; notes go in `( )`";
 
 /// `https://host[:port]` of an absolute http(s) URL.
 fn origin(url: &str) -> Option<String> {
@@ -432,11 +435,10 @@ impl Site {
         let mut pages: Vec<Page> = Vec::new();
         for (path, text, span) in web.pages {
             match page_file(&path) {
-                Err(why) => {
-                    errs.push(Diag::new("E0387", format!("page path \"{path}\" is not a path of the site: {why}"), span).hint(
-                        "write the path from the site's root, as in the address bar: `page(\"/\", ...)`, `page(\"/about\", ...)`",
-                    ))
-                }
+                Err(why) => errs.push(
+                    Diag::new("E0387", format!("page path \"{path}\" is not a path of the site: {why}"), span)
+                        .hint("write a path like `/about`"),
+                ),
                 Ok(file) => {
                     if let Some(first) = pages.iter().find(|p| p.file == file) {
                         let same = if first.path == path {
@@ -446,7 +448,7 @@ impl Site {
                         };
                         errs.push(
                             Diag::new("E0387", format!("two pages have the path \"{path}\"{same}"), span)
-                                .hint("each page needs its own path: rename one of them, or make one page of the two"),
+                                .hint("give each page its own path"),
                         );
                         continue;
                     }
@@ -478,9 +480,9 @@ impl Site {
                 let msg = part.split(" */").next().unwrap_or(part);
                 let (code, msg) = msg.split_once(' ').unwrap_or((msg, ""));
                 let (code, hint): (&'static str, &str) = match code {
-                    "E0381" => ("E0381", "link to `https://...`, `mailto:...`, `tel:...`, a path or an #anchor; the value was computed while the site was built"),
+                    "E0381" => ("E0381", "link to `https://`, `mailto:`, `tel:`, a path or a `#anchor`"),
                     "E0390" => ("E0390", HOURS_HINT),
-                    _ => ("E0374", "use a hex color (`#0F766E`), a theme color (`primary`, `accent`, `bg`, `alt`, `ink`, `muted`) or a name of `site(palette:)`"),
+                    _ => ("E0374", "use `#0F766E`, a theme color (`primary`, `accent`, `ink`, `muted`) or a `palette:` name"),
                 };
                 let value = msg.split('`').nth(1).unwrap_or("");
                 let place = locate(src, &format!("\"{value}\"")).or_else(|| locate(src, value).filter(|_| !value.is_empty()));
@@ -535,13 +537,13 @@ impl Site {
                 let hint = match diag::suggest(&id, known.iter().copied()) {
                     Some(s) => format!("{s} An anchor link needs an element with that id {on}"),
                     None => {
-                        known.truncate(12);
+                        known.truncate(6);
                         let list = if known.is_empty() {
                             "none".to_string()
                         } else {
                             known.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ")
                         };
-                        format!("give the element you mean that id (a section's first argument is its id: `section(\"{id}\", ...)`), or fix the link; the ids {on}: {list}")
+                        format!("give an element that id, `section(\"{id}\", ...)`, or fix the link; ids {on}: {list}")
                     }
                 };
                 errs.push(
@@ -562,9 +564,10 @@ impl Site {
                 .collect();
             let h1 = levels.iter().filter(|l| **l == 1).count();
             if h1 != 1 {
-                warn(Diag::new("E0379", format!("page \"{}\" has {h1} `h1` headings: a page has exactly one", p.path), p.span).hint(
-                    "the `h1` is the page's title for search engines and screen readers: a hero's title is one; make the other headings `h2` or `h3`",
-                ));
+                warn(
+                    Diag::new("E0379", format!("page \"{}\" has {h1} `h1` headings: a page has exactly one", p.path), p.span)
+                        .hint("a hero's title is the `h1`: make the other headings `h2`"),
+                );
             }
             if let Some(w) = levels.windows(2).find(|w| w[1] > w[0] + 1) {
                 warn(
@@ -573,11 +576,7 @@ impl Site {
                         format!("page \"{}\" skips a heading level: an `h{}` follows an `h{}`", p.path, w[1], w[0]),
                         p.span,
                     )
-                    .hint(format!(
-                        "go down one level at a time (`h{}` after `h{}`), so screen readers can follow the outline",
-                        w[0] + 1,
-                        w[0]
-                    )),
+                    .hint(format!("go down one level at a time: `h{}` after `h{}`", w[0] + 1, w[0])),
                 );
             }
         }
@@ -672,7 +671,7 @@ impl Site {
                             let msg =
                                 format!("page \"{}\" shows the image \"{v}\", which is not in `assets/` next to the program", p.path);
                             let d = Diag::new("E0383", msg, p.span).hint(format!(
-                                "put the file at `assets/{}` (images are read from the folder `assets` next to the program), or fix the name",
+                                "put it at `assets/{}`, or fix the name",
                                 v.trim_start_matches("./").trim_start_matches('/')
                             ));
                             if o.strict_images {
@@ -772,9 +771,10 @@ impl Site {
             images_js = format!("const ny_imgs = {{{}}};\n{}", entries.join(", "), client::IMAGES_JS);
         }
         if unscaled > 0 {
-            warn(Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` (--image-tool none)"), at).hint(
-                "build without `--image-tool none` to make WebP variants with the built-in codec; the site works without them, with larger images on phones",
-            ));
+            warn(
+                Diag::new("E0386", format!("{unscaled} image(s) copied without WebP variants or `srcset` (--image-tool none)"), at)
+                    .hint("build without `--image-tool none` for WebP variants"),
+            );
         }
         if !failed.is_empty() {
             let list: Vec<String> = failed.iter().take(5).map(|(f, why)| format!("`{f}` ({why})")).collect();
@@ -782,10 +782,14 @@ impl Site {
             warn(
                 Diag::new(
                     "E0386",
-                    format!("{} image(s) copied without WebP variants: the built-in codec cannot read {}{more}", failed.len(), list.join(", ")),
+                    format!(
+                        "{} image(s) copied without WebP variants: the built-in codec cannot read {}{more}",
+                        failed.len(),
+                        list.join(", ")
+                    ),
                     at,
                 )
-                .hint("save the file again as a plain JPEG, PNG or WebP (an image editor's \"export\"); the site still shows the original"),
+                .hint("re-save it as a plain JPEG, PNG or WebP"),
             );
         }
 
@@ -848,9 +852,7 @@ impl Site {
         for (attr, value) in &used {
             let Some(opt) = motion::Opt::from_name(attr) else { continue };
             if let Err(e) = motion::parse(opt, value, &names) {
-                let hint = e
-                    .hint()
-                    .unwrap_or_else(|| "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`".to_string());
+                let hint = e.hint().unwrap_or_else(|| "the motion words: `nyra explain E0374`".to_string());
                 let place = locate(src, &format!("\"{value}\"")).unwrap_or(at);
                 errs.push(Diag::new("E0374", format!("{} (in data-{attr}=\"{value}\")", e.message), place).hint(hint));
             }
@@ -1431,15 +1433,10 @@ fn contrast(css: &[String], at: Span, warn: &mut impl FnMut(Diag)) {
             warn(
                 Diag::new(
                     "E0380",
-                    format!(
-                        "theme colors `{fg}` {} on `{bg}` {} have a contrast of {r:.2}:1, below the 4.5:1 that WCAG AA needs for text",
-                        shown[fg], shown[bg]
-                    ),
+                    format!("`{fg}` {} on `{bg}` {} has contrast {r:.2}:1 (text needs 4.5:1)", shown[fg], shown[bg]),
                     at,
                 )
-                .hint(format!(
-                    "make `{fg}` darker or `{bg}` lighter (or the reverse for a dark theme) in `site(...)` until they reach 4.5:1"
-                )),
+                .hint(format!("darken `{fg}` or lighten `{bg}` in `site(...)` (or the reverse)")),
             );
         }
     }
@@ -1519,7 +1516,6 @@ pub fn cli(c: &Cli, src: &str, prog: ast::Program) -> std::process::ExitCode {
             if c.json {
                 println!("{}", e.json(&c.file));
             } else {
-                eprint!("{}", diag::render_warnings(&c.file, src));
                 eprint!("{}", e.human(&c.file, src));
             }
             return ExitCode::from(1);

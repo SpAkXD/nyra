@@ -262,7 +262,7 @@ pub fn link(prog: &mut Program) -> Vec<Diag> {
             let hint = match crate::diag::suggest(&u.module, MODULES.iter().copied()) {
                 Some(s) => format!("{s} The standard modules are {}", module_list()),
                 None if u.module == "str" || u.module == "string" || u.module == "strings" => {
-                    "string methods need no import (`s.split(\",\")`); the `text` module has `text.fixed`, `text.is_int` and `text.is_float`".to_string()
+                    "string methods need no import: `s.split(\",\")`".to_string()
                 }
                 None if matches!(u.module.as_str(), "io" | "sys" | "stdin") => {
                     "standard input is the `input` module (`input.line()`), arguments and exit codes are in `os`".to_string()

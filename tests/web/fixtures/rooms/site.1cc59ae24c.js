@@ -1,48 +1,163 @@
 (() => {
 (() => {
-document.addEventListener('submit', (e) => {
-const form = e.target.closest && e.target.closest('.form-body[data-mailto]');
-if (!form) return;
-e.preventDefault();
-if (!form.reportValidity()) return;
-const fields = [...form.elements].filter((el) => el.name && !['submit', 'button'].includes(el.type));
-const message = fields.find((el) => el.tagName === 'TEXTAREA');
-const label = (el) => {
-const l = el.closest('label') || form.querySelector(`label[for="${el.id}"]`);
-return (l ? l.textContent : el.name).replace('*', '').trim();
-};
-const lines = fields
-.filter((el) => el !== message && (el.type === 'checkbox' ? el.checked : el.value.trim()))
-.map((el) => (el.type === 'checkbox' ? label(el) : el.value.trim()));
-let body = (message ? message.value.trim() + '\n\n—\n' : '') + lines.join('\n');
-const query = (form.dataset.query || '').split('&').filter((kv) => {
-if (!/^body=/i.test(kv)) return kv !== '';
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const now = (tz) => {
 try {
-body = decodeURIComponent(kv.slice(5)) + '\n\n' + body;
+const parts = new Intl.DateTimeFormat('en-GB', {
+timeZone: tz || undefined, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).formatToParts(new Date());
+const get = (t) => (parts.find((p) => p.type === t) || {}).value;
+const d = DAYS.indexOf(get('weekday'));
+return { day: d === 0 ? 7 : d, min: Number(get('hour')) * 60 + Number(get('minute')) };
 } catch {
-body = kv.slice(5) + '\n\n' + body;
+const d = new Date();
+return { day: d.getDay() || 7, min: d.getHours() * 60 + d.getMinutes() };
 }
-return false;
-});
-query.push('body=' + encodeURIComponent(body));
-window.location.href = 'mailto:' + form.dataset.mailto + '?' + query.join('&');
-const card = form.closest('.form');
-const done = card && card.querySelector('.form-done');
-if (done) {
-form.hidden = true;
-done.hidden = false;
-const edit = done.querySelector('.form-edit');
-if (edit) edit.focus();
+};
+const days = (spec) => {
+const out = new Set();
+for (const part of spec.split(',')) {
+const [a, b] = part.split('-').map(Number);
+if (Number.isNaN(a)) continue;
+for (let d = a; d <= (Number.isNaN(b) || b === undefined ? a : b); d++) out.add(d === 0 ? 7 : d);
 }
+return out;
+};
+const mins = (t) => {
+const [h, m] = t.split(':').map(Number);
+return h * 60 + (m || 0);
+};
+const inRange = (r, m) => {
+const [a, b] = r.split('-');
+if (!a || !b) return false;
+const from = mins(a);
+const to = mins(b);
+return to > from ? m >= from && m < to : m >= from || m < to;
+};
+const openOn = (row, t) => {
+const [d, ...ranges] = row.trim().split(/\s+/);
+return days(d).has(t.day) && ranges.some((r) => inRange(r, t.min));
+};
+const update = () => {
+for (const b of document.querySelectorAll('.badge[data-hours]')) {
+const t = now(b.dataset.tz);
+const open = b.dataset.hours.split('|').some((row) => row && openOn(row, t));
+b.dataset.state = open ? 'open' : 'closed';
+const label = b.querySelector('.badge-label');
+if (label) label.textContent = open ? b.dataset.open : b.dataset.closed;
+}
+for (const card of document.querySelectorAll('.hours')) {
+const badge = card.querySelector('.badge');
+const t = now(badge && badge.dataset.tz);
+for (const tr of card.querySelectorAll('tr[data-days]')) tr.classList.toggle('is-today', days(tr.dataset.days).has(t.day));
+}
+};
+update();
+setInterval(update, 60000);
+})();
+(() => {
+const ICON = {
+x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+prev: '<path d="m15 18-6-6 6-6"/>',
+next: '<path d="m9 18 6-6-6-6"/>',
+};
+const svg = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+for (const tabs of document.querySelectorAll('.gallery .tabs')) tabs.hidden = false;
+const filter = (tab) => {
+const g = tab.closest('.gallery');
+const f = tab.dataset.filter;
+for (const t of g.querySelectorAll('.tabs [data-filter]')) {
+t.setAttribute('aria-selected', String(t === tab));
+t.tabIndex = t === tab ? 0 : -1;
+}
+for (const it of g.querySelectorAll('.gallery-item')) it.hidden = Boolean(f) && it.dataset.tag !== f;
+};
+for (const t of document.querySelectorAll('.gallery .tabs [data-filter]')) t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1;
+let box = null;
+let items = [];
+let index = 0;
+let opener = null;
+const show = (dir) => {
+const it = items[index];
+const img = it.querySelector('img');
+const big = document.createElement('img');
+big.src = it.getAttribute('href');
+big.alt = img ? img.alt : '';
+big.style.setProperty('--dir', String(dir));
+box.querySelector('.lb-stage').replaceChildren(big);
+box.querySelector('.lb-text').textContent = big.alt;
+box.querySelector('.lb-count').textContent = `${index + 1} / ${items.length}`;
+box.setAttribute('aria-label', big.alt);
+};
+const step = (d) => {
+index = (index + d + items.length) % items.length;
+show(d);
+};
+const build = (g) => {
+box = document.createElement('dialog');
+box.className = 'lightbox';
+box.innerHTML = '<div class="lb-stage"></div><p class="lb-cap"><span class="lb-text"></span><span class="lb-count"></span></p>'
++ `<button type="button" class="lb-btn lb-close">${svg('x')}</button>`
++ `<button type="button" class="lb-btn lb-prev">${svg('prev')}</button>`
++ `<button type="button" class="lb-btn lb-next">${svg('next')}</button>`;
+box.querySelector('.lb-close').setAttribute('aria-label', g.dataset.dismiss || 'Close');
+box.querySelector('.lb-prev').setAttribute('aria-label', g.dataset.prev || 'Previous');
+box.querySelector('.lb-next').setAttribute('aria-label', g.dataset.next || 'Next');
+box.addEventListener('click', (e) => {
+if (e.target.closest('.lb-close')) box.close();
+else if (e.target.closest('.lb-prev')) step(-1);
+else if (e.target.closest('.lb-next')) step(1);
+else if (!e.target.closest('img, .lb-cap')) box.close();
 });
+box.addEventListener('keydown', (e) => {
+if (e.key === 'ArrowRight') step(1);
+if (e.key === 'ArrowLeft') step(-1);
+});
+let x0 = null;
+box.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+box.addEventListener('touchend', (e) => {
+if (x0 === null) return;
+const dx = e.changedTouches[0].clientX - x0;
+x0 = null;
+if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+});
+box.addEventListener('close', () => {
+document.documentElement.style.overflow = '';
+if (opener) opener.focus();
+});
+document.body.append(box);
+};
+const open = (item) => {
+const g = item.closest('.gallery');
+items = [...g.querySelectorAll('.gallery-item:not([hidden])')];
+index = items.indexOf(item);
+opener = item;
+if (!box) build(g);
+show(0);
+if (box.showModal) box.showModal();
+else box.setAttribute('open', '');
+document.documentElement.style.overflow = 'hidden';
+box.querySelector('.lb-close').focus();
+};
 document.addEventListener('click', (e) => {
-const edit = e.target.closest('.form-edit');
-const card = edit && edit.closest('.form');
-if (!card) return;
-card.querySelector('.form-body').hidden = false;
-card.querySelector('.form-done').hidden = true;
-const first = card.querySelector('input, textarea, select');
-if (first) first.focus();
+const tab = e.target.closest('.gallery .tabs [data-filter]');
+if (tab) {
+filter(tab);
+return;
+}
+const item = e.target.closest('.gallery-item');
+if (item && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+e.preventDefault();
+open(item);
+}
+});
+document.addEventListener('keydown', (e) => {
+const tab = e.target.closest && e.target.closest('.gallery .tabs [data-filter]');
+if (!tab || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
+const all = [...tab.parentElement.querySelectorAll('[data-filter]')];
+const next = all[(all.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+next.focus();
+filter(next);
 });
 })();
 })();
@@ -87,7 +202,7 @@ D.readyState=='loading'?D.addEventListener('DOMContentLoaded',init):init();
 })();
 (() => {
 "use strict";
-const ny_file = "live.nyra";
+const ny_file = "rooms.nyra";
 class NyPanic extends Error {}
 function ny_panic(code, msg, hint, line, col) {
 const json = typeof process !== "undefined" && process.env.NYRA_JSON;
@@ -215,10 +330,10 @@ NY_KEYS.set(s, c);
 }
 return c;
 }
-function ny_mnew(kv) {
-const m = new Map();
-for (let i = 0; i < kv.length; i += 2) m.set(ny_ik(kv[i]), kv[i + 1]);
-return m;
+function ny_mget(m, k, kt, line, col) {
+k = ny_ik(k);
+if (!m.has(k)) ny_panic("E0248", `key ${ny_fmt(k, kt)} is not in the map`, "check with `m.has(k)` first, or read it with `m.get(k, default)`", line, col);
+return m.get(k);
 }
 function ny_aindex(a, v) {
 for (let i = 0; i < a.length; i++) if (ny_eq(a[i], v)) return i;
@@ -323,10 +438,10 @@ if (typeof d !== "string") return d[0] === "m" ? new Map() : [];
 return d === "s" ? "" : d === "b" ? false : 0;
 }
 class nyS_Msg {
-constructor(p0, p1, p2) { this.tag = p0; this.Show_0 = p1; this.Send_0 = p2; }
-ny_cp() { return new nyS_Msg(this.tag, this.Show_0, ny_sh(this.Send_0)); }
-ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0 && ny_eq(this.Send_0, o.Send_0); }
-ny_fmt() { const n = ["Msg.Show", "Msg.Send", "Msg.Clear"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; if (this.tag === 1) return n + "(" + ny_fmt(this.Send_0, "{ss") + ")"; return n; }
+constructor(p0, p1) { this.tag = p0; this.Show_0 = p1; }
+ny_cp() { return new nyS_Msg(this.tag, this.Show_0); }
+ny_eq(o) { return this.tag === o.tag && this.Show_0 === o.Show_0; }
+ny_fmt() { const n = ["Msg.Show", "Msg.Photos"][this.tag]; if (this.tag === 0) return n + "(" + ny_fmt(this.Show_0, "s") + ")"; return n; }
 }
 class nyS_Node {
 constructor(p0, p1) { this.html = p0; this.kit = p1; }
@@ -364,11 +479,11 @@ ny_cp() { return new nyS_Tup_t3sss(this._0, this._1, this._2); }
 ny_eq(o) { return this._0 === o._0 && this._1 === o._1 && this._2 === o._2; }
 ny_fmt() { return "(" + ny_fmt(this._0, "s") + ", " + ny_fmt(this._1, "s") + ", " + ny_fmt(this._2, "s") + ")"; }
 }
-class nyS_Bread {
-constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.price = p2; }
-ny_cp() { return new nyS_Bread(this.name, this.kind, this.price); }
-ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.price === o.price; }
-ny_fmt() { return "Bread(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "price: " + ny_fmt(this.price, "i") + ")"; }
+class nyS_Room {
+constructor(p0, p1, p2) { this.name = p0; this.kind = p1; this.photo = p2; }
+ny_cp() { return new nyS_Room(this.name, this.kind, this.photo); }
+ny_eq(o) { return this.name === o.name && this.kind === o.kind && this.photo === o.photo; }
+ny_fmt() { return "Room(" + "name: " + ny_fmt(this.name, "s") + ", " + "kind: " + ny_fmt(this.kind, "s") + ", " + "photo: " + ny_fmt(this.photo, "s") + ")"; }
 }
 class nyS_Opt_oi {
 constructor(p0, p1) { this.has = p0; this.val = p1; }
@@ -376,8 +491,8 @@ ny_cp() { return new nyS_Opt_oi(this.has, this.val); }
 ny_eq(o) { return this.has === o.has && this.val === o.val; }
 ny_fmt() { return this.has ? "Some(" + ny_fmt(this.val, "i") + ")" : "none"; }
 }
-nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"], ["Send_0", "Send_0", ["m", "s", "s"]]];
-nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Send", [2]], ["Clear", []]];
+nyS_Msg.ny_jf = [["tag", "tag", "i"], ["Show_0", "Show_0", "s"]];
+nyS_Msg.ny_jk = "e"; nyS_Msg.ny_jn = "Msg"; nyS_Msg.ny_jv = [["Show", [1]], ["Photos", []]];
 nyS_Node.ny_jf = [["html", "html", "s"], ["kit", "kit", ["a", "s"]]];
 nyS_WebConfig.ny_jf = [["name", "name", "s"], ["url", "url", "s"], ["lang", "lang", "s"], ["tz", "tz", "s"], ["desc", "desc", "s"], ["share", "share", "s"], ["style", "style", "s"], ["motion", "motion", "s"], ["transition", "transition", "s"], ["font", "font", "s"], ["display", "display", "s"], ["primary", "primary", "s"], ["logo", "logo", "s"], ["say", "say", ["m", "s", "s"]], ["palette", "palette", ["m", "s", "s"]]];
 nyS_Opt_of.ny_jf = [["has", "has", "b"], ["val", "val", "f"]];
@@ -388,101 +503,139 @@ nyS_Opt_ot2ss.ny_jf = [["has", "has", "b"], ["val", "val", nyS_Tup_t2ss]];
 nyS_Opt_ot2ss.ny_jk = "o";
 nyS_Tup_t3sss.ny_jf = [["_0", "_0", "s"], ["_1", "_1", "s"], ["_2", "_2", "s"]];
 nyS_Tup_t3sss.ny_jk = "t";
-nyS_Bread.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["price", "price", "i"]];
+nyS_Room.ny_jf = [["name", "name", "s"], ["kind", "kind", "s"], ["photo", "photo", "s"]];
 nyS_Opt_oi.ny_jf = [["has", "has", "b"], ["val", "val", "i"]];
 nyS_Opt_oi.ny_jk = "o";
-function update(m, kind, sent) {
-let nyU__ub7_m1, k, ny_t5, fields;
+function update(m, kind, photos) {
+let nyU__ub7_m1, k, ny_t5;
 nyU__ub7_m1 = m;
 ny_sh(nyU__ub7_m1);
 if (nyU__ub7_m1.tag === 0) {
 k = nyU__ub7_m1.Show_0;
 ny_t5 = k;
 kind.v = ny_t5;
-} else if (nyU__ub7_m1.tag === 1) {
-fields = nyU__ub7_m1.Send_0;
-ny_sh(fields);
-sent.v = ny_add(sent.v, fields.size, 19, 29);
 } else {
-kind.v = "vše";
+photos.v = !photos.v;
 }
 }
-function menu(_web, breads, kind) {
-let ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, k, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, b, ny_t24, ny_b_2, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32;
-ny_t3 = new nyS_Opt_of(false, 0.0);
-ny_t4 = [];
-ny_t5 = new nyS_Opt_of(false, 0.0);
-ny_t6 = [];
-ny_t7 = ["vše", "chléb", "sladké"];
-for (const ny_c1 of ny_t7) {
+function roomList(_web, rooms, extras, kind) {
+let ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, k, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, r, ny_t19, ny_r_2, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, e, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37;
+ny_t4 = new nyS_Opt_of(false, 0.0);
+ny_t5 = [];
+ny_t6 = new nyS_Opt_of(false, 0.0);
+ny_t7 = [];
+ny_t8 = ["all", "double", "family"];
+for (const ny_c1 of ny_t8) {
 k = ny_c1;
-ny_t9 = ny_mnew([]);
-ny_t10 = new nyS_Msg(0, k, ny_sh(ny_t9));
+ny_t10 = new nyS_Msg(0, k);
 ny_t11 = nyU_web_u2e__on(ny_t10);
 ny_t12 = new nyS_Opt_of(false, 0.0);
 ny_t13 = nyU_web_u2e_button(k, "", "", ny_t11, k === kind, "", "", "", "", "", "", "", "", "", ny_t12, "");
 {
-if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
-ny_t6.push(ny_sh(ny_t13));
+if (ny_t7.ny_s) ny_t7 = ny_cp(ny_t7);
+ny_t7.push(ny_sh(ny_t13));
 }
 }
-ny_t14 = ny_mnew([]);
-ny_t15 = new nyS_Msg(2, "", ny_sh(ny_t14));
-ny_t16 = nyU_web_u2e__on(ny_t15);
-ny_t17 = new nyS_Opt_of(false, 0.0);
-ny_t18 = nyU_web_u2e_button("Zrušit filtr", "", "ghost", ny_t16, false, "", "", "", "", "", "", "", "", "", ny_t17, "");
+ny_t14 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t6, "", ny_t7);
 {
-if (ny_t6.ny_s) ny_t6 = ny_cp(ny_t6);
-ny_t6.push(ny_sh(ny_t18));
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t14));
 }
-ny_t19 = nyU_web_u2e_row("", "", "", "", "", "", "", "", ny_t5, "", ny_t6);
+ny_t15 = new nyS_Opt_of(false, 0.0);
+ny_t16 = [];
+ny_t17 = [];
+for (const ny_c2 of rooms) {
+r = ny_c2;
+if ((kind === "all") || (r.kind === kind)) {
 {
-if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
-ny_t4.push(ny_sh(ny_t19));
+if (ny_t17.ny_s) ny_t17 = ny_cp(ny_t17);
+ny_t17.push(ny_sh(r));
 }
-ny_t20 = new nyS_Opt_of(false, 0.0);
+}
+}
+ny_t19 = ny_t17;
+for (const ny_c3 of ny_t19) {
+ny_r_2 = ny_c3;
 ny_t21 = [];
-ny_t22 = [];
-for (const ny_c2 of breads) {
-b = ny_c2;
-if ((kind === "vše") || (b.kind === kind)) {
+ny_t22 = new nyS_Opt_of(false, 0.0);
+ny_t23 = [];
+ny_t24 = new nyS_Opt_of(false, 0.0);
+ny_t25 = nyU_web_u2e_img(ny_r_2.photo, ny_r_2.name, "4/3", "", "", "", "", "", "", "", "", ny_t24, "");
 {
-if (ny_t22.ny_s) ny_t22 = ny_cp(ny_t22);
-ny_t22.push(ny_sh(b));
+if (ny_t23.ny_s) ny_t23 = ny_cp(ny_t23);
+ny_t23.push(ny_sh(ny_t25));
+}
+ny_t26 = nyU_web_u2e_card(ny_r_2.name, ny_r_2.kind, "", "", "", false, "", "", "", "", ny_t21, "", "", "", "", "", "", "", ny_t22, "", ny_t23, _web);
+{
+if (ny_t16.ny_s) ny_t16 = ny_cp(ny_t16);
+ny_t16.push(ny_sh(ny_t26));
 }
 }
+ny_t27 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "", "", "", "", ny_t15, "", ny_t16);
+{
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t27));
 }
-ny_t24 = ny_t22;
-for (const ny_c3 of ny_t24) {
-ny_b_2 = ny_c3;
-ny_t26 = `${ny_b_2.price} Kč`;
-ny_t27 = [];
+if (kind !== "all") {
 ny_t28 = new nyS_Opt_of(false, 0.0);
 ny_t29 = [];
-ny_t30 = nyU_web_u2e_card(ny_b_2.name, ny_t26, "", "", "", false, "", "", "", "", ny_t27, "", "", "", "", "", "", "", ny_t28, "", ny_t29, _web);
+ny_t30 = extras;
+ny_sh(ny_t30);
+for (const ny_c4 of ny_t30) {
+e = ny_c4;
+ny_t32 = [];
+ny_t33 = new nyS_Opt_of(false, 0.0);
+ny_t34 = [];
+ny_t35 = nyU_web_u2e_card(e, kind, "", "", "", false, "", "", "", "", ny_t32, "", "", "", "", "", "", "", ny_t33, "", ny_t34, _web);
 {
-if (ny_t21.ny_s) ny_t21 = ny_cp(ny_t21);
-ny_t21.push(ny_sh(ny_t30));
+if (ny_t29.ny_s) ny_t29 = ny_cp(ny_t29);
+ny_t29.push(ny_sh(ny_t35));
 }
 }
-ny_t31 = nyU_web_u2e_grid(3, "", "", false, "", "", "", "stagger", "lift", "", "", ny_t20, "", ny_t21);
+ny_t36 = nyU_web_u2e_grid(8, "", "", false, "", "", "", "", "", "", "", ny_t28, "", ny_t29);
 {
-if (ny_t4.ny_s) ny_t4 = ny_cp(ny_t4);
-ny_t4.push(ny_sh(ny_t31));
+if (ny_t5.ny_s) ny_t5 = ny_cp(ny_t5);
+ny_t5.push(ny_sh(ny_t36));
 }
-ny_t32 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t3, "", ny_t4);
-return ny_t32;
 }
-function thanks(sent) {
-let ny_t1, ny_t2, ny_t3;
-if (sent > 0) {
-ny_t1 = new nyS_Opt_of(false, 0.0);
-ny_t3 = nyU_web_u2e_p("Děkujeme za zprávu.", "", "", "", "", "", "", "", ny_t1, "");
-} else {
+ny_t37 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t4, "", ny_t5);
+return ny_t37;
+}
+function album(_web, photos) {
+let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19;
 ny_t2 = new nyS_Opt_of(false, 0.0);
-ny_t3 = nyU_web_u2e_p("", "", "", "", "", "", "", "", ny_t2, "");
+ny_t3 = [];
+ny_t4 = new nyS_Msg(1, "");
+ny_t5 = nyU_web_u2e__on(ny_t4);
+ny_t6 = new nyS_Opt_of(false, 0.0);
+ny_t7 = nyU_web_u2e_button(photos ? "Hide photos" : "Show photos", "", "", ny_t5, false, "", "", "", "", "", "", "", "", "", ny_t6, "");
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t7));
 }
-return ny_t3;
+if (photos) {
+ny_t8 = new nyS_Tup_t3sss("photo-4.svg", "The river at dawn", "");
+ny_t9 = new nyS_Tup_t3sss("photo-5.svg", "Breakfast in the garden", "");
+ny_t10 = new nyS_Tup_t3sss("photo-6.svg", "The mill wheel", "");
+ny_t11 = [ny_sh(ny_t8), ny_sh(ny_t9), ny_sh(ny_t10)];
+ny_t12 = [];
+ny_t13 = new nyS_Opt_of(false, 0.0);
+ny_t14 = nyU_web_u2e_gallery(ny_t11, ny_t12, "", 3, "", "", "", "", "", "", ny_t13, "", _web);
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t14));
+}
+ny_t15 = [];
+ny_t16 = new nyS_Opt_of(false, 0.0);
+ny_t17 = [];
+ny_t18 = nyU_web_u2e_card("Bikes", "Free to borrow for the river path.", "bike", "", "", false, "", "", "", "", ny_t15, "", "", "", "", "", "", "", ny_t16, "", ny_t17, _web);
+{
+if (ny_t3.ny_s) ny_t3 = ny_cp(ny_t3);
+ny_t3.push(ny_sh(ny_t18));
+}
+}
+ny_t19 = nyU_web_u2e_stack("", "", "", "", "", "", "", "", ny_t2, "", ny_t3);
+return ny_t19;
 }
 function nyU_web_u2e__render(view) {
 let ny_t1;
@@ -767,25 +920,48 @@ ny_t72 = nyU_web_u2e__kits(kids, "");
 ny_t73 = new nyS_Node(h, ny_sh(ny_t72));
 return ny_t73;
 }
-function nyU_web_u2e_p(text, size, id, cls, anim, hover, loop, scroll, at, morph) {
-let c, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21;
-if (size !== "") {
-ny_t11 = nyU_web_u2e__word(size);
-c = "p p-" + ny_t11;
-} else {
-c = "p";
+function nyU_web_u2e_img(src, alt, ratio, caption, fit, id, cls, anim, hover, loop, scroll, at, morph) {
+let c, h, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29;
+c = "fig";
+if (fit === "contain") {
+{
+c += " fig-contain";
 }
-ny_t12 = nyU_web_u2e__ic(c, id, cls);
-ny_t13 = "<p" + ny_t12;
-ny_t14 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
-ny_t15 = ny_t13 + ny_t14;
-ny_t16 = ny_t15 + ">";
-ny_t17 = nyU_web_u2e__md(text);
-ny_t18 = ny_t16 + ny_t17;
-ny_t19 = ny_t18 + "</p>";
-ny_t20 = [];
-ny_t21 = new nyS_Node(ny_t19, ny_sh(ny_t20));
-return ny_t21;
+}
+if (ratio !== "") {
+{
+c += " fig-ratio";
+}
+}
+ny_t15 = nyU_web_u2e__ic(c, id, cls);
+ny_t16 = "<figure" + ny_t15;
+if (ratio !== "") {
+ny_t17 = nyU_web_u2e__attr(ratio);
+ny_t18 = " style=\"--ratio:" + ny_t17;
+ny_t19 = ny_t18 + "\"";
+} else {
+ny_t19 = "";
+}
+h = ny_t16 + ny_t19;
+ny_t20 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t21 = ny_t20 + ">";
+ny_t22 = nyU_web_u2e__img_tag(src, alt, "(min-width: 1024px) 50vw, 100vw", false);
+ny_t23 = ny_t21 + ny_t22;
+{
+h += ny_t23;
+}
+if (caption !== "") {
+ny_t24 = nyU_web_u2e__md(caption);
+ny_t25 = "<figcaption>" + ny_t24;
+ny_t26 = ny_t25 + "</figcaption>";
+{
+h += ny_t26;
+}
+}
+ny_t27 = h + "</figure>";
+ny_t28 = [];
+ny_t29 = new nyS_Node(ny_t27, ny_sh(ny_t28));
+return ny_t29;
 }
 function nyU_web_u2e_button(text, href, style, on, active, icon, label, size, id, cls, anim, hover, loop, scroll, at, morph) {
 let c, ny_t17, ny_t18, ny_t19, inner, ny_t21, ny_t22, motion, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, h, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, ny_t42, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49;
@@ -851,13 +1027,149 @@ ny_t48 = [];
 ny_t49 = new nyS_Node(ny_t47, ny_sh(ny_t48));
 return ny_t49;
 }
+function nyU_web_u2e_gallery(photos, filters, all, cols, id, cls, anim, hover, loop, scroll, at, morph, _web) {
+let h, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29, ny_t30, ny_t31, ny_t32, ny_t33, ny_t34, ny_t35, ny_t36, ny_t37, ny_t38, ny_t39, ny_t40, ny_t41, f, ny_t43, ny_t44, ny_t45, ny_t46, ny_t47, ny_t48, ny_t49, ph, label, ny_t52, ny_f_2, ny_t54, tint, ny_t56, ny_t57, ny_t58, ny_t59, ny_t60, ny_t61, ny_t62, ny_t63, ny_t64, ny_t65, ny_t66, ny_t67, ny_t68, ny_t69, ny_t70, ny_t71, ny_t72, ny_t73, ny_t74, ny_t75, ny_t76, ny_t77, ny_t78, ny_t79, ny_t80, ny_t81, ny_t82, ny_t83, ny_t84;
+ny_t14 = "gallery" + ((cols === 2) ? " gallery-2" : ((cols === 4) ? " gallery-4" : ""));
+ny_t15 = nyU_web_u2e__ic(ny_t14, id, cls);
+h = "<div" + ny_t15;
+ny_t16 = nyU_web_u2e__mo(anim, hover, loop, scroll, at, morph);
+ny_t17 = ny_t16 + " data-zoom=\"";
+ny_t18 = nyU_web_u2e__say("zoom", _web);
+ny_t19 = nyU_web_u2e__attr(ny_t18);
+ny_t20 = ny_t17 + ny_t19;
+ny_t21 = ny_t20 + "\" data-prev=\"";
+ny_t22 = nyU_web_u2e__say("prev", _web);
+ny_t23 = nyU_web_u2e__attr(ny_t22);
+ny_t24 = ny_t21 + ny_t23;
+{
+h += ny_t24;
+}
+ny_t25 = nyU_web_u2e__say("next", _web);
+ny_t26 = nyU_web_u2e__attr(ny_t25);
+ny_t27 = "\" data-next=\"" + ny_t26;
+ny_t28 = ny_t27 + "\" data-dismiss=\"";
+ny_t29 = nyU_web_u2e__say("dismiss", _web);
+ny_t30 = nyU_web_u2e__attr(ny_t29);
+ny_t31 = ny_t28 + ny_t30;
+ny_t32 = ny_t31 + "\">";
+{
+h += ny_t32;
+}
+if (filters.length > 0) {
+ny_t33 = nyU_web_u2e__say("filter", _web);
+ny_t34 = nyU_web_u2e__attr(ny_t33);
+ny_t35 = "<div class=\"tabs\" role=\"tablist\" aria-label=\"" + ny_t34;
+ny_t36 = ny_t35 + "\" hidden>";
+{
+h += ny_t36;
+}
+if (all !== "") {
+ny_t37 = all;
+} else {
+ny_t37 = nyU_web_u2e__say("all", _web);
+}
+ny_t38 = nyU_web_u2e__md(ny_t37);
+ny_t39 = "<button type=\"button\" role=\"tab\" aria-selected=\"true\" data-filter=\"\">" + ny_t38;
+ny_t40 = ny_t39 + "</button>";
+{
+h += ny_t40;
+}
+ny_t41 = filters;
+ny_sh(ny_t41);
+for (const ny_c1 of ny_t41) {
+f = ny_c1;
+ny_t43 = nyU_web_u2e__attr(f._0);
+ny_t44 = "<button type=\"button\" role=\"tab\" aria-selected=\"false\" data-filter=\"" + ny_t43;
+ny_t45 = ny_t44 + "\">";
+ny_t46 = nyU_web_u2e__md(f._1);
+ny_t47 = ny_t45 + ny_t46;
+ny_t48 = ny_t47 + "</button>";
+{
+h += ny_t48;
+}
+}
+{
+h += "</div>";
+}
+}
+{
+h += "<div class=\"gallery-grid\">";
+}
+ny_t49 = photos;
+ny_sh(ny_t49);
+for (const ny_c2 of ny_t49) {
+ph = ny_c2;
+label = "";
+ny_t52 = filters;
+ny_sh(ny_t52);
+for (const ny_c3 of ny_t52) {
+ny_f_2 = ny_c3;
+if (ny_f_2._0 === ph._2) {
+ny_t54 = ny_f_2._1;
+label = ny_t54;
+}
+}
+if (_web.palette.has(ny_ik(ph._2))) {
+ny_t56 = nyU_web_u2e__word(ph._2);
+ny_t57 = " style=\"--tint:var(--c-" + ny_t56;
+tint = ny_t57 + ")\"";
+} else {
+tint = "";
+}
+ny_t58 = nyU_web_u2e__src(ph._0);
+ny_t59 = nyU_web_u2e__attr(ny_t58);
+ny_t60 = "<a class=\"gallery-item\" href=\"" + ny_t59;
+ny_t61 = ny_t60 + "\"";
+ny_t62 = nyU_web_u2e__at("data-tag", ph._2);
+ny_t63 = ny_t61 + ny_t62;
+ny_t64 = ny_t63 + tint;
+ny_t65 = ny_t64 + " aria-label=\"";
+{
+h += ny_t65;
+}
+ny_t66 = nyU_web_u2e__say("zoom", _web);
+ny_t67 = ny_t66 + ": ";
+ny_t68 = ny_t67 + ph._1;
+ny_t69 = nyU_web_u2e__attr(ny_t68);
+ny_t70 = ny_t69 + "\">";
+ny_t71 = nyU_web_u2e__img_tag(ph._0, ph._1, "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw", false);
+ny_t72 = ny_t70 + ny_t71;
+{
+h += ny_t72;
+}
+{
+h += "<span class=\"gallery-over\" aria-hidden=\"true\">";
+}
+if (label !== "") {
+ny_t73 = nyU_web_u2e__md(label);
+ny_t74 = "<span class=\"gallery-tag\">" + ny_t73;
+ny_t75 = ny_t74 + "</span>";
+{
+h += ny_t75;
+}
+}
+ny_t76 = nyU_web_u2e__esc(ph._1);
+ny_t77 = "<span class=\"gallery-cap\">" + ny_t76;
+ny_t78 = ny_t77 + "</span>";
+ny_t79 = nyU_web_u2e__icon("expand");
+ny_t80 = ny_t78 + ny_t79;
+ny_t81 = ny_t80 + "</span></a>";
+{
+h += ny_t81;
+}
+}
+ny_t82 = h + "</div></div>";
+ny_t83 = ["gallery"];
+ny_t84 = new nyS_Node(ny_t82, ny_sh(ny_t83));
+return ny_t84;
+}
 function nyU_web_u2e__esc(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5;
-ny_t1 = ny_str_replace(s, "&", "&amp;", 5, 5);
-ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 5, 5);
-ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 5, 5);
-ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 5, 5);
-ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 5, 5);
+ny_t1 = ny_str_replace(s, "&", "&amp;", 7, 5);
+ny_t2 = ny_str_replace(ny_t1, "<", "&lt;", 7, 5);
+ny_t3 = ny_str_replace(ny_t2, ">", "&gt;", 7, 5);
+ny_t4 = ny_str_replace(ny_t3, "\"", "&quot;", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "'", "&#39;", 7, 5);
 return ny_t5;
 }
 function nyU_web_u2e__attr(s) {
@@ -887,9 +1199,9 @@ i = 0;
 bold = false;
 em = false;
 while (i < n) {
-c = ny_get(cs, i, 5, 5);
+c = ny_get(cs, i, 7, 5);
 if ((c === 92) && ((i + 1) < n)) {
-ny_t8 = ny_get(cs, i + 1, 5, 5);
+ny_t8 = ny_get(cs, i + 1, 7, 5);
 ny_t9 = `${ny_char_str(ny_t8)}`;
 ny_t10 = nyU_web_u2e__esc(ny_t9);
 {
@@ -899,22 +1211,22 @@ i = i + 2;
 } else {
 ny_t12 = c === 42;
 if (ny_t12) {
-ny_t11 = ny_add(i, 1, 5, 5);
+ny_t11 = ny_add(i, 1, 7, 5);
 ny_t12 = ny_t11 < n;
 }
 ny_t15 = ny_t12;
 if (ny_t15) {
-ny_t13 = ny_add(i, 1, 5, 5);
-ny_t14 = ny_get(cs, ny_t13, 5, 5);
+ny_t13 = ny_add(i, 1, 7, 5);
+ny_t14 = ny_get(cs, ny_t13, 7, 5);
 ny_t15 = ny_t14 === 42;
 }
 ny_t20 = ny_t15;
 if (ny_t20) {
 ny_t19 = bold;
 if (!ny_t19) {
-ny_t16 = ny_add(i, 2, 5, 5);
+ny_t16 = ny_add(i, 2, 7, 5);
 ny_t17 = nyU_web_u2e__find(cs, ny_t16, "**");
-ny_t18 = ny_add(i, 2, 5, 5);
+ny_t18 = ny_add(i, 2, 7, 5);
 ny_t19 = ny_t17 > ny_t18;
 }
 ny_t20 = ny_t19;
@@ -924,24 +1236,24 @@ if (ny_t20) {
 o += bold ? "</strong>" : "<strong>";
 }
 bold = !bold;
-i = ny_add(i, 2, 5, 5);
+i = ny_add(i, 2, 7, 5);
 } else {
 ny_t30 = c === 42;
 if (ny_t30) {
 ny_t29 = em;
 if (!ny_t29) {
-ny_t21 = ny_add(i, 1, 5, 5);
+ny_t21 = ny_add(i, 1, 7, 5);
 ny_t24 = ny_t21 < n;
 if (ny_t24) {
-ny_t22 = ny_add(i, 1, 5, 5);
-ny_t23 = ny_get(cs, ny_t22, 5, 5);
+ny_t22 = ny_add(i, 1, 7, 5);
+ny_t23 = ny_get(cs, ny_t22, 7, 5);
 ny_t24 = ny_t23 !== 32;
 }
 ny_t28 = ny_t24;
 if (ny_t28) {
-ny_t25 = ny_add(i, 1, 5, 5);
+ny_t25 = ny_add(i, 1, 7, 5);
 ny_t26 = nyU_web_u2e__find(cs, ny_t25, "*");
-ny_t27 = ny_add(i, 1, 5, 5);
+ny_t27 = ny_add(i, 1, 7, 5);
 ny_t28 = ny_t26 > ny_t27;
 }
 ny_t29 = ny_t28;
@@ -953,26 +1265,26 @@ if (ny_t30) {
 o += em ? "</em>" : "<em>";
 }
 em = !em;
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 7, 5);
 } else {
 ny_t33 = c === 96;
 if (ny_t33) {
-ny_t31 = ny_add(i, 1, 5, 5);
+ny_t31 = ny_add(i, 1, 7, 5);
 ny_t32 = nyU_web_u2e__find(cs, ny_t31, "`");
                         ny_t33 = ny_t32 > i;
                     }
                     if (ny_t33) {
-                        ny_t35 = ny_add(i, 1, 5, 5);
+                        ny_t35 = ny_add(i, 1, 7, 5);
                         j = nyU_web_u2e__find(cs, ny_t35, "`");
-ny_t36 = ny_add(i, 1, 5, 5);
-ny_t37 = ny_str_slice(s, ny_t36, j, 5, 5);
+ny_t36 = ny_add(i, 1, 7, 5);
+ny_t37 = ny_str_slice(s, ny_t36, j, 7, 5);
 ny_t38 = nyU_web_u2e__esc(ny_t37);
 ny_t39 = "<code>" + ny_t38;
 ny_t40 = ny_t39 + "</code>";
 {
 o += ny_t40;
 }
-i = ny_add(j, 1, 5, 5);
+i = ny_add(j, 1, 7, 5);
 } else {
 ny_t42 = c === 91;
 if (ny_t42) {
@@ -980,23 +1292,23 @@ ny_t41 = nyU_web_u2e__link_end(cs, i);
 ny_t42 = ny_t41 > i;
 }
 if (ny_t42) {
-ny_t44 = ny_add(i, 1, 5, 5);
+ny_t44 = ny_add(i, 1, 7, 5);
 mid = nyU_web_u2e__find(cs, ny_t44, "](");
 end = nyU_web_u2e__link_end(cs, i);
-ny_t47 = ny_add(mid, 2, 5, 5);
-url = ny_str_slice(s, ny_t47, end, 5, 5);
+ny_t47 = ny_add(mid, 2, 7, 5);
+url = ny_str_slice(s, ny_t47, end, 7, 5);
 ny_t48 = nyU_web_u2e__link_attrs(url);
 ny_t49 = "<a" + ny_t48;
 ny_t50 = ny_t49 + ">";
-ny_t51 = ny_add(i, 1, 5, 5);
-ny_t52 = ny_str_slice(s, ny_t51, mid, 5, 5);
+ny_t51 = ny_add(i, 1, 7, 5);
+ny_t52 = ny_str_slice(s, ny_t51, mid, 7, 5);
 ny_t53 = nyU_web_u2e__md(ny_t52);
 ny_t54 = ny_t50 + ny_t53;
 ny_t55 = ny_t54 + "</a>";
 {
 o += ny_t55;
 }
-i = ny_add(end, 1, 5, 5);
+i = ny_add(end, 1, 7, 5);
 } else {
 ny_t57 = c === 58;
 if (ny_t57) {
@@ -1005,15 +1317,15 @@ ny_t57 = ny_t56 > i;
 }
 if (ny_t57) {
 ny_j_2 = nyU_web_u2e__icon_end(cs, i);
-ny_t60 = ny_add(i, 1, 5, 5);
-name = ny_str_slice(s, ny_t60, ny_j_2, 5, 5);
+ny_t60 = ny_add(i, 1, 7, 5);
+name = ny_str_slice(s, ny_t60, ny_j_2, 7, 5);
 ny_t61 = nyU_web_u2e__icon_kind(name);
 if (ny_t61 > 0) {
 ny_t62 = nyU_web_u2e__icon(name);
 {
 o += ny_t62;
 }
-i = ny_add(ny_j_2, 1, 5, 5);
+i = ny_add(ny_j_2, 1, 7, 5);
 } else {
 ny_t63 = nyU_web_u2e__icon_like(name);
 ny_t64 = ny_t63 !== "";
@@ -1025,7 +1337,7 @@ ny_t67 = nyU_web_u2e__icon(ny_t66);
 {
 o += ny_t67;
 }
-i = ny_add(ny_j_2, 1, 5, 5);
+i = ny_add(ny_j_2, 1, 7, 5);
 } else {
 ny_t68 = "text " + name;
 nyU_web_u2e__warn("E0389", ny_t68);
@@ -1034,7 +1346,7 @@ ny_t70 = nyU_web_u2e__esc(ny_t69);
 {
 o += ny_t70;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 7, 5);
 }
 }
 } else {
@@ -1043,7 +1355,7 @@ ny_t72 = nyU_web_u2e__esc(ny_t71);
 {
 o += ny_t72;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 7, 5);
 }
 }
 }
@@ -1068,15 +1380,15 @@ let ps, i, ny_t5, ok, k, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13;
 ps = ny_chars(pat);
 i = from;
 for (;; ) {
-ny_t5 = ny_add(i, ps.length, 5, 5);
+ny_t5 = ny_add(i, ps.length, 7, 5);
 if (!(ny_t5 <= cs.length)) break;
 ok = true;
 k = 0;
 ny_t8 = ps.length;
 for (; k < ny_t8; k = k + 1) {
-ny_t9 = ny_add(i, k, 5, 5);
-ny_t10 = ny_get(cs, ny_t9, 5, 5);
-ny_t11 = ny_get(ps, k, 5, 5);
+ny_t9 = ny_add(i, k, 7, 5);
+ny_t10 = ny_get(cs, ny_t9, 7, 5);
+ny_t11 = ny_get(ps, k, 7, 5);
 if (ny_t10 !== ny_t11) {
 ok = false;
 break;
@@ -1086,22 +1398,22 @@ if (ok) {
 ny_t12 = i;
 return ny_t12;
 }
-i = ny_add(i, 1, 5, 5);
+i = ny_add(i, 1, 7, 5);
 }
 ny_t13 = -1 + 0;
 return ny_t13;
 }
 function nyU_web_u2e__link_end(cs, at) {
 let mid, ny_t3, depth, k, c;
-ny_t3 = ny_add(at, 1, 5, 5);
+ny_t3 = ny_add(at, 1, 7, 5);
 mid = nyU_web_u2e__find(cs, ny_t3, "](");
 if (mid < 0) {
 return -1 + 0;
 }
 depth = 0;
-k = ny_add(mid, 2, 5, 5);
+k = ny_add(mid, 2, 7, 5);
 while (k < cs.length) {
-c = ny_get(cs, k, 5, 5);
+c = ny_get(cs, k, 7, 5);
 if (c === 10) {
 return -1 + 0;
 }
@@ -1119,41 +1431,41 @@ return -1 + 0;
 }
 function nyU_web_u2e__icon_end(cs, at) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, j, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16;
-ny_t2 = ny_add(at, 1, 5, 5);
+ny_t2 = ny_add(at, 1, 7, 5);
 ny_t6 = ny_t2 >= cs.length;
 if (!ny_t6) {
-ny_t3 = ny_add(at, 1, 5, 5);
-ny_t4 = ny_get(cs, ny_t3, 5, 5);
+ny_t3 = ny_add(at, 1, 7, 5);
+ny_t4 = ny_get(cs, ny_t3, 7, 5);
 ny_t5 = nyU_web_u2e__lower(ny_t4);
 ny_t6 = !ny_t5;
 }
 if (ny_t6) {
 return -1 + 0;
 }
-j = ny_add(at, 1, 5, 5);
+j = ny_add(at, 1, 7, 5);
 for (;; ) {
 ny_t14 = j < cs.length;
 if (ny_t14) {
-ny_t8 = ny_get(cs, j, 5, 5);
+ny_t8 = ny_get(cs, j, 7, 5);
 ny_t9 = nyU_web_u2e__lower(ny_t8);
 ny_t11 = ny_t9;
 if (!ny_t11) {
-ny_t10 = ny_get(cs, j, 5, 5);
+ny_t10 = ny_get(cs, j, 7, 5);
 ny_t11 = ny_char_is_digit(ny_t10);
 }
 ny_t13 = ny_t11;
 if (!ny_t13) {
-ny_t12 = ny_get(cs, j, 5, 5);
+ny_t12 = ny_get(cs, j, 7, 5);
 ny_t13 = ny_t12 === 45;
 }
 ny_t14 = ny_t13;
 }
 if (!ny_t14) break;
-j = ny_add(j, 1, 5, 5);
+j = ny_add(j, 1, 7, 5);
 }
 ny_t16 = j < cs.length;
 if (ny_t16) {
-ny_t15 = ny_get(cs, j, 5, 5);
+ny_t15 = ny_get(cs, j, 7, 5);
 ny_t16 = ny_t15 === 58;
 }
 if (ny_t16) {
@@ -1195,15 +1507,15 @@ u = ny_str_trim(url);
 scheme = nyU_web_u2e__scheme(u);
 if (((((scheme !== "") && (scheme !== "http")) && (scheme !== "https")) && (scheme !== "mailto")) && (scheme !== "tel")) {
 ny_t3 = "the link `" + u;
-        ny_t4 = ny_t3 + "` uses the scheme `";
+        ny_t4 = ny_t3 + "` uses the forbidden scheme `";
         ny_t5 = ny_t4 + scheme;
-        ny_t6 = ny_t5 + ":`, which a page may not link to";
+        ny_t6 = ny_t5 + ":`";
 nyU_web_u2e__err("E0381", ny_t6);
 ny_t7 = "#";
 return ny_t7;
 }
 if (scheme === "tel") {
-ny_t8 = ny_str_replace(u, " ", "", 5, 5);
+ny_t8 = ny_str_replace(u, " ", "", 7, 5);
 ny_t9 = nyU_web_u2e__attr(ny_t8);
 return ny_t9;
 }
@@ -1231,10 +1543,10 @@ let cs, i, c, ny_t4, ny_t5, ny_t6, ny_t7;
 cs = ny_chars(u);
 i = 0;
 while (i < cs.length) {
-c = ny_get(cs, i, 5, 5);
+c = ny_get(cs, i, 7, 5);
 if (c === 58) {
 if (i > 0) {
-ny_t4 = ny_str_slice(u, 0, i, 5, 5);
+ny_t4 = ny_str_slice(u, 0, i, 7, 5);
 ny_t5 = ny_str_lower(ny_t4);
 } else {
 ny_t5 = "";
@@ -1296,21 +1608,21 @@ function nyU_web_u2e__err(code, msg) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:error " + code;
 ny_t3 = ny_t2 + " ";
-ny_t4 = ny_str_replace(msg, "*/", "* /", 5, 5);
-ny_t5 = ny_str_replace(ny_t4, "\n", " ", 5, 5);
+ny_t4 = ny_str_replace(msg, "*/", "* /", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 7, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
-ny_std_web__css(ny_t7, 5, 5);
+ny_std_web__css(ny_t7, 7, 5);
 }
 function nyU_web_u2e__warn(code, what) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7;
 ny_t2 = "/*! nyra:warn " + code;
 ny_t3 = ny_t2 + " ";
-ny_t4 = ny_str_replace(what, "*/", "* /", 5, 5);
-ny_t5 = ny_str_replace(ny_t4, "\n", " ", 5, 5);
+ny_t4 = ny_str_replace(what, "*/", "* /", 7, 5);
+ny_t5 = ny_str_replace(ny_t4, "\n", " ", 7, 5);
 ny_t6 = ny_t3 + ny_t5;
 ny_t7 = ny_t6 + " */";
-ny_std_web__css(ny_t7, 5, 5);
+ny_std_web__css(ny_t7, 7, 5);
 }
 function nyU_web_u2e__color(c, _web) {
 let ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10;
@@ -1340,10 +1652,10 @@ return ny_t10;
 }
 function nyU_web_u2e__css_value(v) {
 let ny_t1, ny_t2, ny_t3, ny_t4;
-ny_t1 = ny_str_replace(v, ";", "", 5, 5);
-ny_t2 = ny_str_replace(ny_t1, "}", "", 5, 5);
-ny_t3 = ny_str_replace(ny_t2, "{", "", 5, 5);
-ny_t4 = ny_str_replace(ny_t3, "<", "", 5, 5);
+ny_t1 = ny_str_replace(v, ";", "", 7, 5);
+ny_t2 = ny_str_replace(ny_t1, "}", "", 7, 5);
+ny_t3 = ny_str_replace(ny_t2, "{", "", 7, 5);
+ny_t4 = ny_str_replace(ny_t3, "<", "", 7, 5);
 return ny_t4;
 }
 function nyU_web_u2e__word(w) {
@@ -1365,9 +1677,9 @@ return o;
 }
 function nyU_web_u2e__size(s) {
 let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5, ny_t6;
-ny_t1 = ny_std_text_is_float(s, 5, 5);
+ny_t1 = ny_std_text_is_float(s, 7, 5);
 if (ny_t1) {
-ny_t3 = ny_str_to_float(s, 5, 5);
+ny_t3 = ny_str_to_float(s, 7, 5);
 ny_t2 = new nyS_Opt_of(true, ny_t3);
 } else {
 ny_t2 = new nyS_Opt_of(false, 0.0);
@@ -1377,7 +1689,7 @@ if (!ny_eq(ny_t2, ny_t4)) {
 ny_t6 = s + "rem";
 } else {
 ny_t5 = nyU_web_u2e__css_value(s);
-ny_t6 = ny_str_replace(ny_t5, "\"", "", 5, 5);
+ny_t6 = ny_str_replace(ny_t5, "\"", "", 7, 5);
 }
 return ny_t6;
 }
@@ -1452,7 +1764,7 @@ return ny_t3;
 close = ny_str_index_of(html, ">");
 ny_t8 = close < 0;
 if (!ny_t8) {
-ny_t5 = ny_str_slice(html, 0, close, 5, 5);
+ny_t5 = ny_str_slice(html, 0, close, 7, 5);
 ny_t6 = " " + name;
 ny_t7 = ny_t6 + "=";
 ny_t8 = ny_t5.includes(ny_t7);
@@ -1465,16 +1777,16 @@ end = 1;
 for (;; ) {
 ny_t12 = end < close;
 if (ny_t12) {
-ny_t11 = ny_str_slice(html, end, end + 1, 5, 5);
+ny_t11 = ny_str_slice(html, end, end + 1, 7, 5);
 ny_t12 = !" \n\t/".includes(ny_t11);
 }
 if (!ny_t12) break;
 end = end + 1;
 }
-ny_t13 = ny_str_slice(html, 0, end, 5, 5);
+ny_t13 = ny_str_slice(html, 0, end, 7, 5);
 ny_t14 = nyU_web_u2e__at(name, value);
 ny_t15 = ny_t13 + ny_t14;
-ny_t16 = ny_str_slice(html, end, ny_len(html), 5, 5);
+ny_t16 = ny_str_slice(html, end, ny_len(html), 7, 5);
 ny_t17 = ny_t15 + ny_t16;
 return ny_t17;
 }
@@ -1520,6 +1832,170 @@ all.push(ny_t8);
 }
 return all;
 }
+function nyU_web_u2e__say(key, _web) {
+let ny_t2, ny_t3, ny_t4;
+if (_web.say.has(ny_ik(key))) {
+ny_t2 = ny_mget(_web.say, key, "s", 7, 5);
+return ny_t2;
+}
+if (_web.lang === "cs") {
+ny_t3 = nyU_web_u2e__say_cs(key);
+return ny_t3;
+}
+ny_t4 = nyU_web_u2e__say_en(key);
+return ny_t4;
+}
+function nyU_web_u2e__say_en(key) {
+let ny_t1, ny_t2;
+ny_t1 = key;
+ny_t2 = (ny_t1 === "open") ? "Open now" : ((ny_t1 === "closed") ? "Closed now" : ((ny_t1 === "shut") ? "Closed" : ((ny_t1 === "hours") ? "Opening hours" : ((ny_t1 === "more") ? "More" : ((ny_t1 === "down") ? "Scroll down" : ((ny_t1 === "map") ? "Map" : ((ny_t1 === "show") ? "Show map" : ((ny_t1 === "go") ? "Open in Google Maps" : ((ny_t1 === "menu") ? "Open menu" : ((ny_t1 === "close") ? "Close menu" : ((ny_t1 === "nav") ? "Main navigation" : ((ny_t1 === "skip") ? "Skip to content" : ((ny_t1 === "back") ? "Back" : ((ny_t1 === "all") ? "All" : ((ny_t1 === "filter") ? "Filter photos" : ((ny_t1 === "zoom") ? "Enlarge" : ((ny_t1 === "prev") ? "Previous" : ((ny_t1 === "next") ? "Next" : ((ny_t1 === "dismiss") ? "Close" : ((ny_t1 === "send") ? "Send message" : ((ny_t1 === "mail_note") ? "The message opens in your e-mail app, ready to send." : ((ny_t1 === "done") ? "Your message is ready" : ((ny_t1 === "done_text") ? "We opened it in your e-mail app: just send it from there." : ((ny_t1 === "edit") ? "Edit message" : ((ny_t1 === "top") ? "Back to top" : ((ny_t1 === "links") ? "Links" : ((ny_t1 === "contact") ? "Contact" : key)))))))))))))))))))))))))));
+return ny_t2;
+}
+function nyU_web_u2e__say_cs(key) {
+let ny_t1, ny_t2, ny_t3, ny_t4, ny_t5, ny_t6, ny_t7, ny_t8, ny_t9, ny_t10, ny_t11, ny_t12, ny_t13, ny_t14, ny_t15, ny_t16, ny_t17, ny_t18, ny_t19, ny_t20, ny_t21, ny_t22, ny_t23, ny_t24, ny_t25, ny_t26, ny_t27, ny_t28, ny_t29;
+ny_t1 = key;
+if (ny_t1 === "open") {
+ny_t29 = "Nyní otevřeno";
+} else {
+if (ny_t1 === "closed") {
+ny_t28 = "Nyní zavřeno";
+} else {
+if (ny_t1 === "shut") {
+ny_t27 = "Zavřeno";
+} else {
+if (ny_t1 === "hours") {
+ny_t26 = "Otevírací doba";
+} else {
+if (ny_t1 === "more") {
+ny_t25 = "Více";
+} else {
+if (ny_t1 === "down") {
+ny_t24 = "Posunout dolů";
+} else {
+if (ny_t1 === "map") {
+ny_t23 = "Mapa";
+} else {
+if (ny_t1 === "show") {
+ny_t22 = "Zobrazit mapu";
+} else {
+if (ny_t1 === "go") {
+ny_t21 = "Otevřít v Google Maps";
+} else {
+if (ny_t1 === "menu") {
+ny_t20 = "Otevřít menu";
+} else {
+if (ny_t1 === "close") {
+ny_t19 = "Zavřít menu";
+} else {
+if (ny_t1 === "nav") {
+ny_t18 = "Hlavní navigace";
+} else {
+if (ny_t1 === "skip") {
+ny_t17 = "Přeskočit na obsah";
+} else {
+if (ny_t1 === "back") {
+ny_t16 = "Zpět";
+} else {
+if (ny_t1 === "all") {
+ny_t15 = "Vše";
+} else {
+if (ny_t1 === "filter") {
+ny_t14 = "Filtrovat fotografie";
+} else {
+if (ny_t1 === "zoom") {
+ny_t13 = "Zvětšit";
+} else {
+if (ny_t1 === "prev") {
+ny_t12 = "Předchozí";
+} else {
+if (ny_t1 === "next") {
+ny_t11 = "Další";
+} else {
+if (ny_t1 === "dismiss") {
+ny_t10 = "Zavřít";
+} else {
+if (ny_t1 === "send") {
+ny_t9 = "Odeslat zprávu";
+} else {
+if (ny_t1 === "mail_note") {
+ny_t8 = "Zpráva se otevře ve vašem e-mailu, odkud ji odešlete.";
+} else {
+if (ny_t1 === "done") {
+ny_t7 = "Zpráva je připravená";
+} else {
+if (ny_t1 === "done_text") {
+ny_t6 = "Otevřeli jsme ji ve vašem e-mailovém programu, stačí ji odeslat.";
+} else {
+if (ny_t1 === "edit") {
+ny_t5 = "Upravit zprávu";
+} else {
+if (ny_t1 === "top") {
+ny_t4 = "Nahoru";
+} else {
+if (ny_t1 === "links") {
+ny_t3 = "Odkazy";
+} else {
+if (ny_t1 === "contact") {
+ny_t2 = "Kontakt";
+} else {
+ny_t2 = nyU_web_u2e__say_en(key);
+}
+ny_t3 = ny_t2;
+}
+ny_t4 = ny_t3;
+}
+ny_t5 = ny_t4;
+}
+ny_t6 = ny_t5;
+}
+ny_t7 = ny_t6;
+}
+ny_t8 = ny_t7;
+}
+ny_t9 = ny_t8;
+}
+ny_t10 = ny_t9;
+}
+ny_t11 = ny_t10;
+}
+ny_t12 = ny_t11;
+}
+ny_t13 = ny_t12;
+}
+ny_t14 = ny_t13;
+}
+ny_t15 = ny_t14;
+}
+ny_t16 = ny_t15;
+}
+ny_t17 = ny_t16;
+}
+ny_t18 = ny_t17;
+}
+ny_t19 = ny_t18;
+}
+ny_t20 = ny_t19;
+}
+ny_t21 = ny_t20;
+}
+ny_t22 = ny_t21;
+}
+ny_t23 = ny_t22;
+}
+ny_t24 = ny_t23;
+}
+ny_t25 = ny_t24;
+}
+ny_t26 = ny_t25;
+}
+ny_t27 = ny_t26;
+}
+ny_t28 = ny_t27;
+}
+ny_t29 = ny_t28;
+}
+return ny_t29;
+}
 function nyU_web_u2e__icon_kind(name) {
 let icons, brands, key, ny_t4, ny_t5;
 icons = "|accessibility|activity|alert-circle|alert-triangle|apple|arrow-down|arrow-left|arrow-right|arrow-up|arrow-up-right|at-sign|award|axe|baby|badge-check|banknote|bar-chart|bar-chart-2|bar-chart-3|beer|bell|bike|book-open|bookmark|brick-wall|briefcase|building|building-2|bus|cake|cake-slice|calendar|calendar-days|camera|candy|car|carrot|cat|chart-column|chart-line|check|check-check|check-circle|check-circle-2|chef-hat|cherry|chevron-down|chevron-left|chevron-right|chevron-up|chevrons-down|church|circle|circle-alert|circle-check|circle-help|circle-x|clipboard-list|clock|cloud|cloud-sun|cloud-upload|code|coffee|coins|compass|construction|cookie|cpu|credit-card|croissant|crown|cup-soda|database|dog|dollar-sign|donut|download|drill|droplet|droplets|dumbbell|egg|ellipsis|euro|expand|external-link|eye|factory|file-text|film|flag|flame|flower|flower-2|fuel|gem|gift|globe|graduation-cap|grid|grid-3x3|hammer|hand-heart|handshake|hard-hat|headphones|heart|help-circle|history|home|hotel|hourglass|house|ice-cream-cone|image|images|info|key|landmark|languages|laptop|layers|layout-grid|leaf|lightbulb|line-chart|link|link-2|list-checks|lock|mail|mail-open|map|map-pin|maximize-2|medal|menu|message-circle|message-square|mic|minimize-2|minus|monitor|moon|more-horizontal|mountain|move-right|music|navigation|package|paint-roller|paintbrush|palette|party-popper|pen-tool|pencil|percent|phone|phone-call|piggy-bank|pill|pizza|plane|play|plus|printer|quote|receipt|recycle|rocket|ruler|sandwich|scale|school|scissors|search|send|server|settings|share-2|shield|shield-check|ship|shopping-bag|shopping-cart|shovel|sliders-horizontal|smartphone|smile|snowflake|sparkles|sprout|star|stethoscope|store|sun|syringe|tag|target|tent|terminal|thermometer|thumbs-up|timer|train|train-front|tree-pine|trees|trending-up|triangle-alert|trophy|truck|tv|umbrella|upload|user|users|utensils|verified|video|wallet|warehouse|waves|wheat|wifi|wind|wine|wrench|x|x-circle|zap|zoom-in|";
@@ -1539,8 +2015,8 @@ if (at < 0) {
 ny_t5 = "";
 return ny_t5;
 }
-rest = ny_str_slice(pairs, (at + ny_len(name)) + 2, ny_len(pairs), 5, 5);
-ny_t7 = ny_str_slice(rest, 0, ny_str_index_of(rest, "|"), 5, 5);
+rest = ny_str_slice(pairs, (at + ny_len(name)) + 2, ny_len(pairs), 7, 5);
+ny_t7 = ny_str_slice(rest, 0, ny_str_index_of(rest, "|"), 7, 5);
 return ny_t7;
 }
 function nyU_web_u2e__on(m) {
@@ -1549,31 +2025,63 @@ ny_t1 = ny_jenc(m, nyS_Msg);
 return ny_t1;
 }
 const ny_st = {
-"kind": ny_from("vše", "s"),
-"sent": ny_from(0, "i"),
-"_web": ny_from({"name":"Pekárna Hana","url":"","lang":"cs","tz":"","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#7A3E1D","logo":"","say":{},"palette":{}}, nyS_WebConfig),
-"breads": ny_from([{"name":"Kváskový chléb","kind":"chléb","price":89},{"name":"Croissant","kind":"sladké","price":35},{"name":"Bageta","kind":"chléb","price":29}], ["a", nyS_Bread]),
+"kind": ny_from("all", "s"),
+"photos": ny_from(false, "b"),
+"_web": ny_from({"name":"Mill House","url":"","lang":"en","tz":"Europe/Prague","desc":"","share":"","style":"soft","motion":"","transition":"","font":"Inter","display":"","primary":"#5B3A29","logo":"","say":{},"palette":{}}, nyS_WebConfig),
+"rooms": ny_from([{"name":"River Room","kind":"double","photo":"photo-1.svg"},{"name":"Garden Room","kind":"double","photo":"photo-2.svg"},{"name":"Attic Room","kind":"family","photo":"photo-3.svg"}], ["a", nyS_Room]),
+"extras": ny_from(["Wi-Fi","Parking","Garden","Sauna","Bikes","Pets","Bakery","Canoes"], ["a", "s"]),
 };
 const ny_web = {
 update(text) {
 const ny_m = ny_from(JSON.parse(text), nyS_Msg);
 const ny_b0 = {v: ny_st["kind"]};
-const ny_b1 = {v: ny_st["sent"]};
+const ny_b1 = {v: ny_st["photos"]};
 update(ny_m, ny_b0, ny_b1);
 ny_st["kind"] = ny_b0.v;
-ny_st["sent"] = ny_b1.v;
+ny_st["photos"] = ny_b1.v;
 },
 views: {
-"menu": () => {
-const ny_r = nyU_web_u2e__render(menu(ny_st["_web"], ny_st["breads"], ny_st["kind"]));
+"roomList": () => {
+const ny_r = nyU_web_u2e__render(roomList(ny_st["_web"], ny_st["rooms"], ny_st["extras"], ny_st["kind"]));
 return ny_r;
 },
-"thanks": () => {
-const ny_r = nyU_web_u2e__render(thanks(ny_st["sent"]));
+"album": () => {
+const ny_r = nyU_web_u2e__render(album(ny_st["_web"], ny_st["photos"]));
 return ny_r;
 },
 },
 };
+const ny_imgs = {"photo-1.svg": ["img/photo-1-96fc7884.svg", "", 1600, 1000, ""], "photo-2.svg": ["img/photo-2-b3948750.svg", "", 1200, 1500, ""], "photo-3.svg": ["img/photo-3-6faa67c4.svg", "", 1600, 1100, ""], "photo-4.svg": ["img/photo-4-370fd493.svg", "", 1400, 1000, ""], "photo-5.svg": ["img/photo-5-9250f43c.svg", "", 1200, 1400, ""], "photo-6.svg": ["img/photo-6-156f6d51.svg", "", 1600, 1050, ""]};
+const ny_up = (() => {
+const s = typeof document !== "undefined" && document.currentScript;
+const a = (s && s.getAttribute("src")) || "";
+return a.slice(0, a.lastIndexOf("/") + 1);
+})();
+const NY_REFS = ["src", "href", "poster", "data-src", "data-full", "data-bg", "data-image"];
+function ny_img_fix(root) {
+for (const e of root.querySelectorAll("*")) {
+const img = e.nodeName === "IMG";
+const first = e.getAttribute("fetchpriority") === "high";
+for (const a of NY_REFS) {
+const v = e.getAttribute(a);
+const i = v !== null && Object.prototype.hasOwnProperty.call(ny_imgs, v) ? ny_imgs[v] : null;
+if (!i || (a === "href" && e.nodeName !== "A" && e.nodeName !== "LINK")) continue;
+e.setAttribute(a, ny_up + i[0]);
+if (!img || a !== "src") continue;
+if (i[2] && !e.hasAttribute("width") && !e.hasAttribute("height")) {
+e.setAttribute("width", i[2]);
+e.setAttribute("height", i[3]);
+}
+if (i[1] && !e.hasAttribute("srcset")) {
+e.setAttribute("srcset", i[1].split(", ").map((x) => ny_up + x).join(", "));
+if (!e.hasAttribute("sizes")) e.setAttribute("sizes", "100vw");
+}
+if (i[4] && !first) ny_class(e, [i[4]]);
+}
+if (img && !e.hasAttribute("loading") && !first) e.setAttribute("loading", "lazy");
+if (img && !e.hasAttribute("decoding")) e.setAttribute("decoding", "async");
+}
+}
 function ny_std_web__emit() {}
 function ny_std_web__uses() {}
 function ny_std_web__css() {}

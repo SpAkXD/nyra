@@ -200,6 +200,101 @@ fn css_block(code: &str) -> bool {
         })
 }
 
+/// Where a string that is not closed on its line ends, when it was written over several lines:
+/// the first `"` of a later line, if what follows it closes the call or the item (`")`, `",`) or
+/// ends the line. `nl` is the line break after the opening line.
+fn multiline_end(cs: &[char], nl: usize) -> Option<usize> {
+    if cs.get(nl) != Some(&'\n') {
+        return None;
+    }
+    let mut k = nl + 1;
+    for _ in 0..200 {
+        if k >= cs.len() {
+            return None;
+        }
+        let end = cs[k..].iter().position(|c| *c == '\n').map_or(cs.len(), |p| k + p);
+        if let Some(q) = (k..end).find(|&j| cs[j] == '"' && (j == k || cs[j - 1] != '\\')) {
+            let after: String = cs[q + 1..end].iter().collect();
+            let after = after.trim();
+            return (after.is_empty() || after.starts_with(')') || after.starts_with(',')).then_some(q);
+        }
+        k = end + 1;
+    }
+    None
+}
+
+/// The text of a string written over several lines as the text of a one-line string: each line
+/// break `\n`, and the braces of a `{ ... }` that spanned lines doubled (CSS rules: they were text,
+/// as a `{ }` that is not closed on its line is, and on one line they would insert a value).
+fn one_line(text: &str) -> String {
+    let cs: Vec<char> = text.chars().collect();
+    let mut double = vec![false; cs.len()];
+    let mut open: Vec<usize> = Vec::new();
+    for (i, c) in cs.iter().enumerate() {
+        match c {
+            '{' => open.push(i),
+            '}' => {
+                if let Some(o) = open.pop() {
+                    if cs[o..i].contains(&'\n') {
+                        double[o] = true;
+                        double[i] = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = String::new();
+    for (i, c) in cs.iter().enumerate() {
+        match c {
+            '\r' => {}
+            '\n' => out.push_str("\\n"),
+            _ if double[i] => {
+                out.push(*c);
+                out.push(*c);
+            }
+            _ => out.push(*c),
+        }
+    }
+    out
+}
+
+/// True for a line of CSS written as code (`h1 { color: red; }`, `color: red;`, `@media ...`),
+/// which belongs in `css("...")`.
+fn css_line(line: &str) -> bool {
+    let t = line.trim();
+    if t.starts_with("@media") || t.starts_with("@import") || t.starts_with("@font-face") || t.starts_with("@keyframes") {
+        return true;
+    }
+    let selector =
+        |s: &str| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || " .#,:>*_-[]=\"'()+~%".contains(c));
+    // `h1, .x { font-weight: 700; }` or `.card {` followed by declarations
+    if let Some((sel, body)) = t.split_once('{') {
+        let words = sel.trim();
+        let first = words.split([' ', ',', ':', '.', '>']).next().unwrap_or("");
+        const TAGS: &[&str] = &[
+            "html", "body", "h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "img", "nav", "header", "footer", "main", "div", "span",
+            "ul", "ol", "li", "button", "input", "textarea", "table", "td", "th", "form", "label", "strong", "em",
+        ];
+        let css_selector = words.starts_with(['.', '#', '*', ':', '[']) || TAGS.contains(&first);
+        let one_line_rule = body.contains(':') && body.contains(';') && body.trim_end().ends_with('}');
+        return selector(words) && !words.contains('(') && (one_line_rule || (body.trim().is_empty() && css_selector));
+    }
+    // `font-family: 'Fraunces', serif;`
+    if let Some((prop, value)) = t.strip_suffix(';').and_then(|d| d.split_once(':')) {
+        return prop.len() > 1
+            && prop.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+            && !value.trim().is_empty()
+            && !value.contains('=');
+    }
+    false
+}
+
+/// The column of the character at offset `p`.
+fn col_of(cs: &[char], p: usize) -> usize {
+    p - cs[..p].iter().rposition(|c| *c == '\n').map_or(0, |n| n + 1) + 1
+}
+
 pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let cs: Vec<char> = src.chars().collect();
     let mut toks: Vec<Token> = Vec::new();
@@ -229,6 +324,30 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
             i += 1;
             col += 1;
             continue;
+        }
+        // CSS written as code (it belongs in `css("...")`): one error for the rule or block, which
+        // is skipped, so its `;`, `#` and `@` are not errors too
+        if ends_line(&toks) && open.last() != Some(&true) {
+            let end = |k: usize| cs[k..].iter().position(|c| *c == '\n').map_or(cs.len(), |p| k + p);
+            let first: String = cs[i..end(i)].iter().collect();
+            if css_line(&first) {
+                errs.push(Diag::new("E0101", "CSS outside a string", span).hint("CSS goes in `css(\"...\")`"));
+                // the lines of the rule, up to the `}` that closes it
+                let mut depth = 0i32;
+                let mut k = i;
+                loop {
+                    let e = end(k);
+                    let text: String = cs[k..e].iter().collect();
+                    depth += text.matches('{').count() as i32 - text.matches('}').count() as i32;
+                    if depth <= 0 || e >= cs.len() {
+                        i = e;
+                        break;
+                    }
+                    line += 1;
+                    k = e + 1;
+                }
+                continue;
+            }
         }
         if c == '/' && next == '/' {
             while i < cs.len() && cs[i] != '\n' {
@@ -264,7 +383,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                         let hint = if text == "9223372036854775808" {
                             "the smallest `int` has no literal: write `-9223372036854775807 - 1`".to_string()
                         } else {
-                            format!("keep `int` values within 9223372036854775807, or write a float: `{text}.0`")
+                            format!("write a float: `{text}.0`")
                         };
                         errs.push(
                             Diag::new(
@@ -325,6 +444,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
         if c == '"' {
             i += 1;
             col += 1;
+            let str_start = i;
             let mut parts: Vec<StrPart> = Vec::new();
             let mut s = String::new();
             let mut closed = false;
@@ -357,9 +477,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                                 'u' | 'x' => format!(
                                     "Nyra has no `\\{esc}` escape: type the character itself (strings are UTF-8), e.g. \"\u{e9}\""
                                 ),
-                                _ => format!(
-                                    "the escapes are `\\n` `\\t` `\\r` `\\0` `\\\\` and `\\\"`; to write a literal backslash, double it: `\\\\{esc}`"
-                                ),
+                                _ => "escapes: `\\n` `\\t` `\\r` `\\0` `\\\\` `\\\"`; a backslash is `\\\\`".to_string(),
                             };
                             // `\{` and `\'` have one meaning: a literal brace, a quote
                             let fixed = match esc {
@@ -455,11 +573,28 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
                 i += 1;
                 col += 1;
             }
+            // a string written over several lines (`css("` ... `")`): one error, with the line breaks
+            // written as `\n` as the fix, and the lexer goes on after its closing quote
+            if let Some(end) = (!closed).then(|| multiline_end(&cs, i)).flatten() {
+                let old: String = cs[str_start..end].iter().collect();
+                let text = one_line(&old);
+                let lines = old.matches('\n').count();
+                let close = Span { line: line + lines, col: col_of(&cs, end) };
+                errs.push(
+                    Diag::new("E0002", format!("a string over {} lines: a string ends on its line", lines + 1), span)
+                        .hint("write each line break as `\\n`")
+                        .fix(vec![Edit::range(Span { line: span.line, col: span.col + 1 }, close, &old, text)]),
+                );
+                toks.push(Token { tok: Tok::Str(old), span });
+                line = close.line;
+                col = close.col + 1;
+                i = end + 1;
+                continue;
+            }
             if !closed {
                 errs.push(
-                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span).hint(
-                        "add `\"` at the end of the text; a string cannot continue on the next line (write `\\n` for a line break)",
-                    ),
+                    Diag::new("E0002", "unterminated string: the closing `\"` is missing before the end of the line", span)
+                        .hint("close it with `\"` on this line (a line break is `\\n`)"),
                 );
             }
             let tok = if parts.is_empty() {
@@ -753,8 +888,7 @@ fn optional_type(cs: &[char], i: usize) -> Option<String> {
 /// statements on one line it becomes a line break. Inside `( )` or in the header of a `for`, `while`
 /// or `if` (`for i = 0; i < n; i++ {`) there is no fix: that line needs rewriting, not a deletion.
 fn semicolon(cs: &[char], i: usize, span: Span, paren_depth: usize) -> Diag {
-    let d = Diag::new("E0005", "unexpected `;`: Nyra has no semicolons", span)
-        .hint("delete the `;`: a new line already ends a statement, so put each statement on its own line");
+    let d = Diag::new("E0005", "unexpected `;`: Nyra has no semicolons", span).hint("a new line ends a statement");
     let rest: String = cs[i + 1..].iter().take_while(|c| **c != '\n').collect();
     let after = rest.trim_start();
     let line_start = cs[..i].iter().rposition(|c| *c == '\n').map_or(0, |p| p + 1);

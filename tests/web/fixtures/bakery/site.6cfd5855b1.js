@@ -1427,9 +1427,9 @@ u = ny_str_trim(url);
 scheme = nyU_web_u2e__scheme(u);
 if (((((scheme !== "") && (scheme !== "http")) && (scheme !== "https")) && (scheme !== "mailto")) && (scheme !== "tel")) {
 ny_t3 = "the link `" + u;
-        ny_t4 = ny_t3 + "` uses the scheme `";
+        ny_t4 = ny_t3 + "` uses the forbidden scheme `";
         ny_t5 = ny_t4 + scheme;
-        ny_t6 = ny_t5 + ":`, which a page may not link to";
+        ny_t6 = ny_t5 + ":`";
 nyU_web_u2e__err("E0381", ny_t6);
 ny_t7 = "#";
 return ny_t7;

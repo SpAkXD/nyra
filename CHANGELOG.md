@@ -91,6 +91,23 @@ Editors and docs
 - `docs/AGENTS.md`: an `AGENTS.md` to copy into your own project, so coding agents (Codex, Cursor, Claude Code
   through `CLAUDE.md`, ...) know how to check, run and fix Nyra and which mistakes to avoid.
 
+Errors for agents
+- **Every certain fix is applied, also when other errors remain.** `check`, `run`, `build`, the MCP tools and the
+  playground repair them in memory and report only what is left as errors, at its places in the file as it is;
+  the repairs are warnings with their `fix` edits (in the same places) and `"exact":true`. `--fix` writes them.
+- **Shorter messages and hints** (about a third fewer tokens; a test keeps each under a budget): with a fix, the
+  hint says only why; a web function by its bare name; no file paths. An unknown parameter of a web function names
+  the close parameter, the functions that have it (`icon` is an option of `card`, `button`, ...), or the parameter
+  names; an unknown icon names the three closest icons by meaning and spelling (`siren`: `bell`, `triangle-alert`,
+  `phone-call`).
+- **One error per mistake:** the same mistake in several places (an undefined struct and its uses, a comma after each
+  match arm) is one diagnostic that lists the other lines; errors come first and in the order of the file, and
+  `= explain` once per code. A string written over several lines, a tuple with field names and CSS written as code
+  are each one error (the first with a fix), not a wall of follow-ups.
+- Opening hours accept a note in parentheses (`"8:00–12:00 (tyres only)"`), and a row only the table shows is no
+  error (E0390 is for the badge). New warning E0391: a page reads state that `update` changes outside a live view.
+- `nyra help agent` prints every command on one line, for agents.
+
 ## v0.7.0 (2026-10-10)
 
 Speed

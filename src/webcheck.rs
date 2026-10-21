@@ -90,12 +90,11 @@ pub fn icon_like(name: &str) -> Option<&'static str> {
 /// literal) and while the site is built (a value from data), so it is given once.
 pub fn icon_warning(name: &str, text: bool, span: Span) -> Diag {
     let shown = if text { format!(":{name}:") } else { name.to_string() };
-    let known = icons();
     match icon_like(name) {
         Some(like) => {
             let what = if text { format!("`:{like}:`") } else { format!("`{like}`") };
             let d = Diag::new("E0389", format!("unknown icon `{shown}`: drawn as `{like}`"), span)
-                .hint(format!("`{name}` is not a name of the icon set (Lucide names): write {what}"));
+                .hint(format!("the Lucide name is {what}"));
             if text {
                 d
             } else {
@@ -103,23 +102,195 @@ pub fn icon_warning(name: &str, text: bool, span: Span) -> Diag {
             }
         }
         None => {
-            let near = known.iter().map(|i| (edits(name, i), i)).filter(|(d, _)| *d <= 2).min();
-            // else the icons that share a word with it (`alert-octagon`: `circle-alert`, `triangle-alert`)
-            let parts: Vec<&str> = name.split('-').filter(|p| p.len() >= 3).collect();
-            let kin: Vec<String> =
-                known.iter().filter(|i| i.split('-').any(|p| parts.contains(&p))).take(4).map(|i| format!("`{i}`")).collect();
-            let guess = match near {
-                Some((_, i)) => format!("did you mean `{i}`? "),
-                None if !kin.is_empty() => format!("the set has {}; ", kin.join(", ")),
-                None => String::new(),
-            };
+            let guesses: Vec<String> = icon_guesses(name).iter().map(|i| format!("`{i}`")).collect();
             let drawn = if text { "shown as it is written" } else { "drawn as a plain circle" };
-            Diag::new("E0389", format!("unknown icon `{shown}`: {drawn}"), span).hint(format!(
-                "{guess}the icons are a subset of Lucide: `phone`, `mail`, `map-pin`, `clock`, `calendar`, `star`, `heart`, `check`, `circle-alert`, `triangle-alert`, `activity`, `users`, ... (src/std/web_icons.nyra lists them){}",
-                if text { "; write `\\\\:` for a colon that starts no icon" } else { "" }
-            ))
+            let hint = match guesses.len() {
+                0 => "the icons are Lucide names, e.g. `star`, `check`, `heart`".to_string(),
+                1 => format!("use {}", guesses[0]),
+                n => format!("use {} or {}", guesses[..n - 1].join(", "), guesses[n - 1]),
+            };
+            Diag::new("E0389", format!("unknown icon `{shown}`: {drawn}"), span).hint(hint)
         }
     }
+}
+
+/// What common words mean as icons of the set: for an unknown icon name, the icons that say the
+/// same (`siren`: `bell`, `triangle-alert`, ...). One line per meaning: the words, `:`, the icons.
+const MEANINGS: &str = "\
+alarm siren emergency urgent alert sos: bell triangle-alert phone-call
+danger warning caution hazard error problem: triangle-alert circle-alert shield
+ambulance hospital clinic medical medicine health healthcare: stethoscope activity heart
+doctor nurse physician: stethoscope user activity
+heart-pulse heartbeat pulse cardio: activity heart stethoscope
+tooth teeth dental dentist implant braces orthodontics: smile sparkles stethoscope
+pill pharmacy drug drugs prescription capsule: pill stethoscope syringe
+vaccine injection needle vaccination: syringe stethoscope shield-check
+clean cleaning hygiene whitening polish: sparkles droplets shield-check
+fitness gym workout exercise weight weights muscle strength training barbell: dumbbell activity trophy
+run running runner cardio-run marathon jog: activity timer trending-up
+yoga meditation pilates stretch mindfulness: leaf sun heart
+spa massage wellness relax relaxation sauna: leaf droplets sparkles
+car auto vehicle automobile: car truck wrench
+repair mechanic garage service servicing maintenance fix: wrench car settings
+tire tyre tires tyres wheel wheels: car circle settings
+engine motor gearbox: settings car zap
+oil lubricant fluid: droplet fuel car
+gauge speed speedometer dashboard performance meter: activity timer trending-up
+battery charge charging electric electricity power energy plug: zap fuel sun
+parking park: car map-pin building
+square box-shape rectangle: layout-grid grid circle
+circle-dot dot point bullet record: circle target circle-check
+calculator calculate math accounting finance quote-price estimate: percent receipt chart-column
+calendar-check booking book appointment reservation reserve schedule scheduled: calendar calendar-days clock
+date event events day: calendar calendar-days clock
+time hour hours opening open-hours: clock timer calendar
+paint-bucket paint painting painter decor decorating: paint-roller paintbrush palette
+room rooms bed bedroom sleep stay accommodation hostel motel inn lodging guesthouse: hotel house moon
+guest guests visitor visitors: users user hand-heart
+family kids children child parents: users baby heart
+bath bathroom shower toilet: droplets droplet waves
+pool swim swimming swimmer: waves droplets sun
+beach sea ocean lake river water: waves droplet umbrella
+hike hiking trail trek climbing climb: mountain compass tree-pine
+nature garden gardening plant plants eco green outdoor: leaf sprout flower
+forest tree woods park-trees: trees tree-pine leaf
+weather forecast climate: cloud-sun sun cloud
+rain rainy storm: umbrella cloud droplets
+cold winter snow ice frozen freezer: snowflake thermometer cloud
+hot heat warm temperature heating thermostat: thermometer flame sun
+fire fireplace flame-fire bbq grill: flame utensils chef-hat
+internet online wireless connection network: wifi globe server
+television tv-screen screen display: tv monitor laptop
+breakfast food meal restaurant dining eat kitchen lunch dinner: utensils coffee chef-hat
+cook cooking chef cuisine: chef-hat utensils flame
+bakery bread baker baking: croissant wheat cake
+pastry dessert sweet sweets: cake-slice cookie donut
+drink drinks bar cocktail cocktails pub: wine beer cup-soda
+cafe tea espresso latte: coffee cup-soda croissant
+fruit fruits: apple cherry carrot
+vegetable vegetables vegan vegetarian organic veggie salad: carrot leaf sprout
+pet pets animal animals puppy kitten: dog cat heart
+vet veterinary veterinarian: dog stethoscope heart
+money price prices pricing cost costs payment pay cash fee fees: banknote credit-card wallet
+discount sale offer offers deal deals promo promotion coupon voucher: percent tag gift
+shop shopping buy store cart basket: shopping-bag shopping-cart store
+delivery shipping transport van courier: truck package map-pin
+parcel box boxes: package truck gift
+location address place where directions map-marker pin: map-pin map navigation
+contact call telephone: phone mail message-circle
+email letter newsletter inbox: mail send message-circle
+message chat sms text comment comments: message-circle message-square send
+support help question questions faq: circle-help message-circle info
+about information details: info file-text circle-help
+success done ok complete completed approved yes tick: circle-check check badge-check
+close cancel remove delete no: x circle-x minus
+security secure safe safety protect protection insurance guarantee warranty: shield-check shield lock
+private password login account-lock privacy: lock key shield
+access entry door keys: key lock house
+award prize quality best certificate certified certification accredited: award medal badge-check
+winner champion win victory first: trophy medal crown
+premium vip luxury exclusive royal: crown gem sparkles
+rating review reviews favorite favourite stars: star thumbs-up heart
+like love loved: heart thumbs-up smile
+team staff people community members crew employees: users user handshake
+person profile account owner member customer client: user users smile
+customers clients: users handshake star
+partner partners partnership cooperation agreement: handshake users briefcase
+care charity donate donation volunteer heart-handshake caring: hand-heart heart handshake
+education school learn learning course courses training class classes lesson student teacher: graduation-cap book-open school
+book books read reading library blog article news: book-open file-text bookmark
+document documents file pdf contract form paperwork: file-text clipboard-list printer
+list checklist tasks todo plan steps: list-checks clipboard-list check
+work job jobs business career careers office services: briefcase building handshake
+tool tools handyman plumbing plumber electrician: wrench hammer drill
+construction builder building-site renovation build: hard-hat hammer construction
+measure size ruler dimensions: ruler scale maximize-2
+design creative art artist drawing: palette pen-tool paintbrush
+photo photos photography picture pictures gallery camera-photo: camera image images
+video videos film movie movies cinema: video film play
+music song songs audio sound concert band: music headphones mic
+podcast microphone speaker voice: mic headphones music
+computer pc desktop: monitor laptop cpu
+mobile app cellphone: smartphone phone wifi
+developer programming software dev coding: code terminal cpu
+hosting server data storage-data backup: server database cloud
+cloud-storage upload-file: cloud-upload upload cloud
+settings config configuration options preferences gear: settings sliders-horizontal wrench
+chart stats statistics analytics growth graph report results: chart-column chart-line trending-up
+goal aim focus mission: target trophy rocket
+launch start fast quick speed-fast: rocket zap timer
+idea innovation tip tips insight: lightbulb sparkles rocket
+new magic special shine sparkle sparkling: sparkles star gem
+gift present gifts: gift party-popper heart
+party celebration birthday wedding anniversary: party-popper cake gift
+travel trip flight airport vacation holiday holidays tour tours: plane map compass
+rail railway: train-front map-pin ticket
+bicycle cycling cyclist bikes: bike map-pin activity
+boat ferry cruise sailing: ship waves anchor
+camping camp campsite: tent tree-pine flame
+chapel cathedral: church landmark building
+museum history culture heritage castle monument: landmark history building-2
+city town downtown urban: building-2 building map-pin
+industry manufacturing plant-factory production: factory warehouse settings
+storage stock inventory: warehouse package box
+home house real-estate property apartment flat rent rental: house building key
+farm farming agriculture harvest grain crops: wheat sprout leaf
+recycling sustainable sustainability environment: recycle leaf sprout
+wind-energy windy breeze: wind cloud leaf
+sunny summer day-light: sun cloud-sun thermometer
+night evening moon-night: moon star clock
+translate translation international global world worldwide multilingual: languages globe flag
+wheelchair disabled disability accessible: accessibility hand-heart user
+infant newborn toddler: baby heart smile
+country nation report: flag globe map
+share social: share-2 link send
+website web url homepage: globe link external-link
+printing print: printer file-text image
+testimonial testimonials quote-mark: quote message-square star
+invoice bill bills order orders receipt-paper: receipt file-text credit-card
+savings save bank budget invest investment: piggy-bank coins banknote
+currency dollar euro-sign: dollar-sign euro coins
+law legal justice lawyer attorney court: scale landmark file-text
+haircut hair barber salon hairdresser: scissors sparkles smile
+beauty cosmetics makeup nails: sparkles palette smile
+label category categories tags: tag layers bookmark
+layout dashboard-grid grid-view: layout-grid grid layers
+menu-button hamburger navigation-menu: menu ellipsis layout-grid
+next forward continue: arrow-right chevron-right move-right
+back previous return: arrow-left chevron-left history
+top up: arrow-up chevron-up trending-up
+down bottom: arrow-down chevron-down chevrons-down
+fullscreen enlarge zoom: expand maximize-2 zoom-in
+add plus-sign more: plus circle-check sparkles
+stopwatch countdown duration timer-clock: timer hourglass clock
+past archive previous-version: history clock bookmark
+";
+
+/// The icons of the set that the unknown `name` most likely means: by meaning (`MEANINGS`), then by
+/// spelling, then the icons that share a word with it (`circle-dot`: `circle`). At most three.
+pub fn icon_guesses(name: &str) -> Vec<String> {
+    let known = icons();
+    let mut out: Vec<String> = Vec::new();
+    let add = |i: &str, out: &mut Vec<String>| {
+        if out.len() < 3 && i != name && known.iter().any(|k| k == i) && !out.iter().any(|o| o == i) {
+            out.push(i.to_string());
+        }
+    };
+    let parts: Vec<&str> = name.split('-').filter(|p| p.len() >= 3).collect();
+    // the whole name first, then each of its words
+    for word in std::iter::once(name).chain(parts.iter().copied()) {
+        for line in MEANINGS.lines() {
+            let Some((words, icons)) = line.split_once(':') else { continue };
+            if words.split_whitespace().any(|w| w == word) {
+                icons.split_whitespace().for_each(|i| add(i, &mut out));
+            }
+        }
+    }
+    let mut near: Vec<(usize, &String)> = known.iter().map(|i| (edits(name, i), i)).filter(|(d, _)| *d <= 2).collect();
+    near.sort();
+    near.iter().for_each(|(_, i)| add(i, &mut out));
+    known.iter().filter(|i| i.split('-').any(|p| parts.contains(&p))).for_each(|i| add(i, &mut out));
+    out
 }
 
 /// The option words the library knows, by parameter (and by function where they differ).
@@ -158,20 +329,13 @@ pub fn option_word(func: &str, param: &str, word: &str) -> bool {
 /// guess: what to write instead.
 pub fn unknown_param_hint(func: &str, param: &str) -> Option<String> {
     Some(match (func, param) {
-        ("hero", "rows" | "hours" | "open") => {
-            "`hero` has no `rows:`: `badge:` takes the opening hours rows themselves, `badge: [(\"Mon–Fri\", \"1-5 8:00-16:00\")]`"
-                .into()
-        }
+        ("hero", "rows" | "hours" | "open") => "use `badge: [(\"Mon–Fri\", \"8:00-16:00\")]`".into(),
         (_, "onclick" | "onClick" | "on_click" | "click" | "action") => {
             format!("an event is `on: Msg.X(...)`: `{func}(..., on: Msg.Show(1))`")
         }
-        (_, "class" | "className" | "class_name" | "classes") => {
-            "a class is `cls: \"name\"`, styled with `css(\".name { ... }\")`".into()
-        }
-        (_, "style") => {
-            format!("`{func}` has no `style:`: give it a class with `cls: \"name\"` and style that with `css(\".name {{ ... }}\")`")
-        }
-        (_, "children" | "content" | "body") => format!("the content of `{func}` is its child block: `{func}(...) {{ p(\"text\") }}`"),
+        (_, "class" | "className" | "class_name" | "classes") => "use `cls: \"name\"`".into(),
+        (_, "style") => "use `cls: \"name\"` and `css(\".name { ... }\")`".to_string(),
+        (_, "children" | "content" | "body") => format!("use a child block: `{func}(...) {{ p(\"text\") }}`"),
         _ => return None,
     })
 }
@@ -292,7 +456,7 @@ pub fn motion(src: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     for issue in crate::web::motion::lint_source(src) {
         let (code, fallback) = match issue.kind {
-            IssueKind::UnknownWord => ("E0374", "the motion words are listed under Motion in docs/WEB.md: `nyra explain E0374`"),
+            IssueKind::UnknownWord => ("E0374", "the motion words: `nyra explain E0374`"),
             IssueKind::BadKeyframes => {
                 ("E0388", "a keyframes word is `keyframes(\"sway\", \"0%, 100% { rotate: -3deg } 50% { rotate: 3deg }\")`")
             }
@@ -315,9 +479,7 @@ fn clashes(prog: &Program, public: &HashSet<String>) -> Vec<Diag> {
             let new = new_name(&f.name);
             errs.push(
                 Diag::new("E0372", format!("`fn {}` has the name of the web function `{}`", f.name, f.name), f.span)
-                    .hint(format!(
-                        "rename your function, e.g. `fn {new}`, and its calls: in a program with `use web` the web functions are called by their bare names"
-                    ))
+                    .hint(format!("rename yours, e.g. `fn {new}`"))
                     .fix(rename(prog, f, &new, public).unwrap_or_default()),
             );
         }
@@ -337,10 +499,8 @@ fn clashes(prog: &Program, public: &HashSet<String>) -> Vec<Diag> {
                 if public.contains(name) || name == STATE {
                     let what = if name == STATE { "the site's state".to_string() } else { format!("the web function `{name}`") };
                     errs.push(
-                        Diag::new("E0372", format!("the script variable `{name}` has the name of {what}"), s.span).hint(format!(
-                            "rename it, e.g. `{} my_{name} = ...`: in a program with `use web` the web functions are called by their bare names",
-                            if *mutable { "var" } else { "let" }
-                        )),
+                        Diag::new("E0372", format!("the script variable `{name}` has the name of {what}"), s.span)
+                            .hint(format!("rename it, e.g. `{} my_{name} = ...`", if *mutable { "var" } else { "let" })),
                     );
                 }
             }
@@ -444,9 +604,8 @@ impl Ctx<'_> {
         let ExprKind::Call(name, args) = &mut e.kind else { return };
         if name == "Node" || name == "WebConfig" {
             errs.push(
-                Diag::new("E0378", format!("a `{name}` is made by the web functions, not written out"), span).hint(
-                    "use the elements and components (`p(...)`, `card(...)`); for markup of your own, `html(\"...\")` with a string literal",
-                ),
+                Diag::new("E0378", format!("a `{name}` is made by the web functions, not written out"), span)
+                    .hint("use the elements (`p(...)`, `card(...)`) or `html(\"...\")`"),
             );
             return;
         }
@@ -503,9 +662,8 @@ impl Ctx<'_> {
         if !self.msg.update {
             let missing = if self.msg.variants.is_none() { "no `enum Msg`" } else { "no `fn update(m: Msg)`" };
             errs.push(
-                Diag::new("E0373", format!("`on:` sends a `Msg` to `update`, but the program has {missing}"), value.span).hint(
-                    "declare the events and what they do: `enum Msg { Show(str) }` and `fn update(m: Msg) { match m { Msg.Show(k) => kind = k } }`",
-                ),
+                Diag::new("E0373", format!("`on:` sends a `Msg` to `update`, but the program has {missing}"), value.span)
+                    .hint("declare `enum Msg { Show(str) }` and `fn update(m: Msg) { match m { Msg.Show(k) => kind = k } }`"),
             );
             return;
         }
@@ -560,9 +718,7 @@ impl Ctx<'_> {
                 match bare {
                     Some(name) => errs.push(
                         Diag::new("E0374", format!("unknown icon `{s}`"), span)
-                            .hint(format!(
-                                "`{param}:` takes the icon's name without colons: `{param}: \"{name}\"` (colons mark an icon inside text)"
-                            ))
+                            .hint(format!("no colons in `{param}:`"))
                             .fix(vec![Edit::replace(span, &format!("\"{s}\""), format!("\"{name}\""))]),
                     ),
                     // an icon is decoration: the site still builds (and draws a stand-in)
@@ -613,12 +769,10 @@ fn tag_pairs(value: &mut Expr) {
 }
 
 fn raw_needs_literal(func: &str, span: Span, errs: &mut Vec<Diag>) {
-    errs.push(
-        Diag::new("E0378", format!("`{func}(...)` takes only a string literal"), span).hint(format!(
-            "write the {} out as one literal without `{{ }}`: data never becomes markup; for text from data use the elements (`p(text)`), which escape it",
-            if func == "css" { "CSS" } else { "markup" }
-        )),
-    );
+    errs.push(Diag::new("E0378", format!("`{func}(...)` takes only a string literal"), span).hint(format!(
+        "write the {} as one literal without `{{ }}`; for data use `p(text)`",
+        if func == "css" { "CSS" } else { "markup" }
+    )));
 }
 
 /// The edit distance of two names (a swap of neighbours counts as one edit).
@@ -644,9 +798,8 @@ fn edits(a: &str, b: &str) -> usize {
 }
 
 fn scheme_error(scheme: &str, url: &str, span: Span) -> Diag {
-    Diag::new("E0381", format!("the link `{url}` uses the scheme `{scheme}:`, which a page may not link to"), span).hint(
-        "link to `https://...`, `mailto:...`, `tel:...`, a path (`/about`) or an anchor (`#contact`); `javascript:` and `data:` run or carry code",
-    )
+    Diag::new("E0381", format!("the link `{url}` uses the forbidden scheme `{scheme}:`"), span)
+        .hint("link to `https://`, `mailto:`, `tel:`, a path (`/about`) or `#anchor`")
 }
 
 fn list(ws: &[&str]) -> String {
@@ -802,6 +955,7 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
     if changed.is_empty() {
         return errs;
     }
+    stale_reads(prog, &changed);
     let mut views: Vec<String> = Vec::new();
     let mut with_params: Vec<String> = Vec::new();
     for f in &prog.funcs {
@@ -827,9 +981,8 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
         if let Some(fa) = facts.get(&n) {
             for (m, span) in &fa.effects {
                 errs.push(
-                    Diag::new("E0384", format!("`{n}` runs in the browser (as `update`, a live view or a function they call), but it uses `{m}`"), *span).hint(
-                        format!("the browser has no files, arguments or standard input for `{m}`: read them while the site is built, into a script variable, and use that"),
-                    ),
+                    Diag::new("E0384", format!("`{n}` runs in the browser but uses `{m}`"), *span)
+                        .hint("read it at build time into a script variable"),
                 );
             }
             client.extend(fa.calls.iter().cloned());
@@ -853,8 +1006,12 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
                 *e = Expr::new(ExprKind::Call("web._live".to_string(), vec![Expr::new(ExprKind::Str(name), span), inner]), span);
             } else if with_params.contains(name) {
                 errs.push(
-                    Diag::new("E0376", format!("`{name}` reads state that `update` changes, so it must render again in the browser, but it has parameters"), e.span)
-                        .hint(format!("give `fn {name}` no parameters and let it read the script variables it needs: the browser calls a live view again with no arguments")),
+                    Diag::new(
+                        "E0376",
+                        format!("live view `{name}` (it reads state `update` changes) must have no parameters"),
+                        e.span,
+                    )
+                    .hint(format!("let `fn {name}()` read the script variables itself")),
                 );
             }
         });
@@ -869,6 +1026,32 @@ fn live(prog: &mut Program, public: &HashSet<String>) -> Vec<Diag> {
         });
     }
     errs
+}
+
+/// Warning E0391: a page that reads a script variable `update` changes right in its sections
+/// (`p("Showing {kind}")` in `page(...) { ... }`): the page is rendered once, while the site is
+/// built, so that part never changes. Only a live view (`fn view() -> Node`) renders again.
+fn stale_reads(prog: &Program, changed: &BTreeSet<String>) {
+    let Some(main) = prog.funcs.iter().find(|f| f.name == "main") else { return };
+    let mut seen: Vec<String> = Vec::new();
+    let mut body = main.body.clone();
+    each_stmt_mut(&mut body, &mut |_| {}, &mut |e| {
+        let ExprKind::Call(n, _) = &e.kind else { return };
+        if n != "web.page" {
+            return;
+        }
+        e.clone().each_mut(&mut |x| {
+            if let ExprKind::Var(v) = &x.kind {
+                if changed.contains(v) && !seen.contains(v) {
+                    seen.push(v.clone());
+                    crate::diag::warn(
+                        Diag::new("E0391", format!("the page reads `{v}` once, at build time: `update` changes it in vain"), x.span)
+                            .hint(format!("read it in a live view, `fn view() -> Node` that uses `{v}`, and call `view()` here")),
+                    );
+                }
+            }
+        });
+    });
 }
 
 /// Marks a call of a live view while its calls are being wrapped.
